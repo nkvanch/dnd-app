@@ -1,0 +1,390 @@
+// app/(tabs)/index.tsx
+// Home dashboard: last character, active campaign section, quick actions, dice roller.
+import { useState, useCallback, useEffect } from 'react';
+import {
+  View, Text, ScrollView, Pressable, StyleSheet,
+  Modal, TextInput, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { useCharacterStore } from '../../src/store/characterStore';
+import { rollExpression } from '../../src/engine/dice';
+import { DiceRoll, Entity } from '../../src/engine/types';
+import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+
+// ── Dice Roller Modal ─────────────────────────────────────────────────────────
+
+function DiceRollerModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [expr,   setExpr]   = useState('1d20');
+  const [label,  setLabel]  = useState('');
+  const [result, setResult] = useState<DiceRoll | null>(null);
+  const [error,  setError]  = useState('');
+
+  function roll() {
+    try {
+      setError('');
+      const r = rollExpression(expr.trim() || '1d20', label.trim() || undefined);
+      setResult(r);
+    } catch (e) {
+      setError('Invalid expression. Try: 1d20, 2d6+3, 4d6kh3');
+    }
+  }
+
+  const QUICK = ['1d4','1d6','1d8','1d10','1d12','1d20','2d6','4d6kh3'];
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={onClose} />
+        <View style={styles.modalSheet}>
+          <Text style={styles.modalTitle}>Dice Roller</Text>
+
+          <View style={styles.quickRow}>
+            {QUICK.map(q => (
+              <Pressable key={q} style={styles.quickBtn} onPress={() => { setExpr(q); setResult(null); }}>
+                <Text style={styles.quickBtnText}>{q}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.exprInput}
+              value={expr}
+              onChangeText={t => { setExpr(t); setResult(null); setError(''); }}
+              placeholder="e.g. 2d6+3"
+              placeholderTextColor={Colors.textDim}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TextInput
+              style={styles.labelInput}
+              value={label}
+              onChangeText={setLabel}
+              placeholder="Label (optional)"
+              placeholderTextColor={Colors.textDim}
+            />
+          </View>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <Pressable style={styles.rollBtn} onPress={roll}>
+            <Text style={styles.rollBtnText}>Roll</Text>
+          </Pressable>
+
+          {result && (
+            <View style={styles.resultBox}>
+              {result.label ? <Text style={styles.resultLabel}>{result.label}</Text> : null}
+              <Text style={styles.resultTotal}>{result.total}</Text>
+              <Text style={styles.resultBreakdown}>
+                [{result.rolls.join(', ')}]{result.modifier !== 0 ? ` + ${result.modifier}` : ''}
+              </Text>
+              <Text style={styles.resultExpr}>{result.expression}</Text>
+            </View>
+          )}
+
+          <Pressable style={styles.closeBtn} onPress={onClose}>
+            <Text style={styles.closeBtnText}>Close</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ── Last Character Card ───────────────────────────────────────────────────────
+
+function LastCharacterCard({ character, onPress }: { character: Entity; onPress: () => void }) {
+  const { identity, resources, derived } = character;
+  const hpPercent = resources.hp.maximum > 0
+    ? resources.hp.current / resources.hp.maximum
+    : 1;
+  const hpColor = hpPercent > 0.5 ? Colors.green : hpPercent > 0.25 ? Colors.gold : Colors.red;
+
+  return (
+    <Pressable style={styles.lastCharCard} onPress={onPress}>
+      <View style={styles.lastCharHeader}>
+        <View>
+          <Text style={styles.lastCharName}>{identity.name || 'Unnamed'}</Text>
+          <Text style={styles.lastCharSub}>
+            Level {identity.level}  ·  {identity.classId || '—'}  ·  {identity.raceId || '—'}
+          </Text>
+        </View>
+        <View style={styles.lastCharStats}>
+          <View style={styles.statPill}>
+            <Text style={styles.statPillLabel}>AC</Text>
+            <Text style={styles.statPillValue}>{derived.ac}</Text>
+          </View>
+          <View style={styles.statPill}>
+            <Text style={styles.statPillLabel}>Spd</Text>
+            <Text style={styles.statPillValue}>{derived.speed}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.hpRow}>
+        <View style={styles.hpBarOuter}>
+          <View style={[styles.hpBarFill, {
+            width: `${Math.round(Math.max(0, Math.min(1, hpPercent)) * 100)}%` as any,
+            backgroundColor: hpColor,
+          }]} />
+        </View>
+        <Text style={styles.hpText}>
+          {resources.hp.current} / {resources.hp.maximum} HP
+        </Text>
+      </View>
+
+      <Text style={styles.openHint}>Tap to open sheet →</Text>
+    </Pressable>
+  );
+}
+
+// ── Home Screen ───────────────────────────────────────────────────────────────
+
+export default function HomeScreen() {
+  const router     = useRouter();
+  const characters = useCharacterStore(s => s.characters);
+  const [diceOpen, setDiceOpen] = useState(false);
+
+  // Last modified = last in array (store appends)
+  const lastChar = characters.length > 0 ? characters[characters.length - 1] : null;
+
+  const openSheet = useCallback((id: string) => {
+    router.push(`/sheet/${id}` as any);
+  }, [router]);
+
+  const startCreation = useCallback(() => {
+    router.push('/creation/name');
+  }, [router]);
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.topBar}>
+        <Text style={styles.appTitle}>D&D Companion</Text>
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+        {/* Continue Last Character */}
+        <Text style={styles.sectionLabel}>Continue Last Character</Text>
+        {lastChar ? (
+          <LastCharacterCard character={lastChar} onPress={() => openSheet(lastChar.id)} />
+        ) : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyCardText}>No characters yet. Create one to get started.</Text>
+          </View>
+        )}
+
+        {/* Active Campaign */}
+        <Text style={styles.sectionLabel}>Active Campaign</Text>
+        <View style={styles.stubCard}>
+          <Text style={styles.stubIcon}>🗺️</Text>
+          <Text style={styles.stubText}>No active campaign</Text>
+          <Text style={styles.stubSub}>Join a campaign from the Campaigns tab</Text>
+        </View>
+
+        {/* Quick Actions */}
+        <Text style={styles.sectionLabel}>Quick Actions</Text>
+        <View style={styles.quickActions}>
+          <Pressable style={styles.actionBtn} onPress={startCreation}>
+            <Text style={styles.actionBtnIcon}>✨</Text>
+            <Text style={styles.actionBtnText}>Create Character</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.actionBtn, styles.actionBtnSecondary]}
+            onPress={() => router.push({ pathname: '/(tabs)/campaigns', params: { action: 'join' } } as any)}
+          >
+            <Text style={styles.actionBtnIcon}>🤝</Text>
+            <Text style={styles.actionBtnText}>Join Campaign</Text>
+          </Pressable>
+
+          <Pressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => setDiceOpen(true)}>
+            <Text style={styles.actionBtnIcon}>🎲</Text>
+            <Text style={styles.actionBtnText}>Roll Dice</Text>
+          </Pressable>
+        </View>
+
+      </ScrollView>
+
+      <DiceRollerModal visible={diceOpen} onClose={() => setDiceOpen(false)} />
+    </View>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  screen:  { flex: 1, backgroundColor: Colors.bg },
+  topBar:  {
+    paddingTop:        Spacing.xl + 8,
+    paddingBottom:     Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  appTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
+
+  scroll:   { flex: 1 },
+  content:  { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl },
+
+  sectionLabel: {
+    fontSize:   FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color:      Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: -4,
+  },
+
+  // Last character card
+  lastCharCard: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.lg,
+    borderWidth:     1,
+    borderColor:     Colors.gold + '44',
+    padding:         Spacing.md,
+    gap:             Spacing.sm,
+  },
+  lastCharHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  lastCharName:   { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  lastCharSub:    { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+  lastCharStats:  { flexDirection: 'row', gap: Spacing.sm },
+  statPill: {
+    backgroundColor: Colors.surfaceHigh,
+    borderRadius:    Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:   2,
+    alignItems:      'center',
+  },
+  statPillLabel: { fontSize: FontSize.xs, color: Colors.textSecondary },
+  statPillValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+
+  hpRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  hpBarOuter: {
+    flex: 1, height: 6, backgroundColor: Colors.border,
+    borderRadius: Radius.full, overflow: 'hidden',
+  },
+  hpBarFill: { height: '100%', borderRadius: Radius.full },
+  hpText:    { fontSize: FontSize.sm, color: Colors.textSecondary, width: 90, textAlign: 'right' },
+  openHint:  { fontSize: FontSize.xs, color: Colors.textDim, textAlign: 'right' },
+
+  // Stubs
+  emptyCard: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.lg,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    padding:         Spacing.md,
+  },
+  emptyCardText: { color: Colors.textSecondary, fontSize: FontSize.md },
+
+  stubCard: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.lg,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    padding:         Spacing.lg,
+    alignItems:      'center',
+    gap:             Spacing.xs,
+  },
+  stubIcon: { fontSize: 32 },
+  stubText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textSecondary },
+  stubSub:  { fontSize: FontSize.sm, color: Colors.textDim },
+
+  // Quick actions
+  quickActions: { gap: Spacing.sm },
+  actionBtn: {
+    backgroundColor: Colors.gold,
+    borderRadius:    Radius.md,
+    padding:         Spacing.md,
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             Spacing.sm,
+  },
+  actionBtnSecondary: {
+    backgroundColor: Colors.surface,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+  },
+  actionBtnIcon: { fontSize: 20 },
+  actionBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+
+  // Dice roller modal
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: '#000000aa' },
+  modalSheet: {
+    backgroundColor: Colors.surfaceHigh,
+    borderTopLeftRadius:  Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    padding: Spacing.lg,
+    gap:     Spacing.md,
+  },
+  modalTitle: {
+    fontSize:   FontSize.xl,
+    fontWeight: FontWeight.bold,
+    color:      Colors.textPrimary,
+    textAlign:  'center',
+  },
+  quickRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  quickBtn: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:   Spacing.xs,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+  },
+  quickBtnText: { color: Colors.textPrimary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+
+  inputRow:   { gap: Spacing.sm },
+  exprInput: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.md,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    padding:         Spacing.md,
+    fontSize:        FontSize.lg,
+    color:           Colors.textPrimary,
+    textAlign:       'center',
+    fontWeight:      FontWeight.bold,
+  },
+  labelInput: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.md,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    padding:         Spacing.sm,
+    fontSize:        FontSize.sm,
+    color:           Colors.textPrimary,
+  },
+
+  errorText: { color: Colors.red, fontSize: FontSize.sm, textAlign: 'center' },
+
+  rollBtn: {
+    backgroundColor: Colors.gold,
+    borderRadius:    Radius.md,
+    padding:         Spacing.md,
+    alignItems:      'center',
+  },
+  rollBtnText: { color: Colors.bg, fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+
+  resultBox: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.lg,
+    padding:         Spacing.md,
+    alignItems:      'center',
+    gap:             Spacing.xs,
+    borderWidth:     1,
+    borderColor:     Colors.gold + '66',
+  },
+  resultLabel:     { fontSize: FontSize.sm, color: Colors.textSecondary },
+  resultTotal:     { fontSize: 56, fontWeight: FontWeight.bold, color: Colors.gold },
+  resultBreakdown: { fontSize: FontSize.md, color: Colors.textSecondary },
+  resultExpr:      { fontSize: FontSize.xs, color: Colors.textDim },
+
+  closeBtn: { padding: Spacing.sm, alignItems: 'center' },
+  closeBtnText: { color: Colors.textSecondary, fontSize: FontSize.md },
+});

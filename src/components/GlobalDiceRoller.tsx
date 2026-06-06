@@ -1,0 +1,200 @@
+// src/components/GlobalDiceRoller.tsx
+// Floating dice button + modal. Import and add to any screen that needs it.
+import { useState } from 'react';
+import {
+  View, Text, Pressable, StyleSheet, Modal,
+  TextInput, ScrollView, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { rollExpression } from '../engine/dice';
+import { DiceRoll } from '../engine/types';
+import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
+
+const QUICK_DICE = ['1d4','1d6','1d8','1d10','1d12','1d20','d100','2d6','4d6kh3'];
+
+interface Props {
+  /** Override position of the floating button. Default: bottom-right. */
+  bottom?: number;
+  right?:  number;
+}
+
+export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
+  const [open,    setOpen]    = useState(false);
+  const [expr,    setExpr]    = useState('1d20');
+  const [label,   setLabel]   = useState('');
+  const [error,   setError]   = useState('');
+  const [history, setHistory] = useState<DiceRoll[]>([]);
+
+  function roll() {
+    try {
+      setError('');
+      const result = rollExpression(expr.trim() || '1d20', label.trim() || undefined);
+      setHistory(prev => [result, ...prev].slice(0, 10));
+    } catch {
+      setError(`Invalid expression: "${expr}"`);
+    }
+  }
+
+  const latest = history[0] ?? null;
+
+  return (
+    <>
+      {/* Floating button */}
+      <Pressable
+        style={[styles.fab, { bottom, right }]}
+        onPress={() => setOpen(true)}
+      >
+        <Text style={styles.fabTxt}>🎲</Text>
+      </Pressable>
+
+      {/* Modal */}
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
+          <View style={styles.sheet}>
+            <Text style={styles.title}>Dice Roller</Text>
+
+            {/* Quick dice */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
+              {QUICK_DICE.map(q => (
+                <Pressable key={q} style={styles.quickBtn} onPress={() => { setExpr(q); setError(''); }}>
+                  <Text style={styles.quickBtnTxt}>{q}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            {/* Expression input */}
+            <TextInput
+              style={styles.exprInput}
+              value={expr}
+              onChangeText={t => { setExpr(t); setError(''); }}
+              placeholder="e.g. 2d6+3"
+              placeholderTextColor={Colors.textDim}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TextInput
+              style={styles.labelInput}
+              value={label}
+              onChangeText={setLabel}
+              placeholder="Label (optional)"
+              placeholderTextColor={Colors.textDim}
+            />
+
+            {error ? <Text style={styles.errorTxt}>{error}</Text> : null}
+
+            <Pressable style={styles.rollBtn} onPress={roll}>
+              <Text style={styles.rollBtnTxt}>Roll</Text>
+            </Pressable>
+
+            {/* Latest result */}
+            {latest && (
+              <View style={styles.resultBox}>
+                {latest.label ? <Text style={styles.resultLabel}>{latest.label}</Text> : null}
+                <Text style={styles.resultTotal}>{latest.total}</Text>
+                <Text style={styles.resultBreakdown}>
+                  [{latest.rolls.join(', ')}]{latest.modifier !== 0 ? ` + ${latest.modifier}` : ''}
+                </Text>
+                <Text style={styles.resultExpr}>{latest.expression}</Text>
+              </View>
+            )}
+
+            {/* Roll history */}
+            {history.length > 1 && (
+              <View style={styles.historySection}>
+                <Text style={styles.historyTitle}>RECENT ROLLS</Text>
+                {history.slice(1).map((r, i) => (
+                  <View key={r.id} style={styles.historyRow}>
+                    <Text style={styles.historyExpr}>{r.label ?? r.expression}</Text>
+                    <Text style={styles.historyTotal}>{r.total}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <Pressable style={styles.closeBtn} onPress={() => setOpen(false)}>
+              <Text style={styles.closeBtnTxt}>Close</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  fab: {
+    position:        'absolute',
+    width:           48,
+    height:          48,
+    borderRadius:    Radius.full,
+    backgroundColor: Colors.surfaceHigh,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    alignItems:      'center',
+    justifyContent:  'center',
+    elevation:       4,
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 2 },
+    shadowOpacity:   0.3,
+    shadowRadius:    4,
+  },
+  fabTxt: { fontSize: 22 },
+
+  overlay:  { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: '#000000aa' },
+  sheet: {
+    backgroundColor: Colors.surfaceHigh,
+    borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,
+    padding: Spacing.lg, gap: Spacing.md,
+  },
+  title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
+
+  quickRow: { gap: Spacing.xs, paddingVertical: 2 },
+  quickBtn: {
+    backgroundColor: Colors.surface, borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  quickBtnTxt: { color: Colors.textPrimary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+
+  exprInput: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.md, fontSize: FontSize.xl,
+    color: Colors.textPrimary, textAlign: 'center', fontWeight: FontWeight.bold,
+  },
+  labelInput: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, fontSize: FontSize.sm, color: Colors.textPrimary,
+  },
+  errorTxt: { color: Colors.red, fontSize: FontSize.sm, textAlign: 'center' },
+
+  rollBtn: {
+    backgroundColor: Colors.gold, borderRadius: Radius.md,
+    padding: Spacing.md, alignItems: 'center',
+  },
+  rollBtnTxt: { color: Colors.bg, fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+
+  resultBox: {
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    padding: Spacing.md, alignItems: 'center', gap: Spacing.xs,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+  },
+  resultLabel:     { fontSize: FontSize.sm, color: Colors.textSecondary },
+  resultTotal:     { fontSize: 48, fontWeight: FontWeight.bold, color: Colors.gold },
+  resultBreakdown: { fontSize: FontSize.md, color: Colors.textSecondary },
+  resultExpr:      { fontSize: FontSize.xs, color: Colors.textDim },
+
+  historySection: { gap: Spacing.xs },
+  historyTitle:   { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 2 },
+  historyRow:     { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+  historyExpr:    { fontSize: FontSize.sm, color: Colors.textSecondary },
+  historyTotal:   { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+
+  closeBtn:    { alignItems: 'center', padding: Spacing.sm },
+  closeBtnTxt: { color: Colors.textSecondary, fontSize: FontSize.md },
+});

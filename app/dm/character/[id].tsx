@@ -1,0 +1,179 @@
+// app/dm/character/[id].tsx
+// DM read-only character view with override controls on every stat.
+// Mirrors the 6-tab sheet but the DM can't edit notes/inventory directly —
+// instead they use the DM override system on every tappable stat.
+import { useState, useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCharacterStore } from '../../../src/store/characterStore';
+import { useCampaignStore }  from '../../../src/store/campaignStore';
+import { useSessionStore }   from '../../../src/store/sessionStore';
+import { recomputeDerived }  from '../../../src/engine/pipeline';
+import { applyDamage, applyHealing } from '../../../src/engine/combat';
+import { applyCondition, removeCondition } from '../../../src/engine/conditions';
+import { Entity } from '../../../src/engine/types';
+import { TabCharacter } from '../../../src/components/sheet/TabCharacter';
+import { TabAbilities } from '../../../src/components/sheet/TabAbilities';
+import { TabFeatures }  from '../../../src/components/sheet/TabFeatures';
+import { TabActions }   from '../../../src/components/sheet/TabActions';
+import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../../src/theme';
+
+type TabId = 'character' | 'actions' | 'abilities' | 'features';
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'character',  label: 'Combat'    },
+  { id: 'actions',    label: 'Actions'   },
+  { id: 'abilities',  label: 'Abilities' },
+  { id: 'features',   label: 'Features'  },
+];
+
+export default function DmCharacterView() {
+  const { id }  = useLocalSearchParams<{ id: string }>();
+  const router  = useRouter();
+  const characters      = useCharacterStore(s => s.characters);
+  const updateCharacter = useCharacterStore(s => s.updateCharacter);
+  const rules           = useCharacterStore(s => s.rules);
+  const campaignId = useCampaignStore(s => s.activeCampaign?.id ?? '');
+  const deviceId   = useSessionStore(s => s.session?.deviceId ?? '');
+
+  const entity     = characters.find(c => c.id === id);
+  const [activeTab, setActiveTab] = useState<TabId>('character');
+
+  const mutate = useCallback((updater: (e: Entity) => Entity) => {
+    if (!id) return;
+    updateCharacter(id, e => recomputeDerived(updater(e), rules));
+  }, [id, updateCharacter, rules]);
+
+  if (!entity) {
+    return (
+      <View style={styles.screen}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backTxt}>← Back</Text>
+        </Pressable>
+        <View style={styles.center}>
+          <Text style={styles.errorTxt}>Character not found.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.header}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backTxt}>← Back</Text>
+        </Pressable>
+        <View style={styles.headerInfo}>
+          <Text style={styles.charName}>{entity.identity.name || 'Unnamed'}</Text>
+          <Text style={styles.charSub}>
+            👑 DM View · Lv {entity.identity.level} {entity.identity.classId}
+          </Text>
+        </View>
+        <View style={styles.hpPill}>
+          <Text style={styles.hpPillTxt}>
+            {entity.resources.hp.current}/{entity.resources.hp.maximum}
+          </Text>
+          <Text style={styles.hpPillLabel}>HP</Text>
+        </View>
+      </View>
+
+      <View style={styles.tabBar}>
+        {TABS.map(t => (
+          <Pressable
+            key={t.id}
+            style={[styles.tabBtn, activeTab === t.id && styles.tabBtnActive]}
+            onPress={() => setActiveTab(t.id)}
+          >
+            <Text style={[styles.tabTxt, activeTab === t.id && styles.tabTxtActive]}>
+              {t.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.tabContent}>
+        {activeTab === 'character' && (
+          <TabCharacter
+            entity={entity}
+            rules={rules}
+            isDm={true}
+            campaignId={campaignId}
+            deviceId={deviceId}
+            onDamage={amt => mutate(e => applyDamage(e, amt, rules))}
+            onHeal={amt => mutate(e => applyHealing(e, amt, rules))}
+            onAddCondition={cId => mutate(e => applyCondition(e, cId, 'dm', rules))}
+            onRemoveCondition={cId => mutate(e => removeCondition(e, cId, rules))}
+            onResourceChange={(rId, delta) => mutate(e => ({
+              ...e,
+              resources: {
+                ...e.resources,
+                custom: e.resources.custom.map(r =>
+                  r.id === rId ? { ...r, current: Math.max(0, Math.min(r.maximum, r.current + delta)) } : r
+                ),
+              },
+            }))}
+            onSpendSlot={tier => mutate(e => {
+              if (!e.spellcasting) return e;
+              const slot = e.spellcasting.slots[tier as keyof typeof e.spellcasting.slots];
+              if (!slot || slot.used >= slot.total) return e;
+              return { ...e, spellcasting: { ...e.spellcasting, slots: { ...e.spellcasting.slots, [tier]: { ...slot, used: slot.used + 1 } } } };
+            })}
+            onRestoreSlot={tier => mutate(e => {
+              if (!e.spellcasting) return e;
+              const slot = e.spellcasting.slots[tier as keyof typeof e.spellcasting.slots];
+              if (!slot || slot.used <= 0) return e;
+              return { ...e, spellcasting: { ...e.spellcasting, slots: { ...e.spellcasting.slots, [tier]: { ...slot, used: slot.used - 1 } } } };
+            })}
+            onEntityUpdate={updated => mutate(() => updated)}
+          />
+        )}
+        {activeTab === 'actions'   && <TabActions   entity={entity} />}
+        {activeTab === 'abilities' && (
+          <TabAbilities
+            entity={entity}
+            rules={rules}
+            isDm={true}
+            campaignId={campaignId}
+            deviceId={deviceId}
+            onEntityUpdate={updated => mutate(() => updated)}
+          />
+        )}
+        {activeTab === 'features'  && <TabFeatures entity={entity} />}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.bg },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errorTxt: { color: Colors.red, fontSize: FontSize.lg },
+  header: {
+    backgroundColor: Colors.surfaceHigh,
+    paddingTop: Spacing.xl + 8, paddingBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  backBtn:     { paddingRight: Spacing.xs },
+  backTxt:     { color: Colors.gold, fontSize: FontSize.md, fontWeight: FontWeight.bold },
+  headerInfo:  { flex: 1 },
+  charName:    { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  charSub:     { fontSize: FontSize.xs, color: Colors.gold, marginTop: 2 },
+  hpPill: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4, alignItems: 'center',
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  hpPillTxt:   { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.green },
+  hpPillLabel: { fontSize: FontSize.xs, color: Colors.textDim },
+  tabBar: {
+    flexDirection: 'row', backgroundColor: Colors.surfaceHigh,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  tabBtn:       { flex: 1, paddingVertical: Spacing.sm, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabBtnActive: { borderBottomColor: Colors.gold },
+  tabTxt:       { fontSize: FontSize.xs, color: Colors.textDim, fontWeight: FontWeight.bold },
+  tabTxtActive: { color: Colors.gold },
+  tabContent:   { flex: 1 },
+});

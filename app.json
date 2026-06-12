@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "dnd-app",
-    "slug": "dnd-app",
+    "slug": "dndapp",
     "version": "1.0.0",
     "scheme": "dndapp",
     "orientation": "portrait",
@@ -33,6 +33,15 @@
         }
       ],
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "root": "app"
+      },
+      "eas": {
+        "projectId": "aeadae6b-4bef-42c6-8f21-99acc658acb3"
+      }
+    },
+    "owner": "nkvanchs-organization"
   }
 }

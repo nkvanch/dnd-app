@@ -82,60 +82,67 @@ function buildEntries(entity: Entity, stat: string): AuditEntry[] {
 function buildAcEntries(entity: Entity): AuditEntry[] {
   const entries: AuditEntry[] = [];
   // Use effective stats (base + race/feature modifiers) so the breakdown shows
-  // the real DEX/CON contributions — not the raw assigned scores (which would
-  // display "+0" for Unarmored Defense even after stats are assigned).
+  // the real DEX/CON contributions — not the raw assigned scores.
   const allEffects     = collectAllEffects(entity);
   const effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const dexMod = modifier(effectiveStats.dex);
 
-  // Determine which base formula is active
-  const hasArmorFormula = entity.inventory.equipped.some(item =>
-    item.features.some(f => f.effects.some(e => e.type === 'base_ac_formula'))
-  );
-  const hasUnarmoredDefense = entity.features.some(f =>
-    f.isActive && f.effects.some(e => e.type === 'base_ac_formula')
-  );
+  // Gather every AC base formula (armor on equipped items, Unarmored Defense on
+  // features) and every flat AC bonus (shields, magic items, feature bonuses).
+  type FormulaCandidate = {
+    label: string; kind: AuditSourceKind; id: string | null;
+    base: number; abilities: Ability[];
+  };
+  const formulas: FormulaCandidate[] = [];
+  const flats:    AuditEntry[]       = [];
 
-  if (!hasArmorFormula && !hasUnarmoredDefense) {
-    // No armor, no formula — standard fallback
-    entries.push(entry('Base', 10, 'base', null));
-    entries.push(entry('DEX modifier', dexMod, 'base', null));
-  }
-
-  // Equipped items — armor and shields
   for (const item of entity.inventory.equipped) {
     for (const f of item.features) {
       for (const e of f.effects) {
-        if (e.type === 'base_ac_formula') {
-          entries.push(entry(item.itemId, e.value as number, 'item', item.itemId));
+        if (e.type === 'base_ac_formula' && typeof e.value === 'number') {
+          formulas.push({
+            label: f.name, kind: 'item', id: item.itemId,
+            base: e.value, abilities: (e.formulaAbilities ?? []) as Ability[],
+          });
         } else if (e.type === 'stat_modifier' && e.target === 'ac' && typeof e.value === 'number') {
-          entries.push(entry(item.itemId, e.value, 'item', item.itemId));
+          flats.push(entry(f.name, e.value, 'item', item.itemId));
         }
       }
     }
   }
 
-  // Feature AC modifiers (Unarmored Defense, Shield spell, etc.)
   for (const f of entity.features) {
     if (!f.isActive) continue;
     for (const e of f.effects) {
-      if (e.type === 'base_ac_formula') {
-        entries.push(entry(`${f.name} (base)`, e.value as number, f.source.kind, f.id));
-        // Show each ability modifier contribution from the formula (effective stats)
-        for (const ab of (e.formulaAbilities ?? [])) {
-          entries.push(entry(
-            `${ab.toUpperCase()} modifier`,
-            modifier(effectiveStats[ab]),
-            f.source.kind,
-            f.id,
-          ));
-        }
+      if (e.type === 'base_ac_formula' && typeof e.value === 'number') {
+        formulas.push({
+          label: f.name, kind: f.source.kind as AuditSourceKind, id: f.id,
+          base: e.value, abilities: (e.formulaAbilities ?? []) as Ability[],
+        });
       } else if (e.type === 'stat_modifier' && e.target === 'ac' && typeof e.value === 'number') {
-        entries.push(entry(f.name, e.value, f.source.kind, f.id));
+        flats.push(entry(f.name, e.value, f.source.kind as AuditSourceKind, f.id));
       }
     }
   }
 
+  if (formulas.length === 0) {
+    // No armor, no formula — standard fallback: 10 + DEX
+    entries.push(entry('Base', 10, 'base', null));
+    entries.push(entry('DEX modifier', dexMod, 'base', null));
+  } else {
+    // The pipeline takes the HIGHEST formula (Math.max). Mirror that here:
+    // show only the winning formula's base + its ability contributions,
+    // otherwise the audit total inflates past the real AC.
+    const computeTotal = (c: FormulaCandidate) =>
+      c.base + c.abilities.reduce((s, ab) => s + modifier(effectiveStats[ab]), 0);
+    const best = formulas.reduce((a, b) => (computeTotal(b) > computeTotal(a) ? b : a));
+    entries.push(entry(`${best.label} (base)`, best.base, best.kind, best.id));
+    for (const ab of best.abilities) {
+      entries.push(entry(`${ab.toUpperCase()} modifier`, modifier(effectiveStats[ab]), best.kind, best.id));
+    }
+  }
+
+  entries.push(...flats);
   return entries;
 }
 
@@ -143,8 +150,8 @@ function buildAcEntries(entity: Entity): AuditEntry[] {
 
 function buildInitiativeEntries(entity: Entity): AuditEntry[] {
   const entries: AuditEntry[] = [];
-  const dexMod = modifier(entity.stats.dex);
-  entries.push(entry('DEX modifier', dexMod, 'base', null));
+  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  entries.push(entry('DEX modifier', modifier(effectiveStats.dex), 'base', null));
 
   for (const f of entity.features) {
     if (!f.isActive) continue;
@@ -161,31 +168,48 @@ function buildInitiativeEntries(entity: Entity): AuditEntry[] {
 
 function buildSpeedEntries(entity: Entity): AuditEntry[] {
   const entries: AuditEntry[] = [];
-  entries.push(entry('Base speed', entity.resources.speed, 'base', null));
+
+  // Single pass over every speed effect (features — which include condition-
+  // sourced features — and equipped items), partitioned by operation.
+  type Found = {
+    label: string; value: number; kind: AuditSourceKind; id: string | null;
+    op: string;
+  };
+  const found: Found[] = [];
 
   for (const f of entity.features) {
     if (!f.isActive) continue;
+    const label = f.source.kind === 'condition' ? `${f.name} (condition)` : f.name;
     for (const e of f.effects) {
       if (e.type === 'stat_modifier' && e.target === 'speed' && typeof e.value === 'number') {
-        entries.push(entry(f.name, e.value, f.source.kind, f.id));
+        found.push({ label, value: e.value, kind: f.source.kind as AuditSourceKind, id: f.id, op: e.operation });
+      }
+    }
+  }
+  for (const item of entity.inventory.equipped) {
+    for (const f of item.features) {
+      for (const e of f.effects) {
+        if (e.type === 'stat_modifier' && e.target === 'speed' && typeof e.value === 'number') {
+          found.push({ label: f.name, value: e.value, kind: 'item', id: item.itemId, op: e.operation });
+        }
       }
     }
   }
 
-  // Conditions that reduce speed (e.g. Grappled: speed 0)
-  for (const c of entity.conditions) {
-    // Conditions that set speed to 0 are marked with a set operation
-    const relatedFeature = entity.features.find(f =>
-      f.source.kind === 'condition' && f.source.refId === c.id &&
-      f.effects.some(e => e.target === 'speed')
-    );
-    if (relatedFeature) {
-      for (const e of relatedFeature.effects) {
-        if (e.target === 'speed' && typeof e.value === 'number') {
-          entries.push(entry(`${c.id} (condition)`, e.value, 'condition', c.id));
-        }
-      }
-    }
+  const sets = found.filter(x => x.op === 'set');
+  if (sets.length > 0) {
+    // 'set' REPLACES the base speed (Dwarf 25, Grappled 0). Showing base 30
+    // PLUS "25" was the old bug — a dwarf's audit displayed 55. The pipeline's
+    // last-collected set wins, so mirror that ordering here.
+    const winner = sets[sets.length - 1];
+    entries.push(entry(`${winner.label} (sets speed)`, winner.value, winner.kind, winner.id));
+  } else {
+    entries.push(entry('Base speed', entity.resources.speed, 'base', null));
+  }
+
+  // Additive bonuses (Fast Movement, magic items) stack on top.
+  for (const a of found.filter(x => x.op === 'add')) {
+    entries.push(entry(a.label, a.value, a.kind, a.id));
   }
 
   return entries;
@@ -214,7 +238,8 @@ function buildSpellSaveDcEntries(entity: Entity): AuditEntry[] {
   if (!entity.spellcasting) return [];
   const prof    = Math.ceil(1 + entity.identity.level / 4);
   const ability = entity.spellcasting.ability;
-  const mod     = modifier(entity.stats[ability]);
+  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const mod     = modifier(effectiveStats[ability]);
   return [
     entry('Base', 8, 'base', null),
     entry('Proficiency bonus', prof, 'class', null),
@@ -228,7 +253,8 @@ function buildSpellAttackEntries(entity: Entity): AuditEntry[] {
   if (!entity.spellcasting) return [];
   const prof    = Math.ceil(1 + entity.identity.level / 4);
   const ability = entity.spellcasting.ability;
-  const mod     = modifier(entity.stats[ability]);
+  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const mod     = modifier(effectiveStats[ability]);
   return [
     entry('Proficiency bonus', prof, 'class', null),
     entry(`${ability.toUpperCase()} modifier`, mod, 'base', null),
@@ -261,7 +287,8 @@ function buildAbilityEntries(entity: Entity, ability: Ability): AuditEntry[] {
 
 function buildSaveEntries(entity: Entity, ability: Ability): AuditEntry[] {
   const entries: AuditEntry[] = [];
-  const mod  = modifier(entity.stats[ability]);
+  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const mod  = modifier(effectiveStats[ability]);
   const prof = Math.ceil(1 + entity.identity.level / 4);
   const isProficient = entity.proficiencies.savingThrows.includes(ability);
 
@@ -294,7 +321,8 @@ function buildSkillEntries(entity: Entity, skill: SkillName): AuditEntry[] {
   const skillEntry = entity.skills.skills[skill];
   if (!skillEntry) return entries;
 
-  const abilityMod = modifier(entity.stats[skillEntry.ability]);
+  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const abilityMod = modifier(effectiveStats[skillEntry.ability]);
   const prof       = Math.ceil(1 + entity.identity.level / 4);
 
   entries.push(entry(`${skillEntry.ability.toUpperCase()} modifier`, abilityMod, 'base', null));

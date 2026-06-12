@@ -1,5 +1,5 @@
 import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant,
-         ResourceUpgrade, FeatureInstance, ClassProgression, Ability, SpellSlots } from './types';
+         ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { getSpellSlotsForClassLevel } from '../content/classes/spellSlotTables';
 
@@ -198,6 +198,186 @@ export function recalculateAllHP(entity: Entity, rules: CampaignRules): Entity {
   };
 }
 
+// ── reconcileConHp ─────────────────────────────────────────────────────────────
+
+/**
+ * PHB "Beyond 1st Level": when your Constitution modifier increases, your hit
+ * point maximum increases by 1 for each level you have attained (and the reverse
+ * if it drops). Call this after a PERMANENT Constitution change (an ASI or a
+ * feat) to adjust max HP by (Δ CON modifier × level) WITHOUT recomputing rolled
+ * HP from scratch — so a character who rolled HP keeps those rolls.
+ *
+ * `prev` = entity before the change, `next` = entity after. Current HP moves
+ * with maximum so the increase isn't "lost" as if the character were damaged.
+ */
+export function reconcileConHp(prev: Entity, next: Entity): Entity {
+  const level = next.identity.level;
+  if (level <= 0) return next;
+
+  const prevCon = applyStatModifiers(prev.stats, collectAllEffects(prev)).con;
+  const nextCon = applyStatModifiers(next.stats, collectAllEffects(next)).con;
+  const delta   = modifier(nextCon) - modifier(prevCon);
+  if (delta === 0) return next;
+
+  const hpDelta = delta * level;
+  return {
+    ...next,
+    resources: {
+      ...next.resources,
+      hp: {
+        ...next.resources.hp,
+        maximum: Math.max(1, next.resources.hp.maximum + hpDelta),
+        current: Math.max(0, next.resources.hp.current + hpDelta),
+      },
+    },
+  };
+}
+
+// ── reapplyResolvedAsi ─────────────────────────────────────────────────────────
+
+/**
+ * Re-applies every RESOLVED ASI selection on top of the entity's CURRENT base
+ * stats. Needed because ASI increases live in base stats, and the scores screen
+ * overwrites base stats wholesale — without this, re-confirming scores after
+ * resolving an ASI silently erased the improvement (and since the choice stayed
+ * resolved, it could never be taken again). Feat-based resolutions live in
+ * features and are unaffected by a stat overwrite, so they're skipped here.
+ *
+ * Selections are parsed from the labels applyAsiToEntity stores, e.g.
+ * 'con+2' or 'str+1,dex+1'. Each re-applied increase is capped by effective-
+ * score headroom, mirroring applyAsiToEntity.
+ */
+export function reapplyResolvedAsi(entity: Entity, rules: CampaignRules): Entity {
+  const asiChoices = entity.choices.filter(
+    c => c.definition.kind === 'asi' && c.resolved
+  );
+  if (asiChoices.length === 0) return entity;
+
+  const maxScore = rules.maxAbilityScore ?? 20;
+  const effects  = collectAllEffects(entity);
+  const newStats = { ...entity.stats };
+
+  let changed = false;
+  for (const choice of asiChoices) {
+    for (const sel of choice.selections) {
+      for (const part of sel.split(',')) {
+        const m = part.trim().match(/^(str|dex|con|int|wis|cha)\+(\d+)$/);
+        if (!m) continue;                       // 'feat:…', 'no_change', etc.
+        const ab  = m[1] as Ability;
+        const inc = parseInt(m[2], 10);
+        const effective = applyStatModifiers(newStats, effects)[ab];
+        const headroom  = Math.max(0, maxScore - effective);
+        const applied   = Math.min(inc, headroom);
+        if (applied > 0) {
+          newStats[ab] += applied;
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed ? { ...entity, stats: newStats } : entity;
+}
+
+/**
+ * Subtracts every resolved ASI's recorded increases from base stats.
+ * Used when class data is cleared (class re-selection): the ASI choices are
+ * about to be dropped and re-queued by the new class, so their stat bumps must
+ * not survive as ghosts — otherwise resolving the new class's ASI stacks on top
+ * (+2 STR becomes +4). Selections are the same parseable labels
+ * applyAsiToEntity records ('con+2', 'str+1,dex+1'); feat selections are
+ * skipped (feat features are removed separately).
+ */
+export function stripResolvedAsiStats(entity: Entity): Entity {
+  const asiChoices = entity.choices.filter(
+    c => c.definition.kind === 'asi' && c.resolved
+  );
+  if (asiChoices.length === 0) return entity;
+
+  const newStats = { ...entity.stats };
+  let changed = false;
+  for (const choice of asiChoices) {
+    for (const sel of choice.selections) {
+      for (const part of sel.split(',')) {
+        const m = part.trim().match(/^(str|dex|con|int|wis|cha)\+(\d+)$/);
+        if (!m) continue;
+        const ab  = m[1] as Ability;
+        const dec = parseInt(m[2], 10);
+        newStats[ab] = Math.max(1, newStats[ab] - dec);
+        changed = true;
+      }
+    }
+  }
+  return changed ? { ...entity, stats: newStats } : entity;
+}
+
+// ── ASI / Feat resolution ───────────────────────────────────────────────────────
+
+/**
+ * Resolves an ASI choice by raising base ability scores (capped at the rules
+ * maximum), marking the choice resolved, applying the retroactive CON→HP rule,
+ * and recomputing derived stats. Used by both creation and in-play level-up.
+ */
+export function applyAsiToEntity(
+  entity:    Entity,
+  choiceId:  string,
+  increases: Partial<Record<Ability, number>>,
+  rules:     CampaignRules,
+): Entity {
+  const maxScore = rules.maxAbilityScore ?? 20;
+  // Cap against EFFECTIVE scores (base + racial/feat effects), not base stats.
+  // A Mountain Dwarf with base STR 18 is effectively 20 — no headroom left.
+  const effective = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const newStats  = { ...entity.stats };
+  const applied: Partial<Record<Ability, number>> = {};
+  for (const ab of Object.keys(increases) as Ability[]) {
+    const headroom = Math.max(0, maxScore - effective[ab]);
+    const inc      = Math.min(increases[ab] ?? 0, headroom);
+    if (inc > 0) {
+      newStats[ab] = newStats[ab] + inc;
+      applied[ab]  = inc;
+    }
+  }
+  const label = (Object.entries(applied) as [Ability, number][])
+    .map(([ab, n]) => `${ab}+${n}`)
+    .join(',') || 'no_change';
+
+  let updated: Entity = {
+    ...entity,
+    stats: newStats,
+    choices: entity.choices.map(c =>
+      c.id === choiceId ? { ...c, resolved: true, selections: [label] } : c
+    ),
+  };
+  updated = reconcileConHp(entity, updated);
+  return recomputeDerived(updated, rules);
+}
+
+/**
+ * Resolves an ASI choice by taking a feat instead. Adds the feat's Feature
+ * through the standard grant path (so its automated Effects fire normally),
+ * marks the choice resolved, applies the retroactive CON→HP rule (feats that
+ * raise CON count too), and recomputes. Takes a Feature, not a Feat, so the
+ * engine stays free of content imports.
+ */
+export function applyFeatToEntity(
+  entity:      Entity,
+  choiceId:    string,
+  grantedAt:   number,
+  featFeature: Feature,
+  featId:      string,
+  rules:       CampaignRules,
+): Entity {
+  let updated = applyGrant(entity, { kind: 'feature', value: featFeature }, grantedAt);
+  updated = {
+    ...updated,
+    choices: updated.choices.map(c =>
+      c.id === choiceId ? { ...c, resolved: true, selections: [`feat:${featId}`] } : c
+    ),
+  };
+  updated = reconcileConHp(entity, updated);
+  return recomputeDerived(updated, rules);
+}
+
 // ── canAutoResolve ────────────────────────────────────────────────────────────
 
 function canAutoResolve(choice: ChoiceDefinition): boolean {
@@ -258,6 +438,24 @@ export function levelUp(
         }
       } else {
         updated = queueChoice(updated, choice, lvl);
+      }
+    }
+
+    // Spell slots: refresh from the PHB table for this level so a caster's slots
+    // grow automatically every level. Without this, progressions would each need
+    // an explicit spell_slots grant per level (only level 1 has one), so leveling
+    // a Wizard 1->5 would leave them stuck on level-1 slots. Preserves `used`.
+    if (updated.spellcasting) {
+      const slotArr = getSpellSlotsForClassLevel(updated.identity.classId, lvl);
+      if (slotArr) {
+        const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
+        const newSlots = { ...updated.spellcasting.slots };
+        tiers.forEach((t, i) => {
+          const total = slotArr[i];
+          const used  = Math.min(newSlots[t]?.used ?? 0, total);
+          newSlots[t] = { total, used };
+        });
+        updated = { ...updated, spellcasting: { ...updated.spellcasting, slots: newSlots } };
       }
     }
 

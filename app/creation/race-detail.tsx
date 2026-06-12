@@ -131,11 +131,6 @@ export default function RaceDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-      {/* Back button */}
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backBtnText}>← Back</Text>
-      </Pressable>
-
       <Text style={styles.heading}>{race.name}</Text>
       <View style={styles.divider} />
 

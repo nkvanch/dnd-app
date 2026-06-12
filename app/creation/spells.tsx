@@ -14,6 +14,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { resolveChoice } from '../../src/engine/leveling';
 import { ChoiceOption, Entity, Spell } from '../../src/engine/types';
 import { globalContentDB } from '../../src/content/classes/library';
+import { ALL_VAULT_SPELLS } from '../../src/content/spells/generated';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Starting spells known at level 1, by class. Prepared casters (Cleric/Druid)
@@ -100,7 +101,17 @@ export default function SpellsScreen() {
 
   const classId       = draft.identity.classId;
   const isSpellcaster = !!draft.spellcasting || spellChoices.length > 0;
-  const allSpells     = globalContentDB.spells;
+  const allSpells = (() => {
+    // Prefer vault spells (487 class-tagged) when they exist; fall back to
+    // the hand-authored corpus for any spell not in the vault (by id).
+    const vaultIds  = new Set(ALL_VAULT_SPELLS.map(s => s.id));
+    const fallbacks = globalContentDB.spells.filter(s => !vaultIds.has(s.id));
+    return [...ALL_VAULT_SPELLS, ...fallbacks];
+  })();
+
+  // Filter by class — only show spells tagged for this class.
+  // If a spell has no `classes` tag at all (legacy), include it so nothing disappears.
+  const classSpells = allSpells.filter(s => !s.classes || s.classes.length === 0 || s.classes.includes(classId));
 
   // ── 1. Non-spellcaster ──────────────────────────────────────────────────────
   if (!isSpellcaster) {
@@ -185,8 +196,8 @@ export default function SpellsScreen() {
   const targets        = SPELLS_AT_L1[classId] ?? { cantrips: 0, spells: 0 };
   const q              = search.trim().toLowerCase();
   const matchesSearch  = (s: Spell) => q === '' || s.name.toLowerCase().includes(q) || s.school.toLowerCase().includes(q);
-  const cantripPool    = allSpells.filter(s => s.level === 0 && matchesSearch(s));
-  const spellPool      = allSpells.filter(s => s.level === 1 && matchesSearch(s));
+  const cantripPool    = classSpells.filter(s => s.level === 0 && matchesSearch(s));
+  const spellPool      = classSpells.filter(s => s.level === 1 && matchesSearch(s));
 
   const toggleCantrip = (id: string) => {
     setPickedCantrips(prev => {

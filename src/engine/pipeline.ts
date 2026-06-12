@@ -28,6 +28,8 @@ export const modifier = (score: number): number => Math.floor((score - 10) / 2);
  * modifier calculations for AC, initiative, saves, and skills.
  * Exported so leveling.ts can compute effectiveStats.con for HP calculations.
  */
+// Explicitly exported so the Abilities tab and AsiFeatPicker can display
+// effective scores (base + race/feat effects) rather than raw base stats.
 export function applyStatModifiers(
   base:    Entity['stats'],
   effects: ActiveEffect[],

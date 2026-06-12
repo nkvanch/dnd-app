@@ -3,7 +3,7 @@
 // PROJECT: Short Rest & Long Rest Recovery Engine
 // ============================================================================
 import { Entity, SpellcastingBlock, SpellSlots, CampaignRules } from './types';
-import { recomputeDerived } from './pipeline';
+import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { removeCondition, reduceExhaustion } from './conditions';
 import { dropConcentration } from './combat';
 import { DEFAULT_RULES } from '../store/characterStore';
@@ -144,7 +144,9 @@ export function spendHitDie(
 
   const { die } = entity.resources.hitDice;
   const roll     = Math.floor(Math.random() * die) + 1;
-  const conMod   = Math.floor((entity.stats.con - 10) / 2);
+  // Use effective CON (race/feat bonuses included), consistent with HP calc.
+  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const conMod   = modifier(effectiveStats.con);
   const heal     = Math.max(1, roll + conMod);
 
   const newCurrent = Math.min(
@@ -164,6 +166,29 @@ export function spendHitDie(
     },
   };
 
+  return recomputeDerived(updated, rules);
+}
+
+/**
+ * Player discards one hit die WITHOUT healing. Use when the player rolls
+ * PHYSICAL dice and applies the healing themselves (the app's player-facing
+ * resolution model) — this just decrements the remaining pool.
+ */
+export function discardHitDie(
+  entity: Entity,
+  rules:  CampaignRules = DEFAULT_RULES
+): Entity {
+  if (entity.resources.hitDice.remaining <= 0) return entity;
+  const updated = {
+    ...entity,
+    resources: {
+      ...entity.resources,
+      hitDice: {
+        ...entity.resources.hitDice,
+        remaining: entity.resources.hitDice.remaining - 1,
+      },
+    },
+  };
   return recomputeDerived(updated, rules);
 }
 

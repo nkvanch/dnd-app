@@ -251,7 +251,7 @@ export const itemLeatherArmor: Item = {
   features: [{
     id: 'leather_armor_ac', name: 'Leather Armor', description: 'Base AC 11 + DEX modifier.',
     source: { kind: 'item', refId: 'leather_armor' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 11, condition: null }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 11, condition: null, formulaAbilities: ['dex'] as any }],
   }],
 };
 
@@ -261,11 +261,15 @@ export const itemStuddedLeather: Item = {
   features: [{
     id: 'studded_leather_ac', name: 'Studded Leather', description: 'Base AC 12 + DEX modifier.',
     source: { kind: 'item', refId: 'studded_leather' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 12, condition: null }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 12, condition: null, formulaAbilities: ['dex'] as any }],
   }],
 };
 
 // ── Medium Armor ──────────────────────────────────────────────────────────────
+// Medium armor: base + DEX (max +2). The pipeline takes formulaAbilities mods
+// uncapped; for medium armor correctness the DEX cap would need pipeline support.
+// For now we express as base_ac_formula with DEX so equipping any medium armor
+// at least shows the correct base and adds DEX. Cap enforcement is a TODO.
 
 export const itemChainShirt: Item = {
   id: 'chain_shirt', name: 'Chain Shirt', weight: 20, cost: '50 gp',
@@ -273,7 +277,7 @@ export const itemChainShirt: Item = {
   features: [{
     id: 'chain_shirt_ac', name: 'Chain Shirt', description: 'Base AC 13 + DEX modifier (max 2).',
     source: { kind: 'item', refId: 'chain_shirt' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 13, condition: null }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 13, condition: null, formulaAbilities: ['dex'] as any }],
   }],
 };
 
@@ -283,7 +287,7 @@ export const itemScaleMail: Item = {
   features: [{
     id: 'scale_mail_ac', name: 'Scale Mail', description: 'Base AC 14 + DEX modifier (max 2).',
     source: { kind: 'item', refId: 'scale_mail' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null, formulaAbilities: ['dex'] as any }],
   }],
 };
 
@@ -293,7 +297,7 @@ export const itemBreastplate: Item = {
   features: [{
     id: 'breastplate_ac', name: 'Breastplate', description: 'Base AC 14 + DEX modifier (max 2).',
     source: { kind: 'item', refId: 'breastplate' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null, formulaAbilities: ['dex'] as any }],
   }],
 };
 
@@ -303,7 +307,7 @@ export const itemHalfPlate: Item = {
   features: [{
     id: 'half_plate_ac', name: 'Half Plate', description: 'Base AC 15 + DEX modifier (max 2).',
     source: { kind: 'item', refId: 'half_plate' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 15, condition: null }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 15, condition: null, formulaAbilities: ['dex'] as any }],
   }],
 };
 

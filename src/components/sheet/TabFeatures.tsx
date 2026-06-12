@@ -1,8 +1,10 @@
 // app/sheet/TabFeatures.tsx
 // Tab 4 — Features grouped by source, plus spells if applicable.
 import { useState } from 'react';
-import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
-import { Entity, FeatureInstance, ActionCard } from '../../engine/types';
+import { ScrollView, View, Text, Pressable, StyleSheet, Modal, Alert } from 'react-native';
+import { Entity, FeatureInstance, ActionCard, CampaignRules } from '../../engine/types';
+import { resolveChoice } from '../../engine/leveling';
+import { AsiFeatPicker } from '../AsiFeatPicker';
 import { generateAllActionCards } from '../../engine/actionCards';
 import { globalContentDB } from '../../content/classes/library';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -71,8 +73,38 @@ function CollapsibleGroup({ title, children }: { title: string; children: React.
   );
 }
 
-export function TabFeatures({ entity }: { entity: Entity }) {
+export function TabFeatures({ entity, rules, onEntityUpdate }: {
+  entity: Entity;
+  /** Optional — when provided, pending choices become resolvable in this tab. */
+  rules?: CampaignRules;
+  onEntityUpdate?: (updated: Entity) => void;
+}) {
   const { features, spellcasting, derived } = entity;
+  const [skillSelections, setSkillSelections] = useState<Record<string, string[]>>({});
+  const [asiChoiceOpen, setAsiChoiceOpen] = useState<string | null>(null);
+
+  const pendingChoices = entity.choices.filter(c => !c.resolved);
+  const canResolve     = !!rules && !!onEntityUpdate;
+
+  function toggleSkill(choiceId: string, optionId: string, count: number) {
+    setSkillSelections(prev => {
+      const cur = prev[choiceId] ?? [];
+      if (cur.includes(optionId)) return { ...prev, [choiceId]: cur.filter(o => o !== optionId) };
+      if (cur.length >= count)    return prev;
+      return { ...prev, [choiceId]: [...cur, optionId] };
+    });
+  }
+
+  function confirmSkillChoice(choiceId: string) {
+    if (!rules || !onEntityUpdate) return;
+    const sel = skillSelections[choiceId] ?? [];
+    try {
+      onEntityUpdate(resolveChoice(entity, choiceId, sel, rules));
+      setSkillSelections(prev => ({ ...prev, [choiceId]: [] }));
+    } catch (e) {
+      Alert.alert('Could not resolve choice', e instanceof Error ? e.message : String(e));
+    }
+  }
 
   // Group features by source kind
   const groups = new Map<string, FeatureInstance[]>();
@@ -99,6 +131,71 @@ export function TabFeatures({ entity }: { entity: Entity }) {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      {/* Pending level-up / creation choices */}
+      {pendingChoices.length > 0 && (
+        <CollapsibleGroup title={`PENDING CHOICES (${pendingChoices.length})`}>
+          {pendingChoices.map(c => {
+            const def     = c.definition;
+            const isSkill = def.kind === 'skill' && Array.isArray(def.pool);
+            const sel     = skillSelections[c.id] ?? [];
+            return (
+              <View key={c.id} style={styles.pendingRow}>
+                <Text style={styles.pendingPrompt}>{def.prompt}</Text>
+                <Text style={styles.pendingMeta}>From level {c.grantedAt} · pick {def.count}</Text>
+
+                {def.kind === 'asi' && (
+                  <Pressable
+                    style={[styles.resolveBtn, !canResolve && styles.resolveBtnDisabled]}
+                    disabled={!canResolve}
+                    onPress={() => setAsiChoiceOpen(c.id)}
+                  >
+                    <Text style={styles.resolveBtnTxt}>Resolve — ASI or Feat →</Text>
+                  </Pressable>
+                )}
+
+                {isSkill && (
+                  <>
+                    <View style={styles.chipRow}>
+                      {(def.pool as { id: string; label: string; value: unknown }[]).map(opt => {
+                        const selected  = sel.includes(opt.id);
+                        const skillName = String(opt.value);
+                        const alreadyTrained =
+                          entity.skills.skills[skillName as keyof typeof entity.skills.skills]?.trained === true;
+                        return (
+                          <Pressable
+                            key={opt.id}
+                            style={[styles.chip, selected && styles.chipSelected, alreadyTrained && styles.chipDisabled]}
+                            disabled={alreadyTrained || !canResolve}
+                            onPress={() => toggleSkill(c.id, opt.id, def.count)}
+                          >
+                            <Text style={[styles.chipTxt, selected && styles.chipTxtSelected]}>
+                              {opt.label}{alreadyTrained ? ' ✓' : ''}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <Pressable
+                      style={[styles.resolveBtn, (sel.length !== def.count || !canResolve) && styles.resolveBtnDisabled]}
+                      disabled={sel.length !== def.count || !canResolve}
+                      onPress={() => confirmSkillChoice(c.id)}
+                    >
+                      <Text style={styles.resolveBtnTxt}>Confirm ({sel.length}/{def.count})</Text>
+                    </Pressable>
+                  </>
+                )}
+
+                {def.kind !== 'asi' && !isSkill && (
+                  <Text style={styles.pendingNote}>
+                    Resolve this with your DM for now — an in-app picker for this choice type is coming.
+                  </Text>
+                )}
+              </View>
+            );
+          })}
+        </CollapsibleGroup>
+      )}
 
       {/* Feature groups */}
       {SOURCE_ORDER.filter(k => groups.has(k)).map(kind => (
@@ -175,6 +272,34 @@ export function TabFeatures({ entity }: { entity: Entity }) {
         </View>
       )}
 
+      {/* ASI / Feat resolution modal */}
+      <Modal visible={asiChoiceOpen !== null} animationType="slide" onRequestClose={() => setAsiChoiceOpen(null)}>
+        <View style={styles.asiModalRoot}>
+          {(() => {
+            const ch = entity.choices.find(c => c.id === asiChoiceOpen && !c.resolved);
+            if (!ch || !rules || !onEntityUpdate) {
+              return (
+                <View style={styles.asiDone}>
+                  <Text style={styles.asiDoneTxt}>Nothing to resolve.</Text>
+                  <Pressable style={styles.resolveBtn} onPress={() => setAsiChoiceOpen(null)}>
+                    <Text style={styles.resolveBtnTxt}>Close</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            return (
+              <AsiFeatPicker
+                entity={entity}
+                choice={ch}
+                rules={rules}
+                onClose={() => setAsiChoiceOpen(null)}
+                onResolved={(updated) => { onEntityUpdate(updated); setAsiChoiceOpen(null); }}
+              />
+            );
+          })()}
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -243,4 +368,30 @@ const styles = StyleSheet.create({
   empty:     { alignItems: 'center', gap: Spacing.sm, paddingTop: Spacing.xxl },
   emptyIcon: { fontSize: 48 },
   emptyTxt:  { fontSize: FontSize.lg, color: Colors.textSecondary },
+
+  // Pending choices
+  pendingRow:    { paddingVertical: Spacing.sm, gap: Spacing.xs, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  pendingPrompt: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  pendingMeta:   { fontSize: FontSize.xs, color: Colors.textDim },
+  pendingNote:   { fontSize: FontSize.sm, color: Colors.textSecondary, fontStyle: 'italic' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  chip: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  chipSelected:    { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  chipDisabled:    { opacity: 0.4 },
+  chipTxt:         { fontSize: FontSize.sm, color: Colors.textSecondary },
+  chipTxtSelected: { color: Colors.gold, fontWeight: FontWeight.bold },
+  resolveBtn: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    padding: Spacing.sm, alignItems: 'center', marginTop: 2,
+  },
+  resolveBtnDisabled: { opacity: 0.4 },
+  resolveBtnTxt:      { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  asiModalRoot: { flex: 1, backgroundColor: Colors.bg, paddingTop: Spacing.xl + 8 },
+  asiDone:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.lg, padding: Spacing.lg },
+  asiDoneTxt:   { fontSize: FontSize.lg, color: Colors.textPrimary },
 });

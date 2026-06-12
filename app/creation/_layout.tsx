@@ -4,10 +4,12 @@
 import { Stack } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
 import { Colors } from '../../src/theme';
+import { CreationHeader } from '../../src/components/CreationHeader';
 
 export default function CreationLayout() {
   return (
     <View style={styles.wrapper}>
+      <CreationHeader />
       <Stack
         screenOptions={{
           headerShown:  false,

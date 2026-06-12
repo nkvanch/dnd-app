@@ -5,6 +5,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoid
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
+import { recalculateAllHP, reapplyResolvedAsi } from '../../src/engine/leveling';
 import { rollAbilityScoreSet } from '../../src/engine/dice';
 import { Ability, AbilityScores } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -165,7 +166,19 @@ export default function ScoresScreen() {
       stats: base,
       notes: JSON.stringify({ ...existingNotes, scoresConfirmed: true }),
     };
-    const updated = recomputeDerived(withFlag, rules);
+    // Setting base stats wholesale would erase any ASI already resolved during
+    // creation (the +2/+1+1 lives in base stats). Re-apply resolved ASIs on top
+    // so re-confirming scores never silently loses an Ability Score Improvement.
+    let updated = reapplyResolvedAsi(withFlag, rules);
+    updated = recomputeDerived(updated, rules);
+    // Recompute HP now that final CON is known, so the sheet/hub don't show a
+    // stale value computed at class-selection time (e.g. HP 13 instead of 16
+    // when CON was raised to 18 after choosing the class). Only meaningful once
+    // a class (hit die) has been chosen.
+    if (updated.identity.classId && updated.resources.hitDice.die > 0) {
+      updated = recalculateAllHP(updated, rules);
+      updated = recomputeDerived(updated, rules);
+    }
     setDraft(updated);
     router.push('/creation/hub');
   }
@@ -176,10 +189,6 @@ export default function ScoresScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>← Back</Text>
-        </Pressable>
 
         <Text style={styles.heading}>Ability Scores</Text>
         <View style={styles.divider} />

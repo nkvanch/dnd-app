@@ -68,6 +68,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       conditions:  globalContentDB.conditions,
       items:       globalContentDB.items,
       features:    [...globalContentDB.features,    ...features],
+      feats:       globalContentDB.feats,
     };
   },
 

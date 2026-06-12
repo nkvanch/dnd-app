@@ -94,6 +94,22 @@ export type Item = {
   features:   Feature[];
 };
 
+/**
+ * A feat. Selected in place of an Ability Score Increase.
+ * `feature` is the Feature applied when the feat is taken; it carries any
+ * automated Effects (e.g. a fixed +1 to an ability, +5 initiative). Feats whose
+ * benefits can't be fully automated yet still apply as a named, described Feature
+ * the player tracks manually.
+ */
+export type Feat = {
+  id:           string;
+  name:         string;
+  prerequisite: string | null;
+  description:  string;
+  source:       string;
+  feature:      Feature;
+};
+
 export type ContentDB = {
   races:       Race[];
   classes:     CharClass[];
@@ -102,6 +118,7 @@ export type ContentDB = {
   items:       Item[];
   conditions:  Condition[];
   features:    Feature[];
+  feats?:      Feat[];   // optional so existing ContentDB literals remain valid
 };
 
 // ── 3. Entity runtime schemas ────────────────────────────────────────────────
@@ -240,6 +257,8 @@ export type Spell = {
   upcast:                   string | null;
   ritual:                   boolean;
   concentration:            boolean;
+  /** Class IDs that can cast this spell (lowercased, e.g. 'wizard'). Drives class-filtered spell lists. */
+  classes?:                 string[];
   /** Features applied to caster while concentrating — removed when concentration drops. */
   onConcentrationFeatures?: Feature[];
 };

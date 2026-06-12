@@ -14,6 +14,7 @@ import { takeRest } from '../../src/engine/rest';
 import { expireOverrides } from '../../src/engine/dmOverride';
 import { hasActiveOverride } from '../../src/engine/dmOverride';
 import { Entity } from '../../src/engine/types';
+import { ALL_ITEMS } from '../../src/content/items/index';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
 import { TabActions }   from '../../src/components/sheet/TabActions';
 import { TabAbilities } from '../../src/components/sheet/TabAbilities';
@@ -146,12 +147,18 @@ export default function CharacterSheetScreen() {
     mutate(e => {
       const inst = e.inventory.carried.find(i => i.itemId === itemId);
       if (!inst) return e;
+      // Hydrate features from the content definition at equip time.
+      // Inventory instances are created with `features: []` (resolveChoice and
+      // the equipment screen only store the itemId) — without this, equipping
+      // armor adds an item with zero effects and AC never changes.
+      const def      = ALL_ITEMS.find(i => i.id === itemId);
+      const hydrated = def ? { ...inst, features: def.features } : inst;
       return {
         ...e,
         inventory: {
           ...e.inventory,
           carried:  e.inventory.carried.filter(i => i.itemId !== itemId),
-          equipped: [...e.inventory.equipped, inst],
+          equipped: [...e.inventory.equipped, hydrated],
         },
       };
     });
@@ -271,7 +278,13 @@ export default function CharacterSheetScreen() {
             onEntityUpdate={updated => mutate(() => updated)}
           />
         )}
-        {activeTab === 'features'  && <TabFeatures  entity={entity} />}
+        {activeTab === 'features' && (
+          <TabFeatures
+            entity={entity}
+            rules={rules}
+            onEntityUpdate={updated => mutate(() => updated)}
+          />
+        )}
         {activeTab === 'inventory' && (
           <TabInventory
             entity={entity}

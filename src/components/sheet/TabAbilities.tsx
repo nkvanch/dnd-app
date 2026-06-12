@@ -83,8 +83,8 @@ export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEnti
         <Text style={styles.sectionTitle}>ABILITY SCORES</Text>
         <View style={styles.abilityGrid}>
           {ABILITIES.map(({ key, label }) => {
-            const score = stats[key];
-            const mod   = modifier(score);
+            const score  = effectiveStats[key];   // effective = base + race/feat bonuses
+            const mod    = modifier(score);
             const modStr = mod >= 0 ? `+${mod}` : String(mod);
             return (
               <Pressable key={key} style={styles.abilityBox}
@@ -135,7 +135,7 @@ export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEnti
         {SKILLS.map(({ name, label, ability }) => {
           const entry  = skills.skills[name];
           const val    = entry?.bonus ?? 0;
-          const modVal = modifier(stats[ability]) + (entry?.expertise ? derived.proficiencyBonus * 2 : entry?.trained ? derived.proficiencyBonus : 0) + (entry?.bonus ?? 0);
+          const modVal = modifier(effectiveStats[ability]) + (entry?.expertise ? derived.proficiencyBonus * 2 : entry?.trained ? derived.proficiencyBonus : 0) + (entry?.bonus ?? 0);
           const valStr = modVal >= 0 ? `+${modVal}` : String(modVal);
           const expertise  = entry?.expertise;
           const trained    = entry?.trained;

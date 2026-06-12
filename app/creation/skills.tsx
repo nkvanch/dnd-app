@@ -1,5 +1,7 @@
 // app/creation/skills.tsx
 // Skill selection. Shows already-owned proficiencies at top, then choices below.
+// Handles re-entry gracefully: if all choices are already resolved, shows a
+// read-only summary of what was picked rather than "no choices for this class".
 import { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -23,9 +25,11 @@ export default function SkillsScreen() {
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
 
-  const skillChoices = draft
-    ? draft.choices.filter(c => !c.resolved && c.definition.kind === 'skill')
-    : [];
+  // Split into pending vs resolved so re-entry shows a summary instead of
+  // the confusing "no additional skill choices" message.
+  const allSkillChoices      = draft ? draft.choices.filter(c => c.definition.kind === 'skill') : [];
+  const pendingSkillChoices  = allSkillChoices.filter(c => !c.resolved);
+  const resolvedSkillChoices = allSkillChoices.filter(c =>  c.resolved);
 
   // Already-owned skills from background / race / class grants
   const alreadyTrained = draft
@@ -35,13 +39,13 @@ export default function SkillsScreen() {
     : [];
 
   const [selections, setSelections] = useState<Record<string, string[]>>(
-    Object.fromEntries(skillChoices.map(c => [c.id, []]))
+    Object.fromEntries(pendingSkillChoices.map(c => [c.id, []]))
   );
 
   // Redirect to name if no draft — must be in useEffect, not render
   useEffect(() => {
     if (!draft) router.replace('/creation/name');
-  }, [draft]);
+  }, [draft?.id]);
 
   if (!draft) return null;
 
@@ -55,12 +59,12 @@ export default function SkillsScreen() {
   }
 
   function canProceed() {
-    return skillChoices.every(c => (selections[c.id]?.length ?? 0) === c.definition.count);
+    return pendingSkillChoices.every(c => (selections[c.id]?.length ?? 0) === c.definition.count);
   }
 
   function handleConfirm() {
     let updated = draft!;
-    for (const choice of skillChoices) {
+    for (const choice of pendingSkillChoices) {
       const chosen = selections[choice.id] ?? [];
       if (chosen.length === choice.definition.count) {
         updated = resolveChoice(updated, choice.id, chosen, rules);
@@ -70,8 +74,8 @@ export default function SkillsScreen() {
     router.push('/creation/hub');
   }
 
-  // No skill choices — show message with explicit Continue button
-  if (skillChoices.length === 0) {
+  // ── Case 1: no skill choices exist for this class ──────────────────────────
+  if (allSkillChoices.length === 0) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <Text style={styles.heading}>Skill Selection</Text>
@@ -86,6 +90,32 @@ export default function SkillsScreen() {
     );
   }
 
+  // ── Case 2: all choices already resolved (re-entering this step) ───────────
+  if (pendingSkillChoices.length === 0) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.heading}>Skill Selection</Text>
+        <View style={styles.divider} />
+        <Text style={styles.ownedTitle}>Skills already chosen:</Text>
+        {resolvedSkillChoices.map(c => {
+          const pool = Array.isArray(c.definition.pool) ? c.definition.pool as ChoiceOption[] : [];
+          return c.selections.map(selId => {
+            const opt   = pool.find(o => o.id === selId);
+            const label = opt
+              ? (SKILL_LABELS[opt.label.toLowerCase().replace(/ /g, '_')] ?? opt.label)
+              : SKILL_LABELS[selId] ?? selId;
+            return <Text key={selId} style={styles.ownedSkill}>✓ {label}</Text>;
+          });
+        })}
+        <View style={styles.divider} />
+        <Pressable style={styles.nextBtn} onPress={() => router.push('/creation/hub')}>
+          <Text style={styles.nextBtnText}>Continue →</Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
+
+  // ── Case 3: pending choices to make ───────────────────────────────────────
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Skill Selection</Text>
@@ -102,8 +132,8 @@ export default function SkillsScreen() {
         </View>
       )}
 
-      {/* Choices */}
-      {skillChoices.map(choice => {
+      {/* Pending choices */}
+      {pendingSkillChoices.map(choice => {
         const pool   = Array.isArray(choice.definition.pool) ? choice.definition.pool as ChoiceOption[] : [];
         const chosen = selections[choice.id] ?? [];
         return (
@@ -111,13 +141,10 @@ export default function SkillsScreen() {
             <Text style={styles.choicePrompt}>Choose {choice.definition.count} Skills</Text>
             <Text style={styles.choiceCount}>Selected: {chosen.length} / {choice.definition.count}</Text>
             {pool.map(opt => {
-              // A skill already proficient (from background/race/class) cannot be
-              // picked again — disable it and tag it instead of letting the player
-              // waste a class skill choice on it.
-              const skillKey        = opt.value as SkillName;
+              const skillKey         = opt.value as SkillName;
               const isAlreadyTrained = draft!.skills.skills[skillKey]?.trained === true;
-              const isSelected      = chosen.includes(opt.id);
-              const isDisabled      = isAlreadyTrained || (!isSelected && chosen.length >= choice.definition.count);
+              const isSelected       = chosen.includes(opt.id);
+              const isDisabled       = isAlreadyTrained || (!isSelected && chosen.length >= choice.definition.count);
               return (
                 <Pressable
                   key={opt.id}
@@ -133,7 +160,7 @@ export default function SkillsScreen() {
                     isSelected && styles.optionTextSelected,
                     isAlreadyTrained && styles.optionTextMuted,
                   ]}>
-                    {SKILL_LABELS[opt.label.toLowerCase().replace(/ /g,'_')] ?? opt.label}
+                    {SKILL_LABELS[opt.label.toLowerCase().replace(/ /g, '_')] ?? opt.label}
                   </Text>
                   {isAlreadyTrained && <Text style={styles.alreadyTag}>From background</Text>}
                 </Pressable>
@@ -173,24 +200,21 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm, paddingHorizontal: Spacing.sm,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  optionSelected: { backgroundColor: Colors.surfaceHigh },
-  optionDisabled: { opacity: 0.4 },
+  optionSelected:     { backgroundColor: Colors.surfaceHigh },
+  optionDisabled:     { opacity: 0.4 },
   checkbox: {
     width: 22, height: 22, borderRadius: 4,
     borderWidth: 2, borderColor: Colors.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  checkboxSelected: { backgroundColor: Colors.gold, borderColor: Colors.gold },
-  checkmark:        { fontSize: 12, color: Colors.bg, fontWeight: FontWeight.bold },
-  optionText:        { fontSize: FontSize.md, color: Colors.textPrimary, flex: 1 },
+  checkboxSelected:   { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  checkmark:          { fontSize: 12, color: Colors.bg, fontWeight: FontWeight.bold },
+  optionText:         { fontSize: FontSize.md, color: Colors.textPrimary, flex: 1 },
   optionTextSelected: { fontWeight: FontWeight.bold },
-  optionTextMuted:   { color: Colors.textDim },
-  alreadyTag:        { fontSize: FontSize.xs, color: Colors.green, fontWeight: FontWeight.bold },
+  optionTextMuted:    { color: Colors.textDim },
+  alreadyTag:         { fontSize: FontSize.xs, color: Colors.green, fontWeight: FontWeight.bold },
 
-  nextBtn: {
-    backgroundColor: Colors.gold, borderRadius: Radius.md,
-    paddingVertical: Spacing.md, alignItems: 'center', marginTop: Spacing.lg,
-  },
+  nextBtn:         { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center', marginTop: Spacing.lg },
   nextBtnDisabled: { backgroundColor: Colors.goldDim },
-  nextBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
+  nextBtnText:     { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
 });

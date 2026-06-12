@@ -5,39 +5,11 @@ import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { globalContentDB } from '../../src/content/classes/library';
-import { levelUp } from '../../src/engine/leveling';
+import { levelUp, stripResolvedAsiStats } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { fighterProgression } from '../../src/content/classes/fighter';
-import {
-  rogueProgression,
-  wizardProgression,
-  clericProgression,
-  barbarianProgression,
-  rangerProgression,
-  paladinProgression,
-  druidProgression,
-  bardProgression,
-  monkProgression,
-  sorcererProgression,
-  warlockProgression,
-} from '../../src/content/classes/index';
+import { PROGRESSIONS } from '../../src/content/classes/progressions';
 import { Entity } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
-
-const PROGRESSIONS: Record<string, Parameters<typeof levelUp>[2]> = {
-  fighter:   fighterProgression,
-  rogue:     rogueProgression,
-  wizard:    wizardProgression,
-  cleric:    clericProgression,
-  barbarian: barbarianProgression,
-  ranger:    rangerProgression,
-  paladin:   paladinProgression,
-  druid:     druidProgression,
-  bard:      bardProgression,
-  monk:      monkProgression,
-  sorcerer:  sorcererProgression,
-  warlock:   warlockProgression,
-};
 
 type ClassDetail = {
   description: string;
@@ -179,19 +151,97 @@ const CLASS_DETAIL: Record<string, ClassDetail> = {
  * piles up old features/choices/resources and double-counts HP.
  */
 function clearClassData(entity: Entity, hitDie: number): Entity {
+  // Revert resolved-ASI stat bumps BEFORE dropping the choices that record them.
+  const stripped = stripResolvedAsiStats(entity);
+
+  // Reset ALL skills to untrained — class skill choices set trained=true on the
+  // skill block directly (not via effects), so they survive a features/choices
+  // wipe and stack when a new class's skill choices are resolved.
+  // Background-granted skills (set at grantedAt===0 via selectBackground) also
+  // live here; we'll re-apply them below from the background features.
+  const clearedSkills: typeof stripped.skills = {
+    skills: Object.fromEntries(
+      Object.entries(stripped.skills.skills).map(([k, v]) => [
+        k,
+        { ...v, trained: false, expertise: false },
+      ])
+    ) as typeof stripped.skills.skills,
+  };
+
+  // Re-apply background skill grants so they survive the class change.
+  // Background features carry grant_proficiency effects or the background
+  // screen directly sets trained=true; we re-derive from the remaining features.
+  let retrainedSkills = clearedSkills;
+  const backgroundFeatures = stripped.features.filter(
+    f => f.source.kind === 'background'
+  );
+  for (const feature of backgroundFeatures) {
+    for (const effect of feature.effects) {
+      if (
+        effect.type === 'grant_proficiency' &&
+        effect.target.startsWith('skill:') &&
+        effect.operation === 'add'
+      ) {
+        const skillName = effect.target.slice(6) as keyof typeof retrainedSkills.skills;
+        if (retrainedSkills.skills[skillName]) {
+          retrainedSkills = {
+            skills: {
+              ...retrainedSkills.skills,
+              [skillName]: { ...retrainedSkills.skills[skillName], trained: true },
+            },
+          };
+        }
+      }
+    }
+  }
+  // Background.tsx also sets trained=true directly (not via effect) — re-apply
+  // by checking background feature proficiency lists from the content DB.
+  // This is safe because the backgroundId is stable on the entity.
+  const bgId = stripped.identity.backgroundId;
+  if (bgId) {
+    const BG_SKILL_MAP: Record<string, string[]> = {
+      acolyte:      ['insight', 'religion'],
+      charlatan:    ['deception', 'sleight_of_hand'],
+      criminal:     ['deception', 'stealth'],
+      entertainer:  ['acrobatics', 'performance'],
+      folk_hero:    ['animal_handling', 'survival'],
+      guild_artisan:['insight', 'persuasion'],
+      hermit:       ['medicine', 'religion'],
+      noble:        ['history', 'persuasion'],
+      outlander:    ['athletics', 'survival'],
+      sage:         ['arcana', 'history'],
+      sailor:       ['athletics', 'perception'],
+      soldier:      ['athletics', 'intimidation'],
+      urchin:       ['sleight_of_hand', 'stealth'],
+    };
+    const bgSkills = BG_SKILL_MAP[bgId] ?? [];
+    for (const sk of bgSkills) {
+      const skillName = sk as keyof typeof retrainedSkills.skills;
+      if (retrainedSkills.skills[skillName]) {
+        retrainedSkills = {
+          skills: {
+            ...retrainedSkills.skills,
+            [skillName]: { ...retrainedSkills.skills[skillName], trained: true },
+          },
+        };
+      }
+    }
+  }
+
   return {
-    ...entity,
-    // Drop class & subclass features
-    features:  entity.features.filter(f => f.source.kind !== 'class' && f.source.kind !== 'subclass'),
-    // Drop class-granted choices (equipment, skills, spells, ASI); keep race/level-0 grants
-    choices:   entity.choices.filter(c => c.grantedAt === 0),
+    ...stripped,
+    skills:   retrainedSkills,
+    identity: { ...stripped.identity, level: 0, subclassId: null },
+    features: stripped.features.filter(
+      f => f.source.kind !== 'class' && f.source.kind !== 'subclass' && f.source.kind !== 'feat'
+    ),
+    choices:   stripped.choices.filter(c => c.grantedAt === 0),
     resources: {
-      ...entity.resources,
-      custom:  [],                                          // class custom resources
-      hp:      { current: 0, maximum: 0, temp: 0 },         // reset — levelUp recomputes
+      ...stripped.resources,
+      custom:  [],
+      hp:      { current: 0, maximum: 0, temp: 0 },
       hitDice: { die: hitDie, total: 0, remaining: 0 },
     },
-    // Reset spellcasting so init_spellcasting re-initialises for the new class
     spellcasting: null,
   };
 }
@@ -257,10 +307,6 @@ export default function ClassDetailScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backBtnText}>← Back</Text>
-      </Pressable>
 
       <Text style={styles.heading}>{cls.name}</Text>
       <View style={styles.divider} />

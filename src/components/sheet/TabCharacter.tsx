@@ -13,10 +13,11 @@ import { hasActiveOverride } from '../../engine/dmOverride';
 import { dropConcentration } from '../../engine/combat';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from '../../engine/pipeline';
 import { levelUp } from '../../engine/leveling';
-import { spendHitDie } from '../../engine/rest';
+import { spendHitDie, discardHitDie } from '../../engine/rest';
 import { rollD20, rollExpression } from '../../engine/dice';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
 import { globalContentDB } from '../../content/classes/library';
+import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -227,6 +228,11 @@ function DeathSavesSection({
           </Pressable>
         </>
       )}
+      {(saves.successes > 0 || saves.failures > 0 || isDead || isStable) && (
+        <Pressable style={styles.deathResetBtn} onPress={() => onSavesChange({ successes: 0, failures: 0 })}>
+          <Text style={styles.deathResetTxt}>↺ Reset Death Saves</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -234,9 +240,9 @@ function DeathSavesSection({
 // ── Level Up Button ───────────────────────────────────────────────────────────
 
 function LevelUpSection({
-  entity, rules, onEntityUpdate,
+  entity, rules, onEntityUpdate, onLeveled,
 }: {
-  entity: Entity; rules: CampaignRules; onEntityUpdate: (u: Entity) => void;
+  entity: Entity; rules: CampaignRules; onEntityUpdate: (u: Entity) => void; onLeveled: (u: Entity) => void;
 }) {
   const classId     = entity.identity.classId;
   const progression = ALL_PROGRESSIONS[classId];
@@ -257,13 +263,7 @@ function LevelUpSection({
           onPress: () => {
             const updated = levelUp(entity, nextLevel, progression!, rules);
             onEntityUpdate(updated);
-            const pending = updated.choices.filter(c => !c.resolved).length;
-            if (pending > 0) {
-              Alert.alert(
-                `${pending} choice(s) pending`,
-                'Open the Features tab to resolve skill and other choices.'
-              );
-            }
+            onLeveled(updated);
           },
         },
       ]
@@ -391,9 +391,11 @@ export function TabCharacter({
   const [concOpen,   setConcOpen]   = useState(false);
   const [concDc,     setConcDc]     = useState(10);
   const [manualHpOpen, setManualHpOpen] = useState(false);
+  const [maxHpOpen,    setMaxHpOpen]    = useState(false);
   const [tempHpOpen,   setTempHpOpen]   = useState(false);
   // Death saves are session-local — not stored in entity.notes
   const [deathSaves, setDeathSaves] = useState({ successes: 0, failures: 0 });
+  const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
 
   const { identity, resources, derived, conditions, spellcasting } = entity;
 
@@ -405,6 +407,16 @@ export function TabCharacter({
     const clamped = Math.max(0, Math.min(resources.hp.maximum, value));
     onEntityUpdate(recomputeDerived(
       { ...entity, resources: { ...entity.resources, hp: { ...entity.resources.hp, current: clamped } } },
+      rules,
+    ));
+  }
+  function handleSetMaxHp(value: number) {
+    // Manual max-HP override. recomputeDerived never touches resources.hp, so this
+    // persists. Clamp current HP down if the new max is lower.
+    const newMax     = Math.max(1, value);
+    const newCurrent = Math.min(entity.resources.hp.current, newMax);
+    onEntityUpdate(recomputeDerived(
+      { ...entity, resources: { ...entity.resources, hp: { ...entity.resources.hp, maximum: newMax, current: newCurrent } } },
       rules,
     ));
   }
@@ -422,15 +434,24 @@ export function TabCharacter({
       rules,
     ));
   }
-  function handleUseHitDie() {
+  function handleRollHitDie() {
     if (resources.hitDice.remaining <= 0) return;
     const before  = resources.hp.current;
     const updated = spendHitDie(entity, rules);
     onEntityUpdate(updated);
     const healed = updated.resources.hp.current - before;
     Alert.alert(
-      'Hit Die Spent',
+      'Hit Die Rolled',
       `Restored ${healed} HP. Hit dice remaining: ${updated.resources.hitDice.remaining}/${updated.resources.hitDice.total}.`,
+    );
+  }
+  function handleDiscardHitDie() {
+    if (resources.hitDice.remaining <= 0) return;
+    const updated = discardHitDie(entity, rules);
+    onEntityUpdate(updated);
+    Alert.alert(
+      'Hit Die Used',
+      `Spent one hit die — roll your own dice and heal manually. Remaining: ${updated.resources.hitDice.remaining}/${updated.resources.hitDice.total}.`,
     );
   }
 
@@ -497,16 +518,21 @@ export function TabCharacter({
       {/* HP utility row: manual set + temporary HP */}
       {!isDying && (
         <View style={styles.hpUtilRow}>
-          <Pressable style={styles.hpUtilBtn} onPress={() => setManualHpOpen(true)}>
-            <Text style={styles.hpUtilTxt}>✎ Set HP manually</Text>
-          </Pressable>
+          <View style={styles.hpUtilBtns}>
+            <Pressable style={styles.hpUtilBtn} onPress={() => setManualHpOpen(true)}>
+              <Text style={styles.hpUtilTxt}>✎ Set HP</Text>
+            </Pressable>
+            <Pressable style={styles.hpUtilBtn} onPress={() => setMaxHpOpen(true)}>
+              <Text style={styles.hpUtilTxt}>✎ Set Max</Text>
+            </Pressable>
+          </View>
           <View style={styles.tempHpControls}>
             <Text style={styles.tempHpLabel}>Temp HP: {resources.hp.temp}</Text>
-            <Pressable style={styles.resBtn} onPress={() => setTempHpOpen(true)}>
-              <Text style={styles.resBtnTxt}>+</Text>
-            </Pressable>
             <Pressable style={styles.resBtn} onPress={handleClearTempHp} disabled={resources.hp.temp <= 0}>
               <Text style={[styles.resBtnTxt, resources.hp.temp <= 0 && styles.disabled]}>−</Text>
+            </Pressable>
+            <Pressable style={styles.resBtn} onPress={() => setTempHpOpen(true)}>
+              <Text style={styles.resBtnTxt}>+</Text>
             </Pressable>
           </View>
         </View>
@@ -549,6 +575,15 @@ export function TabCharacter({
         entity={entity}
         rules={rules}
         onEntityUpdate={onEntityUpdate}
+        onLeveled={(updated) => {
+          const hasAsi = updated.choices.some(c => c.definition.kind === 'asi' && !c.resolved);
+          if (hasAsi) {
+            setLevelUpAsiOpen(true);
+          } else {
+            const other = updated.choices.filter(c => !c.resolved).length;
+            if (other > 0) Alert.alert(`${other} choice(s) pending`, 'Open the Features tab to resolve remaining choices.');
+          }
+        }}
       />
 
       {/* Weapon Attacks */}
@@ -584,13 +619,23 @@ export function TabCharacter({
             {resources.hitDice.remaining}/{resources.hitDice.total}  ·  d{resources.hitDice.die}
           </Text>
         </View>
-        <Pressable
-          style={[styles.useHitDieBtn, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
-          onPress={handleUseHitDie}
-          disabled={resources.hitDice.remaining <= 0}
-        >
-          <Text style={styles.useHitDieTxt}>🎲 Use Hit Die</Text>
-        </Pressable>
+        <View style={styles.hitDieRow}>
+          <Pressable
+            style={[styles.hitDieBtn, styles.hitDieRoll, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
+            onPress={handleRollHitDie}
+            disabled={resources.hitDice.remaining <= 0}
+          >
+            <Text style={styles.useHitDieTxt}>🎲 Roll Hit Die</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.hitDieBtn, styles.hitDieUse, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
+            onPress={handleDiscardHitDie}
+            disabled={resources.hitDice.remaining <= 0}
+          >
+            <Text style={styles.hitDieUseTxt}>Use Hit Die</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.hitDieHint}>Roll: app rolls the die + heals you.  Use: spend one and roll your own.</Text>
       </View>
 
       {/* Conditions + Exhaustion */}
@@ -730,6 +775,15 @@ export function TabCharacter({
       />
 
       <NumberPromptModal
+        visible={maxHpOpen}
+        title="Set Max HP"
+        label="Set maximum HP to (overrides the calculated value):"
+        confirmLabel="Set Max HP"
+        onConfirm={handleSetMaxHp}
+        onClose={() => setMaxHpOpen(false)}
+      />
+
+      <NumberPromptModal
         visible={tempHpOpen}
         title="Add Temporary HP"
         label="Temp HP only replaces if higher than current."
@@ -781,6 +835,38 @@ export function TabCharacter({
         </Pressable>
       </Modal>
 
+      {/* Level-up ASI / Feat picker */}
+      <Modal visible={levelUpAsiOpen} animationType="slide" onRequestClose={() => setLevelUpAsiOpen(false)}>
+        <View style={styles.lvModalRoot}>
+          {(() => {
+            const pending = entity.choices.filter(c => c.definition.kind === 'asi' && !c.resolved);
+            if (pending.length === 0) {
+              return (
+                <View style={styles.lvDone}>
+                  <Text style={styles.lvDoneTxt}>All set — no improvements to resolve.</Text>
+                  <Pressable style={styles.lvDoneBtn} onPress={() => setLevelUpAsiOpen(false)}>
+                    <Text style={styles.lvDoneBtnTxt}>Done</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            return (
+              <AsiFeatPicker
+                entity={entity}
+                choice={pending[0]}
+                rules={rules}
+                onClose={() => setLevelUpAsiOpen(false)}
+                onResolved={(updated) => {
+                  onEntityUpdate(updated);
+                  const more = updated.choices.some(c => c.definition.kind === 'asi' && !c.resolved);
+                  if (!more) setLevelUpAsiOpen(false);
+                }}
+              />
+            );
+          })()}
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -814,6 +900,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, padding: Spacing.sm,
   },
   hpUtilBtn:      { paddingVertical: 4, paddingHorizontal: Spacing.sm },
+  hpUtilBtns:     { flexDirection: 'row', gap: Spacing.xs },
   hpUtilTxt:      { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold },
   tempHpControls: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   tempHpLabel:    { fontSize: FontSize.sm, color: Colors.blue, fontWeight: FontWeight.bold },
@@ -880,6 +967,12 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, alignItems: 'center',
   },
   deathRollBtnTxt: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  deathResetBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.xs,
+  },
+  deathResetTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   statRow: { flexDirection: 'row', gap: Spacing.sm },
   statBox: {
@@ -1000,4 +1093,19 @@ const styles = StyleSheet.create({
   condPickerItemTxt: { fontSize: FontSize.md, color: Colors.textPrimary, textTransform: 'capitalize' },
   cancelBtn:         { alignItems: 'center', padding: Spacing.sm },
   cancelTxt:         { color: Colors.textSecondary, fontSize: FontSize.md },
+
+  // Hit dice buttons
+  hitDieRow:    { flexDirection: 'row', gap: Spacing.sm },
+  hitDieBtn:    { flex: 1, borderRadius: Radius.md, borderWidth: 1, padding: Spacing.sm, alignItems: 'center' },
+  hitDieRoll:   { backgroundColor: Colors.green + '22', borderColor: Colors.green + '66' },
+  hitDieUse:    { backgroundColor: Colors.surfaceHigh, borderColor: Colors.border },
+  hitDieUseTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  hitDieHint:   { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic', marginTop: 4 },
+
+  // Level-up modal
+  lvModalRoot:  { flex: 1, backgroundColor: Colors.bg, paddingTop: Spacing.xl + 8 },
+  lvDone:       { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.lg, padding: Spacing.lg },
+  lvDoneTxt:    { fontSize: FontSize.lg, color: Colors.textPrimary, textAlign: 'center' },
+  lvDoneBtn:    { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md },
+  lvDoneBtnTxt: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
 });

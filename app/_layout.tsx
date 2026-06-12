@@ -97,7 +97,6 @@ export default function RootLayout() {
       >
         <Stack.Screen name="(tabs)"              options={{ headerShown: false }} />
         <Stack.Screen name="creation"            options={{ headerShown: false }} />
-        <Stack.Screen name="creation/level-up"  options={{ headerShown: false }} />
         <Stack.Screen name="sheet/[id]"          options={{ headerShown: false }} />
         <Stack.Screen name="dm/dashboard"        options={{ headerShown: false }} />
         <Stack.Screen name="dm/encounter"        options={{ headerShown: false }} />

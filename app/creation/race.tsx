@@ -30,11 +30,6 @@ export default function RaceScreen() {
   return (
     <View style={styles.container}>
 
-      {/* Back */}
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backBtnText}>← Back</Text>
-      </Pressable>
-
       <Text style={styles.heading}>Select Race</Text>
       <View style={styles.divider} />
 

@@ -160,9 +160,6 @@ export default function BackgroundScreen() {
 
   return (
     <View style={styles.container}>
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backBtnText}>← Back</Text>
-      </Pressable>
       <Text style={styles.heading}>Select Background</Text>
       <View style={styles.divider} />
 
@@ -221,7 +218,43 @@ function BackgroundDetail({ id }: { id: string }) {
   if (!bg || !draft) return null;
 
   function selectBackground() {
-    let updated = { ...draft!, identity: { ...draft!.identity, backgroundId: bg!.id } };
+    // Strip old background features and skills before applying the new one,
+    // so changing background doesn't stack skills from both.
+    const prevBgId = draft!.identity.backgroundId;
+    const BG_SKILL_MAP: Record<string, string[]> = {
+      acolyte:      ['insight', 'religion'],
+      charlatan:    ['deception', 'sleight_of_hand'],
+      criminal:     ['deception', 'stealth'],
+      entertainer:  ['acrobatics', 'performance'],
+      folk_hero:    ['animal_handling', 'survival'],
+      guild_artisan:['insight', 'persuasion'],
+      hermit:       ['medicine', 'religion'],
+      noble:        ['history', 'persuasion'],
+      outlander:    ['athletics', 'survival'],
+      sage:         ['arcana', 'history'],
+      sailor:       ['athletics', 'perception'],
+      soldier:      ['athletics', 'intimidation'],
+      urchin:       ['sleight_of_hand', 'stealth'],
+    };
+
+    // Remove old background's directly-set skill proficiencies.
+    let updatedSkills = { ...draft!.skills.skills };
+    if (prevBgId && BG_SKILL_MAP[prevBgId]) {
+      for (const sk of BG_SKILL_MAP[prevBgId]) {
+        const key = sk as SkillName;
+        if (updatedSkills[key]) {
+          updatedSkills = { ...updatedSkills, [key]: { ...updatedSkills[key], trained: false } };
+        }
+      }
+    }
+
+    let updated = {
+      ...draft!,
+      identity: { ...draft!.identity, backgroundId: bg!.id },
+      // Remove old background features; new ones applied below.
+      features: draft!.features.filter(f => f.source.kind !== 'background'),
+      skills:   { skills: updatedSkills },
+    };
 
     // Apply background features via the grant pipeline
     for (const feature of bg!.features) {
@@ -256,9 +289,6 @@ function BackgroundDetail({ id }: { id: string }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backBtnText}>← Back</Text>
-      </Pressable>
       <Text style={styles.heading}>{bg.name}</Text>
       <View style={styles.divider} />
 

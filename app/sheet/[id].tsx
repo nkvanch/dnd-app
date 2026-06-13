@@ -12,9 +12,9 @@ import { applyDamage, applyHealing } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { takeRest } from '../../src/engine/rest';
 import { expireOverrides } from '../../src/engine/dmOverride';
-import { hasActiveOverride } from '../../src/engine/dmOverride';
 import { Entity } from '../../src/engine/types';
 import { ALL_ITEMS } from '../../src/content/items/index';
+import { CONDITIONS_BY_ID } from '../../src/content/conditions/index';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
 import { TabActions }   from '../../src/components/sheet/TabActions';
 import { TabAbilities } from '../../src/components/sheet/TabAbilities';
@@ -86,7 +86,10 @@ export default function CharacterSheetScreen() {
   }, [mutate, rules]);
 
   const handleAddCondition = useCallback((condId: string) => {
-    mutate(e => applyCondition(e, condId, 'manual', rules));
+    // Look up the condition's mechanical features from content so the engine
+    // can enforce them (e.g. Grappled sets speed to 0 in the pipeline).
+    const condContent = CONDITIONS_BY_ID[condId];
+    mutate(e => applyCondition(e, condId, 'manual', rules, condContent?.features));
   }, [mutate, rules]);
 
   const handleRemoveCondition = useCallback((condId: string) => {

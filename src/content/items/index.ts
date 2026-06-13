@@ -275,9 +275,9 @@ export const itemChainShirt: Item = {
   id: 'chain_shirt', name: 'Chain Shirt', weight: 20, cost: '50 gp',
   properties: ['medium armor'],
   features: [{
-    id: 'chain_shirt_ac', name: 'Chain Shirt', description: 'Base AC 13 + DEX modifier (max 2).',
+    id: 'chain_shirt_ac', name: 'Chain Shirt', description: 'Base AC 13 + DEX modifier (max +2).',
     source: { kind: 'item', refId: 'chain_shirt' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 13, condition: null, formulaAbilities: ['dex'] as any }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 13, condition: null, formulaAbilities: ['dex'] as any, formulaAbilityCap: { dex: 2 } }],
   }],
 };
 
@@ -285,9 +285,9 @@ export const itemScaleMail: Item = {
   id: 'scale_mail', name: 'Scale Mail', weight: 45, cost: '50 gp',
   properties: ['medium armor', 'disadvantage on stealth'],
   features: [{
-    id: 'scale_mail_ac', name: 'Scale Mail', description: 'Base AC 14 + DEX modifier (max 2).',
+    id: 'scale_mail_ac', name: 'Scale Mail', description: 'Base AC 14 + DEX modifier (max +2).',
     source: { kind: 'item', refId: 'scale_mail' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null, formulaAbilities: ['dex'] as any }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null, formulaAbilities: ['dex'] as any, formulaAbilityCap: { dex: 2 } }],
   }],
 };
 
@@ -295,9 +295,9 @@ export const itemBreastplate: Item = {
   id: 'breastplate', name: 'Breastplate', weight: 20, cost: '400 gp',
   properties: ['medium armor'],
   features: [{
-    id: 'breastplate_ac', name: 'Breastplate', description: 'Base AC 14 + DEX modifier (max 2).',
+    id: 'breastplate_ac', name: 'Breastplate', description: 'Base AC 14 + DEX modifier (max +2).',
     source: { kind: 'item', refId: 'breastplate' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null, formulaAbilities: ['dex'] as any }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null, formulaAbilities: ['dex'] as any, formulaAbilityCap: { dex: 2 } }],
   }],
 };
 
@@ -305,9 +305,9 @@ export const itemHalfPlate: Item = {
   id: 'half_plate', name: 'Half Plate', weight: 40, cost: '750 gp',
   properties: ['medium armor', 'disadvantage on stealth'],
   features: [{
-    id: 'half_plate_ac', name: 'Half Plate', description: 'Base AC 15 + DEX modifier (max 2).',
+    id: 'half_plate_ac', name: 'Half Plate', description: 'Base AC 15 + DEX modifier (max +2).',
     source: { kind: 'item', refId: 'half_plate' }, level: null, actions: [], choices: [], passive: true,
-    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 15, condition: null, formulaAbilities: ['dex'] as any }],
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 15, condition: null, formulaAbilities: ['dex'] as any, formulaAbilityCap: { dex: 2 } }],
   }],
 };
 

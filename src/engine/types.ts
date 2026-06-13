@@ -339,13 +339,14 @@ export type Effect = {
   operation: 'add' | 'multiply' | 'set' | 'advantage' | 'disadvantage'
            | 'resistance' | 'immunity' | 'vulnerability' | 'suppress';
   value:     number | string | string[] | null;
-  /** Runtime flag or condition ID that must be active for this effect to apply. */
   condition: string | null;
-  /**
-   * For base_ac_formula only: ability score modifiers to add to the base value.
-   * e.g. ['dex', 'con'] for Barbarian Unarmored Defense (10 + DEX + CON).
-   */
   formulaAbilities?: Ability[];
+  /**
+   * Per-ability cap applied AFTER the modifier is computed, for medium armor.
+   * e.g. { dex: 2 } means "add DEX modifier but cap it at +2".
+   * Only meaningful when the ability appears in formulaAbilities.
+   */
+  formulaAbilityCap?: Partial<Record<Ability, number>>;
 };
 
 /**
@@ -430,6 +431,17 @@ export type Grant = {
   kind:  'feature' | 'resource' | 'resource_upgrade' | 'spell_slots' | 'proficiency'
        | 'speed' | 'subclass_unlock' | 'init_spellcasting';
   value: unknown;
+};
+
+/**
+ * Proficiency grant — used by the class progression `proficiency` grant kind.
+ * Each field is an array of string identifiers. Any field may be omitted.
+ */
+export type ProficiencyGrant = {
+  armor?:     string[];
+  weapons?:   string[];
+  tools?:     string[];
+  languages?: string[];
 };
 
 export type ResourceGrant = {

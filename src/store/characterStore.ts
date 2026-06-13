@@ -10,13 +10,40 @@
 // On startup: call loadCharacters() after initDb() to hydrate from SQLite.
 // ============================================================================
 import { create } from 'zustand';
-import { Entity, CampaignRules, SkillName, SkillEntry, AbilityScores } from '../engine/types';
+import { Entity, CampaignRules, SkillName, SkillEntry, AbilityScores, ItemInstance } from '../engine/types';
 import {
   saveEntity, loadAllEntities, deleteEntity, loadAllEntityMeta, EntityMeta,
 } from '../db/entityRepo';
 import { syncManager } from '../sync/syncManager';
+import { ALL_ITEMS } from '../content/items/index';
 
 export type { EntityMeta };
+
+// ── Item feature hydration ────────────────────────────────────────────────────
+
+/**
+ * Hydrates features on all equipped and carried ItemInstances from the content
+ * definitions. ItemInstances are serialised with features:[] (only itemId is
+ * stored) so on load we must re-attach the definition's features. Without this,
+ * equipping armor has no AC effect after an app restart.
+ */
+function hydrateItemFeatures(entity: Entity): Entity {
+  function hydrateInstance(inst: ItemInstance): ItemInstance {
+    if (inst.features.length > 0) return inst;   // already hydrated (e.g. from equip path)
+    const def = ALL_ITEMS.find(i => i.id === inst.itemId);
+    return def ? { ...inst, features: def.features } : inst;
+  }
+  const equippedHydrated = entity.inventory.equipped.map(hydrateInstance);
+  const carriedHydrated  = entity.inventory.carried.map(hydrateInstance);
+  if (
+    equippedHydrated.every((h, i) => h === entity.inventory.equipped[i]) &&
+    carriedHydrated.every( (h, i) => h === entity.inventory.carried[i])
+  ) return entity;   // nothing changed — avoid unnecessary object creation
+  return {
+    ...entity,
+    inventory: { ...entity.inventory, equipped: equippedHydrated, carried: carriedHydrated },
+  };
+}
 
 // ── Default campaign rules ────────────────────────────────────────────────────
 
@@ -207,8 +234,11 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     set({ isLoading: true });
     try {
       const entities = await loadAllEntities();
-      // Only load character-kind entities into the character store
-      const characters = entities.filter(e => e.kind === 'character');
+      // Hydrate item features on load — ItemInstances are stored with features:[]
+      // so we re-attach definition features before the engine sees them.
+      const characters = entities
+        .filter(e => e.kind === 'character')
+        .map(hydrateItemFeatures);
       set({ characters, isLoading: false });
     } catch (e) {
       console.error('[characterStore] loadCharacters failed:', e);

@@ -110,7 +110,12 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
       ? Math.max(...formulaEffects.map(ae => {
           const baseValue    = ae.effect.value as number;
           const abilityBonus = (ae.effect.formulaAbilities ?? [])
-            .reduce((sum, ab) => sum + modifier(effectiveStats[ab]), 0);
+            .reduce((sum, ab) => {
+              const rawMod = modifier(effectiveStats[ab]);
+              // formulaAbilityCap: e.g. { dex: 2 } for medium armor (PHB p.144)
+              const cap    = ae.effect.formulaAbilityCap?.[ab];
+              return sum + (cap !== undefined ? Math.min(rawMod, cap) : rawMod);
+            }, 0);
           return baseValue + abilityBonus;
         }))
       : entity.resources.ac > 0

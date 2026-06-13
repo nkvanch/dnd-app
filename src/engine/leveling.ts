@@ -1,4 +1,4 @@
-import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant,
+import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { getSpellSlotsForClassLevel } from '../content/classes/spellSlotTables';
@@ -58,13 +58,69 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
     }
 
     case "proficiency": {
-      // TODO: categorise by armor/weapon/tool and append to correct proficiency list
-      return entity;
+      // Merge the granted proficiencies into the entity's proficiency block.
+      // The grant value is a ProficiencyGrant: { armor?, weapons?, tools?, languages? }.
+      // We deduplicate each list so re-applying on class change is safe.
+      const g = grant.value as ProficiencyGrant;
+      const merge = (existing: string[], additions?: string[]) =>
+        additions ? [...new Set([...existing, ...additions])] : existing;
+      return {
+        ...entity,
+        proficiencies: {
+          ...entity.proficiencies,
+          armor:     merge(entity.proficiencies.armor,     g.armor),
+          weapons:   merge(entity.proficiencies.weapons,   g.weapons),
+          tools:     merge(entity.proficiencies.tools,     g.tools),
+          languages: merge(entity.proficiencies.languages, g.languages),
+        },
+      };
     }
 
-    case "subclass_unlock":
-    case "speed":
-      return entity; // TODO in later steps
+    case "subclass_unlock": {
+      // Queue a pending subclass choice so it surfaces in the Features tab's
+      // Pending Choices section. Without authored subclass content, the player
+      // resolves this with their DM. When subclass content is authored, this
+      // choice will be replaced with a proper pool of subclass options.
+      const choiceId = `subclass_unlock_${atLevel}`;
+      const alreadyQueued = entity.choices.some(c => c.id === choiceId);
+      if (alreadyQueued) return entity;
+      const subclassChoice: ChoiceDefinition = {
+        id:       choiceId,
+        prompt:   `Choose your ${entity.identity.classId} subclass`,
+        kind:     'custom',
+        count:    1,
+        pool:     [],
+        grants:   [],
+        required: true,
+        resolved: false,
+      };
+      return {
+        ...entity,
+        choices: [...entity.choices, {
+          id:          choiceId,
+          definition:  subclassChoice,
+          grantedAt:   atLevel,
+          resolved:    false,
+          selections:  [],
+        }],
+      };
+    }
+
+    case "speed": {
+      // Adds a permanent bonus to the entity's base speed (stored in resources.speed).
+      // Used for class-granted speed increases like Barbarian Fast Movement (+10 ft).
+      // The pipeline reads entity.resources.speed as the base and adds/sets on top
+      // via stat_modifier effects, so modifying resources.speed here is the right
+      // home for permanent class bonuses.
+      const speedBonus = grant.value as number;
+      return {
+        ...entity,
+        resources: {
+          ...entity.resources,
+          speed: entity.resources.speed + speedBonus,
+        },
+      };
+    }
 
     case "init_spellcasting": {
       // Initialise the spellcasting block for a spellcasting class (called once).

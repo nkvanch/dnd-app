@@ -2,7 +2,7 @@
 // FILE: src/engine/conditions.ts
 // PROJECT: Condition Application, Suppression & Immunity Engine
 // ============================================================================
-import { Entity, ActiveCondition, CampaignRules } from './types';
+import { Entity, ActiveCondition, CampaignRules, Feature, FeatureInstance } from './types';
 import { recomputeDerived } from './pipeline';
 import { DEFAULT_RULES } from '../store/characterStore';
 
@@ -73,11 +73,17 @@ export function refreshSuppressors(entity: Entity): Entity {
  * - If the condition is already active, returns unchanged (no stacking).
  * - Exhaustion is the only exception: increments the numeric level instead.
  */
+/**
+ * Optional condition features from content (e.g. globalContentDB.conditions).
+ * The engine can't import content directly (circular dep), so the caller looks
+ * up the Condition and passes its features here.
+ */
 export function applyCondition(
-  entity:      Entity,
-  conditionId: string,
-  sourceId:    string,
-  rules:       CampaignRules = DEFAULT_RULES
+  entity:             Entity,
+  conditionId:        string,
+  sourceId:           string,
+  rules:              CampaignRules = DEFAULT_RULES,
+  conditionFeatures?: Feature[]
 ): Entity {
   if (isImmuneToCondition(entity, conditionId)) return entity;
 
@@ -103,6 +109,15 @@ export function applyCondition(
     suppressedBy: collectSuppressors(entity, conditionId),
   };
 
+  // Apply the condition's mechanical features so the pipeline enforces them.
+  // Each feature gets source.kind='condition' so removeCondition strips them
+  // when the condition is lifted.
+  const newFeatures: FeatureInstance[] = (conditionFeatures ?? []).map(f => ({
+    ...f,
+    source:   { kind: 'condition' as const, refId: conditionId },
+    isActive: true,
+  }));
+
   const updated = {
     ...entity,
     conditions: [...entity.conditions, newCondition],
@@ -110,6 +125,7 @@ export function applyCondition(
       ...entity.conditionMonitor,
       active: [...entity.conditionMonitor.active, newCondition],
     },
+    features: [...entity.features, ...newFeatures],
   };
 
   return recomputeDerived(updated, rules);

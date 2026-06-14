@@ -58,6 +58,48 @@ export default function SkillsScreen() {
     });
   }
 
+  // Re-opens already-resolved skill choices for editing: untrains the skills
+  // this choice previously granted (so they're selectable again), flips the
+  // choice back to unresolved, and pre-fills the picker with the previous
+  // picks. Without this, confirming skills once made the Skills screen
+  // permanently read-only on re-entry.
+  function startEditingSkills() {
+    let updated = draft!;
+    const newSelections: Record<string, string[]> = {};
+
+    for (const choice of resolvedSkillChoices) {
+      const pool = Array.isArray(choice.definition.pool) ? choice.definition.pool as ChoiceOption[] : [];
+      const prevSkills = choice.selections
+        .map(selId => pool.find(o => o.id === selId)?.value as SkillName | undefined)
+        .filter((v): v is SkillName => !!v);
+
+      if (prevSkills.length > 0) {
+        updated = {
+          ...updated,
+          skills: {
+            skills: {
+              ...updated.skills.skills,
+              ...Object.fromEntries(
+                prevSkills.map(sk => [sk, { ...updated.skills.skills[sk], trained: false }])
+              ),
+            },
+          },
+        };
+      }
+
+      newSelections[choice.id] = [...choice.selections];
+      updated = {
+        ...updated,
+        choices: updated.choices.map(c =>
+          c.id === choice.id ? { ...c, resolved: false, selections: [] } : c
+        ),
+      };
+    }
+
+    setDraft(updated);
+    setSelections(prev => ({ ...prev, ...newSelections }));
+  }
+
   function canProceed() {
     return pendingSkillChoices.every(c => (selections[c.id]?.length ?? 0) === c.definition.count);
   }
@@ -108,6 +150,9 @@ export default function SkillsScreen() {
           });
         })}
         <View style={styles.divider} />
+        <Pressable style={styles.changeBtn} onPress={startEditingSkills}>
+          <Text style={styles.changeBtnTxt}>✎ Change Skills</Text>
+        </Pressable>
         <Pressable style={styles.nextBtn} onPress={() => router.push('/creation/hub')}>
           <Text style={styles.nextBtnText}>Continue →</Text>
         </Pressable>
@@ -217,4 +262,11 @@ const styles = StyleSheet.create({
   nextBtn:         { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center', marginTop: Spacing.lg },
   nextBtnDisabled: { backgroundColor: Colors.goldDim },
   nextBtnText:     { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
+
+  changeBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  changeBtnTxt: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.gold },
 });

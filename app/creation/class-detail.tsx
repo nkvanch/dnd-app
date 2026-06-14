@@ -1,6 +1,6 @@
 // app/creation/class-detail.tsx
 // Class detail with back button, collapsible sections, and safe re-selection.
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, Modal } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
@@ -254,6 +254,10 @@ export default function ClassDetailScreen() {
   const rules    = useCharacterStore(s => s.rules);
 
   const [openSection, setOpenSection] = useState<string | null>(null);
+  // Custom-styled class-change confirmation (replaces native Alert)
+  const [changePrompt, setChangePrompt] = useState<{
+    lines: string[]; className: string; onConfirm: () => void;
+  } | null>(null);
 
   const cls    = globalContentDB.classes.find(c => c.id === id);
   const detail = id ? CLASS_DETAIL[id] : null;
@@ -272,33 +276,72 @@ export default function ClassDetailScreen() {
   function selectClass() {
     const progression = PROGRESSIONS[cls!.id];
     const detail      = cls ? CLASS_DETAIL[cls.id] : null;
+    const isReselect  = !!draft!.identity.classId && draft!.identity.classId !== cls!.id;
 
-    // Strip old class data before applying new class (also resets HP & spellcasting)
-    let updated = clearClassData(draft!, cls!.hitDie);
+    function doSelect() {
+      // Strip old class data before applying new class (also resets HP & spellcasting)
+      let updated = clearClassData(draft!, cls!.hitDie);
 
-    // Clear visited flags so the equipment/spells screens re-show for the new class
-    const notes = (() => {
-      try { return JSON.parse(updated.notes || '{}'); }
-      catch { return {}; }
-    })();
+      // Clear visited flags so the equipment/spells screens re-show for the new class
+      const notes = (() => {
+        try { return JSON.parse(updated.notes || '{}'); }
+        catch { return {}; }
+      })();
 
-    updated = {
-      ...updated,
-      identity:  { ...updated.identity, classId: cls!.id },
-      proficiencies: {
-        ...updated.proficiencies,
-        savingThrows: detail?.savingThrowAbilities ?? [],
-      },
-      notes: JSON.stringify({ ...notes, equipmentVisited: false, spellsVisited: false }),
-    };
+      updated = {
+        ...updated,
+        identity:  { ...updated.identity, classId: cls!.id },
+        proficiencies: {
+          ...updated.proficiencies,
+          savingThrows: detail?.savingThrowAbilities ?? [],
+        },
+        notes: JSON.stringify({ ...notes, equipmentVisited: false, spellsVisited: false }),
+      };
 
-    if (progression) {
-      updated = levelUp(updated, targetLevel, progression, rules);
+      if (progression) {
+        updated = levelUp(updated, targetLevel, progression, rules);
+      }
+
+      updated = recomputeDerived(updated, rules);
+      setDraft(updated);
+      router.push('/creation/hub');
     }
 
-    updated = recomputeDerived(updated, rules);
-    setDraft(updated);
-    router.push('/creation/hub');
+    // Q29: if switching away from an already-selected class, warn clearly what
+    // will be lost so the player can make an informed decision.
+    if (isReselect) {
+      const classFeatures = draft!.features
+        .filter(f => f.source.kind === 'class' || f.source.kind === 'subclass')
+        .map(f => f.name);
+      const resolvedChoices = draft!.choices
+        .filter(c => c.resolved && c.grantedAt > 0)
+        .length;
+      const resolvedAsis = draft!.choices
+        .filter(c => c.resolved && c.definition.kind === 'asi')
+        .length;
+      const hadSpells = !!draft!.spellcasting;
+      const newHadSpells = detail?.spellcasting ?? false;
+
+      const lines: string[] = [
+        `Switching from ${draft!.identity.classId} to ${cls!.id}.`,
+        '',
+        'This will remove:',
+        `• ${classFeatures.length} class feature${classFeatures.length !== 1 ? 's' : ''} (${classFeatures.slice(0, 3).join(', ')}${classFeatures.length > 3 ? '…' : ''})`,
+        `• ${resolvedChoices} resolved choice${resolvedChoices !== 1 ? 's' : ''} (skill picks, equipment, spells)`,
+        resolvedAsis > 0 ? `• ${resolvedAsis} Ability Score Improvement${resolvedAsis !== 1 ? 's' : ''}` : null,
+        hadSpells && !newHadSpells ? '• Spellcasting block (new class has no spells)' : null,
+        '',
+        'HP will be recalculated using the new hit die.',
+      ].filter(Boolean) as string[];
+
+      setChangePrompt({
+        lines,
+        className: cls!.name,
+        onConfirm: () => { setChangePrompt(null); doSelect(); },
+      });
+    } else {
+      doSelect();
+    }
   }
 
   function toggle(section: string) {
@@ -306,6 +349,7 @@ export default function ClassDetailScreen() {
   }
 
   return (
+    <>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
       <Text style={styles.heading}>{cls.name}</Text>
@@ -357,6 +401,38 @@ export default function ClassDetailScreen() {
         <Text style={styles.selectBtnText}>Select Class</Text>
       </Pressable>
     </ScrollView>
+
+    {/* Class-change confirmation — custom dark/gold modal (replaces native Alert) */}
+    <Modal visible={!!changePrompt} transparent animationType="fade" onRequestClose={() => setChangePrompt(null)}>
+      <View style={ccStyles.backdrop}>
+        <View style={ccStyles.sheet}>
+          <Text style={ccStyles.title}>Change Class?</Text>
+          {changePrompt && (
+            <ScrollView style={ccStyles.body} showsVerticalScrollIndicator={false}>
+              {changePrompt.lines.map((line, i) => {
+                if (line === '') return <View key={i} style={ccStyles.spacer} />;
+                if (line.startsWith('•')) {
+                  return <Text key={i} style={ccStyles.bullet}>{line}</Text>;
+                }
+                if (line === 'This will remove:') {
+                  return <Text key={i} style={ccStyles.sectionLabel}>{line}</Text>;
+                }
+                return <Text key={i} style={ccStyles.line}>{line}</Text>;
+              })}
+            </ScrollView>
+          )}
+          <View style={ccStyles.btnRow}>
+            <Pressable style={ccStyles.cancelBtn} onPress={() => setChangePrompt(null)}>
+              <Text style={ccStyles.cancelTxt}>Cancel</Text>
+            </Pressable>
+            <Pressable style={ccStyles.confirmBtn} onPress={() => changePrompt?.onConfirm()}>
+              <Text style={ccStyles.confirmTxt}>Switch to {changePrompt?.className}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -385,6 +461,42 @@ const csStyles = StyleSheet.create({
   title: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 },
   caret: { fontSize: FontSize.sm, color: Colors.textDim },
   body:  { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, padding: Spacing.md, marginTop: 2 },
+});
+
+// ── Class-change confirmation modal styles ───────────────────────────────────
+const ccStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1, backgroundColor: '#000000bb',
+    justifyContent: 'center', alignItems: 'center', padding: Spacing.lg,
+  },
+  sheet: {
+    backgroundColor: Colors.surfaceHigh,
+    borderRadius:    Radius.lg,
+    borderWidth:     1,
+    borderColor:     Colors.gold + '44',
+    padding:         Spacing.lg,
+    width:           '100%',
+    maxHeight:       '75%',
+    gap:             Spacing.md,
+  },
+  title: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold, textAlign: 'center' },
+  body:  { maxHeight: 320 },
+  line:  { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 20 },
+  sectionLabel: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold, marginTop: 2 },
+  bullet: { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 20, paddingLeft: Spacing.sm },
+  spacer: { height: Spacing.xs },
+  btnRow: { flexDirection: 'row', gap: Spacing.sm },
+  cancelBtn: {
+    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  cancelTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  confirmBtn: {
+    flex: 1, backgroundColor: Colors.red, borderRadius: Radius.md,
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  confirmTxt: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.md, textAlign: 'center' },
 });
 
 function InfoRow({ label, value }: { label: string; value: string }) {

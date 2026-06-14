@@ -4,6 +4,7 @@ import { View, Text, FlatList, Pressable, StyleSheet, TextInput } from 'react-na
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { globalContentDB } from '../../src/content/classes/library';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const RACE_DESCRIPTIONS: Record<string, string> = {
@@ -22,8 +23,12 @@ export default function RaceScreen() {
   const router  = useRouter();
   const [search,   setSearch]   = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const homebrewRaces = useHomebrewStore(s => s.races);
 
   const races = globalContentDB.races.filter(r =>
+    r.name.toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredHomebrewRaces = homebrewRaces.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -78,10 +83,49 @@ export default function RaceScreen() {
           );
         }}
         ListFooterComponent={
-          <Pressable style={styles.homebrewRow} onPress={() => {}}>
-            <Text style={styles.homebrewText}>Homebrew Races</Text>
-            <Text style={styles.rowArrow}>›</Text>
-          </Pressable>
+          <View style={styles.homebrewSection}>
+            <Text style={styles.homebrewHeading}>HOMEBREW RACES</Text>
+            {filteredHomebrewRaces.length === 0 ? (
+              <Pressable
+                style={styles.homebrewRow}
+                onPress={() => router.push('/homebrew/race-builder')}
+              >
+                <Text style={styles.homebrewEmptyText}>No homebrew races yet — create one</Text>
+                <Text style={styles.rowArrow}>›</Text>
+              </Pressable>
+            ) : (
+              filteredHomebrewRaces.map(item => {
+                const isOpen = expanded === item.id;
+                return (
+                  <View key={item.id} style={styles.itemWrap}>
+                    <Pressable
+                      style={styles.row}
+                      onPress={() => router.push(`/creation/race-detail?id=${item.id}`)}
+                    >
+                      <Text style={styles.rowName}>{item.name}</Text>
+                      <View style={styles.homebrewTag}>
+                        <Text style={styles.homebrewTagTxt}>Homebrew</Text>
+                      </View>
+                      <Pressable
+                        hitSlop={12}
+                        onPress={e => { e.stopPropagation(); setExpanded(isOpen ? null : item.id); }}
+                      >
+                        <Text style={styles.rowCaret}>{isOpen ? '▲' : '▼'}</Text>
+                      </Pressable>
+                      <Text style={styles.rowArrow}>›</Text>
+                    </Pressable>
+                    {isOpen && (
+                      <View style={styles.dropdown}>
+                        <Text style={styles.dropdownFeatures}>
+                          Features: {item.features.map(f => f.name).join(', ') || 'None'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </View>
         }
       />
     </View>
@@ -122,9 +166,25 @@ const styles = StyleSheet.create({
   dropdownDesc:     { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.xs, lineHeight: 20 },
   dropdownFeatures: { fontSize: FontSize.sm, color: Colors.textDim },
 
+  homebrewSection: {
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  homebrewHeading: {
+    fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim,
+    letterSpacing: 2, marginBottom: Spacing.sm,
+  },
   homebrewRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: Spacing.md, marginTop: Spacing.sm,
+    paddingVertical: Spacing.md,
   },
-  homebrewText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+  homebrewEmptyText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+  homebrewTag: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  homebrewTagTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
 });

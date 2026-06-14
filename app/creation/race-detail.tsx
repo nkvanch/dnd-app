@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { globalContentDB } from '../../src/content/classes/library';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { applyGrant } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { Entity } from '../../src/engine/types';
@@ -84,8 +85,9 @@ export default function RaceDetailScreen() {
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
+  const homebrewRaces = useHomebrewStore(s => s.races);
 
-  const race   = globalContentDB.races.find(r => r.id === id);
+  const race   = [...globalContentDB.races, ...homebrewRaces].find(r => r.id === id);
   const detail = id ? RACE_DETAIL[id] : null;
 
   // Subrace selection — mandatory when the race defines subraces.

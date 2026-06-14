@@ -88,9 +88,14 @@ export default function CharactersScreen() {
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>Characters</Text>
-        <Pressable style={styles.newBtn} onPress={startCreation}>
-          <Text style={styles.newBtnText}>+ New</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.settingsBtn} onPress={() => router.push('/settings' as any)}>
+            <Text style={styles.settingsBtnText}>⚙️</Text>
+          </Pressable>
+          <Pressable style={styles.newBtn} onPress={startCreation}>
+            <Text style={styles.newBtnText}>+ New</Text>
+          </Pressable>
+        </View>
       </View>
 
       {characters.length === 0 ? (
@@ -133,6 +138,9 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   title:      { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  settingsBtn:     { padding: Spacing.sm },
+  settingsBtnText: { fontSize: 20 },
   newBtn: {
     backgroundColor: Colors.gold,
     paddingHorizontal: Spacing.md,

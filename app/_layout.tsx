@@ -107,6 +107,7 @@ export default function RootLayout() {
         <Stack.Screen name="homebrew/class-builder"      options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/race-builder"       options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/feature-editor"     options={{ headerShown: false }} />
+        <Stack.Screen name="settings"                      options={{ headerShown: false }} />
       </Stack>
     </View>
     </ErrorBoundary>

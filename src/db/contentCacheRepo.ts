@@ -2,6 +2,7 @@
 // FILE: src/db/contentCacheRepo.ts
 // CRUD for homebrew content stored in the content_cache table.
 // ============================================================================
+import { Platform } from 'react-native';
 import { Race, CharClass, Spell, Feature, Background } from '../engine/types';
 import { getDb } from './db';
 
@@ -20,6 +21,7 @@ export async function saveHomebrewContent(
   type:    ContentCacheType,
   content: HomebrewContent,
 ): Promise<void> {
+  if (Platform.OS === 'web') return;
   const db = getDb();
   const id = `${type}:${(content as any).id}`;
   await db.runAsync(
@@ -32,6 +34,7 @@ export async function saveHomebrewContent(
 
 /** Load all homebrew content of a given type. */
 export async function loadHomebrewByType(type: ContentCacheType): Promise<HomebrewContent[]> {
+  if (Platform.OS === 'web') return [];
   const db   = getDb();
   const rows = await db.getAllAsync<ContentCacheRow>(
     'SELECT * FROM content_cache WHERE type = ?',
@@ -42,6 +45,7 @@ export async function loadHomebrewByType(type: ContentCacheType): Promise<Homebr
 
 /** Load all homebrew content (all types). */
 export async function loadAllHomebrew(): Promise<Partial<Record<ContentCacheType, HomebrewContent[]>>> {
+  if (Platform.OS === 'web') return {};
   const db   = getDb();
   const rows = await db.getAllAsync<ContentCacheRow>('SELECT * FROM content_cache');
   const result: Partial<Record<ContentCacheType, HomebrewContent[]>> = {};
@@ -55,6 +59,7 @@ export async function loadAllHomebrew(): Promise<Partial<Record<ContentCacheType
 
 /** Delete a specific homebrew item. */
 export async function deleteHomebrewContent(type: ContentCacheType, id: string): Promise<void> {
+  if (Platform.OS === 'web') return;
   const db   = getDb();
   const key  = `${type}:${id}`;
   await db.runAsync('DELETE FROM content_cache WHERE id = ?', [key]);

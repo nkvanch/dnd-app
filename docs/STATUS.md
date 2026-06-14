@@ -1,211 +1,287 @@
 # Grimoire — Project Status & Direction
 
-*The single source of truth for where this project is. Read `ABOUT.md` for the
-recruiting pitch, `DESIGN.md` for the architecture, `ROADMAP.md` for the sequenced
-plan. This file ties them together: **what the app is, what's built, what's next, and
-the final aim.***
+*Single source of truth for where the project is right now.*
+*Read `PRODUCT_PRINCIPLES.md` for philosophy, `UI_RULES.md` for UI constraints,
+`ROADMAP.md` for the sequenced plan, `ARCHITECTURE.md` for technical design,
+`IMPLEMENTATION.md` for concrete schemas and protocols.*
 
-*Last updated: after the feats / in-play level-up / hit-dice / spell-conversion work.*
+*Last updated: after the engine audit / conditions-as-content / grant fixes / armor cap
+/ feature hydration pass. See §3 changelog for the full list.*
 
 ---
 
 ## 1. What the app is
 
-Grimoire (working name) is a **rules-aware tabletop RPG companion**. Its first and
-default ruleset is **D&D 5th Edition**, but the architecture treats rules, content, and
-workflow as *data*, not hardcoded logic — so the long-term shape is less "a D&D app" and
-more "an engine that runs tabletop rulesets, with D&D 5e as the first one loaded."
+Grimoire is a **rules-aware tabletop RPG companion**. Its first ruleset is D&D 5e,
+but the architecture treats rules as data — so the long-term shape is a platform
+that runs tabletop rulesets, not a D&D-specific app.
 
-It runs on **iOS and Android**, works **fully offline**, and can sync a table together
-over **local WiFi** with no server, account, or internet.
+It runs on **Android** (iOS untested), works **fully offline**, and can sync a table
+over **local WiFi** (TCP, no server, no account).
 
-It does three jobs:
+Three jobs:
+1. **Build characters** — guided wizard, every number computed by the engine.
+2. **Play** — live sheet tracking HP, conditions, spell slots, resources, hit dice,
+   death saves, with an audit trail behind every value.
+3. **Run the table (DM)** — party dashboard, monster library, encounter tracker,
+   transparent overrides.
 
-1. **Build characters** through a guided wizard that produces a rules-correct character —
-   every number (AC, HP, save DC, proficiency bonus) computed by the engine, never typed
-   in by hand.
-2. **Play** with a live character sheet that tracks HP, conditions, spell slots,
-   resources, hit dice, and death saves, and can **explain every number** — tap a value
-   to see its full breakdown.
-3. **Run the table (DM)** with a dashboard of every player's sheet, a monster library,
-   an encounter builder, and transparent overrides (players see a ✱ and the reason).
+### The two load-bearing ideas
 
-### The two ideas everything rests on
+**Characters and monsters are the same `Entity`**, run through one engine.
+Combat logic, stat logic, and condition logic are written once.
 
-- **Characters and monsters are the same `Entity`**, run through the same rules engine.
-  We write combat/stat/condition logic once; players and monsters both benefit.
-- **Every number is explainable.** The UI never does math — it reads `entity.derived`,
-  and any value drills down to base + race + class + item + condition + DM override.
-  This is structural: the same machinery that *computes* a value can *explain* it,
-  because everything that changes a number is a `Feature` carrying `Effect`s that the
-  engine resolves in a fixed priority order.
+**Every number is explainable.** The UI never computes anything — it reads
+`entity.derived`. Tap any value → see base + race + class + item + condition +
+DM override. This is structural: the machinery that computes a value can explain
+it, because all changes flow through the Feature / Effect pipeline.
 
 ---
 
-## 2. Where it stands today (current capabilities)
+## 2. Current capabilities
 
-### Character creation — working
-Guided wizard: name & level → race (with subraces) → class → background → ability scores
-(standard array / point buy / manual / 4d6 roll, with live race-bonus preview) → skills →
-starting equipment → spells → review. Produces a rules-correct character with HP, AC,
-saves, and proficiencies derived automatically. Shared safe-area `CreationHeader` with
-back + cancel. Switching race or class cleanly re-applies from scratch (no stale
-features, HP, or AC).
+### Character creation ✅ working
 
-### The living character sheet — working
-Six tabs:
-- **Combat** — HP (damage / heal / temp / manual set / set-max override), **hit dice
-  with two actions: Roll (app rolls + heals) and Use (spend one, roll your own)**, death
-  saves, weapon attacks, conditions with mechanical reminders, resources, spell slots,
-  concentration checks, and an in-place **Level Up** button.
-- **Actions** — action cards generated from features.
-- **Abilities** — ability scores, skills, passive Perception/Investigation/Insight.
-- **Features** — features grouped by source.
-- **Inventory** — carried/equipped items, carry weight, currency.
-- **Notes**.
+Full wizard: name & level → race (mandatory subrace where applicable) → class →
+background → ability scores (standard array / point buy / manual / 4d6) → skills →
+equipment → spells → review. Produces a rules-correct character with HP, AC, saves,
+proficiencies, and features derived automatically.
 
-Tap any derived value (AC, speed, initiative, passive perception) for its audit trail.
-A persistent rest bar (short/long) sits above the Android nav bar; a floating dice
-roller is always available.
+**Data-integrity guarantees (all verified):**
+- Switching class clears old class skills/features/ASI stats; re-applies background skills.
+- Switching background clears old background skills; applies new ones.
+- Setting ability scores after an ASI is resolved re-applies the ASI (never lost).
+- ASI stat bumps are stripped before class change so they don't ghost-stack.
+- Racial bonuses show in the scores step as an annotation, never baked into base scores.
 
-### Leveling up — working (single-class)
-- **In-play level-up**: the Combat-tab Level Up button advances the character through the
-  engine, grants features, grows spell slots, and — when the level grants an Ability
-  Score Improvement — opens the **ASI / Feat picker** right there.
-- **ASI / Feat picker** (shared between creation and in-play, so they never drift):
-  +2 to one stat, +1 to two, or take a **Feat** from a searchable list of all 82 feats.
-- **Rules-correct HP**: proficiency bonus grows by level automatically; per-level Hit Die
-  HP; and the **retroactive CON→HP rule** (raising your CON modifier increases max HP by
-  1 per level) is applied on both ASI and feat, without wiping rolled HP.
+### Character sheet ✅ working (6 tabs)
 
-### Content — substantial
-- 9 races (+subraces), 12 classes (full L1–20 progressions), 13 backgrounds, items, a
-  starter set of SRD monsters.
-- **82 feats** (`src/content/feats/`), each selectable in place of an ASI; the
-  mechanically simple ones auto-apply their effects (e.g. Alert +5 initiative, Durable
-  +1 CON, Mobile +10 speed), the rest apply as described features.
-- **487 spells** parsed from the vault into `src/content/spells/generated.ts`, each tagged
-  with the **classes** that can cast it. *(Generated and type-checked; not yet wired into
-  the app's spell picker — that's the immediate next step.)*
+**Combat** — HP block (damage/heal/temp/set/set-max), death saves, stat row
+(AC/Speed/Init/Perc — each tappable for audit), level-up button, weapon attacks
+with computed bonus, hit dice (Roll = app heals; Use = spend, player rolls), conditions
+with mechanical reminders, concentration tracking, resources, spell slot pips.
 
-### DM tools — partial
-Dashboard, monster library, encounter screen, per-character view, and a transparent
-DM-override model exist. Override values apply last in the pipeline and show a ✱ with a
-reason. Not yet a complete end-to-end DM flow.
+**Actions** — auto-generated cards grouped into Actions / Bonus Actions / Reactions,
+color-coded by purpose. Cards grey out with reason when unaffordable.
 
-### Offline & multiplayer — built, sync untested at a real table
-Every device keeps a full SQLite copy (works with no signal). Local-WiFi sync: DM device
-hosts a WebSocket server, players join via 6-digit code + QR. Combat resolution is
-player-facing — the app shows the dice expression and consumes the resource; the player
-rolls physical dice. *(Two-device sync is unverified — only one Android device on hand.)*
+**Abilities** — effective scores (base + racial/feat bonuses, not raw base), saving
+throws, passive scores, all 18 skills with proficiency dots. Tapping any value opens
+the audit modal.
 
-### Homebrew — built, unverified on real input
-Builders for custom spells/classes/races and a feature editor exist; official and
-homebrew content already merge through one `ContentDB` so the engine can't tell them
-apart. The external-statblock importer (`wikiImporter`) is untested on a real URL (needs
-an API key).
+**Features** — features by source (Race / Class / Background / Feat). Pending Choices
+section at the top: skill choices resolve inline, ASI/feat choices open the picker,
+subclass choices show a "resolve with DM" note.
 
----
+**Inventory** — weight bar, currency, equipped/carried with equip toggle. Equipping
+armor updates AC immediately through the pipeline.
 
-## 3. What we've built recently (changelog)
+**Notes** — free text, auto-saves.
 
-In rough order across the recent sessions:
+**Persistent rest bar** — Short rest (hit dice, short-rest resources) and Long rest
+(full HP, all slots, full hit-dice pool, −1 exhaustion).
 
-- **Device-test bug fixes**: class-change corruption (zeroed HP / missing equipment / no
-  AC bonus), stale HP during creation, AC double-counting (21 instead of 15), creation
-  header + cancel, spell-slot growth on level-up, temp-HP controls, set-max-HP override,
-  death-save reset.
-- **Strategic reframe** to "tabletop RPG operating system," captured in `ABOUT.md`,
-  `DESIGN.md`, `ROADMAP.md`. Verified the engine is already ~80% aligned with that vision.
-- **Feats** (was completely empty): added the `Feat` type, authored all 82 feats from the
-  vault, wired them into the content DB and the homebrew merge.
-- **ASI / Feat picker**: built the shared `AsiFeatPicker` component; the creation level-up
-  screen and the in-play sheet both use it. Consolidated to a single level-up button.
-- **In-play level-up**: the Combat-tab button now levels the character and resolves the
-  ASI/feat choice; deduped the class-progression map to one canonical source.
-- **Retroactive CON→HP** rule and shared `applyAsiToEntity` / `applyFeatToEntity` engine
-  helpers; `spendHitDie` now uses effective CON.
-- **Hit-dice actions**: split into **Roll Hit Die** (app rolls + heals) and **Use Hit
-  Die** (`discardHitDie` — spend one, no auto-heal).
-- **Spell conversion**: added a `classes` field to the `Spell` type and wrote
-  `scripts/convert-spells.mjs`, which parsed **487** class-tagged spells from the vault
-  into `src/content/spells/generated.ts`.
+### Engine correctness (all verified post-audit)
 
----
+| Value | Status |
+|---|---|
+| AC from armor (light/medium/heavy) | ✅ Correct formula + DEX cap enforced |
+| AC from Unarmored Defense | ✅ base_ac_formula with formulaAbilities |
+| Medium armor DEX cap (+2 max) | ✅ formulaAbilityCap on effect |
+| Speed (race set, condition set, additive) | ✅ Resolved correctly |
+| Race bonuses in HP calculation | ✅ effectiveStats.con used |
+| Race bonuses on Abilities tab | ✅ effectiveStats displayed, not base |
+| ASI cap vs effective score | ✅ Capped against effective, not base |
+| Hit dice Roll healing | ✅ Uses effective CON (with racial bonus) |
+| Retroactive CON→HP on ASI | ✅ reconcileConHp applied |
+| Proficiency grants from class | ✅ Populates armor/weapons/tools/languages |
+| Speed grants from class | ✅ Adds to entity.resources.speed |
+| Subclass unlock at level 3 | ✅ Queues pending choice (resolves with DM) |
+| Spell slots on level-up | ✅ Grow from PHB table automatically |
+| Conditions enforce mechanical effects | ✅ Grappled/Restrained/Paralyzed/Stunned/Petrified set speed 0 |
+| Equipped armor persists after restart | ✅ Hydrated in loadCharacters |
 
-## 4. What's next
+### Audit trail (tap any value)
 
-### Immediate (spells — in progress)
-1. **Wire `generated.ts` into the app.** Decide replace-vs-merge with the existing
-   hand-authored spells, point the aggregator at the 487-spell corpus.
-2. **Class-filtered spell picker.** Use each spell's `classes` tag to show only the
-   relevant list in the creation spell step (`spells.tsx`).
-3. **Spell selection on level-up.** Let casters learn/prepare new spells as they level —
-   needs a small per-class spellcasting-progression table (known vs. prepared, counts by
-   level). The biggest of the three; scoped after the data is wired.
+AC, Speed, Initiative, Passive Perception, all 6 ability scores, all 6 saving throws,
+all 18 skills, Spell Save DC, Spell Attack Bonus — each produces a complete breakdown
+showing base + every contributor + DM override if any. All use effective stats (race
+bonuses appear correctly in breakdowns).
 
-### Near-term correctness / depth
-- **Level-up completeness**: audit all 12 progressions; many mid/high levels are HP-only
-  stubs and subclass features aren't authored yet.
-- **Conditions as content**: `globalContentDB.conditions` is still empty; the sheet's
-  condition reminders are hardcoded. Move them into content so the engine *applies* them.
-- **PHB fixed starting equipment** (only choice-based gear is granted today).
-- Smaller: inspiration toggle, XP bar (when `rules.useXP`), consumables/potions,
-  actions-remaining tracker, more monsters/subclasses.
+### Leveling ✅ single-class working
 
-### The differentiators (from the roadmap)
-- **Rule Debugger** — a read-only screen dumping an entity's features/effects/overrides
-  in resolution order. Cheap; accelerates everything else.
-- **Recursive Explain-Everything** — make the audit modal drill down (AC → DEX modifier →
-  racial +2 → the feature). Nearly free given the data model; the flagship feature.
-- **Content Pack architecture** — wrap existing content as a built-in pack, load enabled
-  packs in order (house rules override PHB), add pack provenance. Delivers the
-  "rules-as-data platform" spirit cheaply.
-- **Feature-first homebrew builder** — author a Feature; races/classes/items are just
-  named collections of Features.
-- **Encounter runtime + condition intelligence** — one combat screen (initiative, rounds,
-  per-combatant HP/conditions/concentration); conditions that actually apply their effects.
+In-play level-up button → engine applies new level → ASI/feat picker opens if needed.
+Shared `AsiFeatPicker` used by both creation and in-play (no drift). 82 feats available.
+Subclass unlock queues a visible pending choice at level 3.
 
-### Deliberately deferred (until a real second use case forces them)
-Multiclassing (rewrites the identity model), re-authoring official content as JSON,
-generic resource pools replacing spell slots, any non-D&D ruleset, full session replay.
-Alignment / languages / inspiration are small separate tasks, not level-up mechanics.
+### Content
+
+| Category | Count | Status |
+|---|---|---|
+| Races | 9 (+subraces) | ✅ Full |
+| Classes | 12 | ✅ L1–20 progressions; mid/high levels often HP-only stubs |
+| Subclasses | 24 files | ⚠️ Files exist, features not authored into progressions |
+| Backgrounds | 13 | ✅ Full |
+| Feats | 82 | ✅ Full |
+| Spells | 487 (vault) + ~181 (legacy) | ✅ Class-filtered in creation |
+| Conditions | 15 | ✅ Authored as content; 5 auto-enforce speed=0 |
+| Items | Weapons + armor + gear | ✅ With correct AC formulas |
+| Monsters | SRD starter set | ⚠️ Partial |
+
+### DM tools ⚠️ partial
+
+Dashboard (live party HP/conditions/resources), monster browser, encounter screen,
+per-character view, transparent overrides (✱ badge + reason in audit). Not yet a
+complete end-to-end DM session flow.
+
+### Sync ⚠️ built, untested two-device
+
+TCP + NDJSON + event-sourcing, 6-digit room code + QR join. Only one Android device
+on hand — two-device reconnect/conflict handling unverified.
+
+### Homebrew ⚠️ built, unverified end-to-end
+
+Spell builder (full, validates), race builder (full), class builder (scaffold),
+feature editor (partial). Import pipeline (Claude parses URL → content) built but
+untested on real input. **Not yet wired into creation** — homebrew saves to library
+but doesn't appear in the creation wizard.
 
 ---
 
-## 5. The final aim
+## 3. Recent changelog (since last status update)
 
-A single tool where a table can **build, modify, and run their own game** without being
-boxed in by a fixed ruleset:
+### Engine fixes
 
-- A player can invent a race, class, spell, feat, resource, condition, or house rule, and
-  the engine can **understand it, validate it, explain it, and run it** — because it's all
-  data flowing through the same Feature/Effect pipeline that official content uses.
-- Every number on every sheet is **inspectable to its roots** — a learning tool for new
-  players and a trust tool for veterans.
-- The DM runs encounters from one screen, with transparent overrides and a monster library
-  that shares the exact same engine as the player characters.
-- It all works **offline first**, with optional local-WiFi sync as a convenience, never a
-  requirement.
+- **Armor equip now changes AC.** Root cause: `ItemInstance` stores with `features:[]`;
+  `handleEquip` now hydrates features from content definition at equip time. Also fixed
+  durably in `loadCharacters` so armor AC survives app restarts.
+- **Speed audit was wrong for dwarves.** `buildSpeedEntries` was adding base 30 + set 25
+  = 55. Rewritten: `set` operations replace the base entry; additive bonuses stack on top.
+- **Race bonuses not showing in Abilities tab.** Tab was reading `entity.stats[key]`
+  (base) instead of `effectiveStats[key]`. Fixed to use effective scores everywhere.
+- **Race bonus missing from HP calculation.** `recalculateAllHP` and `applyHP` now both
+  call `applyStatModifiers` to get effective CON.
+- **ASI picker was showing base scores.** `AsiFeatPicker` now computes and displays
+  effective scores; cap is enforced against effective, not base. Mountain Dwarf STR 18
+  (effective 20) correctly shows 0 headroom.
+- **ASI erased on score re-confirm.** `reapplyResolvedAsi` re-applies all resolved ASI
+  selections after scores are overwritten. Called in `scores.tsx` on confirm.
+- **Ghost ASI stats after class change.** `stripResolvedAsiStats` subtracts recorded
+  increases before dropping choices; called in `clearClassData`.
+- **Skills stacked on class change.** `clearClassData` now resets all skill trained flags,
+  then re-applies background skills from `BG_SKILL_MAP`. Skills stacking on background
+  change fixed in `selectBackground` similarly.
+- **Skills page: re-entry showed "no choices."** Fixed: split into pending vs resolved
+  choices; resolved state shows a read-only summary.
+- **`applyGrant` proficiency case was a no-op.** Now correctly populates
+  `entity.proficiencies.armor/weapons/tools/languages` from a `ProficiencyGrant` value.
+- **`applyGrant` speed case was a no-op.** Now adds to `entity.resources.speed`.
+- **`applyGrant` subclass_unlock was a no-op.** Now queues a pending custom choice
+  that surfaces in the Features tab.
+- **Medium armor DEX cap not enforced.** Added `formulaAbilityCap` field to `Effect` type;
+  medium armor items carry `{ dex: 2 }`; pipeline and audit both respect the cap.
+- **Conditions were hardcoded text, not engine content.** Created
+  `src/content/conditions/index.ts` with all 15 PHB conditions as `Condition` objects.
+  Five (Grappled, Restrained, Paralyzed, Stunned, Petrified) carry speed=0 effects.
+  `applyCondition` now accepts optional features from the caller (avoiding circular dep)
+  and adds them to `entity.features`; `removeCondition` already strips them by source.
+  Speed audit now shows "Grappled (condition): set to 0" correctly.
+- **Audit trail used base stats throughout.** `buildSaveEntries`, `buildSkillEntries`,
+  `buildSpellSaveDcEntries`, `buildSpellAttackEntries`, `buildInitiativeEntries` all
+  switched to `applyStatModifiers` so breakdowns show effective values.
+- **AC audit inflated with both armor and Unarmored Defense formulas.** Rewritten to
+  pick the winning (highest-total) formula and show only its contributions.
+- **Feature hydration in UI layer only.** Moved to `loadCharacters` in `characterStore`
+  so equipped items retain AC effects after every app restart, not just after fresh equip.
 
-D&D 5e is the proof that the engine works. The north star is that the engine isn't
-*about* D&D at all — D&D is just the first content pack.
+### Spell wiring
+
+- **487 vault spells wired into creation.** `spells.tsx` now merges vault corpus
+  (preferred) with legacy spells (fallback), filtered by `spell.classes` to show only
+  the character's class.
+
+### Documentation
+
+Five new reference documents written to `docs/`:
+- `PRODUCT_PRINCIPLES.md` — 7 governing principles in priority order.
+- `UI_RULES.md` — 8 binding UI rules with forbidden word list and audit trail contract.
+- `ROADMAP.md` — sequenced pre-release and post-release priorities with sizing.
+- `NAVIGATION_MAP.md` — complete verified screen tree and answers to UX questions.
+- `PAGE_REFERENCE.md` — detailed walkthrough of every screen and every choice.
+- `QA_GUIDE.md` — step-by-step manual test procedures with exact expected values.
+
+---
+
+## 4. What's next (ordered)
+
+### Pre-release (blocking)
+
+1. **Character header: HP + AC always visible.** Hours of work, highest player impact.
+   Currently AC only appears in the Combat tab's stat row.
+2. **Settings screen.** Exposes `CampaignRules` (level cap, HP mode, multiclass,
+   feats on/off, XP vs milestone). Required by the "table adapts to app" principle.
+3. **Homebrew → creation wiring (Part A).** Custom races, spells, backgrounds, and
+   features from the homebrew library appear in the creation wizard. The homebrew items
+   already have the right shape — the creation wizard just needs to merge the library
+   into its content sources. Part B (homebrew classes) is a separate larger project.
+4. **Spellbook tab.** A seventh in-page tab (spellcasters only) for: browse by level,
+   prepared/known distinction, concentration/ritual tags, Cast button that uses the same
+   code path as the action card Use button.
+5. **Campaign overview screen.** Between-sessions surface: session log, quest tracker,
+   campaign notes, party member list. Makes the Campaigns tab useful on non-game days.
+6. **Home screen campaign state.** Three states: no campaign, between sessions, live
+   session. Requires #5 to have content to show.
+
+### Post-release
+
+- Spell selection on level-up (known/prepared count tables per class)
+- Audit trail completeness gate — every number listed in `UI_RULES.md` Rule 2 must
+  produce a non-empty breakdown
+- Quest log and shared journal extension of #5
+- Ruleset concept formalized (CampaignRules → Ruleset with name + content pack list)
+- Content pack architecture
+- Subclass features authored into progressions
+- Attack bonuses through the pipeline (currently computed ad-hoc in TabCharacter)
+- Condition advantage/disadvantage effects (currently reminder text only)
+- Proficiency display on the sheet (the proficiency block is now populated correctly
+  but not shown anywhere in the UI)
+
+### Deliberately deferred
+
+Multiclassing (identity model rewrite), cloud sync, non-D&D rulesets, generic resource
+pools, full session replay. These wait for a proven second use case.
+
+---
+
+## 5. Known gaps (honest)
+
+| Gap | Impact | Status |
+|---|---|---|
+| No Settings screen | DM can't configure rules | Pre-release blocker |
+| Homebrew not wired into creation | Core differentiator incomplete | Pre-release blocker |
+| No Spellbook tab | Casters manage spells across two tabs | Pre-release blocker |
+| No character header AC | Players ask "what's my AC?" constantly | Pre-release blocker |
+| Subclass features not authored | Level 3 subclass pick shows "resolve with DM" | Major gap |
+| Many mid/high-level class entries are HP stubs | Level 6+ is mechanically thin | Major gap |
+| Conditions only auto-enforce speed | Poisoned/Blinded etc. are reminders only | Known |
+| Attack bonuses not in pipeline | No audit trail for attack rolls | Known |
+| Two-device sync untested | Reconnect/conflict handling unverified | Known |
+| Proficiency block not displayed | Populated but no UI surface | Minor |
+| Feat prerequisites not enforced | Player/DM judgment only | Minor |
+| No portraits/identity art | Flat character cards | Minor |
+| `src/screens/` directory | Predates expo-router, dead code | Cleanup |
 
 ---
 
 ## 6. How we work
 
-- **Direct edits (default):** diagnosis and surgical fixes happen against the real files.
-- **Claude Code (for bulk):** self-contained generation it can build/test itself.
-- **Scripts (for data):** one-off converters like `scripts/convert-spells.mjs`, re-runnable
-  against the source vault.
-- **The loop:** edit → `npx tsc --noEmit` → `npx expo run:android` → test on device →
-  report → edit. `tsc` is the static gate; device behavior is verified by hand.
+**Edit loop:** Claude edits files via Filesystem MCP → `npx tsc --noEmit` (static gate)
+→ EAS cloud build (`eas build --profile preview --platform android`) for device testing.
+Local `npx expo run:android` can deadlock on Windows during C++ compilation; prefer EAS
+or Expo Go for iteration.
 
-### Honest current limitations
-- In-play level-up resolves ASI/feat; other queued choices (a caster's new spells, the
-  level-3 subclass pick) are not yet resolvable from the sheet.
-- Feat prerequisites are shown, not enforced (player/DM judges).
-- Two-device sync is unverified (one device on hand).
-- The 487-spell corpus is generated but not yet consumed by the app.
-- Homebrew + wiki import are built but untested on real input.
+**Commit discipline:** always `npm install` → `git add -A` → `git commit` → `git push`
+before triggering an EAS build. EAS runs `npm ci` which requires lock file and source
+to be in sync.
+
+**`edit_file` reliability:** always re-read the file after every edit. The read result
+is ground truth; tool response is not.

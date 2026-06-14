@@ -2,7 +2,7 @@
 // Character sheet — 6-tab sheet with persistent rest bar.
 // All values read from entity.derived — never computed in components.
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
 import { useCampaignStore } from '../../src/store/campaignStore';
@@ -73,7 +73,12 @@ export default function CharacterSheetScreen() {
     );
   }
 
-  const { identity, resources } = entity;
+  const { identity, resources, derived } = entity;
+
+  // Header stat colours
+  const hpPct   = resources.hp.maximum > 0
+    ? resources.hp.current / resources.hp.maximum : 0;
+  const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
 
   // ── Handlers (all pure engine calls → mutate) ─────────────────────────────
 
@@ -187,19 +192,12 @@ export default function CharacterSheetScreen() {
   }, [mutate]);
 
   const handleRest = useCallback((kind: 'short' | 'long') => {
-    const label = kind === 'short' ? 'Short Rest' : 'Long Rest';
-    Alert.alert(label, `Take a ${label.toLowerCase()}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: label,
-        onPress: () => mutate(e => {
-          let updated = takeRest(e, kind, rules);
-          // Long rest also expires 'end_of_session' DM overrides
-          if (kind === 'long') updated = expireOverrides(updated, 'end_of_session', rules);
-          return updated;
-        }),
-      },
-    ]);
+    mutate(e => {
+      let updated = takeRest(e, kind, rules);
+      // Long rest also expires 'end_of_session' DM overrides
+      if (kind === 'long') updated = expireOverrides(updated, 'end_of_session', rules);
+      return updated;
+    });
   }, [mutate, rules]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -207,26 +205,50 @@ export default function CharacterSheetScreen() {
   return (
     <View style={styles.screen}>
 
-      {/* Header */}
+      {/* Header — name + always-visible HP / AC / Speed */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backTxt}>← Back</Text>
-        </Pressable>
-        <View style={styles.headerInfo}>
-          <Text style={styles.charName} numberOfLines={1}>{identity.name || 'Unnamed'}</Text>
-          <Text style={styles.charSub}>
-            Lv {identity.level}  ·  {identity.classId || '—'}  ·  {identity.raceId || '—'}
+        <View style={styles.headerTop}>
+          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+            <Text style={styles.backTxt}>← Back</Text>
+          </Pressable>
+          <Text style={styles.charName} numberOfLines={1}>
+            {identity.name || 'Unnamed'}
           </Text>
+          <SyncStatusDot />
         </View>
-        <SyncStatusDot />
-        <View style={styles.hpPill}>
-          <Text style={[
-            styles.hpPillTxt,
-            resources.hp.current / Math.max(1, resources.hp.maximum) < 0.25 && { color: Colors.red },
-          ]}>
-            {resources.hp.current}/{resources.hp.maximum}
+        <View style={styles.headerStats}>
+          <Text style={styles.charSub}>
+            Lv {identity.level}  ·  {identity.classId || '—'}
           </Text>
-          <Text style={styles.hpPillLabel}>HP</Text>
+          <View style={styles.statPills}>
+            {/* HP */}
+            <View style={[styles.statPill, { borderColor: hpColor + '88' }]}>
+              <Text style={[styles.statPillValue, { color: hpColor }]}>
+                {resources.hp.current}
+                <Text style={styles.statPillMax}>/{resources.hp.maximum}</Text>
+              </Text>
+              <Text style={styles.statPillLabel}>HP</Text>
+            </View>
+            {/* AC */}
+            <View style={styles.statPill}>
+              <Text style={styles.statPillValue}>{derived.ac}</Text>
+              <Text style={styles.statPillLabel}>AC</Text>
+            </View>
+            {/* Speed */}
+            <View style={styles.statPill}>
+              <Text style={styles.statPillValue}>{derived.speed}</Text>
+              <Text style={styles.statPillLabel}>ft</Text>
+            </View>
+            {/* Temp HP badge — only when active */}
+            {resources.hp.temp > 0 && (
+              <View style={[styles.statPill, { borderColor: Colors.blue + '88' }]}>
+                <Text style={[styles.statPillValue, { color: Colors.blue }]}>
+                  +{resources.hp.temp}
+                </Text>
+                <Text style={styles.statPillLabel}>TMP</Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
@@ -331,24 +353,45 @@ const styles = StyleSheet.create({
     paddingTop:        Spacing.xl + 8,
     paddingBottom:     Spacing.sm,
     paddingHorizontal: Spacing.md,
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               Spacing.sm,
+    gap:               Spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  backBtn: { paddingRight: Spacing.xs },
-  backTxt: { color: Colors.gold, fontSize: FontSize.md, fontWeight: FontWeight.bold },
-  headerInfo: { flex: 1 },
-  charName:   { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  charSub:    { fontSize: FontSize.xs, color: Colors.textSecondary },
-  hpPill: {
-    backgroundColor: Colors.surface, borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm, paddingVertical: 4,
-    alignItems: 'center', borderWidth: 1, borderColor: Colors.border,
+  headerTop: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            Spacing.sm,
   },
-  hpPillTxt:   { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.green },
-  hpPillLabel: { fontSize: FontSize.xs, color: Colors.textDim },
+  headerStats: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    paddingLeft:    2,
+  },
+  backBtn:  { paddingRight: Spacing.xs },
+  backTxt:  { color: Colors.gold, fontSize: FontSize.md, fontWeight: FontWeight.bold },
+  charName: { flex: 1, fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  charSub:  { fontSize: FontSize.xs, color: Colors.textSecondary },
+
+  statPills: { flexDirection: 'row', gap: Spacing.xs },
+  statPill: {
+    backgroundColor:  Colors.surface,
+    borderRadius:     Radius.md,
+    borderWidth:      1,
+    borderColor:      Colors.border,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:  3,
+    alignItems:       'center',
+    minWidth:         44,
+  },
+  statPillValue: {
+    fontSize:   FontSize.md,
+    fontWeight: FontWeight.bold,
+    color:      Colors.textPrimary,
+    lineHeight: 20,
+  },
+  statPillMax:  { fontSize: FontSize.xs, color: Colors.textDim, fontWeight: FontWeight.normal },
+  statPillLabel:{ fontSize: FontSize.xs, color: Colors.textDim, lineHeight: 14 },
 
   tabBar: {
     flexDirection:     'row',

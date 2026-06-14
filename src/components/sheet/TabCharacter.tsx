@@ -2,10 +2,10 @@
 // Tab 1 — Combat dashboard. Players live here.
 // Includes: HP, stat row, conditions/exhaustion, resources, spell slots,
 //           death saves (when HP=0), concentration check, level-up button.
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  Modal, TextInput, Alert,
+  Modal, TextInput,
 } from 'react-native';
 import { Entity, CampaignRules } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
@@ -153,51 +153,63 @@ function DeathSavesSection({
 }) {
   const isDead   = saves.failures  >= 3;
   const isStable = saves.successes >= 3;
+  const [lastRoll, setLastRoll] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showResult(msg: string) {
+    setLastRoll(msg);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setLastRoll(null), 3000);
+  }
+
+  function revive() {
+    const updated: Entity = {
+      ...entity,
+      resources: { ...entity.resources, hp: { ...entity.resources.hp, current: 1 } },
+    };
+    onEntityUpdate(recomputeDerived(updated, rules));
+    onSavesChange({ successes: 0, failures: 0 });
+  }
+
+  function addSuccess() {
+    if (isDead || isStable) return;
+    const next = Math.min(3, saves.successes + 1);
+    if (next >= 3) { revive(); showResult('Stable — 1 HP'); }
+    else { onSavesChange({ ...saves, successes: next }); showResult(`Success (${next}/3)`); }
+  }
+
+  function addFailure() {
+    if (isDead || isStable) return;
+    const next = Math.min(3, saves.failures + 1);
+    onSavesChange({ ...saves, failures: next });
+    showResult(next >= 3 ? 'Dead' : `Failure (${next}/3)`);
+  }
 
   function handleRoll() {
     if (isDead || isStable) return;
     const result = rollExpression('1d20').total;
-    let { successes, failures } = saves;
-
     if (result === 20) {
-      // Natural 20: regain 1 HP, reset pips
-      const updated: Entity = {
-        ...entity,
-        resources: { ...entity.resources, hp: { ...entity.resources.hp, current: 1 } },
-      };
-      onEntityUpdate(recomputeDerived(updated, rules));
-      onSavesChange({ successes: 0, failures: 0 });
-      Alert.alert('Natural 20!', 'You regain 1 HP and are no longer dying!');
-      return;
+      showResult('Natural 20 — revived!');
+      revive();
     } else if (result === 1) {
-      failures = Math.min(3, failures + 2);
+      const next = Math.min(3, saves.failures + 2);
+      onSavesChange({ ...saves, failures: next });
+      showResult(next >= 3 ? '1 — Dead' : `1 — Two failures! (${next}/3)`);
     } else if (result >= 10) {
-      successes = Math.min(3, successes + 1);
+      const next = Math.min(3, saves.successes + 1);
+      if (next >= 3) { revive(); showResult('Stable — 1 HP'); }
+      else { onSavesChange({ ...saves, successes: next }); showResult(`${result} — Success (${next}/3)`); }
     } else {
-      failures = Math.min(3, failures + 1);
-    }
-
-    const newSaves = { successes, failures };
-    onSavesChange(newSaves);
-
-    if (successes >= 3) {
-      const updated: Entity = {
-        ...entity,
-        resources: { ...entity.resources, hp: { ...entity.resources.hp, current: 1 } },
-      };
-      onEntityUpdate(recomputeDerived(updated, rules));
-      onSavesChange({ successes: 0, failures: 0 });
-      Alert.alert('Stable!', 'You have stabilized with 1 HP.');
-    } else if (failures >= 3) {
-      Alert.alert('💀 Dead', `${entity.identity.name} has died.`);
-    } else {
-      Alert.alert(
-        result >= 10 ? '✅ Success' : '❌ Failure',
-        `Rolled ${result}. Successes: ${successes}/3  Failures: ${failures}/3`
-      );
+      const next = Math.min(3, saves.failures + 1);
+      onSavesChange({ ...saves, failures: next });
+      showResult(next >= 3 ? `${result} — Dead` : `${result} — Failure (${next}/3)`);
     }
   }
 
+  const resultColor = !lastRoll ? Colors.textDim
+    : (lastRoll.includes('Success') || lastRoll.includes('Stable')) ? Colors.green
+    : lastRoll.includes('20') ? Colors.gold
+    : Colors.red;
   return (
     <View style={styles.deathSection}>
       <Text style={styles.sectionTitle}>DEATH SAVING THROWS</Text>
@@ -223,9 +235,21 @@ function DeathSavesSection({
               </View>
             </View>
           </View>
-          <Pressable style={styles.deathRollBtn} onPress={handleRoll}>
-            <Text style={styles.deathRollBtnTxt}>🎲 Roll Death Save</Text>
-          </Pressable>
+          {/* Failure | Roll | Success */}
+          <View style={styles.deathBtnRow}>
+            <Pressable style={[styles.deathBtn, styles.deathBtnFail]} onPress={addFailure}>
+              <Text style={styles.deathBtnFailTxt}>✖ Failure</Text>
+            </Pressable>
+            <Pressable style={[styles.deathBtn, styles.deathBtnRoll]} onPress={handleRoll}>
+              <Text style={styles.deathBtnRollTxt}>🎲 Roll</Text>
+            </Pressable>
+            <Pressable style={[styles.deathBtn, styles.deathBtnPass]} onPress={addSuccess}>
+              <Text style={styles.deathBtnPassTxt}>✔ Success</Text>
+            </Pressable>
+          </View>
+          {lastRoll && (
+            <Text style={[styles.dieResultTxt, { color: resultColor }]}>{lastRoll}</Text>
+          )}
         </>
       )}
       {(saves.successes > 0 || saves.failures > 0 || isDead || isStable) && (
@@ -251,28 +275,17 @@ function LevelUpSection({
   if (!progression) return null;
   if (entity.identity.level >= maxLevel) return null;
 
-  function handleLevelUp() {
-    const nextLevel = entity.identity.level + 1;
-    Alert.alert(
-      `Level Up to ${nextLevel}`,
-      `Level up ${entity.identity.name} from ${entity.identity.level} to ${nextLevel}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Level Up!',
-          onPress: () => {
-            const updated = levelUp(entity, nextLevel, progression!, rules);
-            onEntityUpdate(updated);
-            onLeveled(updated);
-          },
-        },
-      ]
-    );
+  const nextLevel = entity.identity.level + 1;
+
+  function doLevelUp() {
+    const updated = levelUp(entity, nextLevel, progression!, rules);
+    onEntityUpdate(updated);
+    onLeveled(updated);
   }
 
   return (
-    <Pressable style={styles.levelUpBtn} onPress={handleLevelUp}>
-      <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {entity.identity.level + 1})</Text>
+    <Pressable style={styles.levelUpBtn} onPress={doLevelUp}>
+      <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
     </Pressable>
   );
 }
@@ -393,9 +406,17 @@ export function TabCharacter({
   const [manualHpOpen, setManualHpOpen] = useState(false);
   const [maxHpOpen,    setMaxHpOpen]    = useState(false);
   const [tempHpOpen,   setTempHpOpen]   = useState(false);
-  // Death saves are session-local — not stored in entity.notes
   const [deathSaves, setDeathSaves] = useState({ successes: 0, failures: 0 });
   const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
+  // Inline hit-die result — shown for 3s then cleared, no Alert needed
+  const [hitDieResult, setHitDieResult] = useState<string | null>(null);
+  const hitDieTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showHitDieResult(msg: string) {
+    setHitDieResult(msg);
+    if (hitDieTimer.current) clearTimeout(hitDieTimer.current);
+    hitDieTimer.current = setTimeout(() => setHitDieResult(null), 3000);
+  }
 
   const { identity, resources, derived, conditions, spellcasting } = entity;
 
@@ -440,19 +461,12 @@ export function TabCharacter({
     const updated = spendHitDie(entity, rules);
     onEntityUpdate(updated);
     const healed = updated.resources.hp.current - before;
-    Alert.alert(
-      'Hit Die Rolled',
-      `Restored ${healed} HP. Hit dice remaining: ${updated.resources.hitDice.remaining}/${updated.resources.hitDice.total}.`,
-    );
+    showHitDieResult(`+${healed} HP restored`);
   }
   function handleDiscardHitDie() {
     if (resources.hitDice.remaining <= 0) return;
-    const updated = discardHitDie(entity, rules);
-    onEntityUpdate(updated);
-    Alert.alert(
-      'Hit Die Used',
-      `Spent one hit die — roll your own dice and heal manually. Remaining: ${updated.resources.hitDice.remaining}/${updated.resources.hitDice.total}.`,
-    );
+    onEntityUpdate(discardHitDie(entity, rules));
+    showHitDieResult('Hit die spent — roll your die and heal');
   }
 
   function openAudit(stat: string, label: string) {
@@ -577,12 +591,8 @@ export function TabCharacter({
         onEntityUpdate={onEntityUpdate}
         onLeveled={(updated) => {
           const hasAsi = updated.choices.some(c => c.definition.kind === 'asi' && !c.resolved);
-          if (hasAsi) {
-            setLevelUpAsiOpen(true);
-          } else {
-            const other = updated.choices.filter(c => !c.resolved).length;
-            if (other > 0) Alert.alert(`${other} choice(s) pending`, 'Open the Features tab to resolve remaining choices.');
-          }
+          if (hasAsi) setLevelUpAsiOpen(true);
+          // Other pending choices (subclass, spells) surface in the Features tab automatically
         }}
       />
 
@@ -636,6 +646,9 @@ export function TabCharacter({
           </Pressable>
         </View>
         <Text style={styles.hitDieHint}>Roll: app rolls the die + heals you.  Use: spend one and roll your own.</Text>
+        {hitDieResult && (
+          <Text style={styles.dieResultTxt}>{hitDieResult}</Text>
+        )}
       </View>
 
       {/* Conditions + Exhaustion */}
@@ -973,6 +986,18 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.xs,
   },
   deathResetTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  // Death save manual buttons
+  deathBtnRow: { flexDirection: 'row', gap: Spacing.xs },
+  deathBtn: {
+    flex: 1, borderRadius: Radius.md, borderWidth: 1,
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  deathBtnFail: { backgroundColor: Colors.red + '22', borderColor: Colors.red + '66' },
+  deathBtnFailTxt: { color: Colors.red, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  deathBtnRoll: { backgroundColor: Colors.surfaceHigh, borderColor: Colors.border },
+  deathBtnRollTxt: { color: Colors.textPrimary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  deathBtnPass: { backgroundColor: Colors.green + '22', borderColor: Colors.green + '66' },
+  deathBtnPassTxt: { color: Colors.green, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   statRow: { flexDirection: 'row', gap: Spacing.sm },
   statBox: {
@@ -1101,6 +1126,37 @@ const styles = StyleSheet.create({
   hitDieUse:    { backgroundColor: Colors.surfaceHigh, borderColor: Colors.border },
   hitDieUseTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   hitDieHint:   { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic', marginTop: 4 },
+  // Inline result text (hit die + death saves)
+  dieResultTxt: {
+    fontSize:   FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color:      Colors.green,
+    textAlign:  'center',
+    paddingTop: 4,
+  },
+  // Level-up inline confirm row
+  levelUpConfirmRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            Spacing.sm,
+    backgroundColor: Colors.gold + '11',
+    borderRadius:   Radius.md,
+    borderWidth:    1,
+    borderColor:    Colors.gold + '66',
+    padding:        Spacing.sm,
+  },
+  levelUpConfirmTxt:    { flex: 1, color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  levelUpConfirmYes: {
+    backgroundColor: Colors.gold, borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  levelUpConfirmYesTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  levelUpConfirmNo: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  levelUpConfirmNoTxt:   { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   // Level-up modal
   lvModalRoot:  { flex: 1, backgroundColor: Colors.bg, paddingTop: Spacing.xl + 8 },

@@ -11,26 +11,75 @@ ARCHITECTURE.md for the technical design, IMPLEMENTATION.md for schemas.
 
 ## 📍 Status Tracker — read this first
 
-**You are here:** Pre-release priorities #1–#3 are done. #4 (homebrew-into-creation) is next.
+**You are here:** Pre-release priorities #1–#4a are done. #5 (Spellbook tab) is next.
 
 | # | Item | Status | Notes |
 |---|------|--------|-------|
 | 1 | Character header — HP/AC/Speed always visible | ✅ Done | Already in `app/sheet/[id].tsx` header (`statPills`) |
 | 2 | Class change warning (Q29) | ✅ Done | Custom dark/gold modal in `class-detail.tsx` (restyled 2026-06-14; was a native `Alert`) |
 | 3 | Settings screen | ✅ Done | `app/settings.tsx` — HP mode, level cap, feats/multiclass/XP toggles, ability score cap |
-| 4a | Wire homebrew into creation (races/spells/backgrounds/features) | 🔵 In progress | Races done: `race.tsx` + `race-detail.tsx` now merge `useHomebrewStore` races, with a working "Homebrew" section. Spells/backgrounds/features/classes still read only `globalContentDB`. |
+| 4a | Wire homebrew into creation (races/spells/backgrounds/features) | ✅ Done | All four wired via `useHomebrewStore`: races (`race.tsx`/`race-detail.tsx`), spells (`spells.tsx`, tagged + override official by id), backgrounds (`background.tsx`, generalized skill-proficiency marking from feature effects), features (`AsiFeatPicker.tsx` — homebrew Features reshaped to `Feat` and merged into the Feat picker, used by both creation and in-play level-up). Classes intentionally excluded — see 4b. |
 | 4b | Homebrew classes/subclasses (full progression authoring) | ⬜ Not started | Deferred until 4a ships — see Pre-release #4 Part B |
 | 5 | Spellbook tab | ⬜ Not started | Spec is in UI_RULES.md Rule 6 and FEATURE_QA_CHARACTER_SHEET.md |
 | 6 | Plain-language audit view | ⬜ Not started | Display-only — no engine changes needed |
 | 7 | Campaign overview screen | ⬜ Not started | DM dashboard exists but is encounter/party-focused, not a between-sessions surface |
 | 8 | Home screen campaign state | ⬜ Not started | Blocked on #7 |
 
-**Next up:** #4a — wire homebrew races/spells/backgrounds/features into the creation
-wizard's pickers via `useHomebrewStore.getMergedContentDB()`. Start with `race.tsx`,
-which already has the "Homebrew Races" placeholder row.
+**Next up:** #5 — Spellbook tab (seventh sheet tab, conditional on spellcasting class).
+See Pre-release #5 below for the full spec. Also worth a quick look: the Homebrew
+tab's "New Background" button currently routes to `/homebrew/race-builder` (saves
+a `Race`, not a `Background`) — flagged in the 2026-06-15 session log, not yet fixed.
 
 ### Recent session log
 *(most recent first — one entry per session, updated whenever a change lands)*
+
+- **2026-06-15 (2):** #4a completed — the remaining three categories (spells,
+  backgrounds, features) are now wired into creation, following the races pattern
+  from earlier today. **Spells** (`spells.tsx`): homebrew spells merged into
+  `allSpells` (override official-by-id), tagged with a gold "Homebrew" pill in
+  `SpellRow`, flows through both the content-based picker and any future
+  ChoiceDefinition-based spell choices. **Backgrounds** (`background.tsx`): list
+  screen merges `useHomebrewStore().backgrounds` into a "Homebrew" section (tag, or
+  "create one" → `/homebrew` if empty); detail screen resolves homebrew backgrounds
+  and renders a generic Features list + "Homebrew" tag when there's no `BG_DETAIL`
+  entry. Generalized the skill-proficiency-marking logic in `selectBackground()`:
+  in addition to the hardcoded `BG_DETAIL`-driven pass (kept for PHB, now redundant
+  but harmless), a new pass scans every background feature's `effects` for
+  `grant_proficiency` on `skill:*` and marks those trained — this is what makes
+  homebrew backgrounds grant proficiencies correctly with no per-background data
+  entry needed. **Features** (`AsiFeatPicker.tsx`): homebrew "Features" (built in
+  the Feature Editor, authored with `source:{kind:'feat',refId:id}` — i.e. already
+  shaped as standalone feats) are reshaped to `Feat` and merged into the Feat-mode
+  list, search, dedup (`takenFeatIds` already matches on `source.refId`), and apply
+  path (`applyFeatToEntity`) alongside the 82 official feats, tagged "Homebrew" in
+  gold. Since `AsiFeatPicker` is shared, this also reaches in-play level-up, not
+  just creation. **Flagged, not fixed:** Homebrew tab's "New Background" button
+  routes to `/homebrew/race-builder`, which saves a `Race` — homebrew backgrounds
+  have no real authoring path yet (only via the import pipeline). #4a is now fully
+  ✅ for Part A; #4b (homebrew classes) remains its own project. Not yet verified
+  with `npx tsc --noEmit`.
+
+- **2026-06-15:** #4a (races) shipped — `race.tsx` and `race-detail.tsx` now merge
+  `useHomebrewStore` races into the creation picker with a "Homebrew" section/tag,
+  replacing the dead placeholder row. Separately, authored a full official-pattern
+  content package for the user's real level-2 campaign character: **Skeleton race**
+  with a **Giant** lineage (Large size, Undead traits — darkvision, necrotic/poison
+  resistance, poisoned immunity, Doomed Touch chill touch, Restoring Limbs), a new
+  **Abyss Knight** class (`src/content/classes/abyssKnight.ts`, d10, CHA pact-magic-
+  style spellcasting from level 2) with the **Oozing Knight** Demonic Patron baked in
+  as `source.kind:'subclass'` features (L1 tiny-space movement/no food/acid option +
+  Indiscernible Anatomy, L6 Pseudopods, L10 Amorphous incl. acid resistance, L14
+  Consume), and three custom items (Greatsword of Life Drinking 2d8 w/ life-steal
+  reminder text, Cast-Off Breastplate, Rope of Mending). Added two missing SRD spells
+  (Arms of Hadar, Hellish Rebuke) to `level1.ts`. Added a small additive engine
+  feature: a new `known_spells` grant kind (`types.ts` + `leveling.ts`) so a class/
+  race can grant fixed known spells — used for Abyss Knight's level-2 spells, and
+  generally useful for the "spell selection on level-up" gap. Added `ABYSS_KNIGHT_SLOTS`
+  to `spellSlotTables.ts` and a `CLASS_DETAIL['abyss_knight']` entry in
+  `class-detail.tsx` (without it, saving-throw proficiencies wouldn't have been set
+  at all). Granted heavy armor proficiency directly in the class's base proficiencies
+  to cover the practical effect of the "Heavily Armored" feat, since no ASI/feat slot
+  exists before level 4. Not yet verified with `npx tsc --noEmit` or in-app creation.
 
 - **2026-06-14:** Death Saves redesigned to match Hit Dice (manual Success/Failure
   buttons + Roll, inline result text, no native dialogs). Fixed a JSX nesting bug in
@@ -47,11 +96,11 @@ which already has the "Homebrew Races" placeholder row.
 
 ## Current state (what works today)
 
-- Character creation wizard (all 12 classes, 9 races, 13 backgrounds)
+- Character creation wizard (13 classes incl. Abyss Knight, 10 races incl. Skeleton, 13 backgrounds)
 - Live character sheet (6 tabs, rest bar, conditions, spell slots, hit dice)
 - Rules engine: effects, pipeline, audit trail, action cards
 - 82 feats with ASI/feat picker (creation + in-play level-up)
-- 487 class-tagged spells wired into class-filtered creation picker
+- 489 class-tagged spells wired into class-filtered creation picker
 - All 15 PHB conditions authored as content; 5 auto-enforce speed=0 in engine
 - Proficiency, speed, and subclass_unlock grants implemented
 - Medium armor DEX cap (+2) enforced

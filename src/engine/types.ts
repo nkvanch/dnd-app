@@ -429,8 +429,20 @@ export type ClassProgression = {
 
 export type Grant = {
   kind:  'feature' | 'resource' | 'resource_upgrade' | 'spell_slots' | 'proficiency'
-       | 'speed' | 'subclass_unlock' | 'init_spellcasting';
+       | 'speed' | 'subclass_unlock' | 'init_spellcasting' | 'known_spells';
   value: unknown;
+};
+
+/**
+ * 'known_spells' grant value — adds fixed spell/cantrip ids to an already-
+ * initialized spellcasting block (must come after 'init_spellcasting' in the
+ * same level entry's grants array). Used for classes/races that grant specific
+ * known spells rather than a player choice (e.g. innate spellcasting, or a
+ * subclass that knows fixed spells at a given level).
+ */
+export type KnownSpellsGrant = {
+  spellIds?:   string[];
+  cantripIds?: string[];
 };
 
 /**

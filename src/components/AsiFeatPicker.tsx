@@ -8,7 +8,8 @@ import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-
 import { applyAsiToEntity, applyFeatToEntity } from '../engine/leveling';
 import { applyStatModifiers, collectAllEffects } from '../engine/pipeline';
 import { ALL_FEATS } from '../content/feats/index';
-import { Entity, ChoiceState, CampaignRules, Ability } from '../engine/types';
+import { useHomebrewStore } from '../store/homebrewStore';
+import { Entity, ChoiceState, CampaignRules, Ability, Feat } from '../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 const ABILITIES: { key: Ability; label: string }[] = [
@@ -42,6 +43,20 @@ export function AsiFeatPicker({
   const [search, setSearch] = useState('');
 
   const maxScore = rules.maxAbilityScore ?? 20;
+  const homebrewFeatures = useHomebrewStore(s => s.features);
+
+  // Homebrew "features" (built in the Feature Editor) are authored with
+  // source: {kind:'feat', refId: id} — they're standalone custom feats.
+  // Reshape them to the Feat type so they slot into the same list, search,
+  // dedup, and apply path as the 82 official feats.
+  const homebrewFeats: Feat[] = useMemo(
+    () => homebrewFeatures.map(f => ({
+      id: f.id, name: f.name, prerequisite: null,
+      description: f.description, source: 'Homebrew', feature: f,
+    })),
+    [homebrewFeatures],
+  );
+  const allFeats = useMemo(() => [...ALL_FEATS, ...homebrewFeats], [homebrewFeats]);
 
   // EFFECTIVE scores (base + racial/feat effects) — must match what the sheet's
   // Abilities tab shows, and the PHB cap of 20 applies to the effective score.
@@ -56,10 +71,10 @@ export function AsiFeatPicker({
   );
   const filteredFeats = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return ALL_FEATS
+    return allFeats
       .filter(f => !takenFeatIds.has(f.id))
       .filter(f => q === '' || f.name.toLowerCase().includes(q) || f.description.toLowerCase().includes(q));
-  }, [search, takenFeatIds]);
+  }, [search, takenFeatIds, allFeats]);
 
   function canApply(): boolean {
     if (mode === '+2')   return first !== null;
@@ -72,7 +87,7 @@ export function AsiFeatPicker({
     let updated: Entity;
 
     if (mode === 'feat' && featId) {
-      const feat = ALL_FEATS.find(f => f.id === featId);
+      const feat = allFeats.find(f => f.id === featId);
       if (!feat) return;
       updated = applyFeatToEntity(entity, choice.id, choice.grantedAt, feat.feature, feat.id, rules);
     } else {
@@ -153,7 +168,9 @@ export function AsiFeatPicker({
                   <Text style={styles.featDesc} numberOfLines={selected ? undefined : 2}>
                     {f.description}
                   </Text>
-                  <Text style={styles.featSource}>{f.source}</Text>
+                  <Text style={[styles.featSource, f.source === 'Homebrew' && styles.featSourceHomebrew]}>
+                    {f.source}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -281,6 +298,7 @@ const styles = StyleSheet.create({
   featPrereq: { fontSize: FontSize.xs, color: Colors.gold, marginTop: 2, fontStyle: 'italic' },
   featDesc:   { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 4, lineHeight: 18 },
   featSource: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 4, opacity: 0.6 },
+  featSourceHomebrew: { color: Colors.gold, fontWeight: FontWeight.bold, opacity: 1 },
   featEmpty:  { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', padding: Spacing.lg },
 
   applyBtn: {

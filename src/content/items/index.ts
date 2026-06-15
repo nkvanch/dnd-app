@@ -153,6 +153,28 @@ export const itemGreatsword: Item = {
   }],
 };
 
+export const itemGreatswordLifeDrinking: Item = {
+  id: 'greatsword_life_drinking', name: 'Greatsword of Life Drinking', weight: 6, cost: '—',
+  properties: ['heavy', 'two-handed', 'magic weapon'],
+  features: [{
+    id: 'greatsword_life_drinking_attack', name: 'Greatsword of Life Drinking',
+    description: 'An enchanted greatsword whose blade is etched with hungry runes. Melee weapon attack, 2d8 slashing damage. Life Steal: on a hit, you regain hit points equal to half the damage dealt (rounded down) — roll the damage, then apply that healing yourself with the Heal control.',
+    source: { kind: 'item', refId: 'greatsword_life_drinking' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '2d8', damageType: 'slashing' }],
+  }],
+};
+
+export const itemRopeOfMending: Item = {
+  id: 'rope_of_mending', name: 'Rope of Mending', weight: 3, cost: '—',
+  properties: ['magic item', '50 feet'],
+  features: [{
+    id: 'rope_of_mending_use', name: 'Rope of Mending',
+    description: 'A 50-foot coil of fine, silken rope. Lay a length of it across a tear or break — in cloth, wood, rope, stone, or even a wound-worthy seam — and after one minute the material knits back together as if it had never been damaged. The rope itself never frays and can be used again and again.',
+    source: { kind: 'item', refId: 'rope_of_mending' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+
 export const itemGreataxe: Item = {
   id: 'greataxe', name: 'Greataxe', weight: 7, cost: '30 gp',
   properties: ['heavy', 'two-handed'],
@@ -297,6 +319,17 @@ export const itemBreastplate: Item = {
   features: [{
     id: 'breastplate_ac', name: 'Breastplate', description: 'Base AC 14 + DEX modifier (max +2).',
     source: { kind: 'item', refId: 'breastplate' }, level: null, actions: [], choices: [], passive: true,
+    effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null, formulaAbilities: ['dex'] as any, formulaAbilityCap: { dex: 2 } }],
+  }],
+};
+
+export const itemCastOffBreastplate: Item = {
+  id: 'cast_off_breastplate', name: 'Cast-Off Breastplate', weight: 20, cost: '—',
+  properties: ['medium armor'],
+  features: [{
+    id: 'cast_off_breastplate_ac', name: 'Cast-Off Breastplate',
+    description: 'A breastplate hammered down and refitted from plate cast off by a creature far larger than its current wearer — the seams still bear the marks of the reforging. Base AC 14 + DEX modifier (max +2).',
+    source: { kind: 'item', refId: 'cast_off_breastplate' }, level: null, actions: [], choices: [], passive: true,
     effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 14, condition: null, formulaAbilities: ['dex'] as any, formulaAbilityCap: { dex: 2 } }],
   }],
 };
@@ -491,19 +524,19 @@ export const ALL_ITEMS: Item[] = [
   // Simple ranged
   itemShortbow, itemLightCrossbow, itemDart,
   // Martial melee
-  itemLongsword, itemBattleaxe, itemGreatsword, itemGreataxe, itemScimitar, itemRapier, itemWarhammer, itemMaul, itemShortSword,
+  itemLongsword, itemBattleaxe, itemGreatsword, itemGreatswordLifeDrinking, itemGreataxe, itemScimitar, itemRapier, itemWarhammer, itemMaul, itemShortSword,
   // Martial ranged
   itemLongbow, itemHandCrossbow,
   // Light armor
   itemLeatherArmor, itemStuddedLeather,
   // Medium armor
-  itemChainShirt, itemScaleMail, itemBreastplate, itemHalfPlate,
+  itemChainShirt, itemScaleMail, itemBreastplate, itemCastOffBreastplate, itemHalfPlate,
   // Heavy armor
   itemRingMail, itemChainMail, itemSplint, itemPlateMail,
   // Shield
   itemShieldItem,
   // Gear
-  itemBackpack, itemRope50ft, itemTorch, itemRations1day, itemHealersKit,
+  itemBackpack, itemRope50ft, itemRopeOfMending, itemTorch, itemRations1day, itemHealersKit,
   itemArcaneOrb, itemHolySymbol, itemDruidicFocus,
   itemComponentPouch, itemSpellbook, itemLute, itemThievesTools, itemArrows20, itemBolts20,
   // Packs

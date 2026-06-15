@@ -4,6 +4,7 @@
 // ============================================================================
 import { ClassProgression, LevelEntry, ChoiceDefinition } from '../../engine/types';
 import { fighterProgression } from './fighter';
+import { abyssKnightProgression } from './abyssKnight';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -716,6 +717,7 @@ export const ALL_CLASS_PROGRESSIONS: ClassProgression[] = [
   monkProgression,
   sorcererProgression,
   warlockProgression,
+  abyssKnightProgression,
 ];
 
 /** Lookup map: classId → ClassProgression. Use this instead of hardcoding class names. */
@@ -736,4 +738,5 @@ export const ALL_CHAR_CLASSES = [
   { id: 'monk',      name: 'Monk',      hitDie: 8,  features: [] },
   { id: 'sorcerer',  name: 'Sorcerer',  hitDie: 6,  features: [] },
   { id: 'warlock',   name: 'Warlock',   hitDie: 8,  features: [] },
+  { id: 'abyss_knight', name: 'Abyss Knight', hitDie: 10, features: [] },
 ] as import('../../engine/types').CharClass[];

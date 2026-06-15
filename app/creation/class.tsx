@@ -19,6 +19,7 @@ const CASTER_TYPE: Record<string, string> = {
   sorcerer:  'Full Caster',
   warlock:   'Half Caster',
   wizard:    'Full Caster',
+  abyss_knight: 'Half Caster',
 };
 
 const CLASS_DESCRIPTIONS: Record<string, string> = {
@@ -34,6 +35,7 @@ const CLASS_DESCRIPTIONS: Record<string, string> = {
   sorcerer:  'An innate spellcaster powered by bloodline magic. Metamagic lets you shape spells in unique ways. Fewer spell slots than wizard. Hit Die: d6.',
   warlock:   'A pact-magic spellcaster empowered by a patron. Short-rest spell slot recharge, Eldritch Invocations, and flexible Pact Boon. Hit Die: d8.',
   wizard:    'A scholarly spellcaster with the broadest spell list in the game. Arcane Recovery and spellbook give unmatched flexibility. Hit Die: d6.',
+  abyss_knight: 'A demon-pact knight who spends hit dice to fuel devastating melee strikes, gaining CHA-based pact spellcasting and a Demonic Patron at 2nd level. Hit Die: d10.',
 };
 
 export default function ClassScreen() {

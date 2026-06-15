@@ -11,6 +11,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { resolveChoice } from '../../src/engine/leveling';
 import { ChoiceOption, Entity, Spell } from '../../src/engine/types';
 import { globalContentDB } from '../../src/content/classes/library';
@@ -40,9 +41,9 @@ function markVisited(entity: Entity): Entity {
 // ── Spell row (select + expandable description) ───────────────────────────────
 
 function SpellRow({
-  spell, selected, disabled, onToggle,
+  spell, selected, disabled, isHomebrew, onToggle,
 }: {
-  spell: Spell; selected: boolean; disabled: boolean; onToggle: () => void;
+  spell: Spell; selected: boolean; disabled: boolean; isHomebrew?: boolean; onToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -53,7 +54,14 @@ function SpellRow({
             {selected && <Text style={styles.checkmark}>✓</Text>}
           </View>
           <View style={styles.spellCardLeft}>
-            <Text style={styles.spellName}>{spell.name}</Text>
+            <View style={styles.spellNameRow}>
+              <Text style={styles.spellName}>{spell.name}</Text>
+              {isHomebrew && (
+                <View style={styles.homebrewTag}>
+                  <Text style={styles.homebrewTagTxt}>Homebrew</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.spellMeta}>
               {spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`}  ·  {spell.school}  ·  {spell.castingTime}
               {spell.concentration ? '  ·  Concentration' : ''}
@@ -76,6 +84,7 @@ export default function SpellsScreen() {
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
+  const homebrewSpells = useHomebrewStore(s => s.spells);
 
   // ── ALL hooks first — before any conditional return ──
   // Redirect to name if no draft — must be in useEffect, not render
@@ -104,10 +113,15 @@ export default function SpellsScreen() {
   const allSpells = (() => {
     // Prefer vault spells (487 class-tagged) when they exist; fall back to
     // the hand-authored corpus for any spell not in the vault (by id).
-    const vaultIds  = new Set(ALL_VAULT_SPELLS.map(s => s.id));
-    const fallbacks = globalContentDB.spells.filter(s => !vaultIds.has(s.id));
-    return [...ALL_VAULT_SPELLS, ...fallbacks];
+    // Homebrew spells are merged in last and override official spells of the
+    // same id, so a homebrew edit of an existing spell takes precedence.
+    const vaultIds    = new Set(ALL_VAULT_SPELLS.map(s => s.id));
+    const fallbacks   = globalContentDB.spells.filter(s => !vaultIds.has(s.id));
+    const homebrewIds = new Set(homebrewSpells.map(s => s.id));
+    const official    = [...ALL_VAULT_SPELLS, ...fallbacks].filter(s => !homebrewIds.has(s.id));
+    return [...official, ...homebrewSpells];
   })();
+  const homebrewSpellIds = new Set(homebrewSpells.map(s => s.id));
 
   // Filter by class — only show spells tagged for this class.
   // If a spell has no `classes` tag at all (legacy), include it so nothing disappears.
@@ -174,6 +188,7 @@ export default function SpellsScreen() {
                     spell={spell}
                     selected={selected}
                     disabled={disabled}
+                    isHomebrew={homebrewSpellIds.has(spell.id)}
                     onToggle={() => toggleChoice(choice.id, opt.id, choice.definition.count)}
                   />
                 );
@@ -272,6 +287,7 @@ export default function SpellsScreen() {
                   spell={s}
                   selected={pickedCantrips.includes(s.id)}
                   disabled={!pickedCantrips.includes(s.id) && pickedCantrips.length >= targets.cantrips}
+                  isHomebrew={homebrewSpellIds.has(s.id)}
                   onToggle={() => toggleCantrip(s.id)}
                 />
               ))}
@@ -291,6 +307,7 @@ export default function SpellsScreen() {
                   spell={s}
                   selected={pickedSpells.includes(s.id)}
                   disabled={!pickedSpells.includes(s.id) && pickedSpells.length >= targets.spells}
+                  isHomebrew={homebrewSpellIds.has(s.id)}
                   onToggle={() => toggleSpell(s.id)}
                 />
               ))}
@@ -342,7 +359,14 @@ const styles = StyleSheet.create({
   checkboxSelected: { backgroundColor: Colors.blue, borderColor: Colors.blue },
   checkmark:        { fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold },
   spellCardLeft:    { flex: 1 },
+  spellNameRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   spellName:        { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  homebrewTag: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 1,
+  },
+  homebrewTagTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
   spellMeta:        { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   infoBtn:          { paddingHorizontal: Spacing.sm, paddingVertical: 2 },
   infoBtnTxt:       { fontSize: FontSize.md, color: Colors.blue },

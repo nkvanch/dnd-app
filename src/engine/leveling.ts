@@ -1,5 +1,6 @@
 import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
-         ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots } from './types';
+         ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
+         KnownSpellsGrant } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { getSpellSlotsForClassLevel } from '../content/classes/spellSlotTables';
 
@@ -159,6 +160,22 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
       return {
         ...entity,
         spellcasting: { ...entity.spellcasting, slots: newSlots },
+      };
+    }
+
+    case "known_spells": {
+      // Adds fixed known spells/cantrips to an already-initialized spellcasting
+      // block. No-op if spellcasting hasn't been initialized yet — order the
+      // 'init_spellcasting' grant earlier in the same level entry's grants array.
+      const ks = grant.value as KnownSpellsGrant;
+      if (!entity.spellcasting) return entity;
+      return {
+        ...entity,
+        spellcasting: {
+          ...entity.spellcasting,
+          known:    [...new Set([...entity.spellcasting.known,    ...(ks.spellIds   ?? [])])],
+          cantrips: [...new Set([...entity.spellcasting.cantrips, ...(ks.cantripIds ?? [])])],
+        },
       };
     }
 

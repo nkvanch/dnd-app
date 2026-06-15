@@ -77,6 +77,20 @@ export const WARLOCK_SLOTS: SpellSlotRow[] = [
   { level: 20, slots: [0,0,0,0,4,0,0,0,0] },
 ];
 
+/**
+ * Abyss Knight (pact-magic-style, all slots same tier, recharge short or long
+ * rest). Per the class's own text — "at 5th level, you have two 2nd-level
+ * spell slots" — this is the Warlock table shifted one class-level later:
+ * spellcasting doesn't begin until 2nd level, so Abyss Knight level N uses
+ * the Warlock level (N-1) row. Level 1 has no slots at all.
+ */
+export const ABYSS_KNIGHT_SLOTS: SpellSlotRow[] = [
+  { level: 1, slots: [0,0,0,0,0,0,0,0,0] },
+  ...WARLOCK_SLOTS
+    .filter(r => r.level <= 19)
+    .map(r => ({ level: r.level + 1, slots: r.slots })),
+];
+
 /** Build a SpellSlots object from a SlotRow for a given level. */
 export function slotsForLevel(
   table: SpellSlotRow[],
@@ -107,6 +121,7 @@ const SLOT_TABLES: Record<string, SpellSlotRow[]> = {
   paladin:  HALF_CASTER_SLOTS,
   ranger:   HALF_CASTER_SLOTS,
   warlock:  WARLOCK_SLOTS,
+  abyss_knight: ABYSS_KNIGHT_SLOTS,
 };
 
 /**

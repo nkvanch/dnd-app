@@ -143,6 +143,16 @@ const CLASS_DETAIL: Record<string, ClassDetail> = {
     toolProf: 'None',
     spellcasting: true,
   },
+  abyss_knight: {
+    description: 'A warrior bound by pact to a demon lord of the Abyss, channeling dark power through their hit dice to fuel both their attacks and their nascent spellcasting.',
+    savingThrows: ['Strength', 'Constitution'],
+    savingThrowAbilities: ['str', 'con'],
+    primaryFeatures: ['Abyssal Energy', 'Oozing Knight', "Demon's Sight", 'Frightening Gaze', 'Dark Magic'],
+    armorProf: 'Light, medium, heavy, shields',
+    weaponProf: 'Simple weapons, martial weapons',
+    toolProf: 'None',
+    spellcasting: true,
+  },
 };
 
 /**

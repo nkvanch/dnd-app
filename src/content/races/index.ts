@@ -569,6 +569,83 @@ export const raceTiefling: Race = {
   ],
 };
 
+export const raceSkeleton: Race = {
+  id: 'skeleton',
+  name: 'Skeleton',
+  features: [
+    {
+      id: 'skeleton_undead_nature',
+      name: 'Undead Nature',
+      description: "You are the reanimated, fleshless bones of a once-living creature, held together by necromantic magic. You don't need to eat, drink, breathe, or sleep, though you can still do any of these if you wish. You are considered an undead creature for the purposes of effects that interact with that type, such as Turn Undead and many healing spells.",
+      source: { kind: 'race', refId: 'skeleton' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'skeleton_disease_poison_immunity',
+      name: 'Disease and Poison Immunity',
+      description: 'You are immune to disease and to the poisoned condition, and you have resistance to poison damage.',
+      source: { kind: 'race', refId: 'skeleton' },
+      level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'condition_immunity', target: 'poisoned', operation: 'immunity', value: null, condition: null },
+        { type: 'grant_resistance', target: 'poison', operation: 'resistance', value: null, condition: null },
+      ],
+    },
+    {
+      id: 'skeleton_doomed_touch',
+      name: 'Doomed Touch',
+      description: 'You know the chill touch cantrip and can cast it at will, without expending a spell slot. Constitution is your spellcasting ability for it.',
+      source: { kind: 'race', refId: 'skeleton' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'skeleton_darkvision',
+      name: 'Darkvision',
+      description: "Necromancy restored your sight after death. You can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of grey.",
+      source: { kind: 'race', refId: 'skeleton' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'skeleton_might_of_death',
+      name: 'Might of Death',
+      description: 'You have resistance to necrotic damage.',
+      source: { kind: 'race', refId: 'skeleton' },
+      level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'grant_resistance', target: 'necrotic', operation: 'resistance', value: null, condition: null },
+      ],
+    },
+    {
+      id: 'skeleton_languages',
+      name: 'Languages',
+      description: 'You can speak, read, and write Common and Notongue — the creaking, cracking language of the undead, understood by almost all undead creatures.',
+      source: { kind: 'race', refId: 'skeleton' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'skeleton_restoring_limbs',
+      name: 'Restoring Limbs',
+      description: 'If one of your limbs is severed or destroyed, you can restore it by finding a suitable replacement limb and spending your action to attach it.',
+      source: { kind: 'race', refId: 'skeleton' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+  subraces: [
+    {
+      id: 'skeleton_giant', name: 'Giant', parentId: 'skeleton',
+      features: [
+        {
+          id: 'skeleton_giant_remains',
+          name: 'Giant Remains',
+          description: 'In life you were a giant, or several lesser skeletons were fused by foul alchemy into a single hulking form. Your size is Large. The considerable strength of your former body carries over and is already reflected in your recorded ability scores. Skeletons of this lineage are simple and straightforward by nature, and often become proud warriors.',
+          source: { kind: 'race', refId: 'skeleton_giant' },
+          level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+  ],
+};
+
 export const ALL_RACES = [
   raceHuman,
   raceElf,
@@ -579,4 +656,5 @@ export const ALL_RACES = [
   raceHalfElf,
   raceHalfOrc,
   raceTiefling,
+  raceSkeleton,
 ];

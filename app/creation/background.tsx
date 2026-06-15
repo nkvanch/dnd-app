@@ -4,6 +4,7 @@ import { View, Text, FlatList, Pressable, StyleSheet, TextInput, ScrollView } fr
 import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { globalContentDB } from '../../src/content/classes/library';
 import { Background, SkillName } from '../../src/engine/types';
 import { applyGrant } from '../../src/engine/leveling';
@@ -149,12 +150,16 @@ const BG_DETAIL: Record<string, {
 export default function BackgroundScreen() {
   const router = useRouter();
   const { detail } = useLocalSearchParams<{ detail?: string }>();
+  const homebrewBackgrounds = useHomebrewStore(s => s.backgrounds);
 
   // If ?detail=id is in the URL, show the detail view inline
   if (detail) return <BackgroundDetail id={detail} />;
 
   const [search, setSearch] = useState('');
   const backgrounds = globalContentDB.backgrounds.filter(b =>
+    b.name.toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredHomebrewBackgrounds = homebrewBackgrounds.filter(b =>
     b.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -185,10 +190,29 @@ export default function BackgroundScreen() {
           </Pressable>
         )}
         ListFooterComponent={
-          <Pressable style={styles.homebrewRow} onPress={() => {}}>
-            <Text style={styles.homebrewText}>Homebrew Backgrounds</Text>
-            <Text style={styles.rowArrow}>›</Text>
-          </Pressable>
+          <View style={styles.homebrewSection}>
+            <Text style={styles.homebrewHeading}>HOMEBREW BACKGROUNDS</Text>
+            {filteredHomebrewBackgrounds.length === 0 ? (
+              <Pressable style={styles.row} onPress={() => router.push('/homebrew')}>
+                <Text style={styles.homebrewEmptyText}>No homebrew backgrounds yet — create one</Text>
+                <Text style={styles.rowArrow}>›</Text>
+              </Pressable>
+            ) : (
+              filteredHomebrewBackgrounds.map(item => (
+                <Pressable
+                  key={item.id}
+                  style={styles.row}
+                  onPress={() => router.push(`/creation/background?detail=${item.id}`)}
+                >
+                  <Text style={styles.rowName}>{item.name}</Text>
+                  <View style={styles.homebrewTag}>
+                    <Text style={styles.homebrewTagTxt}>Homebrew</Text>
+                  </View>
+                  <Text style={styles.rowArrow}>›</Text>
+                </Pressable>
+              ))
+            )}
+          </View>
         }
       />
     </View>
@@ -201,8 +225,9 @@ function BackgroundDetail({ id }: { id: string }) {
   const router   = useRouter();
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
+  const homebrewBackgrounds = useHomebrewStore(s => s.backgrounds);
 
-  const bg     = globalContentDB.backgrounds.find(b => b.id === id);
+  const bg     = [...globalContentDB.backgrounds, ...homebrewBackgrounds].find(b => b.id === id);
   const detail = BG_DETAIL[id];
 
   const [trait, setTrait] = useState('');
@@ -280,6 +305,34 @@ function BackgroundDetail({ id }: { id: string }) {
       }
     }
 
+    // Generalized version of the above, driven by the background's own feature
+    // effects rather than the hardcoded BG_DETAIL table. This is what makes
+    // homebrew backgrounds (which have no BG_DETAIL entry) grant proficiency
+    // correctly — and is a harmless no-op re-application for PHB backgrounds,
+    // whose features already carry the same grant_proficiency effects.
+    for (const feature of bg!.features) {
+      for (const effect of feature.effects) {
+        if (
+          effect.type === 'grant_proficiency' &&
+          effect.operation === 'add' &&
+          effect.target.startsWith('skill:')
+        ) {
+          const key = effect.target.slice(6) as SkillName;
+          if (updated.skills.skills[key]) {
+            updated = {
+              ...updated,
+              skills: {
+                skills: {
+                  ...updated.skills.skills,
+                  [key]: { ...updated.skills.skills[key], trained: true },
+                },
+              },
+            };
+          }
+        }
+      }
+    }
+
     // Personality stored in notes alongside other creation flags
     const existing = (() => { try { return JSON.parse(updated.notes || '{}'); } catch { return {}; } })();
     updated = { ...updated, notes: JSON.stringify({ ...existing, trait, ideal, bond, flaw }) };
@@ -289,7 +342,14 @@ function BackgroundDetail({ id }: { id: string }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>{bg.name}</Text>
+      <View style={styles.headingRow}>
+        <Text style={styles.heading}>{bg.name}</Text>
+        {!detail && (
+          <View style={styles.homebrewTag}>
+            <Text style={styles.homebrewTagTxt}>Homebrew</Text>
+          </View>
+        )}
+      </View>
       <View style={styles.divider} />
 
       {detail && (
@@ -312,6 +372,27 @@ function BackgroundDetail({ id }: { id: string }) {
           <PersonalityPicker label="Ideal"  options={detail.ideals}  value={ideal} onChange={setIdeal} />
           <PersonalityPicker label="Bond"   options={detail.bonds}   value={bond}  onChange={setBond}  />
           <PersonalityPicker label="Flaw"   options={detail.flaws}   value={flaw}  onChange={setFlaw}  />
+        </>
+      )}
+
+      {!detail && (
+        <>
+          <Text style={styles.sectionTitle}>Features</Text>
+          {bg.features.length === 0 ? (
+            <Text style={styles.emptyNote}>This background grants no features.</Text>
+          ) : (
+            bg.features.map(f => (
+              <View key={f.id} style={styles.featureBlock}>
+                <Text style={styles.featureName}>{f.name}</Text>
+                <Text style={styles.featureText}>{f.description}</Text>
+              </View>
+            ))
+          )}
+          <View style={styles.divider} />
+          <Text style={styles.sub}>
+            Traits, ideals, bonds, and flaws aren't predefined for homebrew backgrounds —
+            jot yours down on the Notes tab after creation.
+          </Text>
         </>
       )}
 
@@ -373,6 +454,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
+  headingRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm },
+  sub:       { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
+  emptyNote: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
+  featureBlock: { marginBottom: Spacing.md },
+  featureName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 2 },
   divider:   { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
   search: {
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
@@ -387,8 +473,23 @@ const styles = StyleSheet.create({
   },
   rowName:  { fontSize: FontSize.md, color: Colors.textPrimary },
   rowArrow: { fontSize: FontSize.xl, color: Colors.textDim },
-  homebrewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Spacing.md, marginTop: Spacing.sm },
-  homebrewText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+  homebrewSection: {
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  homebrewHeading: {
+    fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim,
+    letterSpacing: 2, marginBottom: Spacing.sm,
+  },
+  homebrewEmptyText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+  homebrewTag: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  homebrewTagTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
   backBtn:     { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xs },
   backBtnText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
   sectionTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.sm },

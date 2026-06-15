@@ -222,6 +222,27 @@ export const spellMageArmor: Spell = {
   upcast: null, ritual: false, concentration: false,
 };
 
+export const spellArmsOfHadar: Spell = {
+  id: 'arms_of_hadar', name: 'Arms of Hadar', level: 1, school: 'Conjuration',
+  castingTime: '1 action', range: 'Self (10-foot radius)', components: ['V', 'S'],
+  duration: 'Instantaneous',
+  description: 'You invoke the power of Hadar, the Dark Hunger. Tendrils of dark energy erupt from you and batter all creatures within 10 feet of you. Each creature in that area must make a Strength saving throw. On a failed save, a target takes 2d6 necrotic damage and can\'t take reactions until the start of its next turn. On a successful save, the creature takes half as much damage and suffers no other effect.',
+  upcast: 'When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d6 for each slot level above 1st.',
+  ritual: false, concentration: false,
+  classes: ['warlock', 'abyss_knight'],
+};
+
+export const spellHellishRebuke: Spell = {
+  id: 'hellish_rebuke', name: 'Hellish Rebuke', level: 1, school: 'Evocation',
+  castingTime: '1 reaction, which you take when you take damage from a creature within 60 feet of you that you can see',
+  range: '60 feet', components: ['V', 'S'],
+  duration: 'Instantaneous',
+  description: 'You point your finger, and the creature that damaged you is momentarily surrounded by hellish flames. The creature must make a Dexterity saving throw. It takes 2d10 fire damage on a failed save, or half as much damage on a successful one.',
+  upcast: 'When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d10 for each slot level above 1st.',
+  ritual: false, concentration: false,
+  classes: ['warlock', 'abyss_knight'],
+};
+
 export const NEW_LEVEL1: Spell[] = [
   spellChromaticOrb,
   spellWitchBolt,
@@ -249,4 +270,6 @@ export const NEW_LEVEL1: Spell[] = [
   spellThunderousSmite,
   spellDivineFavor,
   spellMageArmor,
+  spellArmsOfHadar,
+  spellHellishRebuke,
 ];

@@ -42,7 +42,7 @@ export function AsiFeatPicker({
   const [featId, setFeatId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
-  const maxScore = rules.maxAbilityScore ?? 20;
+  const maxScore = rules.maxAbilityScore ?? Infinity;
   const homebrewFeatures = useHomebrewStore(s => s.features);
 
   // Homebrew "features" (built in the Feature Editor) are authored with

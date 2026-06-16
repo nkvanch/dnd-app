@@ -39,7 +39,13 @@ export default function NameScreen() {
     >
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
 
-        <Text style={styles.heading}>Character Basics</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerSpacer} />
+          <Text style={styles.heading}>Character Basics</Text>
+          <Pressable style={styles.settingsBtn} onPress={() => router.push('/settings')}>
+            <Text style={styles.settingsBtnText}>⚙️</Text>
+          </Pressable>
+        </View>
         <View style={styles.divider} />
 
         {/* Name */}
@@ -111,8 +117,17 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.black,
     color: Colors.textPrimary,
     textAlign: 'center',
+    flex: 1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: Spacing.md,
   },
+  headerSpacer: { width: 32 },
+  settingsBtn: { width: 32, alignItems: 'center' },
+  settingsBtnText: { fontSize: 20 },
   divider: {
     height: 1,
     backgroundColor: Colors.border,

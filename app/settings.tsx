@@ -53,21 +53,31 @@ export default function SettingsScreen() {
 
       {/* ── Level cap ───────────────────────────────────────────── */}
       <Section title="Maximum Level">
-        {[5, 10, 15, 20].map(lvl => (
-          <Pressable
-            key={lvl}
-            style={[styles.chipRow]}
-            onPress={() => setRules({ maxLevel: lvl })}
-          >
-            <View style={[styles.chip, rules.maxLevel === lvl && styles.chipActive]}>
+        <View style={styles.chipRow}>
+          {[5, 10, 15, 20].map(lvl => (
+            <Pressable
+              key={lvl}
+              style={[styles.chip, rules.maxLevel === lvl && styles.chipActive]}
+              onPress={() => setRules({ maxLevel: lvl })}
+            >
               <Text style={[styles.chipTxt, rules.maxLevel === lvl && styles.chipTxtActive]}>
                 {lvl}
               </Text>
-            </View>
+            </Pressable>
+          ))}
+          <Pressable
+            style={[styles.chip, rules.maxLevel === null && styles.chipActive]}
+            onPress={() => setRules({ maxLevel: null })}
+          >
+            <Text style={[styles.chipTxt, rules.maxLevel === null && styles.chipTxtActive]}>
+              Uncapped
+            </Text>
           </Pressable>
-        ))}
+        </View>
         <Text style={styles.hint}>
-          Currently: Level {rules.maxLevel ?? 20}. Characters cannot level beyond this.
+          {rules.maxLevel === null
+            ? 'Currently: Uncapped. Characters can level up to 20, the highest level any class progression in Grimoire defines.'
+            : `Currently: Level ${rules.maxLevel ?? 20}. Characters cannot level beyond this.`}
         </Text>
       </Section>
 
@@ -95,22 +105,31 @@ export default function SettingsScreen() {
 
       {/* ── Ability score cap ───────────────────────────────────── */}
       <Section title="Ability Score Maximum">
-        {[18, 20, 24, 30].map(cap => (
-          <Pressable
-            key={cap}
-            style={styles.chipRow}
-            onPress={() => setRules({ maxAbilityScore: cap })}
-          >
-            <View style={[styles.chip, rules.maxAbilityScore === cap && styles.chipActive]}>
+        <View style={styles.chipRow}>
+          {[18, 20, 24, 30].map(cap => (
+            <Pressable
+              key={cap}
+              style={[styles.chip, rules.maxAbilityScore === cap && styles.chipActive]}
+              onPress={() => setRules({ maxAbilityScore: cap })}
+            >
               <Text style={[styles.chipTxt, rules.maxAbilityScore === cap && styles.chipTxtActive]}>
                 {cap}
               </Text>
-            </View>
+            </Pressable>
+          ))}
+          <Pressable
+            style={[styles.chip, rules.maxAbilityScore === null && styles.chipActive]}
+            onPress={() => setRules({ maxAbilityScore: null })}
+          >
+            <Text style={[styles.chipTxt, rules.maxAbilityScore === null && styles.chipTxtActive]}>
+              Uncapped
+            </Text>
           </Pressable>
-        ))}
+        </View>
         <Text style={styles.hint}>
-          Currently: {rules.maxAbilityScore ?? 20}. Applies to ability score improvements.
-          Standard D&D 5e is 20.
+          {rules.maxAbilityScore === null
+            ? 'Currently: Uncapped. Ability Score Improvements and feats always apply in full, with no ceiling.'
+            : `Currently: ${rules.maxAbilityScore ?? 20}. Applies to ability score improvements. Standard D&D 5e is 20.`}
         </Text>
       </Section>
 

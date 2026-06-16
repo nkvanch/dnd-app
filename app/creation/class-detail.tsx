@@ -4,10 +4,11 @@ import { View, Text, ScrollView, Pressable, StyleSheet, Modal } from 'react-nati
 import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { globalContentDB } from '../../src/content/classes/library';
 import { levelUp, stripResolvedAsiStats } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { PROGRESSIONS } from '../../src/content/classes/progressions';
+import { getProgressionForClass } from '../../src/content/classes/progressions';
 import { Entity } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -268,8 +269,9 @@ export default function ClassDetailScreen() {
   const [changePrompt, setChangePrompt] = useState<{
     lines: string[]; className: string; onConfirm: () => void;
   } | null>(null);
+  const homebrewClasses = useHomebrewStore(s => s.classes);
 
-  const cls    = globalContentDB.classes.find(c => c.id === id);
+  const cls    = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === id);
   const detail = id ? CLASS_DETAIL[id] : null;
 
   useEffect(() => {
@@ -284,7 +286,7 @@ export default function ClassDetailScreen() {
   })();
 
   function selectClass() {
-    const progression = PROGRESSIONS[cls!.id];
+    const progression = getProgressionForClass(cls!);
     const detail      = cls ? CLASS_DETAIL[cls.id] : null;
     const isReselect  = !!draft!.identity.classId && draft!.identity.classId !== cls!.id;
 
@@ -308,9 +310,7 @@ export default function ClassDetailScreen() {
         notes: JSON.stringify({ ...notes, equipmentVisited: false, spellsVisited: false }),
       };
 
-      if (progression) {
-        updated = levelUp(updated, targetLevel, progression, rules);
-      }
+      updated = levelUp(updated, targetLevel, progression, rules);
 
       updated = recomputeDerived(updated, rules);
       setDraft(updated);
@@ -362,7 +362,14 @@ export default function ClassDetailScreen() {
     <>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-      <Text style={styles.heading}>{cls.name}</Text>
+      <View style={styles.headingRow}>
+        <Text style={styles.heading}>{cls.name}</Text>
+        {!detail && (
+          <View style={styles.homebrewTag}>
+            <Text style={styles.homebrewTagTxt}>Homebrew</Text>
+          </View>
+        )}
+      </View>
       <View style={styles.divider} />
 
       {detail && (
@@ -403,6 +410,43 @@ export default function ClassDetailScreen() {
             <InfoRow label="Weapons" value={detail.weaponProf} />
             <InfoRow label="Tools"   value={detail.toolProf} />
           </CollapsibleSection>
+        </>
+      )}
+
+      {!detail && (
+        <>
+          {cls.description && (
+            <>
+              <Text style={styles.description}>{cls.description}</Text>
+              <View style={styles.divider} />
+            </>
+          )}
+
+          <InfoRow label="Hit Die" value={`d${cls.hitDie}`} />
+
+          <View style={styles.divider} />
+
+          <Text style={styles.sectionLabel}>FEATURES</Text>
+          {cls.features.length === 0 ? (
+            <Text style={styles.emptyNote}>This class has no features defined yet.</Text>
+          ) : (
+            cls.features.map(f => (
+              <View key={f.id} style={styles.featureBlock}>
+                <Text style={styles.featureName}>{f.name}</Text>
+                <Text style={styles.description}>{f.description}</Text>
+              </View>
+            ))
+          )}
+
+          <View style={styles.divider} />
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardTxt}>
+              This homebrew class has a basic progression: HP grows by d{cls.hitDie}
+              every level, and Ability Score Improvements appear at levels 4, 8, 12,
+              16, and 19. Saving throws, armor/weapon proficiencies, and
+              spellcasting aren't set up for this class yet.
+            </Text>
+          </View>
         </>
       )}
 
@@ -524,6 +568,20 @@ const styles = StyleSheet.create({
   backBtn:   { marginBottom: Spacing.md },
   backBtnText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
   heading: { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
+  headingRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm },
+  homebrewTag: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+    marginBottom: Spacing.md,
+  },
+  homebrewTagTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  sectionLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.sm },
+  emptyNote: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
+  featureBlock: { marginBottom: Spacing.md },
+  featureName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 2 },
+  infoCard: { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
+  infoCardTxt: { color: Colors.textDim, fontSize: FontSize.sm, lineHeight: 20 },
   divider:     { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
   description: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 22 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.xs, borderBottomWidth: 1, borderBottomColor: Colors.border },

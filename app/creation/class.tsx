@@ -4,6 +4,7 @@ import { View, Text, FlatList, Pressable, StyleSheet, TextInput } from 'react-na
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { globalContentDB } from '../../src/content/classes/library';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const CASTER_TYPE: Record<string, string> = {
@@ -42,8 +43,12 @@ export default function ClassScreen() {
   const router  = useRouter();
   const [search,   setSearch]   = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const homebrewClasses = useHomebrewStore(s => s.classes);
 
   const classes = globalContentDB.classes.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredHomebrewClasses = homebrewClasses.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -98,10 +103,49 @@ export default function ClassScreen() {
           );
         }}
         ListFooterComponent={
-          <Pressable style={styles.homebrewRow} onPress={() => {}}>
-            <Text style={styles.homebrewText}>Homebrew Classes</Text>
-            <Text style={styles.rowArrow}>›</Text>
-          </Pressable>
+          <View style={styles.homebrewSection}>
+            <Text style={styles.homebrewHeading}>HOMEBREW CLASSES</Text>
+            {filteredHomebrewClasses.length === 0 ? (
+              <Pressable style={styles.row} onPress={() => router.push('/homebrew/class-builder')}>
+                <Text style={styles.homebrewEmptyText}>No homebrew classes yet — create one</Text>
+                <Text style={styles.rowArrow}>›</Text>
+              </Pressable>
+            ) : (
+              filteredHomebrewClasses.map(item => {
+                const isOpen = expanded === item.id;
+                return (
+                  <View key={item.id} style={styles.itemWrap}>
+                    <Pressable
+                      style={styles.row}
+                      onPress={() => router.push(`/creation/class-detail?id=${item.id}`)}
+                    >
+                      <View style={styles.rowInfo}>
+                        <Text style={styles.rowName}>{item.name}</Text>
+                        <Text style={styles.rowSub}>Homebrew · d{item.hitDie}</Text>
+                      </View>
+                      <View style={styles.homebrewTag}>
+                        <Text style={styles.homebrewTagTxt}>Homebrew</Text>
+                      </View>
+                      {item.description && (
+                        <Pressable
+                          hitSlop={12}
+                          onPress={e => { e.stopPropagation(); setExpanded(isOpen ? null : item.id); }}
+                        >
+                          <Text style={styles.rowCaret}>{isOpen ? '▲' : '▼'}</Text>
+                        </Pressable>
+                      )}
+                      <Text style={styles.rowArrow}>›</Text>
+                    </Pressable>
+                    {isOpen && item.description && (
+                      <View style={styles.dropdown}>
+                        <Text style={styles.dropdownDesc}>{item.description}</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </View>
         }
       />
     </View>
@@ -143,9 +187,21 @@ const styles = StyleSheet.create({
   },
   dropdownDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
 
-  homebrewRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: Spacing.md, marginTop: Spacing.sm,
+  homebrewSection: {
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
-  homebrewText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+  homebrewHeading: {
+    fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim,
+    letterSpacing: 2, marginBottom: Spacing.sm,
+  },
+  homebrewEmptyText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+  homebrewTag: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  homebrewTagTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
 });

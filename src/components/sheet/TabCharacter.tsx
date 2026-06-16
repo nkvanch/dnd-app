@@ -16,7 +16,9 @@ import { levelUp } from '../../engine/leveling';
 import { spendHitDie, discardHitDie } from '../../engine/rest';
 import { rollD20, rollExpression } from '../../engine/dice';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
+import { getProgressionForClass } from '../../content/classes/progressions';
 import { globalContentDB } from '../../content/classes/library';
+import { useHomebrewStore } from '../../store/homebrewStore';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
@@ -269,7 +271,9 @@ function LevelUpSection({
   entity: Entity; rules: CampaignRules; onEntityUpdate: (u: Entity) => void; onLeveled: (u: Entity) => void;
 }) {
   const classId     = entity.identity.classId;
-  const progression = ALL_PROGRESSIONS[classId];
+  const homebrewClasses = useHomebrewStore(s => s.classes);
+  const cls = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === classId);
+  const progression = cls ? getProgressionForClass(cls) : (ALL_PROGRESSIONS[classId] ?? null);
   const maxLevel    = rules.maxLevel ?? 20;
 
   if (!progression) return null;

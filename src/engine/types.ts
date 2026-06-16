@@ -81,7 +81,7 @@ export type Race = {
   features:  Feature[];    // base race features — all subraces get these
   subraces?: Subrace[];    // if present, player must pick one before confirming race
 };
-export type CharClass  = { id: string; name: string; hitDie: number; features: Feature[] };
+export type CharClass  = { id: string; name: string; hitDie: number; features: Feature[]; description?: string };
 export type Background = { id: string; name: string; features: Feature[] };
 export type Condition  = { id: string; name: string; description: string; features: Feature[] };
 

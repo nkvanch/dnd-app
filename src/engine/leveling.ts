@@ -326,7 +326,7 @@ export function reapplyResolvedAsi(entity: Entity, rules: CampaignRules): Entity
   );
   if (asiChoices.length === 0) return entity;
 
-  const maxScore = rules.maxAbilityScore ?? 20;
+  const maxScore = rules.maxAbilityScore ?? Infinity;
   const effects  = collectAllEffects(entity);
   const newStats = { ...entity.stats };
 
@@ -396,7 +396,7 @@ export function applyAsiToEntity(
   increases: Partial<Record<Ability, number>>,
   rules:     CampaignRules,
 ): Entity {
-  const maxScore = rules.maxAbilityScore ?? 20;
+  const maxScore = rules.maxAbilityScore ?? Infinity;
   // Cap against EFFECTIVE scores (base + racial/feat effects), not base stats.
   // A Mountain Dwarf with base STR 18 is effectively 20 — no headroom left.
   const effective = applyStatModifiers(entity.stats, collectAllEffects(entity));

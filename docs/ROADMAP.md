@@ -11,7 +11,7 @@ ARCHITECTURE.md for the technical design, IMPLEMENTATION.md for schemas.
 
 ## 📍 Status Tracker — read this first
 
-**You are here:** Pre-release priorities #1–#4a are done. #5 (Spellbook tab) is next.
+**You are here:** Pre-release priorities #1–4a are done, #4b Phase 1 is done, #5 is done. #6 (plain-language audit view) is next.
 
 | # | Item | Status | Notes |
 |---|------|--------|-------|
@@ -19,19 +19,79 @@ ARCHITECTURE.md for the technical design, IMPLEMENTATION.md for schemas.
 | 2 | Class change warning (Q29) | ✅ Done | Custom dark/gold modal in `class-detail.tsx` (restyled 2026-06-14; was a native `Alert`) |
 | 3 | Settings screen | ✅ Done | `app/settings.tsx` — HP mode, level cap, feats/multiclass/XP toggles, ability score cap |
 | 4a | Wire homebrew into creation (races/spells/backgrounds/features) | ✅ Done | All four wired via `useHomebrewStore`: races (`race.tsx`/`race-detail.tsx`), spells (`spells.tsx`, tagged + override official by id), backgrounds (`background.tsx`, generalized skill-proficiency marking from feature effects), features (`AsiFeatPicker.tsx` — homebrew Features reshaped to `Feat` and merged into the Feat picker, used by both creation and in-play level-up). Classes intentionally excluded — see 4b. |
-| 4b | Homebrew classes/subclasses (full progression authoring) | ⬜ Not started | Deferred until 4a ships — see Pre-release #4 Part B |
-| 5 | Spellbook tab | ⬜ Not started | Spec is in UI_RULES.md Rule 6 and FEATURE_QA_CHARACTER_SHEET.md |
+| 4b | Homebrew classes/subclasses (full progression authoring) | 🔵 Phase 1 done | Phase 1 (stub progression) ships: any homebrew class is selectable in creation, levelable in-play, gets HP-by-hit-die + ASI at 4/8/12/16/19. Phase 2 (full level-by-level editor for saving throws/proficiencies/spellcasting/per-level features/subclasses) not started. |
+| 5 | Spellbook tab | ✅ Done | Seventh sheet tab (`TabSpells.tsx`), conditional on `entity.spellcasting` non-null. Tab bar made scrollable (`ScrollView` horizontal) to accommodate 7 tabs for spellcasters. Shares `UseModal` + slot-spend logic with TabActions — no parallel cast implementation. Prepared-caster toggle (Wizard/Cleric/Druid/Paladin) wired to `entity.spellcasting.prepared`. |
 | 6 | Plain-language audit view | ⬜ Not started | Display-only — no engine changes needed |
 | 7 | Campaign overview screen | ⬜ Not started | DM dashboard exists but is encounter/party-focused, not a between-sessions surface |
 | 8 | Home screen campaign state | ⬜ Not started | Blocked on #7 |
 
-**Next up:** #5 — Spellbook tab (seventh sheet tab, conditional on spellcasting class).
-See Pre-release #5 below for the full spec. Also worth a quick look: the Homebrew
-tab's "New Background" button currently routes to `/homebrew/race-builder` (saves
-a `Race`, not a `Background`) — flagged in the 2026-06-15 session log, not yet fixed.
+**Next up:** #6 — Plain-language audit view (toggle in the audit modal between the current
+technical breakdown and a single readable sentence).
 
 ### Recent session log
 *(most recent first — one entry per session, updated whenever a change lands)*
+
+- **2026-06-16:** #5 Spellbook tab shipped. `src/components/sheet/TabSpells.tsx` is a new
+  seventh sheet tab, inserted after Actions and **conditional** on `entity.spellcasting`
+  being non-null — non-spellcasters (Fighter, Barbarian, etc.) see only 6 tabs unchanged.
+  For spellcasters the tab bar grows to 7; to keep it usable I converted it from a `View`
+  with `flex:1` tabs to a horizontal `ScrollView` with `contentContainerStyle.minWidth:'100%'`
+  and a computed `minWidth` per tab so 6 tabs still fill the screen and 7 tabs can scroll.
+  **Cast flow:** `UseModal` and its `UseModalProps` type are now exported from `TabActions`;
+  `TabSpells` imports them and uses the same slot-decrement code path — one implementation,
+  two entry points, per the roadmap principle. **Spell display:** groups action cards by
+  `card.resourceCost?.spellSlotTier ?? 0` (level 0 = cantrips). Each level section header
+  shows a live slot count badge (blue, greyed when empty). Each spell row shows name,
+  Concentration + Ritual tags, school and casting time; tapping expands range, duration,
+  components, layer2/layer3 effect summary, full description, and At Higher Levels.
+  **Prepared casters** (Wizard/Cleric/Druid/Paladin): a ✓/○ toggle button per leveled spell
+  adds/removes from `entity.spellcasting.prepared`, persisted via `onEntityUpdate`.
+  **Spell lookup:** merges `ALL_VAULT_SPELLS` + hand-authored corpus + homebrew for
+  description expansion — vault spells not in the hand-authored set still show their
+  action-card layer2/layer3 summary. Also: renamed 'Inventory' tab label to 'Items' in the
+  base tab list (saves space in 7-tab view). `npx tsc --noEmit` not yet verified for this batch.
+
+- **2026-06-15 (4):** 4B Phase 1 shipped — homebrew classes are now selectable,
+  levelable, and non-crashing, via a generated "stub progression" rather than the
+  full level-by-level editor (Phase 2, separate project). **Root cause** was:
+  `class-builder.tsx` only ever saved `CharClass{id,name,hitDie,features:[]}`
+  (description was collected but discarded — now fixed); `class.tsx`/`class-detail.tsx`
+  only read `globalContentDB.classes` (homebrew excluded, per 4a); and
+  `class-detail.tsx`'s `selectClass()` did `const progression = PROGRESSIONS[cls.id]`
+  then `if (progression) levelUp(...)` — for homebrew this silently skipped
+  `levelUp`, leaving the character permanently at level 0/0 HP (no crash, but
+  completely unplayable); `TabCharacter.tsx`'s in-play Level Up button used
+  `if (!progression) return null`, hiding the button entirely for homebrew classes.
+  **Fix:** `src/content/classes/progressions.ts` gains `buildStubProgression(cls)`
+  (20 levels, `hpDie: cls.hitDie`, level-1 grants from `cls.features`, ASI choices at
+  4/8/12/16/19) and `getProgressionForClass(cls)` (`ALL_PROGRESSIONS[cls.id] ??
+  buildStubProgression(cls)` — never null). `class.tsx`/`class-detail.tsx`/
+  `TabCharacter.tsx` now merge `useHomebrewStore().classes` (with a "Homebrew"
+  tag/section, mirroring 4a's race/background/spell pattern) and call
+  `getProgressionForClass` unconditionally. `class-detail.tsx` shows a fallback view
+  for classes with no `CLASS_DETAIL` entry: description, hit die, a features list,
+  and an info note that saving throws/proficiencies/spellcasting aren't generated
+  yet. `CharClass` gained an optional `description?: string`; `class-builder.tsx`
+  now actually saves it (previously collected and silently dropped) and its info
+  card describes Phase 1 accurately instead of claiming a level-by-level editor that
+  doesn't exist. Not yet verified with `npx tsc --noEmit`.
+
+- **2026-06-15 (3):** Added a ⚙️ settings button to the "Character Basics" screen
+  (`app/creation/name.tsx`, header row, navigates to `/settings`) — campaign rules
+  are now reachable from the start of creation, not just the Characters tab. In
+  `app/settings.tsx`, added an "Uncapped" chip to both **Maximum Level** (sets
+  `rules.maxLevel = null`) and **Ability Score Maximum** (sets
+  `rules.maxAbilityScore = null`), with hint text explaining each. Also fixed the
+  pre-existing chip layout bug where each chip was individually wrapped in
+  `chipRow` (forcing one chip per visual row) — all chips in a section now share
+  one wrapping row. Engine-side: `rules.maxAbilityScore ?? 20` (3 call sites —
+  `reapplyResolvedAsi`, `applyAsiToEntity` in `leveling.ts`, and `AsiFeatPicker.tsx`)
+  changed to `?? Infinity`, since `null` now means "no cap" and the old fallback
+  would have silently re-capped "Uncapped" at 20. `rules.maxLevel`'s one consumer
+  (`TabCharacter.tsx`'s Level Up button gate, `rules.maxLevel ?? 20`) needed **no**
+  change — 20 is both "no DM-imposed cap" and the engine's hard ceiling (every
+  class progression, including Abyss Knight, defines levels 1–20 and no further),
+  so `null ?? 20` already resolves correctly.
 
 - **2026-06-15 (2):** #4a completed — the remaining three categories (spells,
   backgrounds, features) are now wired into creation, following the races pattern
@@ -177,6 +237,14 @@ spellcasting init, resource scaling, and ASIs. The class builder currently produ
 a scaffold. Turning that into a real playable class requires designing an authoring
 surface for progressions.
 Do not block Part A on Part B.
+
+**Update (2026-06-15):** Part B Phase 1 is done — `getProgressionForClass()` generates
+a stub progression (HP by hit die, ASI at 4/8/12/16/19, level-1 features from the
+class's own `features[]`) for any homebrew class with no authored progression, so
+saving a class in the builder makes it immediately selectable and levelable with no
+crashes or dead ends. Phase 2 — a real level-by-level editor (saving throws,
+proficiencies, spellcasting, per-level features, subclasses) replacing the stub —
+remains the larger, separate project described above.
 
 ### 5. Spellbook tab
 **Size:** medium.

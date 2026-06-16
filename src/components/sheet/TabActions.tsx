@@ -18,13 +18,13 @@ const CARD_COLORS: Record<ActionCard['color'], string> = {
 
 // ── Use Result Modal ──────────────────────────────────────────────────────────
 
-interface UseModalProps {
+export interface UseModalProps {
   card:    ActionCard | null;
   onRoll:  () => DiceRoll | null;
   onClose: () => void;
 }
 
-function UseModal({ card, onRoll, onClose }: UseModalProps) {
+export function UseModal({ card, onRoll, onClose }: UseModalProps) {
   const [result, setResult] = useState<DiceRoll | null>(null);
 
   if (!card) return null;

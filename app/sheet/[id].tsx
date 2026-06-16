@@ -2,7 +2,7 @@
 // Character sheet — 6-tab sheet with persistent rest bar.
 // All values read from entity.derived — never computed in components.
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
 import { useCampaignStore } from '../../src/store/campaignStore';
@@ -21,21 +21,24 @@ import { TabAbilities } from '../../src/components/sheet/TabAbilities';
 import { TabFeatures }  from '../../src/components/sheet/TabFeatures';
 import { TabInventory } from '../../src/components/sheet/TabInventory';
 import { TabNotes }     from '../../src/components/sheet/TabNotes';
+import { TabSpells }    from '../../src/components/sheet/TabSpells';
 import { GlobalDiceRoller } from '../../src/components/GlobalDiceRoller';
 import { SyncStatusDot }   from '../../src/components/SyncStatusDot';
 import { SafeBottomView }  from '../../src/components/SafeBottomView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
-type TabId = 'character' | 'actions' | 'abilities' | 'features' | 'inventory' | 'notes';
+type TabId = 'character' | 'actions' | 'spells' | 'abilities' | 'features' | 'inventory' | 'notes';
 
-const TABS: { id: TabId; label: string }[] = [
+const BASE_TABS: { id: TabId; label: string }[] = [
   { id: 'character',  label: 'Combat'     },
   { id: 'actions',    label: 'Actions'    },
   { id: 'abilities',  label: 'Abilities'  },
   { id: 'features',   label: 'Features'   },
-  { id: 'inventory',  label: 'Inventory'  },
+  { id: 'inventory',  label: 'Items'      },
   { id: 'notes',      label: 'Notes'      },
 ];
+
+const SPELLS_TAB: { id: TabId; label: string } = { id: 'spells', label: 'Spells' };
 
 export default function CharacterSheetScreen() {
   const { id }   = useLocalSearchParams<{ id: string }>();
@@ -51,6 +54,16 @@ export default function CharacterSheetScreen() {
 
   const entity = characters.find(c => c.id === id);
   const [activeTab, setActiveTab] = useState<TabId>('character');
+
+  // Build tab list: Spells tab is inserted after Actions for spellcasters.
+  // This is computed after entity exists — but the hook is called unconditionally;
+  // the value just updates once entity loads.
+  const TABS: { id: TabId; label: string }[] = entity?.spellcasting
+    ? [BASE_TABS[0], BASE_TABS[1], SPELLS_TAB, ...BASE_TABS.slice(2)]
+    : BASE_TABS;
+
+  // Tab min-width: fills screen for 6 tabs, scrollable for 7.
+  const TAB_MIN_W = Math.floor(Dimensions.get('window').width / 6);
 
   const mutate = useCallback((updater: (e: Entity) => Entity) => {
     if (!id) return;
@@ -252,12 +265,17 @@ export default function CharacterSheetScreen() {
         </View>
       </View>
 
-      {/* Tab Bar */}
-      <View style={styles.tabBar}>
+      {/* Tab Bar — horizontal ScrollView so spellcasters' 7 tabs can scroll */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabBarScroll}
+        contentContainerStyle={styles.tabBarContent}
+      >
         {TABS.map(t => (
           <Pressable
             key={t.id}
-            style={[styles.tabBtn, activeTab === t.id && styles.tabBtnActive]}
+            style={[styles.tabBtn, { minWidth: TAB_MIN_W }, activeTab === t.id && styles.tabBtnActive]}
             onPress={() => setActiveTab(t.id)}
           >
             <Text style={[styles.tabTxt, activeTab === t.id && styles.tabTxtActive]}>
@@ -265,7 +283,7 @@ export default function CharacterSheetScreen() {
             </Text>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
 
       {/* Tab Content */}
       <View style={styles.tabContent}>
@@ -288,6 +306,13 @@ export default function CharacterSheetScreen() {
         )}
         {activeTab === 'actions' && (
           <TabActions
+            entity={entity}
+            rules={rules}
+            onEntityUpdate={updated => mutate(() => updated)}
+          />
+        )}
+        {activeTab === 'spells' && (
+          <TabSpells
             entity={entity}
             rules={rules}
             onEntityUpdate={updated => mutate(() => updated)}
@@ -393,14 +418,19 @@ const styles = StyleSheet.create({
   statPillMax:  { fontSize: FontSize.xs, color: Colors.textDim, fontWeight: FontWeight.normal },
   statPillLabel:{ fontSize: FontSize.xs, color: Colors.textDim, lineHeight: 14 },
 
-  tabBar: {
-    flexDirection:     'row',
+  tabBarScroll: {
     backgroundColor:   Colors.surfaceHigh,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    flexGrow:          0,
+  },
+  tabBarContent: {
+    flexDirection: 'row',
+    minWidth:      '100%',
   },
   tabBtn: {
-    flex: 1, paddingVertical: Spacing.sm,
+    flex: 1,
+    paddingVertical: Spacing.sm,
     alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent',
   },
   tabBtnActive:  { borderBottomColor: Colors.gold },

@@ -1,0 +1,579 @@
+// ============================================================================
+// FILE: src/components/sheet/TabSpells.tsx
+// Spellbook tab — spell reference + Cast for every spell a character knows.
+//
+// Only rendered when entity.spellcasting is non-null (parent gates this).
+// Cast flow uses the same ActionCard / UseModal pipeline as TabActions, so
+// slot consumption, unavailability checks, and the dice result modal are all
+// shared — no parallel cast implementation.
+//
+// Prepared casters (Wizard, Cleric, Druid, Paladin): shows a "Prepared" badge
+// and a toggle to add/remove spells from entity.spellcasting.prepared.
+// Spontaneous casters: all known spells are castable; no prepared toggle.
+// ============================================================================
+import { useState, useCallback, useMemo } from 'react';
+import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Entity, CampaignRules, ActionCard } from '../../engine/types';
+import { generateAllActionCards } from '../../engine/actionCards';
+import { ALL_VAULT_SPELLS } from '../../content/spells/generated';
+import { globalContentDB } from '../../content/classes/library';
+import { useHomebrewStore } from '../../store/homebrewStore';
+import { rollExpression } from '../../engine/dice';
+import { UseModal } from './TabActions';
+import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+/**
+ * Classes that use the daily-preparation model: the entity maintains a
+ * spellbook (.known) and prepares a subset each long rest (.prepared).
+ * All other casters are spontaneous: .known is the full castable list.
+ */
+const PREPARED_CASTERS = new Set(['wizard', 'cleric', 'druid', 'paladin']);
+
+const SLOT_ORDINALS: Record<number, string> = {
+  1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th',
+  6: '6th', 7: '7th', 8: '8th', 9: '9th',
+};
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+interface Props {
+  entity:         Entity;
+  rules:          CampaignRules;
+  onEntityUpdate: (updated: Entity) => void;
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
+  const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const homebrewSpells = useHomebrewStore(s => s.spells);
+
+  const { spellcasting, identity } = entity;
+  if (!spellcasting) return null;
+
+  const isPreparedCaster = PREPARED_CASTERS.has(identity.classId);
+  const preparedSet      = new Set(spellcasting.prepared);
+
+  // ── Spell cards ───────────────────────────────────────────────────────────
+  // ActionCard instances already know slot availability. We filter to the
+  // 'spellcasting' tab to exclude non-spell feature cards.
+
+  const spellCards = useMemo(
+    () => generateAllActionCards(entity).filter(c => c.tabs.includes('spellcasting')),
+    [entity],
+  );
+
+  // ── Spell detail lookup ───────────────────────────────────────────────────
+  // Merge vault + hand-authored + homebrew so description expansion works for
+  // vault spells too. Vault spells have no hand-authored entry; if a spell
+  // isn't found here the expand panel shows the action-card layer2/layer3
+  // summary instead of a full description.
+
+  const spellMap = useMemo(() => {
+    const vaultIds  = new Set(ALL_VAULT_SPELLS.map(s => s.id));
+    const fallbacks = globalContentDB.spells.filter(s => !vaultIds.has(s.id));
+    const all       = [...ALL_VAULT_SPELLS, ...fallbacks, ...homebrewSpells];
+    return new Map(all.map(s => [s.id, s]));
+  }, [homebrewSpells]);
+
+  // ── Group cards by spell level ────────────────────────────────────────────
+  // Level is inferred from resourceCost.spellSlotTier; cantrips have null cost → level 0.
+
+  const grouped = useMemo(() => {
+    const groups = new Map<number, ActionCard[]>();
+    for (const card of spellCards) {
+      const level = card.resourceCost?.spellSlotTier ?? 0;
+      if (!groups.has(level)) groups.set(level, []);
+      groups.get(level)!.push(card);
+    }
+    return groups;
+  }, [spellCards]);
+
+  const sortedLevels = Array.from(grouped.keys()).sort((a, b) => a - b);
+
+  // ── Cast handler (mirrors TabActions.handleUse exactly) ──────────────────
+
+  const handleCast = useCallback((card: ActionCard) => {
+    const cost = card.resourceCost;
+    if (!cost) {
+      // Cantrip or free cast — open result modal directly
+      setActiveCard(card);
+      return;
+    }
+
+    let updated = entity;
+
+    if (cost.resourceId === 'spell_slots') {
+      if (!updated.spellcasting) return;
+      const tier = String(cost.spellSlotTier ?? 1) as keyof typeof updated.spellcasting.slots;
+      const slot = updated.spellcasting.slots[tier];
+      if (!slot || slot.used >= slot.total) return;
+      updated = {
+        ...updated,
+        spellcasting: {
+          ...updated.spellcasting,
+          slots: {
+            ...updated.spellcasting.slots,
+            [tier]: { ...slot, used: slot.used + 1 },
+          },
+        },
+      };
+    } else {
+      const res = updated.resources.custom.find(r => r.id === cost.resourceId);
+      if (!res || res.current < cost.quantity) return;
+      updated = {
+        ...updated,
+        resources: {
+          ...updated.resources,
+          custom: updated.resources.custom.map(r =>
+            r.id === cost.resourceId
+              ? { ...r, current: Math.max(0, r.current - cost.quantity) }
+              : r
+          ),
+        },
+      };
+    }
+
+    onEntityUpdate(updated);
+    setActiveCard(card);
+  }, [entity, onEntityUpdate]);
+
+  // ── Prepared toggle (prepared casters only) ──────────────────────────────
+
+  const togglePrepared = useCallback((spellId: string) => {
+    if (!entity.spellcasting) return;
+    const alreadyPrepared = entity.spellcasting.prepared.includes(spellId);
+    const newPrepared = alreadyPrepared
+      ? entity.spellcasting.prepared.filter(id => id !== spellId)
+      : [...entity.spellcasting.prepared, spellId];
+    onEntityUpdate({
+      ...entity,
+      spellcasting: { ...entity.spellcasting, prepared: newPrepared },
+    });
+  }, [entity, onEntityUpdate]);
+
+  function rollForCard() {
+    if (!activeCard) return null;
+    const expr = activeCard.layer2.match(/(\d+d\d+(?:[+-]\d+)?)/)?.[1];
+    if (!expr) return null;
+    try { return rollExpression(expr, activeCard.name); }
+    catch { return null; }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      {/* Concentration banner */}
+      {spellcasting.concentrating && (
+        <View style={styles.concBanner}>
+          <Text style={styles.concBannerTxt}>
+            🧠 Concentrating: {spellcasting.concentrating}
+          </Text>
+        </View>
+      )}
+
+      {/* Empty state */}
+      {sortedLevels.length === 0 && (
+        <View style={styles.empty}>
+          <Text style={styles.emptyIcon}>📖</Text>
+          <Text style={styles.emptyTxt}>No spells known yet.</Text>
+          <Text style={styles.emptySubTxt}>
+            Spells appear here after leveling up or completing the creation wizard.
+          </Text>
+        </View>
+      )}
+
+      {/* Level sections */}
+      {sortedLevels.map(level => {
+        const cards    = grouped.get(level)!;
+        const slotKey  = String(level) as keyof typeof spellcasting.slots;
+        const slotData = level > 0 ? spellcasting.slots[slotKey] : null;
+
+        return (
+          <View key={level} style={styles.levelSection}>
+            {/* Section header */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {level === 0
+                  ? 'CANTRIPS'
+                  : `${SLOT_ORDINALS[level]?.toUpperCase() ?? `LEVEL ${level}`} LEVEL`}
+              </Text>
+              {slotData && slotData.total > 0 && (
+                <View style={[
+                  styles.slotBadge,
+                  slotData.used >= slotData.total && styles.slotBadgeEmpty,
+                ]}>
+                  <Text style={[
+                    styles.slotBadgeTxt,
+                    slotData.used >= slotData.total && styles.slotBadgeTxtEmpty,
+                  ]}>
+                    {slotData.total - slotData.used}/{slotData.total} slots
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Spell rows */}
+            {cards.map(card => {
+              const spell      = spellMap.get(card.featureId);
+              const isExpanded = expandedId === card.featureId;
+              const isPrepared = preparedSet.has(card.featureId);
+
+              return (
+                <View key={card.featureId} style={[
+                  styles.spellCard,
+                  !card.available && styles.spellCardUnavail,
+                ]}>
+                  <View style={styles.spellRow}>
+                    {/* Left — tap to expand */}
+                    <Pressable
+                      style={styles.spellBody}
+                      onPress={() => setExpandedId(isExpanded ? null : card.featureId)}
+                    >
+                      <View style={styles.spellNameLine}>
+                        <Text style={[styles.spellName, !card.available && styles.spellNameDim]}>
+                          {card.name}
+                        </Text>
+                        <View style={styles.spellTags}>
+                          {spell?.concentration && (
+                            <View style={styles.tagConc}>
+                              <Text style={styles.tagConcTxt}>Conc</Text>
+                            </View>
+                          )}
+                          {spell?.ritual && (
+                            <View style={styles.tagRitual}>
+                              <Text style={styles.tagRitualTxt}>Ritual</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.expandCaret}>{isExpanded ? '▲' : '▼'}</Text>
+                      </View>
+                      <Text style={styles.spellMeta} numberOfLines={1}>
+                        {spell
+                          ? `${spell.school} · ${spell.castingTime}`
+                          : card.layer1
+                        }
+                      </Text>
+                    </Pressable>
+
+                    {/* Right — prepared toggle (prepared casters, leveled spells) + Cast */}
+                    <View style={styles.spellActions}>
+                      {isPreparedCaster && level > 0 && (
+                        <Pressable
+                          style={[styles.prepBtn, isPrepared && styles.prepBtnActive]}
+                          onPress={() => togglePrepared(card.featureId)}
+                        >
+                          <Text style={[styles.prepBtnTxt, isPrepared && styles.prepBtnTxtActive]}>
+                            {isPrepared ? '✓' : '○'}
+                          </Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        style={[styles.castBtn, !card.available && styles.castBtnDisabled]}
+                        onPress={() => handleCast(card)}
+                        disabled={!card.available}
+                      >
+                        <Text style={[styles.castBtnTxt, !card.available && styles.castBtnTxtDisabled]}>
+                          {card.available ? 'Cast' : 'N/A'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Expanded spell details */}
+                  {isExpanded && (
+                    <View style={styles.details}>
+                      {spell ? (
+                        <>
+                          <View style={styles.detailGrid}>
+                            <DetailCell label="Range"      value={spell.range} />
+                            <DetailCell label="Duration"   value={spell.duration} />
+                            <DetailCell label="Components" value={spell.components.join(', ')} />
+                          </View>
+                          {/* Key effect from action card (damage dice, save, etc.) */}
+                          {card.layer2 && (
+                            <Text style={styles.detailEffect}>{card.layer2}</Text>
+                          )}
+                          {card.layer3 && (
+                            <Text style={styles.detailSave}>{card.layer3}</Text>
+                          )}
+                          <Text style={styles.detailDesc}>{spell.description}</Text>
+                          {spell.upcast && (
+                            <View style={styles.upcastBlock}>
+                              <Text style={styles.upcastLabel}>At Higher Levels</Text>
+                              <Text style={styles.upcastDesc}>{spell.upcast}</Text>
+                            </View>
+                          )}
+                        </>
+                      ) : (
+                        // Vault spell with no hand-authored entry — show layer2/layer3 only
+                        <>
+                          {card.layer2 && <Text style={styles.detailEffect}>{card.layer2}</Text>}
+                          {card.layer3 && <Text style={styles.detailSave}>{card.layer3}</Text>}
+                        </>
+                      )}
+                      {!card.available && card.unavailableReason && (
+                        <Text style={styles.unavailNote}>{card.unavailableReason}</Text>
+                      )}
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        );
+      })}
+
+      {/* Shared cast result modal */}
+      <UseModal
+        card={activeCard}
+        onRoll={rollForCard}
+        onClose={() => setActiveCard(null)}
+      />
+    </ScrollView>
+  );
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function DetailCell({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailCell}>
+      <Text style={styles.detailCellLabel}>{label}</Text>
+      <Text style={styles.detailCellValue}>{value}</Text>
+    </View>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  scroll:  { flex: 1 },
+  content: { padding: Spacing.md, gap: Spacing.sm, paddingBottom: Spacing.xxl },
+
+  // Concentration
+  concBanner: {
+    backgroundColor: Colors.blue + '22',
+    borderRadius:    Radius.md,
+    borderWidth:     1,
+    borderColor:     Colors.blue + '66',
+    padding:         Spacing.sm,
+    marginBottom:    Spacing.xs,
+  },
+  concBannerTxt: {
+    color:      Colors.blue,
+    fontWeight: FontWeight.bold,
+    fontSize:   FontSize.sm,
+    textAlign:  'center',
+  },
+
+  // Empty
+  empty:      { alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.sm },
+  emptyIcon:  { fontSize: 48 },
+  emptyTxt:   { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  emptySubTxt:{ fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
+
+  // Level section
+  levelSection: { gap: Spacing.xs },
+  sectionHeader: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  sectionTitle: {
+    fontSize:      FontSize.xs,
+    fontWeight:    FontWeight.bold,
+    color:         Colors.textSecondary,
+    letterSpacing: 2,
+  },
+
+  // Slot badge
+  slotBadge: {
+    backgroundColor:  Colors.blue + '22',
+    borderRadius:     Radius.full,
+    borderWidth:      1,
+    borderColor:      Colors.blue + '66',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:  2,
+  },
+  slotBadgeEmpty: {
+    backgroundColor: Colors.border,
+    borderColor:     Colors.border,
+  },
+  slotBadgeTxt: {
+    fontSize:   FontSize.xs,
+    color:      Colors.blue,
+    fontWeight: FontWeight.bold,
+  },
+  slotBadgeTxtEmpty: { color: Colors.textDim },
+
+  // Spell card
+  spellCard: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.md,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    overflow:        'hidden',
+  },
+  spellCardUnavail: { opacity: 0.6 },
+
+  spellRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    padding:       Spacing.sm,
+    gap:           Spacing.sm,
+  },
+
+  // Left body (tap to expand)
+  spellBody: { flex: 1, gap: 3 },
+  spellNameLine: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Spacing.xs,
+  },
+  spellName: {
+    fontSize:   FontSize.md,
+    fontWeight: FontWeight.bold,
+    color:      Colors.textPrimary,
+    flexShrink: 1,
+  },
+  spellNameDim: { color: Colors.textDim },
+  spellTags: { flexDirection: 'row', gap: 4 },
+  tagConc: {
+    backgroundColor: Colors.blue + '22',
+    borderRadius:    Radius.sm,
+    borderWidth:     1,
+    borderColor:     Colors.blue + '66',
+    paddingHorizontal: 5,
+    paddingVertical:   1,
+  },
+  tagConcTxt:  { fontSize: 9, color: Colors.blue, fontWeight: FontWeight.bold },
+  tagRitual: {
+    backgroundColor: Colors.gold + '22',
+    borderRadius:    Radius.sm,
+    borderWidth:     1,
+    borderColor:     Colors.gold + '66',
+    paddingHorizontal: 5,
+    paddingVertical:   1,
+  },
+  tagRitualTxt:{ fontSize: 9, color: Colors.gold, fontWeight: FontWeight.bold },
+  expandCaret: { fontSize: 9, color: Colors.textDim, marginLeft: 'auto' },
+  spellMeta:   { fontSize: FontSize.xs, color: Colors.textSecondary },
+
+  // Right actions
+  spellActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+
+  // Prepared toggle
+  prepBtn: {
+    width:           28,
+    height:          28,
+    borderRadius:    Radius.full,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    backgroundColor: Colors.surfaceHigh,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  prepBtnActive: {
+    borderColor:     Colors.green + '88',
+    backgroundColor: Colors.green + '22',
+  },
+  prepBtnTxt:        { fontSize: FontSize.sm, color: Colors.textDim },
+  prepBtnTxtActive:  { color: Colors.green, fontWeight: FontWeight.bold },
+
+  // Cast button
+  castBtn: {
+    backgroundColor:  Colors.blue + '22',
+    borderRadius:     Radius.md,
+    borderWidth:      1,
+    borderColor:      Colors.blue + '66',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:  Spacing.xs,
+    minWidth:         44,
+    alignItems:       'center',
+  },
+  castBtnDisabled: {
+    backgroundColor: Colors.surfaceHigh,
+    borderColor:     Colors.border,
+  },
+  castBtnTxt:         { fontSize: FontSize.sm, color: Colors.blue, fontWeight: FontWeight.bold },
+  castBtnTxtDisabled: { color: Colors.textDim },
+
+  // Expanded details
+  details: {
+    paddingHorizontal: Spacing.sm,
+    paddingBottom:     Spacing.sm,
+    paddingTop:        2,
+    gap:               Spacing.xs,
+    borderTopWidth:    1,
+    borderTopColor:    Colors.border,
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap:      'wrap',
+    gap:           Spacing.xs,
+    marginBottom:  Spacing.xs,
+  },
+  detailCell: {
+    backgroundColor:  Colors.surfaceHigh,
+    borderRadius:     Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:   4,
+  },
+  detailCellLabel: {
+    fontSize:      FontSize.xs,
+    color:         Colors.textDim,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  detailCellValue: {
+    fontSize:   FontSize.sm,
+    color:      Colors.textPrimary,
+    fontWeight: FontWeight.bold,
+  },
+  detailEffect: {
+    fontSize:   FontSize.sm,
+    color:      Colors.gold,
+    fontWeight: FontWeight.bold,
+  },
+  detailSave: {
+    fontSize: FontSize.xs,
+    color:    Colors.textSecondary,
+  },
+  detailDesc: {
+    fontSize:   FontSize.sm,
+    color:      Colors.textSecondary,
+    lineHeight: 18,
+  },
+  upcastBlock: {
+    backgroundColor: Colors.surfaceHigh,
+    borderRadius:    Radius.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.gold + '66',
+    padding:         Spacing.sm,
+    gap:             2,
+  },
+  upcastLabel: {
+    fontSize:   FontSize.xs,
+    color:      Colors.gold,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 1,
+  },
+  upcastDesc: {
+    fontSize:   FontSize.xs,
+    color:      Colors.textSecondary,
+    lineHeight: 16,
+  },
+  unavailNote: {
+    fontSize:   FontSize.xs,
+    color:      Colors.red,
+    fontStyle:  'italic',
+  },
+});

@@ -28,6 +28,7 @@ export default function ClassBuilderScreen() {
       name:    name.trim(),
       hitDie,
       features: [],
+      description: description.trim(),
     };
     await saveItem('class', cls);
     Alert.alert('Saved!', `"${cls.name}" added to your homebrew library.`, [
@@ -65,9 +66,12 @@ export default function ClassBuilderScreen() {
 
         <View style={styles.infoCard}>
           <Text style={styles.infoTxt}>
-            💡 Full level 1-20 progression can be added after saving by editing the class.
-            Level-by-level feature grants, spell slot tables, and resource definitions
-            are supported via the feature editor.
+            💡 Saving this class makes it selectable in creation right away. It gets a
+            basic level 1–20 progression automatically: HP grows by this hit die
+            every level, and Ability Score Improvements appear at levels 4, 8, 12,
+            16, and 19 — same as most official classes. Saving throws, armor/weapon
+            proficiencies, spellcasting, and per-level features aren't generated
+            yet; a full level-by-level editor for those is planned.
           </Text>
         </View>
       </ScrollView>

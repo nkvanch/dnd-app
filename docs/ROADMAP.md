@@ -11,25 +11,57 @@ ARCHITECTURE.md for the technical design, IMPLEMENTATION.md for schemas.
 
 ## 📍 Status Tracker — read this first
 
-**You are here:** Pre-release priorities #1–4a are done, #4b Phase 1 is done, #5 is done. #6 (plain-language audit view) is next.
+**You are here:** Pre-release priorities #1–6 are done. #7 (campaign overview) is next.
 
-| # | Item | Status | Notes |
-|---|------|--------|-------|
-| 1 | Character header — HP/AC/Speed always visible | ✅ Done | Already in `app/sheet/[id].tsx` header (`statPills`) |
-| 2 | Class change warning (Q29) | ✅ Done | Custom dark/gold modal in `class-detail.tsx` (restyled 2026-06-14; was a native `Alert`) |
-| 3 | Settings screen | ✅ Done | `app/settings.tsx` — HP mode, level cap, feats/multiclass/XP toggles, ability score cap |
-| 4a | Wire homebrew into creation (races/spells/backgrounds/features) | ✅ Done | All four wired via `useHomebrewStore`: races (`race.tsx`/`race-detail.tsx`), spells (`spells.tsx`, tagged + override official by id), backgrounds (`background.tsx`, generalized skill-proficiency marking from feature effects), features (`AsiFeatPicker.tsx` — homebrew Features reshaped to `Feat` and merged into the Feat picker, used by both creation and in-play level-up). Classes intentionally excluded — see 4b. |
-| 4b | Homebrew classes/subclasses (full progression authoring) | 🔵 Phase 1 done | Phase 1 (stub progression) ships: any homebrew class is selectable in creation, levelable in-play, gets HP-by-hit-die + ASI at 4/8/12/16/19. Phase 2 (full level-by-level editor for saving throws/proficiencies/spellcasting/per-level features/subclasses) not started. |
-| 5 | Spellbook tab | ✅ Done | Seventh sheet tab (`TabSpells.tsx`), conditional on `entity.spellcasting` non-null. Tab bar made scrollable (`ScrollView` horizontal) to accommodate 7 tabs for spellcasters. Shares `UseModal` + slot-spend logic with TabActions — no parallel cast implementation. Prepared-caster toggle (Wizard/Cleric/Druid/Paladin) wired to `entity.spellcasting.prepared`. |
-| 6 | Plain-language audit view | ⬜ Not started | Display-only — no engine changes needed |
-| 7 | Campaign overview screen | ⬜ Not started | DM dashboard exists but is encounter/party-focused, not a between-sessions surface |
-| 8 | Home screen campaign state | ⬜ Not started | Blocked on #7 |
+| #   | Item                                                            | Status          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --- | --------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Character header — HP/AC/Speed always visible                   | ✅ Done          | Already in `app/sheet/[id].tsx` header (`statPills`)                                                                                                                                                                                                                                                                                                                                                                          |
+| 2   | Class change warning (Q29)                                      | ✅ Done          | Custom dark/gold modal in `class-detail.tsx` (restyled 2026-06-14; was a native `Alert`)                                                                                                                                                                                                                                                                                                                                      |
+| 3   | Settings screen                                                 | ✅ Done          | `app/settings.tsx` — HP mode, level cap, feats/multiclass/XP toggles, ability score cap                                                                                                                                                                                                                                                                                                                                       |
+| 4a  | Wire homebrew into creation (races/spells/backgrounds/features) | ✅ Done          | All four wired via `useHomebrewStore`: races (`race.tsx`/`race-detail.tsx`), spells (`spells.tsx`, tagged + override official by id), backgrounds (`background.tsx`, generalized skill-proficiency marking from feature effects), features (`AsiFeatPicker.tsx` — homebrew Features reshaped to `Feat` and merged into the Feat picker, used by both creation and in-play level-up). Classes intentionally excluded — see 4b. |
+| 4b  | Homebrew classes/subclasses (full progression authoring)        | ✅ Phase 2 done  | Phase 1: stub progression (HP/ASI). Phase 2: full authoring — saving throws, armor/weapon profs, spellcasting (ability + slot table + start level), per-level features, custom ASI levels. Engine: `spell_slots` grant now accepts inline `slotsTable`. |
+| 5   | Spellbook tab                                                   | ✅ Done          | Seventh sheet tab (`TabSpells.tsx`), conditional on `entity.spellcasting` non-null. Tab bar made scrollable (`ScrollView` horizontal) to accommodate 7 tabs for spellcasters. Shares `UseModal` + slot-spend logic with TabActions — no parallel cast implementation. Prepared-caster toggle (Wizard/Cleric/Druid/Paladin) wired to `entity.spellcasting.prepared`.                                                           |
+| 6   | Plain-language audit view                                       | ✅ Done          | Plain/Technical toggle in `AuditModal.tsx`. Plain view builds a single readable sentence from the existing `AuditEntry` list: "17 = 10 base + 3 DEX modifier + 2 Chain Shirt". Technical view unchanged. No engine changes. |
+| 7   | Campaign overview screen                                        | ⬜ Not started   | DM dashboard exists but is encounter/party-focused, not a between-sessions surface                                                                                                                                                                                                                                                                                                                                            |
+| 8   | Home screen campaign state                                      | ⬜ Not started   | Blocked on #7                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
-**Next up:** #6 — Plain-language audit view (toggle in the audit modal between the current
-technical breakdown and a single readable sentence).
+**Next up:** #7 — Campaign overview screen.
 
 ### Recent session log
 *(most recent first — one entry per session, updated whenever a change lands)*
+
+- **2026-06-17 (2):** #6 Plain-language audit view shipped. `AuditModal.tsx` gained
+  a Plain/Technical segment control toggle (pill-style, defaults to Technical to not
+  surprise existing users). Plain mode calls `buildPlainSentence(total, entries)` which
+  filters out zero-value entries, signs all contributors after the first (first has no
+  prefix, subsequent get `+` or `−`), and produces e.g. "17 = 10 base armor  + 3 DEX
+  modifier  + 2 Chain Shirt  + 2 Shield". The only engine-side change was importing
+  `AuditEntry` in the modal (it was already exported from `types.ts`). The technical
+  breakdown view is unchanged. The modal's `scroll` max-height was trimmed from 280 to
+  240px to keep the layout stable with the extra toggle row. No `npx tsc` run yet.
+
+- **2026-06-17:** #4b Phase 2 shipped. **Type layer:** `CharClass` extended with
+  eight optional Phase 2 fields: `savingThrows`, `armorProfs`, `weaponProfs`,
+  `spellcastingAbility`, `spellcastingStyle` (`'full'|'half'|'pact'`),
+  `spellcastingStartLevel`, `asiLevels`, and `levelFeatures`. All old `CharClass`
+  objects remain valid. **Engine:** `applyGrant` for `spell_slots` now accepts
+  `slotsTable` embedded in the grant value; homebrew classes embed the relevant
+  `SpellSlotRow[]` directly so the engine doesn't need a `SLOT_TABLES` entry for
+  every homebrew classId — official classes are unaffected (no `slotsTable` in their
+  grants, falls through to classId lookup as before). **Progression builder:**
+  `buildStubProgression` replaced by `buildProgressionFromClass` (old name kept as
+  alias) which reads all Phase 2 fields to emit real `proficiency`,
+  `init_spellcasting`, `spell_slots`, and `feature` grants level by level; Phase 1
+  behavior fully preserved for old homebrew classes. **Class detail:** homebrew
+  fallback display now shows saving throws, proficiencies, and spellcasting from the
+  `CharClass` fields; the "not configured yet" note only shows for unset fields;
+  `doSelect()` applies `cls.savingThrows` to the proficiency block. **Class builder
+  UI** (`class-builder.tsx`): complete rewrite into a 6-section authoring flow —
+  Basics, Saving Throws (6 ability toggles), Starting Proficiencies (armor + weapon),
+  Spellcasting (toggle + ability + Full/Half/Pact + start level), Per-Level Features
+  ("+Add Feature" bottom sheet: level 1–20, name, description; listed by level with
+  delete), ASI Levels (1–20 grid, toggleable, defaults pre-populated in gold).
+  Not yet verified with `npx tsc --noEmit`.
 
 - **2026-06-16:** #5 Spellbook tab shipped. `src/components/sheet/TabSpells.tsx` is a new
   seventh sheet tab, inserted after Actions and **conditional** on `entity.spellcasting`

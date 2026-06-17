@@ -81,7 +81,25 @@ export type Race = {
   features:  Feature[];    // base race features — all subraces get these
   subraces?: Subrace[];    // if present, player must pick one before confirming race
 };
-export type CharClass  = { id: string; name: string; hitDie: number; features: Feature[]; description?: string };
+export type CharClass  = {
+  id:          string;
+  name:        string;
+  hitDie:      number;
+  features:    Feature[];     // level-1 features (backward-compat; Phase 2 uses levelFeatures)
+  description?: string;
+
+  // ── Phase 2: authored progression data (all optional) ─────────────────────────
+  // When present, buildProgressionFromClass uses these instead of stub defaults.
+  savingThrows?:          Ability[];     // e.g. ['str', 'con']
+  armorProfs?:            string[];      // 'light' | 'medium' | 'heavy' | 'shield'
+  weaponProfs?:           string[];      // 'simple' | 'martial'
+  spellcastingAbility?:   Ability;       // 'int' | 'wis' | 'cha'
+  spellcastingStyle?:     'full' | 'half' | 'pact'; // slot table to use
+  spellcastingStartLevel?: number;       // first level that gets spell slots (default 1)
+  asiLevels?:             number[];      // defaults to [4,8,12,16,19]
+  // Per-level features authored by the player (replaces cls.features for level 1+)
+  levelFeatures?:         { level: number; name: string; description: string }[];
+};
 export type Background = { id: string; name: string; features: Feature[] };
 export type Condition  = { id: string; name: string; description: string; features: Feature[] };
 

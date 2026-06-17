@@ -305,7 +305,10 @@ export default function ClassDetailScreen() {
         identity:  { ...updated.identity, classId: cls!.id },
         proficiencies: {
           ...updated.proficiencies,
-          savingThrows: detail?.savingThrowAbilities ?? [],
+          // For official classes: use CLASS_DETAIL saving throws.
+          // For homebrew Phase 2 classes: fall back to cls.savingThrows.
+          // For Phase 1 stub classes with no data: empty array.
+          savingThrows: detail?.savingThrowAbilities ?? cls!.savingThrows ?? [],
         },
         notes: JSON.stringify({ ...notes, equipmentVisited: false, spellsVisited: false }),
       };
@@ -424,29 +427,86 @@ export default function ClassDetailScreen() {
 
           <InfoRow label="Hit Die" value={`d${cls.hitDie}`} />
 
+          {/* Saving Throws */}
+          {cls.savingThrows && cls.savingThrows.length > 0 && (
+            <InfoRow
+              label="Saving Throws"
+              value={cls.savingThrows.map(a => a.charAt(0).toUpperCase() + a.slice(1)).join(', ')}
+            />
+          )}
+
+          {/* Proficiencies */}
+          {(cls.armorProfs?.length || cls.weaponProfs?.length) && (
+            <InfoRow
+              label="Proficiencies"
+              value={[
+                ...(cls.armorProfs ?? []),
+                ...(cls.weaponProfs ?? []),
+              ].join(', ') || 'None'}
+            />
+          )}
+
+          {/* Spellcasting */}
+          {cls.spellcastingAbility && (
+            <InfoRow
+              label="Spellcasting"
+              value={`${cls.spellcastingAbility.toUpperCase()} • ${cls.spellcastingStyle ?? 'custom'}${
+                cls.spellcastingStartLevel && cls.spellcastingStartLevel > 1
+                  ? ` (from level ${cls.spellcastingStartLevel})`
+                  : ''
+              }`}
+            />
+          )}
+
           <View style={styles.divider} />
 
           <Text style={styles.sectionLabel}>FEATURES</Text>
-          {cls.features.length === 0 ? (
-            <Text style={styles.emptyNote}>This class has no features defined yet.</Text>
-          ) : (
+          {cls.levelFeatures && cls.levelFeatures.length > 0 ? (
+            // Show Phase 2 levelFeatures grouped by level
+            (() => {
+              const byLevel = new Map<number, { name: string; description: string }[]>();
+              for (const f of cls.levelFeatures!) {
+                if (!byLevel.has(f.level)) byLevel.set(f.level, []);
+                byLevel.get(f.level)!.push(f);
+              }
+              return Array.from(byLevel.entries())
+                .sort(([a], [b]) => a - b)
+                .map(([lvl, feats]) => (
+                  <View key={lvl}>
+                    <Text style={styles.levelLabel}>Level {lvl}</Text>
+                    {feats.map((f, i) => (
+                      <View key={i} style={styles.featureBlock}>
+                        <Text style={styles.featureName}>{f.name}</Text>
+                        <Text style={styles.description}>{f.description}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ));
+            })()
+          ) : cls.features.length > 0 ? (
+            // Fall back to legacy cls.features for Phase 1 classes
             cls.features.map(f => (
               <View key={f.id} style={styles.featureBlock}>
                 <Text style={styles.featureName}>{f.name}</Text>
                 <Text style={styles.description}>{f.description}</Text>
               </View>
             ))
+          ) : (
+            <Text style={styles.emptyNote}>No features defined yet.</Text>
           )}
 
           <View style={styles.divider} />
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTxt}>
-              This homebrew class has a basic progression: HP grows by d{cls.hitDie}
-              every level, and Ability Score Improvements appear at levels 4, 8, 12,
-              16, and 19. Saving throws, armor/weapon proficiencies, and
-              spellcasting aren't set up for this class yet.
-            </Text>
-          </View>
+          {/* Show the info card only if Phase 2 data is incomplete */}
+          {(!cls.savingThrows || !cls.spellcastingAbility) && (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoCardTxt}>
+                {!cls.savingThrows
+                  ? `Saving throws and some proficiencies haven't been configured yet. Edit this class in the Homebrew tab to add them.`
+                  : `Spellcasting hasn't been configured yet. Edit this class in the Homebrew tab if this is a spellcasting class.`
+                }
+              </Text>
+            </View>
+          )}
         </>
       )}
 
@@ -577,6 +637,7 @@ const styles = StyleSheet.create({
   },
   homebrewTagTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
   sectionLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.sm },
+  levelLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim, letterSpacing: 1, marginTop: Spacing.sm, marginBottom: 2 },
   emptyNote: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
   featureBlock: { marginBottom: Spacing.md },
   featureName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 2 },

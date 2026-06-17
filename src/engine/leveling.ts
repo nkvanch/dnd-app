@@ -145,9 +145,21 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
 
     case "spell_slots": {
       // Set spell slot totals from the PHB table for this class at this level.
-      const slotGrant = grant.value as { level: number };
-      const slots = getSpellSlotsForClassLevel(entity.identity.classId, slotGrant.level);
-      if (!slots || !entity.spellcasting) return entity;
+      // For homebrew classes the slotsTable may be embedded directly in the
+      // grant value (set by buildProgressionFromClass) rather than looked up
+      // by classId — both code paths produce the same slot object.
+      const slotGrant = grant.value as {
+        level:      number;
+        slotsTable?: { level: number; slots: number[] }[];
+      };
+      let slotRow: number[] | null = null;
+      if (slotGrant.slotsTable) {
+        slotRow = slotGrant.slotsTable.find(r => r.level === slotGrant.level)?.slots ?? null;
+      } else {
+        slotRow = getSpellSlotsForClassLevel(entity.identity.classId, slotGrant.level);
+      }
+      if (!slotRow || !entity.spellcasting) return entity;
+      const slots = slotRow;
       const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
       const newSlots = { ...entity.spellcasting.slots };
       tiers.forEach((t, i) => {

@@ -11,24 +11,54 @@ ARCHITECTURE.md for the technical design, IMPLEMENTATION.md for schemas.
 
 ## 📍 Status Tracker — read this first
 
-**You are here:** Pre-release priorities #1–6 are done. #7 (campaign overview) is next.
+**You are here:** All 8 pre-release priorities are done. 🎉
 
-| #   | Item                                                            | Status          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| --- | --------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Character header — HP/AC/Speed always visible                   | ✅ Done          | Already in `app/sheet/[id].tsx` header (`statPills`)                                                                                                                                                                                                                                                                                                                                                                          |
-| 2   | Class change warning (Q29)                                      | ✅ Done          | Custom dark/gold modal in `class-detail.tsx` (restyled 2026-06-14; was a native `Alert`)                                                                                                                                                                                                                                                                                                                                      |
-| 3   | Settings screen                                                 | ✅ Done          | `app/settings.tsx` — HP mode, level cap, feats/multiclass/XP toggles, ability score cap                                                                                                                                                                                                                                                                                                                                       |
-| 4a  | Wire homebrew into creation (races/spells/backgrounds/features) | ✅ Done          | All four wired via `useHomebrewStore`: races (`race.tsx`/`race-detail.tsx`), spells (`spells.tsx`, tagged + override official by id), backgrounds (`background.tsx`, generalized skill-proficiency marking from feature effects), features (`AsiFeatPicker.tsx` — homebrew Features reshaped to `Feat` and merged into the Feat picker, used by both creation and in-play level-up). Classes intentionally excluded — see 4b. |
-| 4b  | Homebrew classes/subclasses (full progression authoring)        | ✅ Phase 2 done  | Phase 1: stub progression (HP/ASI). Phase 2: full authoring — saving throws, armor/weapon profs, spellcasting (ability + slot table + start level), per-level features, custom ASI levels. Engine: `spell_slots` grant now accepts inline `slotsTable`. |
-| 5   | Spellbook tab                                                   | ✅ Done          | Seventh sheet tab (`TabSpells.tsx`), conditional on `entity.spellcasting` non-null. Tab bar made scrollable (`ScrollView` horizontal) to accommodate 7 tabs for spellcasters. Shares `UseModal` + slot-spend logic with TabActions — no parallel cast implementation. Prepared-caster toggle (Wizard/Cleric/Druid/Paladin) wired to `entity.spellcasting.prepared`.                                                           |
-| 6   | Plain-language audit view                                       | ✅ Done          | Plain/Technical toggle in `AuditModal.tsx`. Plain view builds a single readable sentence from the existing `AuditEntry` list: "17 = 10 base + 3 DEX modifier + 2 Chain Shirt". Technical view unchanged. No engine changes. |
-| 7   | Campaign overview screen                                        | ⬜ Not started   | DM dashboard exists but is encounter/party-focused, not a between-sessions surface                                                                                                                                                                                                                                                                                                                                            |
-| 8   | Home screen campaign state                                      | ⬜ Not started   | Blocked on #7                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| #   | Item                                                            | Status         | Notes                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --- | --------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Character header — HP/AC/Speed always visible                   | ✅ Done         | Already in `app/sheet/[id].tsx` header (`statPills`)                                                                                                                                                                                                                                                                                                                                                                          |
+| 2   | Class change warning (Q29)                                      | ✅ Done         | Custom dark/gold modal in `class-detail.tsx` (restyled 2026-06-14; was a native `Alert`)                                                                                                                                                                                                                                                                                                                                      |
+| 3   | Settings screen                                                 | ✅ Done         | `app/settings.tsx` — HP mode, level cap, feats/multiclass/XP toggles, ability score cap                                                                                                                                                                                                                                                                                                                                       |
+| 4a  | Wire homebrew into creation (races/spells/backgrounds/features) | ✅ Done         | All four wired via `useHomebrewStore`: races (`race.tsx`/`race-detail.tsx`), spells (`spells.tsx`, tagged + override official by id), backgrounds (`background.tsx`, generalized skill-proficiency marking from feature effects), features (`AsiFeatPicker.tsx` — homebrew Features reshaped to `Feat` and merged into the Feat picker, used by both creation and in-play level-up). Classes intentionally excluded — see 4b. |
+| 4b  | Homebrew classes/subclasses (full progression authoring)        | ✅ Phase 2 done | Phase 1: stub progression (HP/ASI). Phase 2: full authoring — saving throws, armor/weapon profs, spellcasting (ability + slot table + start level), per-level features, custom ASI levels. Engine: `spell_slots` grant now accepts inline `slotsTable`.                                                                                                                                                                       |
+| 5   | Spellbook tab                                                   | ✅ Done         | Seventh sheet tab (`TabSpells.tsx`), conditional on `entity.spellcasting` non-null. Tab bar made scrollable (`ScrollView` horizontal) to accommodate 7 tabs for spellcasters. Shares `UseModal` + slot-spend logic with TabActions — no parallel cast implementation. Prepared-caster toggle (Wizard/Cleric/Druid/Paladin) wired to `entity.spellcasting.prepared`.                                                           |
+| 6   | Plain-language audit view                                       | ✅ Done         | Plain/Technical toggle in `AuditModal.tsx`. Plain view builds a single readable sentence from the existing `AuditEntry` list: "17 = 10 base + 3 DEX modifier + 2 Chain Shirt". Technical view unchanged. No engine changes.                                                                                                                                                                                                   |
+| 7   | Campaign overview screen                                        | ✅ Done         | `campaigns.tsx` expanded: Notes (editable for DM, read-only for player), Quest tracker (add/cycle status Active→Done→Failed/delete), Session log (DM adds timestamped entries, newest-first, collapsible), Party (HP bar per character). `Campaign` type gained optional `sessionLog` and `quests` fields.                                                                                                                    |
+| 8   | Home screen campaign state                                      | ✅ Done          | `index.tsx` replaced the hardcoded stub with `ActiveCampaignCard`: no-campaign shows stub unchanged; between-sessions shows name, active quest/party pills, last session snippet; live shows green LIVE badge, player count, DM Dashboard shortcut. Quick Actions swaps "Join" for "Open Campaign" when a campaign is active. |
 
-**Next up:** #7 — Campaign overview screen.
+**All 8 pre-release priorities are complete.** 🎉 See "After release" section for the post-launch backlog.
 
 ### Recent session log
 *(most recent first — one entry per session, updated whenever a change lands)*
+
+- **2026-06-17 (4):** #8 Home screen campaign state shipped. `index.tsx` imported
+  `useCampaignStore` and `useSyncStore` and replaced the hardcoded stub with
+  `ActiveCampaignCard`, a component rendering one of three states: no campaign
+  (stub unchanged); between-sessions (gold-bordered card: campaign name, active
+  quest count + party size as small pills, last session log entry as a gold
+  left-bordered snippet, "Tap to open" hint); live (green border + ● LIVE badge,
+  player count or "Connected to DM", DM Dashboard shortcut for DM only, Open
+  Campaign secondary button). The Quick Actions row conditionally swaps "Join
+  Campaign" for "Open Campaign" (→ campaigns tab) when a campaign is active.
+  `loadCampaigns()` called on mount so the state is always fresh on tab focus.
+  With this, all 8 pre-release priorities are complete.
+
+- **2026-06-17 (3):** #7 Campaign overview screen shipped. `Campaign` type in
+  `types.ts` gained two optional fields: `sessionLog: SessionLogEntry[]` (id,
+  summary, date) and `quests: Quest[]` (id, name, description, status). All
+  existing `Campaign` objects remain valid. `campaigns.tsx` was rewritten to
+  expand the DM and Player active views from near-empty stubs into a proper
+  between-sessions surface. Both views share four section components:
+  `NotesSection` (editable `TextInput` for DM, read-only text for player; saves
+  on blur to the existing `Campaign.notes` field), `QuestsSection` (add via modal,
+  tap ↻ to cycle Active→Completed→Failed, tap ✕ to delete with confirmation;
+  status shown as a colored chip — green/gold/red), `SessionLogSection` (DM adds
+  timestamped entries via modal; entries listed newest-first; collapses to 3
+  with "Show N more" link; DM can delete entries), `PartySection` (character
+  name + class + level + HP bar). The DM view also keeps the connection block
+  (room code, QR, DM Dashboard button) at the top; player view gets a clean
+  status block instead. `updateCampaign` in the campaign store already handles
+  arbitrary field patches so no store changes were needed. Not yet verified with
+  `npx tsc --noEmit`.
 
 - **2026-06-17 (2):** #6 Plain-language audit view shipped. `AuditModal.tsx` gained
   a Plain/Technical segment control toggle (pill-style, defaults to Technical to not

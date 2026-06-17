@@ -4,8 +4,8 @@
 //
 // State machine:
 //   NO CAMPAIGN  → [Create Campaign] or [Join Campaign]
-//   DM ACTIVE    → room code + QR code, connected-player count, sync dot
-//   PLAYER ACTIVE → campaign name, DM name, sync dot
+//   DM ACTIVE    → connection block + campaign overview (notes/quests/log/party)
+//   PLAYER ACTIVE → read-only campaign overview + sync status
 // ============================================================================
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -16,64 +16,62 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 
-import { useCampaignStore } from '../../src/store/campaignStore';
-import { useSessionStore }  from '../../src/store/sessionStore';
+import { useCampaignStore }  from '../../src/store/campaignStore';
+import { useSessionStore }   from '../../src/store/sessionStore';
 import { useCharacterStore } from '../../src/store/characterStore';
-import { useSyncStore }     from '../../src/store/syncStore';
-import { syncManager }      from '../../src/sync/syncManager';
-import { SyncStatusDot }   from '../../src/components/SyncStatusDot';
+import { useSyncStore }      from '../../src/store/syncStore';
+import { syncManager }       from '../../src/sync/syncManager';
+import { SyncStatusDot }     from '../../src/components/SyncStatusDot';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { Quest, SessionLogEntry } from '../../src/engine/types';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function genId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function formatDate(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
+}
 
 // ── QR Scanner Modal ──────────────────────────────────────────────────────────
 
 function QrScannerModal({
-  visible,
-  onScan,
-  onClose,
-}: {
-  visible:  boolean;
-  onScan:   (code: string) => void;
-  onClose:  () => void;
-}) {
+  visible, onScan, onClose,
+}: { visible: boolean; onScan: (code: string) => void; onClose: () => void }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
 
   useEffect(() => {
-    if (visible && !permission?.granted) {
-      requestPermission();
-    }
+    if (visible && !permission?.granted) requestPermission();
     if (!visible) setScanned(false);
   }, [visible, permission?.granted, requestPermission]);
 
   function handleBarcode(result: BarcodeScanningResult) {
     if (scanned) return;
     const raw = result.data?.trim().toUpperCase() ?? '';
-    if (/^[0-9A-Z]{6}$/.test(raw)) {
-      setScanned(true);
-      onScan(raw);
-    }
+    if (/^[0-9A-Z]{6}$/.test(raw)) { setScanned(true); onScan(raw); }
   }
 
   if (!visible) return null;
-
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={scanStyles.container}>
         {!permission?.granted ? (
           <View style={scanStyles.center}>
-            <Text style={scanStyles.permTxt}>Camera permission is required to scan QR codes.</Text>
+            <Text style={scanStyles.permTxt}>Camera permission required to scan QR codes.</Text>
             <Pressable style={scanStyles.permBtn} onPress={requestPermission}>
               <Text style={scanStyles.permBtnTxt}>Grant Permission</Text>
             </Pressable>
           </View>
         ) : (
           <>
-            <CameraView
-              style={scanStyles.camera}
-              facing="back"
+            <CameraView style={scanStyles.camera} facing="back"
               barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={handleBarcode}
-            />
+              onBarcodeScanned={handleBarcode} />
             <View style={scanStyles.overlay}>
               <View style={scanStyles.frame} />
               <Text style={scanStyles.hint}>Point at the DM's QR code</Text>
@@ -95,20 +93,14 @@ const scanStyles = StyleSheet.create({
   permTxt:   { color: '#fff', textAlign: 'center', fontSize: 16 },
   permBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: 24, paddingVertical: 12 },
   permBtnTxt:{ color: Colors.bg, fontWeight: FontWeight.bold, fontSize: 16 },
-  overlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  frame: {
-    width: 220, height: 220, borderWidth: 3, borderColor: Colors.gold,
-    borderRadius: Radius.lg,
-  },
-  hint:     { color: '#fff', marginTop: 20, fontSize: 14, textAlign: 'center' },
-  closeBtn: { position: 'absolute', top: 52, right: 20, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, padding: 12 },
-  closeTxt: { color: '#fff', fontWeight: FontWeight.bold, fontSize: 16 },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  frame:   { width: 220, height: 220, borderWidth: 3, borderColor: Colors.gold, borderRadius: Radius.lg },
+  hint:    { color: '#fff', marginTop: 20, fontSize: 14, textAlign: 'center' },
+  closeBtn:{ position: 'absolute', top: 52, right: 20, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, padding: 12 },
+  closeTxt:{ color: '#fff', fontWeight: FontWeight.bold, fontSize: 16 },
 });
 
-// ── Create Campaign Modal ─────────────────────────────────────────────────────
+// ── Create/Join Campaign Modals ───────────────────────────────────────────────
 
 function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [name,    setName]    = useState('');
@@ -122,24 +114,13 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
     setLoading(true);
     try {
       const campaign = await createCampaign(trimmed);
-      // Start the TCP server and get the real room code from the local IP
       const roomCode = await syncManager.startAsServer(
-        campaign.id,
-        campaign.id,          // use campaignId as sessionId for simplicity
-        session.deviceId,
-        session.nickname || 'DM',
+        campaign.id, campaign.id, session.deviceId, session.nickname || 'DM',
       );
-      // Update the campaign's joinCode so it displays the real room code
-      await useCampaignStore.getState().updateCampaign(campaign.id, c => ({
-        ...c, joinCode: roomCode,
-      }));
-      setName('');
-      onClose();
-    } catch (e) {
-      Alert.alert('Error', String(e));
-    } finally {
-      setLoading(false);
-    }
+      await useCampaignStore.getState().updateCampaign(campaign.id, c => ({ ...c, joinCode: roomCode }));
+      setName(''); onClose();
+    } catch (e) { Alert.alert('Error', String(e)); }
+    finally { setLoading(false); }
   }
 
   return (
@@ -147,23 +128,11 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
           <Text style={styles.modalTitle}>New Campaign</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="Campaign name…"
-            placeholderTextColor={Colors.textDim}
-            autoFocus
-          />
-          <Pressable
-            style={[styles.primaryBtn, (!name.trim() || loading) && styles.btnDisabled]}
-            onPress={handleCreate}
-            disabled={!name.trim() || loading}
-          >
-            {loading
-              ? <ActivityIndicator color={Colors.bg} />
-              : <Text style={styles.primaryBtnTxt}>Create Campaign</Text>
-            }
+          <TextInput style={styles.input} value={name} onChangeText={setName}
+            placeholder="Campaign name…" placeholderTextColor={Colors.textDim} autoFocus />
+          <Pressable style={[styles.primaryBtn, (!name.trim() || loading) && styles.btnDisabled]}
+            onPress={handleCreate} disabled={!name.trim() || loading}>
+            {loading ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.primaryBtnTxt}>Create Campaign</Text>}
           </Pressable>
           <Pressable style={styles.cancelBtn} onPress={onClose}>
             <Text style={styles.cancelTxt}>Cancel</Text>
@@ -173,8 +142,6 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
     </Modal>
   );
 }
-
-// ── Join Campaign Modal ───────────────────────────────────────────────────────
 
 function JoinModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [code,       setCode]       = useState('');
@@ -186,80 +153,37 @@ function JoinModal({ visible, onClose }: { visible: boolean; onClose: () => void
   async function handleJoin(rawCode?: string) {
     const trimmed = (rawCode ?? code).trim().toUpperCase();
     if (trimmed.length !== 6 || !session) return;
-    setLoading(true);
-    setScannerOpen(false);
+    setLoading(true); setScannerOpen(false);
     try {
-      // Connect to the DM's server first — this will set campaignId on 'welcome'
-      await syncManager.startAsClient(
-        trimmed,
-        session.deviceId,
-        session.nickname || 'Player',
-      );
-      // Also store a local stub campaign for offline access
+      await syncManager.startAsClient(trimmed, session.deviceId, session.nickname || 'Player');
       await joinCampaign(trimmed);
-      setCode('');
-      onClose();
-    } catch (e) {
-      Alert.alert('Connection failed', String(e));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleScan(scannedCode: string) {
-    setCode(scannedCode);
-    setScannerOpen(false);
-    handleJoin(scannedCode);
+      setCode(''); onClose();
+    } catch (e) { Alert.alert('Connection failed', String(e)); }
+    finally { setLoading(false); }
   }
 
   return (
     <>
-      <QrScannerModal
-        visible={scannerOpen}
-        onScan={handleScan}
-        onClose={() => setScannerOpen(false)}
-      />
+      <QrScannerModal visible={scannerOpen}
+        onScan={c => { setCode(c); setScannerOpen(false); handleJoin(c); }}
+        onClose={() => setScannerOpen(false)} />
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
         <Pressable style={styles.backdrop} onPress={onClose}>
           <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Join Campaign</Text>
-            <Text style={styles.modalSub}>
-              Type the 6-character code shown on the DM's screen, or scan the QR code.
-            </Text>
-
-            <TextInput
-              style={[styles.input, styles.codeInput]}
-              value={code}
+            <Text style={styles.modalSub}>Enter the 6-character room code or scan the DM's QR.</Text>
+            <TextInput style={[styles.input, styles.codeInput]} value={code}
               onChangeText={t => setCode(t.toUpperCase().slice(0, 6))}
-              placeholder="XXXXXX"
-              placeholderTextColor={Colors.textDim}
-              autoCapitalize="characters"
-              maxLength={6}
-              autoFocus
-            />
-
-            {/* Only show QR scan button on native (not web) */}
+              placeholder="XXXXXX" placeholderTextColor={Colors.textDim}
+              autoCapitalize="characters" maxLength={6} autoFocus />
             {Platform.OS !== 'web' && (
-              <Pressable
-                style={[styles.primaryBtn, styles.secondaryBtn]}
-                onPress={() => setScannerOpen(true)}
-                disabled={loading}
-              >
-                <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>
-                  📷  Scan QR Code
-                </Text>
+              <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={() => setScannerOpen(true)} disabled={loading}>
+                <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>📷  Scan QR Code</Text>
               </Pressable>
             )}
-
-            <Pressable
-              style={[styles.primaryBtn, (code.length !== 6 || loading) && styles.btnDisabled]}
-              onPress={() => handleJoin()}
-              disabled={code.length !== 6 || loading}
-            >
-              {loading
-                ? <ActivityIndicator color={Colors.bg} />
-                : <Text style={styles.primaryBtnTxt}>Join</Text>
-              }
+            <Pressable style={[styles.primaryBtn, (code.length !== 6 || loading) && styles.btnDisabled]}
+              onPress={() => handleJoin()} disabled={code.length !== 6 || loading}>
+              {loading ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.primaryBtnTxt}>Join</Text>}
             </Pressable>
             <Pressable style={styles.cancelBtn} onPress={onClose}>
               <Text style={styles.cancelTxt}>Cancel</Text>
@@ -271,19 +195,301 @@ function JoinModal({ visible, onClose }: { visible: boolean; onClose: () => void
   );
 }
 
-// ── Active Campaign View (DM) ─────────────────────────────────────────────────
+// ── Campaign Overview Sections ────────────────────────────────────────────────
+// Used by both DM and Player views; editable=true only for the DM.
+
+// ── Notes Section ─────────────────────────────────────────────────────────────
+
+function NotesSection({ notes, editable, onChange }: {
+  notes: string; editable: boolean; onChange: (n: string) => void;
+}) {
+  const [local, setLocal] = useState(notes);
+  useEffect(() => setLocal(notes), [notes]);
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>CAMPAIGN NOTES</Text>
+      {editable ? (
+        <TextInput
+          style={[styles.input, styles.notesInput]}
+          value={local}
+          onChangeText={setLocal}
+          onBlur={() => onChange(local)}
+          placeholder="Add notes, world details, reminders…"
+          placeholderTextColor={Colors.textDim}
+          multiline
+          textAlignVertical="top"
+        />
+      ) : local ? (
+        <Text style={styles.notesReadOnly}>{local}</Text>
+      ) : (
+        <Text style={styles.emptyNote}>No campaign notes yet.</Text>
+      )}
+    </View>
+  );
+}
+
+// ── Quest Status Chip ─────────────────────────────────────────────────────────
+
+const QUEST_STATUS_COLORS: Record<Quest['status'], string> = {
+  active:    Colors.green,
+  completed: Colors.gold,
+  failed:    Colors.red,
+};
+const QUEST_STATUS_LABELS: Record<Quest['status'], string> = {
+  active: 'Active', completed: 'Done', failed: 'Failed',
+};
+
+function QuestChip({ status }: { status: Quest['status'] }) {
+  const color = QUEST_STATUS_COLORS[status];
+  return (
+    <View style={[styles.questChip, { borderColor: color + '66', backgroundColor: color + '22' }]}>
+      <Text style={[styles.questChipTxt, { color }]}>{QUEST_STATUS_LABELS[status]}</Text>
+    </View>
+  );
+}
+
+// ── Quests Section ────────────────────────────────────────────────────────────
+
+function QuestsSection({ quests, editable, onUpdate }: {
+  quests: Quest[];
+  editable: boolean;
+  onUpdate: (quests: Quest[]) => void;
+}) {
+  const [addModal, setAddModal] = useState(false);
+  const [addName,  setAddName]  = useState('');
+  const [addDesc,  setAddDesc]  = useState('');
+
+  function addQuest() {
+    if (!addName.trim()) return;
+    const newQuest: Quest = {
+      id: genId(), name: addName.trim(),
+      description: addDesc.trim(), status: 'active',
+    };
+    onUpdate([...quests, newQuest]);
+    setAddName(''); setAddDesc(''); setAddModal(false);
+  }
+
+  function cycleStatus(id: string) {
+    const cycle: Record<Quest['status'], Quest['status']> = {
+      active: 'completed', completed: 'failed', failed: 'active',
+    };
+    onUpdate(quests.map(q => q.id === id ? { ...q, status: cycle[q.status] } : q));
+  }
+
+  function deleteQuest(id: string) {
+    Alert.alert('Remove Quest?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => onUpdate(quests.filter(q => q.id !== id)) },
+    ]);
+  }
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>QUESTS</Text>
+
+      {quests.length === 0 ? (
+        <Text style={styles.emptyNote}>{editable ? 'No quests yet. Add one below.' : 'No quests yet.'}</Text>
+      ) : (
+        quests.map(q => (
+          <View key={q.id} style={styles.questRow}>
+            <QuestChip status={q.status} />
+            <View style={styles.questBody}>
+              <Text style={styles.questName}>{q.name}</Text>
+              {q.description ? <Text style={styles.questDesc} numberOfLines={2}>{q.description}</Text> : null}
+            </View>
+            {editable && (
+              <View style={styles.questActions}>
+                <Pressable style={styles.questActionBtn} onPress={() => cycleStatus(q.id)} hitSlop={8}>
+                  <Text style={styles.questActionTxt}>↻</Text>
+                </Pressable>
+                <Pressable style={styles.questActionBtn} onPress={() => deleteQuest(q.id)} hitSlop={8}>
+                  <Text style={[styles.questActionTxt, { color: Colors.red }]}>✕</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        ))
+      )}
+
+      {editable && (
+        <Pressable style={styles.addBtn} onPress={() => setAddModal(true)}>
+          <Text style={styles.addBtnTxt}>+ Add Quest</Text>
+        </Pressable>
+      )}
+
+      <Modal visible={addModal} transparent animationType="slide" onRequestClose={() => setAddModal(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setAddModal(false)}>
+          <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>New Quest</Text>
+            <TextInput style={styles.input} value={addName} onChangeText={setAddName}
+              placeholder="Quest name…" placeholderTextColor={Colors.textDim} autoFocus />
+            <TextInput style={[styles.input, styles.notesInput]} value={addDesc} onChangeText={setAddDesc}
+              placeholder="Description (optional)…" placeholderTextColor={Colors.textDim}
+              multiline textAlignVertical="top" />
+            <View style={styles.modalBtns}>
+              <Pressable style={styles.cancelBtn} onPress={() => setAddModal(false)}>
+                <Text style={styles.cancelTxt}>Cancel</Text>
+              </Pressable>
+              <Pressable style={[styles.primaryBtn, { flex: 2 }, !addName.trim() && styles.btnDisabled]}
+                onPress={addQuest} disabled={!addName.trim()}>
+                <Text style={styles.primaryBtnTxt}>Add Quest</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+// ── Session Log Section ───────────────────────────────────────────────────────
+
+function SessionLogSection({ log, editable, onUpdate }: {
+  log: SessionLogEntry[];
+  editable: boolean;
+  onUpdate: (log: SessionLogEntry[]) => void;
+}) {
+  const [addModal,  setAddModal]  = useState(false);
+  const [addText,   setAddText]   = useState('');
+  const [collapsed, setCollapsed] = useState(true);   // show only 3 entries initially
+
+  function addEntry() {
+    if (!addText.trim()) return;
+    const entry: SessionLogEntry = { id: genId(), summary: addText.trim(), date: Date.now() };
+    onUpdate([entry, ...log]);   // newest first
+    setAddText(''); setAddModal(false); setCollapsed(false);
+  }
+
+  function deleteEntry(id: string) {
+    onUpdate(log.filter(e => e.id !== id));
+  }
+
+  const visible = collapsed ? log.slice(0, 3) : log;
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>SESSION LOG</Text>
+
+      {log.length === 0 ? (
+        <Text style={styles.emptyNote}>
+          {editable ? 'No sessions logged yet. Add a summary after each session.' : 'No sessions logged yet.'}
+        </Text>
+      ) : (
+        <>
+          {visible.map(entry => (
+            <View key={entry.id} style={styles.logEntry}>
+              <View style={styles.logEntryHeader}>
+                <Text style={styles.logDate}>{formatDate(entry.date)}</Text>
+                {editable && (
+                  <Pressable onPress={() => deleteEntry(entry.id)} hitSlop={8}>
+                    <Text style={styles.logDeleteTxt}>✕</Text>
+                  </Pressable>
+                )}
+              </View>
+              <Text style={styles.logSummary}>{entry.summary}</Text>
+            </View>
+          ))}
+          {log.length > 3 && (
+            <Pressable onPress={() => setCollapsed(v => !v)}>
+              <Text style={styles.showMoreTxt}>
+                {collapsed ? `Show ${log.length - 3} more…` : 'Show less'}
+              </Text>
+            </Pressable>
+          )}
+        </>
+      )}
+
+      {editable && (
+        <Pressable style={styles.addBtn} onPress={() => setAddModal(true)}>
+          <Text style={styles.addBtnTxt}>+ Add Session Note</Text>
+        </Pressable>
+      )}
+
+      <Modal visible={addModal} transparent animationType="slide" onRequestClose={() => setAddModal(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setAddModal(false)}>
+          <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Session Note</Text>
+            <Text style={styles.modalSub}>{formatDate(Date.now())}</Text>
+            <TextInput style={[styles.input, styles.notesInput]} value={addText}
+              onChangeText={setAddText}
+              placeholder="What happened this session? Key events, decisions, loot…"
+              placeholderTextColor={Colors.textDim} multiline textAlignVertical="top" autoFocus />
+            <View style={styles.modalBtns}>
+              <Pressable style={styles.cancelBtn} onPress={() => setAddModal(false)}>
+                <Text style={styles.cancelTxt}>Cancel</Text>
+              </Pressable>
+              <Pressable style={[styles.primaryBtn, { flex: 2 }, !addText.trim() && styles.btnDisabled]}
+                onPress={addEntry} disabled={!addText.trim()}>
+                <Text style={styles.primaryBtnTxt}>Save Entry</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+// ── Party Section ─────────────────────────────────────────────────────────────
+
+function PartySection({ characterIds }: { characterIds: string[] }) {
+  const characters = useCharacterStore(s => s.characters);
+  const partyChars = characters.filter(c => characterIds.includes(c.id));
+  if (partyChars.length === 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>PARTY</Text>
+      {partyChars.map(c => {
+        const hpPct   = c.resources.hp.maximum > 0
+          ? c.resources.hp.current / c.resources.hp.maximum : 0;
+        const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
+        return (
+          <View key={c.id} style={styles.partyCard}>
+            <View style={styles.partyInfo}>
+              <Text style={styles.partyName}>{c.identity.name || 'Unnamed'}</Text>
+              <Text style={styles.partySub}>
+                Lv {c.identity.level} · {c.identity.classId || '—'}
+              </Text>
+            </View>
+            <View style={styles.partyRight}>
+              <Text style={[styles.hpTxt, { color: hpColor }]}>
+                {c.resources.hp.current}/{c.resources.hp.maximum} HP
+              </Text>
+              <View style={styles.hpBarOuter}>
+                <View style={[styles.hpBarFill, {
+                  width: `${Math.round(Math.max(0, Math.min(1, hpPct)) * 100)}%` as any,
+                  backgroundColor: hpColor,
+                }]} />
+              </View>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ── DM Active View ────────────────────────────────────────────────────────────
 
 function DmActiveView() {
   const router         = useRouter();
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
   const leaveCampaign  = useCampaignStore(s => s.leaveCampaign);
+  const updateCampaign = useCampaignStore(s => s.updateCampaign);
   const syncStatus     = useSyncStore(s => s.status);
-  const characters     = useCharacterStore(s => s.characters);
 
   if (!activeCampaign) return null;
 
   const roomCode   = syncStatus.roomCode ?? activeCampaign.joinCode;
-  const partyChars = characters.filter(c => activeCampaign.characterIds.includes(c.id));
+  const quests     = activeCampaign.quests ?? [];
+  const log        = activeCampaign.sessionLog ?? [];
+  const campaignId = activeCampaign.id;   // captured after null guard for closure safety
+
+  function save(patch: Partial<typeof activeCampaign>) {
+    updateCampaign(campaignId, c => ({ ...c, ...patch }));
+  }
 
   function confirmEnd() {
     Alert.alert('End Campaign', 'This will end the campaign for all players. Continue?', [
@@ -299,89 +505,67 @@ function DmActiveView() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-      {/* Campaign header */}
+      {/* Connection block */}
       <View style={styles.campaignCard}>
         <View style={styles.campaignHeaderRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.campaignName}>{activeCampaign.name}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+            <View style={styles.syncRow}>
               <SyncStatusDot />
               <Text style={styles.campaignMeta}>
                 {syncStatus.connected
                   ? `${syncStatus.clientCount} player${syncStatus.clientCount !== 1 ? 's' : ''} connected`
-                  : 'Starting server…'
-                }
+                  : 'Starting server…'}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Room code */}
         <View style={styles.codeSection}>
           <Text style={styles.codeLabel}>ROOM CODE</Text>
           <Text style={styles.codeValue}>{roomCode}</Text>
           <Text style={styles.codeHint}>Players enter this code or scan the QR below</Text>
         </View>
 
-        {/* QR code — only rendered on native; RN web doesn't have SVG */}
         {Platform.OS !== 'web' && roomCode ? (
           <View style={styles.qrContainer}>
-            <QRCode
-              value={roomCode}
-              size={180}
-              color={Colors.textPrimary}
-              backgroundColor={Colors.surface}
-            />
+            <QRCode value={roomCode} size={160}
+              color={Colors.textPrimary} backgroundColor={Colors.surface} />
           </View>
         ) : null}
 
-        <Pressable
-          style={styles.dmBtn}
-          onPress={() => router.push('/dm/dashboard' as any)}
-        >
+        <Pressable style={styles.dmBtn} onPress={() => router.push('/dm/dashboard' as any)}>
           <Text style={styles.dmBtnTxt}>🎲 Open DM Dashboard</Text>
         </Pressable>
       </View>
 
-      {/* Party */}
-      {partyChars.length > 0 && (
-        <>
-          <Text style={styles.sectionLabel}>PARTY</Text>
-          {partyChars.map(c => {
-            const hpPct   = c.resources.hp.maximum > 0
-              ? c.resources.hp.current / c.resources.hp.maximum : 0;
-            const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
-            return (
-              <View key={c.id} style={styles.partyCard}>
-                <View>
-                  <Text style={styles.partyName}>{c.identity.name}</Text>
-                  <Text style={styles.partySub}>
-                    Lv {c.identity.level} · {c.identity.classId}
-                  </Text>
-                </View>
-                <View style={styles.partyRight}>
-                  <View style={styles.hpBarOuter}>
-                    <View style={[styles.hpBarFill, {
-                      width: `${Math.round(Math.max(0, Math.min(1, hpPct)) * 100)}%` as any,
-                      backgroundColor: hpColor,
-                    }]} />
-                  </View>
-                  <Text style={styles.hpTxt}>{c.resources.hp.current}/{c.resources.hp.maximum}</Text>
-                </View>
-              </View>
-            );
-          })}
-        </>
-      )}
+      {/* Overview sections */}
+      <NotesSection
+        notes={activeCampaign.notes}
+        editable
+        onChange={notes => save({ notes })}
+      />
+      <QuestsSection
+        quests={quests}
+        editable
+        onUpdate={q => save({ quests: q })}
+      />
+      <SessionLogSection
+        log={log}
+        editable
+        onUpdate={l => save({ sessionLog: l })}
+      />
+      <PartySection characterIds={activeCampaign.characterIds} />
 
       <Pressable style={styles.leaveBtn} onPress={confirmEnd}>
         <Text style={styles.leaveBtnTxt}>🗑 End Campaign</Text>
       </Pressable>
+
     </ScrollView>
   );
 }
 
-// ── Active Campaign View (Player) ─────────────────────────────────────────────
+// ── Player Active View ────────────────────────────────────────────────────────
 
 function PlayerActiveView() {
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
@@ -389,6 +573,9 @@ function PlayerActiveView() {
   const syncStatus     = useSyncStore(s => s.status);
 
   if (!activeCampaign) return null;
+
+  const quests = activeCampaign.quests ?? [];
+  const log    = activeCampaign.sessionLog ?? [];
 
   function confirmLeave() {
     Alert.alert('Leave Campaign', 'You will leave this campaign. Continue?', [
@@ -403,9 +590,11 @@ function PlayerActiveView() {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      {/* Status block */}
       <View style={styles.campaignCard}>
         <Text style={styles.campaignName}>{activeCampaign.name}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+        <View style={styles.syncRow}>
           <SyncStatusDot />
           <Text style={styles.campaignMeta}>
             {syncStatus.connected ? 'Connected to DM' : 'Reconnecting…'}
@@ -413,9 +602,32 @@ function PlayerActiveView() {
         </View>
       </View>
 
+      {/* Overview sections — read-only */}
+      <NotesSection
+        notes={activeCampaign.notes}
+        editable={false}
+        onChange={() => {}}
+      />
+      {quests.length > 0 && (
+        <QuestsSection
+          quests={quests}
+          editable={false}
+          onUpdate={() => {}}
+        />
+      )}
+      {log.length > 0 && (
+        <SessionLogSection
+          log={log}
+          editable={false}
+          onUpdate={() => {}}
+        />
+      )}
+      <PartySection characterIds={activeCampaign.characterIds} />
+
       <Pressable style={styles.leaveBtn} onPress={confirmLeave}>
         <Text style={styles.leaveBtnTxt}>🚪 Leave Campaign</Text>
       </Pressable>
+
     </ScrollView>
   );
 }
@@ -425,26 +637,19 @@ function PlayerActiveView() {
 function NoCampaignView({
   nickname, onNicknameChange, onCreate, onJoin,
 }: {
-  nickname:         string;
-  onNicknameChange: (n: string) => void;
-  onCreate:         () => void;
-  onJoin:           () => void;
+  nickname: string; onNicknameChange: (n: string) => void;
+  onCreate: () => void; onJoin: () => void;
 }) {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.contentCenter}>
       <Text style={styles.emptyIcon}>🗺️</Text>
       <Text style={styles.emptyHeading}>No Active Campaign</Text>
 
-      {/* Nickname input */}
       <View style={[styles.nicknameRow, { alignSelf: 'stretch' }]}>
         <Text style={styles.nickLabel}>YOUR NAME</Text>
-        <TextInput
-          style={styles.nickInput}
-          value={nickname}
+        <TextInput style={styles.nickInput} value={nickname}
           onChangeText={onNicknameChange}
-          placeholder="Enter your name…"
-          placeholderTextColor={Colors.textDim}
-        />
+          placeholder="Enter your name…" placeholderTextColor={Colors.textDim} />
       </View>
 
       <View style={styles.actionGroup}>
@@ -483,7 +688,6 @@ export default function CampaignsScreen() {
   const [joinOpen,   setJoinOpen]   = useState(false);
   const [nickname,   setLocalNick]  = useState(session?.nickname ?? '');
 
-  // Open join modal when navigated here with action=join (from home screen quick action)
   const actionHandled = useRef(false);
   useEffect(() => {
     if (action === 'join' && !actionHandled.current) {
@@ -492,40 +696,33 @@ export default function CampaignsScreen() {
     }
   }, [action]);
 
-  useEffect(() => { loadCampaigns(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadCampaigns(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (session?.nickname !== undefined) setLocalNick(session.nickname);
   }, [session?.nickname]);
 
   const handleNicknameChange = useCallback((n: string) => {
     setLocalNick(n);
-    setNickname(n);   // persist to SecureStore via sessionStore
+    setNickname(n);
   }, [setNickname]);
-
-  if (activeCampaign) {
-    return (
-      <View style={styles.screen}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Campaigns</Text>
-        </View>
-        {isDm ? <DmActiveView /> : <PlayerActiveView />}
-        <CreateModal visible={createOpen} onClose={() => setCreateOpen(false)} />
-        <JoinModal   visible={joinOpen}   onClose={() => setJoinOpen(false)} />
-      </View>
-    );
-  }
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>Campaigns</Text>
       </View>
-      <NoCampaignView
-        nickname={nickname}
-        onNicknameChange={handleNicknameChange}
-        onCreate={() => setCreateOpen(true)}
-        onJoin={() => setJoinOpen(true)}
-      />
+
+      {activeCampaign ? (
+        isDm ? <DmActiveView /> : <PlayerActiveView />
+      ) : (
+        <NoCampaignView
+          nickname={nickname}
+          onNicknameChange={handleNicknameChange}
+          onCreate={() => setCreateOpen(true)}
+          onJoin={() => setJoinOpen(true)}
+        />
+      )}
+
       <CreateModal visible={createOpen} onClose={() => setCreateOpen(false)} />
       <JoinModal   visible={joinOpen}   onClose={() => setJoinOpen(false)} />
     </View>
@@ -537,11 +734,9 @@ export default function CampaignsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   header: {
-    paddingTop:        Spacing.xl + 8,
-    paddingBottom:     Spacing.md,
+    paddingTop: Spacing.xl + 8, paddingBottom: Spacing.md,
     paddingHorizontal: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
 
@@ -552,11 +747,73 @@ const styles = StyleSheet.create({
     padding: Spacing.xl, gap: Spacing.md,
   },
 
+  // Section
+  section: {
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.md, gap: Spacing.sm,
+  },
   sectionLabel: {
     fontSize: FontSize.xs, color: Colors.textSecondary,
     letterSpacing: 2, fontWeight: FontWeight.bold,
   },
+  emptyNote: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
 
+  // Notes
+  notesInput:   { minHeight: 90 },
+  notesReadOnly:{ fontSize: FontSize.md, color: Colors.textPrimary, lineHeight: 22 },
+
+  // Quests
+  questRow: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    gap: Spacing.sm, paddingVertical: Spacing.xs,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  questChip: {
+    borderRadius: Radius.full, borderWidth: 1,
+    paddingHorizontal: Spacing.sm, paddingVertical: 2, marginTop: 2,
+  },
+  questChipTxt:  { fontSize: FontSize.xs, fontWeight: FontWeight.bold },
+  questBody:     { flex: 1 },
+  questName:     { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  questDesc:     { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2, lineHeight: 16 },
+  questActions:  { flexDirection: 'row', gap: Spacing.xs, marginTop: 2 },
+  questActionBtn:{ padding: 4 },
+  questActionTxt:{ fontSize: FontSize.md, color: Colors.textDim, fontWeight: FontWeight.bold },
+
+  // Session log
+  logEntry: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
+    padding: Spacing.sm, gap: Spacing.xs,
+  },
+  logEntryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  logDate:       { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  logDeleteTxt:  { fontSize: FontSize.sm, color: Colors.textDim },
+  logSummary:    { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 20 },
+  showMoreTxt:   { fontSize: FontSize.xs, color: Colors.gold, marginTop: Spacing.xs },
+
+  // Add buttons (shared)
+  addBtn: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold + '66',
+    padding: Spacing.sm, alignItems: 'center',
+  },
+  addBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+
+  // Party
+  partyCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  partyInfo:  { flex: 1 },
+  partyName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  partySub:   { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+  partyRight: { alignItems: 'flex-end', gap: 4 },
+  hpTxt:      { fontSize: FontSize.xs, fontWeight: FontWeight.bold },
+  hpBarOuter: { width: 80, height: 4, backgroundColor: Colors.border, borderRadius: Radius.full, overflow: 'hidden' },
+  hpBarFill:  { height: '100%', borderRadius: Radius.full },
+
+  // Campaign header card (DM view)
   campaignCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,
     borderWidth: 1, borderColor: Colors.gold + '44',
@@ -564,51 +821,33 @@ const styles = StyleSheet.create({
   },
   campaignHeaderRow: { flexDirection: 'row', alignItems: 'flex-start' },
   campaignName:      { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  syncRow:           { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 },
   campaignMeta:      { fontSize: FontSize.sm, color: Colors.textSecondary },
+  codeSection:       { alignItems: 'center', gap: Spacing.xs },
+  codeLabel:         { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 2 },
+  codeValue:         { fontSize: 36, fontWeight: FontWeight.bold, color: Colors.gold, letterSpacing: 8 },
+  codeHint:          { fontSize: FontSize.xs, color: Colors.textDim, textAlign: 'center' },
+  qrContainer:       { alignItems: 'center', padding: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg },
+  dmBtn:             { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  dmBtnTxt:          { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 
-  codeSection:  { alignItems: 'center', gap: Spacing.xs },
-  codeLabel:    { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 2 },
-  codeValue:    { fontSize: 36, fontWeight: FontWeight.bold, color: Colors.gold, letterSpacing: 8 },
-  codeHint:     { fontSize: FontSize.xs, color: Colors.textDim, textAlign: 'center' },
-
-  qrContainer: { alignItems: 'center', padding: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg },
-
-  dmBtn:    { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
-  dmBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
-
-  partyCard: {
-    backgroundColor: Colors.surface, borderRadius: Radius.lg,
-    borderWidth: 1, borderColor: Colors.border,
-    padding: Spacing.md, flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'space-between',
-  },
-  partyName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  partySub:   { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
-  partyRight: { alignItems: 'flex-end', gap: 4 },
-  hpBarOuter: { width: 80, height: 4, backgroundColor: Colors.border, borderRadius: Radius.full, overflow: 'hidden' },
-  hpBarFill:  { height: '100%', borderRadius: Radius.full },
-  hpTxt:      { fontSize: FontSize.xs, color: Colors.textSecondary },
-
+  // Leave/end button
   leaveBtn: {
-    marginTop: Spacing.sm, borderRadius: Radius.md,
-    padding: Spacing.md, alignItems: 'center',
-    borderWidth: 1, borderColor: Colors.red + '66',
-    backgroundColor: Colors.red + '11',
+    borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center',
+    borderWidth: 1, borderColor: Colors.red + '66', backgroundColor: Colors.red + '11',
   },
   leaveBtnTxt: { color: Colors.red, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 
-  // No-campaign view
+  // No campaign view
   emptyIcon:    { fontSize: 64 },
   emptyHeading: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
-
-  nicknameRow: { gap: 6 },
-  nickLabel:   { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2, fontWeight: FontWeight.bold },
+  nicknameRow:  { gap: 6 },
+  nickLabel:    { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2, fontWeight: FontWeight.bold },
   nickInput: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
     padding: Spacing.sm, fontSize: FontSize.md, color: Colors.textPrimary,
   },
-
   actionGroup: { gap: Spacing.sm, alignSelf: 'stretch' },
   howItWorks: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,
@@ -623,10 +862,11 @@ const styles = StyleSheet.create({
   modalSheet: {
     backgroundColor: Colors.surfaceHigh,
     borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,
-    padding: Spacing.lg, gap: Spacing.md,
+    padding: Spacing.lg, gap: Spacing.md, paddingBottom: Spacing.xxl,
   },
-  modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
-  modalSub:   { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
+  modalTitle:    { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
+  modalSub:      { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
+  modalBtns:     { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' },
   input: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
@@ -637,6 +877,6 @@ const styles = StyleSheet.create({
   secondaryBtn:  { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   btnDisabled:   { opacity: 0.4 },
   primaryBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
-  cancelBtn:     { alignItems: 'center', padding: Spacing.sm },
+  cancelBtn:     { alignItems: 'center', padding: Spacing.sm, flex: 1 },
   cancelTxt:     { color: Colors.textSecondary, fontSize: FontSize.md },
 });

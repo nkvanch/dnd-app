@@ -706,6 +706,19 @@ export type DeviceSession = {
   campaignId: string | null;
 };
 
+export type SessionLogEntry = {
+  id:        string;
+  summary:   string;
+  date:      number;   // timestamp
+};
+
+export type Quest = {
+  id:          string;
+  name:        string;
+  description: string;
+  status:      'active' | 'completed' | 'failed';
+};
+
 /**
  * A campaign is owned by one DM device.
  * Players join via a 6-digit room code (+ QR code) that resolves to the DM's local IP.
@@ -721,6 +734,10 @@ export type Campaign = {
   characterIds: string[];
   notes:        string;
   createdAt:    number;
+  /** DM-authored session summaries, newest first. */
+  sessionLog?:  SessionLogEntry[];
+  /** Quest tracker — DM manages status. */
+  quests?:      Quest[];
 };
 
 /** A single event recorded in the combat log during a session. */

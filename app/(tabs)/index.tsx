@@ -7,6 +7,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useCampaignStore }  from '../../src/store/campaignStore';
+import { useSyncStore }      from '../../src/store/syncStore';
 import { rollExpression } from '../../src/engine/dice';
 import { DiceRoll, Entity } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -94,6 +96,97 @@ function DiceRollerModal({ visible, onClose }: { visible: boolean; onClose: () =
   );
 }
 
+// ── Active Campaign Card ─────────────────────────────────────────────────────
+// Three states driven by campaign + sync status:
+//   between-sessions: name, quest count, last session note, party size
+//   live:             name + sync dot, player count, DM shortcut
+
+function ActiveCampaignCard({ onOpen }: { onOpen: () => void }) {
+  const router         = useRouter();
+  const activeCampaign = useCampaignStore(s => s.activeCampaign);
+  const isDm           = useCampaignStore(s => s.isDm);
+  const syncStatus     = useSyncStore(s => s.status);
+  const characters     = useCharacterStore(s => s.characters);
+
+  if (!activeCampaign) return null;
+
+  const isLive        = syncStatus.connected;
+  const activeQuests  = (activeCampaign.quests ?? []).filter(q => q.status === 'active');
+  const lastEntry     = activeCampaign.sessionLog?.[0] ?? null;
+  const partyCount    = activeCampaign.characterIds.length;
+
+  if (isLive) {
+    // ── Live state ───────────────────────────────────────────────────────────
+    return (
+      <Pressable style={[styles.campaignCard, styles.campaignCardLive]} onPress={onOpen}>
+        <View style={styles.campaignCardTop}>
+          <View style={{ flex: 1 }}>
+            <View style={styles.campaignLiveBadge}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveTxt}>LIVE</Text>
+            </View>
+            <Text style={styles.campaignCardName}>{activeCampaign.name}</Text>
+            <Text style={styles.campaignCardMeta}>
+              {isDm
+                ? `${syncStatus.clientCount} player${syncStatus.clientCount !== 1 ? 's' : ''} connected`
+                : 'Connected to DM'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.campaignCardActions}>
+          {isDm && (
+            <Pressable
+              style={styles.campaignActionBtn}
+              onPress={() => router.push('/dm/dashboard' as any)}
+            >
+              <Text style={styles.campaignActionTxt}>🎲 DM Dashboard</Text>
+            </Pressable>
+          )}
+          <Pressable style={[styles.campaignActionBtn, styles.campaignActionBtnSecondary]} onPress={onOpen}>
+            <Text style={styles.campaignActionTxtSecondary}>Open Campaign →</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    );
+  }
+
+  // ── Between-sessions state ─────────────────────────────────────────────────
+  return (
+    <Pressable style={styles.campaignCard} onPress={onOpen}>
+      <Text style={styles.campaignCardName}>{activeCampaign.name}</Text>
+
+      <View style={styles.campaignMetaRow}>
+        {activeQuests.length > 0 && (
+          <View style={styles.campaignPill}>
+            <Text style={styles.campaignPillTxt}>
+              {activeQuests.length} quest{activeQuests.length !== 1 ? 's' : ''} active
+            </Text>
+          </View>
+        )}
+        {partyCount > 0 && (
+          <View style={styles.campaignPill}>
+            <Text style={styles.campaignPillTxt}>
+              {partyCount} character{partyCount !== 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {lastEntry && (
+        <View style={styles.lastSessionBlock}>
+          <Text style={styles.lastSessionLabel}>Last session</Text>
+          <Text style={styles.lastSessionText} numberOfLines={2}>
+            {lastEntry.summary}
+          </Text>
+        </View>
+      )}
+
+      <Text style={styles.campaignOpenHint}>Tap to open campaign →</Text>
+    </Pressable>
+  );
+}
+
 // ── Last Character Card ───────────────────────────────────────────────────────
 
 function LastCharacterCard({ character, onPress }: { character: Entity; onPress: () => void }) {
@@ -146,7 +239,11 @@ function LastCharacterCard({ character, onPress }: { character: Entity; onPress:
 export default function HomeScreen() {
   const router     = useRouter();
   const characters = useCharacterStore(s => s.characters);
+  const activeCampaign = useCampaignStore(s => s.activeCampaign);
+  const loadCampaigns  = useCampaignStore(s => s.loadCampaigns);
   const [diceOpen, setDiceOpen] = useState(false);
+
+  useEffect(() => { loadCampaigns(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Last modified = last in array (store appends)
   const lastChar = characters.length > 0 ? characters[characters.length - 1] : null;
@@ -179,11 +276,17 @@ export default function HomeScreen() {
 
         {/* Active Campaign */}
         <Text style={styles.sectionLabel}>Active Campaign</Text>
-        <View style={styles.stubCard}>
-          <Text style={styles.stubIcon}>🗺️</Text>
-          <Text style={styles.stubText}>No active campaign</Text>
-          <Text style={styles.stubSub}>Join a campaign from the Campaigns tab</Text>
-        </View>
+        {activeCampaign ? (
+          <ActiveCampaignCard
+            onOpen={() => router.push('/(tabs)/campaigns' as any)}
+          />
+        ) : (
+          <View style={styles.stubCard}>
+            <Text style={styles.stubIcon}>🗺️</Text>
+            <Text style={styles.stubText}>No active campaign</Text>
+            <Text style={styles.stubSub}>Join a campaign from the Campaigns tab</Text>
+          </View>
+        )}
 
         {/* Quick Actions */}
         <Text style={styles.sectionLabel}>Quick Actions</Text>
@@ -193,13 +296,23 @@ export default function HomeScreen() {
             <Text style={styles.actionBtnText}>Create Character</Text>
           </Pressable>
 
-          <Pressable
-            style={[styles.actionBtn, styles.actionBtnSecondary]}
-            onPress={() => router.push({ pathname: '/(tabs)/campaigns', params: { action: 'join' } } as any)}
-          >
-            <Text style={styles.actionBtnIcon}>🤝</Text>
-            <Text style={styles.actionBtnText}>Join Campaign</Text>
-          </Pressable>
+          {activeCampaign ? (
+            <Pressable
+              style={[styles.actionBtn, styles.actionBtnSecondary]}
+              onPress={() => router.push('/(tabs)/campaigns' as any)}
+            >
+              <Text style={styles.actionBtnIcon}>🗺️</Text>
+              <Text style={styles.actionBtnText}>Open Campaign</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[styles.actionBtn, styles.actionBtnSecondary]}
+              onPress={() => router.push({ pathname: '/(tabs)/campaigns', params: { action: 'join' } } as any)}
+            >
+              <Text style={styles.actionBtnIcon}>🤝</Text>
+              <Text style={styles.actionBtnText}>Join Campaign</Text>
+            </Pressable>
+          )}
 
           <Pressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => setDiceOpen(true)}>
             <Text style={styles.actionBtnIcon}>🎲</Text>
@@ -293,6 +406,70 @@ const styles = StyleSheet.create({
   stubIcon: { fontSize: 32 },
   stubText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textSecondary },
   stubSub:  { fontSize: FontSize.sm, color: Colors.textDim },
+
+  // Active campaign card
+  campaignCard: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.lg,
+    borderWidth:     1,
+    borderColor:     Colors.gold + '44',
+    padding:         Spacing.md,
+    gap:             Spacing.sm,
+  },
+  campaignCardLive: {
+    borderColor: Colors.green + '66',
+    backgroundColor: Colors.green + '08',
+  },
+  campaignCardTop:  { flexDirection: 'row', alignItems: 'flex-start' },
+  campaignCardName: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  campaignCardMeta: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+  campaignOpenHint: { fontSize: FontSize.xs, color: Colors.textDim, textAlign: 'right' },
+
+  // Live badge
+  campaignLiveBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  liveDot: {
+    width: 8, height: 8, borderRadius: Radius.full,
+    backgroundColor: Colors.green,
+  },
+  liveTxt: { fontSize: FontSize.xs, color: Colors.green, fontWeight: FontWeight.bold, letterSpacing: 1 },
+
+  // Between-sessions meta pills
+  campaignMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  campaignPill: {
+    backgroundColor: Colors.surfaceHigh,
+    borderRadius:    Radius.full,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:   2,
+  },
+  campaignPillTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+
+  // Last session snippet
+  lastSessionBlock: {
+    backgroundColor: Colors.surfaceHigh,
+    borderRadius:    Radius.md,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.gold + '66',
+    padding:         Spacing.sm,
+    gap:             2,
+  },
+  lastSessionLabel: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold, letterSpacing: 1 },
+  lastSessionText:  { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 18 },
+
+  // Campaign action buttons
+  campaignCardActions: { flexDirection: 'row', gap: Spacing.sm },
+  campaignActionBtn: {
+    flex: 1, backgroundColor: Colors.green,
+    borderRadius: Radius.md, padding: Spacing.sm,
+    alignItems: 'center',
+  },
+  campaignActionBtnSecondary: {
+    backgroundColor: Colors.surfaceHigh,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  campaignActionTxt:          { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  campaignActionTxtSecondary: { color: Colors.textPrimary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   // Quick actions
   quickActions: { gap: Spacing.sm },

@@ -87,7 +87,6 @@ function CreatePanel() {
     { label: '🎓  New Class',        route: '/homebrew/class-builder' },
     { label: '✨  New Spell',        route: '/homebrew/spell-builder' },
     { label: '📖  New Feature',      route: '/homebrew/feature-editor' },
-    { label: '🧙  New Background',   route: '/homebrew/race-builder'  },
   ];
 
   return (

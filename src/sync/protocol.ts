@@ -7,16 +7,26 @@
 // ============================================================================
 import { Entity, SyncEvent } from '../engine/types';
 
+// ── Connected player roster entry ──────────────────────────────────────────────
+
+/** A player currently connected to the DM's session. */
+export type ConnectedPlayer = {
+  deviceId:    string;
+  nickname:    string;
+  characterId: string | null;   // which character they're controlling, if any
+};
+
 // ── Message union type ────────────────────────────────────────────────────────
 
 export type SyncMessage =
   | { type: 'ping' }
   | { type: 'pong' }
-  | { type: 'hello';          deviceId: string; nickname: string }
+  | { type: 'hello';          deviceId: string; nickname: string; characterId: string | null }
   | { type: 'welcome';        campaignId: string; sessionId: string }
   | { type: 'sync_event';     event: SyncEvent }
   | { type: 'request_entity'; entityId: string }
   | { type: 'entity_snapshot'; entity: Entity }
+  | { type: 'claim_character'; characterId: string | null }
   | { type: 'error';          message: string };
 
 // ── Framing helpers ───────────────────────────────────────────────────────────

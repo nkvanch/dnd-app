@@ -23,7 +23,7 @@ const ABILITY_LABELS: Record<Ability, string> = {
 const ARMOR_PROFS = ['light', 'medium', 'heavy', 'shield'] as const;
 const WEAPON_PROFS = ['simple', 'martial'] as const;
 
-const SPELL_ABILITIES: Ability[] = ['int', 'wis', 'cha'];
+const SPELL_ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const SPELL_STYLES = [
   { key: 'full', label: 'Full Caster', sub: 'Wizard/Cleric slots' },
   { key: 'half', label: 'Half Caster', sub: 'Paladin/Ranger slots' },

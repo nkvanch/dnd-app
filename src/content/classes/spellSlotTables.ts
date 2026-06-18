@@ -78,17 +78,36 @@ export const WARLOCK_SLOTS: SpellSlotRow[] = [
 ];
 
 /**
- * Abyss Knight (pact-magic-style, all slots same tier, recharge short or long
- * rest). Per the class's own text — "at 5th level, you have two 2nd-level
- * spell slots" — this is the Warlock table shifted one class-level later:
- * spellcasting doesn't begin until 2nd level, so Abyss Knight level N uses
- * the Warlock level (N-1) row. Level 1 has no slots at all.
+ * Abyss Knight pact magic — exact class table.
+ * Level  | Slots | Slot Level
+ *  2-4   |   2   |    1st
+ *  5-8   |   2   |    2nd
+ *  9-10  |   2   |    3rd
+ * 11-12  |   3   |    3rd
+ * 13-16  |   3   |    4th
+ * 17-20  |   4   |    5th
  */
 export const ABYSS_KNIGHT_SLOTS: SpellSlotRow[] = [
-  { level: 1, slots: [0,0,0,0,0,0,0,0,0] },
-  ...WARLOCK_SLOTS
-    .filter(r => r.level <= 19)
-    .map(r => ({ level: r.level + 1, slots: r.slots })),
+  { level:  1, slots: [0, 0, 0, 0, 0, 0, 0, 0, 0] }, // no spellcasting
+  { level:  2, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0] }, // 2 × 1st
+  { level:  3, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { level:  4, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { level:  5, slots: [0, 2, 0, 0, 0, 0, 0, 0, 0] }, // 2 × 2nd ↑
+  { level:  6, slots: [0, 2, 0, 0, 0, 0, 0, 0, 0] },
+  { level:  7, slots: [0, 2, 0, 0, 0, 0, 0, 0, 0] },
+  { level:  8, slots: [0, 2, 0, 0, 0, 0, 0, 0, 0] },
+  { level:  9, slots: [0, 0, 2, 0, 0, 0, 0, 0, 0] }, // 2 × 3rd ↑
+  { level: 10, slots: [0, 0, 2, 0, 0, 0, 0, 0, 0] },
+  { level: 11, slots: [0, 0, 3, 0, 0, 0, 0, 0, 0] }, // 3 × 3rd ↑
+  { level: 12, slots: [0, 0, 3, 0, 0, 0, 0, 0, 0] },
+  { level: 13, slots: [0, 0, 0, 3, 0, 0, 0, 0, 0] }, // 3 × 4th ↑
+  { level: 14, slots: [0, 0, 0, 3, 0, 0, 0, 0, 0] },
+  { level: 15, slots: [0, 0, 0, 3, 0, 0, 0, 0, 0] },
+  { level: 16, slots: [0, 0, 0, 3, 0, 0, 0, 0, 0] },
+  { level: 17, slots: [0, 0, 0, 0, 4, 0, 0, 0, 0] }, // 4 × 5th ↑
+  { level: 18, slots: [0, 0, 0, 0, 4, 0, 0, 0, 0] },
+  { level: 19, slots: [0, 0, 0, 0, 4, 0, 0, 0, 0] },
+  { level: 20, slots: [0, 0, 0, 0, 4, 0, 0, 0, 0] },
 ];
 
 /** Build a SpellSlots object from a SlotRow for a given level. */

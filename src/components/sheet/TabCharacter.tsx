@@ -674,6 +674,13 @@ export function TabCharacter({
           </View>
         )}
 
+        {/* Stabilized — shown when at 0 HP with 3 death save successes */}
+        {entity.resources.hp.current <= 0 && deathSaves.successes >= 3 && (
+          <View style={styles.stabilizedChip}>
+            <Text style={styles.stabilizedTxt}>♥ STABILIZED</Text>
+          </View>
+        )}
+
         {conditions.length === 0 && exhaustion === 0 ? (
           <Text style={styles.emptyNote}>No active conditions</Text>
         ) : (
@@ -969,6 +976,16 @@ const styles = StyleSheet.create({
   },
   deathMsg:   { color: Colors.red, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   stableMsg:  { color: Colors.green, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  stabilizedChip: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.green + '22',
+    borderRadius: Radius.full,
+    borderWidth: 1.5, borderColor: Colors.green,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.xs,
+  },
+  stabilizedTxt: { color: Colors.green, fontWeight: FontWeight.bold, fontSize: FontSize.sm, letterSpacing: 1 },
   pipRows:    { gap: Spacing.sm },
   pipRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   pipLabel:   { fontSize: FontSize.sm, color: Colors.textSecondary, width: 80 },

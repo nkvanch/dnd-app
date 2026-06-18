@@ -155,7 +155,7 @@ function JoinModal({ visible, onClose }: { visible: boolean; onClose: () => void
     if (trimmed.length !== 6 || !session) return;
     setLoading(true); setScannerOpen(false);
     try {
-      await syncManager.startAsClient(trimmed, session.deviceId, session.nickname || 'Player');
+      await syncManager.startAsClient(trimmed, session.deviceId, session.nickname || 'Player', null);
       await joinCampaign(trimmed);
       setCode(''); onClose();
     } catch (e) { Alert.alert('Connection failed', String(e)); }
@@ -570,17 +570,33 @@ function DmActiveView() {
 function PlayerActiveView() {
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
   const leaveCampaign  = useCampaignStore(s => s.leaveCampaign);
+  const assignCharacter = useCampaignStore(s => s.assignCharacterToCampaign);
   const syncStatus     = useSyncStore(s => s.status);
+  const characters     = useCharacterStore(s => s.characters);
+  const [claimOpen, setClaimOpen] = useState(false);
 
   if (!activeCampaign) return null;
 
   const quests = activeCampaign.quests ?? [];
   const log    = activeCampaign.sessionLog ?? [];
+  const myChar = characters.find(c => activeCampaign.characterIds.includes(c.id)) ?? null;
+  const campaignId = activeCampaign.id;
+
+  async function claim(characterId: string) {
+    await assignCharacter(characterId, campaignId);
+    // Push the entity up to the DM so it appears in their roster + dashboard,
+    // then announce which character we're controlling.
+    const ent = characters.find(c => c.id === characterId);
+    if (ent) syncManager.pushEntity(ent);
+    syncManager.claimCharacter(characterId);
+    setClaimOpen(false);
+  }
 
   function confirmLeave() {
     Alert.alert('Leave Campaign', 'You will leave this campaign. Continue?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Leave', style: 'destructive', onPress: async () => {
+          syncManager.claimCharacter(null);
           syncManager.stopAll();
           await leaveCampaign();
         }
@@ -600,6 +616,26 @@ function PlayerActiveView() {
             {syncStatus.connected ? 'Connected to DM' : 'Reconnecting…'}
           </Text>
         </View>
+      </View>
+
+      {/* Your character */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>YOUR CHARACTER</Text>
+        {myChar ? (
+          <View style={styles.partyCard}>
+            <View style={styles.partyInfo}>
+              <Text style={styles.partyName}>{myChar.identity.name || 'Unnamed'}</Text>
+              <Text style={styles.partySub}>Lv {myChar.identity.level} · {myChar.identity.classId || '—'}</Text>
+            </View>
+            <Pressable onPress={() => setClaimOpen(true)}>
+              <Text style={styles.changeLink}>Change</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable style={styles.addBtn} onPress={() => setClaimOpen(true)}>
+            <Text style={styles.addBtnTxt}>+ Choose your character</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Overview sections — read-only */}
@@ -627,6 +663,31 @@ function PlayerActiveView() {
       <Pressable style={styles.leaveBtn} onPress={confirmLeave}>
         <Text style={styles.leaveBtnTxt}>🚪 Leave Campaign</Text>
       </Pressable>
+
+      {/* Character picker modal */}
+      <Modal visible={claimOpen} transparent animationType="slide" onRequestClose={() => setClaimOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setClaimOpen(false)}>
+          <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Choose Your Character</Text>
+            {characters.length === 0 ? (
+              <Text style={styles.emptyNote}>You have no characters yet. Create one first.</Text>
+            ) : (
+              characters.map(c => (
+                <Pressable key={c.id} style={styles.pickRow} onPress={() => claim(c.id)}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.partyName}>{c.identity.name || 'Unnamed'}</Text>
+                    <Text style={styles.partySub}>Lv {c.identity.level} · {c.identity.classId || '—'}</Text>
+                  </View>
+                  {myChar?.id === c.id && <Text style={styles.changeLink}>✓</Text>}
+                </Pressable>
+              ))
+            )}
+            <Pressable style={styles.cancelBtn} onPress={() => setClaimOpen(false)}>
+              <Text style={styles.cancelTxt}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
     </ScrollView>
   );
@@ -809,6 +870,12 @@ const styles = StyleSheet.create({
   partyName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   partySub:   { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   partyRight: { alignItems: 'flex-end', gap: 4 },
+  changeLink: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  pickRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
   hpTxt:      { fontSize: FontSize.xs, fontWeight: FontWeight.bold },
   hpBarOuter: { width: 80, height: 4, backgroundColor: Colors.border, borderRadius: Radius.full, overflow: 'hidden' },
   hpBarFill:  { height: '100%', borderRadius: Radius.full },

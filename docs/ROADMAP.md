@@ -30,6 +30,85 @@ ARCHITECTURE.md for the technical design, IMPLEMENTATION.md for schemas.
 ### Recent session log
 *(most recent first — one entry per session, updated whenever a change lands)*
 
+- **2026-06-18 (3):** Three fixes + inline homebrew creation in the wizard.
+  **Fix 1 — Abyss Knight/Skeleton not showing:** The seed flag
+  `builtin_homebrew_seeded_v1` was set in a prior session before
+  `builtinHomebrew.ts` existed on the real machine, causing `seedBuiltinHomebrew`
+  to return early without seeding. Bumped to `builtin_homebrew_seeded_v2` to
+  force a fresh seed on next launch. **Fix 2 — spellcasting abilities:**
+  `class-builder.tsx` `SPELL_ABILITIES` expanded from `['int','wis','cha']` to
+  all six abilities, supporting STR/DEX/CON-based casters (e.g. some homebrew
+  variants). **Fix 3 — dead code cleanup:** Removed `abyss_knight` from
+  `CASTER_TYPE` and `CLASS_DESCRIPTIONS` in `class.tsx` (now homebrew-only);
+  removed the broken "New Background" button from the homebrew CreatePanel
+  (it incorrectly routed to `race-builder`). **Inline homebrew creation:**
+  Class and race pickers gained a persistent `+ Create new` chip alongside the
+  `HOMEBREW [TYPE]` section header — always visible, not only when the list is
+  empty. Spells screen gained a `+ Create new homebrew spell` link near the
+  search bar. Background picker got the same header layout; its button routes to
+  the Homebrew tab (no dedicated background builder exists yet — noted as a gap).
+  The builders are already wired to call `router.back()` after saving and update
+  `homebrewStore` in-memory, so returning to the picker immediately shows the
+  new item. Not yet verified with `npx tsc --noEmit`.
+
+- **2026-06-18 (2):** Built-in homebrew migration — Abyss Knight + Skeleton.
+  of official content into the seeded homebrew store so they exercise the real
+  homebrew pipeline (the stated goal: find bugs in active use). **Type:** `CharClass`
+  gained `rawProgression?: ClassProgression` — an escape hatch for hand-authored
+  classes too complex for the simplified builder fields (Abyss Knight has a baked
+  Oozing Knight subclass, level-2 known-spell grants, a custom slot table, and
+  per-level effect-bearing features). Both `buildProgressionFromClass` and
+  `getProgressionForClass` return `cls.rawProgression` verbatim when present.
+  **Seed:** `src/content/builtinHomebrew.ts` defines `abyssKnightClass` (carrying
+  `rawProgression: abyssKnightProgression` + `savingThrows: ['str','con']`) and
+  re-exports `raceSkeleton`; `BUILTIN_HOMEBREW_SEED` is the [type,item] list.
+  `src/db/appMetaRepo.ts` (`getMeta`/`setMeta`) + the `app_meta` table back a
+  one-time `builtin_homebrew_seeded_v1` flag. `homebrewStore.seedBuiltinHomebrew()`
+  loops the seed list calling `saveHomebrewContent`, guarded by the flag, and
+  `_layout.tsx` calls it BEFORE `loadHomebrew` so the rows load on the same launch.
+  **Removal:** `abyss_knight` is gone from `ALL_CLASS_PROGRESSIONS` + `ALL_CHAR_CLASSES`
+  and the import in `classes/index.ts`; `raceSkeleton` is gone from `ALL_RACES`. Both
+  underlying `export const`s (the progression file, the race definition) REMAIN so
+  `builtinHomebrew.ts` can import them — they're just no longer registered as official.
+  Net effect: both appear ONLY under the Homebrew sections, are deletable (the flag
+  keeps a deleted entry gone), and round-trip faithfully through select → play →
+  delete. **Storage reality confirmed:** `contentCacheRepo` stores `JSON.stringify`
+  of any shape, so `rawProgression` persists through SQLite fine. **The edit-path
+  finding (the real value of this test):** the homebrew builders (`class-builder.tsx`,
+  `race-builder.tsx`) are CREATE-ONLY — there is no edit-load path, and the Library
+  panel only offers delete. So the flatten-on-edit risk is currently UNREACHABLE.
+  When an edit feature is built later, it MUST add a flatten warning: editing
+  Abyss Knight in the simplified class-builder would drop `rawProgression` (losing
+  the subclass, known spells, custom slots), and editing Skeleton in the race-builder
+  would drop its resistances, poison immunity, and Giant subrace (the builder only
+  authors ASI + speed + darkvision + one free-text trait). The `Race` type needs no
+  extension (it already holds everything); only the builder UI is the limiter.
+  Not yet verified with `npx tsc --noEmit`. **Next:** inline homebrew creation in
+  the wizard (a "+ Create new" affordance in each picker that opens the builder and
+  returns with the new item selectable).
+
+- **2026-06-18:** Sync fixes (C1 + C2 + DM-taps-player). **C1 — reconnect double-count
+  bug:** `syncManager` kept its own `_clientCount` that blindly incremented on every
+  `onClientJoined`, so a player who dropped and rejoined inflated the count. Replaced
+  it with `this.server.clientCount` (the actual `Map.size`), which is authoritative.
+  Also made the server's socket `close` handler reconnect-safe: it now only evicts a
+  roster entry if the closing socket is still the *current* socket for that deviceId,
+  so a late 'close' from a dead socket can't remove a player who already reconnected.
+  The `hello` handler destroys any lingering prior socket for the same deviceId.
+  **C2 — player identity:** the `hello` message now carries `characterId`; added a
+  `claim_character` message and a `ConnectedPlayer` roster type (deviceId, nickname,
+  characterId). The server tracks the roster and fires `onRosterChanged`; `SyncStatus`
+  gained a `roster` field. Players can now push their own entity up to the DM — added
+  an inbound `entity_snapshot` handler on the server (applies locally via new
+  `onEntityReceived` callback + relays to other players) and a `pushEntity()` /
+  `claimCharacter()` pair on the client + manager. **UI:** the DM Dashboard gained a
+  "Connected Players" section showing each live player, which character they're
+  controlling, and a tap-through to that character's sheet (`/dm/character/[id]`).
+  The player's campaign view gained a "Your Character" picker that assigns the
+  character to the campaign, pushes it to the DM, and claims it on the roster.
+  Not yet verified with `npx tsc --noEmit`. **Next:** homebrew migration (Abyss
+  Knight + Skeleton into the homebrew store) + inline homebrew creation in the wizard.
+
 - **2026-06-17 (4):** #8 Home screen campaign state shipped. `index.tsx` imported
   `useCampaignStore` and `useSyncStore` and replaced the hardcoded stub with
   `ActiveCampaignCard`, a component rendering one of three states: no campaign

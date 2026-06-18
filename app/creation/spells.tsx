@@ -275,6 +275,13 @@ export default function SpellsScreen() {
             placeholderTextColor={Colors.textDim}
           />
 
+          <Pressable
+            style={styles.createSpellBtn}
+            onPress={() => router.push('/homebrew/spell-builder')}
+          >
+            <Text style={styles.createSpellTxt}>+ Create new homebrew spell</Text>
+          </Pressable>
+
           {targets.cantrips > 0 && (
             <View style={styles.choiceBlock}>
               <Text style={styles.choicePrompt}>Cantrips</Text>
@@ -378,4 +385,12 @@ const styles = StyleSheet.create({
   },
   nextBtnDisabled: { backgroundColor: Colors.goldDim },
   nextBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
+  createSpellBtn: {
+    alignSelf: 'flex-end',
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 3,
+    marginBottom: Spacing.md,
+  },
+  createSpellTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
 });

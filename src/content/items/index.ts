@@ -39,6 +39,39 @@ export const itemClub: Item = {
   }],
 };
 
+export const itemGreatclub: Item = {
+  id: 'greatclub', name: 'Greatclub', weight: 10, cost: '2 sp',
+  properties: ['two-handed'],
+  features: [{
+    id: 'greatclub_attack', name: 'Greatclub', description: 'Melee weapon attack.',
+    source: { kind: 'item', refId: 'greatclub' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'bludgeoning' }],
+  }],
+};
+
+export const itemLightHammer: Item = {
+  id: 'light_hammer', name: 'Light Hammer', weight: 2, cost: '2 gp',
+  properties: ['light', 'thrown (range 20/60)'],
+  features: [{
+    id: 'light_hammer_attack', name: 'Light Hammer', description: 'Melee or ranged weapon attack.',
+    source: { kind: 'item', refId: 'light_hammer' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'bludgeoning' }],
+  }],
+};
+
+export const itemSickle: Item = {
+  id: 'sickle', name: 'Sickle', weight: 2, cost: '1 gp',
+  properties: ['light'],
+  features: [{
+    id: 'sickle_attack', name: 'Sickle', description: 'Melee weapon attack.',
+    source: { kind: 'item', refId: 'sickle' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'slashing' }],
+  }],
+};
+
 export const itemQuarterstaff: Item = {
   id: 'quarterstaff', name: 'Quarterstaff', weight: 4, cost: '2 sp',
   properties: ['versatile (1d8)'],
@@ -107,6 +140,17 @@ export const itemShortbow: Item = {
   }],
 };
 
+export const itemSling: Item = {
+  id: 'sling', name: 'Sling', weight: 0, cost: '1 sp',
+  properties: ['ammunition (range 30/120)'],
+  features: [{
+    id: 'sling_attack', name: 'Sling', description: 'Ranged weapon attack.',
+    source: { kind: 'item', refId: 'sling' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'bludgeoning' }],
+  }],
+};
+
 export const itemLightCrossbow: Item = {
   id: 'light_crossbow', name: 'Light Crossbow', weight: 5, cost: '25 gp',
   properties: ['ammunition (range 80/320)', 'loading', 'two-handed'],
@@ -119,6 +163,105 @@ export const itemLightCrossbow: Item = {
 };
 
 // ── Martial Melee Weapons ─────────────────────────────────────────────────────
+
+export const itemFlail: Item = {
+  id: 'flail', name: 'Flail', weight: 2, cost: '10 gp',
+  properties: [],
+  features: [{
+    id: 'flail_attack', name: 'Flail', description: 'Melee weapon attack.',
+    source: { kind: 'item', refId: 'flail' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'bludgeoning' }],
+  }],
+};
+
+export const itemGlaive: Item = {
+  id: 'glaive', name: 'Glaive', weight: 6, cost: '20 gp',
+  properties: ['heavy', 'reach', 'two-handed'],
+  features: [{
+    id: 'glaive_attack', name: 'Glaive', description: 'Melee weapon attack. Reach 10 feet.',
+    source: { kind: 'item', refId: 'glaive' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d10', damageType: 'slashing' }],
+  }],
+};
+
+export const itemHalberd: Item = {
+  id: 'halberd', name: 'Halberd', weight: 6, cost: '20 gp',
+  properties: ['heavy', 'reach', 'two-handed'],
+  features: [{
+    id: 'halberd_attack', name: 'Halberd', description: 'Melee weapon attack. Reach 10 feet.',
+    source: { kind: 'item', refId: 'halberd' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d10', damageType: 'slashing' }],
+  }],
+};
+
+export const itemLance: Item = {
+  id: 'lance', name: 'Lance', weight: 6, cost: '10 gp',
+  properties: ['reach', 'special (disadvantage within 5 ft)'],
+  features: [{
+    id: 'lance_attack', name: 'Lance', description: 'Melee weapon attack. Reach 10 feet. Disadvantage when used against targets within 5 feet.',
+    source: { kind: 'item', refId: 'lance' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d12', damageType: 'piercing' }],
+  }],
+};
+
+export const itemMorningstar: Item = {
+  id: 'morningstar', name: 'Morningstar', weight: 4, cost: '15 gp',
+  properties: [],
+  features: [{
+    id: 'morningstar_attack', name: 'Morningstar', description: 'Melee weapon attack.',
+    source: { kind: 'item', refId: 'morningstar' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'piercing' }],
+  }],
+};
+
+export const itemPike: Item = {
+  id: 'pike', name: 'Pike', weight: 18, cost: '5 gp',
+  properties: ['heavy', 'reach', 'two-handed'],
+  features: [{
+    id: 'pike_attack', name: 'Pike', description: 'Melee weapon attack. Reach 10 feet.',
+    source: { kind: 'item', refId: 'pike' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d10', damageType: 'piercing' }],
+  }],
+};
+
+export const itemTrident: Item = {
+  id: 'trident', name: 'Trident', weight: 4, cost: '5 gp',
+  properties: ['thrown (range 20/60)', 'versatile (1d8)'],
+  features: [{
+    id: 'trident_attack', name: 'Trident', description: 'Melee or ranged weapon attack.',
+    source: { kind: 'item', refId: 'trident' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d6', damageType: 'piercing' }],
+  }],
+};
+
+export const itemWarPick: Item = {
+  id: 'war_pick', name: 'War Pick', weight: 2, cost: '5 gp',
+  properties: [],
+  features: [{
+    id: 'war_pick_attack', name: 'War Pick', description: 'Melee weapon attack.',
+    source: { kind: 'item', refId: 'war_pick' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'piercing' }],
+  }],
+};
+
+export const itemWhip: Item = {
+  id: 'whip', name: 'Whip', weight: 3, cost: '2 gp',
+  properties: ['finesse', 'reach'],
+  features: [{
+    id: 'whip_attack', name: 'Whip', description: 'Melee weapon attack. Reach 10 feet.',
+    source: { kind: 'item', refId: 'whip' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'slashing' }],
+  }],
+};
 
 export const itemLongsword: Item = {
   id: 'longsword', name: 'Longsword', weight: 3, cost: '15 gp',
@@ -154,15 +297,30 @@ export const itemGreatsword: Item = {
 };
 
 export const itemGreatswordLifeDrinking: Item = {
-  id: 'greatsword_life_drinking', name: 'Greatsword of Life Drinking', weight: 6, cost: '—',
-  properties: ['heavy', 'two-handed', 'magic weapon'],
-  features: [{
-    id: 'greatsword_life_drinking_attack', name: 'Greatsword of Life Drinking',
-    description: 'An enchanted greatsword whose blade is etched with hungry runes. Melee weapon attack, 2d8 slashing damage. Life Steal: on a hit, you regain hit points equal to half the damage dealt (rounded down) — roll the damage, then apply that healing yourself with the Heal control.',
-    source: { kind: 'item', refId: 'greatsword_life_drinking' }, level: null, effects: [], actions: [], choices: [], passive: false,
-    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
-    abilityEffects: [{ type: 'damage', dice: '2d8', damageType: 'slashing' }],
-  }],
+  id: 'greatsword_life_drinking', name: '+1 Life-Drinking Greatsword', weight: 6, cost: '—',
+  properties: [
+    'heavy', 'magic weapon', '+1 to attack and damage rolls',
+    'two-handed (one-handed for Large creatures)',
+  ],
+  features: [
+    {
+      id: 'greatsword_life_drinking_attack',
+      name: '+1 Life-Drinking Greatsword',
+      description:
+        'Melee weapon attack (+1 bonus to attack and damage rolls). Deals 2d8 slashing damage ' +
+        '(oversized damage die for Large creatures; base 2d6 for Medium). ' +
+        'Life Drain: on a hit, roll 3d6 — deal that as additional necrotic damage, then heal ' +
+        'yourself for the same value (up to your maximum HP). Roll the 3d6 once and apply it to both.',
+      source: { kind: 'item', refId: 'greatsword_life_drinking' },
+      level: null, actions: [], choices: [], effects: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '2d8', damageType: 'slashing' },
+        { type: 'damage', dice: '3d6', damageType: 'necrotic' },
+        { type: 'heal',   dice: '3d6' },
+      ],
+    },
+  ],
 };
 
 export const itemRopeOfMending: Item = {
@@ -251,6 +409,39 @@ export const itemLongbow: Item = {
     source: { kind: 'item', refId: 'longbow' }, level: null, effects: [], actions: [], choices: [], passive: false,
     activation: { actionType: 'action', resourceCost: null, range: '150 feet', target: 'single', requiresSave: null },
     abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'piercing' }],
+  }],
+};
+
+export const itemHeavyCrossbow: Item = {
+  id: 'heavy_crossbow', name: 'Heavy Crossbow', weight: 18, cost: '50 gp',
+  properties: ['ammunition (range 100/400)', 'heavy', 'loading', 'two-handed'],
+  features: [{
+    id: 'heavy_crossbow_attack', name: 'Heavy Crossbow', description: 'Ranged weapon attack.',
+    source: { kind: 'item', refId: 'heavy_crossbow' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '100 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d10', damageType: 'piercing' }],
+  }],
+};
+
+export const itemBlowgun: Item = {
+  id: 'blowgun', name: 'Blowgun', weight: 1, cost: '10 gp',
+  properties: ['ammunition (range 25/100)', 'loading'],
+  features: [{
+    id: 'blowgun_attack', name: 'Blowgun', description: 'Ranged weapon attack.',
+    source: { kind: 'item', refId: 'blowgun' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '25 feet', target: 'single', requiresSave: null },
+    abilityEffects: [{ type: 'damage', dice: '1d1', damageType: 'piercing' }],
+  }],
+};
+
+export const itemNet: Item = {
+  id: 'net', name: 'Net', weight: 3, cost: '1 gp',
+  properties: ['special', 'thrown (range 5/15)'],
+  features: [{
+    id: 'net_attack', name: 'Net', description: 'Ranged weapon attack. On a hit, a Large or smaller creature is restrained. DC 10 Strength check to escape.',
+    source: { kind: 'item', refId: 'net' }, level: null, effects: [], actions: [], choices: [], passive: false,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+    abilityEffects: [],
   }],
 };
 
@@ -520,13 +711,17 @@ export const itemBurglarsPack: Item = {
 
 export const ALL_ITEMS: Item[] = [
   // Simple melee
-  itemDagger, itemHandaxe, itemClub, itemQuarterstaff, itemJavelin, itemSpear, itemMace,
+  itemDagger, itemHandaxe, itemClub, itemGreatclub, itemLightHammer, itemSickle,
+  itemQuarterstaff, itemJavelin, itemSpear, itemMace,
   // Simple ranged
-  itemShortbow, itemLightCrossbow, itemDart,
+  itemShortbow, itemLightCrossbow, itemSling, itemDart,
   // Martial melee
-  itemLongsword, itemBattleaxe, itemGreatsword, itemGreatswordLifeDrinking, itemGreataxe, itemScimitar, itemRapier, itemWarhammer, itemMaul, itemShortSword,
+  itemLongsword, itemBattleaxe, itemFlail, itemGlaive, itemHalberd, itemLance,
+  itemGreatsword, itemGreatswordLifeDrinking, itemGreataxe,
+  itemMorningstar, itemPike, itemScimitar, itemRapier, itemTrident, itemWarPick,
+  itemWarhammer, itemMaul, itemShortSword, itemWhip,
   // Martial ranged
-  itemLongbow, itemHandCrossbow,
+  itemLongbow, itemHeavyCrossbow, itemHandCrossbow, itemBlowgun, itemNet,
   // Light armor
   itemLeatherArmor, itemStuddedLeather,
   // Medium armor

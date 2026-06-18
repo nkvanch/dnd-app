@@ -144,10 +144,9 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
     }
 
     case "spell_slots": {
-      // Set spell slot totals from the PHB table for this class at this level.
+      // Set spell slot totals from the table for this class at this level.
       // For homebrew classes the slotsTable may be embedded directly in the
-      // grant value (set by buildProgressionFromClass) rather than looked up
-      // by classId — both code paths produce the same slot object.
+      // grant value; otherwise we look up by classId.
       const slotGrant = grant.value as {
         level:      number;
         slotsTable?: { level: number; slots: number[] }[];
@@ -161,13 +160,15 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
       if (!slotRow || !entity.spellcasting) return entity;
       const slots = slotRow;
       const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
-      const newSlots = { ...entity.spellcasting.slots };
+      // Always zero ALL tiers before applying the new row. The row represents
+      // the COMPLETE slot state at this level — zeroing first is what makes
+      // pact-magic tier upgrades work correctly (e.g. Abyss Knight level 4
+      // replaces tier-1 slots with tier-2 slots; without zeroing, tier-1
+      // would persist alongside the new tier-2 allocation).
+      const newSlots = {} as typeof entity.spellcasting.slots;
       tiers.forEach((t, i) => {
-        const total = slots[i];
-        if (total > 0) {
-          const existingUsed = newSlots[t]?.used ?? 0;
-          newSlots[t] = { total, used: Math.min(existingUsed, total) };
-        }
+        const total = slots[i] ?? 0;
+        newSlots[t] = { total, used: Math.min(entity.spellcasting!.slots[t]?.used ?? 0, total) };
       });
       return {
         ...entity,

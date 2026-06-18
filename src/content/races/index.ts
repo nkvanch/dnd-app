@@ -596,7 +596,19 @@ export const raceSkeleton: Race = {
       name: 'Doomed Touch',
       description: 'You know the chill touch cantrip and can cast it at will, without expending a spell slot. Constitution is your spellcasting ability for it.',
       source: { kind: 'race', refId: 'skeleton' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null,
+      effects: [
+        // Grants chill touch as a known cantrip. Initialises spellcasting
+        // (CON) if the character has no spellcasting class yet. If they do
+        // (e.g. Abyss Knight), chill_touch is added to their existing list.
+        {
+          type: 'grant_spell',
+          cantripIds: ['chill_touch'],
+          spellcastingAbility: 'con',
+          target: '', operation: 'add', value: null, condition: null,
+        } as import('../../engine/types').Effect,
+      ],
+      actions: [], choices: [], passive: true,
     },
     {
       id: 'skeleton_darkvision',
@@ -656,5 +668,4 @@ export const ALL_RACES = [
   raceHalfElf,
   raceHalfOrc,
   raceTiefling,
-  raceSkeleton,
 ];

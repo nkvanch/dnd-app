@@ -67,6 +67,14 @@ export const CREATE_COMBAT_STATE_TABLE = `
   );
 `;
 
+// Simple key-value store for app-level flags (e.g. one-time seeding markers).
+export const CREATE_APP_META_TABLE = `
+  CREATE TABLE IF NOT EXISTS app_meta (
+    key   TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+  );
+`;
+
 // Indexes for common query patterns
 export const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_entities_kind     ON entities    (kind);
@@ -81,5 +89,6 @@ export const ALL_TABLES = [
   CREATE_DEVICE_SESSION_TABLE,
   CREATE_CONTENT_CACHE_TABLE,
   CREATE_COMBAT_STATE_TABLE,
+  CREATE_APP_META_TABLE,
   CREATE_INDEXES,
 ];

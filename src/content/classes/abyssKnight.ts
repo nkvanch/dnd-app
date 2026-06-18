@@ -96,9 +96,48 @@ export const abyssKnightProgression: ClassProgression = {
         },
       ],
     },
-    { level: 3, hpDie: 10, choices: [], grants: [] },
-    { level: 4, hpDie: 10, choices: [asiChoice('abyss_knight_asi_4')], grants: [] },
-    { level: 5, hpDie: 10, choices: [], grants: [] },
+    {
+      level: 3, hpDie: 10, choices: [],
+      grants: [
+        { kind: 'spell_slots', value: { level: 3 } },
+        { kind: 'known_spells', value: { cantripIds: ['green_flame_blade'] } },
+        {
+          kind: 'feature', value: {
+            id: 'demonic_fire',
+            name: 'Demonic Fire',
+            description:
+              'You learn to control and manipulate the fire and profane essence of the abyss. ' +
+              'You learn the Green-Flame Blade cantrip; you can choose to deal either of the ' +
+              'damage types from your Abyssal Energy feature instead of fire. The range of the ' +
+              'cantrip increases to 30 feet.\n\n' +
+              'When a creature makes an attack roll against you, you can use your reaction and ' +
+              'expend a power point to add your Charisma modifier as a bonus to your AC. On a ' +
+              'miss, the attacking creature takes fire damage equal to twice your Charisma modifier.',
+            source: { kind: 'class', refId: 'abyss_knight' },
+            level: 3, effects: [], actions: [], choices: [], passive: true,
+          },
+        },
+        {
+          kind: 'feature', value: {
+            id: 'corrupted_blood_3',
+            name: 'Corrupted Blood',
+            description:
+              'Your blood has been tainted by abyssal ichor. At 3rd level, you gain the following:' +
+              '\n\u2022 When you expend hit dice to deal Abyssal Energy damage, you may use your ' +
+              'Constitution modifier instead of the die roll (minimum 1) once per short rest.' +
+              '\n\u2022 You have resistance to poison damage, and when you take poison damage ' +
+              'you heal hit points equal to half the poison damage dealt (rounded down). ' +
+              '(DM granted.)',
+            source: { kind: 'class', refId: 'abyss_knight' },
+            level: 3, effects: [
+              { type: 'grant_resistance', target: 'poison', operation: 'resistance', value: null, condition: null },
+            ], actions: [], choices: [], passive: true,
+          },
+        },
+      ],
+    },
+    { level: 4,  hpDie: 10, choices: [asiChoice('abyss_knight_asi_4')],  grants: [{ kind: 'spell_slots', value: { level: 4  } }] },
+    { level: 5,  hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 5  } }] },
     {
       level: 6, hpDie: 10, choices: [],
       grants: [
@@ -111,9 +150,9 @@ export const abyssKnightProgression: ClassProgression = {
         },
       ],
     },
-    { level: 7, hpDie: 10, choices: [], grants: [] },
-    { level: 8, hpDie: 10, choices: [asiChoice('abyss_knight_asi_8')], grants: [] },
-    { level: 9, hpDie: 10, choices: [], grants: [] },
+    { level: 7,  hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 7  } }] },
+    { level: 8,  hpDie: 10, choices: [asiChoice('abyss_knight_asi_8')],  grants: [{ kind: 'spell_slots', value: { level: 8  } }] },
+    { level: 9,  hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 9  } }] },
     {
       level: 10, hpDie: 10, choices: [],
       grants: [
@@ -128,9 +167,9 @@ export const abyssKnightProgression: ClassProgression = {
         },
       ],
     },
-    { level: 11, hpDie: 10, choices: [], grants: [] },
-    { level: 12, hpDie: 10, choices: [asiChoice('abyss_knight_asi_12')], grants: [] },
-    { level: 13, hpDie: 10, choices: [], grants: [] },
+    { level: 11, hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 11 } }] },
+    { level: 12, hpDie: 10, choices: [asiChoice('abyss_knight_asi_12')], grants: [{ kind: 'spell_slots', value: { level: 12 } }] },
+    { level: 13, hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 13 } }] },
     {
       level: 14, hpDie: 10, choices: [],
       grants: [
@@ -143,11 +182,11 @@ export const abyssKnightProgression: ClassProgression = {
         },
       ],
     },
-    { level: 15, hpDie: 10, choices: [], grants: [] },
-    { level: 16, hpDie: 10, choices: [asiChoice('abyss_knight_asi_16')], grants: [] },
-    { level: 17, hpDie: 10, choices: [], grants: [] },
-    { level: 18, hpDie: 10, choices: [], grants: [] },
-    { level: 19, hpDie: 10, choices: [asiChoice('abyss_knight_asi_19')], grants: [] },
-    { level: 20, hpDie: 10, choices: [], grants: [] },
+    { level: 15, hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 15 } }] },
+    { level: 16, hpDie: 10, choices: [asiChoice('abyss_knight_asi_16')], grants: [{ kind: 'spell_slots', value: { level: 16 } }] },
+    { level: 17, hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 17 } }] },
+    { level: 18, hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 18 } }] },
+    { level: 19, hpDie: 10, choices: [asiChoice('abyss_knight_asi_19')], grants: [{ kind: 'spell_slots', value: { level: 19 } }] },
+    { level: 20, hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 20 } }] },
   ],
 };

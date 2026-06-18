@@ -30,13 +30,15 @@ export class SyncClient {
   private cb:          ClientCallbacks;
   private deviceId:    string;
   private nickname:    string;
+  private characterId: string | null;
   private host:        string = '';
   private port:        number = 0;
 
-  constructor(deviceId: string, nickname: string, callbacks: ClientCallbacks) {
-    this.deviceId = deviceId;
-    this.nickname = nickname;
-    this.cb       = callbacks;
+  constructor(deviceId: string, nickname: string, characterId: string | null, callbacks: ClientCallbacks) {
+    this.deviceId    = deviceId;
+    this.nickname    = nickname;
+    this.characterId = characterId;
+    this.cb          = callbacks;
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -69,6 +71,15 @@ export class SyncClient {
     try { this.socket.write(encodeMessage(msg)); } catch { /* ignore */ }
   }
 
+  /**
+   * Tell the server which character this player is now controlling.
+   * Updates the local field too, so a later reconnect re-announces it in 'hello'.
+   */
+  claimCharacter(characterId: string | null): void {
+    this.characterId = characterId;
+    this.send({ type: 'claim_character', characterId });
+  }
+
   // ── Private: connection management ─────────────────────────────────────────
 
   private attemptConnect(): void {
@@ -81,7 +92,7 @@ export class SyncClient {
         this.buffer    = '';
         console.log(`[sync-client] Connected to ${this.host}:${this.port}`);
         // Introduce ourselves to the server
-        this.send({ type: 'hello', deviceId: this.deviceId, nickname: this.nickname });
+        this.send({ type: 'hello', deviceId: this.deviceId, nickname: this.nickname, characterId: this.characterId });
       }
     );
 

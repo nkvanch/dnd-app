@@ -84,15 +84,17 @@ export default function RaceScreen() {
         }}
         ListFooterComponent={
           <View style={styles.homebrewSection}>
-            <Text style={styles.homebrewHeading}>HOMEBREW RACES</Text>
-            {filteredHomebrewRaces.length === 0 ? (
+            <View style={styles.homebrewHeader}>
+              <Text style={styles.homebrewHeading}>HOMEBREW RACES</Text>
               <Pressable
-                style={styles.homebrewRow}
+                style={styles.createNewBtn}
                 onPress={() => router.push('/homebrew/race-builder')}
               >
-                <Text style={styles.homebrewEmptyText}>No homebrew races yet — create one</Text>
-                <Text style={styles.rowArrow}>›</Text>
+                <Text style={styles.createNewTxt}>+ Create new</Text>
               </Pressable>
+            </View>
+            {filteredHomebrewRaces.length === 0 ? (
+              <Text style={styles.homebrewEmptyText}>No homebrew races yet.</Text>
             ) : (
               filteredHomebrewRaces.map(item => {
                 const isOpen = expanded === item.id;
@@ -172,15 +174,21 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
+  homebrewHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: Spacing.sm,
+  },
   homebrewHeading: {
     fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim,
-    letterSpacing: 2, marginBottom: Spacing.sm,
+    letterSpacing: 2,
   },
-  homebrewRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: Spacing.md,
+  createNewBtn: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
   },
-  homebrewEmptyText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+  createNewTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  homebrewEmptyText: { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic', paddingVertical: Spacing.sm },
   homebrewTag: {
     backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
     borderWidth: 1, borderColor: Colors.gold + '66',

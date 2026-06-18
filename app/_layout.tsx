@@ -38,12 +38,122 @@ export default function RootLayout() {
         // 1. Open / migrate the database (idempotent)
         await initDb();
         // 2. Hydrate stores from SQLite — run in parallel
+        //    loadHomebrew merges built-in homebrew (Abyss Knight, Skeleton)
+        //    directly from BUILTIN_HOMEBREW — no separate seeding step needed.
         await Promise.all([
           loadCharacters(),
           initSession(),
           loadHomebrew(),
         ]);
-        // 3. Restore combat state if a combat was active before the app was killed
+        // 3. One-time migration: patch characters created before engine fixes.
+        //    (a) Abyss Knight: ensure light/medium/heavy/shield + simple/martial profs
+        //        (the progression has a proficiency grant at level 1 but the existing
+        //        character may have been created before it was added).
+        //    (b) Skeleton's Doomed Touch grants chill touch — add it to knownSpellIds
+        //        for any character with the Skeleton race OR the feature in their list.
+        //        Also handles the slot count fix for Abyss Knight at level 2 (old
+        //        table gave 1 slot; correct is 2).
+        //    All checks are idempotent so they never corrupt already-fixed saves.
+        const { characters, updateCharacter } = useCharacterStore.getState();
+        for (const char of characters) {
+          // (a) Abyss Knight proficiencies
+          if (char.identity.classId === 'abyss_knight') {
+            const hasAllArmor = ['light','medium','heavy','shield'].every(
+              p => char.proficiencies.armor.includes(p)
+            );
+            const hasAllWeapons = ['simple','martial'].every(
+              p => char.proficiencies.weapons.includes(p)
+            );
+            if (!hasAllArmor || !hasAllWeapons) {
+              updateCharacter(char.id, e => ({
+                ...e,
+                proficiencies: {
+                  ...e.proficiencies,
+                  armor:   [...new Set([...e.proficiencies.armor,   'light','medium','heavy','shield'])],
+                  weapons: [...new Set([...e.proficiencies.weapons, 'simple','martial'])],
+                },
+              }));
+            }
+          }
+
+          // (a-2) Abyss Knight level-2 slot count (1 → 2)
+          if (
+            char.identity.classId === 'abyss_knight' &&
+            char.identity.level   === 2 &&
+            char.spellcasting     !== null &&
+            (char.spellcasting?.slots['1']?.total ?? 0) < 2
+          ) {
+            updateCharacter(char.id, e => ({
+              ...e,
+              spellcasting: {
+                ...e.spellcasting!,
+                slots: {
+                  ...e.spellcasting!.slots,
+                  '1': { total: 2, used: e.spellcasting!.slots['1']?.used ?? 0 },
+                },
+              },
+            }));
+          }
+
+          // (b) Chill touch for Skeleton race characters
+          const isSkeleton =
+            char.identity.raceId    === 'skeleton' ||
+            char.identity.subRaceId === 'skeleton_giant' ||
+            char.features.some(f => f.id === 'skeleton_doomed_touch');
+
+          if (isSkeleton && char.spellcasting) {   // truthy — catches both null and undefined
+            const knownCantrips = char.spellcasting.cantrips ?? [];
+            const missing = ['chill_touch', 'magic_stone']
+              .filter(id => !knownCantrips.includes(id));
+            if (missing.length > 0) {
+              updateCharacter(char.id, e => ({
+                ...e,
+                spellcasting: e.spellcasting ? {
+                  ...e.spellcasting,
+                  cantrips: [...new Set([...e.spellcasting.cantrips, ...missing])],
+                } : e.spellcasting,
+              }));
+            }
+          }
+
+          // (c) Abyss Knight DM-granted abilities:
+          //     • Poison healing half damage (passive feature)
+          //     • Abyssal Claim construct cantrip
+          if (char.identity.classId === 'abyss_knight') {
+            const hasHealPoison  = char.features.some(f => f.id === 'dm_poison_heal');
+            const hasAbyssalClaim = (char.spellcasting?.cantrips ?? []).includes('abyssal_claim');
+
+            if (!hasHealPoison) {
+              updateCharacter(char.id, e => ({
+                ...e,
+                features: [...e.features, {
+                  id: 'dm_poison_heal',
+                  name: 'Poisonous Adaptation (DM Gift)',
+                  description:
+                    'Your abyssal corruption has made you partially immune to poisons. ' +
+                    'When you take poison damage, you heal hit points equal to half the ' +
+                    'poison damage dealt (rounded down, minimum 1). ' +
+                    'Apply this manually: after taking poison damage, use the Heal control ' +
+                    'to add half the damage amount back to your HP.',
+                  source: { kind: 'class', refId: 'abyss_knight' },
+                  level: char.identity.level,
+                  effects: [],
+                  actions: [], choices: [], passive: true, isActive: true,
+                }],
+              }));
+            }
+
+            if (!hasAbyssalClaim && char.spellcasting) {
+              updateCharacter(char.id, e => ({
+                ...e,
+                spellcasting: e.spellcasting ? {
+                  ...e.spellcasting,
+                  cantrips: [...new Set([...e.spellcasting.cantrips, 'abyssal_claim'])],
+                } : e.spellcasting,
+              }));
+            }
+          }
+        }
         loadCombatState().then(state => {
           if (state?.active) {
             useCombatStore.setState({ combat: state });

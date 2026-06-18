@@ -99,6 +99,15 @@ export type CharClass  = {
   asiLevels?:             number[];      // defaults to [4,8,12,16,19]
   // Per-level features authored by the player (replaces cls.features for level 1+)
   levelFeatures?:         { level: number; name: string; description: string }[];
+  /**
+   * Escape hatch for hand-authored classes too complex for the simplified
+   * builder fields (subclass features, known-spell grants, custom slot tables,
+   * per-level effect-bearing features). When present, getProgressionForClass
+   * uses this verbatim and ignores all the simplified fields above. The class
+   * builder cannot create this — it's only set by seeded built-in homebrew or
+   * the import pipeline — and editing such a class in the builder will drop it.
+   */
+  rawProgression?:        ClassProgression;
 };
 export type Background = { id: string; name: string; features: Feature[] };
 export type Condition  = { id: string; name: string; description: string; features: Feature[] };
@@ -352,7 +361,10 @@ export type FeatureSource = {
 export type Effect = {
   type:      'stat_modifier' | 'grant_proficiency' | 'grant_resistance' | 'grant_immunity'
            | 'apply_condition' | 'grant_resource' | 'override_rule' | 'base_ac_formula'
-           | 'suppress_condition_effects' | 'condition_immunity';
+           | 'suppress_condition_effects' | 'condition_immunity'
+           // Grants spells/cantrips to known spell list; safe on racial features
+           // (initialises spellcasting if not yet active).
+           | 'grant_spell';
   target:    string;
   operation: 'add' | 'multiply' | 'set' | 'advantage' | 'disadvantage'
            | 'resistance' | 'immunity' | 'vulnerability' | 'suppress';
@@ -365,6 +377,10 @@ export type Effect = {
    * Only meaningful when the ability appears in formulaAbilities.
    */
   formulaAbilityCap?: Partial<Record<Ability, number>>;
+  // ── grant_spell-specific fields ───────────────────────────────────
+  cantripIds?:         string[];
+  spellIds?:           string[];
+  spellcastingAbility?: Ability;
 };
 
 /**

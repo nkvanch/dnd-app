@@ -200,6 +200,31 @@ export default function CharacterSheetScreen() {
     });
   }, [mutate]);
 
+  const handleAddItem = useCallback((itemId: string) => {
+    mutate(e => ({
+      ...e,
+      inventory: {
+        ...e.inventory,
+        carried: [...e.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }],
+      },
+    }));
+  }, [mutate]);
+
+  const handleRemoveItem = useCallback((itemId: string) => {
+    mutate(e => ({
+      ...e,
+      inventory: {
+        ...e.inventory,
+        equipped: e.inventory.equipped.filter(i => i.itemId !== itemId),
+        carried:  e.inventory.carried.filter(i => i.itemId !== itemId),
+      },
+    }));
+  }, [mutate]);
+
+  const handleUpdateCurrency = useCallback((currency: import('../../src/engine/types').Currency) => {
+    mutate(e => ({ ...e, inventory: { ...e.inventory, currency } }));
+  }, [mutate]);
+
   const handleSaveNotes = useCallback((notes: string) => {
     mutate(e => ({ ...e, notes }));
   }, [mutate]);
@@ -340,6 +365,9 @@ export default function CharacterSheetScreen() {
             entity={entity}
             onEquip={handleEquip}
             onUnequip={handleUnequip}
+            onAddItem={handleAddItem}
+            onRemoveItem={handleRemoveItem}
+            onUpdateCurrency={handleUpdateCurrency}
           />
         )}
         {activeTab === 'notes' && (

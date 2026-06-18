@@ -148,6 +148,48 @@ export default function DmDashboard() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {/* Connected players roster (live sync) */}
+        {syncStatus.role === 'dm' && (
+          <>
+            <Text style={styles.sectionLabel}>CONNECTED PLAYERS ({syncStatus.roster.length})</Text>
+            {syncStatus.roster.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTxt}>
+                  No players connected yet.{'\n'}
+                  Share your room code from the Campaigns tab.
+                </Text>
+              </View>
+            ) : (
+              syncStatus.roster.map(p => {
+                const claimed = p.characterId
+                  ? characters.find(c => c.id === p.characterId) ?? null
+                  : null;
+                return (
+                  <Pressable
+                    key={p.deviceId}
+                    style={styles.rosterRow}
+                    onPress={() => claimed && router.push(`/dm/character/${claimed.id}` as any)}
+                    disabled={!claimed}
+                  >
+                    <View style={styles.rosterDot} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rosterName}>{p.nickname}</Text>
+                      <Text style={styles.rosterSub}>
+                        {claimed
+                          ? `Playing ${claimed.identity.name || 'Unnamed'} · Lv ${claimed.identity.level}`
+                          : p.characterId
+                            ? 'Character not synced yet…'
+                            : 'No character selected'}
+                      </Text>
+                    </View>
+                    {claimed && <Text style={styles.rosterArrow}>›</Text>}
+                  </Pressable>
+                );
+              })
+            )}
+          </>
+        )}
+
         <Text style={styles.sectionLabel}>PARTY ({partyChars.length})</Text>
 
         {partyChars.length === 0 ? (
@@ -196,6 +238,17 @@ const styles = StyleSheet.create({
   scroll:       { flex: 1 },
   content:      { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },
   sectionLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2, fontWeight: FontWeight.bold },
+
+  rosterRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm,
+  },
+  rosterDot:   { width: 8, height: 8, borderRadius: Radius.full, backgroundColor: Colors.green },
+  rosterName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  rosterSub:   { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 1 },
+  rosterArrow: { fontSize: FontSize.lg, color: Colors.textDim },
 
   partyCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,

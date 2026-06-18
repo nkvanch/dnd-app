@@ -14,6 +14,7 @@ import { Platform } from 'react-native';
 import { Entity, SyncEvent } from '../engine/types';
 import { SyncServer } from './server';
 import { SyncClient } from './client';
+import { ConnectedPlayer } from './protocol';
 import { decodeRoomCode, encodeRoomCode, getLocalIp } from './discovery';
 import { queueSyncEvent, markEventApplied, getUnflushedEvents } from '../db/syncRepo';
 import { saveEntity } from '../db/entityRepo';
@@ -35,6 +36,7 @@ export type SyncStatus = {
   clientCount: number;      // DM only: number of live player connections
   roomCode:    string | null;
   sessionId:   string | null;
+  roster:      ConnectedPlayer[];   // DM only: who's connected and which character they control
 };
 
 export type SyncManagerCallbacks = {
@@ -58,7 +60,7 @@ class SyncManagerClass {
   private callbacks:   SyncManagerCallbacks | null = null;
   private roomCode:    string | null = null;
   private sessionId:   string | null = null;
-  private _clientCount = 0;
+  private _roster:     ConnectedPlayer[] = [];
 
   // ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -92,11 +94,13 @@ class SyncManagerClass {
 
     this.server = new SyncServer(campaignId, sessionId, {
       onClientJoined: (_dId, _nick) => {
-        this._clientCount++;
-        this.emitStatus();
+        // Count/roster are derived from onRosterChanged; nothing to do here.
       },
       onClientLeft: (_dId) => {
-        this._clientCount = Math.max(0, this._clientCount - 1);
+        // Count/roster are derived from onRosterChanged; nothing to do here.
+      },
+      onRosterChanged: (roster) => {
+        this._roster = roster;
         this.emitStatus();
       },
       onSyncEvent: (event) => {
@@ -123,6 +127,10 @@ class SyncManagerClass {
           this.server?.sendTo(requesterId, { type: 'entity_snapshot', entity: ent });
         }
       },
+      onEntityReceived: (entity) => {
+        // A player pushed their character up to us (the DM). Apply locally.
+        this.callbacks?.onEntityReceived(entity);
+      },
     });
 
     await this.server.start();
@@ -135,9 +143,10 @@ class SyncManagerClass {
    * `code` is the 6-character room code shown on the DM's screen.
    */
   async startAsClient(
-    code:     string,
-    deviceId: string,
-    nickname: string,
+    code:        string,
+    deviceId:    string,
+    nickname:    string,
+    characterId: string | null,
   ): Promise<void> {
     if (Platform.OS === 'web') throw new Error('Sync not supported on web.');
     this.stopAll();
@@ -145,7 +154,7 @@ class SyncManagerClass {
     const { ip, port } = decodeRoomCode(code);
     this.role = 'player';
 
-    this.client = new SyncClient(deviceId, nickname, {
+    this.client = new SyncClient(deviceId, nickname, characterId, {
       onConnected: (campaignId, sessionId) => {
         this.sessionId = sessionId;
         this.emitStatus();
@@ -182,6 +191,28 @@ class SyncManagerClass {
   }
 
   /**
+   * Player-only: announce which character this device is controlling.
+   * No-op for DM/offline. Safe to call before connection completes — the
+   * client also re-sends the current characterId inside every 'hello'.
+   */
+  claimCharacter(characterId: string | null): void {
+    if (this.role === 'player' && this.client) {
+      this.client.claimCharacter(characterId);
+    }
+  }
+
+  /**
+   * Player-only: push a full entity snapshot up to the DM (and, via relay, the
+   * rest of the table). Used when a player claims/updates their character so it
+   * appears on the DM's dashboard. No-op for DM/offline.
+   */
+  pushEntity(entity: Entity): void {
+    if (this.role === 'player' && this.client) {
+      this.client.send({ type: 'entity_snapshot', entity });
+    }
+  }
+
+  /**
    * Emit a typed sync event to connected peers.
    * If offline, the event is queued in SQLite for replay on reconnect.
    */
@@ -213,7 +244,7 @@ class SyncManagerClass {
     this.server       = null;
     this.client       = null;
     this.role         = 'offline';
-    this._clientCount = 0;
+    this._roster      = [];
     this.roomCode     = null;
     this.sessionId    = null;
     this.emitStatus();
@@ -232,9 +263,10 @@ class SyncManagerClass {
     return {
       role:        this.role,
       connected,
-      clientCount: this._clientCount,
+      clientCount: this.role === 'dm' ? (this.server?.clientCount ?? 0) : 0,
       roomCode:    this.roomCode,
       sessionId:   this.sessionId,
+      roster:      this.role === 'dm' ? this._roster : [],
     };
   }
 

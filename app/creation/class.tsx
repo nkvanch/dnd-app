@@ -20,7 +20,6 @@ const CASTER_TYPE: Record<string, string> = {
   sorcerer:  'Full Caster',
   warlock:   'Half Caster',
   wizard:    'Full Caster',
-  abyss_knight: 'Half Caster',
 };
 
 const CLASS_DESCRIPTIONS: Record<string, string> = {
@@ -36,7 +35,6 @@ const CLASS_DESCRIPTIONS: Record<string, string> = {
   sorcerer:  'An innate spellcaster powered by bloodline magic. Metamagic lets you shape spells in unique ways. Fewer spell slots than wizard. Hit Die: d6.',
   warlock:   'A pact-magic spellcaster empowered by a patron. Short-rest spell slot recharge, Eldritch Invocations, and flexible Pact Boon. Hit Die: d8.',
   wizard:    'A scholarly spellcaster with the broadest spell list in the game. Arcane Recovery and spellbook give unmatched flexibility. Hit Die: d6.',
-  abyss_knight: 'A demon-pact knight who spends hit dice to fuel devastating melee strikes, gaining CHA-based pact spellcasting and a Demonic Patron at 2nd level. Hit Die: d10.',
 };
 
 export default function ClassScreen() {
@@ -104,12 +102,17 @@ export default function ClassScreen() {
         }}
         ListFooterComponent={
           <View style={styles.homebrewSection}>
-            <Text style={styles.homebrewHeading}>HOMEBREW CLASSES</Text>
-            {filteredHomebrewClasses.length === 0 ? (
-              <Pressable style={styles.row} onPress={() => router.push('/homebrew/class-builder')}>
-                <Text style={styles.homebrewEmptyText}>No homebrew classes yet — create one</Text>
-                <Text style={styles.rowArrow}>›</Text>
+            <View style={styles.homebrewHeader}>
+              <Text style={styles.homebrewHeading}>HOMEBREW CLASSES</Text>
+              <Pressable
+                style={styles.createNewBtn}
+                onPress={() => router.push('/homebrew/class-builder')}
+              >
+                <Text style={styles.createNewTxt}>+ Create new</Text>
               </Pressable>
+            </View>
+            {filteredHomebrewClasses.length === 0 ? (
+              <Text style={styles.homebrewEmptyText}>No homebrew classes yet.</Text>
             ) : (
               filteredHomebrewClasses.map(item => {
                 const isOpen = expanded === item.id;
@@ -193,11 +196,21 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
+  homebrewHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: Spacing.sm,
+  },
   homebrewHeading: {
     fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim,
-    letterSpacing: 2, marginBottom: Spacing.sm,
+    letterSpacing: 2,
   },
-  homebrewEmptyText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+  createNewBtn: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  createNewTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  homebrewEmptyText: { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic', paddingVertical: Spacing.sm },
   homebrewTag: {
     backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
     borderWidth: 1, borderColor: Colors.gold + '66',

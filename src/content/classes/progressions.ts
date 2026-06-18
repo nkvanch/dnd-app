@@ -58,6 +58,9 @@ function slotTableForStyle(
  * (backward-compat alias used by existing callers).
  */
 export function buildProgressionFromClass(cls: CharClass): ClassProgression {
+  // A hand-authored full progression always wins over the simplified fields.
+  if (cls.rawProgression) return cls.rawProgression;
+
   const asiLevels = new Set(cls.asiLevels ?? STUB_ASI_LEVELS);
 
   // Resolve spell slot table if spellcasting is configured
@@ -154,5 +157,8 @@ export const buildStubProgression = buildProgressionFromClass;
  * Never returns null.
  */
 export function getProgressionForClass(cls: CharClass): ClassProgression {
+  // Priority: hand-authored rawProgression > registered official progression >
+  // progression rebuilt from the simplified homebrew fields.
+  if (cls.rawProgression) return cls.rawProgression;
   return ALL_PROGRESSIONS[cls.id] ?? buildProgressionFromClass(cls);
 }

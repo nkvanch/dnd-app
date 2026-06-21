@@ -17,7 +17,7 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
 
     case "feature": {
       const f = grant.value as FeatureInstance;
-      return {
+      let next: Entity = {
         ...entity,
         features: [...entity.features, {
           ...f,
@@ -26,6 +26,41 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
           isActive: true,
         }]
       };
+
+      // Process any grant_spell effects on this feature. This is how racial
+      // features like the Skeleton's Doomed Touch ("you know chill touch")
+      // actually add the cantrip. It initialises a spellcasting block if the
+      // entity has none yet (a non-caster gaining a racial cantrip), using the
+      // effect's spellcastingAbility (default CON for racial grants).
+      const spellEffects = (f.effects ?? []).filter(e => e.type === 'grant_spell');
+      for (const eff of spellEffects) {
+        const cantripIds = (eff as any).cantripIds as string[] | undefined;
+        const spellIds   = (eff as any).spellIds   as string[] | undefined;
+        const ability    = ((eff as any).spellcastingAbility as Ability) ?? 'con';
+
+        if (!next.spellcasting) {
+          const emptySlots = Object.fromEntries(
+            ['1','2','3','4','5','6','7','8','9'].map(t => [t, { total: 0, used: 0 }])
+          ) as SpellSlots;
+          next = {
+            ...next,
+            spellcasting: {
+              ability, slots: emptySlots,
+              cantrips: [], known: [], prepared: [], concentrating: null,
+            },
+          };
+        }
+        next = {
+          ...next,
+          spellcasting: {
+            ...next.spellcasting!,
+            cantrips: [...new Set([...next.spellcasting!.cantrips, ...(cantripIds ?? [])])],
+            known:    [...new Set([...next.spellcasting!.known,    ...(spellIds   ?? [])])],
+          },
+        };
+      }
+
+      return next;
     }
 
     case "resource": {
@@ -124,9 +159,18 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
     }
 
     case "init_spellcasting": {
-      // Initialise the spellcasting block for a spellcasting class (called once).
+      // Initialise the spellcasting block for a spellcasting class.
+      // If a racial feature (e.g. Skeleton Doomed Touch) already created the
+      // block with a default ability (CON), this UPGRADES the ability to the
+      // class's real casting ability (e.g. Abyss Knight CHA) while preserving
+      // any cantrips/known spells the racial grant already added.
       const sc = grant.value as { ability: Ability };
-      if (entity.spellcasting) return entity; // already initialised — no-op
+      if (entity.spellcasting) {
+        return {
+          ...entity,
+          spellcasting: { ...entity.spellcasting, ability: sc.ability },
+        };
+      }
       const emptySlots = Object.fromEntries(
         ['1','2','3','4','5','6','7','8','9'].map(t => [t, { total: 0, used: 0 }])
       ) as SpellSlots;

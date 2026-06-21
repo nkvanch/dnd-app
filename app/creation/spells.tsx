@@ -105,6 +105,8 @@ export default function SpellsScreen() {
   const [pickedCantrips, setPickedCantrips] = useState<string[]>(draft?.spellcasting?.cantrips ?? []);
   const [pickedSpells,   setPickedSpells]   = useState<string[]>(draft?.spellcasting?.known ?? []);
   const [search,         setSearch]         = useState('');
+  const [schoolFilter,   setSchoolFilter]   = useState<string | null>(null);
+  const [spellSort,      setSpellSort]      = useState<'name' | 'school'>('name');
 
   if (!draft) return null;
 
@@ -211,8 +213,19 @@ export default function SpellsScreen() {
   const targets        = SPELLS_AT_L1[classId] ?? { cantrips: 0, spells: 0 };
   const q              = search.trim().toLowerCase();
   const matchesSearch  = (s: Spell) => q === '' || s.name.toLowerCase().includes(q) || s.school.toLowerCase().includes(q);
-  const cantripPool    = classSpells.filter(s => s.level === 0 && matchesSearch(s));
-  const spellPool      = classSpells.filter(s => s.level === 1 && matchesSearch(s));
+  const matchesSchool  = (s: Spell) => !schoolFilter || s.school === schoolFilter;
+  const sortSpells = (list: Spell[]) => [...list].sort((a, b) =>
+    spellSort === 'school'
+      ? (a.school.localeCompare(b.school) || a.name.localeCompare(b.name))
+      : a.name.localeCompare(b.name)
+  );
+  const cantripPool    = sortSpells(classSpells.filter(s => s.level === 0 && matchesSearch(s) && matchesSchool(s)));
+  const spellPool      = sortSpells(classSpells.filter(s => s.level === 1 && matchesSearch(s) && matchesSchool(s)));
+
+  // Distinct schools present in this class's cantrip+level-1 pool, for the chips.
+  const availableSchools = Array.from(new Set(
+    classSpells.filter(s => s.level <= 1).map(s => s.school)
+  )).sort();
 
   const toggleCantrip = (id: string) => {
     setPickedCantrips(prev => {
@@ -275,6 +288,51 @@ export default function SpellsScreen() {
             placeholderTextColor={Colors.textDim}
           />
 
+          {/* School filter chips */}
+          {availableSchools.length > 1 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipRow}
+              contentContainerStyle={styles.chipRowContent}
+            >
+              <Pressable
+                style={[styles.chip, !schoolFilter && styles.chipActive]}
+                onPress={() => setSchoolFilter(null)}
+              >
+                <Text style={[styles.chipTxt, !schoolFilter && styles.chipTxtActive]}>All</Text>
+              </Pressable>
+              {availableSchools.map(school => (
+                <Pressable
+                  key={school}
+                  style={[styles.chip, schoolFilter === school && styles.chipActive]}
+                  onPress={() => setSchoolFilter(s => s === school ? null : school)}
+                >
+                  <Text style={[styles.chipTxt, schoolFilter === school && styles.chipTxtActive]}>
+                    {school}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Sort selector */}
+          <View style={styles.sortRow}>
+            <Text style={styles.sortLabel}>Sort:</Text>
+            <Pressable
+              style={[styles.sortBtn, spellSort === 'name' && styles.sortBtnActive]}
+              onPress={() => setSpellSort('name')}
+            >
+              <Text style={[styles.sortTxt, spellSort === 'name' && styles.sortTxtActive]}>A–Z</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.sortBtn, spellSort === 'school' && styles.sortBtnActive]}
+              onPress={() => setSpellSort('school')}
+            >
+              <Text style={[styles.sortTxt, spellSort === 'school' && styles.sortTxtActive]}>School</Text>
+            </Pressable>
+          </View>
+
           <Pressable
             style={styles.createSpellBtn}
             onPress={() => router.push('/homebrew/spell-builder')}
@@ -284,10 +342,13 @@ export default function SpellsScreen() {
 
           {targets.cantrips > 0 && (
             <View style={styles.choiceBlock}>
-              <Text style={styles.choicePrompt}>Cantrips</Text>
-              <Text style={[styles.choiceCount, cantripsDone && styles.choiceCountDone]}>
-                {pickedCantrips.length} of {targets.cantrips} selected
-              </Text>
+              <View style={styles.levelHeaderRow}>
+                <Text style={styles.levelHeader}>CANTRIPS</Text>
+                <View style={styles.levelHeaderLine} />
+                <Text style={[styles.levelHeaderCount, cantripsDone && styles.choiceCountDone]}>
+                  {pickedCantrips.length}/{targets.cantrips}
+                </Text>
+              </View>
               {cantripPool.map(s => (
                 <SpellRow
                   key={s.id}
@@ -304,10 +365,13 @@ export default function SpellsScreen() {
 
           {targets.spells > 0 && (
             <View style={styles.choiceBlock}>
-              <Text style={styles.choicePrompt}>1st-Level Spells</Text>
-              <Text style={[styles.choiceCount, spellsDone && styles.choiceCountDone]}>
-                {pickedSpells.length} of {targets.spells} selected
-              </Text>
+              <View style={styles.levelHeaderRow}>
+                <Text style={styles.levelHeader}>1ST-LEVEL SPELLS</Text>
+                <View style={styles.levelHeaderLine} />
+                <Text style={[styles.levelHeaderCount, spellsDone && styles.choiceCountDone]}>
+                  {pickedSpells.length}/{targets.spells}
+                </Text>
+              </View>
               {spellPool.map(s => (
                 <SpellRow
                   key={s.id}
@@ -345,7 +409,41 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
     padding: Spacing.sm, color: Colors.textPrimary, marginBottom: Spacing.lg,
   },
+  chipRow: { flexGrow: 0, marginBottom: Spacing.lg, marginTop: -Spacing.sm },
+  chipRowContent: { gap: Spacing.xs, paddingVertical: 2 },
+  chip: {
+    backgroundColor: Colors.surface, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  chipActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
+  chipTxt:       { fontSize: FontSize.xs, color: Colors.textSecondary },
+  chipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
+  sortRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.md },
+  sortLabel: { fontSize: FontSize.xs, color: Colors.textDim, marginRight: 2 },
+  sortBtn: {
+    backgroundColor: Colors.surface, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 3,
+  },
+  sortBtnActive: { backgroundColor: Colors.blue + '22', borderColor: Colors.blue },
+  sortTxt:       { fontSize: FontSize.xs, color: Colors.textSecondary },
+  sortTxtActive: { color: Colors.blue, fontWeight: FontWeight.bold },
   choiceBlock:  { marginBottom: Spacing.xl },
+  levelHeaderRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    marginBottom: Spacing.md, marginTop: Spacing.sm,
+  },
+  levelHeader: {
+    fontSize: FontSize.xl, fontWeight: FontWeight.black,
+    color: Colors.gold, letterSpacing: 2,
+  },
+  levelHeaderLine: {
+    flex: 1, height: 2, backgroundColor: Colors.gold + '44', borderRadius: 1,
+  },
+  levelHeaderCount: {
+    fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textSecondary,
+  },
   choicePrompt: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.xs },
   choiceCount:  { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
   choiceCountDone: { color: Colors.green, fontWeight: FontWeight.bold },

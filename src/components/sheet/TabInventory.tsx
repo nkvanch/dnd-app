@@ -43,85 +43,199 @@ type ItemCategory = {
   test:   (item: Item) => boolean;
 };
 
+// ── Classification helpers ─────────────────────────────────────────────
+
+function propsLower(i: Item): string[] {
+  return i.properties.map(p => p.toLowerCase());
+}
+function isMagic(i: Item): boolean {
+  return propsLower(i).some(p => p.includes('magic') || p.includes('wondrous') || p.includes('artifact'));
+}
+// Canonical D&D 5e base weapons → { martial, ranged }. Magic weapons are typed
+// only "Magic Weapon", so we recover the class from the base-weapon name in the
+// item name (e.g. "Flame Tongue Greatsword" → greatsword → martial melee).
+type WeaponClass = { martial: boolean; ranged: boolean };
+const BASE_WEAPONS: Record<string, WeaponClass> = {
+  club: { martial: false, ranged: false },
+  dagger: { martial: false, ranged: false },
+  greatclub: { martial: false, ranged: false },
+  handaxe: { martial: false, ranged: false },
+  javelin: { martial: false, ranged: false },
+  'light hammer': { martial: false, ranged: false },
+  mace: { martial: false, ranged: false },
+  quarterstaff: { martial: false, ranged: false },
+  sickle: { martial: false, ranged: false },
+  spear: { martial: false, ranged: false },
+  yklwa: { martial: false, ranged: false },
+  'light crossbow': { martial: false, ranged: true },
+  dart: { martial: false, ranged: true },
+  shortbow: { martial: false, ranged: true },
+  sling: { martial: false, ranged: true },
+  battleaxe: { martial: true, ranged: false },
+  flail: { martial: true, ranged: false },
+  glaive: { martial: true, ranged: false },
+  greataxe: { martial: true, ranged: false },
+  greatsword: { martial: true, ranged: false },
+  halberd: { martial: true, ranged: false },
+  lance: { martial: true, ranged: false },
+  longsword: { martial: true, ranged: false },
+  maul: { martial: true, ranged: false },
+  morningstar: { martial: true, ranged: false },
+  pike: { martial: true, ranged: false },
+  rapier: { martial: true, ranged: false },
+  scimitar: { martial: true, ranged: false },
+  shortsword: { martial: true, ranged: false },
+  trident: { martial: true, ranged: false },
+  'war pick': { martial: true, ranged: false },
+  warhammer: { martial: true, ranged: false },
+  whip: { martial: true, ranged: false },
+  blowgun: { martial: true, ranged: true },
+  'hand crossbow': { martial: true, ranged: true },
+  'heavy crossbow': { martial: true, ranged: true },
+  longbow: { martial: true, ranged: true },
+  net: { martial: true, ranged: true },
+};
+const WEAPON_WORD_FALLBACK: Record<string, WeaponClass> = {
+  sword: { martial: true, ranged: false },
+  blade: { martial: true, ranged: false },
+  axe: { martial: true, ranged: false },
+  hammer: { martial: true, ranged: false },
+  bow: { martial: true, ranged: true },
+};
+
+type ArmorWeight = 'heavy' | 'medium' | 'light';
+const BASE_ARMORS: Record<string, ArmorWeight> = {
+  padded: 'light', leather: 'light', 'studded leather': 'light',
+  hide: 'medium', 'chain shirt': 'medium', 'scale mail': 'medium',
+  breastplate: 'medium', 'half plate': 'medium',
+  'ring mail': 'heavy', 'chain mail': 'heavy', splint: 'heavy', plate: 'heavy',
+};
+
+function hasProp(i: Item, kw: string): boolean {
+  return propsLower(i).some(p => p.includes(kw));
+}
+
+/** Recover a weapon's { martial, ranged } class from its name, or null. */
+function classifyWeaponByName(i: Item): WeaponClass | null {
+  const name = i.name.toLowerCase();
+  const bases = Object.keys(BASE_WEAPONS).sort((a, b) => b.length - a.length);
+  for (const base of bases) {
+    if (name.includes(base)) return BASE_WEAPONS[base];
+  }
+  const words = Object.keys(WEAPON_WORD_FALLBACK).sort((a, b) => b.length - a.length);
+  for (const w of words) {
+    if (name.includes(w)) return WEAPON_WORD_FALLBACK[w];
+  }
+  return null;
+}
+
+/** True if the item is a weapon (mundane attack feature, "magic weapon"
+ *  property, or a recognizable base-weapon name). */
+function isWeapon(i: Item): boolean {
+  if (i.features.some(f => f.abilityEffects?.some(e => e.type === 'damage'))) return true;
+  if (hasProp(i, 'magic weapon')) return true;
+  return classifyWeaponByName(i) !== null;
+}
+function isRangedWeapon(i: Item): boolean {
+  const cls = classifyWeaponByName(i);
+  if (cls) return cls.ranged;
+  const p = propsLower(i);
+  if (p.some(x => x.includes('ammunition') || x.includes('thrown'))) return true;
+  return i.features.some(f =>
+    f.abilityEffects?.some(e => e.type === 'damage') &&
+    f.activation?.range && !['5 feet', 'touch', '10 feet'].includes(f.activation.range)
+  );
+}
+function isMartialWeapon(i: Item): boolean {
+  const cls = classifyWeaponByName(i);
+  if (cls) return cls.martial;
+  const p = propsLower(i);
+  if (p.some(x => x.includes('martial'))) return true;
+  if (p.some(x => x.includes('simple'))) return false;
+  return p.some(x => ['heavy', 'reach', 'two-handed', 'special'].some(kw => x.includes(kw)));
+}
+
+/** Recover armor weight from properties or base-armor name, or null. */
+function armorWeight(i: Item): ArmorWeight | null {
+  const p = propsLower(i);
+  if (p.some(x => x.includes('heavy armor')))  return 'heavy';
+  if (p.some(x => x.includes('medium armor'))) return 'medium';
+  if (p.some(x => x.includes('light armor')))  return 'light';
+  const name = i.name.toLowerCase();
+  const bases = Object.keys(BASE_ARMORS).sort((a, b) => b.length - a.length);
+  for (const base of bases) {
+    if (name.includes(base)) return BASE_ARMORS[base];
+  }
+  return null;
+}
+function isArmor(i: Item, weight: 'heavy' | 'medium' | 'light'): boolean {
+  return armorWeight(i) === weight;
+}
+function isShield(i: Item): boolean {
+  return hasProp(i, 'shield');
+}
+function isAmmo(i: Item): boolean {
+  return hasProp(i, 'ammunition');
+}
+function isToolOrKit(i: Item): boolean {
+  return propsLower(i).some(p => ['tool', 'kit', 'instrument', 'artisan'].some(kw => p.includes(kw)));
+}
+function isFocus(i: Item): boolean {
+  return propsLower(i).some(p => ['focus', 'spellbook', 'component pouch'].some(kw => p.includes(kw)));
+}
+
 const ITEM_CATEGORIES: ItemCategory[] = [
+  // ── Magic equipment, sub-typed like mundane gear ──
   {
-    label: 'Magic Items',
-    emoji: '✨',
-    test: i => i.properties.some(p => p.toLowerCase().includes('magic')),
+    label: 'Magic Weapons — Martial Melee',
+    emoji: '✨⚔️',
+    test: i => isMagic(i) && isWeapon(i) && !isRangedWeapon(i) && isMartialWeapon(i),
   },
   {
-    label: 'Weapons — Martial Melee',
-    emoji: '⚔️',
-    test: i => {
-      const isMeleeWeapon = i.features.some(
-        f => f.abilityEffects?.some(e => e.type === 'damage') &&
-             (f.activation?.range === '5 feet' || f.activation?.range === 'touch')
-      );
-      const isMartial = !i.properties.some(p =>
-        ['light', 'finesse', 'thrown'].some(kw => p.toLowerCase().includes(kw)) &&
-        !['heavy', 'two-handed', 'versatile'].some(kw => p.toLowerCase().includes(kw))
-      );
-      return isMeleeWeapon && (i.properties.some(p =>
-        p.toLowerCase().includes('heavy') || p.toLowerCase().includes('versatile') ||
-        ['greatsword','greataxe','maul','longsword','battleaxe','warhammer','rapier','scimitar'].some(n => i.id.includes(n))
-      ));
-    },
+    label: 'Magic Weapons — Simple Melee',
+    emoji: '✨🗡️',
+    test: i => isMagic(i) && isWeapon(i) && !isRangedWeapon(i) && !isMartialWeapon(i),
   },
   {
-    label: 'Weapons — Simple Melee',
-    emoji: '🗡️',
-    test: i =>
-      i.features.some(f => f.abilityEffects?.some(e => e.type === 'damage') &&
-        (f.activation?.range === '5 feet' || f.activation?.range === 'touch')) &&
-      ['dagger','handaxe','club','quarterstaff','javelin','spear','mace'].some(n => i.id.includes(n)),
+    label: 'Magic Weapons — Martial Ranged',
+    emoji: '✨🏹',
+    test: i => isMagic(i) && isWeapon(i) && isRangedWeapon(i) && isMartialWeapon(i),
   },
   {
-    label: 'Weapons — Ranged',
-    emoji: '🏹',
-    test: i =>
-      i.features.some(f => f.abilityEffects?.some(e => e.type === 'damage') &&
-        f.activation?.range && !['5 feet','touch'].includes(f.activation.range)),
+    label: 'Magic Weapons — Simple Ranged',
+    emoji: '✨🎟️',
+    test: i => isMagic(i) && isWeapon(i) && isRangedWeapon(i) && !isMartialWeapon(i),
   },
   {
-    label: 'Heavy Armor',
-    emoji: '🛡️',
-    test: i => i.properties.some(p => p.toLowerCase().includes('heavy armor')),
+    label: 'Magic Weapons — Other',
+    emoji: '✨☄️',
+    test: i => isMagic(i) && isWeapon(i),  // weapon but base type unidentifiable
   },
-  {
-    label: 'Medium Armor',
-    emoji: '🥋',
-    test: i => i.properties.some(p => p.toLowerCase().includes('medium armor')),
-  },
-  {
-    label: 'Light Armor',
-    emoji: '👕',
-    test: i => i.properties.some(p => p.toLowerCase().includes('light armor')),
-  },
-  {
-    label: 'Shields',
-    emoji: '🔰',
-    test: i => i.properties.some(p => p.toLowerCase().includes('shield')),
-  },
-  {
-    label: 'Ammunition',
-    emoji: '🎯',
-    test: i => i.properties.some(p => p.toLowerCase().includes('ammunition')) && !i.features.some(f => f.abilityEffects?.some(e => e.type === 'damage')),
-  },
-  {
-    label: 'Tools & Kits',
-    emoji: '🔧',
-    test: i => i.properties.some(p => ['tool','kit','instrument'].some(kw => p.toLowerCase().includes(kw))),
-  },
-  {
-    label: 'Spellcasting Focuses',
-    emoji: '🔮',
-    test: i => i.properties.some(p => ['focus','spellbook','component pouch'].some(kw => p.toLowerCase().includes(kw))),
-  },
-  {
-    label: 'Adventuring Gear',
-    emoji: '🎒',
-    test: () => true,   // catch-all
-  },
+  { label: 'Magic Heavy Armor',  emoji: '✨🛡️', test: i => isMagic(i) && isArmor(i, 'heavy') },
+  { label: 'Magic Medium Armor', emoji: '✨🥋', test: i => isMagic(i) && isArmor(i, 'medium') },
+  { label: 'Magic Light Armor',  emoji: '✨👕', test: i => isMagic(i) && isArmor(i, 'light') },
+  { label: 'Magic Armor — Other', emoji: '✨🧥', test: i => isMagic(i) && hasProp(i, 'armor') },
+  { label: 'Magic Shields',      emoji: '✨🔰', test: i => isMagic(i) && isShield(i) },
+  { label: 'Magic Ammunition',   emoji: '✨🎯', test: i => isMagic(i) && isAmmo(i) },
+  { label: 'Magic Tools & Kits', emoji: '✨🔧', test: i => isMagic(i) && isToolOrKit(i) },
+  { label: 'Magic Focuses',      emoji: '✨🔮', test: i => isMagic(i) && isFocus(i) },
+  { label: 'Wondrous & Other Magic', emoji: '✨', test: i => isMagic(i) }, // remaining magic
+
+  // ── Mundane weapons by category ──
+  { label: 'Weapons — Martial Melee',  emoji: '⚔️', test: i => isWeapon(i) && !isRangedWeapon(i) && isMartialWeapon(i) },
+  { label: 'Weapons — Simple Melee',   emoji: '🗡️', test: i => isWeapon(i) && !isRangedWeapon(i) && !isMartialWeapon(i) },
+  { label: 'Weapons — Martial Ranged', emoji: '🏹', test: i => isWeapon(i) && isRangedWeapon(i) && isMartialWeapon(i) },
+  { label: 'Weapons — Simple Ranged',  emoji: '🎟️', test: i => isWeapon(i) && isRangedWeapon(i) && !isMartialWeapon(i) },
+
+  // ── Mundane armor by weight ──
+  { label: 'Heavy Armor',  emoji: '🛡️', test: i => isArmor(i, 'heavy') },
+  { label: 'Medium Armor', emoji: '🥋', test: i => isArmor(i, 'medium') },
+  { label: 'Light Armor',  emoji: '👕', test: i => isArmor(i, 'light') },
+  { label: 'Shields',      emoji: '🔰', test: i => isShield(i) },
+  { label: 'Ammunition',   emoji: '🎯', test: i => isAmmo(i) && !isWeapon(i) },
+  { label: 'Tools & Kits', emoji: '🔧', test: i => isToolOrKit(i) },
+  { label: 'Spellcasting Focuses', emoji: '🔮', test: i => isFocus(i) },
+  { label: 'Adventuring Gear', emoji: '🎒', test: () => true }, // catch-all
 ];
 
 function categorise(items: Item[]): { cat: ItemCategory; items: Item[] }[] {
@@ -137,6 +251,58 @@ function categorise(items: Item[]): { cat: ItemCategory; items: Item[] }[] {
   return result;
 }
 
+// ── Sorting ─────────────────────────────────────────────────────────────
+
+type SortMode = 'name' | 'value' | 'weight' | 'rarity';
+
+const SORT_LABELS: Record<SortMode, string> = {
+  name:   'A–Z',
+  value:  'Value',
+  weight: 'Weight',
+  rarity: 'Rarity',
+};
+
+// D&D rarity tiers (low → high). Items with no rarity sort as 0 (mundane).
+const RARITY_RANK: Record<string, number> = {
+  common: 1, uncommon: 2, rare: 3, 'very rare': 4, legendary: 5, artifact: 6,
+};
+function rarityRank(i: Item): number {
+  for (const p of i.properties) {
+    const r = RARITY_RANK[p.toLowerCase()];
+    if (r) return r;
+  }
+  return 0;
+}
+
+/** Parses a cost string ("50 gp", "2 sp", "—") into a copper-piece value for sorting. */
+function costInCopper(cost: string): number {
+  if (!cost || cost === '—') return -1; // unknown cost sorts last on value
+  const m = cost.match(/([\d.]+)\s*(pp|gp|ep|sp|cp)/i);
+  if (!m) return -1;
+  const amt = parseFloat(m[1]);
+  const unit = m[2].toLowerCase();
+  const mult = unit === 'pp' ? 1000 : unit === 'gp' ? 100 : unit === 'ep' ? 50 : unit === 'sp' ? 10 : 1;
+  return amt * mult;
+}
+
+function sortItems(items: Item[], mode: SortMode): Item[] {
+  const copy = [...items];
+  switch (mode) {
+    case 'value':
+      // Highest value first; unknown (−1) sinks to the bottom.
+      return copy.sort((a, b) => costInCopper(b.cost) - costInCopper(a.cost));
+    case 'weight':
+      // Lightest first.
+      return copy.sort((a, b) => (a.weight ?? 0) - (b.weight ?? 0));
+    case 'rarity':
+      // Highest rarity first, then alphabetical within a tier.
+      return copy.sort((a, b) => rarityRank(b) - rarityRank(a) || a.name.localeCompare(b.name));
+    case 'name':
+    default:
+      return copy.sort((a, b) => a.name.localeCompare(b.name));
+  }
+}
+
 // ── Add Item Modal ─────────────────────────────────────────────────────────────
 
 function AddItemModal({
@@ -148,26 +314,107 @@ function AddItemModal({
   onAdd:       (itemId: string) => void;
   onClose:     () => void;
 }) {
-  const homebrewItems = useHomebrewStore(s =>
-    (s as any).items as Item[] | undefined
-  ) ?? [];
+  const homebrewItems = useHomebrewStore(s => s.items);
+  const saveHomebrew  = useHomebrewStore(s => s.saveItem);
   const [search,    setSearch]    = useState('');
   const [expanded, setExpanded]  = useState<string | null>(null);
+  // Active category filter (null = all). When set, only that category shows.
+  const [catFilter, setCatFilter] = useState<string | null>(null);
+  const [sortMode,  setSortMode]  = useState<SortMode>('name');
+  // Quick-add custom item form
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [qName,  setQName]  = useState('');
+  const [qType,  setQType]  = useState('');
+  const [qDesc,  setQDesc]  = useState('');
+  // Collapsible filters dropdown
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  async function handleQuickAdd() {
+    const name = qName.trim();
+    if (!name) return;
+    const id = 'hb_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') + '_' + Date.now().toString(36);
+    const props = qType.trim() ? qType.split(',').map(p => p.trim().toLowerCase()).filter(Boolean) : [];
+    const custom: Item = {
+      id, name, weight: 0, cost: '\u2014',
+      properties: props,
+      features: [{
+        id: id + '_desc',
+        name,
+        description: qDesc.trim() || name,
+        source: { kind: 'item', refId: id },
+        level: null, effects: [], actions: [], choices: [], passive: true,
+      }],
+    };
+    await saveHomebrew('item', custom);
+    onAdd(id);
+    setQName(''); setQType(''); setQDesc(''); setQuickOpen(false);
+  }
+
 
   const allItems = [...globalContentDB.items, ...homebrewItems];
   const q = search.trim().toLowerCase();
-  const filtered = q
+  const searchFiltered = q
     ? allItems.filter(i => i.name.toLowerCase().includes(q) ||
         i.properties.some(p => p.toLowerCase().includes(q)))
     : allItems;
 
-  const groups = categorise(filtered);
+  const allGroups = categorise(searchFiltered).map(g => ({
+    ...g,
+    items: sortItems(g.items, sortMode),
+  }));
+  const groups = catFilter ? allGroups.filter(g => g.cat.label === catFilter) : allGroups;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={addStyles.backdrop} onPress={onClose}>
         <Pressable style={addStyles.sheet} onPress={e => e.stopPropagation()}>
-          <Text style={addStyles.title}>Add Item</Text>
+          <View style={addStyles.titleRow}>
+            <Text style={addStyles.title}>Add Item</Text>
+            <Pressable
+              style={[addStyles.quickToggle, quickOpen && addStyles.quickToggleActive]}
+              onPress={() => setQuickOpen(o => !o)}
+            >
+              <Text style={[addStyles.quickToggleTxt, quickOpen && addStyles.quickToggleTxtActive]}>
+                {quickOpen ? '× Cancel' : '+ Custom item'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Quick-add custom (homebrew) item form */}
+          {quickOpen && (
+            <View style={addStyles.quickForm}>
+              <TextInput
+                style={addStyles.quickInput}
+                value={qName}
+                onChangeText={setQName}
+                placeholder="Item name (required)"
+                placeholderTextColor={Colors.textDim}
+                autoFocus
+              />
+              <TextInput
+                style={addStyles.quickInput}
+                value={qType}
+                onChangeText={setQType}
+                placeholder="Properties, comma-separated (e.g. magic item, wondrous)"
+                placeholderTextColor={Colors.textDim}
+              />
+              <TextInput
+                style={[addStyles.quickInput, addStyles.quickInputMulti]}
+                value={qDesc}
+                onChangeText={setQDesc}
+                placeholder="Description (optional)"
+                placeholderTextColor={Colors.textDim}
+                multiline
+              />
+              <Pressable
+                style={[addStyles.quickAddBtn, !qName.trim() && addStyles.quickAddBtnDisabled]}
+                onPress={handleQuickAdd}
+                disabled={!qName.trim()}
+              >
+                <Text style={addStyles.quickAddBtnTxt}>Create & Add to Bag</Text>
+              </Pressable>
+            </View>
+          )}
           <TextInput
             style={addStyles.search}
             value={search}
@@ -176,7 +423,60 @@ function AddItemModal({
             placeholderTextColor={Colors.textDim}
             autoFocus
           />
-          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+
+          {/* Filters dropdown toggle + sort inline */}
+          <View style={addStyles.filterBar}>
+            <Pressable style={addStyles.filterToggle} onPress={() => setFiltersOpen(o => !o)}>
+              <Text style={addStyles.filterToggleTxt}>
+                {filtersOpen ? '▲' : '▼'} Filters{catFilter ? ' (1)' : ''}
+              </Text>
+            </Pressable>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}
+              style={addStyles.sortInlineRow} contentContainerStyle={addStyles.chipRowContent}>
+              {(Object.keys(SORT_LABELS) as SortMode[]).map(mode => (
+                <Pressable
+                  key={mode}
+                  style={[addStyles.sortBtn, sortMode === mode && addStyles.sortBtnActive]}
+                  onPress={() => setSortMode(mode)}
+                >
+                  <Text style={[addStyles.sortTxt, sortMode === mode && addStyles.sortTxtActive]}>
+                    {SORT_LABELS[mode]}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+
+          {filtersOpen && (
+            <View style={addStyles.filterPanel}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={addStyles.chipRow}
+                contentContainerStyle={addStyles.chipRowContent}
+              >
+                <Pressable
+                  style={[addStyles.chip, !catFilter && addStyles.chipActive]}
+                  onPress={() => setCatFilter(null)}
+                >
+                  <Text style={[addStyles.chipTxt, !catFilter && addStyles.chipTxtActive]}>All</Text>
+                </Pressable>
+                {allGroups.map(({ cat, items }) => (
+                  <Pressable
+                    key={cat.label}
+                    style={[addStyles.chip, catFilter === cat.label && addStyles.chipActive]}
+                    onPress={() => setCatFilter(c => c === cat.label ? null : cat.label)}
+                  >
+                    <Text style={[addStyles.chipTxt, catFilter === cat.label && addStyles.chipTxtActive]}>
+                      {cat.emoji} {cat.label.replace('Weapons — ', '').replace(' Armor', '')} ({items.length})
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
             {groups.map(({ cat, items }) => (
               <View key={cat.label} style={addStyles.group}>
                 <Pressable
@@ -190,7 +490,7 @@ function AddItemModal({
                     {expanded === cat.label || q ? '▲' : '▼'}
                   </Text>
                 </Pressable>
-                {(expanded === cat.label || !!q) && items.map(item => {
+                {(expanded === cat.label || !!q || catFilter === cat.label) && items.map(item => {
                   const owned = equippedIds.has(item.id) || carriedIds.has(item.id);
                   return (
                     <View key={item.id} style={[addStyles.itemRow, owned && addStyles.itemRowOwned]}>
@@ -244,6 +544,63 @@ const addStyles = StyleSheet.create({
     maxHeight: '90%',
   },
   title:  { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  quickToggle: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 3,
+  },
+  quickToggleActive: { backgroundColor: Colors.red + '22', borderColor: Colors.red + '66' },
+  quickToggleTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  quickToggleTxtActive: { color: Colors.red },
+  quickForm: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.gold + '44',
+    padding: Spacing.sm, gap: Spacing.xs,
+  },
+  quickInput: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, color: Colors.textPrimary, fontSize: FontSize.sm,
+  },
+  quickInputMulti: { minHeight: 60, textAlignVertical: 'top' },
+  quickAddBtn: {
+    backgroundColor: Colors.gold, borderRadius: Radius.md,
+    padding: Spacing.sm, alignItems: 'center',
+  },
+  quickAddBtnDisabled: { opacity: 0.4 },
+  quickAddBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  chipRow: { flexGrow: 0, marginBottom: Spacing.xs },
+  chipRowContent: { gap: Spacing.xs, paddingVertical: 2 },
+  chip: {
+    backgroundColor: Colors.surface, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  chipActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
+  chipTxt:       { fontSize: FontSize.xs, color: Colors.textSecondary },
+  chipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
+  filterBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: 2 },
+  filterToggle: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 5,
+  },
+  filterToggleTxt: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  sortInlineRow: { flexGrow: 1 },
+  filterPanel: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.xs, marginBottom: Spacing.xs,
+  },
+  sortBtn: {
+    backgroundColor: Colors.surface, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 3,
+  },
+  sortBtnActive: { backgroundColor: Colors.blue + '22', borderColor: Colors.blue },
+  sortTxt:       { fontSize: FontSize.xs, color: Colors.textSecondary },
+  sortTxtActive: { color: Colors.blue, fontWeight: FontWeight.bold },
   search: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
@@ -447,7 +804,7 @@ export function TabInventory({
   const [addOpen,  setAddOpen]  = useState(false);
   const [currOpen, setCurrOpen] = useState(false);
 
-  const homebrewItemList = useHomebrewStore(s => (s as any).items as Item[] | undefined) ?? [];
+  const homebrewItemList = useHomebrewStore(s => s.items);
   const allItems = [...globalContentDB.items, ...homebrewItemList];
 
   const large          = isLargeCreature(entity);

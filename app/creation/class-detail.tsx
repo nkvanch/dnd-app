@@ -9,6 +9,9 @@ import { globalContentDB } from '../../src/content/classes/library';
 import { levelUp, stripResolvedAsiStats } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { getProgressionForClass } from '../../src/content/classes/progressions';
+import {
+  classMeta, featuresByLevel, progressionTable, abilityFullName,
+} from '../../src/content/classes/classBrowse';
 import { Entity } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -265,6 +268,14 @@ export default function ClassDetailScreen() {
   const rules    = useCharacterStore(s => s.rules);
 
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const [browseLayer, setBrowseLayer] = useState<'summary' | 'progression' | 'features'>('summary');
+  const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
+
+  // Jump from a progression row to the Features tab, expanding that feature.
+  function goToFeature(featureId: string) {
+    setExpandedFeature(featureId);
+    setBrowseLayer('features');
+  }
   // Custom-styled class-change confirmation (replaces native Alert)
   const [changePrompt, setChangePrompt] = useState<{
     lines: string[]; className: string; onConfirm: () => void;
@@ -375,140 +386,212 @@ export default function ClassDetailScreen() {
       </View>
       <View style={styles.divider} />
 
-      {detail && (
-        <>
-          <Text style={styles.description}>{detail.description}</Text>
-          <View style={styles.divider} />
-
-          <InfoRow label="Hit Die"      value={`d${cls.hitDie}`} />
-          <InfoRow label="Spellcasting" value={detail.spellcasting ? 'Yes' : 'No'} />
-
-          <View style={styles.divider} />
-
-          {/* Collapsible: Saving Throws */}
-          <CollapsibleSection
-            title="Saving Throws"
-            open={openSection === 'saves'}
-            onToggle={() => toggle('saves')}
+      {/* ── Three-layer class browser (Summary / Features / Progression) ── */}
+      <View style={styles.layerTabs}>
+        {([
+          ['summary', 'Summary'],
+          ['progression', 'Progression'],
+          ['features', 'Features'],
+        ] as const).map(([key, label]) => (
+          <Pressable
+            key={key}
+            style={[styles.layerTab, browseLayer === key && styles.layerTabActive]}
+            onPress={() => setBrowseLayer(key)}
           >
-            {detail.savingThrows.map((s, i) => <Text key={i} style={styles.bullet}>{s}</Text>)}
-          </CollapsibleSection>
+            <Text style={[styles.layerTabTxt, browseLayer === key && styles.layerTabTxtActive]}>
+              {label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
-          {/* Collapsible: Primary Features */}
-          <CollapsibleSection
-            title="Primary Features"
-            open={openSection === 'features'}
-            onToggle={() => toggle('features')}
-          >
-            {detail.primaryFeatures.map((f, i) => <Text key={i} style={styles.bullet}>• {f}</Text>)}
-          </CollapsibleSection>
-
-          {/* Collapsible: Proficiencies */}
-          <CollapsibleSection
-            title="Proficiencies"
-            open={openSection === 'profs'}
-            onToggle={() => toggle('profs')}
-          >
-            <InfoRow label="Armor"   value={detail.armorProf} />
-            <InfoRow label="Weapons" value={detail.weaponProf} />
-            <InfoRow label="Tools"   value={detail.toolProf} />
-          </CollapsibleSection>
-        </>
-      )}
-
-      {!detail && (
-        <>
-          {cls.description && (
-            <>
-              <Text style={styles.description}>{cls.description}</Text>
-              <View style={styles.divider} />
-            </>
-          )}
-
-          <InfoRow label="Hit Die" value={`d${cls.hitDie}`} />
-
-          {/* Saving Throws */}
-          {cls.savingThrows && cls.savingThrows.length > 0 && (
-            <InfoRow
-              label="Saving Throws"
-              value={cls.savingThrows.map(a => a.charAt(0).toUpperCase() + a.slice(1)).join(', ')}
-            />
-          )}
-
-          {/* Proficiencies */}
-          {(cls.armorProfs?.length || cls.weaponProfs?.length) && (
-            <InfoRow
-              label="Proficiencies"
-              value={[
-                ...(cls.armorProfs ?? []),
-                ...(cls.weaponProfs ?? []),
-              ].join(', ') || 'None'}
-            />
-          )}
-
-          {/* Spellcasting */}
-          {cls.spellcastingAbility && (
-            <InfoRow
-              label="Spellcasting"
-              value={`${cls.spellcastingAbility.toUpperCase()} • ${cls.spellcastingStyle ?? 'custom'}${
-                cls.spellcastingStartLevel && cls.spellcastingStartLevel > 1
-                  ? ` (from level ${cls.spellcastingStartLevel})`
-                  : ''
-              }`}
-            />
-          )}
-
-          <View style={styles.divider} />
-
-          <Text style={styles.sectionLabel}>FEATURES</Text>
-          {cls.levelFeatures && cls.levelFeatures.length > 0 ? (
-            // Show Phase 2 levelFeatures grouped by level
-            (() => {
-              const byLevel = new Map<number, { name: string; description: string }[]>();
-              for (const f of cls.levelFeatures!) {
-                if (!byLevel.has(f.level)) byLevel.set(f.level, []);
-                byLevel.get(f.level)!.push(f);
-              }
-              return Array.from(byLevel.entries())
-                .sort(([a], [b]) => a - b)
-                .map(([lvl, feats]) => (
-                  <View key={lvl}>
-                    <Text style={styles.levelLabel}>Level {lvl}</Text>
-                    {feats.map((f, i) => (
-                      <View key={i} style={styles.featureBlock}>
-                        <Text style={styles.featureName}>{f.name}</Text>
-                        <Text style={styles.description}>{f.description}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ));
-            })()
-          ) : cls.features.length > 0 ? (
-            // Fall back to legacy cls.features for Phase 1 classes
-            cls.features.map(f => (
-              <View key={f.id} style={styles.featureBlock}>
-                <Text style={styles.featureName}>{f.name}</Text>
-                <Text style={styles.description}>{f.description}</Text>
+      {/* Layer 1 — Summary */}
+      {browseLayer === 'summary' && (() => {
+        const meta = classMeta(cls);
+        return (
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryGrid}>
+              <View style={styles.summaryCell}>
+                <Text style={styles.summaryCellLabel}>ROLE</Text>
+                <Text style={styles.summaryCellValue}>{meta.role}</Text>
               </View>
-            ))
-          ) : (
-            <Text style={styles.emptyNote}>No features defined yet.</Text>
-          )}
+              <View style={styles.summaryCell}>
+                <Text style={styles.summaryCellLabel}>PRIMARY</Text>
+                <Text style={styles.summaryCellValue}>{abilityFullName(meta.primaryAbility)}</Text>
+              </View>
+              <View style={styles.summaryCell}>
+                <Text style={styles.summaryCellLabel}>HIT DIE</Text>
+                <Text style={styles.summaryCellValue}>d{cls.hitDie}</Text>
+              </View>
+              <View style={styles.summaryCell}>
+                <Text style={styles.summaryCellLabel}>COMPLEXITY</Text>
+                <Text style={[styles.summaryCellValue, {
+                  color: meta.complexity === 'Easy' ? Colors.green
+                       : meta.complexity === 'Complex' ? Colors.red : Colors.gold,
+                }]}>{meta.complexity}</Text>
+              </View>
+            </View>
 
-          <View style={styles.divider} />
-          {/* Show the info card only if Phase 2 data is incomplete */}
-          {(!cls.savingThrows || !cls.spellcastingAbility) && (
+            <Text style={styles.summaryDesc}>{meta.shortDescription}</Text>
+
+            {meta.keyMechanics.length > 0 && (
+              <>
+                <Text style={styles.summarySectionLabel}>KEY MECHANICS</Text>
+                <View style={styles.mechanicsRow}>
+                  {meta.keyMechanics.map((m, i) => (
+                    <View key={i} style={styles.mechanicChip}>
+                      <Text style={styles.mechanicChipTxt}>{m}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
+            <Text style={styles.summarySectionLabel}>PLAYSTYLE</Text>
+            <Text style={styles.summaryDesc}>{meta.playstyle}</Text>
+
+            {meta.recommendation && (
+              <View style={styles.recBox}>
+                <Text style={styles.recLabel}>💡 RECOMMENDED BUILD</Text>
+                <Text style={styles.recTxt}>{meta.recommendation}</Text>
+              </View>
+            )}
+          </View>
+        );
+      })()}
+
+      {/* Layer 2 — Feature database (descriptions collapse behind names) */}
+      {browseLayer === 'features' && (() => {
+        const feats = featuresByLevel(cls);
+        if (feats.length === 0) {
+          return <Text style={styles.emptyNote}>No features defined for this class yet.</Text>;
+        }
+        return (
+          <View style={{ gap: Spacing.sm }}>
+            {feats.map(({ feature, level }) => {
+              const open = expandedFeature === feature.id;
+              return (
+                <View key={feature.id} style={styles.featCard}>
+                  <Pressable
+                    style={styles.featCardHead}
+                    onPress={() => setExpandedFeature(open ? null : feature.id)}
+                  >
+                    <Text style={styles.featCardName}>{feature.name}</Text>
+                    <View style={styles.featLevelBadge}>
+                      <Text style={styles.featLevelTxt}>Lv {level}</Text>
+                    </View>
+                    <Text style={styles.featCaret}>{open ? '▲' : '▼'}</Text>
+                  </Pressable>
+                  {open && (
+                    <>
+                      {feature.activation && (
+                        <Text style={styles.featTag}>
+                          {feature.activation.actionType === 'bonus_action' ? 'Bonus Action'
+                            : feature.activation.actionType === 'reaction' ? 'Reaction'
+                            : feature.activation.actionType === 'action' ? 'Action'
+                            : 'Passive'}
+                        </Text>
+                      )}
+                      <Text style={styles.featDesc}>{feature.description}</Text>
+                    </>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        );
+      })()}
+
+      {/* Layer 3 — Progression table (tap a feature → Features tab) */}
+      {browseLayer === 'progression' && (() => {
+        const rows = progressionTable(cls);
+        return (
+          <>
+            <Text style={styles.progHint}>Tap a feature to read its description.</Text>
+            <View style={styles.progTable}>
+              <View style={[styles.progRow, styles.progHeaderRow]}>
+                <Text style={[styles.progLevelCell, styles.progHeaderTxt]}>Lv</Text>
+                <Text style={[styles.progFeatCell, styles.progHeaderTxt]}>Features</Text>
+                <Text style={[styles.progSlotCell, styles.progHeaderTxt]}>Slots</Text>
+              </View>
+              {rows.map(row => (
+                <View key={row.level} style={styles.progRow}>
+                  <Text style={styles.progLevelCell}>{row.level}</Text>
+                  <View style={styles.progFeatCell}>
+                    {row.features.length === 0 && !row.hasASI ? (
+                      <Text style={styles.progFeatNone}>—</Text>
+                    ) : (
+                      <View style={styles.progFeatWrap}>
+                        {row.features.map((f, i) => (
+                          <Pressable key={f.id} onPress={() => goToFeature(f.id)}>
+                            <Text style={styles.progFeatLink}>
+                              {f.name}{(i < row.features.length - 1 || row.hasASI) ? ',' : ''}
+                            </Text>
+                          </Pressable>
+                        ))}
+                        {row.hasASI && (
+                          <Text style={styles.progFeatAsi}>Ability Score Improvement</Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.progSlotCell}>{row.slotSummary ?? ''}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        );
+      })()}
+
+      <View style={styles.divider} />
+
+      {/* Proficiencies & Saving Throws — the one piece the three layers don't
+          cover. Works for official (CLASS_DETAIL) and homebrew (cls fields). */}
+      {(() => {
+        // Saving throws: official from CLASS_DETAIL, homebrew from cls.savingThrows.
+        const saves = detail
+          ? detail.savingThrows
+          : (cls.savingThrows ?? []).map(a => a.charAt(0).toUpperCase() + a.slice(1));
+        // Proficiencies: official has prose strings; homebrew has profs arrays.
+        const armor   = detail ? detail.armorProf  : (cls.armorProfs ?? []).join(', ');
+        const weapons = detail ? detail.weaponProf : (cls.weaponProfs ?? []).join(', ');
+        const tools   = detail ? detail.toolProf   : '';
+        const hasAny  = saves.length > 0 || armor || weapons || tools;
+        if (!hasAny) {
+          return (
             <View style={styles.infoCard}>
               <Text style={styles.infoCardTxt}>
-                {!cls.savingThrows
-                  ? `Saving throws and some proficiencies haven't been configured yet. Edit this class in the Homebrew tab to add them.`
-                  : `Spellcasting hasn't been configured yet. Edit this class in the Homebrew tab if this is a spellcasting class.`
-                }
+                Saving throws and proficiencies haven't been configured for this
+                class yet. Edit it in the Homebrew tab to add them.
               </Text>
             </View>
-          )}
-        </>
-      )}
+          );
+        }
+        return (
+          <>
+            <CollapsibleSection
+              title="Proficiencies & Saving Throws"
+              open={openSection === 'profs'}
+              onToggle={() => toggle('profs')}
+            >
+              {saves.length > 0 && <InfoRow label="Saving Throws" value={saves.join(', ')} />}
+              {!!armor   && <InfoRow label="Armor"   value={armor} />}
+              {!!weapons && <InfoRow label="Weapons" value={weapons} />}
+              {!!tools   && <InfoRow label="Tools"   value={tools} />}
+            </CollapsibleSection>
+
+            {/* Homebrew with incomplete spellcasting config gets a gentle hint */}
+            {!detail && cls.spellcastingAbility === undefined && (
+              <View style={styles.infoCard}>
+                <Text style={styles.infoCardTxt}>
+                  If this is a spellcasting class, configure spellcasting in the
+                  Homebrew tab so spell slots appear in the progression.
+                </Text>
+              </View>
+            )}
+          </>
+        );
+      })()}
 
       <View style={styles.divider} />
       <Pressable style={styles.selectBtn} onPress={selectClass}>
@@ -625,8 +708,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
-  backBtn:   { marginBottom: Spacing.md },
-  backBtnText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
   heading: { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
   headingRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm },
   homebrewTag: {
@@ -636,19 +717,93 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   homebrewTagTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
-  sectionLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.sm },
-  levelLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim, letterSpacing: 1, marginTop: Spacing.sm, marginBottom: 2 },
   emptyNote: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
-  featureBlock: { marginBottom: Spacing.md },
-  featureName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 2 },
+
+  // ── Three-layer browser ──
+  layerTabs: { flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.md },
+  layerTab: {
+    flex: 1, alignItems: 'center', paddingVertical: Spacing.sm,
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  layerTabActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
+  layerTabTxt: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  layerTabTxtActive: { color: Colors.gold },
+
+  // Layer 1 — summary
+  summaryCard: {
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, gap: Spacing.sm,
+  },
+  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  summaryCell: {
+    flexBasis: '47%', flexGrow: 1,
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, padding: Spacing.sm,
+  },
+  summaryCellLabel: { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 1, marginBottom: 2 },
+  summaryCellValue: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  summaryDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
+  summarySectionLabel: {
+    fontSize: FontSize.xs, color: Colors.gold, letterSpacing: 2,
+    fontWeight: FontWeight.bold, marginTop: Spacing.xs,
+  },
+  mechanicsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  mechanicChip: {
+    backgroundColor: Colors.gold + '18', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '44',
+    paddingHorizontal: Spacing.sm, paddingVertical: 3,
+  },
+  mechanicChipTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  recBox: {
+    backgroundColor: Colors.gold + '11', borderRadius: Radius.md,
+    borderLeftWidth: 3, borderLeftColor: Colors.gold,
+    padding: Spacing.sm, marginTop: Spacing.xs,
+  },
+  recLabel: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold, letterSpacing: 1, marginBottom: 2 },
+  recTxt: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 19 },
+
+  // Layer 2 — feature cards
+  featCard: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.sm, gap: 4,
+  },
+  featCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  featCardName: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold, flex: 1 },
+  featCaret: { fontSize: FontSize.xs, color: Colors.textDim, marginLeft: Spacing.sm },
+  featLevelBadge: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 1,
+  },
+  featLevelTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  featTag: { fontSize: FontSize.xs, color: Colors.blue, fontWeight: FontWeight.bold },
+  featDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 19 },
+
+  // Layer 3 — progression table
+  progTable: {
+    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, overflow: 'hidden',
+  },
+  progRow: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    paddingVertical: Spacing.xs, paddingHorizontal: Spacing.sm, gap: Spacing.sm,
+  },
+  progHeaderRow: { backgroundColor: Colors.surfaceHigh },
+  progHeaderTxt: { color: Colors.gold, fontWeight: FontWeight.bold, letterSpacing: 1 },
+  progLevelCell: { width: 28, fontSize: FontSize.sm, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  progFeatCell:  { flex: 1, fontSize: FontSize.sm, color: Colors.textSecondary },
+  progHint: { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic', marginBottom: Spacing.xs },
+  progFeatWrap: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 },
+  progFeatLink: { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold },
+  progFeatAsi: { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic' },
+  progFeatNone: { fontSize: FontSize.sm, color: Colors.textDim },
+  progSlotCell:  { width: 56, fontSize: FontSize.xs, color: Colors.blue, textAlign: 'right' },
   infoCard: { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
   infoCardTxt: { color: Colors.textDim, fontSize: FontSize.sm, lineHeight: 20 },
   divider:     { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
-  description: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 22 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.xs, borderBottomWidth: 1, borderBottomColor: Colors.border },
   infoLabel: { fontSize: FontSize.md, color: Colors.textSecondary },
   infoValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, flex: 1, textAlign: 'right' },
-  bullet:    { fontSize: FontSize.md, color: Colors.textPrimary, marginBottom: Spacing.xs },
   selectBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center' },
   selectBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
 });

@@ -367,9 +367,10 @@ function getEquippedWeapons(entity: Entity, profBonus: number): WeaponInfo[] {
     // A weapon is any item whose feature carries a 'damage' ability effect.
     let dice: string | null = null;
     let dmgType = '';
+    let featureName = def.name;
     for (const f of def.features) {
       for (const ae of (f.abilityEffects ?? [])) {
-        if (ae.type === 'damage') { dice = ae.dice; dmgType = ae.damageType; break; }
+        if (ae.type === 'damage') { dice = ae.dice; dmgType = ae.damageType; featureName = f.name; break; }
       }
       if (dice) break;
     }
@@ -379,14 +380,23 @@ function getEquippedWeapons(entity: Entity, profBonus: number): WeaponInfo[] {
     const isFinesse  = props.some(p => p.includes('finesse'));
     const isRanged   = props.some(p => p.includes('ammunition'));
     const abMod      = (isFinesse || isRanged) ? Math.max(strMod, dexMod) : strMod;
-    const attackBonus = profBonus + abMod;
-    const modStr     = abMod >= 0 ? `+${abMod}` : `${abMod}`;
+
+    // Parse a magic bonus (+1/+2/+3) from the item properties or name, matching
+    // the action-card calculation so both views agree. e.g. "+1 to attack and
+    // damage rolls" or a name like "+1 Life-Drinking Greatsword".
+    const magicHay = [def.name, featureName, ...def.properties].join(' ');
+    const magicMatch = magicHay.match(/\+(\d)\b/);
+    const magicBonus = magicMatch ? parseInt(magicMatch[1], 10) : 0;
+
+    const attackBonus = profBonus + abMod + magicBonus;
+    const dmgBonus    = abMod + magicBonus;
+    const modStr      = dmgBonus >= 0 ? `+${dmgBonus}` : `${dmgBonus}`;
 
     result.push({
       itemId: inst.itemId,
       name: def.name,
       attackBonus,
-      damage: `${dice}${abMod !== 0 ? modStr : ''} ${dmgType}`.trim(),
+      damage: `${dice}${dmgBonus !== 0 ? modStr : ''} ${dmgType}`.trim(),
       isRanged,
     });
   }

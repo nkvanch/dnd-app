@@ -22,6 +22,7 @@ import { TabFeatures }  from '../../src/components/sheet/TabFeatures';
 import { TabInventory } from '../../src/components/sheet/TabInventory';
 import { TabNotes }     from '../../src/components/sheet/TabNotes';
 import { TabSpells }    from '../../src/components/sheet/TabSpells';
+import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
 import { GlobalDiceRoller } from '../../src/components/GlobalDiceRoller';
 import { SyncStatusDot }   from '../../src/components/SyncStatusDot';
 import { SafeBottomView }  from '../../src/components/SafeBottomView';
@@ -54,11 +55,18 @@ export default function CharacterSheetScreen() {
 
   const entity = characters.find(c => c.id === id);
   const [activeTab, setActiveTab] = useState<TabId>('character');
+  const [freeEditOpen, setFreeEditOpen] = useState(false);
 
   // Build tab list: Spells tab is inserted after Actions for spellcasters.
-  // This is computed after entity exists — but the hook is called unconditionally;
-  // the value just updates once entity loads.
-  const TABS: { id: TabId; label: string }[] = entity?.spellcasting
+  // Also show it for Skeleton characters (Doomed Touch grants chill touch) even
+  // if their spellcasting block hasn't been initialised yet — the tab provides
+  // the repair action that initialises it.
+  const isSkeletonChar =
+    entity?.identity.raceId    === 'skeleton' ||
+    entity?.identity.subRaceId === 'skeleton_giant' ||
+    !!entity?.features.some(f => f.id === 'skeleton_doomed_touch');
+  const showSpellsTab = !!entity?.spellcasting || isSkeletonChar;
+  const TABS: { id: TabId; label: string }[] = showSpellsTab
     ? [BASE_TABS[0], BASE_TABS[1], SPELLS_TAB, ...BASE_TABS.slice(2)]
     : BASE_TABS;
 
@@ -252,6 +260,12 @@ export default function CharacterSheetScreen() {
           <Text style={styles.charName} numberOfLines={1}>
             {identity.name || 'Unnamed'}
           </Text>
+          {/* Free-edit is only offered when NOT in an active campaign (solo/prep). */}
+          {!campaignId && (
+            <Pressable style={styles.freeEditBtn} onPress={() => setFreeEditOpen(true)}>
+              <Text style={styles.freeEditTxt}>🔓 Edit</Text>
+            </Pressable>
+          )}
           <SyncStatusDot />
         </View>
         <View style={styles.headerStats}>
@@ -390,6 +404,15 @@ export default function CharacterSheetScreen() {
       {/* Global dice roller — floats above rest bar */}
       <GlobalDiceRoller bottom={72} right={12} />
 
+      {/* Free-edit modal (solo/prep only) */}
+      <FreeEditModal
+        visible={freeEditOpen}
+        entity={entity}
+        rules={rules}
+        onApply={updated => mutate(() => updated)}
+        onClose={() => setFreeEditOpen(false)}
+      />
+
     </View>
   );
 }
@@ -424,6 +447,12 @@ const styles = StyleSheet.create({
   backBtn:  { paddingRight: Spacing.xs },
   backTxt:  { color: Colors.gold, fontSize: FontSize.md, fontWeight: FontWeight.bold },
   charName: { flex: 1, fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  freeEditBtn: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 3, marginRight: Spacing.xs,
+  },
+  freeEditTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
   charSub:  { fontSize: FontSize.xs, color: Colors.textSecondary },
 
   statPills: { flexDirection: 'row', gap: Spacing.xs },

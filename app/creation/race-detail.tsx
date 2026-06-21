@@ -92,6 +92,7 @@ export default function RaceDetailScreen() {
 
   // Subrace selection — mandatory when the race defines subraces.
   const [subRaceId, setSubRaceId] = useState<string | null>(null);
+  const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
   const subraces    = race?.subraces ?? [];
   const hasSubraces = subraces.length > 0;
   const canSelect   = !hasSubraces || subRaceId !== null;
@@ -152,12 +153,26 @@ export default function RaceDetailScreen() {
         <>
           <View style={styles.divider} />
           <Text style={styles.sectionTitle}>Features</Text>
-          {race.features.map(f => (
-            <View key={f.id} style={styles.featureRow}>
-              <Text style={styles.bullet}>• {f.name}</Text>
-              {f.description ? <Text style={styles.featureDesc}>{f.description}</Text> : null}
-            </View>
-          ))}
+          {race.features.map(f => {
+            const open = expandedFeature === f.id;
+            return (
+              <View key={f.id} style={styles.featureRow}>
+                <Pressable
+                  style={styles.featureHeader}
+                  onPress={() => setExpandedFeature(open ? null : f.id)}
+                  disabled={!f.description}
+                >
+                  <Text style={styles.featureName}>{f.name}</Text>
+                  {f.description ? (
+                    <Text style={styles.featureCaret}>{open ? '▲' : '▼'}</Text>
+                  ) : null}
+                </Pressable>
+                {open && f.description ? (
+                  <Text style={styles.featureDesc}>{f.description}</Text>
+                ) : null}
+              </View>
+            );
+          })}
         </>
       )}
 
@@ -248,8 +263,11 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: FontSize.md, color: Colors.textSecondary },
   infoValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   bullet:      { fontSize: FontSize.md, color: Colors.textPrimary, marginBottom: Spacing.xs },
-  featureRow:  { marginBottom: Spacing.sm },
-  featureDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, paddingLeft: Spacing.md, marginTop: 2 },
+  featureRow:  { marginBottom: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border, paddingBottom: Spacing.xs },
+  featureHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2 },
+  featureName: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold, flex: 1 },
+  featureCaret: { fontSize: FontSize.xs, color: Colors.textDim, marginLeft: Spacing.sm },
+  featureDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 4, lineHeight: 19 },
   selectBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center' },
   selectBtnDisabled: { backgroundColor: Colors.goldDim },
   selectBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },

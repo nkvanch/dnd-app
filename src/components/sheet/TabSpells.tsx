@@ -20,6 +20,7 @@ import { globalContentDB } from '../../content/classes/library';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { rollExpression } from '../../engine/dice';
 import { UseModal } from './TabActions';
+import { AddSpellModal } from './AddSpellModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -51,9 +52,35 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const homebrewSpells = useHomebrewStore(s => s.spells);
+  const [addSpellOpen, setAddSpellOpen] = useState(false);
 
-  const { spellcasting, identity } = entity;
-  if (!spellcasting) return null;
+  // A character may reach this tab without a spellcasting block (e.g. a Skeleton
+  // whose Doomed Touch cantrip hasn't been initialised). Use a safe default so
+  // the Add Spell action can initialise a real block on first use.
+  const spellcasting = entity.spellcasting ?? {
+    ability:       'con' as const,
+    slots:         { '1':{total:0,used:0}, '2':{total:0,used:0}, '3':{total:0,used:0}, '4':{total:0,used:0}, '5':{total:0,used:0}, '6':{total:0,used:0}, '7':{total:0,used:0}, '8':{total:0,used:0}, '9':{total:0,used:0} },
+    cantrips:      [] as string[],
+    known:         [] as string[],
+    prepared:      [] as string[],
+    concentrating: null as string | null,
+  };
+  const { identity } = entity;
+
+  // Add a spell/cantrip to the character. Initialises the spellcasting block
+  // if the entity didn't have one. Cantrips (level 0) go to .cantrips; leveled
+  // spells go to .known.
+  function addSpell(spellId: string, level: number) {
+    const block = entity.spellcasting ?? {
+      ability: 'con' as const,
+      slots: { '1':{total:0,used:0}, '2':{total:0,used:0}, '3':{total:0,used:0}, '4':{total:0,used:0}, '5':{total:0,used:0}, '6':{total:0,used:0}, '7':{total:0,used:0}, '8':{total:0,used:0}, '9':{total:0,used:0} },
+      cantrips: [], known: [], prepared: [], concentrating: null,
+    };
+    const next = level === 0
+      ? { ...block, cantrips: [...new Set([...block.cantrips, spellId])] }
+      : { ...block, known:    [...new Set([...block.known,    spellId])] };
+    onEntityUpdate({ ...entity, spellcasting: next });
+  }
 
   const isPreparedCaster = PREPARED_CASTERS.has(identity.classId);
   const preparedSet      = new Set(spellcasting.prepared);
@@ -168,6 +195,11 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      {/* Add Spell button */}
+      <Pressable style={styles.addSpellBtn} onPress={() => setAddSpellOpen(true)}>
+        <Text style={styles.addSpellBtnTxt}>+ Add Spell or Cantrip</Text>
+      </Pressable>
 
       {/* Concentration banner */}
       {spellcasting.concentrating && (
@@ -336,6 +368,14 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
         onRoll={rollForCard}
         onClose={() => setActiveCard(null)}
       />
+
+      {/* Add Spell picker modal — rich multi-axis filtering */}
+      <AddSpellModal
+        visible={addSpellOpen}
+        entity={entity}
+        onAdd={(spellId, isCantrip) => addSpell(spellId, isCantrip ? 0 : 1)}
+        onClose={() => setAddSpellOpen(false)}
+      />
     </ScrollView>
   );
 }
@@ -354,6 +394,40 @@ function DetailCell({ label, value }: { label: string; value: string }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  addSpellBtn: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.gold + '66', borderStyle: 'dashed',
+    padding: Spacing.sm, alignItems: 'center', marginBottom: Spacing.sm,
+  },
+  addSpellBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+
+  modalBackdrop: { flex: 1, backgroundColor: '#000000bb', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: Colors.surfaceHigh,
+    borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,
+    padding: Spacing.md, gap: Spacing.sm, paddingBottom: Spacing.xxl, maxHeight: '90%',
+  },
+  modalTitle:  { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  modalSearch: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, color: Colors.textPrimary, fontSize: FontSize.md,
+  },
+  modalGroup:      { marginBottom: Spacing.sm },
+  modalGroupLabel: { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 2, fontWeight: FontWeight.bold, marginBottom: Spacing.xs },
+  modalRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: Spacing.sm, gap: Spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  modalRowName: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  modalRowMeta: { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 1 },
+  modalAdd:     { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold },
+  modalRemove:  { fontSize: FontSize.sm, color: Colors.red, fontWeight: FontWeight.bold },
+  modalEmpty:   { color: Colors.textDim, fontStyle: 'italic', textAlign: 'center', padding: Spacing.lg },
+  modalClose:   { alignItems: 'center', padding: Spacing.sm, backgroundColor: Colors.surface, borderRadius: Radius.md },
+  modalCloseTxt:{ color: Colors.textSecondary, fontSize: FontSize.md, fontWeight: FontWeight.bold },
+
   scroll:  { flex: 1 },
   content: { padding: Spacing.md, gap: Spacing.sm, paddingBottom: Spacing.xxl },
 

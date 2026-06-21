@@ -14,6 +14,73 @@ import {
   ActionCardTag, AbilityEffect, FeatureActivation, Spell,
 } from './types';
 import { globalContentDB } from '../content/classes/library';
+import { modifier } from './pipeline';
+
+// ── Weapon attack / damage computation ────────────────────────────────────────
+
+/** Proficiency bonus from character level (PHB scaling). */
+function profBonusFor(entity: Entity): number {
+  return Math.ceil(1 + entity.identity.level / 4);
+}
+
+/**
+ * Parses a magic bonus (+1/+2/+3) from an item's properties or feature name.
+ * e.g. "+1 to attack and damage rolls" → 1; "+1 Life-Drinking Greatsword" → 1.
+ */
+function parseMagicBonus(feature: Feature): number {
+  const hay = [feature.name, ...(feature.description ? [feature.description] : [])].join(' ');
+  const m = hay.match(/\+(\d)\b/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/**
+ * Determines which ability modifier a weapon uses. Finesse weapons use the
+ * higher of STR/DEX; ranged weapons use DEX; everything else uses STR.
+ * Reads item properties via the feature's source item id.
+ */
+function weaponAbilityMod(feature: Feature, entity: Entity): { mod: number; ability: 'str' | 'dex' } {
+  const itemId = feature.source?.kind === 'item' ? feature.source.refId : null;
+  const item   = itemId ? globalContentDB.items.find(i => i.id === itemId) : null;
+  const props  = (item?.properties ?? []).map(p => p.toLowerCase()).join(' ');
+
+  const strMod = modifier(entity.stats.str);
+  const dexMod = modifier(entity.stats.dex);
+
+  const isFinesse = props.includes('finesse');
+  const isRanged  = props.includes('ammunition') || props.includes('thrown') && props.includes('range');
+
+  if (isFinesse) {
+    return dexMod >= strMod ? { mod: dexMod, ability: 'dex' } : { mod: strMod, ability: 'str' };
+  }
+  if (isRanged) return { mod: dexMod, ability: 'dex' };
+  return { mod: strMod, ability: 'str' };
+}
+
+/**
+ * Computes a weapon's to-hit bonus and flat damage bonus.
+ * to-hit = ability mod + proficiency (always proficient for now) + magic bonus
+ * damage = ability mod + magic bonus
+ */
+function computeWeaponAttack(feature: Feature, entity: Entity): { toHit: number; dmgBonus: number; ability: string } | null {
+  // Only item-sourced features with a damage ability effect are weapons
+  if (feature.source?.kind !== 'item') return null;
+  const hasDamage = (feature.abilityEffects ?? []).some(e => e.type === 'damage');
+  if (!hasDamage) return null;
+
+  const { mod, ability } = weaponAbilityMod(feature, entity);
+  const magic = parseMagicBonus(feature);
+  const prof  = profBonusFor(entity);
+
+  return {
+    toHit:    mod + prof + magic,
+    dmgBonus: mod + magic,
+    ability:  ability.toUpperCase(),
+  };
+}
+
+function fmtBonus(n: number): string {
+  return n >= 0 ? `+${n}` : `${n}`;
+}
 
 // ── Classification ────────────────────────────────────────────────────────────
 
@@ -130,14 +197,28 @@ export function buildLayer1ForSpell(spell: Spell, cardType: ActionCardType): str
  * Layer 2: key mechanical summary.
  * Examples: "8d6 Fire • 20 ft radius", "+2 damage, B/P/S resistance"
  */
-export function buildLayer2(feature: Feature): string {
+export function buildLayer2(feature: Feature, entity?: Entity): string {
   const fx = feature.abilityEffects ?? [];
 
   const parts: string[] = [];
 
+  // Weapon attack: prepend to-hit and fold the flat damage bonus into the dice
+  const atk = entity ? computeWeaponAttack(feature, entity) : null;
+  if (atk) {
+    parts.push(`${fmtBonus(atk.toHit)} to hit`);
+  }
+
   for (const e of fx) {
     if (e.type === 'damage') {
-      parts.push(`${e.dice} ${capitalize(e.damageType)}`);
+      // For weapon attacks, show "2d8+8" (dice + ability/magic bonus).
+      // Only the FIRST damage effect gets the ability mod (the weapon swing);
+      // rider damage (e.g. 3d6 necrotic) is shown without the mod.
+      const isFirstDamage = fx.findIndex(x => x.type === 'damage') === fx.indexOf(e);
+      if (atk && isFirstDamage && atk.dmgBonus !== 0) {
+        parts.push(`${e.dice}${fmtBonus(atk.dmgBonus)} ${capitalize(e.damageType)}`);
+      } else {
+        parts.push(`${e.dice} ${capitalize(e.damageType)}`);
+      }
     } else if (e.type === 'heal') {
       parts.push(`Heal ${e.dice}`);
     } else if (e.type === 'apply_condition') {
@@ -306,7 +387,7 @@ export function generateActionCard(
     cardType,
     color:             cardColor(cardType),
     layer1:            buildLayer1(feature, cardType),
-    layer2:            buildLayer2(feature),
+    layer2:            buildLayer2(feature, entity),
     layer3:            buildLayer3(feature),
     activation:        feature.activation,
     resourceCost:      feature.activation.resourceCost,
@@ -385,6 +466,24 @@ export function generateAllActionCards(entity: Entity): ActionCard[] {
     if (!fi.isActive) continue;
     const card = generateActionCard(fi, entity);
     if (card) cards.push(card);
+  }
+
+  // 1b. Equipped item features (weapon attacks, magic-item actions).
+  //     These live on inventory.equipped[].features, NOT entity.features, so
+  //     they must be iterated separately or weapon attack cards never appear.
+  //     If an equipped instance has no hydrated features (older saves stored
+  //     only the itemId), fall back to the item definition in the content DB.
+  for (const inst of entity.inventory.equipped) {
+    const feats = (inst.features && inst.features.length > 0)
+      ? inst.features
+      : (globalContentDB.items.find(i => i.id === inst.itemId)?.features ?? []);
+    for (const fi of feats) {
+      // Only features with an activation produce cards (attacks, usable items);
+      // passive AC features (armor) are handled by collectAllEffects, not here.
+      if (!fi.activation) continue;
+      const card = generateActionCard(fi, entity);
+      if (card) cards.push(card);
+    }
   }
 
   // 2. Spell-based cards (cantrips + known/prepared)

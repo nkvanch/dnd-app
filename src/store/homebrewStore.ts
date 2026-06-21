@@ -10,7 +10,7 @@
 // to SQLite; on next load the SQLite copy takes precedence over the built-in.
 // ============================================================================
 import { create } from 'zustand';
-import { Race, CharClass, Spell, Feature, Background, ContentDB } from '../engine/types';
+import { Race, CharClass, Spell, Feature, Background, Item, ContentDB } from '../engine/types';
 import {
   saveHomebrewContent, loadAllHomebrew, deleteHomebrewContent,
   ContentCacheType, HomebrewContent,
@@ -46,6 +46,7 @@ type HomebrewStore = {
   spells:      Spell[];
   backgrounds: Background[];
   features:    Feature[];
+  items:       Item[];
   isLoading:   boolean;
 
   /** Load all homebrew from SQLite and merge built-in homebrew. */
@@ -67,6 +68,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   spells:      [],
   backgrounds: [],
   features:    [],
+  items:       [],
   isLoading:   false,
 
   loadHomebrew: async () => {
@@ -100,6 +102,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         spells:      (all.spell      ?? []) as Spell[],
         backgrounds: (all.background ?? []) as Background[],
         features:    (all.feature    ?? []) as Feature[],
+        items:       (all.item       ?? []) as Item[],
         isLoading:   false,
       });
     } catch (e) {
@@ -109,14 +112,14 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   },
 
   getMergedContentDB: (): ContentDB => {
-    const { races, classes, spells, backgrounds, features } = get();
+    const { races, classes, spells, backgrounds, features, items } = get();
     return {
       races:       [...globalContentDB.races,       ...races],
       classes:     [...globalContentDB.classes,     ...classes],
       spells:      [...globalContentDB.spells,      ...spells],
       backgrounds: [...globalContentDB.backgrounds, ...backgrounds],
       conditions:  globalContentDB.conditions,
-      items:       globalContentDB.items,
+      items:       [...globalContentDB.items,       ...items],
       features:    [...globalContentDB.features,    ...features],
       feats:       globalContentDB.feats,
     };
@@ -131,6 +134,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'spell':      return { spells:      [...state.spells.filter(s => s.id !== (item as Spell).id),          item as Spell] };
         case 'background': return { backgrounds: [...state.backgrounds.filter(b => b.id !== (item as Background).id), item as Background] };
         case 'feature':    return { features:    [...state.features.filter(f => f.id !== (item as Feature).id),      item as Feature] };
+        case 'item':       return { items:       [...state.items.filter(it => it.id !== (item as Item).id),         item as Item] };
         default:           return state;
       }
     });
@@ -154,6 +158,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'spell':      return { spells:      state.spells.filter(s => s.id !== id) };
         case 'background': return { backgrounds: state.backgrounds.filter(b => b.id !== id) };
         case 'feature':    return { features:    state.features.filter(f => f.id !== id) };
+        case 'item':       return { items:       state.items.filter(it => it.id !== id) };
         default:           return state;
       }
     });

@@ -20,7 +20,8 @@ export function HpModal({ visible, currentHp, maxHp, onDamage, onHeal, onClose }
 
   function submit(type: 'damage' | 'heal') {
     if (!valid) return;
-    type === 'damage' ? onDamage(amount) : onHeal(amount);
+    if (type === 'damage') onDamage(amount);
+    else onHeal(amount);
     setText('');
     onClose();
   }

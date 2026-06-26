@@ -1,12 +1,14 @@
 // app/creation/skills.tsx
 // Skill selection. Shows already-owned proficiencies at top, then choices below.
-// Handles re-entry gracefully: if all choices are already resolved, shows a
-// read-only summary of what was picked rather than "no choices for this class".
+// Two overlap modes (set in Campaign Settings):
+//   'replacement' — opens extra skills so you never lose a pick
+//   'warn'        — stay on class list; warn inline when you'll lose picks
 import { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { resolveChoice } from '../../src/engine/leveling';
+import { skillOverlapMode } from '../../src/engine/houseRules';
 import { ChoiceOption, SkillName } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -25,13 +27,10 @@ export default function SkillsScreen() {
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
 
-  // Split into pending vs resolved so re-entry shows a summary instead of
-  // the confusing "no additional skill choices" message.
   const allSkillChoices      = draft ? draft.choices.filter(c => c.definition.kind === 'skill') : [];
   const pendingSkillChoices  = allSkillChoices.filter(c => !c.resolved);
   const resolvedSkillChoices = allSkillChoices.filter(c =>  c.resolved);
 
-  // Already-owned skills from background / race / class grants
   const alreadyTrained = draft
     ? Object.entries(draft.skills.skills)
         .filter(([, entry]) => entry.trained)
@@ -41,15 +40,63 @@ export default function SkillsScreen() {
   const [selections, setSelections] = useState<Record<string, string[]>>(
     Object.fromEntries(pendingSkillChoices.map(c => [c.id, []]))
   );
+  // Controls the inline loss-confirmation box in warn mode.
+  // Only opens when the user explicitly taps the Confirm button — NOT on selection.
+  const [showWarnBox, setShowWarnBox] = useState(false);
 
-  // Redirect to name if no draft — must be in useEffect, not render
   useEffect(() => {
     if (!draft) router.replace('/creation/name');
   }, [draft?.id]);
 
   if (!draft) return null;
 
+  const ALL_SKILL_KEYS = Object.keys(SKILL_LABELS) as SkillName[];
+  const overlapMode = skillOverlapMode(rules);
+
+  function poolFor(choice: typeof pendingSkillChoices[number]):
+    (ChoiceOption & { isReplacement?: boolean })[] {
+    const basePool = Array.isArray(choice.definition.pool)
+      ? (choice.definition.pool as ChoiceOption[]) : [];
+
+    if (overlapMode === 'warn') return basePool;
+
+    const pickableInClass = basePool.filter(
+      o => !draft!.skills.skills[o.value as SkillName]?.trained
+    ).length;
+    const shortfall = choice.definition.count - pickableInClass;
+    if (shortfall <= 0) return basePool;
+
+    const inPool = new Set(basePool.map(o => o.value));
+    const replacements: (ChoiceOption & { isReplacement?: boolean })[] = ALL_SKILL_KEYS
+      .filter(sk => !inPool.has(sk) && !draft!.skills.skills[sk]?.trained)
+      .map(sk => ({ id: `repl_${sk}`, label: SKILL_LABELS[sk], value: sk, isReplacement: true }));
+    return [...basePool, ...replacements];
+  }
+
+  // How many picks are achievable for this choice given current overlap.
+  function achievableCount(choice: typeof pendingSkillChoices[number]): number {
+    if (overlapMode === 'replacement') return choice.definition.count;
+    const basePool = Array.isArray(choice.definition.pool)
+      ? (choice.definition.pool as ChoiceOption[]) : [];
+    const pickable = basePool.filter(
+      o => !draft!.skills.skills[o.value as SkillName]?.trained
+    ).length;
+    return Math.min(choice.definition.count, pickable);
+  }
+
+  function overlapCount(choice: typeof pendingSkillChoices[number]): number {
+    const basePool = Array.isArray(choice.definition.pool)
+      ? (choice.definition.pool as ChoiceOption[]) : [];
+    return basePool.filter(o => !!draft!.skills.skills[o.value as SkillName]?.trained).length;
+  }
+
+  // Total picks being lost across all pending choices in warn mode.
+  const totalLost = pendingSkillChoices.reduce(
+    (sum, c) => sum + (c.definition.count - achievableCount(c)), 0
+  );
+
   function toggle(choiceId: string, optId: string, max: number) {
+    setShowWarnBox(false);  // hide warn box if user changes selection
     setSelections(prev => {
       const cur = prev[choiceId] ?? [];
       if (cur.includes(optId)) return { ...prev, [choiceId]: cur.filter(id => id !== optId) };
@@ -58,11 +105,18 @@ export default function SkillsScreen() {
     });
   }
 
-  // Re-opens already-resolved skill choices for editing: untrains the skills
-  // this choice previously granted (so they're selectable again), flips the
-  // choice back to unresolved, and pre-fills the picker with the previous
-  // picks. Without this, confirming skills once made the Skills screen
-  // permanently read-only on re-entry.
+  // All pending choices have reached their achievable count.
+  function canProceed(): boolean {
+    return pendingSkillChoices.every(c => {
+      const target   = achievableCount(c);
+      const selected = selections[c.id]?.length ?? 0;
+      return selected === target;
+    });
+  }
+
+  // True when warn mode has losses but the user hasn't yet confirmed.
+  // Only becomes true after the user explicitly taps the Confirm button.
+
   function startEditingSkills() {
     let updated = draft!;
     const newSelections: Record<string, string[]> = {};
@@ -79,20 +133,15 @@ export default function SkillsScreen() {
           skills: {
             skills: {
               ...updated.skills.skills,
-              ...Object.fromEntries(
-                prevSkills.map(sk => [sk, { ...updated.skills.skills[sk], trained: false }])
-              ),
+              ...Object.fromEntries(prevSkills.map(sk => [sk, { ...updated.skills.skills[sk], trained: false }])),
             },
           },
         };
       }
-
       newSelections[choice.id] = [...choice.selections];
       updated = {
         ...updated,
-        choices: updated.choices.map(c =>
-          c.id === choice.id ? { ...c, resolved: false, selections: [] } : c
-        ),
+        choices: updated.choices.map(c => c.id === choice.id ? { ...c, resolved: false, selections: [] } : c),
       };
     }
 
@@ -100,31 +149,60 @@ export default function SkillsScreen() {
     setSelections(prev => ({ ...prev, ...newSelections }));
   }
 
-  function canProceed() {
-    return pendingSkillChoices.every(c => (selections[c.id]?.length ?? 0) === c.definition.count);
-  }
-
-  function handleConfirm() {
+  function commit() {
     let updated = draft!;
     for (const choice of pendingSkillChoices) {
       const chosen = selections[choice.id] ?? [];
-      if (chosen.length === choice.definition.count) {
-        updated = resolveChoice(updated, choice.id, chosen, rules);
+      if (chosen.length !== achievableCount(choice)) continue;
+
+      const pool = poolFor(choice);
+      if (overlapMode === 'replacement') {
+        const augmented = {
+          ...updated,
+          choices: updated.choices.map(c =>
+            c.id === choice.id
+              ? { ...c, definition: { ...c.definition, pool: pool as ChoiceOption[] } }
+              : c
+          ),
+        };
+        updated = resolveChoice(augmented, choice.id, chosen, rules);
+      } else {
+        // Warn mode: pad to full count with overlap ids (already-trained skills
+        // are idempotent re-grants so resolveChoice's count check passes).
+        const basePool = Array.isArray(choice.definition.pool) ? choice.definition.pool as ChoiceOption[] : [];
+        const overlapIds = basePool
+          .filter(o => !!draft!.skills.skills[o.value as SkillName]?.trained)
+          .map(o => o.id);
+        const needPad = choice.definition.count - chosen.length;
+        const padded  = [...chosen, ...overlapIds.slice(0, Math.max(0, needPad))];
+        if (padded.length === choice.definition.count) {
+          updated = resolveChoice(updated, choice.id, padded, rules);
+        } else {
+          // Edge: not enough overlap ids to pad (shouldn't happen). Mark resolved
+          // with what we have so the hub doesn't loop back here forever.
+          updated = {
+            ...updated,
+            choices: updated.choices.map(c =>
+              c.id === choice.id ? { ...c, resolved: true, selections: chosen } : c
+            ),
+          };
+        }
       }
     }
     setDraft(updated);
     router.push('/creation/hub');
   }
 
-  // ── Case 1: no skill choices exist for this class ──────────────────────────
+  // ── Case 1: no skill choices ───────────────────────────────────────────────
   if (allSkillChoices.length === 0) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backBtnTxt}>← Back</Text>
+        </Pressable>
         <Text style={styles.heading}>Skill Selection</Text>
         <View style={styles.divider} />
-        <Text style={{ color: Colors.textSecondary, fontSize: FontSize.md, marginBottom: Spacing.xl }}>
-          No additional skill choices for this class.
-        </Text>
+        <Text style={styles.emptyNote}>No additional skill choices for this class.</Text>
         <Pressable style={styles.nextBtn} onPress={() => router.push('/creation/hub')}>
           <Text style={styles.nextBtnText}>Continue →</Text>
         </Pressable>
@@ -132,10 +210,13 @@ export default function SkillsScreen() {
     );
   }
 
-  // ── Case 2: all choices already resolved (re-entering this step) ───────────
+  // ── Case 2: all resolved (re-entering) ────────────────────────────────────
   if (pendingSkillChoices.length === 0) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backBtnTxt}>← Back</Text>
+        </Pressable>
         <Text style={styles.heading}>Skill Selection</Text>
         <View style={styles.divider} />
         <Text style={styles.ownedTitle}>Skills already chosen:</Text>
@@ -143,8 +224,7 @@ export default function SkillsScreen() {
           const pool = Array.isArray(c.definition.pool) ? c.definition.pool as ChoiceOption[] : [];
           return c.selections.map(selId => {
             const opt   = pool.find(o => o.id === selId);
-            const label = opt
-              ? (SKILL_LABELS[opt.label.toLowerCase().replace(/ /g, '_')] ?? opt.label)
+            const label = opt ? (SKILL_LABELS[opt.label.toLowerCase().replace(/ /g, '_')] ?? opt.label)
               : SKILL_LABELS[selId] ?? selId;
             return <Text key={selId} style={styles.ownedSkill}>✓ {label}</Text>;
           });
@@ -160,41 +240,62 @@ export default function SkillsScreen() {
     );
   }
 
-  // ── Case 3: pending choices to make ───────────────────────────────────────
+  // ── Case 3: pending choices ───────────────────────────────────────────────
+  const ready = canProceed();
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Text style={styles.backBtnTxt}>← Back</Text>
+      </Pressable>
       <Text style={styles.heading}>Skill Selection</Text>
       <View style={styles.divider} />
 
-      {/* Already owned */}
       {alreadyTrained.length > 0 && (
         <View style={styles.ownedBlock}>
-          <Text style={styles.ownedTitle}>Skill Proficiencies already in possession:</Text>
-          {alreadyTrained.map(s => (
-            <Text key={s} style={styles.ownedSkill}>{s}</Text>
-          ))}
+          <Text style={styles.ownedTitle}>Already proficient:</Text>
+          {alreadyTrained.map(s => <Text key={s} style={styles.ownedSkill}>{s}</Text>)}
           <View style={styles.divider} />
         </View>
       )}
 
-      {/* Pending choices */}
       {pendingSkillChoices.map(choice => {
-        const pool   = Array.isArray(choice.definition.pool) ? choice.definition.pool as ChoiceOption[] : [];
-        const chosen = selections[choice.id] ?? [];
+        const pool    = poolFor(choice);
+        const chosen  = selections[choice.id] ?? [];
+        const need    = achievableCount(choice);
+        const overlap = overlapCount(choice);
+        const losing  = choice.definition.count - need;
+
         return (
           <View key={choice.id} style={styles.choiceBlock}>
-            <Text style={styles.choicePrompt}>Choose {choice.definition.count} Skills</Text>
-            <Text style={styles.choiceCount}>Selected: {chosen.length} / {choice.definition.count}</Text>
+            <Text style={styles.choicePrompt}>
+              Choose {need} {need === 1 ? 'Skill' : 'Skills'}
+            </Text>
+            <Text style={styles.choiceCount}>
+              Selected: {chosen.length} / {need}
+            </Text>
+
+            {overlap > 0 && overlapMode === 'replacement' && (
+              <Text style={styles.replacementNote}>
+                Your background already covers {overlap} of this class's skill{overlap === 1 ? '' : 's'}.
+                {' '}{overlap} replacement pick{overlap === 1 ? '' : 's'} opened below — you don't lose any.
+              </Text>
+            )}
+            {losing > 0 && overlapMode === 'warn' && (
+              <Text style={styles.lossNote}>
+                Your background covers {overlap} of this class's skills, so you can pick {need} instead of {choice.definition.count} (losing {losing} pick{losing === 1 ? '' : 's'}).
+              </Text>
+            )}
+
             {pool.map(opt => {
-              const skillKey         = opt.value as SkillName;
-              const isAlreadyTrained = draft!.skills.skills[skillKey]?.trained === true;
+              const isAlreadyTrained = !!draft.skills.skills[opt.value as SkillName]?.trained;
               const isSelected       = chosen.includes(opt.id);
-              const isDisabled       = isAlreadyTrained || (!isSelected && chosen.length >= choice.definition.count);
+              const isDisabled       = isAlreadyTrained || (!isSelected && chosen.length >= need);
               return (
                 <Pressable
                   key={opt.id}
                   style={[styles.option, isSelected && styles.optionSelected, isDisabled && styles.optionDisabled]}
-                  onPress={() => { if (!isAlreadyTrained) toggle(choice.id, opt.id, choice.definition.count); }}
+                  onPress={() => { if (!isAlreadyTrained) toggle(choice.id, opt.id, need); }}
                   disabled={isDisabled}
                 >
                   <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
@@ -208,6 +309,9 @@ export default function SkillsScreen() {
                     {SKILL_LABELS[opt.label.toLowerCase().replace(/ /g, '_')] ?? opt.label}
                   </Text>
                   {isAlreadyTrained && <Text style={styles.alreadyTag}>From background</Text>}
+                  {opt.isReplacement && !isAlreadyTrained && (
+                    <Text style={styles.replacementTag}>Replacement</Text>
+                  )}
                 </Pressable>
               );
             })}
@@ -215,12 +319,43 @@ export default function SkillsScreen() {
         );
       })}
 
+      {/* Inline warn confirmation — only appears after tapping Confirm */}
+      {showWarnBox && (
+        <View style={styles.warnConfirmBox}>
+          <Text style={styles.warnConfirmTitle}>Confirm skill loss</Text>
+          <Text style={styles.warnConfirmBody}>
+            You'll get {totalLost} fewer skill {totalLost === 1 ? 'proficiency' : 'proficiencies'} than normal
+            because your background overlaps your class skills. Continue?
+          </Text>
+          <View style={styles.warnConfirmRow}>
+            <Pressable style={styles.warnCancelBtn} onPress={() => setShowWarnBox(false)}>
+              <Text style={styles.warnCancelTxt}>Cancel</Text>
+            </Pressable>
+            <Pressable style={styles.warnOkBtn} onPress={() => { setShowWarnBox(false); commit(); }}>
+              <Text style={styles.warnOkTxt}>Yes, continue (−{totalLost} skill{totalLost === 1 ? '' : 's'})</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* Confirm button */}
       <Pressable
-        style={[styles.nextBtn, !canProceed() && styles.nextBtnDisabled]}
-        onPress={handleConfirm}
-        disabled={!canProceed()}
+        style={[styles.nextBtn, (!ready || showWarnBox) && styles.nextBtnDisabled]}
+        onPress={() => {
+          if (!ready || showWarnBox) return;
+          if (overlapMode === 'warn' && totalLost > 0) {
+            setShowWarnBox(true);   // show inline confirmation
+          } else {
+            commit();
+          }
+        }}
+        disabled={!ready || showWarnBox}
       >
-        <Text style={styles.nextBtnText}>Confirm Skills</Text>
+        <Text style={styles.nextBtnText}>
+          {ready && overlapMode === 'warn' && totalLost > 0
+            ? `Confirm Skills (losing ${totalLost} pick${totalLost === 1 ? '' : 's'})`
+            : 'Confirm Skills'}
+        </Text>
       </Pressable>
     </ScrollView>
   );
@@ -229,8 +364,13 @@ export default function SkillsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
-  heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
-  divider:   { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
+
+  backBtn: { marginBottom: Spacing.md },
+  backBtnTxt: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+
+  heading: { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
+  divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
+  emptyNote: { color: Colors.textSecondary, fontSize: FontSize.md, marginBottom: Spacing.xl },
 
   ownedBlock: { marginBottom: Spacing.sm },
   ownedTitle: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.sm, fontWeight: FontWeight.bold },
@@ -239,6 +379,11 @@ const styles = StyleSheet.create({
   choiceBlock:  { marginBottom: Spacing.xl },
   choicePrompt: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.xs },
   choiceCount:  { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
+
+  replacementNote: { fontSize: FontSize.sm, color: Colors.blue, marginBottom: Spacing.md, lineHeight: 19 },
+  lossNote:        { fontSize: FontSize.sm, color: Colors.gold, marginBottom: Spacing.md, lineHeight: 19,
+                     backgroundColor: Colors.gold + '11', borderRadius: Radius.sm, padding: Spacing.sm,
+                     borderLeftWidth: 3, borderLeftColor: Colors.gold },
 
   option: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
@@ -258,6 +403,28 @@ const styles = StyleSheet.create({
   optionTextSelected: { fontWeight: FontWeight.bold },
   optionTextMuted:    { color: Colors.textDim },
   alreadyTag:         { fontSize: FontSize.xs, color: Colors.green, fontWeight: FontWeight.bold },
+  replacementTag:     { fontSize: FontSize.xs, color: Colors.blue, fontWeight: FontWeight.bold },
+
+  // Inline warn confirmation (replaces Alert.alert)
+  warnConfirmBox: {
+    backgroundColor: Colors.gold + '11', borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.gold + '55',
+    padding: Spacing.md, gap: Spacing.sm, marginTop: Spacing.md,
+  },
+  warnConfirmTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.gold },
+  warnConfirmBody:  { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 20 },
+  warnConfirmRow:   { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },
+  warnCancelBtn: {
+    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  warnCancelTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  warnOkBtn: {
+    flex: 2, backgroundColor: Colors.gold, borderRadius: Radius.md,
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  warnOkTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   nextBtn:         { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center', marginTop: Spacing.lg },
   nextBtnDisabled: { backgroundColor: Colors.goldDim },

@@ -3,6 +3,7 @@
 import { View, Text, FlatList, Pressable, StyleSheet, TextInput, ScrollView } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { globalContentDB } from '../../src/content/classes/library';
@@ -149,13 +150,15 @@ const BG_DETAIL: Record<string, {
 
 export default function BackgroundScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { detail } = useLocalSearchParams<{ detail?: string }>();
   const homebrewBackgrounds = useHomebrewStore(s => s.backgrounds);
+  const [search, setSearch] = useState('');
 
-  // If ?detail=id is in the URL, show the detail view inline
+  // If ?detail=id is in the URL, show the detail view inline. This branch comes
+  // AFTER all hooks above so hook order stays identical across renders.
   if (detail) return <BackgroundDetail id={detail} />;
 
-  const [search, setSearch] = useState('');
   const backgrounds = globalContentDB.backgrounds.filter(b =>
     b.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -179,7 +182,7 @@ export default function BackgroundScreen() {
       <FlatList
         data={backgrounds}
         keyExtractor={b => b.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + Spacing.xxl }]}
         renderItem={({ item }) => (
           <Pressable
             style={styles.row}

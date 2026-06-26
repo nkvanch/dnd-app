@@ -12,6 +12,7 @@ import { getProgressionForClass } from '../../src/content/classes/progressions';
 import {
   classMeta, featuresByLevel, progressionTable, abilityFullName,
 } from '../../src/content/classes/classBrowse';
+import { subclassEntriesForClass } from '../../src/content/subclasses/subclassBrowse';
 import { Entity } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -593,6 +594,38 @@ export default function ClassDetailScreen() {
         );
       })()}
 
+      {/* ── Subclasses ── */}
+      {(() => {
+        const subs = subclassEntriesForClass(cls.id);
+        if (subs.length === 0) return null;
+        return (
+          <>
+            <View style={styles.divider} />
+            <Text style={styles.subclassHeading}>SUBCLASSES</Text>
+            <View style={{ gap: Spacing.sm }}>
+              {subs.map(sub => (
+                <Pressable
+                  key={sub.id}
+                  style={styles.subclassCard}
+                  onPress={() => router.push(`/creation/subclass-detail?classId=${cls!.id}&subclassId=${sub.id}`)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.subclassNameRow}>
+                      <Text style={styles.subclassName}>{sub.name}</Text>
+                      <View style={styles.subclassLvlBadge}>
+                        <Text style={styles.subclassLvlTxt}>Lv {sub.unlockLevel}+</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.subclassBlurb} numberOfLines={2}>{sub.blurb}</Text>
+                  </View>
+                  <Text style={styles.subclassArrow}>›</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        );
+      })()}
+
       <View style={styles.divider} />
       <Pressable style={styles.selectBtn} onPress={selectClass}>
         <Text style={styles.selectBtnText}>Select Class</Text>
@@ -806,4 +839,19 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, flex: 1, textAlign: 'right' },
   selectBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center' },
   selectBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
+  subclassHeading: { fontSize: FontSize.xs, color: Colors.gold, letterSpacing: 2, fontWeight: FontWeight.bold, marginBottom: Spacing.sm },
+  subclassCard: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.md,
+  },
+  subclassNameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  subclassName: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  subclassLvlBadge: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border, paddingHorizontal: Spacing.sm, paddingVertical: 1,
+  },
+  subclassLvlTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  subclassBlurb: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2, lineHeight: 18 },
+  subclassArrow: { fontSize: FontSize.xl, color: Colors.textDim },
 });

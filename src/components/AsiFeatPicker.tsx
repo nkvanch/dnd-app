@@ -3,13 +3,15 @@
 // Presentational + applies the choice through the engine's ASI/feat helpers,
 // then hands the updated entity back via onResolved. Used by the creation
 // level-up screen and the in-play (sheet) level-up modal so the two never drift.
-import { useState, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { useState, useMemo, useEffect } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Modal } from 'react-native';
 import { applyAsiToEntity, applyFeatToEntity } from '../engine/leveling';
 import { applyStatModifiers, collectAllEffects } from '../engine/pipeline';
+import { evaluatePrerequisite } from '../engine/featPrereq';
+import { asiMode as getAsiMode } from '../engine/houseRules';
 import { ALL_FEATS } from '../content/feats/index';
 import { useHomebrewStore } from '../store/homebrewStore';
-import { Entity, ChoiceState, CampaignRules, Ability, Feat } from '../engine/types';
+import { Entity, ChoiceState, CampaignRules, Ability, SkillName, Feat } from '../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 const ABILITIES: { key: Ability; label: string }[] = [
@@ -21,6 +23,18 @@ const ABILITIES: { key: Ability; label: string }[] = [
   { key: 'cha', label: 'Charisma'     },
 ];
 
+const SKILL_LIST: { key: SkillName; label: string }[] = [
+  { key: 'athletics', label: 'Athletics' }, { key: 'acrobatics', label: 'Acrobatics' },
+  { key: 'sleight_of_hand', label: 'Sleight of Hand' }, { key: 'stealth', label: 'Stealth' },
+  { key: 'arcana', label: 'Arcana' }, { key: 'history', label: 'History' },
+  { key: 'investigation', label: 'Investigation' }, { key: 'nature', label: 'Nature' },
+  { key: 'religion', label: 'Religion' }, { key: 'animal_handling', label: 'Animal Handling' },
+  { key: 'insight', label: 'Insight' }, { key: 'medicine', label: 'Medicine' },
+  { key: 'perception', label: 'Perception' }, { key: 'survival', label: 'Survival' },
+  { key: 'deception', label: 'Deception' }, { key: 'intimidation', label: 'Intimidation' },
+  { key: 'performance', label: 'Performance' }, { key: 'persuasion', label: 'Persuasion' },
+];
+
 type Mode = '+2' | '+1+1' | 'feat';
 
 export function AsiFeatPicker({
@@ -29,20 +43,50 @@ export function AsiFeatPicker({
   rules,
   onResolved,
   onClose,
+  featOnly = false,
 }: {
   entity:     Entity;
   choice:     ChoiceState;
   rules:      CampaignRules;
   onResolved: (updated: Entity) => void;
   onClose?:   () => void;
+  /** When true, only the Feat path is shown (used for feats taken at creation). */
+  featOnly?:  boolean;
 }) {
-  const [mode,   setMode]   = useState<Mode>('+2');
+  const [mode,   setMode]   = useState<Mode>(
+    featOnly ? 'feat' : '+2'
+  );
+  // The table's ASI rule controls which paths are offered. featOnly (a feat
+  // taken at creation, not an ASI level) always forces the feat path.
+  const ruleAsiMode = featOnly ? 'feat_only' : getAsiMode(rules);
+  // 'both' = the player gets an ASI AND a feat at this level. We collect the ASI
+  // first, then require a feat before applying both together.
+  const requireBoth = ruleAsiMode === 'both';
+  // Which top-level paths the mode picker exposes.
+  const showAsiTabs  = ruleAsiMode === 'asi_or_feat' || ruleAsiMode === 'asi_only' || ruleAsiMode === 'both';
+  const showFeatTab  = ruleAsiMode === 'asi_or_feat' || ruleAsiMode === 'feat_only';
   const [first,  setFirst]  = useState<Ability | null>(null);
   const [second, setSecond] = useState<Ability | null>(null);
   const [featId, setFeatId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  // When a player selects a feat whose prerequisite isn't met, we stash it here
+  // to drive the "get anyway" confirmation popup.
+  const [overridePrompt, setOverridePrompt] = useState<{ featId: string; reason: string } | null>(null);
+  // For feats that grant "+1 to one of N abilities (your choice)", the player's pick.
+  const [featAbility, setFeatAbility] = useState<Ability | null>(null);
+  // For skill-granting feats: map of pick id -> chosen skill.
+  const [featSkills, setFeatSkills] = useState<Record<string, SkillName>>({});
+  // 'both' mode: after the ASI is applied we stash the updated entity here and
+  // switch to the feat step; the feat is then applied on top of it.
+  const [bothEntity, setBothEntity] = useState<Entity | null>(null);
 
   const maxScore = rules.maxAbilityScore ?? Infinity;
+  // When the table rule is feat-only (but not the creation featOnly prop),
+  // force the feat path on mount.
+  useEffect(() => {
+    if (ruleAsiMode === 'feat_only' && !featOnly) setMode('feat');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const homebrewFeatures = useHomebrewStore(s => s.features);
 
   // Homebrew "features" (built in the Feature Editor) are authored with
@@ -57,6 +101,13 @@ export function AsiFeatPicker({
     [homebrewFeatures],
   );
   const allFeats = useMemo(() => [...ALL_FEATS, ...homebrewFeats], [homebrewFeats]);
+
+  // Evaluate each feat's prerequisite against the current entity once.
+  const prereqById = useMemo(() => {
+    const map: Record<string, ReturnType<typeof evaluatePrerequisite>> = {};
+    for (const f of allFeats) map[f.id] = evaluatePrerequisite(entity, f.prerequisite);
+    return map;
+  }, [allFeats, entity]);
 
   // EFFECTIVE scores (base + racial/feat effects) — must match what the sheet's
   // Abilities tab shows, and the PHB cap of 20 applies to the effective score.
@@ -79,37 +130,125 @@ export function AsiFeatPicker({
   function canApply(): boolean {
     if (mode === '+2')   return first !== null;
     if (mode === '+1+1') return first !== null && second !== null && first !== second;
-    return featId !== null;
+    // Feat mode: need a feat, and if it has an ability/skill choice, those too.
+    if (featId === null) return false;
+    const f = allFeats.find(x => x.id === featId);
+    if (f?.abilityChoice && featAbility === null) return false;
+    if (f?.skillChoice && f.skillChoice.picks.some(p => !featSkills[p.id])) return false;
+    return true;
+  }
+
+  // Build the feature to apply: inject the chosen ability's stat_modifier and
+  // any chosen skill proficiencies/expertise so they land through the pipeline.
+  function featureToApply(f: Feat): Feat['feature'] {
+    const extra: Feat['feature']['effects'] = [];
+    if (f.abilityChoice && featAbility) {
+      extra.push({
+        type: 'stat_modifier', target: featAbility,
+        operation: 'add', value: f.abilityChoice.amount, condition: null,
+      });
+    }
+    if (f.skillChoice) {
+      for (const pick of f.skillChoice.picks) {
+        const sk = featSkills[pick.id];
+        if (!sk) continue;
+        extra.push({
+          type: 'grant_proficiency', target: `skill:${sk}`,
+          // 'add' = proficiency, 'multiply' = expertise (per the pipeline).
+          operation: pick.mode === 'expertise' ? 'multiply' : 'add',
+          value: null, condition: null,
+        });
+      }
+    }
+    if (extra.length === 0) return f.feature;
+    return { ...f.feature, effects: [...f.feature.effects, ...extra] };
+  }
+
+  function commitFeat(id: string) {
+    const feat = allFeats.find(f => f.id === id);
+    if (!feat) return;
+    // Block commit if an ability or skill choice is required but unmade. This
+    // can happen via the "take anyway" popup, which bypasses canApply — close
+    // the popup and select the feat so its inline pickers show.
+    const needsAbility = !!feat.abilityChoice && !featAbility;
+    const needsSkill   = !!feat.skillChoice && feat.skillChoice.picks.some(p => !featSkills[p.id]);
+    if (needsAbility || needsSkill) {
+      setOverridePrompt(null);
+      setFeatId(id);
+      return;
+    }
+    // Resilient-style feats: the chosen ability also grants proficiency in that
+    // ability's saving throws. Saving-throw proficiency is read directly from
+    // entity.proficiencies.savingThrows (no effect path), so add it here before
+    // the feat's feature and ability bonus are applied.
+    let baseEntity = bothEntity ?? entity;
+    if (feat.abilityChoice?.grantsSaveProficiency && featAbility &&
+        !baseEntity.proficiencies.savingThrows.includes(featAbility)) {
+      baseEntity = {
+        ...baseEntity,
+        proficiencies: {
+          ...baseEntity.proficiencies,
+          savingThrows: [...baseEntity.proficiencies.savingThrows, featAbility],
+        },
+      };
+    }
+    const updated = applyFeatToEntity(baseEntity, choice.id, choice.grantedAt, featureToApply(feat), feat.id, rules);
+    setMode('+2'); setFirst(null); setSecond(null); setFeatId(null); setSearch('');
+    setFeatAbility(null);
+    setFeatSkills({});
+    setOverridePrompt(null);
+    setBothEntity(null);
+    onResolved(updated);
+  }
+
+  // Tapping a feat row: if its prerequisite is unmet, raise the "get anyway"
+  // popup instead of selecting immediately. Met feats select normally.
+  function onFeatTap(id: string) {
+    if (featId === id) { setFeatId(null); setFeatAbility(null); setFeatSkills({}); return; }
+    setFeatAbility(null);
+    setFeatSkills({});
+    const res = prereqById[id];
+    if (res && !res.met) {
+      setOverridePrompt({ featId: id, reason: res.reason });
+      return;
+    }
+    setFeatId(id);
   }
 
   function handleApply() {
     if (!canApply()) return;
-    let updated: Entity;
 
     if (mode === 'feat' && featId) {
-      const feat = allFeats.find(f => f.id === featId);
-      if (!feat) return;
-      updated = applyFeatToEntity(entity, choice.id, choice.grantedAt, feat.feature, feat.id, rules);
-    } else {
-      const increases: Partial<Record<Ability, number>> = {};
-      if (mode === '+2' && first) {
-        increases[first] = 2;
-      } else if (mode === '+1+1' && first && second) {
-        increases[first]  = (increases[first]  ?? 0) + 1;
-        increases[second] = (increases[second] ?? 0) + 1;
-      }
-      updated = applyAsiToEntity(entity, choice.id, increases, rules);
+      commitFeat(featId);
+      return;
     }
 
-    // Reset local selection so the next pending choice (if any) starts clean.
+    const increases: Partial<Record<Ability, number>> = {};
+    if (mode === '+2' && first) {
+      increases[first] = 2;
+    } else if (mode === '+1+1' && first && second) {
+      increases[first]  = (increases[first]  ?? 0) + 1;
+      increases[second] = (increases[second] ?? 0) + 1;
+    }
+    const asiUpdated = applyAsiToEntity(entity, choice.id, increases, rules);
+
+    if (requireBoth) {
+      // ASI done — now require a feat. Stash the ASI-applied entity and move to
+      // the feat step; commitFeat applies the feat on top before resolving.
+      setBothEntity(asiUpdated);
+      setMode('feat');
+      setFirst(null); setSecond(null);
+      return;
+    }
+
     setMode('+2'); setFirst(null); setSecond(null); setFeatId(null); setSearch('');
-    onResolved(updated);
+    onResolved(asiUpdated);
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.headerRow}>
-        <Text style={styles.heading}>Ability Score Improvement</Text>
+        <Text style={styles.heading}>{featOnly ? 'Choose a Feat' : 'Ability Score Improvement'}</Text>
         {onClose && (
           <Pressable onPress={onClose} hitSlop={8}>
             <Text style={styles.close}>✕</Text>
@@ -118,27 +257,47 @@ export function AsiFeatPicker({
       </View>
       <Text style={styles.sub}>{choice.definition.prompt}</Text>
 
-      {/* Mode picker */}
-      <View style={styles.modeRow}>
-        <Pressable
-          style={[styles.modeBtn, mode === '+2' && styles.modeBtnActive]}
-          onPress={() => { setMode('+2'); setFirst(null); setSecond(null); setFeatId(null); }}
-        >
-          <Text style={[styles.modeBtnTxt, mode === '+2' && styles.modeBtnTxtActive]}>+2 one</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.modeBtn, mode === '+1+1' && styles.modeBtnActive]}
-          onPress={() => { setMode('+1+1'); setFirst(null); setSecond(null); setFeatId(null); }}
-        >
-          <Text style={[styles.modeBtnTxt, mode === '+1+1' && styles.modeBtnTxtActive]}>+1 two</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.modeBtn, mode === 'feat' && styles.modeBtnActive]}
-          onPress={() => { setMode('feat'); setFirst(null); setSecond(null); }}
-        >
-          <Text style={[styles.modeBtnTxt, mode === 'feat' && styles.modeBtnTxtActive]}>Feat</Text>
-        </Pressable>
-      </View>
+      {/* Mode picker — visibility depends on the table's ASI rule. */}
+      {!featOnly && (showAsiTabs || showFeatTab) && (
+        <>
+          {requireBoth && (
+            <Text style={styles.bothHint}>
+              {bothEntity
+                ? 'Ability increase applied — now choose a feat to finish.'
+                : 'This table grants BOTH an ability increase AND a feat. Choose your increase first.'}
+            </Text>
+          )}
+          <View style={styles.modeRow}>
+            {showAsiTabs && (
+              <>
+                <Pressable
+                  style={[styles.modeBtn, mode === '+2' && styles.modeBtnActive]}
+                  onPress={() => { setMode('+2'); setFirst(null); setSecond(null); setFeatId(null); }}
+                  disabled={requireBoth && !!bothEntity}
+                >
+                  <Text style={[styles.modeBtnTxt, mode === '+2' && styles.modeBtnTxtActive]}>+2 one</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.modeBtn, mode === '+1+1' && styles.modeBtnActive]}
+                  onPress={() => { setMode('+1+1'); setFirst(null); setSecond(null); setFeatId(null); }}
+                  disabled={requireBoth && !!bothEntity}
+                >
+                  <Text style={[styles.modeBtnTxt, mode === '+1+1' && styles.modeBtnTxtActive]}>+1 two</Text>
+                </Pressable>
+              </>
+            )}
+            {(showFeatTab || requireBoth) && (
+              <Pressable
+                style={[styles.modeBtn, mode === 'feat' && styles.modeBtnActive]}
+                onPress={() => { if (!requireBoth || bothEntity) setMode('feat'); setFirst(null); setSecond(null); }}
+                disabled={requireBoth && !bothEntity}
+              >
+                <Text style={[styles.modeBtnTxt, mode === 'feat' && styles.modeBtnTxtActive]}>Feat</Text>
+              </Pressable>
+            )}
+          </View>
+        </>
+      )}
 
       {mode === 'feat' ? (
         <>
@@ -152,25 +311,116 @@ export function AsiFeatPicker({
           <View style={styles.featList}>
             {filteredFeats.map(f => {
               const selected = featId === f.id;
+              const pr = prereqById[f.id];
+              const unmet = pr && !pr.met;
               return (
                 <Pressable
                   key={f.id}
-                  style={[styles.featRow, selected && styles.featRowSelected]}
-                  onPress={() => setFeatId(selected ? null : f.id)}
+                  style={[styles.featRow, selected && styles.featRowSelected, unmet && styles.featRowUnmet]}
+                  onPress={() => onFeatTap(f.id)}
                 >
                   <View style={styles.featHeader}>
                     <Text style={styles.featName}>{f.name}</Text>
                     {selected && <Text style={styles.featCheck}>✓</Text>}
+                    {unmet && !selected && <Text style={styles.featLock}>⚠</Text>}
                   </View>
                   {f.prerequisite && (
-                    <Text style={styles.featPrereq}>Prerequisite: {f.prerequisite}</Text>
+                    <Text style={[styles.featPrereq, unmet && styles.featPrereqUnmet]}>
+                      Prerequisite: {f.prerequisite}{unmet ? ' — not met' : ' ✓'}
+                    </Text>
                   )}
                   <Text style={styles.featDesc} numberOfLines={selected ? undefined : 2}>
                     {f.description}
                   </Text>
+                  {selected && f.abilityChoice && (
+                    <View style={styles.featChoiceBox}>
+                      <Text style={styles.featChoiceLabel}>
+                        Choose which ability gets +{f.abilityChoice.amount}:
+                      </Text>
+                      <View style={styles.featChoiceRow}>
+                        {f.abilityChoice.options.map(ab => {
+                          const picked = featAbility === ab;
+                          const abLabel = ABILITIES.find(a => a.key === ab)?.label ?? ab;
+                          return (
+                            <Pressable
+                              key={ab}
+                              style={[styles.featChoiceChip, picked && styles.featChoiceChipActive]}
+                              onPress={() => setFeatAbility(picked ? null : ab)}
+                            >
+                              <Text style={[styles.featChoiceTxt, picked && styles.featChoiceTxtActive]}>
+                                {abLabel}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                  {selected && f.skillChoice && f.skillChoice.picks.map(pick => {
+                    // Proficiency picks offer skills the character isn't yet
+                    // trained in; expertise picks offer only trained skills.
+                    const eligible = SKILL_LIST.filter(s => {
+                      const trained = entity.skills.skills[s.key]?.trained === true;
+                      // Don't offer a skill already taken by the OTHER pick.
+                      const takenByOther = Object.entries(featSkills)
+                        .some(([pid, sk]) => pid !== pick.id && sk === s.key);
+                      if (takenByOther) return false;
+                      return pick.from === 'proficient' ? trained : !trained;
+                    });
+                    return (
+                      <View key={pick.id} style={styles.featChoiceBox}>
+                        <Text style={styles.featChoiceLabel}>{pick.label}:</Text>
+                        {eligible.length === 0 ? (
+                          <Text style={styles.featSkillEmpty}>
+                            {pick.from === 'proficient'
+                              ? 'No proficient skills available for expertise.'
+                              : 'No untrained skills available.'}
+                          </Text>
+                        ) : (
+                          <View style={styles.featChoiceRow}>
+                            {eligible.map(s => {
+                              const picked = featSkills[pick.id] === s.key;
+                              return (
+                                <Pressable
+                                  key={s.key}
+                                  style={[styles.featChoiceChip, picked && styles.featChoiceChipActive]}
+                                  onPress={() => setFeatSkills(prev => {
+                                    const next = { ...prev };
+                                    if (picked) delete next[pick.id];
+                                    else next[pick.id] = s.key;
+                                    return next;
+                                  })}
+                                >
+                                  <Text style={[styles.featChoiceTxt, picked && styles.featChoiceTxtActive]}>
+                                    {s.label}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
                   <Text style={[styles.featSource, f.source === 'Homebrew' && styles.featSourceHomebrew]}>
                     {f.source}
                   </Text>
+                  {/* Inline confirm — commit right here so there's no need to
+                      scroll to a button at the bottom of a long feat list. */}
+                  {selected && (
+                    <Pressable
+                      style={[
+                        styles.inlineTakeBtn,
+                        !canApply() && styles.inlineTakeBtnDisabled,
+                      ]}
+                      disabled={!canApply()}
+                      onPress={() => commitFeat(f.id)}
+                    >
+                      <Text style={styles.inlineTakeTxt}>
+                        {!canApply() ? 'Complete the choices above' : `Take ${f.name} →`}
+                      </Text>
+                    </Pressable>
+                  )}
                 </Pressable>
               );
             })}
@@ -236,15 +486,53 @@ export function AsiFeatPicker({
         </>
       )}
 
-      <Pressable
-        style={[styles.applyBtn, !canApply() && styles.applyBtnDisabled]}
-        onPress={handleApply}
-        disabled={!canApply()}
+      {mode !== 'feat' && (
+        <Pressable
+          style={[styles.applyBtn, !canApply() && styles.applyBtnDisabled]}
+          onPress={handleApply}
+          disabled={!canApply()}
+        >
+          <Text style={styles.applyBtnTxt}>Apply Improvement →</Text>
+        </Pressable>
+      )}
+
+      {/* "Get anyway" override popup for feats whose prerequisite isn't met. */}
+      <Modal
+        visible={overridePrompt !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOverridePrompt(null)}
       >
-        <Text style={styles.applyBtnTxt}>
-          {mode === 'feat' ? 'Take Feat →' : 'Apply Improvement →'}
-        </Text>
-      </Pressable>
+        <View style={styles.ovBackdrop}>
+          <View style={styles.ovSheet}>
+            <Text style={styles.ovTitle}>Prerequisite not met</Text>
+            {overridePrompt && (() => {
+              const f = allFeats.find(x => x.id === overridePrompt.featId);
+              return (
+                <>
+                  <Text style={styles.ovFeatName}>{f?.name}</Text>
+                  <Text style={styles.ovReason}>{overridePrompt.reason}</Text>
+                  <Text style={styles.ovNote}>
+                    Your DM may allow this anyway (homebrew, a story reason, or a
+                    requirement the app can't verify). Take it regardless?
+                  </Text>
+                  <View style={styles.ovBtnRow}>
+                    <Pressable style={styles.ovCancel} onPress={() => setOverridePrompt(null)}>
+                      <Text style={styles.ovCancelTxt}>Cancel</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.ovConfirm}
+                      onPress={() => commitFeat(overridePrompt.featId)}
+                    >
+                      <Text style={styles.ovConfirmTxt}>Take anyway</Text>
+                    </Pressable>
+                  </View>
+                </>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -258,6 +546,7 @@ const styles = StyleSheet.create({
   sub:       { fontSize: FontSize.md, color: Colors.textSecondary, marginBottom: Spacing.xl },
 
   modeRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  bothHint: { fontSize: FontSize.sm, color: Colors.gold, fontStyle: 'italic', marginBottom: Spacing.sm, lineHeight: 19 },
   modeBtn: {
     flex: 1, padding: Spacing.md, borderRadius: Radius.md,
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
@@ -292,10 +581,25 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, padding: Spacing.md,
   },
   featRowSelected: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  featRowUnmet: { borderColor: Colors.red + '55' },
   featHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   featName:   { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   featCheck:  { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
+  featLock:   { fontSize: FontSize.md, color: Colors.red },
   featPrereq: { fontSize: FontSize.xs, color: Colors.gold, marginTop: 2, fontStyle: 'italic' },
+  featPrereqUnmet: { color: Colors.red },
+  featChoiceBox: { marginTop: Spacing.sm, gap: Spacing.xs },
+  featChoiceLabel: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  featChoiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  featChoiceChip: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  featChoiceChipActive: { backgroundColor: Colors.gold + '33', borderColor: Colors.gold },
+  featChoiceTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  featChoiceTxtActive: { color: Colors.gold },
+  featSkillEmpty: { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
   featDesc:   { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 4, lineHeight: 18 },
   featSource: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 4, opacity: 0.6 },
   featSourceHomebrew: { color: Colors.gold, fontWeight: FontWeight.bold, opacity: 1 },
@@ -307,4 +611,33 @@ const styles = StyleSheet.create({
   },
   applyBtnDisabled: { backgroundColor: Colors.goldDim },
   applyBtnTxt:      { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
+
+  inlineTakeBtn: {
+    marginTop: Spacing.sm, backgroundColor: Colors.gold, borderRadius: Radius.md,
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  inlineTakeBtnDisabled: { backgroundColor: Colors.goldDim },
+  inlineTakeTxt: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.bg },
+
+  ovBackdrop: { flex: 1, backgroundColor: '#000000cc', justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },
+  ovSheet: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.red + '55',
+    padding: Spacing.lg, width: '100%', gap: Spacing.sm,
+  },
+  ovTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.red, textAlign: 'center' },
+  ovFeatName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
+  ovReason: { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 20 },
+  ovNote: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 19, fontStyle: 'italic' },
+  ovBtnRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },
+  ovCancel: {
+    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  ovCancelTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  ovConfirm: {
+    flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md,
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  ovConfirmTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

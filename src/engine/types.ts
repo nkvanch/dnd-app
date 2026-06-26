@@ -135,6 +135,27 @@ export type Feat = {
   description:  string;
   source:       string;
   feature:      Feature;
+  /**
+   * Some feats grant "+N to one of these abilities (your choice)". When present,
+   * the feat picker collects the player's choice and injects the matching
+   * stat_modifier effect into the feature before it's applied, so the bonus
+   * actually lands on the sheet. Omitted for feats with a fixed or no ability bonus.
+   *
+   * `grantsSaveProficiency` (Resilient): the chosen ability also confers
+   * proficiency in that ability's saving throws. The picker adds it to
+   * entity.proficiencies.savingThrows on commit.
+   */
+  abilityChoice?: { options: Ability[]; amount: number; grantsSaveProficiency?: boolean };
+  /**
+   * Skill-granting feats (Skill Expert, Skilled, Prodigy). Each entry is one
+   * pick the player must make; the picker injects a grant_proficiency effect
+   * (operation 'add' = proficiency, 'multiply' = expertise) for the chosen
+   * skill. `from: 'any'` = any skill; `from: 'proficient'` = only skills the
+   * character is already proficient in (for expertise).
+   */
+  skillChoice?: {
+    picks: { id: string; label: string; mode: 'proficiency' | 'expertise'; from: 'any' | 'proficient' }[];
+  };
 };
 
 export type ContentDB = {
@@ -164,6 +185,22 @@ export type Identity = {
 
 export type AbilityScores = Record<Ability, number>;
 
+/** A special sense. `note` carries homebrew flavour like 'in color' or 'heat-based'. */
+export type SenseType = 'darkvision' | 'blindsight' | 'tremorsense' | 'truesight';
+export type Sense = {
+  type:  SenseType;
+  range: number;       // feet
+  note?: string;       // optional flavour, e.g. 'in color', 'thermal/heat', 'blind beyond'
+};
+
+/** Non-walking movement speeds (feet). 0 / undefined means the creature lacks it. */
+export type MovementSpeeds = {
+  fly?:   number;
+  swim?:  number;
+  climb?: number;
+  burrow?: number;
+};
+
 /** Computed from base stats + effects. Never set manually — always recomputed. */
 export type DerivedStats = {
   proficiencyBonus:  number;
@@ -171,6 +208,10 @@ export type DerivedStats = {
   initiative:        number;
   speed:             number;
   passivePerception: number;
+  passiveInvestigation: number;
+  passiveInsight:    number;
+  senses:            Sense[];
+  movement:          MovementSpeeds;
   savingThrows:      Record<Ability, number>;
   attackBonuses:     AttackBonus[];
   spellSaveDC:       number | null;
@@ -183,7 +224,8 @@ export type DerivedStats = {
  */
 export const DERIVED_NUMERIC_KEYS = new Set<string>([
   'proficiencyBonus', 'ac', 'initiative', 'speed',
-  'passivePerception', 'spellSaveDC', 'spellAttackBonus',
+  'passivePerception', 'passiveInvestigation', 'passiveInsight',
+  'spellSaveDC', 'spellAttackBonus',
 ]);
 
 export type SkillEntry = {
@@ -364,7 +406,13 @@ export type Effect = {
            | 'suppress_condition_effects' | 'condition_immunity'
            // Grants spells/cantrips to known spell list; safe on racial features
            // (initialises spellcasting if not yet active).
-           | 'grant_spell';
+           | 'grant_spell'
+           // Grants a special sense (darkvision/blindsight/tremorsense/truesight).
+           // Aggregated into derived.senses; same type keeps the largest range.
+           | 'grant_sense'
+           // Grants a non-walking movement speed (fly/swim/climb/burrow).
+           // Aggregated into derived.movement; same type keeps the largest value.
+           | 'grant_movement';
   target:    string;
   operation: 'add' | 'multiply' | 'set' | 'advantage' | 'disadvantage'
            | 'resistance' | 'immunity' | 'vulnerability' | 'suppress';
@@ -381,6 +429,13 @@ export type Effect = {
   cantripIds?:         string[];
   spellIds?:           string[];
   spellcastingAbility?: Ability;
+  // ── grant_sense-specific fields ───────────────────────────────────
+  senseType?:  SenseType;
+  senseRange?: number;
+  senseNote?:  string;
+  // ── grant_movement-specific fields ───────────────────────────────────────────
+  movementType?:  'fly' | 'swim' | 'climb' | 'burrow';
+  movementRange?: number;
 };
 
 /**
@@ -411,6 +466,8 @@ export type Feature = {
   tags?:          ActionCardTag[];
   /** Active effects that fire when the player uses this ability (NOT in recomputeDerived). */
   abilityEffects?: AbilityEffect[];
+  /** Player-set: marks this feature as exploration-relevant for the Exploration view filter. */
+  explorationTag?: boolean;
 };
 
 /** Feature with a runtime isActive flag for toggled abilities (Rage, Wild Shape, etc.). */

@@ -18,6 +18,8 @@ export type ClientCallbacks = {
   onDisconnected:   () => void;
   onSyncEvent:      (event: SyncEvent) => void;
   onEntitySnapshot: (entity: Entity) => void;
+  /** Fired whenever a connection attempt fails, with a human-readable reason. */
+  onError?:         (reason: string) => void;
 };
 
 // ── SyncClient ────────────────────────────────────────────────────────────────
@@ -33,6 +35,11 @@ export class SyncClient {
   private characterId: string | null;
   private host:        string = '';
   private port:        number = 0;
+  private lastError:   string | null = null;
+
+  // expose for diagnostics
+  get target(): string { return `${this.host}:${this.port}`; }
+  get lastErrorMessage(): string | null { return this.lastError; }
 
   constructor(deviceId: string, nickname: string, characterId: string | null, callbacks: ClientCallbacks) {
     this.deviceId    = deviceId;
@@ -112,9 +119,12 @@ export class SyncClient {
       this.scheduleRetry();
     });
 
-    this.socket.on('error', (err: Error) => {
+    this.socket.on('error', (err: Error & { code?: string }) => {
       // 'close' always follows an error, so the retry is handled there.
-      console.warn('[sync-client] Connection error:', err.message);
+      const reason = describeSocketError(err, this.host, this.port);
+      this.lastError = reason;
+      console.warn('[sync-client] Connection error:', err.message, `(${reason})`);
+      this.cb.onError?.(reason);
     });
   }
 
@@ -147,4 +157,22 @@ export class SyncClient {
       }
     }, 5000);
   }
+}
+
+/**
+ * Translates a raw TCP socket error into a short, player-readable reason that
+ * actually helps diagnose a failed join.
+ */
+function describeSocketError(err: Error & { code?: string }, host: string, port: number): string {
+  const code = err.code ?? '';
+  if (code === 'ECONNREFUSED' || /ECONNREFUSED/.test(err.message)) {
+    return `No server answering at ${host}:${port}. Make sure the DM has created the campaign and is on this WiFi.`;
+  }
+  if (code === 'ETIMEDOUT' || /ETIMEDOUT|timed out/i.test(err.message)) {
+    return `Couldn't reach ${host}. Both phones must be on the same WiFi, and the router must allow device-to-device connections (no "AP/client isolation").`;
+  }
+  if (code === 'EHOSTUNREACH' || code === 'ENETUNREACH' || /unreachable/i.test(err.message)) {
+    return `${host} is unreachable from this phone. You're probably on a different network or subnet than the DM.`;
+  }
+  return `Connection error: ${err.message} (trying ${host}:${port}).`;
 }

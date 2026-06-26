@@ -8,9 +8,10 @@ import {
   ScrollView, View, Text, Pressable, StyleSheet,
   Modal, TextInput, Alert,
 } from 'react-native';
-import { Entity, ItemInstance, Item, Currency } from '../../engine/types';
+import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engine/types';
 import { globalContentDB } from '../../content/classes/library';
 import { useHomebrewStore } from '../../store/homebrewStore';
+import { usesLargeCreatureWeaponDice } from '../../engine/houseRules';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // ── Large creature detection ───────────────────────────────────────────────────
@@ -110,6 +111,10 @@ const BASE_ARMORS: Record<string, ArmorWeight> = {
   breastplate: 'medium', 'half plate': 'medium',
   'ring mail': 'heavy', 'chain mail': 'heavy', splint: 'heavy', plate: 'heavy',
 };
+// Words that signal an item is ARMOR even when no specific base armor is named
+// (e.g. "Adamantine Armor", "Demon Armor", "Elven Chain", "Glamoured Studded").
+// Weight is unknown for these, so they route to the "— Other" armor bucket.
+const ARMOR_WORD_HINTS = ['armor', 'mail', 'plate', 'cuirass', 'breastplate', 'chain'];
 
 function hasProp(i: Item, kw: string): boolean {
   return propsLower(i).some(p => p.includes(kw));
@@ -168,20 +173,32 @@ function armorWeight(i: Item): ArmorWeight | null {
   }
   return null;
 }
+/** True if the item is body armor (specific weight OR a generic armor name). */
+function isArmorItem(i: Item): boolean {
+  if (hasProp(i, 'armor')) return true;
+  if (armorWeight(i) !== null) return true;
+  const name = i.name.toLowerCase();
+  // Shields are handled separately; don't let "mail"/"chain" steal a shield.
+  if (isShield(i)) return false;
+  return ARMOR_WORD_HINTS.some(w => name.includes(w));
+}
 function isArmor(i: Item, weight: 'heavy' | 'medium' | 'light'): boolean {
   return armorWeight(i) === weight;
 }
 function isShield(i: Item): boolean {
-  return hasProp(i, 'shield');
+  return hasProp(i, 'shield') || /\bshield\b/.test(i.name.toLowerCase());
 }
 function isAmmo(i: Item): boolean {
-  return hasProp(i, 'ammunition');
+  if (hasProp(i, 'ammunition')) return true;
+  return /\b(arrow|arrows|bolt|bolts|bullet|bullets|sling stone|needle)\b/.test(i.name.toLowerCase());
 }
 function isToolOrKit(i: Item): boolean {
-  return propsLower(i).some(p => ['tool', 'kit', 'instrument', 'artisan'].some(kw => p.includes(kw)));
+  if (propsLower(i).some(p => ['tool', 'kit', 'instrument', 'artisan'].some(kw => p.includes(kw)))) return true;
+  return /\b(tools|kit|instrument|utensils|supplies)\b/.test(i.name.toLowerCase());
 }
 function isFocus(i: Item): boolean {
-  return propsLower(i).some(p => ['focus', 'spellbook', 'component pouch'].some(kw => p.includes(kw)));
+  if (propsLower(i).some(p => ['focus', 'spellbook', 'component pouch'].some(kw => p.includes(kw)))) return true;
+  return /\b(wand|rod|staff|orb|crystal|talisman|spellbook|component pouch)\b/.test(i.name.toLowerCase());
 }
 
 const ITEM_CATEGORIES: ItemCategory[] = [
@@ -214,7 +231,7 @@ const ITEM_CATEGORIES: ItemCategory[] = [
   { label: 'Magic Heavy Armor',  emoji: '✨🛡️', test: i => isMagic(i) && isArmor(i, 'heavy') },
   { label: 'Magic Medium Armor', emoji: '✨🥋', test: i => isMagic(i) && isArmor(i, 'medium') },
   { label: 'Magic Light Armor',  emoji: '✨👕', test: i => isMagic(i) && isArmor(i, 'light') },
-  { label: 'Magic Armor — Other', emoji: '✨🧥', test: i => isMagic(i) && hasProp(i, 'armor') },
+  { label: 'Magic Armor — Other', emoji: '✨🧥', test: i => isMagic(i) && isArmorItem(i) },
   { label: 'Magic Shields',      emoji: '✨🔰', test: i => isMagic(i) && isShield(i) },
   { label: 'Magic Ammunition',   emoji: '✨🎯', test: i => isMagic(i) && isAmmo(i) },
   { label: 'Magic Tools & Kits', emoji: '✨🔧', test: i => isMagic(i) && isToolOrKit(i) },
@@ -231,6 +248,7 @@ const ITEM_CATEGORIES: ItemCategory[] = [
   { label: 'Heavy Armor',  emoji: '🛡️', test: i => isArmor(i, 'heavy') },
   { label: 'Medium Armor', emoji: '🥋', test: i => isArmor(i, 'medium') },
   { label: 'Light Armor',  emoji: '👕', test: i => isArmor(i, 'light') },
+  { label: 'Armor — Other', emoji: '🧥', test: i => isArmorItem(i) },
   { label: 'Shields',      emoji: '🔰', test: i => isShield(i) },
   { label: 'Ammunition',   emoji: '🎯', test: i => isAmmo(i) && !isWeapon(i) },
   { label: 'Tools & Kits', emoji: '🔧', test: i => isToolOrKit(i) },
@@ -794,10 +812,12 @@ interface Props {
   onAddItem:         (itemId: string) => void;
   onRemoveItem:      (itemId: string) => void;
   onUpdateCurrency:  (currency: Currency) => void;
+  /** Active campaign rules — used to honour homebrew toggles (e.g. large-creature dice). */
+  rules?:            CampaignRules;
 }
 
 export function TabInventory({
-  entity, onEquip, onUnequip, onAddItem, onRemoveItem, onUpdateCurrency,
+  entity, onEquip, onUnequip, onAddItem, onRemoveItem, onUpdateCurrency, rules,
 }: Props) {
   const { inventory } = entity;
   const { currency }  = inventory;
@@ -848,8 +868,9 @@ export function TabInventory({
         {large && (
           <Text style={styles.largePCNote}>
             🦴 Large creature — carry capacity doubled (STR × 30).
-            Two-handed weapons can be wielded one-handed; versatile weapons use the higher die one-handed.
-            Light weapons give disadvantage on attack rolls.
+            {rules && usesLargeCreatureWeaponDice(rules)
+              ? ' Homebrew: this creature rolls double weapon damage dice with appropriately sized weapons.'
+              : ' (Standard rules: weapon damage dice are unaffected by size.)'}
           </Text>
         )}
       </View>
@@ -883,9 +904,9 @@ export function TabInventory({
         {inventory.equipped.length === 0 ? (
           <Text style={styles.emptyNote}>Nothing equipped</Text>
         ) : (
-          inventory.equipped.map(inst => (
+          inventory.equipped.map((inst, idx) => (
             <ItemRow
-              key={inst.itemId}
+              key={`eq_${inst.itemId}_${idx}`}
               instance={inst}
               equipped
               allItems={allItems}
@@ -909,9 +930,9 @@ export function TabInventory({
         {inventory.carried.length === 0 ? (
           <Text style={styles.emptyNote}>Bag is empty — tap + Add Item to add gear</Text>
         ) : (
-          inventory.carried.map(inst => (
+          inventory.carried.map((inst, idx) => (
             <ItemRow
-              key={inst.itemId}
+              key={`ca_${inst.itemId}_${idx}`}
               instance={inst}
               equipped={false}
               allItems={allItems}

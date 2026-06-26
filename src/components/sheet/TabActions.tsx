@@ -133,7 +133,7 @@ interface Props {
 export function TabActions({ entity, rules, onEntityUpdate }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
 
-  const all        = generateAllActionCards(entity).filter(c => c.tabs.includes('actions'));
+  const all        = generateAllActionCards(entity, rules).filter(c => c.tabs.includes('actions'));
   const actions      = all.filter(c => c.activation.actionType === 'action');
   const bonusActions = all.filter(c => c.activation.actionType === 'bonus_action');
   const reactions    = all.filter(c => c.activation.actionType === 'reaction');

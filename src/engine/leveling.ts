@@ -3,6 +3,7 @@ import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, Proficie
          KnownSpellsGrant } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { getSpellSlotsForClassLevel } from '../content/classes/spellSlotTables';
+import { hpMinHalfDie, bonusFeatEveryLevel } from './houseRules';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -195,12 +196,9 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
         level:      number;
         slotsTable?: { level: number; slots: number[] }[];
       };
-      let slotRow: number[] | null = null;
-      if (slotGrant.slotsTable) {
-        slotRow = slotGrant.slotsTable.find(r => r.level === slotGrant.level)?.slots ?? null;
-      } else {
-        slotRow = getSpellSlotsForClassLevel(entity.identity.classId, slotGrant.level);
-      }
+      const slotRow: number[] | null = slotGrant.slotsTable
+        ? (slotGrant.slotsTable.find(r => r.level === slotGrant.level)?.slots ?? null)
+        : getSpellSlotsForClassLevel(entity.identity.classId, slotGrant.level);
       if (!slotRow || !entity.spellcasting) return entity;
       const slots = slotRow;
       const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
@@ -247,7 +245,8 @@ export function applyHP(
   entity: Entity,
   die: number,
   mode: CampaignRules["hpMode"],
-  atLevel: number
+  atLevel: number,
+  rules?: CampaignRules
 ): Entity {
   // Use effectiveStats.con so race bonuses (e.g. Dwarf +2 CON) feed into HP.
   // This matters even mid-wizard if the player set scores before choosing class.
@@ -255,11 +254,19 @@ export function applyHP(
   const effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const conMod        = modifier(effectiveStats.con);
 
-  const rolled = atLevel === 1
+  let rolled = atLevel === 1
     ? die                                           // Level 1: always max die
     : mode === "max"    ? die
     : mode === "fixed"  ? Math.floor(die / 2) + 1
     : rollDie(die);
+
+  // House rule: HP minimum half-die. A rolled value below half the die is bumped
+  // up to half (rounded up), e.g. d10 → minimum 5. Only affects rolled mode
+  // beyond level 1 (fixed/max already meet or exceed this).
+  if (rules && mode === 'rolled' && atLevel > 1 && hpMinHalfDie(rules)) {
+    const halfDie = Math.ceil(die / 2);
+    if (rolled < halfDie) rolled = halfDie;
+  }
 
   const gain = Math.max(1, rolled + conMod);
 
@@ -551,7 +558,7 @@ export function levelUp(
     if (!entry) continue;
 
     // HP
-    updated = applyHP(updated, entry.hpDie, rules.hpMode, lvl);
+    updated = applyHP(updated, entry.hpDie, rules.hpMode, lvl, rules);
 
     // Grants
     for (const grant of entry.grants) {
@@ -568,6 +575,27 @@ export function levelUp(
         }
       } else {
         updated = queueChoice(updated, choice, lvl);
+      }
+    }
+
+    // Bonus feat every level (house rule). Injects an extra feat-only ASI choice
+    // at every level beyond the class's own ASI schedule.
+    if (bonusFeatEveryLevel(rules)) {
+      const bonusId = `bonus_feat_lvl_${lvl}`;
+      // Only add if not already queued (idempotent re-leveling safety).
+      const alreadyQueued = updated.choices.some(c => c.id === bonusId);
+      if (!alreadyQueued) {
+        const bonusDef: import('./types').ChoiceDefinition = {
+          id:       bonusId,
+          prompt:   `Bonus feat at level ${lvl} (house rule).`,
+          kind:     'asi',
+          count:    1,
+          pool:     'all',
+          grants:   [],
+          required: true,
+          resolved: false,
+        };
+        updated = queueChoice(updated, bonusDef, lvl);
       }
     }
 

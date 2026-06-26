@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Entity, CampaignRules, Ability } from '../../engine/types';
 import { applyDmOverride, getActiveOverrides, cancelDmOverride } from '../../engine/dmOverride';
+import { reconcileConHp } from '../../engine/leveling';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 interface Props {
@@ -62,7 +63,16 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
 
   function setAbility(ab: Ability, n: number) {
     const clamped = Math.max(1, Math.min(30, n));
-    onApply({ ...entity, stats: { ...entity.stats, [ab]: clamped } });
+    let updated: Entity = { ...entity, stats: { ...entity.stats, [ab]: clamped } };
+    // Constitution changes ripple to HP maximum: PHB grants +1 HP per level per
+    // point of CON modifier gained (and the reverse when it drops). Use the
+    // surgical reconcile so manually-set / rolled HP isn't recomputed from
+    // scratch — only the CON delta is applied. No-op for non-CON abilities and
+    // for level-0 drafts (reconcileConHp guards both).
+    if (ab === 'con') {
+      updated = reconcileConHp(entity, updated);
+    }
+    onApply(updated);
   }
 
   function setHitDieSize(size: number) {

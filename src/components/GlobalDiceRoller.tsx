@@ -1,12 +1,11 @@
 // src/components/GlobalDiceRoller.tsx
 // Floating dice button + modal. Import and add to any screen that needs it.
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, Pressable, StyleSheet, Modal,
   TextInput, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { rollExpression } from '../engine/dice';
-import { DiceRoll } from '../engine/types';
+import { useDiceLogStore } from '../store/diceLogStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 const QUICK_DICE = ['1d4','1d6','1d8','1d10','1d12','1d20','d100','2d6','4d6kh3'];
@@ -22,13 +21,25 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
   const [expr,    setExpr]    = useState('1d20');
   const [label,   setLabel]   = useState('');
   const [error,   setError]   = useState('');
-  const [history, setHistory] = useState<DiceRoll[]>([]);
+  const history   = useDiceLogStore(s => s.history);
+  const rollAndLog = useDiceLogStore(s => s.rollAndLog);
+
+  // Auto-open the roller whenever a new roll appears (e.g. a skill tap from the
+  // exploration tab) so the result is actually visible. We track the latest
+  // roll id and pop the sheet open when it changes from outside.
+  const lastSeenId = useRef<string | null>(history[0]?.id ?? null);
+  useEffect(() => {
+    const top = history[0]?.id ?? null;
+    if (top && top !== lastSeenId.current && !open) {
+      setOpen(true);
+    }
+    lastSeenId.current = top;
+  }, [history, open]);
 
   function roll() {
     try {
       setError('');
-      const result = rollExpression(expr.trim() || '1d20', label.trim() || undefined);
-      setHistory(prev => [result, ...prev].slice(0, 10));
+      rollAndLog(expr.trim() || '1d20', label.trim() || undefined);
     } catch {
       setError(`Invalid expression: "${expr}"`);
     }

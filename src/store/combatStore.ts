@@ -6,15 +6,7 @@ import { create } from 'zustand';
 import { Entity, CampaignRules } from '../engine/types';
 import { CombatState, InitiativeEntry, startEncounter, endTurn, endEncounter } from '../engine/combat';
 import { saveCombatState, clearCombatState } from '../db/combatRepo';
-
-const DEFAULT_RULES: CampaignRules = {
-  maxAbilityScore: 20,
-  maxLevel:        20,
-  useXP:           false,
-  hpMode:          'fixed',
-  allowMulticlass: false,
-  customRules:     {},
-};
+import { DEFAULT_RULES } from './characterStore';
 
 const EMPTY_COMBAT: CombatState = {
   active:      false,

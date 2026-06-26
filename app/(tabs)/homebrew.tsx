@@ -1,82 +1,9 @@
 // app/(tabs)/homebrew.tsx
-// Homebrew tab — Import, Create, Library sections.
-import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert } from 'react-native';
+// Homebrew tab — Create and Library sections.
+import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
-
-// ── Import Panel ──────────────────────────────────────────────────────────────
-
-function ImportPanel() {
-  const router = useRouter();
-  const [url,  setUrl]  = useState('');
-  const [text, setText] = useState('');
-  const [tab,  setTab]  = useState<'url' | 'text'>('url');
-
-  return (
-    <View style={styles.panel}>
-      <Text style={styles.panelTitle}>📥 Import</Text>
-      <Text style={styles.panelSub}>
-        Paste a D&D Wiki URL or raw text — Claude will parse it into a structured content item.
-      </Text>
-
-      <View style={styles.segmented}>
-        {(['url', 'text'] as const).map(t => (
-          <Pressable
-            key={t}
-            style={[styles.segBtn, tab === t && styles.segBtnActive]}
-            onPress={() => setTab(t)}
-          >
-            <Text style={[styles.segTxt, tab === t && styles.segTxtActive]}>
-              {t === 'url' ? '🔗 From URL' : '📋 From Text'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {tab === 'url' ? (
-        <TextInput
-          style={styles.input}
-          value={url}
-          onChangeText={setUrl}
-          placeholder="https://www.dandwiki.com/wiki/..."
-          placeholderTextColor={Colors.textDim}
-          autoCapitalize="none"
-          keyboardType="url"
-        />
-      ) : (
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={text}
-          onChangeText={setText}
-          placeholder="Paste D&D content here — race, class, spell, or feature…"
-          placeholderTextColor={Colors.textDim}
-          multiline
-          textAlignVertical="top"
-        />
-      )}
-
-      <Pressable
-        style={[
-          styles.importBtn,
-          (tab === 'url' ? !url.trim() : !text.trim()) && styles.btnDisabled,
-        ]}
-        onPress={() => {
-          const payload = tab === 'url' ? url.trim() : text.trim();
-          if (!payload) return;
-          router.push({
-            pathname: '/homebrew/import-review',
-            params: { mode: tab, payload },
-          } as any);
-        }}
-        disabled={tab === 'url' ? !url.trim() : !text.trim()}
-      >
-        <Text style={styles.importBtnTxt}>Parse with Claude →</Text>
-      </Pressable>
-    </View>
-  );
-}
 
 // ── Create Panel ──────────────────────────────────────────────────────────────
 
@@ -85,6 +12,7 @@ function CreatePanel() {
   const ITEMS = [
     { label: '⚔️  New Race',        route: '/homebrew/race-builder'  },
     { label: '🎓  New Class',        route: '/homebrew/class-builder' },
+    { label: '🧰  New Item',         route: '/homebrew/item-builder'  },
     { label: '✨  New Spell',        route: '/homebrew/spell-builder' },
     { label: '📖  New Feature',      route: '/homebrew/feature-editor' },
   ];
@@ -92,7 +20,7 @@ function CreatePanel() {
   return (
     <View style={styles.panel}>
       <Text style={styles.panelTitle}>🛠 Create</Text>
-      <Text style={styles.panelSub}>Build custom content from scratch using the guided editors.</Text>
+      <Text style={styles.panelSub}>Build custom races, classes, spells, and features with the guided editors.</Text>
       <View style={styles.createGrid}>
         {ITEMS.map(item => (
           <Pressable
@@ -111,12 +39,12 @@ function CreatePanel() {
 // ── Library Panel ─────────────────────────────────────────────────────────────
 
 function LibraryPanel() {
-  const { races, classes, spells, backgrounds, features, deleteItem } = useHomebrewStore();
-  const router = useRouter();
+  const { races, classes, spells, backgrounds, features, items, deleteItem } = useHomebrewStore();
 
   const all = [
     ...races.map(r       => ({ type: 'race'       as const, item: r })),
     ...classes.map(c     => ({ type: 'class'      as const, item: c })),
+    ...items.map(it      => ({ type: 'item'       as const, item: it })),
     ...spells.map(s      => ({ type: 'spell'      as const, item: s })),
     ...backgrounds.map(b => ({ type: 'background' as const, item: b })),
     ...features.map(f    => ({ type: 'feature'    as const, item: f })),
@@ -126,7 +54,7 @@ function LibraryPanel() {
     return (
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>📚 Library</Text>
-        <Text style={styles.emptyTxt}>No homebrew content saved yet. Import or create something above.</Text>
+        <Text style={styles.emptyTxt}>No homebrew content saved yet. Create something above.</Text>
       </View>
     );
   }
@@ -170,7 +98,6 @@ export default function HomebrewScreen() {
         <Text style={styles.title}>Homebrew</Text>
       </View>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <ImportPanel />
         <CreatePanel />
         <LibraryPanel />
       </ScrollView>
@@ -199,30 +126,6 @@ const styles = StyleSheet.create({
   panelTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   panelSub:   { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
 
-  segmented:  { flexDirection: 'row', gap: Spacing.xs },
-  segBtn: {
-    flex: 1, backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
-    padding: Spacing.sm, alignItems: 'center',
-    borderWidth: 1, borderColor: Colors.border,
-  },
-  segBtnActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
-  segTxt:       { fontSize: FontSize.sm, color: Colors.textSecondary },
-  segTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
-
-  input: {
-    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.border,
-    padding: Spacing.sm, color: Colors.textPrimary, fontSize: FontSize.sm,
-  },
-  textArea: { minHeight: 100, textAlignVertical: 'top' },
-
-  importBtn: {
-    backgroundColor: Colors.gold, borderRadius: Radius.md,
-    padding: Spacing.md, alignItems: 'center',
-  },
-  btnDisabled:   { opacity: 0.4 },
-  importBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
-
   createGrid: { gap: Spacing.xs },
   createBtn: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
@@ -243,6 +146,7 @@ const styles = StyleSheet.create({
   typeBadge_spell:      { backgroundColor: Colors.blue   + '22' },
   typeBadge_background: { backgroundColor: Colors.purple + '22' },
   typeBadge_feature:    { backgroundColor: Colors.surfaceHigh },
+  typeBadge_item:       { backgroundColor: Colors.red + '22' },
   libraryActions: { flexDirection: 'row', gap: Spacing.xs },
   libBtn: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,

@@ -12,7 +12,7 @@
 
 import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
-  Ability, SkillName, DERIVED_NUMERIC_KEYS,
+  Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense,
 } from './types';
 import { resolveEffectsForTarget } from './resolver';
 
@@ -140,6 +140,31 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     ? speedResolved
     : entity.resources.speed + speedResolved;
 
+  // ── Senses: aggregate grant_sense effects, dedup by type (largest range) ──
+  const senseEffects = allEffects.filter(ae => ae.effect.type === 'grant_sense');
+  const senseMap = new Map<string, Sense>();
+  for (const ae of senseEffects) {
+    const e = ae.effect;
+    if (!e.senseType) continue;
+    const range = e.senseRange ?? 0;
+    const existing = senseMap.get(e.senseType);
+    // Keep the longest-range instance of each sense type; carry its note.
+    if (!existing || range > existing.range) {
+      senseMap.set(e.senseType, { type: e.senseType, range, note: e.senseNote });
+    }
+  }
+  const senses = Array.from(senseMap.values()).sort((a, b) => b.range - a.range);
+
+  // ── Movement: aggregate grant_movement effects, keep largest per type ──
+  const moveEffects = allEffects.filter(ae => ae.effect.type === 'grant_movement');
+  const movement: import('./types').MovementSpeeds = {};
+  for (const ae of moveEffects) {
+    const t = ae.effect.movementType;
+    const r = ae.effect.movementRange ?? 0;
+    if (!t) continue;
+    if ((movement[t] ?? 0) < r) movement[t] = r;
+  }
+
   // ── Build derived stats object ────────────────────────────────────────────
   const derived: DerivedStats = {
     proficiencyBonus: profBonus,
@@ -147,15 +172,24 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     initiative:       modifier(effectiveStats.dex)
                         + (resolveEffectsForTarget('initiative', allEffects, rules) as number),
     speed:            finalSpeed,
-    passivePerception: 10 + resolveSkill(entity, effectiveStats, 'perception', allEffects, profBonus),
+    passivePerception:    10 + resolveSkill(entity, effectiveStats, 'perception', allEffects, profBonus),
+    passiveInvestigation: 10 + resolveSkill(entity, effectiveStats, 'investigation', allEffects, profBonus),
+    passiveInsight:       10 + resolveSkill(entity, effectiveStats, 'insight', allEffects, profBonus),
+    senses,
+    movement,
     savingThrows:     resolveSavingThrows(effectiveStats, entity.proficiencies.savingThrows, profBonus),
     attackBonuses:    [],
     spellSaveDC:  entity.spellcasting
       ? 8 + profBonus + modifier(effectiveStats[entity.spellcasting.ability])
+          // Accept either target spelling so feature authors aren't tripped by
+          // the snake_case/camelCase split (DM overrides use 'spellSaveDC').
           + (resolveEffectsForTarget('spell_save_dc', allEffects, rules) as number)
+          + (resolveEffectsForTarget('spellSaveDC', allEffects, rules) as number)
       : null,
     spellAttackBonus: entity.spellcasting
       ? profBonus + modifier(effectiveStats[entity.spellcasting.ability])
+          + (resolveEffectsForTarget('spell_attack_bonus', allEffects, rules) as number)
+          + (resolveEffectsForTarget('spellAttackBonus', allEffects, rules) as number)
       : null,
   };
 

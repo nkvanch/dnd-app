@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { getHouseRule } from '../../src/engine/houseRules';
 import { Entity } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -18,14 +19,6 @@ const ORDERED_SECTIONS: Section[] = [
   { key: 'race',       label: 'Race',          route: '/creation/race',       done: d => !!d.identity.raceId },
   { key: 'class',      label: 'Class',         route: '/creation/class',      done: d => !!d.identity.classId },
   { key: 'scores',     label: 'Ability Scores', route: '/creation/scores',
-    // Fixed: scores are considered done when the entity has been through
-    // the scores screen at least once. We detect this by checking if ANY
-    // stat differs from the makeEmptyEntity default of 10, OR if point buy
-    // or manual was used (all 10s is valid — so we use a dedicated flag).
-    // The flag is set by the store when saveDraft fires after scores.
-    // Simplest reliable check: classId is set (leveling sets HP which requires stats)
-    // and resources.hp.maximum > 0 (leveling happened). Actually the cleanest
-    // approach: store a scoresConfirmed flag in notes JSON.
     done: d => {
       try {
         const notes = JSON.parse(d.notes || '{}');
@@ -38,6 +31,12 @@ const ORDERED_SECTIONS: Section[] = [
     done: d => {
       const pending = d.choices.filter(c => c.definition.kind === 'skill' && !c.resolved);
       return pending.length === 0;
+    },
+  },
+  { key: 'feats',      label: 'Feats (optional)', route: '/creation/feats',
+    done: d => {
+      try { return !!JSON.parse(d.notes || '{}').featsVisited; }
+      catch { return false; }
     },
   },
   { key: 'equipment',  label: 'Equipment',     route: '/creation/equipment',
@@ -66,6 +65,7 @@ const ASI_SECTION: Section = {
 export default function HubScreen() {
   const router = useRouter();
   const draft  = useCharacterStore(s => s.draft);
+  const rules  = useCharacterStore(s => s.rules);
 
   useEffect(() => {
     if (!draft) router.replace('/creation/name');
@@ -73,11 +73,17 @@ export default function HubScreen() {
 
   if (!draft) return null;
 
+  // The optional Feats step only appears when the table allows a 1st-level feat.
+  const featsAllowed = getHouseRule(rules, 'featAtCreation');
+  const baseSections = featsAllowed
+    ? ORDERED_SECTIONS
+    : ORDERED_SECTIONS.filter(s => s.key !== 'feats');
+
   // Conditionally include ASI section only when there are pending ASI choices
   const asiChoices = draft.choices.filter(c => c.definition.kind === 'asi');
   const sections   = asiChoices.length > 0
-    ? [...ORDERED_SECTIONS, ASI_SECTION]
-    : ORDERED_SECTIONS;
+    ? [...baseSections, ASI_SECTION]
+    : baseSections;
 
   const allDone = sections.every(s => s.done(draft));
 

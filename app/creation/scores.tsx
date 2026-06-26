@@ -7,6 +7,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { recalculateAllHP, reapplyResolvedAsi } from '../../src/engine/leveling';
 import { rollAbilityScoreSet } from '../../src/engine/dice';
+import { pointBuyConfig } from '../../src/engine/houseRules';
 import { Ability, AbilityScores } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -17,8 +18,13 @@ const ABILITY_LABELS: Record<Ability, string> = {
 };
 
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
-const POINT_COST: Record<number, number> = { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:7, 15:9 };
-const POINT_BUDGET = 27;
+const BASE_POINT_COST: Record<number, number> = { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:7, 15:9 };
+// Cost for any score, extrapolating above 15 at +2/point (matches the 14→15 step)
+// so a custom point-buy max above 15 still has a sensible cost.
+function pointCost(score: number): number {
+  if (score <= 15) return BASE_POINT_COST[score] ?? 0;
+  return 9 + (score - 15) * 2;
+}
 type Method = 'standard' | 'pointbuy' | 'manual' | 'roll';
 
 function getRaceBonuses(
@@ -66,6 +72,7 @@ export default function ScoresScreen() {
   })();
 
   const [method,       setMethod]       = useState<Method>('standard');
+  const pb = pointBuyConfig(rules);   // { points, max, min } from house rules
   const [rolledScores, setRolledScores] = useState<number[]>([]);
   const [rollAssignments, setRollAssignments] = useState<Partial<Record<Ability, number>>>({});
   const [rollSelected, setRollSelected] = useState<number | null>(null);
@@ -96,13 +103,13 @@ export default function ScoresScreen() {
     setSelected(null);
   }
 
-  const pointsSpent = ABILITIES.reduce((s, ab) => s + (POINT_COST[pbScores[ab]] ?? 0), 0);
-  const pointsLeft  = POINT_BUDGET - pointsSpent;
+  const pointsSpent = ABILITIES.reduce((s, ab) => s + pointCost(pbScores[ab]), 0);
+  const pointsLeft  = pb.points - pointsSpent;
 
   function adjustPB(ab: Ability, delta: number) {
     const next = pbScores[ab] + delta;
-    if (next < 8 || next > 15) return;
-    const cost = (POINT_COST[next] ?? 0) - (POINT_COST[pbScores[ab]] ?? 0);
+    if (next < pb.min || next > pb.max) return;
+    const cost = pointCost(next) - pointCost(pbScores[ab]);
     if (cost > pointsLeft) return;
     setPbScores(prev => ({ ...prev, [ab]: next }));
   }
@@ -258,7 +265,7 @@ export default function ScoresScreen() {
             </View>
           </>
         )}
-        {method === 'pointbuy' && <Text style={styles.hint}>Points remaining: {pointsLeft} / {POINT_BUDGET}</Text>}
+        {method === 'pointbuy' && <Text style={styles.hint}>Points remaining: {pointsLeft} / {pb.points}  (scores {pb.min}–{pb.max})</Text>}
         {method === 'manual'   && <Text style={styles.hint}>Enter any value. Use +/− or type directly.</Text>}
 
         {/* Ability rows */}

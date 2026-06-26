@@ -148,6 +148,21 @@ export default function DmDashboard() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {/* Room code banner — what players type/scan to join. */}
+        {syncStatus.role === 'dm' && (
+          <View style={styles.roomCard}>
+            <Text style={styles.roomLabel}>ROOM CODE</Text>
+            {syncStatus.roomCode ? (
+              <Text style={styles.roomCode}>{syncStatus.roomCode}</Text>
+            ) : (
+              <Text style={styles.roomCodeDim}>Not hosting — check WiFi</Text>
+            )}
+            <Text style={styles.roomHint}>
+              Players join with this code on the same WiFi network.
+              {syncStatus.connected ? '' : ' (Server not running.)'}
+            </Text>
+          </View>
+        )}
         {/* Connected players roster (live sync) */}
         {syncStatus.role === 'dm' && (
           <>
@@ -238,6 +253,16 @@ const styles = StyleSheet.create({
   scroll:       { flex: 1 },
   content:      { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },
   sectionLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2, fontWeight: FontWeight.bold },
+
+  roomCard: {
+    backgroundColor: Colors.gold + '14', borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.gold + '55',
+    padding: Spacing.md, alignItems: 'center', gap: 2,
+  },
+  roomLabel: { fontSize: FontSize.xs, color: Colors.gold, letterSpacing: 2, fontWeight: FontWeight.bold },
+  roomCode: { fontSize: 34, fontWeight: FontWeight.black, color: Colors.gold, letterSpacing: 6 },
+  roomCodeDim: { fontSize: FontSize.lg, color: Colors.textDim, fontWeight: FontWeight.bold },
+  roomHint: { fontSize: FontSize.xs, color: Colors.textSecondary, textAlign: 'center', marginTop: 2 },
 
   rosterRow: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,

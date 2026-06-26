@@ -26,6 +26,7 @@ const createTestEntity = (): Entity => ({
   stats: { str: 15, dex: 14, con: 13, int: 10, wis: 12, cha: 8 },
   derived: {
     proficiencyBonus: 2, ac: 16, initiative: 2, speed: 30, passivePerception: 11,
+    passiveInvestigation: 10, passiveInsight: 11, senses: [], movement: {},
     savingThrows: { str: 4, dex: 2, con: 3, int: 0, wis: 1, cha: -1 },
     attackBonuses: [], spellSaveDC: null, spellAttackBonus: null
   },

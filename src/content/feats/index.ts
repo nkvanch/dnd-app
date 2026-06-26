@@ -27,6 +27,8 @@ function feat(
   description: string,
   source: string,
   effects: Effect[] = [],
+  abilityChoice?: { options: Ability[]; amount: number; grantsSaveProficiency?: boolean },
+  skillChoice?: { picks: { id: string; label: string; mode: 'proficiency' | 'expertise'; from: 'any' | 'proficient' }[] },
 ): Feat {
   const feature: Feature = {
     id: `feat_${id}`,
@@ -39,7 +41,22 @@ function feat(
     choices: [],
     passive: true,
   };
-  return { id, name, prerequisite, description, source, feature };
+  return { id, name, prerequisite, description, source, feature, abilityChoice, skillChoice };
+}
+
+// Ability-option shorthands for choice feats.
+const ALL_ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+function choose(options: Ability[], amount = 1, grantsSaveProficiency = false) {
+  return grantsSaveProficiency
+    ? { options, amount, grantsSaveProficiency: true }
+    : { options, amount };
+}
+
+// Shorthand for a feat's skill picks (Skill Expert, Skilled, Prodigy).
+function skillPicks(
+  picks: { id: string; label: string; mode: 'proficiency' | 'expertise'; from: 'any' | 'proficient' }[],
+) {
+  return { picks };
 }
 
 const PHB = "Player's Handbook";
@@ -65,7 +82,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('athlete', 'Athlete', null,
     '+1 Strength or Dexterity (your choice). You stand up from prone using only 5 feet of movement, climbing doesn\'t cost extra movement, and you can make a running jump after only 5 feet of run-up.',
-    PHB),
+    PHB, [], choose(['str', 'dex'])),
 
   feat('bountiful_luck', 'Bountiful Luck', 'Halfling',
     'When an ally within 30 feet rolls a 1 on a d20, you can use your reaction to let them reroll, and they must use the new roll.',
@@ -77,7 +94,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('chef', 'Chef', null,
     '+1 Constitution or Wisdom (your choice). You gain proficiency with cook\'s utensils and can cook special food that restores hit points or grants temporary hit points.',
-    TCE),
+    TCE, [], choose(['con', 'wis'])),
 
   feat('crossbow_expert', 'Crossbow Expert', null,
     'You ignore the loading property of crossbows, being within 5 feet of a hostile creature doesn\'t impose disadvantage on your ranged attacks, and you can make a hand crossbow attack as a bonus action after a one-handed attack.',
@@ -85,7 +102,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('crusher', 'Crusher', null,
     '+1 Strength or Constitution (your choice). Once per turn when you deal bludgeoning damage you can move the target 5 feet, and after a critical hit attackers have advantage against it until your next turn.',
-    TCE),
+    TCE, [], choose(['str', 'con'])),
 
   feat('defensive_duelist', 'Defensive Duelist', 'Dexterity 13+',
     'When wielding a finesse weapon and hit by a melee attack, you can use your reaction to add your proficiency bonus to your AC for that attack.',
@@ -93,11 +110,11 @@ export const ALL_FEATS: Feat[] = [
 
   feat('dragon_fear', 'Dragon Fear', 'Dragonborn',
     '+1 Strength, Constitution, or Charisma (your choice). You can use your Breath Weapon to frighten creatures instead of dealing damage.',
-    XGE),
+    XGE, [], choose(['str', 'con', 'cha'])),
 
   feat('dragon_hide', 'Dragon Hide', 'Dragonborn',
     '+1 Strength, Constitution, or Charisma (your choice). Your AC can become 13 + Dex modifier when unarmored, and your claws deal 1d4 + Str slashing damage.',
-    XGE),
+    XGE, [], choose(['str', 'con', 'cha'])),
 
   feat('drow_high_magic', 'Drow High Magic', 'Elf (drow)',
     'You can cast Detect Magic at will, and Levitate and Dispel Magic once per long rest each, using Charisma.',
@@ -129,23 +146,23 @@ export const ALL_FEATS: Feat[] = [
 
   feat('elven_accuracy', 'Elven Accuracy', 'Elf or half-elf',
     '+1 Dexterity, Intelligence, Wisdom, or Charisma (your choice). When you have advantage on an attack using that ability, you can reroll one of the dice once.',
-    XGE),
+    XGE, [], choose(['dex', 'int', 'wis', 'cha'])),
 
   feat('ember_of_the_fire_giant', 'Ember of the Fire Giant', '4th level, Strike of the Giants (Fire Strike)',
     '+1 Strength, Constitution, or Wisdom. You gain resistance to fire damage and can deal 1d8 + proficiency bonus fire damage in a 15-foot radius and blind creatures (proficiency bonus per long rest).',
-    GG),
+    GG, [], choose(['str', 'con', 'wis'])),
 
   feat('fade_away', 'Fade Away', 'Gnome',
     '+1 Dexterity or Intelligence (your choice). When you take damage you can use your reaction to become invisible until the end of your next turn.',
-    XGE),
+    XGE, [], choose(['dex', 'int'])),
 
   feat('fey_teleportation', 'Fey Teleportation', 'Elf (high)',
     '+1 Intelligence or Charisma (your choice). You learn Sylvan and can cast Misty Step once per short rest using Intelligence.',
-    XGE),
+    XGE, [], choose(['int', 'cha'])),
 
   feat('fey_touched', 'Fey Touched', null,
     '+1 Intelligence, Wisdom, or Charisma (your choice). You learn Misty Step and one 1st-level divination or enchantment spell, castable once per long rest without a slot.',
-    TCE),
+    TCE, [], choose(['int', 'wis', 'cha'])),
 
   feat('fighting_initiate', 'Fighting Initiate', 'Proficiency with a martial weapon',
     'You learn one Fighting Style option from the fighter class.',
@@ -153,11 +170,11 @@ export const ALL_FEATS: Feat[] = [
 
   feat('flames_of_phlegethos', 'Flames of Phlegethos', 'Tiefling',
     '+1 Intelligence or Charisma (your choice). You can reroll 1s on fire spell damage, and creatures that hit you with melee attacks while you concentrate take fire damage.',
-    XGE),
+    XGE, [], choose(['int', 'cha'])),
 
   feat('fury_of_the_frost_giant', 'Fury of the Frost Giant', '4th level, Strike of the Giants (Frost Strike)',
     '+1 Strength, Constitution, or Wisdom. You gain resistance to cold damage and can deal 1d8 + proficiency bonus cold damage and reduce a creature\'s speed to 0 (proficiency bonus per long rest).',
-    GG),
+    GG, [], choose(['str', 'con', 'wis'])),
 
   feat('gift_of_the_chromatic_dragon', 'Gift of the Chromatic Dragon', null,
     'You can imbue a weapon with 1d4 elemental damage (acid, cold, fire, lightning, or poison) as a bonus action, and gain resistance to one such type as a reaction.',
@@ -165,11 +182,11 @@ export const ALL_FEATS: Feat[] = [
 
   feat('gift_of_the_gem_dragon', 'Gift of the Gem Dragon', null,
     '+1 Intelligence, Wisdom, or Charisma (your choice). As a reaction to taking damage, force a creature to make a Strength save or take 2d8 force damage and be pushed 10 feet (proficiency bonus per long rest).',
-    FTD),
+    FTD, [], choose(['int', 'wis', 'cha'])),
 
   feat('gift_of_the_metallic_dragon', 'Gift of the Metallic Dragon', null,
     '+1 Strength, Constitution, Wisdom, or Charisma. You can cast Cure Wounds once per long rest, and manifest protective wings as a reaction to grant +PB AC to a creature (proficiency bonus per long rest).',
-    FTD),
+    FTD, [], choose(['str', 'con', 'wis', 'cha'])),
 
   feat('grappler', 'Grappler', 'Strength 13+',
     'You have advantage on attack rolls against a creature you are grappling, and can use your action to try to pin a grappled creature (restrained).',
@@ -181,7 +198,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('guile_of_the_cloud_giant', 'Guile of the Cloud Giant', '4th level, Strike of the Giants (Cloud Strike)',
     '+1 Strength, Constitution, or Wisdom. You gain resistance to an attack\'s damage as a reaction and can teleport up to 30 feet (proficiency bonus per long rest).',
-    GG),
+    GG, [], choose(['str', 'con', 'wis'])),
 
   feat('gunner', 'Gunner', null,
     '+1 Dexterity. You gain proficiency with firearms, ignore their loading property, and don\'t have disadvantage on ranged attacks within 5 feet.',
@@ -213,11 +230,11 @@ export const ALL_FEATS: Feat[] = [
 
   feat('keenness_of_the_stone_giant', 'Keenness of the Stone Giant', '4th level, Strike of the Giants (Stone Strike)',
     '+1 Strength, Constitution, or Wisdom. You gain darkvision 60 ft and can deal 1d10 force damage at 60 ft and knock a creature prone (proficiency bonus per long rest).',
-    GG),
+    GG, [], choose(['str', 'con', 'wis'])),
 
   feat('lightly_armored', 'Lightly Armored', null,
     '+1 Strength or Dexterity (your choice). You gain proficiency with light armor.',
-    PHB),
+    PHB, [], choose(['str', 'dex'])),
 
   feat('linguist', 'Linguist', null,
     '+1 Intelligence. You learn three languages and can create written ciphers.',
@@ -253,7 +270,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('moderately_armored', 'Moderately Armored', 'Proficiency with light armor',
     '+1 Strength or Dexterity (your choice). You gain proficiency with medium armor and shields.',
-    PHB),
+    PHB, [], choose(['str', 'dex'])),
 
   feat('mounted_combatant', 'Mounted Combatant', null,
     'Advantage on melee attacks against unmounted creatures smaller than your mount, you can redirect attacks aimed at your mount to yourself, and your mount takes no damage on successful Dex saves (half on failure).',
@@ -261,15 +278,15 @@ export const ALL_FEATS: Feat[] = [
 
   feat('observant', 'Observant', null,
     '+1 Intelligence or Wisdom (your choice). You can read lips, and you gain a +5 bonus to passive Perception and passive Investigation.',
-    PHB),
+    PHB, [statBonus('passivePerception', 5)], choose(['int', 'wis'])),
 
   feat('orcish_fury', 'Orcish Fury', 'Half-orc',
     '+1 Strength or Constitution (your choice). Once per short rest, add a weapon damage die when you hit, and you can attack as a reaction after using Relentless Endurance.',
-    XGE),
+    XGE, [], choose(['str', 'con'])),
 
   feat('piercer', 'Piercer', null,
     '+1 Strength or Dexterity (your choice). Once per turn you can reroll a piercing damage die, and a critical hit with a piercing weapon rolls one additional damage die.',
-    TCE),
+    TCE, [], choose(['str', 'dex'])),
 
   feat('poisoner', 'Poisoner', null,
     'You gain proficiency with the poisoner\'s kit, can apply poison as a bonus action, your weapon attacks ignore resistance to poison, and you can craft potent poison.',
@@ -285,7 +302,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('resilient', 'Resilient', null,
     '+1 to one ability score of your choice, and you gain proficiency in saving throws using that ability.',
-    PHB),
+    PHB, [], choose(ALL_ABILITIES, 1, true)),
 
   feat('ritual_caster', 'Ritual Caster', 'Intelligence or Wisdom 13+',
     'You acquire a ritual book with two 1st-level ritual spells from a chosen class and can add more rituals you find.',
@@ -301,7 +318,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('second_chance', 'Second Chance', 'Halfling',
     '+1 Dexterity, Constitution, or Charisma (your choice). When a creature you can see hits you, you can use your reaction to force it to reroll (once per rest until you do).',
-    XGE),
+    XGE, [], choose(['dex', 'con', 'cha'])),
 
   feat('sentinel', 'Sentinel', null,
     'A creature you hit with an opportunity attack has its speed reduced to 0, creatures provoke opportunity attacks even when they Disengage, and you can attack as a reaction when an enemy attacks an ally near you.',
@@ -309,7 +326,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('shadow_touched', 'Shadow Touched', null,
     '+1 Intelligence, Wisdom, or Charisma (your choice). You learn Invisibility and one 1st-level illusion or necromancy spell, castable once per long rest without a slot.',
-    TCE),
+    TCE, [], choose(['int', 'wis', 'cha'])),
 
   feat('sharpshooter', 'Sharpshooter', null,
     'Long-range attacks don\'t have disadvantage, your ranged attacks ignore half and three-quarters cover, and you can take -5 to hit for +10 damage.',
@@ -321,7 +338,10 @@ export const ALL_FEATS: Feat[] = [
 
   feat('skill_expert', 'Skill Expert', null,
     '+1 to one ability score, one skill proficiency, and expertise in one skill you\'re proficient with.',
-    TCE),
+    TCE, [], choose(ALL_ABILITIES), skillPicks([
+      { id: 'se_prof',      label: 'Skill proficiency', mode: 'proficiency', from: 'any' },
+      { id: 'se_expertise', label: 'Expertise',         mode: 'expertise',  from: 'proficient' },
+    ])),
 
   feat('skilled', 'Skilled', null,
     'You gain proficiency in any combination of three skills or tools.',
@@ -333,11 +353,11 @@ export const ALL_FEATS: Feat[] = [
 
   feat('slasher', 'Slasher', null,
     '+1 Strength or Dexterity (your choice). Once per turn reduce a target\'s speed by 10 feet on a slashing hit, and a slashing critical hit gives the target disadvantage on attacks until your next turn.',
-    TCE),
+    TCE, [], choose(['str', 'dex'])),
 
   feat('soul_of_the_storm_giant', 'Soul of the Storm Giant', '4th level, Strike of the Giants (Storm Strike)',
     '+1 Strength, Constitution, or Wisdom. You gain resistance to lightning and thunder, impose disadvantage on attacks against you, and can reduce an attacker\'s speed (proficiency bonus per long rest).',
-    GG),
+    GG, [], choose(['str', 'con', 'wis'])),
 
   feat('spell_sniper', 'Spell Sniper', 'The ability to cast at least one spell',
     'Doubles the range of your attack-roll spells, those spells ignore half and three-quarters cover, and you learn one attack cantrip.',
@@ -345,7 +365,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('squat_nimbleness', 'Squat Nimbleness', 'Dwarf or a Small race',
     '+1 Strength or Dexterity (your choice). Your speed increases by 5 feet, you gain proficiency in Acrobatics or Athletics, and advantage on checks to escape a grapple.',
-    XGE),
+    XGE, [statBonus('speed', 5)], choose(['str', 'dex'])),
 
   feat('strike_of_the_giants', 'Strike of the Giants', 'Proficiency with a martial weapon or Giant Foundling background',
     'Choose a giant type. You can deal extra damage and an additional effect (varies by type) when you hit with a weapon attack (proficiency bonus per long rest).',
@@ -353,15 +373,15 @@ export const ALL_FEATS: Feat[] = [
 
   feat('tavern_brawler', 'Tavern Brawler', null,
     '+1 Strength or Constitution (your choice). Proficiency with improvised weapons, your unarmed strikes deal 1d4, and you can grapple as a bonus action after hitting with an unarmed strike or improvised weapon.',
-    PHB),
+    PHB, [], choose(['str', 'con'])),
 
   feat('telekinetic', 'Telekinetic', null,
     '+1 Intelligence, Wisdom, or Charisma (your choice). You learn Mage Hand (cast without components) and can telekinetically shove a creature 5 feet as a bonus action.',
-    TCE),
+    TCE, [], choose(['int', 'wis', 'cha'])),
 
   feat('telepathic', 'Telepathic', null,
     '+1 Intelligence, Wisdom, or Charisma (your choice). You can speak telepathically to creatures within 60 feet and can cast Detect Thoughts once per long rest without a slot.',
-    TCE),
+    TCE, [], choose(['int', 'wis', 'cha'])),
 
   feat('tough', 'Tough', null,
     'Your hit point maximum increases by twice your level when you take this feat, and by 2 every time you gain a level thereafter.',
@@ -369,7 +389,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('vigor_of_the_hill_giant', 'Vigor of the Hill Giant', '4th level, Strike of the Giants (Hill Strike)',
     '+1 Strength, Constitution, or Wisdom. You can\'t be knocked prone unless willing, and when you spend a Hit Die you regain extra HP equal to your Constitution modifier + proficiency bonus.',
-    GG),
+    GG, [], choose(['str', 'con', 'wis'])),
 
   feat('war_caster', 'War Caster', 'The ability to cast at least one spell',
     'Advantage on concentration saves, you can perform somatic components with weapons or a shield in hand, and you can cast a spell as an opportunity attack.',
@@ -377,7 +397,7 @@ export const ALL_FEATS: Feat[] = [
 
   feat('weapon_master', 'Weapon Master', null,
     '+1 Strength or Dexterity (your choice). You gain proficiency with four weapons of your choice.',
-    PHB),
+    PHB, [], choose(['str', 'dex'])),
 
   feat('wood_elf_magic', 'Wood Elf Magic', 'Elf (wood)',
     'You learn one druid cantrip and can cast Longstrider and Pass Without Trace once per long rest each.',

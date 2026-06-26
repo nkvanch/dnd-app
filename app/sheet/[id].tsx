@@ -12,10 +12,12 @@ import { applyDamage, applyHealing } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { takeRest } from '../../src/engine/rest';
 import { expireOverrides } from '../../src/engine/dmOverride';
+import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { Entity } from '../../src/engine/types';
 import { ALL_ITEMS } from '../../src/content/items/index';
 import { CONDITIONS_BY_ID } from '../../src/content/conditions/index';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
+import { TabExploration } from '../../src/components/sheet/TabExploration';
 import { TabActions }   from '../../src/components/sheet/TabActions';
 import { TabAbilities } from '../../src/components/sheet/TabAbilities';
 import { TabFeatures }  from '../../src/components/sheet/TabFeatures';
@@ -55,7 +57,14 @@ export default function CharacterSheetScreen() {
 
   const entity = characters.find(c => c.id === id);
   const [activeTab, setActiveTab] = useState<TabId>('character');
+  const [sheetMode, setSheetMode] = useState<'combat' | 'exploration'>('combat');
   const [freeEditOpen, setFreeEditOpen] = useState(false);
+
+  // Free-edit a character's own data. Hidden only when a DM has explicitly
+  // locked player edits via the house rule (the DM keeps the button). Being
+  // nominally in a campaign no longer hides it — a player editing their own
+  // sheet is normal, and the lock toggle is the real control.
+  const freeEditAllowed = !playerFreeEditLocked(rules) || isDm;
 
   // Build tab list: Spells tab is inserted after Actions for spellcasters.
   // Also show it for Skeleton characters (Doomed Touch grants chill touch) even
@@ -80,26 +89,6 @@ export default function CharacterSheetScreen() {
       return recomputeDerived(updated, rules);
     });
   }, [id, updateCharacter, rules]);
-
-  if (!entity) {
-    return (
-      <View style={styles.screen}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backTxt}>← Back</Text>
-        </Pressable>
-        <View style={styles.center}>
-          <Text style={styles.errorTxt}>Character not found.</Text>
-        </View>
-      </View>
-    );
-  }
-
-  const { identity, resources, derived } = entity;
-
-  // Header stat colours
-  const hpPct   = resources.hp.maximum > 0
-    ? resources.hp.current / resources.hp.maximum : 0;
-  const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
 
   // ── Handlers (all pure engine calls → mutate) ─────────────────────────────
 
@@ -248,6 +237,28 @@ export default function CharacterSheetScreen() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  // All hooks above run unconditionally (Rules of Hooks). Only now, after every
+  // hook has been called, do we branch on a missing entity.
+  if (!entity) {
+    return (
+      <View style={styles.screen}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backTxt}>← Back</Text>
+        </Pressable>
+        <View style={styles.center}>
+          <Text style={styles.errorTxt}>Character not found.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const { identity, resources, derived } = entity;
+
+  // Header stat colours
+  const hpPct   = resources.hp.maximum > 0
+    ? resources.hp.current / resources.hp.maximum : 0;
+  const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
+
   return (
     <View style={styles.screen}>
 
@@ -260,8 +271,8 @@ export default function CharacterSheetScreen() {
           <Text style={styles.charName} numberOfLines={1}>
             {identity.name || 'Unnamed'}
           </Text>
-          {/* Free-edit is only offered when NOT in an active campaign (solo/prep). */}
-          {!campaignId && (
+          {/* Free-edit is offered outside a campaign, unless the DM has locked it. */}
+          {freeEditAllowed && (
             <Pressable style={styles.freeEditBtn} onPress={() => setFreeEditOpen(true)}>
               <Text style={styles.freeEditTxt}>🔓 Edit</Text>
             </Pressable>
@@ -327,21 +338,51 @@ export default function CharacterSheetScreen() {
       {/* Tab Content */}
       <View style={styles.tabContent}>
         {activeTab === 'character' && (
-          <TabCharacter
-            entity={entity}
-            rules={rules}
-            isDm={isDm}
-            campaignId={campaignId}
-            deviceId={deviceId}
-            onDamage={handleDamage}
-            onHeal={handleHeal}
-            onAddCondition={handleAddCondition}
-            onRemoveCondition={handleRemoveCondition}
-            onResourceChange={handleResourceChange}
-            onSpendSlot={handleSpendSlot}
-            onRestoreSlot={handleRestoreSlot}
-            onEntityUpdate={updated => mutate(() => updated)}
-          />
+          <View style={{ flex: 1 }}>
+            {/* Combat / Exploration mode switch */}
+            <View style={styles.modeSwitch}>
+              {(['combat', 'exploration'] as const).map(m => (
+                <Pressable
+                  key={m}
+                  style={[styles.modeBtn, sheetMode === m && styles.modeBtnActive]}
+                  onPress={() => setSheetMode(m)}
+                >
+                  <Text style={[styles.modeTxt, sheetMode === m && styles.modeTxtActive]}>
+                    {m === 'combat' ? '⚔️  Combat' : '🧭  Exploration'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {sheetMode === 'combat' ? (
+              <TabCharacter
+                entity={entity}
+                rules={rules}
+                isDm={isDm}
+                campaignId={campaignId}
+                deviceId={deviceId}
+                onDamage={handleDamage}
+                onHeal={handleHeal}
+                onAddCondition={handleAddCondition}
+                onRemoveCondition={handleRemoveCondition}
+                onResourceChange={handleResourceChange}
+                onSpendSlot={handleSpendSlot}
+                onRestoreSlot={handleRestoreSlot}
+                onEntityUpdate={updated => mutate(() => updated)}
+              />
+            ) : (
+              <TabExploration
+                entity={entity}
+                rules={rules}
+                onEntityUpdate={updated => mutate(() => updated)}
+                onDamage={handleDamage}
+                onHeal={handleHeal}
+                onAddCondition={handleAddCondition}
+                onRemoveCondition={handleRemoveCondition}
+                onSaveNotes={handleSaveNotes}
+              />
+            )}
+          </View>
         )}
         {activeTab === 'actions' && (
           <TabActions
@@ -377,6 +418,7 @@ export default function CharacterSheetScreen() {
         {activeTab === 'inventory' && (
           <TabInventory
             entity={entity}
+            rules={rules}
             onEquip={handleEquip}
             onUnequip={handleUnequip}
             onAddItem={handleAddItem}
@@ -394,9 +436,11 @@ export default function CharacterSheetScreen() {
         <View style={styles.restBar}>
           <Pressable style={styles.restBtn} onPress={() => handleRest('short')}>
             <Text style={styles.restBtnTxt}>☕  Short Rest</Text>
+            <Text style={styles.restBtnSub}>{formatShortRest(shortRestMinutes(rules))}</Text>
           </Pressable>
           <Pressable style={[styles.restBtn, styles.restBtnLong]} onPress={() => handleRest('long')}>
             <Text style={styles.restBtnTxt}>🌙  Long Rest</Text>
+            <Text style={styles.restBtnSub}>{longRestHours(rules)} hours</Text>
           </Pressable>
         </View>
       </SafeBottomView>
@@ -446,8 +490,9 @@ const styles = StyleSheet.create({
   },
   backBtn:  { paddingRight: Spacing.xs },
   backTxt:  { color: Colors.gold, fontSize: FontSize.md, fontWeight: FontWeight.bold },
-  charName: { flex: 1, fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  charName: { flex: 1, flexShrink: 1, fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   freeEditBtn: {
+    flexShrink: 0,
     backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
     borderWidth: 1, borderColor: Colors.gold + '66',
     paddingHorizontal: Spacing.sm, paddingVertical: 3, marginRight: Spacing.xs,
@@ -496,6 +541,20 @@ const styles = StyleSheet.create({
 
   tabContent: { flex: 1 },
 
+  modeSwitch: {
+    flexDirection: 'row', gap: Spacing.xs,
+    padding: Spacing.sm,
+    backgroundColor: Colors.bg,
+  },
+  modeBtn: {
+    flex: 1, paddingVertical: Spacing.sm, alignItems: 'center',
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  modeBtnActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
+  modeTxt:       { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  modeTxtActive: { color: Colors.gold },
+
   restBar: {
     flexDirection:   'row',
     gap:             Spacing.sm,
@@ -511,4 +570,10 @@ const styles = StyleSheet.create({
   },
   restBtnLong: { borderColor: Colors.blue + '88' },
   restBtnTxt:  { color: Colors.textPrimary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  restBtnSub:  { color: Colors.textDim, fontSize: FontSize.xs, marginTop: 1 },
 });
+
+function formatShortRest(minutes: number): string {
+  if (minutes >= 60) return minutes === 60 ? '1 hour' : `${minutes / 60} hours`;
+  return `${minutes} min`;
+}

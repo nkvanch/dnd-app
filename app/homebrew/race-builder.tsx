@@ -3,11 +3,20 @@
 import { useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Race, Feature, Ability } from '../../src/engine/types';
+import { Race, Feature, Ability, SenseType, Sense, MovementSpeeds } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const ABILITIES: Ability[] = ['str','dex','con','int','wis','cha'];
+const SENSE_TYPES: { key: SenseType; label: string }[] = [
+  { key: 'darkvision', label: 'Darkvision' }, { key: 'blindsight', label: 'Blindsight' },
+  { key: 'tremorsense', label: 'Tremorsense' }, { key: 'truesight', label: 'Truesight' },
+];
+type MoveType = 'fly' | 'swim' | 'climb' | 'burrow';
+const MOVE_TYPES: { key: MoveType; label: string }[] = [
+  { key: 'fly', label: 'Fly' }, { key: 'swim', label: 'Swim' },
+  { key: 'climb', label: 'Climb' }, { key: 'burrow', label: 'Burrow' },
+];
 
 function toId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -23,8 +32,36 @@ export default function RaceBuilderScreen() {
   const [abiBonuses,  setAbiBonuses]  = useState<Record<Ability, string>>({
     str: '', dex: '', con: '', int: '', wis: '', cha: '',
   });
-  const [darkvision, setDarkvision] = useState(false);
+  const [senses, setSenses] = useState<Sense[]>([]);
+  const [draftSenseType, setDraftSenseType] = useState<SenseType>('darkvision');
+  const [draftSenseRange, setDraftSenseRange] = useState('60');
+  const [draftSenseNote, setDraftSenseNote] = useState('');
+  const [movement, setMovement] = useState<MovementSpeeds>({});
+  const [draftMoveType, setDraftMoveType] = useState<MoveType>('fly');
+  const [draftMoveRange, setDraftMoveRange] = useState('30');
   const [extraFeature, setExtraFeature] = useState('');
+
+  function addMovement() {
+    const r = parseInt(draftMoveRange, 10);
+    if (isNaN(r) || r <= 0) return;
+    setMovement(prev => ({ ...prev, [draftMoveType]: r }));
+  }
+  function removeMovement(t: MoveType) {
+    setMovement(prev => { const next = { ...prev }; delete next[t]; return next; });
+  }
+
+  function addSense() {
+    const r = parseInt(draftSenseRange, 10);
+    if (isNaN(r) || r <= 0) return;
+    setSenses(prev => [
+      ...prev.filter(s => s.type !== draftSenseType),  // one entry per type
+      { type: draftSenseType, range: r, note: draftSenseNote.trim() || undefined },
+    ]);
+    setDraftSenseNote('');
+  }
+  function removeSense(t: SenseType) {
+    setSenses(prev => prev.filter(s => s.type !== t));
+  }
 
   function buildRace(): Race {
     const id = toId(name) || 'homebrew_race';
@@ -63,13 +100,49 @@ export default function RaceBuilderScreen() {
       });
     }
 
-    // Darkvision
-    if (darkvision) {
+    // Senses — one feature carrying a grant_sense effect per chosen sense, so
+    // they aggregate into derived.senses and show on the sheet's exploration panel.
+    if (senses.length > 0) {
       features.push({
-        id: `${id}_darkvision`, name: 'Darkvision',
-        description: 'You can see in dim light within 60 feet as if it were bright light.',
+        id: `${id}_senses`, name: 'Senses',
+        description: senses.map(s =>
+          `${SENSE_TYPES.find(t => t.key === s.type)?.label ?? s.type} ${s.range} ft` +
+          (s.note ? ` (${s.note})` : '')
+        ).join('; '),
         source: { kind: 'race', refId: id },
-        level: null, effects: [], actions: [], choices: [], passive: true,
+        level: null, actions: [], choices: [], passive: true,
+        effects: senses.map(s => ({
+          type:      'grant_sense' as const,
+          target:    'senses',
+          operation: 'add' as const,
+          value:     null,
+          condition: null,
+          senseType:  s.type,
+          senseRange: s.range,
+          senseNote:  s.note,
+        })),
+      });
+    }
+
+    // Movement — grant_movement effects feed derived.movement (Travel section).
+    const moveEntries = (Object.entries(movement) as [MoveType, number][]).filter(([, v]) => v > 0);
+    if (moveEntries.length > 0) {
+      features.push({
+        id: `${id}_movement`, name: 'Movement',
+        description: moveEntries.map(([t, v]) =>
+          `${MOVE_TYPES.find(m => m.key === t)?.label ?? t} ${v} ft`
+        ).join('; '),
+        source: { kind: 'race', refId: id },
+        level: null, actions: [], choices: [], passive: true,
+        effects: moveEntries.map(([t, v]) => ({
+          type:      'grant_movement' as const,
+          target:    'movement',
+          operation: 'add' as const,
+          value:     null,
+          condition: null,
+          movementType:  t,
+          movementRange: v,
+        })),
       });
     }
 
@@ -132,9 +205,73 @@ export default function RaceBuilderScreen() {
           ))}
         </View>
 
-        <Pressable style={[styles.toggle, darkvision && styles.toggleActive]} onPress={() => setDarkvision(d => !d)}>
-          <Text style={[styles.toggleTxt, darkvision && styles.toggleTxtActive]}>👁 Darkvision (60 ft)</Text>
-        </Pressable>
+        <Text style={styles.fieldLabel}>Senses</Text>
+        {senses.length > 0 && (
+          <View style={styles.senseChips}>
+            {senses.map(s => (
+              <View key={s.type} style={styles.senseChip}>
+                <Text style={styles.senseChipTxt}>
+                  {SENSE_TYPES.find(t => t.key === s.type)?.label} {s.range}ft{s.note ? ` · ${s.note}` : ''}
+                </Text>
+                <Pressable onPress={() => removeSense(s.type)} hitSlop={8}>
+                  <Text style={styles.senseX}>✕</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+        <View style={styles.senseTypeRow}>
+          {SENSE_TYPES.map(t => (
+            <Pressable
+              key={t.key}
+              style={[styles.chip, draftSenseType === t.key && styles.chipActive]}
+              onPress={() => setDraftSenseType(t.key)}
+            >
+              <Text style={[styles.chipTxt, draftSenseType === t.key && styles.chipTxtActive]}>{t.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.senseInputRow}>
+          <TextInput style={[styles.input, { flex: 1 }]} value={draftSenseRange} onChangeText={setDraftSenseRange}
+            keyboardType="number-pad" placeholder="Range (ft)" placeholderTextColor={Colors.textDim} />
+          <TextInput style={[styles.input, { flex: 2 }]} value={draftSenseNote} onChangeText={setDraftSenseNote}
+            placeholder="Note (e.g. in color, heat)" placeholderTextColor={Colors.textDim} />
+          <Pressable style={styles.senseAddBtn} onPress={addSense}>
+            <Text style={styles.senseAddTxt}>Add</Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.fieldLabel}>Movement (fly / swim / climb / burrow)</Text>
+        {Object.keys(movement).length > 0 && (
+          <View style={styles.senseChips}>
+            {(Object.entries(movement) as [MoveType, number][]).map(([t, v]) => (
+              <View key={t} style={styles.senseChip}>
+                <Text style={styles.senseChipTxt}>{MOVE_TYPES.find(m => m.key === t)?.label} {v}ft</Text>
+                <Pressable onPress={() => removeMovement(t)} hitSlop={8}>
+                  <Text style={styles.senseX}>✕</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+        <View style={styles.senseTypeRow}>
+          {MOVE_TYPES.map(t => (
+            <Pressable
+              key={t.key}
+              style={[styles.chip, draftMoveType === t.key && styles.chipActive]}
+              onPress={() => setDraftMoveType(t.key)}
+            >
+              <Text style={[styles.chipTxt, draftMoveType === t.key && styles.chipTxtActive]}>{t.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.senseInputRow}>
+          <TextInput style={[styles.input, { flex: 1 }]} value={draftMoveRange} onChangeText={setDraftMoveRange}
+            keyboardType="number-pad" placeholder="Speed (ft)" placeholderTextColor={Colors.textDim} />
+          <Pressable style={styles.senseAddBtn} onPress={addMovement}>
+            <Text style={styles.senseAddTxt}>Add</Text>
+          </Pressable>
+        </View>
 
         <Text style={styles.fieldLabel}>Extra Trait Name (optional)</Text>
         <TextInput style={styles.input} value={extraFeature} onChangeText={setExtraFeature}
@@ -174,6 +311,18 @@ const styles = StyleSheet.create({
   toggleActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
   toggleTxt:    { color: Colors.textSecondary, fontSize: FontSize.sm },
   toggleTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
+  chip:      { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: Colors.border },
+  chipActive:{ borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  chipTxt:   { fontSize: FontSize.xs, color: Colors.textSecondary },
+  chipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
+  senseTypeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  senseInputRow: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
+  senseAddBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.md, justifyContent: 'center' },
+  senseAddTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  senseChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  senseChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.blue + '22', borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.blue + '55', paddingHorizontal: Spacing.sm, paddingVertical: 4 },
+  senseChipTxt: { fontSize: FontSize.xs, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  senseX: { color: Colors.red, fontSize: FontSize.sm },
   footer:   { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
   saveBtn:  { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },

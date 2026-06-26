@@ -37,6 +37,7 @@ export type SyncStatus = {
   roomCode:    string | null;
   sessionId:   string | null;
   roster:      ConnectedPlayer[];   // DM only: who's connected and which character they control
+  lastError:   string | null;       // player: most recent connection-failure reason, if any
 };
 
 export type SyncManagerCallbacks = {
@@ -61,6 +62,7 @@ class SyncManagerClass {
   private roomCode:    string | null = null;
   private sessionId:   string | null = null;
   private _roster:     ConnectedPlayer[] = [];
+  private _lastError:  string | null = null;
 
   // ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -153,15 +155,21 @@ class SyncManagerClass {
 
     const { ip, port } = decodeRoomCode(code);
     this.role = 'player';
+    this._lastError = null;
 
     this.client = new SyncClient(deviceId, nickname, characterId, {
       onConnected: (campaignId, sessionId) => {
         this.sessionId = sessionId;
+        this._lastError = null;
         this.emitStatus();
         // Flush any events we queued while offline
         this.flushQueuedEvents(sessionId);
       },
       onDisconnected: () => {
+        this.emitStatus();
+      },
+      onError: (reason) => {
+        this._lastError = reason;
         this.emitStatus();
       },
       onSyncEvent: (event) => {
@@ -247,6 +255,7 @@ class SyncManagerClass {
     this._roster      = [];
     this.roomCode     = null;
     this.sessionId    = null;
+    this._lastError   = null;
     this.emitStatus();
   }
 
@@ -267,6 +276,7 @@ class SyncManagerClass {
       roomCode:    this.roomCode,
       sessionId:   this.sessionId,
       roster:      this.role === 'dm' ? this._roster : [],
+      lastError:   this.role === 'player' ? this._lastError : null,
     };
   }
 

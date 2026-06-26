@@ -17,6 +17,7 @@ const DEFAULT_STATUS: SyncStatus = {
   roomCode:    null,
   sessionId:   null,
   roster:      [],
+  lastError:   null,
 };
 
 export const useSyncStore = create<SyncStore>(set => ({

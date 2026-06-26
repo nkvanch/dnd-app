@@ -15,6 +15,32 @@ import {
 } from './types';
 import { globalContentDB } from '../content/classes/library';
 import { modifier } from './pipeline';
+import { usesLargeCreatureWeaponDice } from './houseRules';
+import { CampaignRules } from './types';
+
+// ── Large-creature weapon dice (house rule) ──────────────────────────
+
+// Minimal Large-creature detection (mirrors TabInventory) so the engine doesn't
+// import from a component. Extend these sets as more Large races are added.
+const LARGE_SUBRACE_IDS = new Set(['skeleton_giant']);
+const LARGE_RACE_IDS    = new Set<string>();
+function isLargeCreature(entity: Entity): boolean {
+  if (entity.identity.subRaceId && LARGE_SUBRACE_IDS.has(entity.identity.subRaceId)) return true;
+  if (entity.identity.raceId    && LARGE_RACE_IDS.has(entity.identity.raceId))       return true;
+  return entity.features.some(f => f.id === 'skeleton_giant_remains');
+}
+
+/**
+ * Doubles the dice COUNT in a dice expression, per the DMG large-creature rule
+ * ("twice the weapon's damage dice"). "1d8" -> "2d8", "2d6" -> "4d6",
+ * "1d10+2" -> "2d10+2". Flat bonuses and non-dice text are left untouched.
+ */
+function doubleDice(dice: string): string {
+  return dice.replace(/(\d+)d(\d+)/g, (_, count, sides) => `${parseInt(count, 10) * 2}d${sides}`);
+}
+
+/** Options that tune card generation from active campaign rules. */
+export type CardGenOptions = { doubleWeaponDice?: boolean };
 
 // ── Weapon attack / damage computation ────────────────────────────────────────
 
@@ -197,7 +223,7 @@ export function buildLayer1ForSpell(spell: Spell, cardType: ActionCardType): str
  * Layer 2: key mechanical summary.
  * Examples: "8d6 Fire • 20 ft radius", "+2 damage, B/P/S resistance"
  */
-export function buildLayer2(feature: Feature, entity?: Entity): string {
+export function buildLayer2(feature: Feature, entity?: Entity, opts: CardGenOptions = {}): string {
   const fx = feature.abilityEffects ?? [];
 
   const parts: string[] = [];
@@ -208,16 +234,21 @@ export function buildLayer2(feature: Feature, entity?: Entity): string {
     parts.push(`${fmtBonus(atk.toHit)} to hit`);
   }
 
+  // The large-creature rule doubles WEAPON dice only (item-sourced attacks),
+  // never spell or feature dice. atk is non-null exactly for weapon attacks.
+  const doubleThisFeature = !!opts.doubleWeaponDice && atk !== null;
+
   for (const e of fx) {
     if (e.type === 'damage') {
+      const dice = doubleThisFeature ? doubleDice(e.dice) : e.dice;
       // For weapon attacks, show "2d8+8" (dice + ability/magic bonus).
       // Only the FIRST damage effect gets the ability mod (the weapon swing);
       // rider damage (e.g. 3d6 necrotic) is shown without the mod.
       const isFirstDamage = fx.findIndex(x => x.type === 'damage') === fx.indexOf(e);
       if (atk && isFirstDamage && atk.dmgBonus !== 0) {
-        parts.push(`${e.dice}${fmtBonus(atk.dmgBonus)} ${capitalize(e.damageType)}`);
+        parts.push(`${dice}${fmtBonus(atk.dmgBonus)} ${capitalize(e.damageType)}`);
       } else {
-        parts.push(`${e.dice} ${capitalize(e.damageType)}`);
+        parts.push(`${dice} ${capitalize(e.damageType)}`);
       }
     } else if (e.type === 'heal') {
       parts.push(`Heal ${e.dice}`);
@@ -367,6 +398,7 @@ export function isFeatureAvailable(
 export function generateActionCard(
   feature: Feature,
   entity: Entity,
+  opts: CardGenOptions = {},
 ): ActionCard | null {
   if (!feature.activation) return null;
 
@@ -387,7 +419,7 @@ export function generateActionCard(
     cardType,
     color:             cardColor(cardType),
     layer1:            buildLayer1(feature, cardType),
-    layer2:            buildLayer2(feature, entity),
+    layer2:            buildLayer2(feature, entity, opts),
     layer3:            buildLayer3(feature),
     activation:        feature.activation,
     resourceCost:      feature.activation.resourceCost,
@@ -458,13 +490,19 @@ export function generateSpellCard(
  * Runs over every active feature and all known/prepared spells.
  * Filters nulls. Each card knows which tabs it belongs to.
  */
-export function generateAllActionCards(entity: Entity): ActionCard[] {
+export function generateAllActionCards(entity: Entity, rules?: CampaignRules): ActionCard[] {
   const cards: ActionCard[] = [];
+
+  // Large-creature weapon-dice house rule: active only when the rule is on AND
+  // this creature is Large+. Weapon (item) damage dice double on their cards.
+  const doubleWeaponDice =
+    !!rules && usesLargeCreatureWeaponDice(rules) && isLargeCreature(entity);
+  const opts: CardGenOptions = { doubleWeaponDice };
 
   // 1. Feature-based cards (class abilities, race abilities, background features)
   for (const fi of entity.features) {
     if (!fi.isActive) continue;
-    const card = generateActionCard(fi, entity);
+    const card = generateActionCard(fi, entity, opts);
     if (card) cards.push(card);
   }
 
@@ -481,7 +519,7 @@ export function generateAllActionCards(entity: Entity): ActionCard[] {
       // Only features with an activation produce cards (attacks, usable items);
       // passive AC features (armor) are handled by collectAllEffects, not here.
       if (!fi.activation) continue;
-      const card = generateActionCard(fi, entity);
+      const card = generateActionCard(fi, entity, opts);
       if (card) cards.push(card);
     }
   }

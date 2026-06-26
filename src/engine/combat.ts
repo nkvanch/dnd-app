@@ -203,20 +203,22 @@ export function concentrationCheck(
 ): Entity {
   if (!entity.spellcasting?.concentrating) return entity;
 
-  const dc      = Math.max(10, Math.floor(damageTaken / 2));
-  const conMod  = Math.floor((entity.stats.con - 10) / 2);
-  const profBonus = Math.ceil(1 + entity.identity.level / 4);
+  const dc = Math.max(10, Math.floor(damageTaken / 2));
 
-  // Check for Resilient (CON) or War Caster proficiency on concentration saves
-  const hasResilientCon = entity.features.some(f =>
-    f.isActive && f.id === 'resilient_con'
-  );
+  // Use the pipeline-computed CON saving throw, which already accounts for the
+  // effective CON modifier (race/feat bonuses) AND saving-throw proficiency
+  // (e.g. Resilient adds CON to proficiencies.savingThrows, which flows into
+  // derived.savingThrows.con). Reading entity.stats.con directly would miss both.
+  const conSaveBonus = entity.derived.savingThrows.con;
+
+  // War Caster grants advantage on concentration saves. Match the actual feat
+  // feature id (feat_<id>); the old 'war_caster'/'resilient_con' ids never
+  // matched anything created by the feats system.
   const hasWarCaster = entity.features.some(f =>
-    f.isActive && f.id === 'war_caster'
+    f.isActive && f.id === 'feat_war_caster'
   );
 
-  const baseRoll = (): number =>
-    rollD20Dice(conMod + (hasResilientCon ? profBonus : 0)).total;
+  const baseRoll = (): number => rollD20Dice(conSaveBonus).total;
 
   const roll = hasWarCaster
     ? Math.max(baseRoll(), baseRoll())   // Advantage: roll twice, keep higher

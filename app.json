@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "dnd-app",
-    "slug": "dndapp",
+    "slug": "grimoire",
     "version": "1.0.0",
     "scheme": "dndapp",
     "orientation": "portrait",
@@ -35,13 +35,13 @@
       "expo-secure-store"
     ],
     "extra": {
+      "eas": {
+        "projectId": "08c0029a-33d6-45e4-85a2-07b5f9995dcd"
+      },
       "router": {
         "root": "app"
-      },
-      "eas": {
-        "projectId": "aeadae6b-4bef-42c6-8f21-99acc658acb3"
       }
     },
-    "owner": "nkvanchs-organization"
+    "owner": "davidkvanchakhadzes-organization"
   }
 }

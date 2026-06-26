@@ -81,6 +81,14 @@ const KNOWN_CONDITIONS = [
   'poisoned','prone','restrained','stunned','unconscious',
 ];
 
+// Display labels for the four structured sense types.
+const SENSE_LABELS: Record<string, string> = {
+  darkvision:  'Darkvision',
+  blindsight:  'Blindsight',
+  tremorsense: 'Tremorsense',
+  truesight:   'Truesight',
+};
+
 // ── Concentration Check Modal ─────────────────────────────────────────────────
 
 function ConcentrationModal({
@@ -403,6 +411,186 @@ function getEquippedWeapons(entity: Entity, profBonus: number): WeaponInfo[] {
   return result;
 }
 
+// ── Ad-hoc feat choice ────────────────────────────────────────────────────────
+
+/**
+ * Synthesizes a one-off ASI/feat ChoiceState so a player can take a feat
+ * directly from the sheet (outside the normal level-up flow). The picker in
+ * featOnly mode resolves a feat against this choice; applyFeatToEntity records
+ * it as a resolved choice on the entity.
+ */
+function makeAdHocFeatChoice(): import('../../engine/types').ChoiceState {
+  const id = `adhoc_feat_${Date.now().toString(36)}`;
+  return {
+    id,
+    grantedAt: 0,
+    resolved: false,
+    selections: [],
+    definition: {
+      id,
+      prompt: 'Take a feat',
+      kind: 'asi',
+      count: 1,
+      pool: 'all',
+      grants: [],
+      required: false,
+      resolved: false,
+    },
+  };
+}
+
+// ── Senses editor modal ───────────────────────────────────────────────────────
+
+const MANUAL_SENSES_FEATURE_ID = 'manual_senses';
+const SENSE_TYPE_OPTIONS: import('../../engine/types').SenseType[] =
+  ['darkvision', 'blindsight', 'tremorsense', 'truesight'];
+
+/**
+ * Reads the player-managed senses from the dedicated manual-senses feature
+ * (source.kind 'campaign', id 'manual_senses'). These are the senses the player
+ * can add/remove here; senses granted by race/feat/item features are aggregated
+ * separately by the pipeline and shown read-only.
+ */
+function readManualSenses(entity: Entity): import('../../engine/types').Sense[] {
+  const f = entity.features.find(ft => ft.id === MANUAL_SENSES_FEATURE_ID);
+  if (!f) return [];
+  return (f.effects ?? [])
+    .filter(e => e.type === 'grant_sense' && e.senseType)
+    .map(e => ({ type: e.senseType!, range: e.senseRange ?? 0, note: e.senseNote }));
+}
+
+/** Writes the manual senses back onto the manual-senses feature (replacing it). */
+function writeManualSenses(
+  entity: Entity,
+  senses: import('../../engine/types').Sense[],
+  rules: CampaignRules,
+): Entity {
+  const effects = senses.map(s => ({
+    type: 'grant_sense' as const,
+    target: 'senses',
+    operation: 'add' as const,
+    value: null,
+    condition: null,
+    senseType: s.type,
+    senseRange: s.range,
+    senseNote: s.note,
+  }));
+  const others = entity.features.filter(ft => ft.id !== MANUAL_SENSES_FEATURE_ID);
+  const updatedFeatures = effects.length === 0
+    ? others
+    : [...others, {
+        id: MANUAL_SENSES_FEATURE_ID,
+        name: 'Senses',
+        description: 'Player-set senses.',
+        source: { kind: 'campaign' as const, refId: MANUAL_SENSES_FEATURE_ID },
+        level: null,
+        effects,
+        actions: [],
+        choices: [],
+        passive: true,
+        isActive: true,
+      }];
+  return recomputeDerived({ ...entity, features: updatedFeatures }, rules);
+}
+
+function SensesModal({
+  visible, entity, rules, onUpdate, onClose,
+}: {
+  visible: boolean;
+  entity: Entity;
+  rules: CampaignRules;
+  onUpdate: (u: Entity) => void;
+  onClose: () => void;
+}) {
+  const manual = readManualSenses(entity);
+  const [type, setType] = useState<import('../../engine/types').SenseType>('darkvision');
+  const [range, setRange] = useState('60');
+  const [note, setNote] = useState('');
+
+  function addSense() {
+    const r = parseInt(range, 10);
+    if (isNaN(r) || r <= 0) return;
+    // Replace any existing manual sense of the same type.
+    const next = [
+      ...manual.filter(s => s.type !== type),
+      { type, range: r, note: note.trim() || undefined },
+    ];
+    onUpdate(writeManualSenses(entity, next, rules));
+    setNote('');
+  }
+
+  function removeSense(t: string) {
+    onUpdate(writeManualSenses(entity, manual.filter(s => s.type !== t), rules));
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.condPickerSheet} onPress={e => e.stopPropagation()}>
+          <Text style={styles.condPickerTitle}>Senses</Text>
+
+          {/* Current manual senses */}
+          {manual.length > 0 && (
+            <View style={styles.senseChips}>
+              {manual.map(s => (
+                <View key={s.type} style={styles.senseChip}>
+                  <Text style={styles.senseChipTxt}>
+                    {SENSE_LABELS[s.type]} {s.range}ft{s.note ? ` · ${s.note}` : ''}
+                  </Text>
+                  <Pressable onPress={() => removeSense(s.type)} hitSlop={8}>
+                    <Text style={styles.condX}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Type selector */}
+          <View style={styles.senseTypeRow}>
+            {SENSE_TYPE_OPTIONS.map(t => (
+              <Pressable
+                key={t}
+                style={[styles.senseTypeChip, type === t && styles.senseTypeChipActive]}
+                onPress={() => setType(t)}
+              >
+                <Text style={[styles.senseTypeTxt, type === t && styles.senseTypeTxtActive]}>
+                  {SENSE_LABELS[t]}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Range + note */}
+          <View style={styles.senseInputRow}>
+            <TextInput
+              style={[styles.condSearch, { flex: 1 }]}
+              value={range}
+              onChangeText={setRange}
+              keyboardType="number-pad"
+              placeholder="Range (ft)"
+              placeholderTextColor={Colors.textDim}
+            />
+            <TextInput
+              style={[styles.condSearch, { flex: 2 }]}
+              value={note}
+              onChangeText={setNote}
+              placeholder="Note (e.g. in color, heat)"
+              placeholderTextColor={Colors.textDim}
+            />
+          </View>
+
+          <Pressable style={styles.rollBtn} onPress={addSense}>
+            <Text style={styles.rollBtnTxt}>Add / Update Sense</Text>
+          </Pressable>
+          <Pressable style={styles.cancelBtn} onPress={onClose}>
+            <Text style={styles.cancelTxt}>Done</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function TabCharacter({
@@ -422,6 +610,8 @@ export function TabCharacter({
   const [tempHpOpen,   setTempHpOpen]   = useState(false);
   const [deathSaves, setDeathSaves] = useState({ successes: 0, failures: 0 });
   const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
+  const [sensesOpen, setSensesOpen] = useState(false);
+  const [addFeatOpen, setAddFeatOpen] = useState(false);
   // Inline hit-die result — shown for 3s then cleared, no Alert needed
   const [hitDieResult, setHitDieResult] = useState<string | null>(null);
   const hitDieTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -598,17 +788,24 @@ export function TabCharacter({
         })}
       </View>
 
-      {/* Level Up */}
-      <LevelUpSection
-        entity={entity}
-        rules={rules}
-        onEntityUpdate={onEntityUpdate}
-        onLeveled={(updated) => {
-          const hasAsi = updated.choices.some(c => c.definition.kind === 'asi' && !c.resolved);
-          if (hasAsi) setLevelUpAsiOpen(true);
-          // Other pending choices (subclass, spells) surface in the Features tab automatically
-        }}
-      />
+      {/* Level Up + Add Feat */}
+      <View style={styles.levelUpRow}>
+        <View style={{ flex: 1 }}>
+          <LevelUpSection
+            entity={entity}
+            rules={rules}
+            onEntityUpdate={onEntityUpdate}
+            onLeveled={(updated) => {
+              const hasAsi = updated.choices.some(c => c.definition.kind === 'asi' && !c.resolved);
+              if (hasAsi) setLevelUpAsiOpen(true);
+              // Other pending choices (subclass, spells) surface in the Features tab automatically
+            }}
+          />
+        </View>
+        <Pressable style={styles.addFeatBtn} onPress={() => setAddFeatOpen(true)}>
+          <Text style={styles.addFeatTxt}>+ Feat</Text>
+        </Pressable>
+      </View>
 
       {/* Weapon Attacks */}
       <View style={styles.section}>
@@ -901,6 +1098,32 @@ export function TabCharacter({
         </View>
       </Modal>
 
+      {/* Senses editor */}
+      <SensesModal
+        visible={sensesOpen}
+        entity={entity}
+        rules={rules}
+        onClose={() => setSensesOpen(false)}
+        onUpdate={(u) => { onEntityUpdate(u); }}
+      />
+
+      {/* Add a feat ad-hoc from the sheet */}
+      <Modal visible={addFeatOpen} animationType="slide" onRequestClose={() => setAddFeatOpen(false)}>
+        <View style={styles.lvModalRoot}>
+          <AsiFeatPicker
+            entity={entity}
+            choice={makeAdHocFeatChoice()}
+            rules={rules}
+            featOnly
+            onClose={() => setAddFeatOpen(false)}
+            onResolved={(updated) => {
+              onEntityUpdate(updated);
+              setAddFeatOpen(false);
+            }}
+          />
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -1037,6 +1260,45 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, alignItems: 'center', gap: 2,
   },
   statBoxOverride: { borderColor: Colors.gold + '66' },
+
+  // Exploration panel
+  passiveRow:   { flexDirection: 'row', gap: Spacing.sm },
+  passiveBox: {
+    flex: 1, backgroundColor: Colors.surfaceHigh,
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, alignItems: 'center', gap: 2,
+  },
+  passiveValue: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  passiveLabel: { fontSize: 9, color: Colors.textSecondary, letterSpacing: 0.5, textAlign: 'center' },
+  sensesWrap:   { gap: Spacing.xs, marginTop: Spacing.xs },
+  sensesHeading:{ fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 1, fontWeight: FontWeight.bold },
+  senseChips:   { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  senseChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.blue + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.blue + '55',
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  senseChipTxt: { fontSize: FontSize.xs, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  senseTypeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  senseTypeChip: {
+    backgroundColor: Colors.surface, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  senseTypeChipActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
+  senseTypeTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  senseTypeTxtActive: { color: Colors.gold },
+  senseInputRow: { flexDirection: 'row', gap: Spacing.sm },
+
+  // Level-up + add-feat row
+  levelUpRow:  { flexDirection: 'row', gap: Spacing.sm, alignItems: 'stretch' },
+  addFeatBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.md, justifyContent: 'center', alignItems: 'center',
+  },
+  addFeatTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   statValueRow:    { flexDirection: 'row', alignItems: 'center', gap: 2 },
   statValue:       { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   overrideStar:    { fontSize: FontSize.xs, color: Colors.gold, alignSelf: 'flex-start', marginTop: 2 },

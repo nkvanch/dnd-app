@@ -6,6 +6,7 @@ import { Entity, SpellcastingBlock, SpellSlots, CampaignRules } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { removeCondition, reduceExhaustion } from './conditions';
 import { dropConcentration } from './combat';
+import { longRestRestoresAllHitDice } from './houseRules';
 import { DEFAULT_RULES } from '../store/characterStore';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -16,7 +17,7 @@ export function takeRest(
   kind:   'short' | 'long',
   rules:  CampaignRules = DEFAULT_RULES
 ): Entity {
-  const restored = kind === 'short' ? shortRest(entity) : longRest(entity);
+  const restored = kind === 'short' ? shortRest(entity) : longRest(entity, rules);
   return recomputeDerived(restored, rules);
 }
 
@@ -62,7 +63,7 @@ function shortRest(entity: Entity): Entity {
  * 6. 'until_rest' conditions removed.
  * 7. Exhaustion reduced by 1.
  */
-function longRest(entity: Entity): Entity {
+function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity {
   let updated = entity;
 
   // 1. HP
@@ -87,8 +88,11 @@ function longRest(entity: Entity): Entity {
     },
   };
 
-  // 3. Hit dice (restore half level, minimum 1)
-  const restoreCount = Math.max(1, Math.floor(updated.identity.level / 2));
+  // 3. Hit dice. RAW restores half your level (rounded down, min 1). The
+  //    'fullHitDiceOnLongRest' house rule restores the entire spent pool.
+  const restoreCount = longRestRestoresAllHitDice(rules)
+    ? updated.resources.hitDice.total
+    : Math.max(1, Math.floor(updated.identity.level / 2));
   updated = {
     ...updated,
     resources: {

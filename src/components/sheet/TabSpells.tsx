@@ -90,8 +90,8 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
   // 'spellcasting' tab to exclude non-spell feature cards.
 
   const spellCards = useMemo(
-    () => generateAllActionCards(entity).filter(c => c.tabs.includes('spellcasting')),
-    [entity],
+    () => generateAllActionCards(entity, rules).filter(c => c.tabs.includes('spellcasting')),
+    [entity, rules],
   );
 
   // ── Spell detail lookup ───────────────────────────────────────────────────

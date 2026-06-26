@@ -21,6 +21,7 @@ import { useSessionStore }   from '../../src/store/sessionStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useSyncStore }      from '../../src/store/syncStore';
 import { syncManager }       from '../../src/sync/syncManager';
+import { decodeRoomCode }    from '../../src/sync/discovery';
 import { SyncStatusDot }     from '../../src/components/SyncStatusDot';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { Quest, SessionLogEntry } from '../../src/engine/types';
@@ -113,11 +114,10 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
     if (!trimmed || !session) return;
     setLoading(true);
     try {
-      const campaign = await createCampaign(trimmed);
-      const roomCode = await syncManager.startAsServer(
-        campaign.id, campaign.id, session.deviceId, session.nickname || 'DM',
-      );
-      await useCampaignStore.getState().updateCampaign(campaign.id, c => ({ ...c, joinCode: roomCode }));
+      // createCampaign now starts the LAN server itself and stores the real
+      // room code, so we must NOT also call startAsServer here (that would bind
+      // the port twice and overwrite the code).
+      await createCampaign(trimmed);
       setName(''); onClose();
     } catch (e) { Alert.alert('Error', String(e)); }
     finally { setLoading(false); }
@@ -155,7 +155,8 @@ function JoinModal({ visible, onClose }: { visible: boolean; onClose: () => void
     if (trimmed.length !== 6 || !session) return;
     setLoading(true); setScannerOpen(false);
     try {
-      await syncManager.startAsClient(trimmed, session.deviceId, session.nickname || 'Player', null);
+      // joinCampaign now opens the LAN client connection itself, so we must NOT
+      // also call startAsClient here (that would open a second connection).
       await joinCampaign(trimmed);
       setCode(''); onClose();
     } catch (e) { Alert.alert('Connection failed', String(e)); }
@@ -525,6 +526,17 @@ function DmActiveView() {
           <Text style={styles.codeLabel}>ROOM CODE</Text>
           <Text style={styles.codeValue}>{roomCode}</Text>
           <Text style={styles.codeHint}>Players enter this code or scan the QR below</Text>
+          {roomCode ? (() => {
+            try {
+              const { ip } = decodeRoomCode(roomCode);
+              return (
+                <Text style={styles.codeDiag}>
+                  Hosting on {ip}:7742 — this must match this phone's WiFi IP, and
+                  players must be on the same network.
+                </Text>
+              );
+            } catch { return null; }
+          })() : null}
         </View>
 
         {Platform.OS !== 'web' && roomCode ? (
@@ -571,9 +583,12 @@ function PlayerActiveView() {
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
   const leaveCampaign  = useCampaignStore(s => s.leaveCampaign);
   const assignCharacter = useCampaignStore(s => s.assignCharacterToCampaign);
+  const reconnectWithCode = useCampaignStore(s => s.reconnectWithCode);
   const syncStatus     = useSyncStore(s => s.status);
   const characters     = useCharacterStore(s => s.characters);
   const [claimOpen, setClaimOpen] = useState(false);
+  const [reconnectOpen, setReconnectOpen] = useState(false);
+  const [reconnectCode, setReconnectCode] = useState('');
 
   if (!activeCampaign) return null;
 
@@ -583,12 +598,9 @@ function PlayerActiveView() {
   const campaignId = activeCampaign.id;
 
   async function claim(characterId: string) {
+    // assignCharacterToCampaign already pushes the entity to the DM and announces
+    // the claimed character over sync, so we don't repeat those calls here.
     await assignCharacter(characterId, campaignId);
-    // Push the entity up to the DM so it appears in their roster + dashboard,
-    // then announce which character we're controlling.
-    const ent = characters.find(c => c.id === characterId);
-    if (ent) syncManager.pushEntity(ent);
-    syncManager.claimCharacter(characterId);
     setClaimOpen(false);
   }
 
@@ -616,6 +628,51 @@ function PlayerActiveView() {
             {syncStatus.connected ? 'Connected to DM' : 'Reconnecting…'}
           </Text>
         </View>
+        {!syncStatus.connected && syncStatus.lastError && (
+          <Text style={styles.syncErrorTxt}>{syncStatus.lastError}</Text>
+        )}
+        {!syncStatus.connected && (
+          reconnectOpen ? (
+            <View style={styles.reconnectBox}>
+              <Text style={styles.reconnectHint}>
+                Ask your DM for the current room code and enter it:
+              </Text>
+              <TextInput
+                style={styles.reconnectInput}
+                value={reconnectCode}
+                onChangeText={t => setReconnectCode(t.toUpperCase())}
+                placeholder="6-char code"
+                placeholderTextColor={Colors.textDim}
+                autoCapitalize="characters"
+                maxLength={6}
+              />
+              <View style={styles.reconnectRow}>
+                <Pressable
+                  style={[styles.reconnectBtn, reconnectCode.trim().length !== 6 && styles.reconnectBtnDisabled]}
+                  disabled={reconnectCode.trim().length !== 6}
+                  onPress={async () => {
+                    try {
+                      await reconnectWithCode(reconnectCode);
+                      setReconnectOpen(false);
+                      setReconnectCode('');
+                    } catch (e) {
+                      Alert.alert('Reconnect failed', String(e));
+                    }
+                  }}
+                >
+                  <Text style={styles.reconnectBtnTxt}>Reconnect</Text>
+                </Pressable>
+                <Pressable style={styles.reconnectCancel} onPress={() => { setReconnectOpen(false); setReconnectCode(''); }}>
+                  <Text style={styles.reconnectCancelTxt}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable style={styles.reEnterLink} onPress={() => setReconnectOpen(true)}>
+              <Text style={styles.reEnterTxt}>Enter a new room code →</Text>
+            </Pressable>
+          )
+        )}
       </View>
 
       {/* Your character */}
@@ -890,10 +947,32 @@ const styles = StyleSheet.create({
   campaignName:      { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   syncRow:           { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 },
   campaignMeta:      { fontSize: FontSize.sm, color: Colors.textSecondary },
+  syncErrorTxt:      { fontSize: FontSize.xs, color: Colors.red, lineHeight: 17, marginTop: 4 },
+  reEnterLink:       { marginTop: Spacing.sm, alignSelf: 'flex-start' },
+  reEnterTxt:        { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold },
+  reconnectBox:      { marginTop: Spacing.sm, gap: Spacing.xs },
+  reconnectHint:     { fontSize: FontSize.xs, color: Colors.textSecondary },
+  reconnectInput: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    fontSize: FontSize.lg, color: Colors.textPrimary, letterSpacing: 4,
+    textAlign: 'center', fontWeight: FontWeight.bold,
+  },
+  reconnectRow:      { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' },
+  reconnectBtn: {
+    flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md,
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  reconnectBtnDisabled: { backgroundColor: Colors.goldDim },
+  reconnectBtnTxt:   { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.bg },
+  reconnectCancel:   { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  reconnectCancelTxt:{ fontSize: FontSize.sm, color: Colors.textSecondary },
   codeSection:       { alignItems: 'center', gap: Spacing.xs },
   codeLabel:         { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 2 },
   codeValue:         { fontSize: 36, fontWeight: FontWeight.bold, color: Colors.gold, letterSpacing: 8 },
   codeHint:          { fontSize: FontSize.xs, color: Colors.textDim, textAlign: 'center' },
+  codeDiag:          { fontSize: FontSize.xs, color: Colors.textSecondary, textAlign: 'center', marginTop: 4, lineHeight: 16 },
   qrContainer:       { alignItems: 'center', padding: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg },
   dmBtn:             { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   dmBtnTxt:          { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },

@@ -3,6 +3,7 @@
 import { View, Text, FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { globalContentDB } from '../../src/content/classes/library';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -39,6 +40,7 @@ const CLASS_DESCRIPTIONS: Record<string, string> = {
 
 export default function ClassScreen() {
   const router  = useRouter();
+  const insets  = useSafeAreaInsets();
   const [search,   setSearch]   = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const homebrewClasses = useHomebrewStore(s => s.classes);
@@ -67,7 +69,7 @@ export default function ClassScreen() {
       <FlatList
         data={classes}
         keyExtractor={c => c.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + Spacing.xxl }]}
         renderItem={({ item }) => {
           const isOpen    = expanded === item.id;
           const desc      = CLASS_DESCRIPTIONS[item.id];

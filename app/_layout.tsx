@@ -10,6 +10,7 @@ import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { initDb } from '../src/db/db';
 import { useCharacterStore } from '../src/store/characterStore';
 import { useSessionStore }   from '../src/store/sessionStore';
+import { useCampaignStore }  from '../src/store/campaignStore';
 import { useHomebrewStore }  from '../src/store/homebrewStore';
 import { syncManager }       from '../src/sync/syncManager';
 import { useSyncStore }      from '../src/store/syncStore';
@@ -72,6 +73,13 @@ export default function RootLayout() {
             }
           },
         });
+
+        // 5. Restore campaign state and re-establish sync if a campaign was
+        //    active before the app was last closed. loadCampaigns sets isDm and
+        //    activeCampaign from the persisted session; resumeSync then re-hosts
+        //    (DM) or reconnects (player). Both are safe no-ops when offline.
+        await useCampaignStore.getState().loadCampaigns();
+        await useCampaignStore.getState().resumeSync();
       } catch (e) {
         console.error('[_layout] Boot sequence failed:', e);
       } finally {

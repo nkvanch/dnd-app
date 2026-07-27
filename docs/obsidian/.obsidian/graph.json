@@ -1,0 +1,57 @@
+{
+  "colorGroups": [
+    {
+      "query": "tag:engine",
+      "color": {
+        "a": 1,
+        "rgb": 14172224
+      }
+    },
+    {
+      "query": "tag:store",
+      "color": {
+        "a": 1,
+        "rgb": 16747520
+      }
+    },
+    {
+      "query": "tag:component",
+      "color": {
+        "a": 1,
+        "rgb": 4225216
+      }
+    },
+    {
+      "query": "tag:screen",
+      "color": {
+        "a": 1,
+        "rgb": 5025616
+      }
+    },
+    {
+      "query": "tag:screen-·-creation",
+      "color": {
+        "a": 1,
+        "rgb": 9159498
+      }
+    },
+    {
+      "query": "tag:content",
+      "color": {
+        "a": 1,
+        "rgb": 10395294
+      }
+    },
+    {
+      "query": "tag:database",
+      "color": {
+        "a": 1,
+        "rgb": 10233776
+      }
+    }
+  ],
+  "hideUnresolved": true,
+  "repelStrength": 12,
+  "linkDistance": 200,
+  "scale": 1
+}

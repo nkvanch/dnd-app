@@ -44,7 +44,8 @@ function NumRow({
           style={styles.numInput}
           defaultValue={String(value)}
           key={String(value)}
-          keyboardType="numbers-and-punctuation"
+          keyboardType="numeric"
+          multiline={false}
           onEndEditing={e => {
             const n = parseInt(e.nativeEvent.text, 10);
             if (!isNaN(n)) onChange(n);
@@ -298,7 +299,8 @@ function DerivedRow({
           style={styles.numInput}
           defaultValue={String(current)}
           key={String(current)}
-          keyboardType="numbers-and-punctuation"
+          keyboardType="numeric"
+          multiline={false}
           onEndEditing={e => {
             const n = parseInt(e.nativeEvent.text, 10);
             if (!isNaN(n)) onSet(stat, n);
@@ -347,9 +349,15 @@ const styles = StyleSheet.create({
   },
   stepTxt: { fontSize: FontSize.lg, color: Colors.gold, fontWeight: FontWeight.bold },
   numInput: {
-    width: 56, height: 32, borderRadius: Radius.md,
+    width: 56, height: 36, borderRadius: Radius.md,
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
     color: Colors.textPrimary, fontSize: FontSize.md, textAlign: 'center',
+    // Android: TextInput adds default vertical padding + font padding which
+    // pushes the text up and makes the fixed-height box internally scrollable.
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 
   segmented: { flexDirection: 'row', gap: 4 },

@@ -7,6 +7,7 @@
     "expo-camera": "~56.0.8",
     "expo-constants": "~56.0.18",
     "expo-linking": "~56.0.14",
+    "expo-network": "~56.0.5",
     "expo-router": "~56.2.11",
     "expo-secure-store": "~56.0.4",
     "expo-sqlite": "~56.0.5",
@@ -14,7 +15,6 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.85.3",
-    "react-native-network-info": "^5.2.2",
     "react-native-qrcode-svg": "^6.3.21",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
@@ -28,6 +28,7 @@
     "@types/react": "~19.2.2",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "patch-package": "^8.0.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.62.0"
   },
@@ -37,7 +38,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/fix-android-manifests.js"
   },
   "expo": {
     "name": "dnd-app",
@@ -45,7 +47,6 @@
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [
-          "react-native-network-info",
           "react-native-tcp-socket"
         ],
         "listUnknownPackages": false

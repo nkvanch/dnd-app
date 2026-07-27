@@ -6,6 +6,7 @@
 // Auto-reconnects every 5 seconds on disconnect.
 // ============================================================================
 import TcpSocket from 'react-native-tcp-socket';
+import { NativeModules } from 'react-native';
 import type Socket from 'react-native-tcp-socket/lib/types/Socket';
 
 import { Entity, SyncEvent } from '../engine/types';
@@ -92,7 +93,20 @@ export class SyncClient {
   private attemptConnect(): void {
     console.log(`[sync-client] Connecting to ${this.host}:${this.port}…`);
 
-    this.socket = TcpSocket.createConnection(
+    // The native module must be linked. If it isn't, createConnection() returns
+    // a JS object whose native calls dereference a null module, crashing. Fail
+    // with a clear message routed through onError instead.
+    if (!NativeModules.TcpSockets) {
+      const reason =
+        'The networking module isn\u2019t available in this build. Rebuild the app ' +
+        '(npx expo run:android) to join campaigns.';
+      this.lastError = reason;
+      console.warn('[sync-client]', reason);
+      this.cb.onError?.(reason);
+      return;
+    }
+
+    const socket = TcpSocket.createConnection(
       { host: this.host, port: this.port },
       () => {
         this.connected = true;
@@ -102,6 +116,23 @@ export class SyncClient {
         this.send({ type: 'hello', deviceId: this.deviceId, nickname: this.nickname, characterId: this.characterId });
       }
     );
+
+    // Defensive: at cold app boot, resumeSync() reconnects almost immediately
+    // on mount, sometimes before react-native-tcp-socket's native module has
+    // finished registering with the bridge, causing createConnection() to
+    // return null. A short retry lets the bridge finish initialising instead
+    // of crashing on `.on(...)` of null.
+    if (!socket) {
+      const reason = 'Network module not ready yet.';
+      this.lastError = reason;
+      console.warn('[sync-client] createConnection returned null — retrying in 400ms.');
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
+        if (!this.connected) this.attemptConnect();
+      }, 400);
+      return;
+    }
+    this.socket = socket;
 
     this.socket.on('data', (chunk: Buffer | string) => {
       this.buffer += chunk.toString();

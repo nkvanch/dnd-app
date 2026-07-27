@@ -1,6 +1,6 @@
 // app/sheet/TabActions.tsx
 // Tab 2 — Action Cards. [Use] consumes resources and shows a dice result modal.
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules } from '../../engine/types';
 import { generateAllActionCards } from '../../engine/actionCards';
@@ -26,6 +26,15 @@ export interface UseModalProps {
 
 export function UseModal({ card, onRoll, onClose }: UseModalProps) {
   const [result, setResult] = useState<DiceRoll | null>(null);
+
+  // Reset the stored roll whenever the modal switches to a different card (or
+  // closes). Without this, the previous spell's result lingers: the modal shows
+  // a stale number and the `!result` guard hides the fresh Roll button, so a
+  // different spell appears to "reuse" the last roll instead of rolling anew.
+  const cardKey = card?.featureId ?? null;
+  useEffect(() => {
+    setResult(null);
+  }, [cardKey]);
 
   if (!card) return null;
 

@@ -330,9 +330,44 @@ export type Spell = {
   classes?:                 string[];
   /** Features applied to caster while concentrating — removed when concentration drops. */
   onConcentrationFeatures?: Feature[];
+  /**
+   * True if this spell (its NAME and mechanical text) is part of the SRD 5.1
+   * (CC-BY-4.0). False for anything using WotC Product Identity naming
+   * (e.g. "Tasha's...", "Melf's...") or sourced from a non-SRD expansion book
+   * (Xanathar's, Tasha's Cauldron, SCAG). Public/distributed builds MUST
+   * filter to srd === true — see src/content/spells/index.ts.
+   * Undefined = not yet audited; treated as NOT safe for public builds.
+   */
+  srd?:                     boolean;
 };
 
 export type Currency     = { pp: number; gp: number; ep: number; sp: number; cp: number };
+
+/**
+ * A beast (or other creature) an entity can temporarily transform into via
+ * Wild Shape. Small, curated content type — v1 ships a handful of SRD-legal
+ * low/mid-CR beasts, not a builder. See docs/ROADMAP_1.0.md "FEATURE DESIGN:
+ * Wild Shape" for the full design and scope cut.
+ */
+export type BeastForm = {
+  id:              string;
+  name:            string;
+  /** CR gate for player-facing pickers (e.g. "only CR ≤ 1/4 beasts at level 2"). */
+  challengeRating: number;
+  size:            'Tiny' | 'Small' | 'Medium' | 'Large';
+  stats:           AbilityScores;       // the beast's own STR/DEX/CON/INT/WIS/CHA
+  ac:              number;
+  hp:              number;              // flat HP pool for the beast form
+  speed:           number;              // walking speed in feet
+  swimSpeed?:      number;
+  flySpeed?:       number;
+  climbSpeed?:     number;
+  senses?:         Sense[];
+  /** Simple attacks, shown as ActionCards while transformed — same as any other AbilityEffect-driven attack in the app. */
+  attacks:         { name: string; effect: AbilityEffect }[];
+  /** Free-text trait summaries (e.g. "Keen Smell", "Pack Tactics") — display-only in v1, not mechanically enforced. */
+  traits?:         string[];
+};
 
 export type ItemInstance = {
   itemId:   string;
@@ -478,12 +513,30 @@ export type FeatureInstance = Feature & {
 // ── 6. Entity master type ────────────────────────────────────────────────────
 
 /**
+ * Runtime Wild Shape state on an entity. Null when not transformed.
+ * Mirrors the DmOverride philosophy: this is a layer applied on top during
+ * recomputeDerived, never a mutation of entity.stats/entity.features. Revert
+ * (set back to null) restores the entity exactly as it was.
+ */
+export type WildShapeState = {
+  active:      boolean;
+  formId:      string;
+  /** The beast form's own HP pool while transformed — tracked separately from the player's real HP, which is untouched and resumes exactly where it was on revert. */
+  beastHp:     number;
+  beastHpMax:  number;
+  /** Per the book duration rule (half druid level in hours, minimum 1). */
+  expiresAt:   DurationTracker;
+};
+
+/**
  * The master entity. Characters, monsters, and NPCs all share this shape.
  *   conditions       = flat active condition list for UI rendering.
  *   conditionMonitor = full runtime state: exhaustion, flags, suppressions.
  *   dmOverrides      = DM stat overrides, applied LAST in recomputeDerived().
  *                      Entity base data is NEVER modified by overrides.
  *                      Cancel = set active:false, values restore automatically.
+ *   wildShapeState   = Wild Shape override layer, same non-mutating philosophy
+ *                      as dmOverrides — null when not transformed.
  */
 export type Entity = {
   id:               string;
@@ -501,6 +554,7 @@ export type Entity = {
   features:         FeatureInstance[];
   choices:          ChoiceState[];
   dmOverrides:      DmOverride[];     // always [] for new entities
+  wildShapeState:   WildShapeState | null;
   notes:            string;
 };
 

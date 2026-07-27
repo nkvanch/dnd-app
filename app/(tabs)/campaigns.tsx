@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  Modal, TextInput, Alert, ActivityIndicator, Platform,
+  Modal, TextInput, Alert, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
@@ -38,6 +38,21 @@ function formatDate(ts: number): string {
   });
 }
 
+/**
+ * Shows an error message reliably on every platform. Alert.alert's simple
+ * (title, message) form is unreliable on web depending on the React Native
+ * Web version — it can render nothing at all, which looks exactly like the
+ * triggering button silently did nothing. window.alert always works on web.
+ */
+function showError(title: string, message: string) {
+  if (Platform.OS === 'web') {
+    // eslint-disable-next-line no-alert
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
 // ── QR Scanner Modal ──────────────────────────────────────────────────────────
 
 function QrScannerModal({
@@ -54,7 +69,7 @@ function QrScannerModal({
   function handleBarcode(result: BarcodeScanningResult) {
     if (scanned) return;
     const raw = result.data?.trim().toUpperCase() ?? '';
-    if (/^[0-9A-Z]{6}$/.test(raw)) { setScanned(true); onScan(raw); }
+    if (/^[0-9A-Z]{7}$/.test(raw)) { setScanned(true); onScan(raw); }
   }
 
   if (!visible) return null;
@@ -119,13 +134,17 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
       // the port twice and overwrite the code).
       await createCampaign(trimmed);
       setName(''); onClose();
-    } catch (e) { Alert.alert('Error', String(e)); }
+    } catch (e) { showError('Error', String(e)); }
     finally { setLoading(false); }
   }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <KeyboardAvoidingView
+        style={styles.backdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <Pressable style={styles.backdropTapArea} onPress={onClose} />
         <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
           <Text style={styles.modalTitle}>New Campaign</Text>
           <TextInput style={styles.input} value={name} onChangeText={setName}
@@ -138,7 +157,7 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
             <Text style={styles.cancelTxt}>Cancel</Text>
           </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -152,14 +171,14 @@ function JoinModal({ visible, onClose }: { visible: boolean; onClose: () => void
 
   async function handleJoin(rawCode?: string) {
     const trimmed = (rawCode ?? code).trim().toUpperCase();
-    if (trimmed.length !== 6 || !session) return;
+    if (trimmed.length !== 7 || !session) return;
     setLoading(true); setScannerOpen(false);
     try {
       // joinCampaign now opens the LAN client connection itself, so we must NOT
       // also call startAsClient here (that would open a second connection).
       await joinCampaign(trimmed);
       setCode(''); onClose();
-    } catch (e) { Alert.alert('Connection failed', String(e)); }
+    } catch (e) { showError('Connection failed', String(e)); }
     finally { setLoading(false); }
   }
 
@@ -169,28 +188,32 @@ function JoinModal({ visible, onClose }: { visible: boolean; onClose: () => void
         onScan={c => { setCode(c); setScannerOpen(false); handleJoin(c); }}
         onClose={() => setScannerOpen(false)} />
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-        <Pressable style={styles.backdrop} onPress={onClose}>
+        <KeyboardAvoidingView
+          style={styles.backdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.backdropTapArea} onPress={onClose} />
           <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Join Campaign</Text>
-            <Text style={styles.modalSub}>Enter the 6-character room code or scan the DM's QR.</Text>
+            <Text style={styles.modalSub}>Enter the 7-character room code or scan the DM's QR.</Text>
             <TextInput style={[styles.input, styles.codeInput]} value={code}
-              onChangeText={t => setCode(t.toUpperCase().slice(0, 6))}
-              placeholder="XXXXXX" placeholderTextColor={Colors.textDim}
-              autoCapitalize="characters" maxLength={6} autoFocus />
+              onChangeText={t => setCode(t.toUpperCase().slice(0, 7))}
+              placeholder="XXXXXXX" placeholderTextColor={Colors.textDim}
+              autoCapitalize="characters" maxLength={7} autoFocus />
             {Platform.OS !== 'web' && (
               <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={() => setScannerOpen(true)} disabled={loading}>
                 <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>📷  Scan QR Code</Text>
               </Pressable>
             )}
-            <Pressable style={[styles.primaryBtn, (code.length !== 6 || loading) && styles.btnDisabled]}
-              onPress={() => handleJoin()} disabled={code.length !== 6 || loading}>
+            <Pressable style={[styles.primaryBtn, (code.length !== 7 || loading) && styles.btnDisabled]}
+              onPress={() => handleJoin()} disabled={code.length !== 7 || loading}>
               {loading ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.primaryBtnTxt}>Join</Text>}
             </Pressable>
             <Pressable style={styles.cancelBtn} onPress={onClose}>
               <Text style={styles.cancelTxt}>Cancel</Text>
             </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -320,7 +343,11 @@ function QuestsSection({ quests, editable, onUpdate }: {
       )}
 
       <Modal visible={addModal} transparent animationType="slide" onRequestClose={() => setAddModal(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setAddModal(false)}>
+        <KeyboardAvoidingView
+          style={styles.backdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.backdropTapArea} onPress={() => setAddModal(false)} />
           <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
             <Text style={styles.modalTitle}>New Quest</Text>
             <TextInput style={styles.input} value={addName} onChangeText={setAddName}
@@ -338,7 +365,7 @@ function QuestsSection({ quests, editable, onUpdate }: {
               </Pressable>
             </View>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -408,7 +435,11 @@ function SessionLogSection({ log, editable, onUpdate }: {
       )}
 
       <Modal visible={addModal} transparent animationType="slide" onRequestClose={() => setAddModal(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setAddModal(false)}>
+        <KeyboardAvoidingView
+          style={styles.backdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.backdropTapArea} onPress={() => setAddModal(false)} />
           <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Session Note</Text>
             <Text style={styles.modalSub}>{formatDate(Date.now())}</Text>
@@ -426,7 +457,7 @@ function SessionLogSection({ log, editable, onUpdate }: {
               </Pressable>
             </View>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -641,22 +672,22 @@ function PlayerActiveView() {
                 style={styles.reconnectInput}
                 value={reconnectCode}
                 onChangeText={t => setReconnectCode(t.toUpperCase())}
-                placeholder="6-char code"
+                placeholder="7-char code"
                 placeholderTextColor={Colors.textDim}
                 autoCapitalize="characters"
-                maxLength={6}
+                maxLength={7}
               />
               <View style={styles.reconnectRow}>
                 <Pressable
-                  style={[styles.reconnectBtn, reconnectCode.trim().length !== 6 && styles.reconnectBtnDisabled]}
-                  disabled={reconnectCode.trim().length !== 6}
+                  style={[styles.reconnectBtn, reconnectCode.trim().length !== 7 && styles.reconnectBtnDisabled]}
+                  disabled={reconnectCode.trim().length !== 7}
                   onPress={async () => {
                     try {
                       await reconnectWithCode(reconnectCode);
                       setReconnectOpen(false);
                       setReconnectCode('');
                     } catch (e) {
-                      Alert.alert('Reconnect failed', String(e));
+                      showError('Reconnect failed', String(e));
                     }
                   }}
                 >
@@ -758,28 +789,48 @@ function NoCampaignView({
   nickname: string; onNicknameChange: (n: string) => void;
   onCreate: () => void; onJoin: () => void;
 }) {
+  // Campaign hosting/joining uses a raw TCP socket over the local WiFi network.
+  // Browsers have no API for raw TCP sockets (only HTTP/WebSocket to a server
+  // you don't control), so this is not something we can fix in JS — it's a
+  // real platform limitation, not a bug. Show that honestly instead of
+  // offering buttons that fail every time on web.
+  const webUnsupported = Platform.OS === 'web';
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.contentCenter}>
       <Text style={styles.emptyIcon}>🗺️</Text>
       <Text style={styles.emptyHeading}>No Active Campaign</Text>
 
-      <View style={[styles.nicknameRow, { alignSelf: 'stretch' }]}>
-        <Text style={styles.nickLabel}>YOUR NAME</Text>
-        <TextInput style={styles.nickInput} value={nickname}
-          onChangeText={onNicknameChange}
-          placeholder="Enter your name…" placeholderTextColor={Colors.textDim} />
-      </View>
-
-      <View style={styles.actionGroup}>
-        <Pressable style={styles.primaryBtn} onPress={onCreate}>
-          <Text style={styles.primaryBtnTxt}>👑 Create Campaign (DM)</Text>
-        </Pressable>
-        <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onJoin}>
-          <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>
-            🗡 Join Campaign (Player)
+      {webUnsupported ? (
+        <View style={styles.webNote}>
+          <Text style={styles.webNoteTitle}>Campaigns need the mobile app</Text>
+          <Text style={styles.webNoteBody}>
+            Hosting or joining a campaign uses a direct WiFi connection between
+            phones at the table, which browsers can't do. Open Grimoire on your
+            phone (same WiFi as the rest of the table) to create or join a campaign.
           </Text>
-        </Pressable>
-      </View>
+        </View>
+      ) : (
+        <>
+          <View style={[styles.nicknameRow, { alignSelf: 'stretch' }]}>
+            <Text style={styles.nickLabel}>YOUR NAME</Text>
+            <TextInput style={styles.nickInput} value={nickname}
+              onChangeText={onNicknameChange}
+              placeholder="Enter your name…" placeholderTextColor={Colors.textDim} />
+          </View>
+
+          <View style={styles.actionGroup}>
+            <Pressable style={styles.primaryBtn} onPress={onCreate}>
+              <Text style={styles.primaryBtnTxt}>👑 Create Campaign (DM)</Text>
+            </Pressable>
+            <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onJoin}>
+              <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>
+                🗡 Join Campaign (Player)
+              </Text>
+            </Pressable>
+          </View>
+        </>
+      )}
 
       <View style={styles.howItWorks}>
         <Text style={styles.howTitle}>How it works</Text>
@@ -1003,8 +1054,17 @@ const styles = StyleSheet.create({
   howTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.gold, marginBottom: 4 },
   howItem:  { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
 
+  webNote: {
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.gold + '44',
+    padding: Spacing.md, gap: Spacing.xs, alignSelf: 'stretch',
+  },
+  webNoteTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.gold },
+  webNoteBody:  { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
+
   // Modals
   backdrop: { flex: 1, backgroundColor: '#000000bb', justifyContent: 'flex-end' },
+  backdropTapArea: { flex: 1 },
   modalSheet: {
     backgroundColor: Colors.surfaceHigh,
     borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,

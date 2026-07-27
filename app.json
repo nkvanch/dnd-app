@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "dnd-app",
+    "name": "Grimoire",
     "slug": "grimoire",
     "version": "1.0.0",
     "scheme": "dndapp",
@@ -18,7 +18,11 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.dndapp"
+      "package": "com.anonymous.dndapp",
+      "permissions": [
+        "ACCESS_WIFI_STATE",
+        "ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -35,13 +39,13 @@
       "expo-secure-store"
     ],
     "extra": {
-      "eas": {
-        "projectId": "08c0029a-33d6-45e4-85a2-07b5f9995dcd"
-      },
       "router": {
         "root": "app"
+      },
+      "eas": {
+        "projectId": "839f3848-3cc0-4d46-94fd-96aee22baf91"
       }
     },
-    "owner": "davidkvanchakhadzes-organization"
+    "owner": "nkvanch"
   }
 }

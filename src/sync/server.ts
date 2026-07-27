@@ -7,6 +7,7 @@
 // connected client so every device sees the same entity state.
 // ============================================================================
 import TcpSocket from 'react-native-tcp-socket';
+import { NativeModules } from 'react-native';
 import type Server from 'react-native-tcp-socket/lib/types/Server';
 import type Socket from 'react-native-tcp-socket/lib/types/Socket';
 
@@ -14,6 +15,18 @@ import { SyncEvent } from '../engine/types';
 import { Entity }    from '../engine/types';
 import { SyncMessage, encodeMessage, parseBuffer, ConnectedPlayer } from './protocol';
 import { SYNC_PORT } from './discovery';
+
+/**
+ * True when the react-native-tcp-socket NATIVE module is actually linked and
+ * registered. The JS layer (TcpSocket.createServer) always returns a Server
+ * object even when the native side is missing — but the Server's internal
+ * `Sockets.listen()` then crashes with "Cannot read property 'listen' of null"
+ * because NativeModules.TcpSockets is null. Checking here lets us fail with a
+ * clear, actionable message instead of a mystifying null TypeError.
+ */
+export function isTcpNativeAvailable(): boolean {
+  return !!NativeModules.TcpSockets;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -56,10 +69,49 @@ export class SyncServer {
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
   start(): Promise<void> {
+    return this.startAttempt(0);
+  }
+
+  /**
+   * Creates the server socket, with one short retry if the native TCP module
+   * hasn't finished registering with the bridge yet. This specifically happens
+   * at cold app boot: resumeSync() re-hosts the campaign almost immediately on
+   * mount, sometimes before react-native-tcp-socket's native module is ready,
+   * causing TcpSocket.createServer() to return null. A ~400ms retry is enough
+   * for the bridge to finish initialising; if it still fails, something else
+   * is wrong and we reject with a clear, readable error instead of letting a
+   * raw "Cannot read property 'listen' of null" TypeError escape.
+   */
+  private startAttempt(retryCount: number): Promise<void> {
     return new Promise((resolve, reject) => {
+      // The native module must be linked. If it isn't (stale build, failed
+      // autolink), createServer() returns a JS object whose listen() dereferences
+      // a null native module. Detect that up front with a clear message.
+      if (!NativeModules.TcpSockets) {
+        reject(new Error(
+          'The networking module isn\u2019t available in this build. This usually means ' +
+          'the app needs a fresh native rebuild (npx expo run:android). ' +
+          'Campaigns can\u2019t be hosted until then.'
+        ));
+        return;
+      }
+
       this.server = TcpSocket.createServer((socket: Socket) => {
         this.handleNewClient(socket);
       });
+
+      if (!this.server) {
+        if (retryCount < 1) {
+          setTimeout(() => {
+            this.startAttempt(retryCount + 1).then(resolve, reject);
+          }, 400);
+          return;
+        }
+        reject(new Error(
+          'Could not start the campaign server (network module not ready). Try again in a moment.'
+        ));
+        return;
+      }
 
       this.server.listen({ port: SYNC_PORT, host: '0.0.0.0' }, () => {
         console.log(`[sync-server] Listening on port ${SYNC_PORT}`);

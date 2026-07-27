@@ -151,6 +151,7 @@ export function makeEmptyEntity(id: string, kind: Entity['kind'] = 'character'):
     features:         [],
     choices:          [],
     dmOverrides:      [],
+    wildShapeState:   null,
     notes:            '',
   };
 }

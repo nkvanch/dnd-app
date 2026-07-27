@@ -37,7 +37,7 @@ type CampaignStore = {
   createCampaign: (name: string) => Promise<Campaign>;
 
   /**
-   * Join an existing campaign via 6-digit code.
+   * Join an existing campaign via 7-character code.
    * In the full sync implementation this resolves to the DM's IP.
    * For now it stores a stub campaign locally.
    */
@@ -287,7 +287,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     if (!activeCampaign || !session || isDm) return;
 
     const cleanCode = code.trim().toUpperCase();
-    if (cleanCode.length !== 6) throw new Error('Room codes are 6 characters.');
+    if (cleanCode.length !== 7) throw new Error('Room codes are 7 characters.');
 
     // Tear down any half-open client before reconnecting with the new code.
     syncManager.stopAll();

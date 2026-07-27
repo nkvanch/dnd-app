@@ -44,6 +44,7 @@ const createTestEntity = (): Entity => ({
   conditionMonitor: { active: [], exhaustion: 2, flags: {} },
   features: [], choices: [],
   dmOverrides: [],   // required: DM stat overrides — always empty for test entity
+  wildShapeState: null,
   notes: ''
 });
 

@@ -6073,7 +6073,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "paladin"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "banishment",
@@ -6098,7 +6099,30 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
+  },
+  {
+    "id": "evards_black_tentacles",
+    "name": "Black Tentacles",
+    "level": 4,
+    "school": "Conjuration",
+    "castingTime": "1 action",
+    "range": "90 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "Concentration, up to 1 minute",
+    "description": "Squirming, ebony tentacles fill a 20-foot square on ground that you can see within range. For the duration, these tentacles turn the ground in the area into difficult terrain.\n\nWHEN a creature enters the affected area for the first time on a turn or starts its turn there, the creature must succeed on a Dexterity saving throw or take 3d6 bludgeoning damage and be restrained by the tentacles until the spell ends. A creature that starts its turn in the area and is already restrained by the tentacles takes 3d6 bludgeoning damage.\n\nA creature restrained by the tentacles can use its action to make a Strength or Dexterity check (its choice) against your spell save DC. On a success, it frees itself.",
+    "upcast": null,
+    "ritual": false,
+    "concentration": true,
+    "classes": [
+      "wizard"
+    ],
+    "srd": true
   },
   {
     "id": "blight",
@@ -6121,7 +6145,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "charm_monster",
@@ -6166,7 +6191,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "bard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "confusion",
@@ -6190,7 +6216,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "conjure_minor_elementals",
@@ -6211,7 +6238,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "conjure_woodland_beings",
@@ -6233,7 +6261,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "control_water",
@@ -6256,7 +6285,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "death_ward",
@@ -6277,7 +6307,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "dimension_door",
@@ -6299,7 +6330,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "divination",
@@ -6322,7 +6354,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "ritual_caster"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "dominate_beast",
@@ -6343,7 +6376,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "elemental_bane",
@@ -6365,27 +6399,6 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "ranger",
       "warlock",
-      "wizard"
-    ]
-  },
-  {
-    "id": "evards_black_tentacles",
-    "name": "Evard's Black Tentacles",
-    "level": 4,
-    "school": "Conjuration",
-    "castingTime": "1 action",
-    "range": "90 feet",
-    "components": [
-      "V",
-      "S",
-      "M"
-    ],
-    "duration": "Concentration, up to 1 minute",
-    "description": "Squirming, ebony tentacles fill a 20-foot square on ground that you can see within range. For the duration, these tentacles turn the ground in the area into difficult terrain.\n\nWHEN a creature enters the affected area for the first time on a turn or starts its turn there, the creature must succeed on a Dexterity saving throw or take 3d6 bludgeoning damage and be restrained by the tentacles until the spell ends. A creature that starts its turn in the area and is already restrained by the tentacles takes 3d6 bludgeoning damage.\n\nA creature restrained by the tentacles can use its action to make a Strength or Dexterity check (its choice) against your spell save DC. On a success, it frees itself.",
-    "upcast": null,
-    "ritual": false,
-    "concentration": true,
-    "classes": [
       "wizard"
     ],
     "srd": false
@@ -6409,7 +6422,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "artisan",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "find_greater_steed",
@@ -6453,7 +6467,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "freedom_of_movement",
@@ -6477,7 +6492,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "gate_seal",
@@ -6521,7 +6537,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "grasping_vine",
@@ -6542,7 +6559,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "greater_invisibility",
@@ -6564,7 +6582,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "guardian_of_faith",
@@ -6584,7 +6603,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "guardian_of_nature",
@@ -6629,7 +6649,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ice_storm",
@@ -6652,7 +6673,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "leomunds_secret_chest",
@@ -6700,7 +6722,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "paladin",
       "ranger",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "mordenkainens_faithful_hound",
@@ -6719,50 +6742,6 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": [
-      "wizard"
-    ],
-    "srd": false
-  },
-  {
-    "id": "mordenkainens_private_sanctum",
-    "name": "Mordenkainen's Private Sanctum",
-    "level": 4,
-    "school": "Abjuration",
-    "castingTime": "10 minutes",
-    "range": "120 feet",
-    "components": [
-      "V",
-      "S",
-      "M"
-    ],
-    "duration": "24 hours",
-    "description": "You make an area within range magically secure. The area is a cube that can be as small as 5 feet to as large as 100 feet on each side. The spell lasts for the duration or until you use an action to dismiss it.\n\nWhen you cast the spell, you decide what sort of security the spell provides, choosing any or all of the following properties:\n\n• Sound can't pass through the barrier at the edge of the warded area.\n\n• The barrier of the warded area appears dark and foggy, preventing vision (including darkvision through it.\n\n• Sensors created by divination spells can't appear inside the protected area or pass through the barrier at its perimeter.\n\n• Creatures in the area can't be targeted by divination spells.\n\n• Nothing can teleport into or out of the warded area.\n\n• Planar travel is blocked within the warded area.\n\nCasting this spell on the same spot every day for a year makes this effect permanent.\n\n**_At Higher Levels_**. When you cast this spell using a spell slot of 5th level or higher, you can increase the size of the cube by 100 feet for each slot level beyond 4th. Thus you could protect a cube that can be up to 200 feet on one side by using a spell slot of 5th level.",
-    "upcast": null,
-    "ritual": false,
-    "concentration": false,
-    "classes": [
-      "wizard"
-    ],
-    "srd": false
-  },
-  {
-    "id": "otilukes_resilient_sphere",
-    "name": "Otiluke's Resilient Sphere",
-    "level": 4,
-    "school": "Evocation",
-    "castingTime": "1 action",
-    "range": "30 feet",
-    "components": [
-      "V",
-      "S",
-      "M"
-    ],
-    "duration": "Concentration, up to 1 minute",
-    "description": "A sphere of shimmering force encloses a creature or object of Large size or smaller within range. An unwilling creature must make a Dexterity saving throw. On a failed save, the creature is enclosed for the duration.\n\nNothing—not physical objects, energy, or other spell effects—can pass through the barrier, in or out, though a creature in the sphere can breathe there. The sphere is immune to all damage, and a creature or object inside can't be damaged by attacks or effects originating from outside, nor can a creature inside the sphere damage anything outside it.\n\nThe sphere is weightless and just large enough to contain the creature or object inside. An enclosed creature can use its action to push against the sphere's walls and thus roll the sphere at up to half the creature's speed. Similarly, the globe can be picked up and moved by other creatures.\n\nA _[disintegrate](https://www.aidedd.org/dnd/sorts.php?vo=disintegrate)_ spell targeting the globe destroys it without harming anything inside it.",
-    "upcast": null,
-    "ritual": false,
-    "concentration": true,
     "classes": [
       "wizard"
     ],
@@ -6789,7 +6768,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "polymorph",
@@ -6813,7 +6793,30 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
+  },
+  {
+    "id": "mordenkainens_private_sanctum",
+    "name": "Private Sanctum",
+    "level": 4,
+    "school": "Abjuration",
+    "castingTime": "10 minutes",
+    "range": "120 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "24 hours",
+    "description": "You make an area within range magically secure. The area is a cube that can be as small as 5 feet to as large as 100 feet on each side. The spell lasts for the duration or until you use an action to dismiss it.\n\nWhen you cast the spell, you decide what sort of security the spell provides, choosing any or all of the following properties:\n\n• Sound can't pass through the barrier at the edge of the warded area.\n\n• The barrier of the warded area appears dark and foggy, preventing vision (including darkvision through it.\n\n• Sensors created by divination spells can't appear inside the protected area or pass through the barrier at its perimeter.\n\n• Creatures in the area can't be targeted by divination spells.\n\n• Nothing can teleport into or out of the warded area.\n\n• Planar travel is blocked within the warded area.\n\nCasting this spell on the same spot every day for a year makes this effect permanent.\n\n**_At Higher Levels_**. When you cast this spell using a spell slot of 5th level or higher, you can increase the size of the cube by 100 feet for each slot level beyond 4th. Thus you could protect a cube that can be up to 200 feet on one side by using a spell slot of 5th level.",
+    "upcast": null,
+    "ritual": false,
+    "concentration": false,
+    "classes": [
+      "wizard"
+    ],
+    "srd": true
   },
   {
     "id": "raulothims_psychic_lance",
@@ -6837,6 +6840,28 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "wizard"
     ],
     "srd": false
+  },
+  {
+    "id": "otilukes_resilient_sphere",
+    "name": "Resilient Sphere",
+    "level": 4,
+    "school": "Evocation",
+    "castingTime": "1 action",
+    "range": "30 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "Concentration, up to 1 minute",
+    "description": "A sphere of shimmering force encloses a creature or object of Large size or smaller within range. An unwilling creature must make a Dexterity saving throw. On a failed save, the creature is enclosed for the duration.\n\nNothing—not physical objects, energy, or other spell effects—can pass through the barrier, in or out, though a creature in the sphere can breathe there. The sphere is immune to all damage, and a creature or object inside can't be damaged by attacks or effects originating from outside, nor can a creature inside the sphere damage anything outside it.\n\nThe sphere is weightless and just large enough to contain the creature or object inside. An enclosed creature can use its action to push against the sphere's walls and thus roll the sphere at up to half the creature's speed. Similarly, the globe can be picked up and moved by other creatures.\n\nA _[disintegrate](https://www.aidedd.org/dnd/sorts.php?vo=disintegrate)_ spell targeting the globe destroys it without harming anything inside it.",
+    "upcast": null,
+    "ritual": false,
+    "concentration": true,
+    "classes": [
+      "wizard"
+    ],
+    "srd": true
   },
   {
     "id": "shadow_of_moil",
@@ -6924,7 +6949,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "stoneskin",
@@ -6948,7 +6974,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "ranger",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "storm_sphere",
@@ -6969,7 +6996,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "summon_aberration",
@@ -7085,7 +7113,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "wall_of_fire",
@@ -7108,7 +7137,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "watery_sphere",
@@ -7131,7 +7161,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "animate_objects",
@@ -7154,7 +7185,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "antilife_shell",
@@ -7174,7 +7206,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "awaken",
@@ -7196,7 +7229,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "banishing_smite",
@@ -7258,7 +7292,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "cloudkill",
@@ -7279,7 +7314,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "commune",
@@ -7300,7 +7336,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "commune_with_nature",
@@ -7321,7 +7358,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "cone_of_cold",
@@ -7343,7 +7381,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "conjure_elemental",
@@ -7365,7 +7404,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "conjure_volley",
@@ -7386,7 +7426,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "ranger"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "contact_other_plane",
@@ -7406,7 +7447,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "contagion",
@@ -7427,7 +7469,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "control_winds",
@@ -7449,7 +7492,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "creation",
@@ -7473,7 +7517,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "danse_macabre",
@@ -7538,7 +7583,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "dispel_evil_and_good",
@@ -7560,7 +7606,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "dominate_person",
@@ -7583,7 +7630,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "dream",
@@ -7606,7 +7654,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "enervation",
@@ -7672,7 +7721,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "geas",
@@ -7695,7 +7745,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "paladin",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "greater_restoration",
@@ -7720,7 +7771,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "hallow",
@@ -7741,7 +7793,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "hold_monster",
@@ -7765,7 +7818,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "holy_weapon",
@@ -7807,7 +7861,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "infernal_calling",
@@ -7853,7 +7908,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "sorcerer"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "legend_lore",
@@ -7876,7 +7932,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "cleric",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "maelstrom",
@@ -7897,7 +7954,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "mass_cure_wounds",
@@ -7919,7 +7977,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "cleric",
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "mislead",
@@ -7939,7 +7998,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "modify_memory",
@@ -7960,7 +8020,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "negative_energy_flood",
@@ -8003,7 +8064,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "planar_binding",
@@ -8027,7 +8089,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "raise_dead",
@@ -8050,7 +8113,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "cleric",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rarys_telepathic_bond",
@@ -8093,7 +8157,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "scrying",
@@ -8118,7 +8183,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "seeming",
@@ -8140,7 +8206,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "skill_empowerment",
@@ -8254,7 +8321,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "synaptic_static",
@@ -8299,7 +8367,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "teleportation_circle",
@@ -8321,7 +8390,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "transmute_rock",
@@ -8344,7 +8414,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "artificer",
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "tree_stride",
@@ -8365,7 +8436,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "wall_of_force",
@@ -8386,7 +8458,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "wall_of_light",
@@ -8434,7 +8507,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "wrath_of_nature",
@@ -8478,7 +8552,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "blade_barrier",
@@ -8498,7 +8573,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "bones_of_the_earth",

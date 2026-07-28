@@ -97,6 +97,10 @@ const SRD_DENY_NAMES = new Set([
   'Conjure Barrage', "Crusader's Mantle", 'Erupting Earth',
   'Life Transference', 'Lightning Arrow', 'Spirit Shroud', 'Tidal Wave',
   'Wall of Sand', 'Wall of Water', 'Aura of Life',
+  // Confirmed on fifth pass: rest of level 4 + all of level 5
+  'Aura of Purity', 'Elemental Bane', 'Grasping Vine', 'Storm Sphere',
+  'Vitriolic Sphere', 'Watery Sphere', 'Conjure Volley', 'Control Winds',
+  'Immolation', 'Maelstrom',
 ]);
 
 // Directly-verified core PHB / SRD 5.1 spells (read against the actual
@@ -154,6 +158,27 @@ const SRD_ALLOW_NAMES = new Set([
   'Water Breathing', 'Water Walk', 'Wind Wall',
   // Level 4 (start)
   'Arcane Eye',
+  // Level 4 (rest, fifth pass)
+  'Banishment', 'Blight', 'Compulsion', 'Confusion',
+  'Conjure Minor Elementals', 'Conjure Woodland Beings', 'Control Water',
+  'Death Ward', 'Dimension Door', 'Divination', 'Dominate Beast',
+  'Fabricate', 'Fire Shield', 'Freedom of Movement', 'Giant Insect',
+  'Greater Invisibility', 'Guardian of Faith', 'Hallucinatory Terrain',
+  'Ice Storm', 'Locate Creature', 'Phantasmal Killer', 'Polymorph',
+  'Stone Shape', 'Stoneskin', 'Wall of Fire',
+  // Level 5 (all, fifth pass)
+  'Animate Objects', 'Antilife Shell', 'Awaken', 'Circle of Power',
+  'Cloudkill', 'Commune', 'Commune with Nature', 'Cone of Cold',
+  'Conjure Elemental', 'Contact Other Plane', 'Contagion', 'Creation',
+  'Destructive Wave', 'Dispel Evil and Good', 'Dominate Person', 'Dream',
+  'Flame Strike', 'Geas', 'Greater Restoration', 'Hallow', 'Hold Monster',
+  'Insect Plague', 'Legend Lore', 'Mass Cure Wounds', 'Mislead',
+  'Modify Memory', 'Passwall', 'Planar Binding', 'Raise Dead',
+  'Reincarnate', 'Scrying', 'Seeming', 'Swift Quiver', 'Telekinesis',
+  'Teleportation Circle', 'Transmute Rock', 'Tree Stride', 'Wall of Force',
+  'Wall of Stone',
+  // Level 6 (start)
+  'Arcane Gate', 'Blade Barrier',
 ]);
 
 function computeSrd(name, description) {
@@ -176,11 +201,13 @@ function computeSrd(name, description) {
 // already applied by hand in src/content/spells/level1.ts–level4.ts — see
 // ROADMAP_1.0.md Step 1.2.
 const SRD_RENAME_MAP = {
-  tashas_hideous_laughter: 'Hideous Laughter',
-  melfs_acid_arrow:        'Acid Arrow',
-  leomunds_tiny_hut:       'Tiny Hut',
-  nystuls_magic_aura:      "Arcanist's Magic Aura",
-  // evards_black_tentacles: 'Black Tentacles',  // add once seen with its actual vault id
+  tashas_hideous_laughter:        'Hideous Laughter',
+  melfs_acid_arrow:               'Acid Arrow',
+  leomunds_tiny_hut:              'Tiny Hut',
+  nystuls_magic_aura:             "Arcanist's Magic Aura",
+  evards_black_tentacles:         'Black Tentacles',
+  mordenkainens_private_sanctum:  'Private Sanctum',
+  otilukes_resilient_sphere:      'Resilient Sphere',
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

@@ -167,8 +167,33 @@ shipping non-SRD content. Legal-clean first, loud second.
             allowed. **324/487 of generated.ts is now classified (66%)** —
             combined with the 146 hand-authored spells, **470/633 of the
             entire spell database (74%) now has a real SRD determination.**
-      - [ ] **NEXT:** commit this checkpoint, then continue into level 4–9
-            in a future session.
+      - [x] **Fifth pass:** read the rest of level 4, all of level 5, and
+            the start of level 6 directly. Findings:
+            - Found `evards_black_tentacles`'s actual vault id — completes
+              all 5 of the originally-planned Step 1.2 renames.
+            - Discovered 2 MORE core-PHB PI-named spells not on the original
+              rename list: Mordenkainen's Private Sanctum → Private
+              Sanctum, Otiluke's Resilient Sphere → Resilient Sphere. Both
+              verified to have real (non-"not OGL") description text before
+              adding. `SRD_RENAME_MAP` now has 7 entries total.
+            - Level 4 and level 5 are now BOTH fully covered.
+            - Extended DENY by 10 (Aura of Purity, Elemental Bane, Grasping
+              Vine, Storm Sphere, Vitriolic Sphere, Watery Sphere, Conjure
+              Volley, Control Winds, Immolation, Maelstrom).
+            - Extended ALLOW by ~60 (remaining level 4 + all of level 5 +
+              start of level 6).
+            - **Not yet re-run against the vault** — do this next.
+      - [x] **Re-run confirmed:**
+            ```
+            SRD classification: 255 allowed, 145 denied, 87 unaudited
+            ```
+            Up from 186/138/163. Levels 4 and 5 are both fully closed out.
+            **400/487 of generated.ts is now classified (82%)** — combined
+            with the 146 hand-authored spells, **546/633 of the entire spell
+            database (86%) now has a real SRD determination. Only 87 spells
+            remain, all in levels 6–9.**
+      - [ ] **NEXT:** commit this checkpoint, then finish levels 6–9 in a
+            future session — the final stretch of Step 1.1.
       - [ ] **Recommended now:** commit this checkpoint (`git add -A &&
             git commit`) so this progress is safely stored — the near-miss
             above is a good reminder not to leave a long run of uncommitted
@@ -201,6 +226,11 @@ SRD text:
       Whip, Melf's Minute Meteors…) → correctly `srd: false` via the PI
       regex — confirmed not added to `SRD_RENAME_MAP` since these never
       existed in the PHB at all, so there's no SRD name to rename to.
+- [x] **Bonus finds beyond the original 5**: Mordenkainen's Private
+      Sanctum → Private Sanctum, Otiluke's Resilient Sphere → Resilient
+      Sphere — both core PHB, discovered and added to `SRD_RENAME_MAP`
+      during the level 4 pass. The rename list may grow further as later
+      levels are read; treat the original 5 as a floor, not a ceiling.
 
 ### Step 1.3 — Filter non-SRD from the public build
 - [ ] `src/content/spells/index.ts`: export `ALL_SPELLS` filtered to

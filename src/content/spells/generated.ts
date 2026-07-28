@@ -2004,6 +2004,29 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "srd": true
   },
   {
+    "id": "tashas_hideous_laughter",
+    "name": "Hideous Laughter",
+    "level": 1,
+    "school": "Enchantment",
+    "castingTime": "1 action",
+    "range": "30 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "Concentration, up to 1 minute",
+    "description": "A creature of your choice that you can see within range perceives everything as hilariously funny and falls into fits of laughter if this spell affects it. The target must succeed on a Wisdom saving throw or fall prone, becoming incapacitated and unable to stand up for the duration. A creature with an Intelligence score of 4 or less isn't affected.\n\nAt the end of each of its turns, and each time it takes damage, the target can make another Wisdom saving throw. The target has advantage on the saving throw if it's triggered by damage. On a success, the spell ends.",
+    "upcast": null,
+    "ritual": false,
+    "concentration": true,
+    "classes": [
+      "bard",
+      "wizard"
+    ],
+    "srd": true
+  },
+  {
     "id": "hunters_mark",
     "name": "Hunter's Mark",
     "level": 1,
@@ -2511,29 +2534,6 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "srd": false
   },
   {
-    "id": "tashas_hideous_laughter",
-    "name": "Tasha's Hideous Laughter",
-    "level": 1,
-    "school": "Enchantment",
-    "castingTime": "1 action",
-    "range": "30 feet",
-    "components": [
-      "V",
-      "S",
-      "M"
-    ],
-    "duration": "Concentration, up to 1 minute",
-    "description": "A creature of your choice that you can see within range perceives everything as hilariously funny and falls into fits of laughter if this spell affects it. The target must succeed on a Wisdom saving throw or fall prone, becoming incapacitated and unable to stand up for the duration. A creature with an Intelligence score of 4 or less isn't affected.\n\nAt the end of each of its turns, and each time it takes damage, the target can make another Wisdom saving throw. The target has advantage on the saving throw if it's triggered by damage. On a success, the spell ends.",
-    "upcast": null,
-    "ritual": false,
-    "concentration": true,
-    "classes": [
-      "bard",
-      "wizard"
-    ],
-    "srd": false
-  },
-  {
     "id": "tensers_floating_disk",
     "name": "Tenser's Floating Disk",
     "level": 1,
@@ -2688,6 +2688,28 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "srd": false
   },
   {
+    "id": "melfs_acid_arrow",
+    "name": "Acid Arrow",
+    "level": 2,
+    "school": "Evocation",
+    "castingTime": "1 action",
+    "range": "90 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "Instantaneous",
+    "description": "A shimmering green arrow streaks toward a target within range and bursts in a spray of acid. Make a ranged spell attack against the target. On a hit, the target takes 4d4 acid damage immediately and 2d4 acid damage at the end of its next turn. On a miss, the arrow splashes the target with acid for half as much of the initial damage and no damage at the end of its next turn.\n\n**_At Higher Levels_**. When you cast this spell using a spell slot of 3rd level or higher, the damage (both initial and later) increases by 1d4 for each slot level above 2nd.",
+    "upcast": null,
+    "ritual": false,
+    "concentration": false,
+    "classes": [
+      "wizard"
+    ],
+    "srd": true
+  },
+  {
     "id": "aganazzars_scorcher",
     "name": "Aganazzar's Scorcher",
     "level": 2,
@@ -2793,6 +2815,28 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     ],
     "duration": "Until dispelled",
     "description": "You touch a closed door, window, gate, chest, or other entryway, and it becomes locked for the duration. You and the creatures you designate when you cast this spell can open the object normally. You can also set a password that, when spoken within 5 feet of the object, suppresses this spell for 1 minute. Otherwise, it is impassable until it is broken or the spell is dispelled or suppressed. Casting _[knock](https://www.aidedd.org/dnd/sorts.php?vo=knock)_ on the object suppresses _[arcane lock](https://www.aidedd.org/dnd/sorts.php?vo=arcane-lock)_ for 10 minutes.\n\nWhile affected by this spell, the object is more difficult to break or force open; the DC to break it or pick any locks on it increases by 10.",
+    "upcast": null,
+    "ritual": false,
+    "concentration": false,
+    "classes": [
+      "wizard"
+    ],
+    "srd": true
+  },
+  {
+    "id": "nystuls_magic_aura",
+    "name": "Arcanist's Magic Aura",
+    "level": 2,
+    "school": "Illusion",
+    "castingTime": "1 action",
+    "range": "Touch",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "24 hours",
+    "description": "You place an illusion on a creature or an object you touch so that divination spells reveal false information about it. The target can be a willing creature or an object that isn't being carried or worn by another creature.\n\nWhen you cast the spell, choose one or both of the following effects. The effect lasts for the duration. If you cast this spell on the same creature or object every day for 30 days, placing the same effect on it each time, the illusion lasts until it is dispelled.\n\n**False Aura**. You change the way the target appears to spells and magical effects, such as _[detect magic](https://www.aidedd.org/dnd/sorts.php?vo=detect-magic)_, that detect magical auras. You can make a nonmagical object appear magical, a magical object appear nonmagical, or change the object's magical aura so that it appears to belong to a specific school of magic that you choose. When you use this effect on an object, you can make the false magic apparent to any creature that handles the item.\n\n**Mask**. You change the way the target appears to spells and magical effects that detect creature types, such as a paladin's Divine Sense or the trigger of a _[symbol](https://www.aidedd.org/dnd/sorts.php?vo=symbol)_ spell. You choose a creature type and other spells and magical effects treat the target as if it were a creature of that type or of that alignment.",
     "upcast": null,
     "ritual": false,
     "concentration": false,
@@ -3680,28 +3724,6 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "srd": false
   },
   {
-    "id": "melfs_acid_arrow",
-    "name": "Melf's Acid Arrow",
-    "level": 2,
-    "school": "Evocation",
-    "castingTime": "1 action",
-    "range": "90 feet",
-    "components": [
-      "V",
-      "S",
-      "M"
-    ],
-    "duration": "Instantaneous",
-    "description": "A shimmering green arrow streaks toward a target within range and bursts in a spray of acid. Make a ranged spell attack against the target. On a hit, the target takes 4d4 acid damage immediately and 2d4 acid damage at the end of its next turn. On a miss, the arrow splashes the target with acid for half as much of the initial damage and no damage at the end of its next turn.\n\n**_At Higher Levels_**. When you cast this spell using a spell slot of 3rd level or higher, the damage (both initial and later) increases by 1d4 for each slot level above 2nd.",
-    "upcast": null,
-    "ritual": false,
-    "concentration": false,
-    "classes": [
-      "wizard"
-    ],
-    "srd": false
-  },
-  {
     "id": "mind_spike",
     "name": "Mind Spike",
     "level": 2,
@@ -3809,28 +3831,6 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "sorcerer",
-      "wizard"
-    ],
-    "srd": false
-  },
-  {
-    "id": "nystuls_magic_aura",
-    "name": "Nystul's Magic Aura",
-    "level": 2,
-    "school": "Illusion",
-    "castingTime": "1 action",
-    "range": "Touch",
-    "components": [
-      "V",
-      "S",
-      "M"
-    ],
-    "duration": "24 hours",
-    "description": "You place an illusion on a creature or an object you touch so that divination spells reveal false information about it. The target can be a willing creature or an object that isn't being carried or worn by another creature.\n\nWhen you cast the spell, choose one or both of the following effects. The effect lasts for the duration. If you cast this spell on the same creature or object every day for 30 days, placing the same effect on it each time, the illusion lasts until it is dispelled.\n\n**False Aura**. You change the way the target appears to spells and magical effects, such as _[detect magic](https://www.aidedd.org/dnd/sorts.php?vo=detect-magic)_, that detect magical auras. You can make a nonmagical object appear magical, a magical object appear nonmagical, or change the object's magical aura so that it appears to belong to a specific school of magic that you choose. When you use this effect on an object, you can make the false magic apparent to any creature that handles the item.\n\n**Mask**. You change the way the target appears to spells and magical effects that detect creature types, such as a paladin's Divine Sense or the trigger of a _[symbol](https://www.aidedd.org/dnd/sorts.php?vo=symbol)_ spell. You choose a creature type and other spells and magical effects treat the target as if it were a creature of that type or of that alignment.",
-    "upcast": null,
-    "ritual": false,
-    "concentration": false,
-    "classes": [
       "wizard"
     ],
     "srd": false
@@ -4581,7 +4581,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "call_lightning",
@@ -4601,7 +4602,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "catnap",
@@ -4649,7 +4651,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "conjure_animals",
@@ -4670,7 +4673,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "conjure_barrage",
@@ -4691,7 +4695,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "ranger"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "counterspell",
@@ -4712,7 +4717,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "create_food_and_water",
@@ -4734,7 +4740,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "artificer",
       "cleric",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "crusaders_mantle",
@@ -4753,7 +4760,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "paladin"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "daylight",
@@ -4776,7 +4784,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "paladin",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "dispel_magic",
@@ -4802,7 +4811,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "elemental_weapon",
@@ -4823,7 +4833,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "artificer",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "enemies_abound",
@@ -4870,7 +4881,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "fear",
@@ -4894,7 +4906,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "feign_death",
@@ -4918,7 +4931,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "fireball",
@@ -4940,7 +4954,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "flame_arrows",
@@ -4964,7 +4979,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "ranger",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "fly",
@@ -4988,7 +5004,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "gaseous_form",
@@ -5011,7 +5028,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "glyph_of_warding",
@@ -5034,7 +5052,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "cleric",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "haste",
@@ -5057,7 +5076,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "artificer",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "hunger_of_hadar",
@@ -5102,7 +5122,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "intellect_fortress",
@@ -5129,29 +5150,6 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "srd": false
   },
   {
-    "id": "leomunds_tiny_hut",
-    "name": "Leomund's Tiny Hut",
-    "level": 3,
-    "school": "Evocation (ritual)",
-    "castingTime": "1 minute",
-    "range": "Self (10-foot-radius hemisphere)",
-    "components": [
-      "V",
-      "S",
-      "M"
-    ],
-    "duration": "8 hours",
-    "description": "A 10-foot-radius immobile dome of force springs into existence around and above you and remains stationary for the duration. The spell ends if you leave its area.\n\nNine creatures of Medium size or smaller can fit inside the dome with you. The spell fails if its area includes a larger creature or more than nine creatures. Creatures and objects within the dome when you cast this spell can move through it freely. All other creatures and objects are barred from passing through it. Spells and other magical effects can't extend through the dome or be cast through it. The atmosphere inside the space is comfortable and dry, regardless of the weather outside.\n\nUntil the spell ends, you can command the interior to become dimly lit or dark. The dome is opaque from the outside, of any color you choose, but it is transparent from the inside.",
-    "upcast": null,
-    "ritual": true,
-    "concentration": false,
-    "classes": [
-      "bard",
-      "wizard"
-    ],
-    "srd": false
-  },
-  {
     "id": "life_transference",
     "name": "Life Transference",
     "level": 3,
@@ -5170,7 +5168,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "lightning_arrow",
@@ -5190,7 +5189,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "ranger"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "lightning_bolt",
@@ -5212,7 +5212,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "magic_circle",
@@ -5236,7 +5237,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "paladin",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "major_image",
@@ -5260,7 +5262,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "mass_healing_word",
@@ -5279,7 +5282,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "meld_into_stone",
@@ -5300,7 +5304,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "melfs_minute_meteors",
@@ -5346,7 +5351,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "ranger",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "phantom_steed",
@@ -5366,7 +5372,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "plant_growth",
@@ -5388,7 +5395,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "protection_from_energy",
@@ -5413,7 +5421,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "ranger",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "remove_curse",
@@ -5436,7 +5445,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "paladin",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "revivify",
@@ -5459,7 +5469,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "artificer",
       "cleric",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "sending",
@@ -5483,7 +5494,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "sleet_storm",
@@ -5506,7 +5518,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "slow",
@@ -5528,7 +5541,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "speak_with_dead",
@@ -5550,7 +5564,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "speak_with_plants",
@@ -5572,7 +5587,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "spirit_guardians",
@@ -5593,7 +5609,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "spirit_shroud",
@@ -5616,7 +5633,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "paladin",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "stinking_cloud",
@@ -5639,7 +5657,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "summon_fey",
@@ -5778,7 +5797,31 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
+  },
+  {
+    "id": "leomunds_tiny_hut",
+    "name": "Tiny Hut",
+    "level": 3,
+    "school": "Evocation (ritual)",
+    "castingTime": "1 minute",
+    "range": "Self (10-foot-radius hemisphere)",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "8 hours",
+    "description": "A 10-foot-radius immobile dome of force springs into existence around and above you and remains stationary for the duration. The spell ends if you leave its area.\n\nNine creatures of Medium size or smaller can fit inside the dome with you. The spell fails if its area includes a larger creature or more than nine creatures. Creatures and objects within the dome when you cast this spell can move through it freely. All other creatures and objects are barred from passing through it. Spells and other magical effects can't extend through the dome or be cast through it. The atmosphere inside the space is comfortable and dry, regardless of the weather outside.\n\nUntil the spell ends, you can command the interior to become dimly lit or dark. The dome is opaque from the outside, of any color you choose, but it is transparent from the inside.",
+    "upcast": null,
+    "ritual": true,
+    "concentration": false,
+    "classes": [
+      "bard",
+      "wizard"
+    ],
+    "srd": true
   },
   {
     "id": "tiny_servant",
@@ -5824,7 +5867,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "vampiric_touch",
@@ -5845,7 +5889,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "wall_of_sand",
@@ -5868,7 +5913,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "wall_of_water",
@@ -5891,7 +5937,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "water_breathing",
@@ -5916,7 +5963,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "ranger",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "water_walk",
@@ -5940,7 +5988,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "wind_wall",
@@ -5962,7 +6011,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "arcane_eye",
@@ -5983,7 +6033,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "aura_of_life",
@@ -6002,7 +6053,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "paladin"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "aura_of_purity",

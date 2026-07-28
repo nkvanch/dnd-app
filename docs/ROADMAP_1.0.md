@@ -136,10 +136,39 @@ shipping non-SRD content. Legal-clean first, loud second.
             Up from 95/124/268. Level 2 is fully closed out; over half of
             the entire 487-spell database (272/487) is now confidently
             classified either way.
-      - [ ] **NEXT:** commit this checkpoint, then continue reading through
-            the rest of level 3–9 in a future session (same programmatic
-            id/name/level/srd extraction approach — much faster than
-            eyeballing raw JSON).
+      - [x] **Fourth pass:** read the rest of level 3 and the start of
+            level 4 directly. Two significant additions:
+            - **New durable rename mechanism**: added `SRD_RENAME_MAP` to the
+              script, keyed by vault slug id. Found that the vault's own
+              copies of Tasha's Hideous Laughter, Melf's Acid Arrow,
+              Leomund's Tiny Hut, and Nystul's Magic Aura are the SAME
+              spells already renamed by hand in level1.ts–level4.ts — all
+              have real (non-"not OGL") description text, so the rename map
+              now strips the PI name and promotes them to srd:true
+              automatically on every regeneration. This closes 4 of the 5
+              Step 1.2 renames durably (only Evard's Black Tentacles left —
+              not yet seen in generated.ts, will add once encountered).
+              Safety condition: only promotes to true if the description
+              ISN'T a redacted "not OGL" placeholder (a rename can't fix
+              missing text).
+            - Level 3 is now FULLY covered.
+            - Extended DENY by 10 (Conjure Barrage, Crusader's Mantle,
+              Erupting Earth, Life Transference, Lightning Arrow, Spirit
+              Shroud, Tidal Wave, Wall of Sand, Wall of Water, Aura of Life).
+            - Extended ALLOW by ~40 (remaining core-PHB level 3 spells +
+              Arcane Eye at the start of level 4).
+            - **Not yet re-run against the vault** — do this next.
+      - [x] **Re-run confirmed:**
+            ```
+            SRD classification: 186 allowed, 138 denied, 163 unaudited
+            ```
+            Up from 140/132/215. Level 3 is fully closed out, and the rename
+            map correctly promoted 4 previously-denied PI-named spells to
+            allowed. **324/487 of generated.ts is now classified (66%)** —
+            combined with the 146 hand-authored spells, **470/633 of the
+            entire spell database (74%) now has a real SRD determination.**
+      - [ ] **NEXT:** commit this checkpoint, then continue into level 4–9
+            in a future session.
       - [ ] **Recommended now:** commit this checkpoint (`git add -A &&
             git commit`) so this progress is safely stored — the near-miss
             above is a good reminder not to leave a long run of uncommitted
@@ -155,16 +184,23 @@ shipping non-SRD content. Legal-clean first, loud second.
 ### Step 1.2 — Rename Product-Identity spells to SRD names
 SRD versions exist with the named wizard stripped. Rename (id + name), keep
 SRD text:
-- [x] Tasha's Hideous Laughter → Hideous Laughter (done in level1.ts pass)
-- [x] Melf's Acid Arrow → Acid Arrow (done in level2.ts pass — name only,
-      id `melfs_acid_arrow` unchanged; see note above)
-- [x] Evard's Black Tentacles → Black Tentacles (done in level4.ts pass —
-      id already matched the SRD name, only display name needed changing)
-- [ ] Leomund's Tiny Hut → Tiny Hut
-- [ ] Nystul's Magic Aura → Arcanist's Magic Aura (SRD name)
+- [x] Tasha's Hideous Laughter → Hideous Laughter (done by hand in
+      level1.ts; also now applied durably to the vault's own copy via
+      `SRD_RENAME_MAP` in convert-spells.mjs — see Step 1.1 fourth pass)
+- [x] Melf's Acid Arrow → Acid Arrow (done by hand in level2.ts; also now
+      durable via `SRD_RENAME_MAP`)
+- [x] Evard's Black Tentacles → Black Tentacles (done by hand in level4.ts
+      — not yet added to `SRD_RENAME_MAP` since its vault id hasn't been
+      seen in generated.ts yet; add once encountered in a future pass)
+- [x] Leomund's Tiny Hut → Tiny Hut (now durable via `SRD_RENAME_MAP` —
+      only exists in generated.ts, no hand-file equivalent needed)
+- [x] Nystul's Magic Aura → Arcanist's Magic Aura (now durable via
+      `SRD_RENAME_MAP` — only exists in generated.ts)
 - [ ] Verify each rename against the actual SRD 5.1 doc — do not trust memory.
-- [ ] Named spells with NO SRD version (Tasha's Caustic Brew, Tasha's Mind
-      Whip, Melf's Minute Meteors…) → `srd: false`.
+- [x] Named spells with NO SRD version (Tasha's Caustic Brew, Tasha's Mind
+      Whip, Melf's Minute Meteors…) → correctly `srd: false` via the PI
+      regex — confirmed not added to `SRD_RENAME_MAP` since these never
+      existed in the PHB at all, so there's no SRD name to rename to.
 
 ### Step 1.3 — Filter non-SRD from the public build
 - [ ] `src/content/spells/index.ts`: export `ALL_SPELLS` filtered to

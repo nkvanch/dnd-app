@@ -93,6 +93,10 @@ const SRD_DENY_NAMES = new Set([
   // Confirmed on second pass through level 2 and start of level 3
   'Dust Devil', 'Earthbind', 'Shadow Blade', 'Skywrite', 'Summon Beast',
   'Warding Wind', 'Aura of Vitality', 'Blinding Smite',
+  // Confirmed on fourth pass: rest of level 3 + start of level 4
+  'Conjure Barrage', "Crusader's Mantle", 'Erupting Earth',
+  'Life Transference', 'Lightning Arrow', 'Spirit Shroud', 'Tidal Wave',
+  'Wall of Sand', 'Wall of Water', 'Aura of Life',
 ]);
 
 // Directly-verified core PHB / SRD 5.1 spells (read against the actual
@@ -137,6 +141,19 @@ const SRD_ALLOW_NAMES = new Set([
   'Spiritual Weapon', 'Suggestion', 'Warding Bond', 'Web', 'Zone of Truth',
   // Level 3 (start)
   'Animate Dead', 'Beacon of Hope', 'Bestow Curse',
+  // Level 3 (rest, fourth pass)
+  'Blink', 'Call Lightning', 'Clairvoyance', 'Conjure Animals',
+  'Counterspell', 'Create Food and Water', 'Daylight', 'Dispel Magic',
+  'Elemental Weapon', 'Fear', 'Feign Death', 'Fireball', 'Flame Arrows',
+  'Fly', 'Gaseous Form', 'Glyph of Warding', 'Haste', 'Hypnotic Pattern',
+  'Lightning Bolt', 'Magic Circle', 'Major Image', 'Mass Healing Word',
+  'Meld into Stone', 'Nondetection', 'Phantom Steed', 'Plant Growth',
+  'Protection from Energy', 'Remove Curse', 'Revivify', 'Sending',
+  'Sleet Storm', 'Slow', 'Speak with Dead', 'Speak with Plants',
+  'Spirit Guardians', 'Stinking Cloud', 'Tongues', 'Vampiric Touch',
+  'Water Breathing', 'Water Walk', 'Wind Wall',
+  // Level 4 (start)
+  'Arcane Eye',
 ]);
 
 function computeSrd(name, description) {
@@ -146,6 +163,25 @@ function computeSrd(name, description) {
   if (SRD_ALLOW_NAMES.has(name)) return true;         // known SRD, verified
   return undefined;                                    // not yet audited — safe default
 }
+
+// ── SRD renames ─────────────────────────────────────────────────────────────────
+// Some PI-named spells are core PHB content that SRD 5.1 kept, but with the
+// named wizard stripped from the title (e.g. "Tasha's Hideous Laughter" →
+// "Hideous Laughter"). This is different from PI-named spells that ONLY ever
+// existed in a non-SRD book (Xanathar's, SCAG, Tasha's Cauldron) — those have
+// no SRD equivalent at all and correctly stay excluded permanently via
+// PI_NAME_RE / SRD_DENY_NAMES above. Keyed by the vault's slugified id;
+// renaming here keeps id (and thus any references) stable while fixing the
+// public-facing name and unlocking srd:true. Mirrors the same renames
+// already applied by hand in src/content/spells/level1.ts–level4.ts — see
+// ROADMAP_1.0.md Step 1.2.
+const SRD_RENAME_MAP = {
+  tashas_hideous_laughter: 'Hideous Laughter',
+  melfs_acid_arrow:        'Acid Arrow',
+  leomunds_tiny_hut:       'Tiny Hut',
+  nystuls_magic_aura:      "Arcanist's Magic Aura",
+  // evards_black_tentacles: 'Black Tentacles',  // add once seen with its actual vault id
+};
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -219,11 +255,22 @@ function parseBlock(block) {
   const concentration = /concentration/i.test(duration);
   const ritual = /\britual\b/i.test(block);
 
-  const srd = computeSrd(name, desc);
+  const id = slug(name);
+  let srd = computeSrd(name, desc);
+  let finalName = name;
+
+  // Apply SRD_RENAME_MAP: only promote a PI-excluded spell to srd:true if we
+  // actually have real description text to show — a rename doesn't help if
+  // the vault only has a redacted "not OGL" placeholder for it.
+  const renamed = SRD_RENAME_MAP[id];
+  if (renamed && srd === false && !/not OGL/i.test(desc)) {
+    finalName = renamed;
+    srd = true;
+  }
 
   return {
-    id: slug(name),
-    name,
+    id,
+    name: finalName,
     level,
     school,
     castingTime,

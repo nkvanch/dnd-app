@@ -468,7 +468,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "artificer",
       "druid",
       "warlock"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "mending",
@@ -8594,7 +8595,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "chain_lightning",
@@ -8616,7 +8618,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "circle_of_death",
@@ -8639,7 +8642,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "conjure_fey",
@@ -8660,7 +8664,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "warlock"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "contingency",
@@ -8681,7 +8686,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "create_homunculus",
@@ -8726,7 +8732,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "disintegrate",
@@ -8748,7 +8755,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "drawmijs_instant_summons",
@@ -8815,7 +8823,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "find_the_path",
@@ -8838,7 +8847,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "cleric",
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "fizbans_platinum_shield",
@@ -8883,7 +8893,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "forbiddance",
@@ -8904,7 +8915,30 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
+  },
+  {
+    "id": "otilukes_freezing_sphere",
+    "name": "Freezing Sphere",
+    "level": 6,
+    "school": "Evocation",
+    "castingTime": "1 action",
+    "range": "300 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "Instantaneous",
+    "description": "A frigid globe of cold energy streaks from your fingertips to a point of your choice within range, where it explodes in a 60-foot-radius sphere. Each creature within the area must make a Constitution saving throw. On a failed save, a creature takes 10d6 cold damage. On a successful save, it takes half as much damage.\n\nIf the globe strikes a body of water or a liquid that is principally water (not including water-based creatures), it freezes the liquid to a depth of 6 inches over an area 30 feet square. This ice lasts for 1 minute. Creatures that were swimming on the surface of frozen water are trapped in the ice. A trapped creature can use an action to make a Strength check against your spell save DC to break free.\n\nYou can refrain from firing the globe after completing the spell, if you wish. A small globe about the size of a sling stone, cool to the touch, appears in your hand. At any time, you or a creature you give the globe to can throw the globe (to a range of 40 feet) or hurl it with a sling (to the sling's normal range). It shatters on impact, with the same effect as the normal casting of the spell. You can also set the globe down without shattering it. After 1 minute, if the globe hasn't already shattered, it explodes.\n\n**_At Higher Levels_**. When you cast this spell using a spell slot of 7th level or higher, the damage increases by 1d6 for each slot level above 6th.",
+    "upcast": null,
+    "ritual": false,
+    "concentration": false,
+    "classes": [
+      "wizard"
+    ],
+    "srd": true
   },
   {
     "id": "globe_of_invulnerability",
@@ -8926,7 +8960,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "guards_and_wards",
@@ -8948,7 +8983,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "harm",
@@ -8968,7 +9004,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "heal",
@@ -8989,7 +9026,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "heroes_feast",
@@ -9011,7 +9049,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "investiture_of_flame",
@@ -9034,7 +9073,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "investiture_of_ice",
@@ -9057,7 +9097,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "investiture_of_stone",
@@ -9080,7 +9121,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "investiture_of_wind",
@@ -9103,7 +9145,29 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": false
+  },
+  {
+    "id": "ottos_irresistible_dance",
+    "name": "Irresistible Dance",
+    "level": 6,
+    "school": "Enchantment",
+    "castingTime": "1 action",
+    "range": "30 feet",
+    "components": [
+      "V"
+    ],
+    "duration": "Concentration, up to 1 minute",
+    "description": "Choose one creature that you can see within range. The target begins a comic dance in place: shuffling, tapping its feet, and capering for the duration. Creatures that can't be charmed are immune to this spell.\n\nA dancing creature must use all its movement to dance without leaving its space and has disadvantage on Dexterity saving throws and attack rolls. While the target is affected by this spell, other creatures have advantage on attack rolls against it. As an action, a dancing creature makes a Wisdom saving throw to regain control of itself. On a successful save, the spell ends.",
+    "upcast": null,
+    "ritual": false,
+    "concentration": true,
+    "classes": [
+      "bard",
+      "wizard"
+    ],
+    "srd": true
   },
   {
     "id": "magic_jar",
@@ -9124,7 +9188,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "mass_suggestion",
@@ -9147,7 +9212,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "mental_prison",
@@ -9192,50 +9258,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
-  },
-  {
-    "id": "otilukes_freezing_sphere",
-    "name": "Otiluke's Freezing Sphere",
-    "level": 6,
-    "school": "Evocation",
-    "castingTime": "1 action",
-    "range": "300 feet",
-    "components": [
-      "V",
-      "S",
-      "M"
     ],
-    "duration": "Instantaneous",
-    "description": "A frigid globe of cold energy streaks from your fingertips to a point of your choice within range, where it explodes in a 60-foot-radius sphere. Each creature within the area must make a Constitution saving throw. On a failed save, a creature takes 10d6 cold damage. On a successful save, it takes half as much damage.\n\nIf the globe strikes a body of water or a liquid that is principally water (not including water-based creatures), it freezes the liquid to a depth of 6 inches over an area 30 feet square. This ice lasts for 1 minute. Creatures that were swimming on the surface of frozen water are trapped in the ice. A trapped creature can use an action to make a Strength check against your spell save DC to break free.\n\nYou can refrain from firing the globe after completing the spell, if you wish. A small globe about the size of a sling stone, cool to the touch, appears in your hand. At any time, you or a creature you give the globe to can throw the globe (to a range of 40 feet) or hurl it with a sling (to the sling's normal range). It shatters on impact, with the same effect as the normal casting of the spell. You can also set the globe down without shattering it. After 1 minute, if the globe hasn't already shattered, it explodes.\n\n**_At Higher Levels_**. When you cast this spell using a spell slot of 7th level or higher, the damage increases by 1d6 for each slot level above 6th.",
-    "upcast": null,
-    "ritual": false,
-    "concentration": false,
-    "classes": [
-      "wizard"
-    ],
-    "srd": false
-  },
-  {
-    "id": "ottos_irresistible_dance",
-    "name": "Otto's Irresistible Dance",
-    "level": 6,
-    "school": "Enchantment",
-    "castingTime": "1 action",
-    "range": "30 feet",
-    "components": [
-      "V"
-    ],
-    "duration": "Concentration, up to 1 minute",
-    "description": "Choose one creature that you can see within range. The target begins a comic dance in place: shuffling, tapping its feet, and capering for the duration. Creatures that can't be charmed are immune to this spell.\n\nA dancing creature must use all its movement to dance without leaving its space and has disadvantage on Dexterity saving throws and attack rolls. While the target is affected by this spell, other creatures have advantage on attack rolls against it. As an action, a dancing creature makes a Wisdom saving throw to regain control of itself. On a successful save, the spell ends.",
-    "upcast": null,
-    "ritual": false,
-    "concentration": true,
-    "classes": [
-      "bard",
-      "wizard"
-    ],
-    "srd": false
+    "srd": true
   },
   {
     "id": "planar_ally",
@@ -9255,7 +9279,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "primordial_ward",
@@ -9275,7 +9300,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "programmed_illusion",
@@ -9297,7 +9323,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "scatter",
@@ -9388,7 +9415,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "tashas_otherworldly_guise",
@@ -9454,7 +9482,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "true_seeing",
@@ -9480,7 +9509,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "wall_of_ice",
@@ -9501,7 +9531,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "wall_of_thorns",
@@ -9522,7 +9553,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "wind_walk",
@@ -9543,7 +9575,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "word_of_recall",
@@ -9562,7 +9595,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "conjure_celestial",
@@ -9582,7 +9616,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "crown_of_stars",
@@ -9627,7 +9662,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "divine_word",
@@ -9644,7 +9680,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "draconic_transformation",
@@ -9717,7 +9754,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "finger_of_death",
@@ -9739,7 +9777,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "fire_storm",
@@ -9761,7 +9800,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "sorcerer"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "forcecage",
@@ -9776,7 +9816,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "mirage_arcane",
@@ -9791,7 +9832,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "mordenkainens_magnificent_mansion",
@@ -9838,7 +9880,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "power_word_pain",
@@ -9869,7 +9912,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "project_image",
@@ -9884,7 +9928,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "regenerate",
@@ -9899,7 +9944,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "resurrection",
@@ -9914,7 +9960,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "reverse_gravity",
@@ -9929,7 +9976,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "sequester",
@@ -9944,7 +9992,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "simulacrum",
@@ -9959,7 +10008,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "symbol",
@@ -9974,7 +10024,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "teleport",
@@ -9989,7 +10040,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": true
   },
   {
     "id": "temple_of_the_gods",
@@ -10020,7 +10072,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [],
+    "srd": false
   },
   {
     "id": "abi_dalzims_horrid_wilting",
@@ -10063,7 +10116,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "antimagic_field",
@@ -10086,7 +10140,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "antipathy_sympathy",
@@ -10109,7 +10164,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "clone",
@@ -10130,7 +10186,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "control_weather",
@@ -10153,7 +10210,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "demiplane",
@@ -10173,7 +10231,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "dominate_monster",
@@ -10196,7 +10255,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "earthquake",
@@ -10219,7 +10279,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "sorcerer"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "feeblemind",
@@ -10243,7 +10304,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "glibness",
@@ -10263,7 +10325,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "warlock"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "holy_aura",
@@ -10284,7 +10347,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "illusory_dragon",
@@ -10326,7 +10390,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "maddening_darkness",
@@ -10368,7 +10433,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "mighty_fortress",
@@ -10411,7 +10477,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "power_word_stun",
@@ -10433,7 +10500,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "sunburst",
@@ -10457,7 +10525,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "telepathy",
@@ -10478,7 +10547,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "tsunami",
@@ -10498,7 +10568,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "astral_projection",
@@ -10521,7 +10592,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "blade_of_disaster",
@@ -10568,7 +10640,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "gate",
@@ -10592,7 +10665,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "imprisonment",
@@ -10614,7 +10688,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "invulnerability",
@@ -10656,7 +10731,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "mass_polymorph",
@@ -10701,7 +10777,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "power_word_heal",
@@ -10722,7 +10799,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "cleric"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "power_word_kill",
@@ -10744,7 +10822,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "prismatic_wall",
@@ -10764,7 +10843,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "psychic_scream",
@@ -10809,7 +10889,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "storm_of_vengeance",
@@ -10829,7 +10910,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "time_stop",
@@ -10849,7 +10931,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "true_polymorph",
@@ -10872,7 +10955,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "true_resurrection",
@@ -10894,7 +10978,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "weird",
@@ -10914,7 +10999,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "wish",
@@ -10934,6 +11020,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   }
 ];

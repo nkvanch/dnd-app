@@ -18,7 +18,7 @@ shipping non-SRD content. Legal-clean first, loud second.
 
 ## PHASE 1 — LEGAL CLEAN (the gate for everything)
 
-### Step 1.1 — Tag every spell with its license status  ⏳ IN PROGRESS
+### Step 1.1 — Tag every spell with its license status  ✅ COMPLETE
 - [x] `srd?: boolean` added to the `Spell` type (`src/engine/types.ts`).
       `undefined` = not yet audited = treated as unsafe for public builds.
 - [x] `src/content/spells/cantrips.ts` — 16/16 tagged (11 SRD, 5 excluded:
@@ -192,8 +192,64 @@ shipping non-SRD content. Legal-clean first, loud second.
             with the 146 hand-authored spells, **546/633 of the entire spell
             database (86%) now has a real SRD determination. Only 87 spells
             remain, all in levels 6–9.**
-      - [ ] **NEXT:** commit this checkpoint, then finish levels 6–9 in a
-            future session — the final stretch of Step 1.1.
+      - [x] **Sixth (final) pass:** read the entire remainder of the file —
+            all of levels 6, 7, 8, and 9 — in one chunk (used `tail` instead
+            of `head` since the target was the end of the file; much more
+            efficient than starting from the top each time). Findings:
+            - Found and verified 2 more genuine PHB-original PI-named
+              spells: Otiluke's Freezing Sphere → Freezing Sphere, Otto's
+              Irresistible Dance → Irresistible Dance. `SRD_RENAME_MAP` now
+              has 9 entries.
+            - ⚠️ **Unrelated data-quality bug found**: Mordenkainen's
+              Magnificent Mansion has a vault markdown parsing error — its
+              school/range/components/duration fields got jumbled together
+              during conversion (range, components, duration all came out
+              empty). Not an SRD issue (it's excluded via the PI name
+              regardless), but the underlying spell data is broken and
+              should be fixed at the vault source before this spell is ever
+              usable, SRD or not. **New backlog item, not urgent** since
+              it's excluded from public builds either way.
+            - Levels 6, 7, 8, and 9 are ALL now fully covered.
+            - Extended DENY by 9 (Bones of the Earth, the 4 Investiture
+              spells, Primordial Ward, Whirlwind, Tsunami, Power Word Heal).
+            - Extended ALLOW by ~85 (essentially all remaining core-PHB
+              spells across levels 6–9).
+            - **Not yet re-run against the vault** — do this next. If the
+              classification was exhaustive, this run should show **0
+              unaudited** — the entire spell database fully classified.
+      - [ ] **NEXT:** run `node scripts/convert-spells.mjs` again. If
+            unaudited reaches 0, Step 1.1 is COMPLETE — move to Step 1.4
+            (auditing classes/races/backgrounds/feats/items). If any spells
+            remain unaudited, they're likely ones this pass missed and can
+            be mopped up quickly. Either way, commit this checkpoint.
+      - [x] **Gap check:** the summary showed 334/152/1 — one spell short of
+            a clean sweep. Tracked it down programmatically (parsed the
+            regenerated file looking for any entry missing an `srd` key)
+            rather than guessing: **Magic Stone** (a cantrip) had been
+            correctly identified as non-SRD back in the very first pass
+            (matches the hand-authored cantrips.ts classification) but was
+            never actually added to `SRD_DENY_NAMES` — a genuine oversight,
+            now fixed.
+      - [x] **FINAL RESULT:**
+            ```
+            SRD classification: 334 allowed, 153 denied, 0 unaudited
+            ```
+            **Every one of the 487 spells in generated.ts now has an
+            explicit SRD determination. Combined with the 146 hand-authored
+            spells (also 100% classified), the ENTIRE 633-spell database is
+            now fully audited. Step 1.1 is complete.**
+
+            9 durable Product-Identity renames now live in `SRD_RENAME_MAP`,
+            re-applied automatically on every future vault regeneration:
+            Hideous Laughter, Acid Arrow, Tiny Hut, Arcanist's Magic Aura,
+            Black Tentacles, Private Sanctum, Resilient Sphere, Freezing
+            Sphere, Irresistible Dance.
+
+            One known non-blocking issue carried forward: Mordenkainen's
+            Magnificent Mansion has a vault markdown parsing bug (empty
+            range/components/duration) — already excluded via its PI name
+            regardless, so it doesn't affect the legal-clean status, but
+            worth fixing at the vault source eventually for data quality.
       - [ ] **Recommended now:** commit this checkpoint (`git add -A &&
             git commit`) so this progress is safely stored — the near-miss
             above is a good reminder not to leave a long run of uncommitted

@@ -78,7 +78,7 @@ const SRD_DENY_NAMES = new Set([
   'Booming Blade', 'Green-Flame Blade', 'Sword Burst', 'Lightning Lure',
   'Control Flames', 'Create Bonfire', 'Frostbite', 'Gust', 'Mold Earth',
   'Shape Water', 'Thorn Whip', 'Thunderclap', 'Toll the Dead', 'Mind Sliver',
-  'Infestation', 'Primal Savagery', 'Word of Radiance',
+  'Infestation', 'Primal Savagery', 'Word of Radiance', 'Magic Stone',
   // Level 1+ — XGE/SCAG/Tasha's additions confirmed elsewhere in this project
   'Absorb Elements', 'Chaos Bolt', 'Ice Knife', 'Wrathful Smite',
   'Thunderous Smite', 'Searing Smite', 'Staggering Smite', 'Blinding Smite',
@@ -101,6 +101,10 @@ const SRD_DENY_NAMES = new Set([
   'Aura of Purity', 'Elemental Bane', 'Grasping Vine', 'Storm Sphere',
   'Vitriolic Sphere', 'Watery Sphere', 'Conjure Volley', 'Control Winds',
   'Immolation', 'Maelstrom',
+  // Confirmed on sixth (final) pass: levels 6–9 in full
+  'Bones of the Earth', 'Investiture of Flame', 'Investiture of Ice',
+  'Investiture of Stone', 'Investiture of Wind', 'Primordial Ward',
+  'Whirlwind', 'Tsunami', 'Power Word Heal',
 ]);
 
 // Directly-verified core PHB / SRD 5.1 spells (read against the actual
@@ -179,6 +183,30 @@ const SRD_ALLOW_NAMES = new Set([
   'Wall of Stone',
   // Level 6 (start)
   'Arcane Gate', 'Blade Barrier',
+  // Level 6 (rest, sixth/final pass)
+  'Chain Lightning', 'Circle of Death', 'Conjure Fey', 'Contingency',
+  'Create Undead', 'Disintegrate', 'Eyebite', 'Find the Path',
+  'Flesh to Stone', 'Forbiddance', 'Globe of Invulnerability',
+  'Guards and Wards', 'Harm', 'Heal', "Heroes' Feast", 'Magic Jar',
+  'Mass Suggestion', 'Move Earth', 'Planar Ally', 'Programmed Illusion',
+  'Sunbeam', 'Transport via Plants', 'True Seeing', 'Wall of Ice',
+  'Wall of Thorns', 'Wind Walk', 'Word of Recall',
+  // Level 7 (all)
+  'Conjure Celestial', 'Delayed Blast Fireball', 'Divine Word',
+  'Etherealness', 'Finger of Death', 'Fire Storm', 'Forcecage',
+  'Mirage Arcane', 'Plane Shift', 'Prismatic Spray', 'Project Image',
+  'Regenerate', 'Resurrection', 'Reverse Gravity', 'Sequester',
+  'Simulacrum', 'Symbol', 'Teleport',
+  // Level 8 (all)
+  'Animal Shapes', 'Antimagic Field', 'Antipathy/Sympathy', 'Clone',
+  'Control Weather', 'Demiplane', 'Dominate Monster', 'Earthquake',
+  'Feeblemind', 'Glibness', 'Holy Aura', 'Incendiary Cloud', 'Maze',
+  'Mind Blank', 'Power Word Stun', 'Sunburst', 'Telepathy',
+  // Level 9 (all)
+  'Astral Projection', 'Foresight', 'Gate', 'Imprisonment', 'Mass Heal',
+  'Meteor Swarm', 'Power Word Kill', 'Prismatic Wall', 'Shapechange',
+  'Storm of Vengeance', 'Time Stop', 'True Polymorph', 'True Resurrection',
+  'Weird', 'Wish',
 ]);
 
 function computeSrd(name, description) {
@@ -208,6 +236,12 @@ const SRD_RENAME_MAP = {
   evards_black_tentacles:         'Black Tentacles',
   mordenkainens_private_sanctum:  'Private Sanctum',
   otilukes_resilient_sphere:      'Resilient Sphere',
+  otilukes_freezing_sphere:       'Freezing Sphere',
+  ottos_irresistible_dance:       'Irresistible Dance',
+  // mordenkainens_magnificent_mansion: has a vault markdown parsing bug
+  // (range/components/duration came out empty) — excluded until that's
+  // fixed at the source; renaming wouldn't help since the underlying data
+  // is broken regardless of SRD status. Flagged separately in ROADMAP_1.0.md.
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

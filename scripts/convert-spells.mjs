@@ -55,10 +55,11 @@ const FILES = [
 // throughout the hand-tagged spell files (cantrips.ts, level1.ts … level9.ts).
 //
 // IMPORTANT: the ALLOW list below was built by directly reading the actual
-// generated spell text for cantrips + a portion of level 1 in one session
-// (see chat history / commit notes). It does NOT yet cover levels 2–9 of
-// this file — those spells will correctly fall through to "unset" (excluded)
-// until a future pass extends the ALLOW list after reading them directly.
+// generated spell text across multiple sessions (see docs/ROADMAP_1.0.md for
+// progress tracking). As of the most recent pass it covers cantrips, all of
+// level 1, and the start of level 2 — the rest of levels 2–9 have NOT been
+// read yet and correctly fall through to "unset" (excluded) until a future
+// pass extends the ALLOW list after reading them directly.
 // Re-running this script does not lose progress; it re-applies the same
 // classification rules to whatever the vault currently contains.
 
@@ -67,7 +68,7 @@ const FILES = [
 // Mordenkainen's, Jim Darkmagic, etc). Even when the mechanic is core PHB,
 // the possessive name itself is WotC Product Identity — exclude until
 // manually renamed to its SRD name (see ROADMAP_1.0.md Step 1.2).
-const PI_NAME_RE = /\b(Tasha|Melf|Bigby|Otiluke|Leomund|Otto|Rary|Evard|Nystul|Drawmij|Mordenkainen|Jim Darkmagic)('s)?\b/i;
+const PI_NAME_RE = /\b(Tasha|Melf|Bigby|Otiluke|Leomund|Otto|Rary|Evard|Nystul|Drawmij|Mordenkainen|Tenser|Aganazzar|Snilloc|Abi-Dalzim|Jim Darkmagic)('s)?\b/i;
 
 // Specific known non-SRD spells that aren't Product-Identity-named (mostly
 // Xanathar's Guide, Sword Coast Adventurer's Guide, Tasha's Cauldron, and
@@ -87,10 +88,14 @@ const SRD_DENY_NAMES = new Set([
   // conservative flag already applied in level1.ts/level3.ts pending a real
   // SRD-text verification pass.
   'Arms of Hadar', 'Hunger of Hadar',
+  // Confirmed while reading levels 1–2 directly in this session
+  'Earth Tremor', 'Hail of Thorns', 'Illusory Script', 'Cordon of Arrows',
 ]);
 
 // Directly-verified core PHB / SRD 5.1 spells (read against the actual
-// generated.ts text in this session — cantrips + partial level 1 only).
+// generated.ts text across two sessions — all of cantrips + level 1, and the
+// start of level 2. Extend this list further by reading more of the file
+// and adding confirmed entries; anything not yet read stays safely unset.
 const SRD_ALLOW_NAMES = new Set([
   // Cantrips
   'Acid Splash', 'Blade Ward', 'Chill Touch', 'Dancing Lights', 'Druidcraft',
@@ -104,7 +109,20 @@ const SRD_ALLOW_NAMES = new Set([
   'Burning Hands', 'Catapult', 'Charm Person', 'Chromatic Orb', 'Color Spray',
   'Command', 'Comprehend Languages', 'Create or Destroy Water', 'Cure Wounds',
   'Detect Evil and Good', 'Detect Magic', 'Detect Poison and Disease',
-  'Disguise Self',
+  'Disguise Self', 'Dissonant Whispers', 'Divine Favor', 'Ensnaring Strike',
+  'Entangle', 'Expeditious Retreat', 'Faerie Fire', 'False Life',
+  'Feather Fall', 'Find Familiar', 'Fog Cloud', 'Goodberry', 'Grease',
+  'Guiding Bolt', 'Healing Word', 'Hellish Rebuke', 'Heroism', 'Hex',
+  "Hunter's Mark", 'Identify', 'Inflict Wounds', 'Jump', 'Longstrider',
+  'Mage Armor', 'Magic Missile', 'Protection from Evil and Good',
+  'Purify Food and Drink', 'Ray of Sickness', 'Sanctuary', 'Shield',
+  'Shield of Faith', 'Silent Image', 'Sleep', 'Speak with Animals',
+  'Thunderwave', 'Unseen Servant', 'Witch Bolt',
+  // Level 2 (partial)
+  'Aid', 'Alter Self', 'Animal Messenger', 'Arcane Lock', 'Augury',
+  'Barkskin', 'Beast Sense', 'Blindness/Deafness', 'Blur', 'Branding Smite',
+  'Calm Emotions', 'Cloud of Daggers', 'Continual Flame', 'Crown of Madness',
+  'Darkness',
 ]);
 
 function computeSrd(name, description) {

@@ -88,11 +88,31 @@ shipping non-SRD content. Legal-clean first, loud second.
             DENY list — confirms the automatic PI-name regex and "not OGL"
             marker detection are doing real work across spells never
             individually read.
-      - [ ] **NEXT:** 327 spells remain unaudited (mostly levels 2–9, not
-            yet read directly). Continue the same incremental read-and-
-            classify process used for cantrips/level 1 to extend the ALLOW
-            list in `scripts/convert-spells.mjs`, then re-run the script
-            after each extension.
+      - [x] **Second pass:** read the rest of level 1 + start of level 2
+            directly (via chunked reads of generated.ts). Findings:
+            - The automatic detection already caught several non-SRD spells
+              correctly on its own, with no manual listing needed: Silvery
+              Barbs, Snare, Zephyr Strike, Tasha's Caustic Brew, Tasha's
+              Hideous Laughter — confirms the "not OGL" marker + PI regex are
+              carrying real weight.
+            - Found and fixed a real gap: the PI regex was missing several
+              named-wizard spells present in the vault (Tenser's Floating
+              Disk, Aganazzar's Scorcher) — added Tenser, Aganazzar, Snilloc,
+              Abi-Dalzim to `PI_NAME_RE`.
+            - Extended DENY list with 4 more confirmed XGE spells (Earth
+              Tremor, Hail of Thorns, Illusory Script, Cordon of Arrows).
+            - Extended ALLOW list with ~55 more directly-verified core PHB
+              spells across the rest of level 1 and the start of level 2.
+      - [x] **Re-run confirmed:**
+            ```
+            SRD classification: 95 allowed, 124 denied, 268 unaudited
+            ```
+            Up from 44/116/327 — confirms the extended lists applied
+            correctly. Nearly a third of the full 487-spell database is now
+            confidently classified either way.
+      - [ ] **NEXT:** commit this checkpoint, then continue reading further
+            into level 2–9 in a future session (same chunked-read approach)
+            to keep extending ALLOW/DENY coverage toward the full file.
       - [ ] **Recommended now:** commit this checkpoint (`git add -A &&
             git commit`) so this progress is safely stored — the near-miss
             above is a good reminder not to leave a long run of uncommitted

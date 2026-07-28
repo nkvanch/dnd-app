@@ -3092,7 +3092,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "ranger",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "detect_thoughts",
@@ -3115,7 +3116,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "dragons_breath",
@@ -3161,7 +3163,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "earthbind",
@@ -3183,7 +3186,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "enhance_ability",
@@ -3207,7 +3211,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "sorcerer"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "enlarge_reduce",
@@ -3229,7 +3234,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "enthrall",
@@ -3250,7 +3256,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "warlock"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "find_steed",
@@ -3270,7 +3277,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "find_traps",
@@ -3292,7 +3300,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "flame_blade",
@@ -3313,7 +3322,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "flaming_sphere",
@@ -3335,7 +3345,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "gentle_repose",
@@ -3357,7 +3368,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "gust_of_wind",
@@ -3380,7 +3392,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "healing_spirit",
@@ -3424,7 +3437,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "hold_person",
@@ -3449,7 +3463,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "invisibility",
@@ -3473,7 +3488,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "knock",
@@ -3494,7 +3510,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "lesser_restoration",
@@ -3518,7 +3535,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "paladin",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "levitate",
@@ -3540,7 +3558,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "locate_animals_or_plants",
@@ -3562,7 +3581,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "locate_object",
@@ -3588,7 +3608,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "paladin",
       "ranger",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "magic_mouth",
@@ -3610,7 +3631,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "magic_weapon",
@@ -3631,7 +3653,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "paladin",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "maximilians_earthen_grasp",
@@ -3653,7 +3676,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "melfs_acid_arrow",
@@ -3719,7 +3743,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "misty_step",
@@ -3740,7 +3765,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "moonbeam",
@@ -3761,7 +3787,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": true,
     "classes": [
       "druid"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "nathairs_mischief",
@@ -3828,7 +3855,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "phantasmal_force",
@@ -3851,7 +3879,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "prayer_of_healing",
@@ -3870,7 +3899,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "protection_from_poison",
@@ -3893,7 +3923,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "paladin",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pyrotechnics",
@@ -3915,7 +3946,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ray_of_enfeeblement",
@@ -3936,7 +3968,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rimes_binding_ice",
@@ -3979,7 +4012,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "scorching_ray",
@@ -4000,7 +4034,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "see_invisibility",
@@ -4023,7 +4058,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "shadow_blade",
@@ -4045,7 +4081,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "shatter",
@@ -4069,7 +4106,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "silence",
@@ -4090,7 +4128,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "bard",
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "skywrite",
@@ -4112,7 +4151,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "druid",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "snillocs_snowball_swarm",
@@ -4158,7 +4198,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "spike_growth",
@@ -4180,7 +4221,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "spiritual_weapon",
@@ -4200,7 +4242,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "concentration": false,
     "classes": [
       "cleric"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "suggestion",
@@ -4223,7 +4266,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "sorcerer",
       "warlock",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "summon_beast",
@@ -4245,7 +4289,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "druid",
       "ranger"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "tashas_mind_whip",
@@ -4288,7 +4333,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "warding_wind",
@@ -4310,7 +4356,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "druid",
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "warp_sense",
@@ -4355,7 +4402,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "zone_of_truth",
@@ -4377,7 +4425,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "cleric",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "animate_dead",
@@ -4399,7 +4448,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ashardalons_stride",
@@ -4444,7 +4494,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "cleric",
       "druid",
       "paladin"
-    ]
+    ],
+    "srd": false
   },
   {
     "id": "beacon_of_hope",
@@ -4465,7 +4516,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "classes": [
       "cleric",
       "paladin"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "bestow_curse",
@@ -4487,7 +4539,8 @@ export const ALL_VAULT_SPELLS: Spell[] = [
       "bard",
       "cleric",
       "wizard"
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "blinding_smite",

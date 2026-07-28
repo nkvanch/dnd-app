@@ -68,7 +68,7 @@ const FILES = [
 // Mordenkainen's, Jim Darkmagic, etc). Even when the mechanic is core PHB,
 // the possessive name itself is WotC Product Identity — exclude until
 // manually renamed to its SRD name (see ROADMAP_1.0.md Step 1.2).
-const PI_NAME_RE = /\b(Tasha|Melf|Bigby|Otiluke|Leomund|Otto|Rary|Evard|Nystul|Drawmij|Mordenkainen|Tenser|Aganazzar|Snilloc|Abi-Dalzim|Jim Darkmagic)('s)?\b/i;
+const PI_NAME_RE = /\b(Tasha|Melf|Bigby|Otiluke|Leomund|Otto|Rary|Evard|Nystul|Drawmij|Mordenkainen|Tenser|Aganazzar|Snilloc|Abi-Dalzim|Maximilian|Jim Darkmagic)('s)?\b/i;
 
 // Specific known non-SRD spells that aren't Product-Identity-named (mostly
 // Xanathar's Guide, Sword Coast Adventurer's Guide, Tasha's Cauldron, and
@@ -90,6 +90,9 @@ const SRD_DENY_NAMES = new Set([
   'Arms of Hadar', 'Hunger of Hadar',
   // Confirmed while reading levels 1–2 directly in this session
   'Earth Tremor', 'Hail of Thorns', 'Illusory Script', 'Cordon of Arrows',
+  // Confirmed on second pass through level 2 and start of level 3
+  'Dust Devil', 'Earthbind', 'Shadow Blade', 'Skywrite', 'Summon Beast',
+  'Warding Wind', 'Aura of Vitality', 'Blinding Smite',
 ]);
 
 // Directly-verified core PHB / SRD 5.1 spells (read against the actual
@@ -122,7 +125,18 @@ const SRD_ALLOW_NAMES = new Set([
   'Aid', 'Alter Self', 'Animal Messenger', 'Arcane Lock', 'Augury',
   'Barkskin', 'Beast Sense', 'Blindness/Deafness', 'Blur', 'Branding Smite',
   'Calm Emotions', 'Cloud of Daggers', 'Continual Flame', 'Crown of Madness',
-  'Darkness',
+  'Darkness', 'Darkvision', 'Detect Thoughts', 'Enhance Ability',
+  'Enlarge/Reduce', 'Enthrall', 'Find Steed', 'Find Traps', 'Flame Blade',
+  'Flaming Sphere', 'Gentle Repose', 'Gust of Wind', 'Heat Metal',
+  'Hold Person', 'Invisibility', 'Knock', 'Lesser Restoration', 'Levitate',
+  'Locate Animals or Plants', 'Locate Object', 'Magic Mouth', 'Magic Weapon',
+  'Mirror Image', 'Misty Step', 'Moonbeam', 'Pass without Trace',
+  'Phantasmal Force', 'Prayer of Healing', 'Protection from Poison',
+  'Pyrotechnics', 'Ray of Enfeeblement', 'Rope Trick', 'Scorching Ray',
+  'See Invisibility', 'Shatter', 'Silence', 'Spider Climb', 'Spike Growth',
+  'Spiritual Weapon', 'Suggestion', 'Warding Bond', 'Web', 'Zone of Truth',
+  // Level 3 (start)
+  'Animate Dead', 'Beacon of Hope', 'Bestow Curse',
 ]);
 
 function computeSrd(name, description) {

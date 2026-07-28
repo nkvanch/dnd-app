@@ -110,9 +110,36 @@ shipping non-SRD content. Legal-clean first, loud second.
             Up from 44/116/327 — confirms the extended lists applied
             correctly. Nearly a third of the full 487-spell database is now
             confidently classified either way.
-      - [ ] **NEXT:** commit this checkpoint, then continue reading further
-            into level 2–9 in a future session (same chunked-read approach)
-            to keep extending ALLOW/DENY coverage toward the full file.
+      - [x] **Third pass:** read the rest of level 2 (in full) and the start
+            of level 3 directly, using a more efficient extraction method
+            (parsed id/name/level/srd programmatically instead of eyeballing
+            raw JSON). Findings:
+            - Level 2 is now FULLY covered — every spell in that tier has an
+              explicit ALLOW or DENY classification.
+            - Added 'Maximilian' to `PI_NAME_RE` (Maximilian's Earthen Grasp,
+              an XGE spell that would otherwise have needed a manual DENY
+              entry).
+            - Extended DENY by 8: Dust Devil, Earthbind, Shadow Blade,
+              Skywrite, Summon Beast, Warding Wind, Aura of Vitality,
+              Blinding Smite (the last two are level 3).
+            - Extended ALLOW by ~45: the remaining core-PHB level 2 spells,
+              plus the first 3 confirmed level 3 spells (Animate Dead,
+              Beacon of Hope, Bestow Curse).
+            - Caught one casing mismatch: the vault spells "Pass without
+              Trace" (lowercase w) — added the exact vault casing since Set
+              membership is case-sensitive.
+            - **Not yet re-run against the vault** — do this next.
+      - [x] **Re-run confirmed:**
+            ```
+            SRD classification: 140 allowed, 132 denied, 215 unaudited
+            ```
+            Up from 95/124/268. Level 2 is fully closed out; over half of
+            the entire 487-spell database (272/487) is now confidently
+            classified either way.
+      - [ ] **NEXT:** commit this checkpoint, then continue reading through
+            the rest of level 3–9 in a future session (same programmatic
+            id/name/level/srd extraction approach — much faster than
+            eyeballing raw JSON).
       - [ ] **Recommended now:** commit this checkpoint (`git add -A &&
             git commit`) so this progress is safely stored — the near-miss
             above is a good reminder not to leave a long run of uncommitted

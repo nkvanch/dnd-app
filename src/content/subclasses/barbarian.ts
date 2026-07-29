@@ -11,6 +11,7 @@ export type SubclassProgression = ClassProgression & { name: string };
 export const berserkerProgression: SubclassProgression = {
   classId: 'barbarian',
   name: 'Path of the Berserker',
+  srd: true,
   entries: [
     {
       level: 3, hpDie: 12, choices: [],
@@ -44,6 +45,11 @@ export const berserkerProgression: SubclassProgression = {
 export const totemWarriorProgression: SubclassProgression = {
   classId: 'barbarian',
   name: 'Path of the Totem Warrior',
+  // NEEDS VERIFICATION — excluded per the standard one-subclass-per-class SRD
+  // convention (matches Berserker's status as the sole SRD Barbarian path in
+  // the original 5.0 SRD lineage). Low-moderate chance SRD 5.1 expanded this;
+  // verify against the real text before assuming either way.
+  srd: false,
   entries: [
     {
       level: 3, hpDie: 12, choices: [],

@@ -11,6 +11,7 @@ export type SubclassProgression = ClassProgression & { name: string };
 export const championProgression: SubclassProgression = {
   classId: 'fighter',
   name: 'Champion',
+  srd: true,
   entries: [
     {
       level: 3, hpDie: 10, choices: [],
@@ -50,6 +51,7 @@ export const championProgression: SubclassProgression = {
 export const battleMasterProgression: SubclassProgression = {
   classId: 'fighter',
   name: 'Battle Master',
+  srd: false,
   entries: [
     {
       level: 3, hpDie: 10, choices: [],

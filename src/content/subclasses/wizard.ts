@@ -11,6 +11,7 @@ export type SubclassProgression = ClassProgression & { name: string };
 export const evocationProgression: SubclassProgression = {
   classId: 'wizard',
   name: 'School of Evocation',
+  srd: true,
   entries: [
     {
       level: 2, hpDie: 6, choices: [],
@@ -45,6 +46,7 @@ export const evocationProgression: SubclassProgression = {
 export const abjurationProgression: SubclassProgression = {
   classId: 'wizard',
   name: 'School of Abjuration',
+  srd: false,
   entries: [
     {
       level: 2, hpDie: 6, choices: [],

@@ -7,7 +7,7 @@ import { ClassProgression } from '../../engine/types';
 export type SubclassProgression = ClassProgression & { name: string };
 
 export const fiendProgression: SubclassProgression = {
-  classId: 'warlock', name: 'The Fiend',
+  classId: 'warlock', name: 'The Fiend', srd: true,
   entries: [
     { level: 1, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'dark_ones_blessing', name: "Dark One's Blessing", description: 'When you reduce a hostile creature to 0 HP, gain temporary HP equal to your CHA modifier + warlock level (min 1).', source: { kind: 'subclass', refId: 'fiend' }, level: 1, effects: [], actions: [], choices: [], passive: true } }] },
     { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'dark_ones_own_luck', name: "Dark One's Own Luck", description: 'Spend 1 use (per short or long rest) to add 1d10 to an ability check or saving throw.', source: { kind: 'subclass', refId: 'fiend' }, level: 6, effects: [], actions: [], choices: [], passive: false } }] },
@@ -18,6 +18,12 @@ export const fiendProgression: SubclassProgression = {
 
 export const greatOldOneProgression: SubclassProgression = {
   classId: 'warlock', name: 'The Great Old One',
+  // NEEDS VERIFICATION — unlike most excluded subclasses (which are from
+  // later expansion books), The Great Old One IS a core 2014 PHB warlock
+  // patron, same as The Fiend. Excluded per the standard one-per-class SRD
+  // convention, but this is a genuine "which one did SRD 5.1 pick" question
+  // rather than a source-legitimacy one — worth an extra-careful check.
+  srd: false,
   entries: [
     { level: 1, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'awakened_mind', name: 'Awakened Mind', description: 'Telepathically communicate with any creature within 30 feet that you can see. No shared language needed. Creature can\'t respond unless it has telepathy.', source: { kind: 'subclass', refId: 'great_old_one' }, level: 1, effects: [], actions: [], choices: [], passive: true } }] },
     { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'entropic_ward', name: 'Entropic Ward', description: 'React to impose disadvantage on an attack roll against you. If it misses, gain advantage on your next attack against that creature this turn. Once per short or long rest.', source: { kind: 'subclass', refId: 'great_old_one' }, level: 6, effects: [], actions: [], choices: [], passive: false } }] },

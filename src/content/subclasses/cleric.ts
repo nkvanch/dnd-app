@@ -11,6 +11,7 @@ export type SubclassProgression = ClassProgression & { name: string };
 export const lifeDomainProgression: SubclassProgression = {
   classId: 'cleric',
   name: 'Life Domain',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 8, choices: [],
@@ -51,6 +52,7 @@ export const lifeDomainProgression: SubclassProgression = {
 export const lightDomainProgression: SubclassProgression = {
   classId: 'cleric',
   name: 'Light Domain',
+  srd: false,
   entries: [
     {
       level: 1, hpDie: 8, choices: [],

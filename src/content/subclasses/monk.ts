@@ -7,7 +7,7 @@ import { ClassProgression } from '../../engine/types';
 export type SubclassProgression = ClassProgression & { name: string };
 
 export const openHandProgression: SubclassProgression = {
-  classId: 'monk', name: 'Way of the Open Hand',
+  classId: 'monk', name: 'Way of the Open Hand', srd: true,
   entries: [
     { level: 3, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'open_hand_technique', name: 'Open Hand Technique', description: 'When you hit a creature with a Flurry of Blows, impose one effect: prone on DEX save, pushed up to 15 feet on STR save, or unable to take reactions until end of your next turn.', source: { kind: 'subclass', refId: 'open_hand' }, level: 3, effects: [], actions: [], choices: [], passive: true } }] },
     { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'wholeness_of_body', name: 'Wholeness of Body', description: 'Regain HP equal to three times your monk level as an action. Once per long rest.', source: { kind: 'subclass', refId: 'open_hand' }, level: 6, effects: [], actions: [], choices: [], passive: false } }] },
@@ -17,7 +17,7 @@ export const openHandProgression: SubclassProgression = {
 };
 
 export const shadowProgression: SubclassProgression = {
-  classId: 'monk', name: 'Way of Shadow',
+  classId: 'monk', name: 'Way of Shadow', srd: false,
   entries: [
     { level: 3, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'shadow_arts', name: 'Shadow Arts', description: 'Spend 2 ki to cast Darkness, Darkvision, Pass without Trace, or Silence without providing material components.', source: { kind: 'subclass', refId: 'shadow' }, level: 3, effects: [], actions: [], choices: [], passive: false } }] },
     { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'shadow_step', name: 'Shadow Step', description: 'While in dim light or darkness, teleport to an unoccupied space within 60 feet that is also dim light or darkness as a bonus action. Advantage on first melee attack after teleport.', source: { kind: 'subclass', refId: 'shadow' }, level: 6, effects: [], actions: [], choices: [], passive: false } }] },

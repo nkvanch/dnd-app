@@ -11,6 +11,7 @@ export type SubclassProgression = ClassProgression & { name: string };
 export const thiefProgression: SubclassProgression = {
   classId: 'rogue',
   name: 'Thief',
+  srd: true,
   entries: [
     {
       level: 3, hpDie: 8, choices: [],
@@ -45,6 +46,7 @@ export const thiefProgression: SubclassProgression = {
 export const assassinProgression: SubclassProgression = {
   classId: 'rogue',
   name: 'Assassin',
+  srd: false,
   entries: [
     {
       level: 3, hpDie: 8, choices: [],

@@ -570,6 +570,16 @@ export type LevelEntry = {
 export type ClassProgression = {
   classId: string;
   entries: LevelEntry[];
+  /**
+   * SRD 5.1 (CC-BY-4.0) legal status. All 12 core PHB classes are SRD-safe
+   * (SRD 5.1 includes the full class chassis, not just a stripped subset) —
+   * true for all of them. For SUBCLASSES (see SubclassProgression in
+   * src/content/subclasses/), the SRD includes exactly ONE subclass per
+   * class; all others are non-SRD and must be excluded from public builds.
+   * Same semantics as Spell.srd — undefined = not yet audited = unsafe.
+   * See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
+   */
+  srd?: boolean;
 };
 
 export type Grant = {

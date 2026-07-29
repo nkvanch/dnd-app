@@ -7,7 +7,7 @@ import { ClassProgression } from '../../engine/types';
 export type SubclassProgression = ClassProgression & { name: string };
 
 export const draconicBloodlineProgression: SubclassProgression = {
-  classId: 'sorcerer', name: 'Draconic Bloodline',
+  classId: 'sorcerer', name: 'Draconic Bloodline', srd: true,
   entries: [
     { level: 1, hpDie: 6, choices: [], grants: [{ kind: 'feature', value: { id: 'dragon_ancestor', name: 'Dragon Ancestor', description: 'Choose a type of dragon. Speak, read, and write Draconic. Advantage on Charisma checks with dragons.', source: { kind: 'subclass', refId: 'draconic_bloodline' }, level: 1, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'draconic_resilience', name: 'Draconic Resilience', description: 'HP maximum increases by 1 per sorcerer level. When not wearing armor, AC = 13 + DEX modifier.', source: { kind: 'subclass', refId: 'draconic_bloodline' }, level: 1, effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 13, condition: null }], actions: [], choices: [], passive: true } }] },
     { level: 6, hpDie: 6, choices: [], grants: [{ kind: 'feature', value: { id: 'elemental_affinity', name: 'Elemental Affinity', description: 'When you cast a spell of the damage type associated with your draconic ancestry, add your CHA modifier to one damage roll. Spend 1 sorcery point to gain resistance to that damage type for 1 hour.', source: { kind: 'subclass', refId: 'draconic_bloodline' }, level: 6, effects: [], actions: [], choices: [], passive: true } }] },
@@ -17,7 +17,7 @@ export const draconicBloodlineProgression: SubclassProgression = {
 };
 
 export const wildMagicProgression: SubclassProgression = {
-  classId: 'sorcerer', name: 'Wild Magic',
+  classId: 'sorcerer', name: 'Wild Magic', srd: false,
   entries: [
     { level: 1, hpDie: 6, choices: [], grants: [{ kind: 'feature', value: { id: 'wild_magic_surge', name: 'Wild Magic Surge', description: 'When you cast a sorcerer spell of 1st level or higher, the DM can have you roll a d20. On a 1, roll on the Wild Magic Surge table.', source: { kind: 'subclass', refId: 'wild_magic' }, level: 1, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'tides_of_chaos', name: 'Tides of Chaos', description: 'Gain advantage on one attack roll, ability check, or saving throw. Once used, the DM can cause a Wild Magic Surge before restoring this feature.', source: { kind: 'subclass', refId: 'wild_magic' }, level: 1, effects: [], actions: [], choices: [], passive: false } }] },
     { level: 6, hpDie: 6, choices: [], grants: [{ kind: 'feature', value: { id: 'bend_luck', name: 'Bend Luck', description: 'Spend 2 sorcery points as a reaction to add or subtract 1d4 from an attack roll, ability check, or saving throw of a creature you can see.', source: { kind: 'subclass', refId: 'wild_magic' }, level: 6, effects: [], actions: [], choices: [], passive: false } }] },

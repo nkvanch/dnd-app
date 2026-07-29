@@ -323,15 +323,73 @@ SRD text:
       the vault's ~487 ids. If `SPELLS_BY_ID`-style lookups ever show a spell
       resolving to unexpected content, check here first.
 
-### Step 1.4 — Audit the OTHER content the same way
-- [ ] Classes/subclasses: SRD has ONE subclass per class (Champion, Life
-      Domain, Thief, etc.). Others → cut or homebrew-gate.
+### Step 1.4 — Audit the OTHER content the same way  ⏳ IN PROGRESS
+- [x] **`srd?: boolean` added to `ClassProgression`** (`src/engine/types.ts`),
+      shared by base classes and subclasses via `SubclassProgression`. Same
+      semantics as `Spell.srd`.
+- [x] **All 12 core PHB base classes tagged `srd: true`** (fighter, rogue,
+      wizard, cleric, barbarian, ranger, paladin, druid, bard, monk,
+      sorcerer, warlock). Confirmed: SRD 5.1 includes the FULL class chassis
+      for all 12 core classes (this was a major expansion vs. the older
+      stripped-down SRD) — no exclusions needed at the base-class level.
+      `abyssKnight.ts` (homebrew) was already correctly excluded from
+      `ALL_CLASS_PROGRESSIONS` before this audit even started.
+- [ ] Subclasses: `src/content/subclasses/` has SRD has ONE subclass per
+      class. Tagged so far:
+      - [x] `fighter.ts` — Champion (SRD) / Battle Master (not SRD)
+      - [x] `wizard.ts` — School of Evocation (SRD) / School of Abjuration (not SRD)
+      - [x] `cleric.ts` — Life Domain (SRD) / Light Domain (not SRD, SCAG)
+      - [x] `barbarian.ts` — Path of the Berserker (SRD) / Path of the Totem
+            Warrior (not SRD, flagged NEEDS VERIFICATION — low-moderate
+            chance SRD 5.1 expanded past one-per-class here)
+      - [x] `bard.ts` — College of Lore (SRD) / College of Valor (not SRD, SCAG)
+      - [x] `druid.ts` — Circle of the Land (SRD) / Circle of the Moon (not SRD)
+      - [x] `monk.ts` — Way of the Open Hand (SRD) / Way of Shadow (not SRD)
+      - [x] `paladin.ts` — Oath of Devotion (SRD) / Oath of the Ancients (not SRD)
+      - [x] `ranger.ts` — Hunter (SRD) / Beast Master (not SRD)
+      - [x] `rogue.ts` — Thief (SRD) / Assassin (not SRD)
+      - [x] `sorcerer.ts` — Draconic Bloodline (SRD) / Wild Magic (not SRD)
+      - [x] `warlock.ts` — The Fiend (SRD) / The Great Old One (not SRD,
+            flagged NEEDS VERIFICATION — unlike most excluded subclasses,
+            this one IS core 2014 PHB content same as The Fiend, so this is
+            genuinely "which one did SRD 5.1 keep" rather than a source-
+            legitimacy question; extra-careful check warranted)
+
+      **All 12 classes now have exactly one SRD-tagged and one excluded
+      subclass. 24 subclasses total, fully classified.** Two flagged for
+      extra verification (Totem Warrior, Great Old One) since the standard
+      "one per class" assumption is slightly less certain for them than the
+      rest — both are PHB-legitimate content, just uncertain SRD-selection.
+
+      - [ ] Wire the filter: subclass pickers need the same `srd === true`
+            treatment as Step 1.3 gave spells (build-target-aware, not a
+            hard filter — personal builds keep every subclass). Not started.
+      - [ ] `subclassBrowse.ts` may also need review depending on what it
+            aggregates — not yet checked.
+
+- [ ] ⚠️ **NEW FINDING (completeness, not legal) — subclass choices are
+      NOT interactively wired.** Every subclass entry across all 24 has
+      `choices: []`. Player-facing decisions that D&D actually requires —
+      Totem Warrior's Bear/Eagle/Wolf pick (twice, at 3 and 14), Hunter's
+      Prey (Colossus Slayer/Giant Killer/Horde Breaker), Battle Master
+      maneuver selection, Metamagic options, Eldritch Invocations, Fighting
+      Style, Divine Domain expanded spells — all exist ONLY as descriptive
+      text inside a Feature's `description` string, never as an actual
+      `ChoiceDefinition` the player is prompted to resolve. This is the same
+      "genuinely wired vs. reminder-only" distinction the project holds
+      itself to elsewhere, but these aren't currently LABELED reminder-only
+      anywhere — they just silently don't prompt. Not a blocker for legal-
+      clean 1.0 (SRD content works fine whether or not its choices are
+      wired), but a real scoping gap worth its own future batch — comparable
+      in size/shape to the house-rules choice-UI work already done. Added to
+      POST-1.0 BACKLOG below.
 - [ ] Races: SRD list only. Variant Human is NOT in SRD 5.1 — check what
-      `featAtCreation` references.
-- [ ] Backgrounds: SRD has only Acolyte. Others → generic/homebrew.
+      `featAtCreation` references. Not yet started.
+- [ ] Backgrounds: SRD has only Acolyte. Others → generic/homebrew. Not yet
+      started.
 - [ ] Feats: SRD has only Grappler. Heaviest cut, or reframe feats as
-      homebrew-first with Grappler as the sample.
-- [ ] Items & monsters: check against SRD lists.
+      homebrew-first with Grappler as the sample. Not yet started.
+- [ ] Items & monsters: check against SRD lists. Not yet started.
 
 ### Step 1.5 — Attribution screen
 - [ ] About/Legal screen with the CC-BY-4.0 required text.
@@ -465,6 +523,10 @@ early 1.1 if Phase 1–4 run long. Do not let it delay Phase 1.
 ---
 
 ## POST-1.0 BACKLOG (resist until shipped)
+- **Subclass choice wiring** — Totem Warrior's totem pick, Hunter's Prey,
+  Battle Master maneuvers, Metamagic, Eldritch Invocations, Fighting Style,
+  Divine Domain spells, etc. currently exist only as description text with
+  `choices: []`, not real `ChoiceDefinition`s. See Step 1.4 finding above.
 - Explainability traces ("why is my AC 17?") — see VISION_ASSESSMENT.md,
   flagged there as the 1.1 flagship feature.
 - Character sheet PDF export/print

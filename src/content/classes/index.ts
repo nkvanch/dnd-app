@@ -69,6 +69,7 @@ const rogueSkillChoice: ChoiceDefinition = {
 
 export const rogueProgression: ClassProgression = {
   classId: 'rogue',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 8, choices: [
@@ -136,6 +137,7 @@ const wizardSkillChoice: ChoiceDefinition = {
 
 export const wizardProgression: ClassProgression = {
   classId: 'wizard',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 6, choices: [
@@ -193,6 +195,7 @@ const clericSkillChoice: ChoiceDefinition = {
 
 export const clericProgression: ClassProgression = {
   classId: 'cleric',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 8, choices: [
@@ -259,6 +262,7 @@ const barbarianSkillChoice: ChoiceDefinition = {
 
 export const barbarianProgression: ClassProgression = {
   classId: 'barbarian',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 12, choices: [
@@ -336,6 +340,7 @@ const rangerSkillChoice: ChoiceDefinition = {
 
 export const rangerProgression: ClassProgression = {
   classId: 'ranger',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 10, choices: [
@@ -393,6 +398,7 @@ const paladinSkillChoice: ChoiceDefinition = {
 
 export const paladinProgression: ClassProgression = {
   classId: 'paladin',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 10, choices: [
@@ -459,6 +465,7 @@ const druidSkillChoice: ChoiceDefinition = {
 
 export const druidProgression: ClassProgression = {
   classId: 'druid',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 8, choices: [
@@ -498,6 +505,7 @@ export const druidProgression: ClassProgression = {
 
 export const bardProgression: ClassProgression = {
   classId: 'bard',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 8,
@@ -566,6 +574,7 @@ const monkSkillChoice: ChoiceDefinition = {
 
 export const monkProgression: ClassProgression = {
   classId: 'monk',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 8, choices: [
@@ -611,6 +620,7 @@ const sorcererSkillChoice: ChoiceDefinition = {
 
 export const sorcererProgression: ClassProgression = {
   classId: 'sorcerer',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 6, choices: [
@@ -662,6 +672,7 @@ const warlockSkillChoice: ChoiceDefinition = {
 
 export const warlockProgression: ClassProgression = {
   classId: 'warlock',
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 8, choices: [

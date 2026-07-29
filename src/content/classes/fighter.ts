@@ -65,6 +65,7 @@ const fighterEquipChoices: ChoiceDefinition[] = [
 
 export const fighterProgression: ClassProgression = {
   classId: "fighter",
+  srd: true,
   entries: [
     {
       level: 1, hpDie: 10, choices: [fighterSkillChoice, ...fighterEquipChoices],

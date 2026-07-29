@@ -7,7 +7,7 @@ import { ClassProgression } from '../../engine/types';
 export type SubclassProgression = ClassProgression & { name: string };
 
 export const devotionProgression: SubclassProgression = {
-  classId: 'paladin', name: 'Oath of Devotion',
+  classId: 'paladin', name: 'Oath of Devotion', srd: true,
   entries: [
     { level: 3, hpDie: 10, choices: [], grants: [{ kind: 'feature', value: { id: 'sacred_weapon', name: 'Channel Divinity: Sacred Weapon', description: 'As an action, imbue one weapon with positive energy. For 1 minute, add your CHA modifier to attack rolls. The weapon emits bright light in a 20-foot radius.', source: { kind: 'subclass', refId: 'devotion' }, level: 3, effects: [], actions: [], choices: [], passive: false } }, { kind: 'feature', value: { id: 'turn_the_unholy', name: 'Channel Divinity: Turn the Unholy', description: 'As an action, present your holy symbol. Fiends and undead within 30 feet must make a WIS save or be turned for 1 minute.', source: { kind: 'subclass', refId: 'devotion' }, level: 3, effects: [], actions: [], choices: [], passive: false } }] },
     { level: 7, hpDie: 10, choices: [], grants: [{ kind: 'feature', value: { id: 'aura_of_devotion', name: 'Aura of Devotion', description: 'You and friendly creatures within 10 feet (30 feet at L18) can\'t be charmed while you are conscious.', source: { kind: 'subclass', refId: 'devotion' }, level: 7, effects: [], actions: [], choices: [], passive: true } }] },
@@ -17,7 +17,7 @@ export const devotionProgression: SubclassProgression = {
 };
 
 export const ancientsProgression: SubclassProgression = {
-  classId: 'paladin', name: 'Oath of the Ancients',
+  classId: 'paladin', name: 'Oath of the Ancients', srd: false,
   entries: [
     { level: 3, hpDie: 10, choices: [], grants: [{ kind: 'feature', value: { id: 'natures_wrath', name: "Channel Divinity: Nature's Wrath", description: 'Use your action to conjure vines. A creature within 10 feet must succeed on a STR or DEX save or be restrained until the vines are destroyed (AC 10, 10 HP).', source: { kind: 'subclass', refId: 'ancients' }, level: 3, effects: [], actions: [], choices: [], passive: false } }, { kind: 'feature', value: { id: 'turn_the_faithless', name: 'Channel Divinity: Turn the Faithless', description: 'Fey and fiends within 30 feet must succeed on a WIS save or be turned for 1 minute.', source: { kind: 'subclass', refId: 'ancients' }, level: 3, effects: [], actions: [], choices: [], passive: false } }] },
     { level: 7, hpDie: 10, choices: [], grants: [{ kind: 'feature', value: { id: 'aura_of_warding', name: 'Aura of Warding', description: 'Resistance to spell damage for you and friendly creatures within 10 feet while conscious.', source: { kind: 'subclass', refId: 'ancients' }, level: 7, effects: [], actions: [], choices: [], passive: true } }] },

@@ -288,13 +288,40 @@ SRD text:
       during the level 4 pass. The rename list may grow further as later
       levels are read; treat the original 5 as a floor, not a ceiling.
 
-### Step 1.3 — Filter non-SRD from the public build
-- [ ] `src/content/spells/index.ts`: export `ALL_SPELLS` filtered to
-      `srd === true` for anything built for distribution.
+### Step 1.3 — Filter non-SRD from the public build  ✅ COMPLETE
+- [x] **Design decision (deviates from the original plan, deliberately):**
+      the original wording ("export ALL_SPELLS filtered to srd === true for
+      anything built for distribution") would have hard-filtered EVERY
+      build, including the one Nick actively uses at his own table with
+      non-SRD content — that would have been a real functionality
+      regression, not a legal fix. Implemented as a **build-target-aware
+      filter** instead:
+      - `src/content/spells/index.ts` now imports `ALL_VAULT_SPELLS` from
+        `generated.ts` (previously NOT WIRED IN AT ALL — the entire Step 1.1
+        audit had zero effect on the running app until this step).
+      - New `FULL_SPELL_LIBRARY` export: every spell, unfiltered (44 inline
+        originals + 146 hand-authored + 487 vault-sourced = 677 total
+        entries feeding in, before dedup).
+      - New `EXPO_PUBLIC_SRD_ONLY` env var, read via `process.env` at
+        runtime. `eas.json`'s `production` build profile now sets it to
+        `"true"`; `development` and `preview` profiles leave it unset.
+      - `ALL_SPELLS` (the export everything else in the app already
+        imports) = `FULL_SPELL_LIBRARY` unfiltered when `SRD_ONLY` is
+        false/unset, or filtered to `srd === true` when true. Personal/dev/
+        preview builds — including everything Nick runs today — are
+        byte-for-byte unaffected. Only the eventual Play Store production
+        build filters.
 - [ ] Move original homebrew (Abyssal Claim, Abyss Knight content, etc.) out
       of the "official" spell list into an example-homebrew content pack —
       not a legal issue, but a content-honesty issue (don't present personal
-      homebrew as official app content).
+      homebrew as official app content). Still pending.
+- [ ] **Known unverified risk**: `FULL_SPELL_LIBRARY` concatenates the 44
+      inline originals, 146 hand-authored, and 487 vault-sourced spells
+      without an explicit id-collision check. The hand-authored files were
+      built specifically as "spells not yet in index.ts", so collisions are
+      believed unlikely, but this hasn't been exhaustively verified against
+      the vault's ~487 ids. If `SPELLS_BY_ID`-style lookups ever show a spell
+      resolving to unexpected content, check here first.
 
 ### Step 1.4 — Audit the OTHER content the same way
 - [ ] Classes/subclasses: SRD has ONE subclass per class (Champion, Life

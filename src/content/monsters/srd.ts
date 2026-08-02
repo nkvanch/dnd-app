@@ -5,7 +5,7 @@
 import { MonsterTemplate } from './types';
 
 export const monsterGoblin: MonsterTemplate = {
-  id: 'goblin', name: 'Goblin', cr: 0.25,
+  id: 'goblin', name: 'Goblin', cr: 0.25, srd: true,
   size: 'small', type: 'humanoid (goblinoid)', alignment: 'neutral evil',
   stats: { str: 8, dex: 14, con: 10, int: 10, wis: 8, cha: 8 },
   hp: { dice: '2d6', average: 7 },
@@ -42,7 +42,7 @@ export const monsterGoblin: MonsterTemplate = {
 };
 
 export const monsterOrc: MonsterTemplate = {
-  id: 'orc', name: 'Orc', cr: 0.5,
+  id: 'orc', name: 'Orc', cr: 0.5, srd: true,
   size: 'medium', type: 'humanoid (orc)', alignment: 'chaotic evil',
   stats: { str: 16, dex: 12, con: 16, int: 7, wis: 11, cha: 10 },
   hp: { dice: '2d8+6', average: 15 },
@@ -71,7 +71,7 @@ export const monsterOrc: MonsterTemplate = {
 };
 
 export const monsterSkeleton: MonsterTemplate = {
-  id: 'skeleton', name: 'Skeleton', cr: 0.25,
+  id: 'skeleton', name: 'Skeleton', cr: 0.25, srd: true,
   size: 'medium', type: 'undead', alignment: 'lawful evil',
   stats: { str: 10, dex: 14, con: 15, int: 6, wis: 8, cha: 5 },
   hp: { dice: '2d8+4', average: 13 },
@@ -102,7 +102,7 @@ export const monsterSkeleton: MonsterTemplate = {
 };
 
 export const monsterZombie: MonsterTemplate = {
-  id: 'zombie', name: 'Zombie', cr: 0.25,
+  id: 'zombie', name: 'Zombie', cr: 0.25, srd: true,
   size: 'medium', type: 'undead', alignment: 'neutral evil',
   stats: { str: 13, dex: 6, con: 16, int: 3, wis: 6, cha: 5 },
   hp: { dice: '3d8+9', average: 22 },
@@ -131,7 +131,7 @@ export const monsterZombie: MonsterTemplate = {
 };
 
 export const monsterWolf: MonsterTemplate = {
-  id: 'wolf', name: 'Wolf', cr: 0.25,
+  id: 'wolf', name: 'Wolf', cr: 0.25, srd: true,
   size: 'medium', type: 'beast', alignment: 'unaligned',
   stats: { str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6 },
   hp: { dice: '2d8+2', average: 11 },
@@ -160,7 +160,7 @@ export const monsterWolf: MonsterTemplate = {
 };
 
 export const monsterGiantSpider: MonsterTemplate = {
-  id: 'giant_spider', name: 'Giant Spider', cr: 1,
+  id: 'giant_spider', name: 'Giant Spider', cr: 1, srd: true,
   size: 'large', type: 'beast', alignment: 'unaligned',
   stats: { str: 14, dex: 16, con: 12, int: 2, wis: 11, cha: 4 },
   hp: { dice: '4d10+4', average: 26 },
@@ -183,7 +183,7 @@ export const monsterGiantSpider: MonsterTemplate = {
 };
 
 export const monsterBandit: MonsterTemplate = {
-  id: 'bandit', name: 'Bandit', cr: 0.125,
+  id: 'bandit', name: 'Bandit', cr: 0.125, srd: true,
   size: 'medium', type: 'humanoid (any race)', alignment: 'any non-lawful',
   stats: { str: 11, dex: 12, con: 12, int: 10, wis: 10, cha: 10 },
   hp: { dice: '2d8+2', average: 11 },
@@ -206,7 +206,7 @@ export const monsterBandit: MonsterTemplate = {
 };
 
 export const monsterGuard: MonsterTemplate = {
-  id: 'guard', name: 'Guard', cr: 0.125,
+  id: 'guard', name: 'Guard', cr: 0.125, srd: true,
   size: 'medium', type: 'humanoid (any race)', alignment: 'any alignment',
   stats: { str: 13, dex: 12, con: 12, int: 10, wis: 11, cha: 10 },
   hp: { dice: '2d8+2', average: 11 },
@@ -229,7 +229,7 @@ export const monsterGuard: MonsterTemplate = {
 };
 
 export const monsterOgre: MonsterTemplate = {
-  id: 'ogre', name: 'Ogre', cr: 2,
+  id: 'ogre', name: 'Ogre', cr: 2, srd: true,
   size: 'large', type: 'giant', alignment: 'chaotic evil',
   stats: { str: 19, dex: 8, con: 16, int: 5, wis: 7, cha: 7 },
   hp: { dice: '7d10+21', average: 59 },
@@ -260,7 +260,7 @@ export const monsterOgre: MonsterTemplate = {
 };
 
 export const monsterTroll: MonsterTemplate = {
-  id: 'troll', name: 'Troll', cr: 5,
+  id: 'troll', name: 'Troll', cr: 5, srd: true,
   size: 'large', type: 'giant', alignment: 'chaotic evil',
   stats: { str: 18, dex: 13, con: 20, int: 7, wis: 9, cha: 7 },
   hp: { dice: '8d10+40', average: 84 },
@@ -289,7 +289,7 @@ export const monsterTroll: MonsterTemplate = {
 };
 
 export const monsterYoungRedDragon: MonsterTemplate = {
-  id: 'young_red_dragon', name: 'Young Red Dragon', cr: 10,
+  id: 'young_red_dragon', name: 'Young Red Dragon', cr: 10, srd: true,
   size: 'large', type: 'dragon', alignment: 'chaotic evil',
   stats: { str: 23, dex: 10, con: 21, int: 14, wis: 11, cha: 19 },
   hp: { dice: '17d10+85', average: 178 },
@@ -320,7 +320,7 @@ export const monsterYoungRedDragon: MonsterTemplate = {
 };
 
 export const monsterLich: MonsterTemplate = {
-  id: 'lich', name: 'Lich', cr: 21,
+  id: 'lich', name: 'Lich', cr: 21, srd: true,
   size: 'medium', type: 'undead', alignment: 'any evil',
   stats: { str: 11, dex: 16, con: 16, int: 20, wis: 14, cha: 16 },
   hp: { dice: '18d8+54', average: 135 },

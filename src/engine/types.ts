@@ -141,6 +141,14 @@ export type Item = {
   cost:       string;
   properties: string[];
   features:   Feature[];
+  /**
+   * SRD 5.1 legal status. Standard PHB weapons/armor/gear (Dagger, Chain
+   * Mail, Explorer's Pack, etc.) carry no Product Identity naming risk at
+   * all — confidently true. Named magic items need individual review
+   * (Product Identity concerns apply the same way as spells). Same
+   * semantics as Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
+   */
+  srd?:       boolean;
 };
 
 /**
@@ -178,6 +186,22 @@ export type Feat = {
   skillChoice?: {
     picks: { id: string; label: string; mode: 'proficiency' | 'expertise'; from: 'any' | 'proficient' }[];
   };
+  /**
+   * SRD 5.1 legal status. `source` already labels the real sourcebook
+   * (PHB/XGE/TCE/FTD/GG) for every feat in this codebase — see
+   * src/content/feats/index.ts, where this is computed automatically from
+   * that string rather than tagged per-feat. HIGH-STAKES JUDGMENT CALL:
+   * the older/stricter SRD convention says only Grappler was ever public;
+   * but the pattern confirmed repeatedly elsewhere in this audit (near-full
+   * spell list, full class chassis, full race/background rosters) suggests
+   * SRD 5.1 may include all 42 PHB feats, not just Grappler. Tagged
+   * optimistically (all PHB feats = true) following that evidenced pattern,
+   * but this is explicitly the single highest-stakes unverified assumption
+   * in the whole legal audit (42x exposure difference if wrong) — confirm
+   * against the real SRD 5.1 text before any public build ships.
+   * See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
+   */
+  srd?: boolean;
 };
 
 export type ContentDB = {

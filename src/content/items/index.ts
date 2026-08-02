@@ -714,7 +714,18 @@ export const itemBurglarsPack: Item = {
  * Hand-authored core items. These have mechanically-correct data (proper AC
  * formulas, ability effects, weights, the special homebrew items) and take
  * precedence over the auto-imported catalog on id collision.
+ *
+ * SRD tagging: standard PHB equipment (weapons/armor/gear/packs) carries no
+ * Product Identity risk at all, so it's tagged true in bulk below. The three
+ * named magic items mixed in here (+1 Life-Drinking Greatsword, Rope of
+ * Mending, Cast-Off Breastplate) are Nick's own original homebrew — not WotC
+ * content, no legal risk, but shouldn't be presented as "official" content,
+ * same treatment as the Abyssal Claim spell and Skeleton race.
  */
+const HOMEBREW_ITEM_IDS = new Set([
+  'greatsword_life_drinking', 'rope_of_mending', 'cast_off_breastplate',
+]);
+
 const CORE_ITEMS: Item[] = [
   // Simple melee
   itemDagger, itemHandaxe, itemClub, itemGreatclub, itemLightHammer, itemSickle,
@@ -743,7 +754,7 @@ const CORE_ITEMS: Item[] = [
   // Packs
   itemExplorersPack, itemDungeoneersPack, itemPriestsPack, itemScholarsPack,
   itemDiplomatsPack, itemEntertainersPack, itemBurglarsPack,
-];
+].map(item => ({ ...item, srd: !HOMEBREW_ITEM_IDS.has(item.id) }));
 
 /**
  * The full item catalog: hand-authored core + auto-imported catalog

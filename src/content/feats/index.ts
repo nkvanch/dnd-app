@@ -41,7 +41,12 @@ function feat(
     choices: [],
     passive: true,
   };
-  return { id, name, prerequisite, description, source, feature, abilityChoice, skillChoice };
+  // SRD status computed automatically from the source constant passed in —
+  // see the HIGH-STAKES JUDGMENT CALL note on Feat.srd in engine/types.ts.
+  // Only PHB-sourced feats are tagged safe; XGE/TCE/FTD/GG are all later
+  // expansion books with no SRD ambiguity — confidently excluded.
+  const srd = source === PHB;
+  return { id, name, prerequisite, description, source, feature, abilityChoice, skillChoice, srd };
 }
 
 // Ability-option shorthands for choice feats.

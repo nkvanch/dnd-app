@@ -75,6 +75,35 @@ def slugify(name):
 DAMAGE_RE = re.compile(r'(\d+d\d+|\d+)\s+(\w+)', re.I)
 MAGIC_RE = re.compile(r'\+(\d)\b')
 
+# ── SRD 5.1 legal classification ────────────────────────────────────────────────
+# See docs/ROADMAP_1.0.md Phase 1 Step 1.4 for full context. Mirrors the same
+# safety-first approach used in scripts/convert-spells.mjs for spells:
+#   - Regex-detect Product Identity naming (named-wizard-style items, e.g.
+#     "Ring of Winter" isn't PI, but "Draco's Amulet" would be) -> srd: False.
+#   - Everything else stays UNCLASSIFIED (no 'srd' key at all) -> the Item
+#     type's own contract treats undefined as "not yet audited, unsafe for
+#     public builds". This is deliberately conservative: unlike spells, this
+#     file has no per-item sourcebook label to lean on yet, and magic items
+#     are a much higher Product-Identity-density category than mundane gear.
+# NOT YET DONE (flagged honestly, not attempted this pass): a real ALLOW list
+# of confirmed-SRD generic magic items (e.g. Bag of Holding, Potion of
+# Healing, +1 Weapon, Ring of Protection are classic SRD-legal items) would
+# need the same read-and-classify treatment the spell audit got, across
+# what's likely several hundred items. Left for a dedicated future session.
+PI_NAME_RE = re.compile(
+    r"\b(Tasha|Melf|Bigby|Otiluke|Leomund|Otto|Rary|Evard|Nystul|Drawmij|"
+    r"Mordenkainen|Tenser|Aganazzar|Snilloc|Abi-Dalzim|Maximilian)('s)?\b",
+    re.I,
+)
+
+
+def compute_srd(name):
+    """Returns False if PI-named, or None (unclassified) otherwise. Never
+    returns True yet — no ALLOW list exists for items (see comment above)."""
+    if PI_NAME_RE.search(name):
+        return False
+    return None
+
 
 def parse_block(b):
     name = b['name']
@@ -161,8 +190,12 @@ def parse_block(b):
             'level': None, 'effects': [], 'actions': [], 'choices': [], 'passive': True,
         })
 
-    return {'id': item_id, 'name': name, 'weight': weight,
-            'cost': '\u2014', 'properties': props, 'features': features}
+    result = {'id': item_id, 'name': name, 'weight': weight,
+              'cost': '\u2014', 'properties': props, 'features': features}
+    srd = compute_srd(name)
+    if srd is not None:
+        result['srd'] = srd
+    return result
 
 
 items, ids = [], set()

@@ -33,4 +33,12 @@ export type MonsterTemplate = {
   languages:    string[];
   legendaryActions?: number;   // number of legendary actions per round
   lairActions?:  Feature[];    // lair action features
+  /**
+   * SRD 5.1 legal status. Monster STAT BLOCKS (numbers/abilities, as opposed
+   * to unique named characters/villains) are explicitly covered by the SRD
+   * CC-BY license. This file (srd.ts) is already scoped to generic, classic
+   * creatures with no Product Identity naming — all confidently true. Same
+   * semantics as Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
+   */
+  srd?: boolean;
 };

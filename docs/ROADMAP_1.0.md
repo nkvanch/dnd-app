@@ -487,21 +487,62 @@ SRD text:
             much smaller task, a rushed first pass here was deliberately
             avoided rather than risking a bad classification on the
             highest-density PI content in the app.
-            - [x] Added the same safety scaffolding `convert-spells.mjs` got:
-                  `parse_items.py` now has a `PI_NAME_RE` regex (reusing the
-                  same named-wizard list) and a `compute_srd()` function.
-                  Currently only ever returns `False` (PI match) or omits
-                  the field entirely (unclassified/unsafe-by-default) — no
-                  ALLOW list exists yet for items, unlike spells/feats.
-            - [ ] **NEXT (dedicated future session):** read through
-                  `importedItems.ts` in chunks (same `head`/`tail`-based
-                  approach that worked for `generated.ts`), build a real
-                  ALLOW list of confirmed-SRD generic magic items (Bag of
-                  Holding, Potion of Healing, +1/+2/+3 Weapon/Armor, Ring of
-                  Protection, and similar classic SRD-legal items are
-                  strong candidates), and extend the DENY list beyond the
-                  bare PI regex. Expect this to take multiple passes, same
-                  as spells did.
+            - [x] **First real classification pass** (this session): read the
+                  first ~3000 lines (~120 items, alphabetically A through
+                  early-C) directly. Findings:
+                  - Confirms the hoped-for pattern: almost everything seen is
+                    real, published D&D magic items with GENERIC (non-PI)
+                    naming — Bag of Holding, the full Belt of [Tier] Giant
+                    Strength family (6 tiers), Boots of Elvenkind/Speed/
+                    Striding and Springing, Bracers of Archery/Defense, the
+                    complete Arrow of [Creature Type] Slaying family (14
+                    variants), Adamantine armor family (8 variants). None of
+                    these have Product Identity naming issues.
+                  - Built real `MUNDANE_ALLOW_NAMES` (29 items: tools,
+                    consumables, adventuring gear) and `MAGIC_ALLOW_NAMES`
+                    (56 items: classic generic-named magic items) sets in
+                    `parse_items.py`, plus a `DENY_NAMES` set.
+                  - ⚠️ **Found a genuine content-quality issue**: "Antimatter
+                    Rifle" is mixed into the vault's item catalog — not real
+                    D&D content at all (sci-fi crossover homebrew). Added to
+                    `DENY_NAMES`. Same pattern as Abyssal Claim/Skeleton
+                    race/the 3 homebrew items in index.ts — the vault mixes
+                    non-official content into what's presented as the
+                    "core"/official catalog. Worth a dedicated cleanup pass
+                    eventually, not attempted here.
+                  - 3 items flagged `NEEDS VERIFICATION` and deliberately
+                    left off the allow list: "Apparatus of the Crab" (real
+                    DMG item is "Apparatus of the Kwalish" — different name,
+                    possibly a modified/homebrew variant), "Cap of Water
+                    Breathing" and "Boots, Flying" (real item is "Winged
+                    Boots" — name mismatch) — same conservative treatment as
+                    ambiguous spells throughout the audit.
+                  - **Not yet run**: `python scripts/parse_items.py` needs to
+                    be re-run to regenerate `importedItems.ts` with these
+                    classifications applied — same workflow as
+                    `convert-spells.mjs`. This requires the vault path to be
+                    correct (check `DEFAULT_SRC` in the script — it may have
+                    the same stale `C:\Users\nk\...` issue that caused the
+                    earlier spell-file incident; verify before running).
+                  - **Scope remaining**: this was ~120 of what's likely
+                    several hundred to 1000+ items (541KB total, alphabetical
+                    A–C covered so far). Continue in the same chunked-read
+                    rhythm as the spell audit across future sessions.
+            - [x] **Confirmed run**: `DEFAULT_SRC` was already correctly
+                  pointed at the D: drive path (no fix needed, unlike
+                  convert-spells.mjs). Also proactively added the same
+                  catastrophic-overwrite safety guard to `parse_items.py`
+                  before ever running it, given the earlier incident.
+                  Result: **835 unique items total** (841 parsed blocks, 6
+                  dropped as duplicate ids). Confirms the file's true scale
+                  — 85 core items (index.ts) is a small fraction of the full
+                  835 + 85 = 920-item combined catalog.
+            - [ ] **NEXT:** continue reading alphabetically from "Censer"
+                  onward (same chunked head/tail read approach), extending
+                  `MUNDANE_ALLOW_NAMES`/`MAGIC_ALLOW_NAMES`/`DENY_NAMES`
+                  in `parse_items.py`, re-running and confirming the count
+                  after each batch — same rhythm as the 6-pass spell audit.
+                  835 items will likely take several more passes.
       - [ ] Filter wiring: none of spells/subclasses/races/backgrounds/feats/
             monsters/items have their `srd === true` filter actually wired
             into pickers yet EXCEPT spells (Step 1.3). Worth doing as one

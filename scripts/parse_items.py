@@ -96,10 +96,85 @@ PI_NAME_RE = re.compile(
     re.I,
 )
 
+# Confirmed non-D&D / out-of-genre content found while reading the vault
+# directly (not a Product Identity issue — just not real D&D material at all,
+# shouldn't be presented as official content either way).
+DENY_NAMES = {
+    'Antimatter Rifle',
+}
+
+# Mundane, non-magical gear — directly verified while reading the vault.
+# Zero Product Identity risk regardless of magic-item SRD questions; this is
+# the same equipment-table content already confirmed safe in index.ts.
+MUNDANE_ALLOW_NAMES = {
+    'Abacus', "Acid (Vial)", "Alchemist's Fire", "Alchemist's Supplies",
+    'Amulet', 'Animal Feed (Per Day)', 'Antitoxin', 'Backpack', 'Bagpipes',
+    'Ball Bearings', 'Barrel', 'Basic Poison', 'Basket', 'Bedroll', 'Bell',
+    'Blanket', 'Block and Tackle', 'Blowgun Needles', 'Bolts', 'Book',
+    'Bottle', "Brewer's Supplies", 'Bucket', "Burglar's Key",
+    'Burnt Othur Fumes', "Calligrapher's Supplies", 'Candle',
+    "Carpenter's Tools", 'Carrion Crawler Mucus', "Cartographer's Tools",
+    'Case, Crossbow Bolt', 'Case, Map or Scroll',
+}
+
+# Classic GENERIC DMG magic items — directly verified while reading the vault.
+# These have no Product Identity naming (named by function/effect, not by a
+# named wizard) and match the generous-inclusion pattern confirmed repeatedly
+# elsewhere in this audit (spells/classes/races/backgrounds). Still a judgment
+# call, same caveat as everywhere else in the audit: verify against the real
+# SRD 5.1 text before a public build ships.
+MAGIC_ALLOW_NAMES = {
+    'Adamantine Armor', 'Adamantine Breastplate', 'Adamantine Chain Mail',
+    'Adamantine Chain Shirt', 'Adamantine Half Plate Armor',
+    'Adamantine Plate Armor', 'Adamantine Ring Mail', 'Adamantine Scale Mail',
+    'Adamantine Splint Armor', 'Amulet of Health',
+    'Amulet of Proof Against Detection and Location', 'Amulet of the Planes',
+    'Animated Shield', 'Armor of Invulnerability',
+    'Armor of Vulnerability', 'Arrow +1', 'Arrow +2', 'Arrow +3',
+    'Arrow of Aberration Slaying', 'Arrow of Beast Slaying',
+    'Arrow of Celestial Slaying', 'Arrow of Construct Slaying',
+    'Arrow of Dragon Slaying', 'Arrow of Elemental Slaying',
+    'Arrow of Fey Slaying', 'Arrow of Fiend Slaying', 'Arrow of Giant Slaying',
+    'Arrow of Humanoid Slaying', 'Arrow of Monstrosity Slaying',
+    'Arrow of Ooze Slaying', 'Arrow of Plant Slaying', 'Arrow of Undead Slaying',
+    'Bag of Beans', 'Bag of Devouring', 'Bag of Holding', 'Bag of Tricks',
+    'Battleaxe +1', 'Battleaxe +2', 'Battleaxe +3', 'Battleaxe of Warning',
+    'Bead of Force', 'Bead of Nourishment',
+    'Belt of Hill Giant Strength', 'Belt of Frost Giant Strength',
+    'Belt of Stone Giant Strength', 'Belt of Fire Giant Strength',
+    'Belt of Cloud Giant Strength', 'Belt of Storm Giant Strength',
+    'Belt of Dwarvenkind', 'Berserker Axe',
+    'Black Dragon Scale Mail', 'Blue Dragon Scale Mail',
+    'Blowgun +1', 'Blowgun +2', 'Blowgun +3', 'Blowgun of Warning',
+    'Blue Sapphire Elemental Gem', 'Boots of Elvenkind', 'Boots of Levitation',
+    'Boots of Speed', 'Boots of Striding and Springing',
+    'Boots of the Winterlands', 'Boots of False Tracks',
+    'Bowl of Commanding Water Elementals', 'Bracers of Archery',
+    'Bracers of Defense', 'Brazier of Commanding Fire Elementals',
+    'Breastplate +1', 'Breastplate +2', 'Breastplate +3',
+    'Breastplate Armor of Resistance', 'Cape of the Mountebank',
+    'Carpet of Flying', 'Censer of Controlling Air Elementals',
+    'Chain Mail +1', 'Chain Mail +2', 'Chain Mail +3',
+}
+
+# NEEDS VERIFICATION — real DMG item names differ slightly from the vault's
+# versions and might be renamed/modified variants rather than exact SRD text.
+# Left OFF the allow list (safe default) pending a real check:
+#   'Apparatus of the Crab'   (real item: "Apparatus of the Kwalish")
+#   'Cap of Water Breathing'  (uncertain if this matches the real item name)
+#   'Boots, Flying'           (real item: "Winged Boots" — different name entirely)
+
 
 def compute_srd(name):
-    """Returns False if PI-named, or None (unclassified) otherwise. Never
-    returns True yet — no ALLOW list exists for items (see comment above)."""
+    """Three-tier safety-first classification, same pattern as
+    convert-spells.mjs: explicit DENY/ALLOW first, PI regex next, otherwise
+    unclassified (None -> key omitted -> treated as unsafe by the Item type's
+    own contract). Most of this ~541KB file has NOT been read yet — see
+    docs/ROADMAP_1.0.md Phase 1 Step 1.4 for progress tracking."""
+    if name in DENY_NAMES:
+        return False
+    if name in MUNDANE_ALLOW_NAMES or name in MAGIC_ALLOW_NAMES:
+        return True
     if PI_NAME_RE.search(name):
         return False
     return None
@@ -241,6 +316,29 @@ out.append('];')
 out.append('')
 
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
+
+# Safety guard — same incident-driven fix already applied to
+# scripts/convert-spells.mjs. If the source markdown is missing/empty/moved,
+# 'items' would be near-empty and this script would otherwise silently
+# overwrite the real ~541KB importedItems.ts with almost nothing. Refuse to
+# write if the result is drastically smaller than what's already on disk.
+previous_count = 0
+if os.path.exists(OUT):
+    with open(OUT, encoding='utf-8') as f:
+        existing = f.read()
+    m = re.search(r'IMPORTED_ITEMS:\s*Item\[\]\s*=\s*\[', existing)
+    if m:
+        previous_count = existing.count('"id":')
+
+if previous_count > 20 and len(items) < previous_count * 0.5:
+    print(
+        f'\nREFUSING TO WRITE: parsed only {len(items)} items, but the '
+        f'existing file has approximately {previous_count}. This usually '
+        f'means SRC ("{SRC}") is wrong or the vault moved. '
+        f'importedItems.ts was NOT modified.'
+    )
+    sys.exit(1)
+
 with open(OUT, 'w', encoding='utf-8') as f:
     f.write('\n'.join(out))
 

@@ -7,6 +7,7 @@ import { Race, Subrace } from '../../engine/types';
 export const raceHuman: Race = {
   id: 'human',
   name: 'Human',
+  srd: true,
   features: [
     {
       id: 'human_asi',
@@ -36,6 +37,7 @@ export const raceHuman: Race = {
 export const raceElf: Race = {
   id: 'elf',
   name: 'Elf',
+  srd: true,
   features: [
     {
       id: 'elf_asi',
@@ -85,7 +87,7 @@ export const raceElf: Race = {
   ],
   subraces: [
     {
-      id: 'high_elf', name: 'High Elf', parentId: 'elf',
+      id: 'high_elf', name: 'High Elf', parentId: 'elf', srd: true,
       features: [
         {
           id: 'high_elf_asi',
@@ -105,7 +107,7 @@ export const raceElf: Race = {
       ],
     },
     {
-      id: 'wood_elf', name: 'Wood Elf', parentId: 'elf',
+      id: 'wood_elf', name: 'Wood Elf', parentId: 'elf', srd: true,
       features: [
         {
           id: 'wood_elf_asi',
@@ -133,7 +135,7 @@ export const raceElf: Race = {
       ],
     },
     {
-      id: 'drow', name: 'Dark Elf (Drow)', parentId: 'elf',
+      id: 'drow', name: 'Dark Elf (Drow)', parentId: 'elf', srd: true,
       features: [
         {
           id: 'drow_asi',
@@ -158,6 +160,7 @@ export const raceElf: Race = {
 export const raceDwarf: Race = {
   id: 'dwarf',
   name: 'Dwarf',
+  srd: true,
   features: [
     {
       id: 'dwarf_asi',
@@ -213,7 +216,7 @@ export const raceDwarf: Race = {
   ],
   subraces: [
     {
-      id: 'hill_dwarf', name: 'Hill Dwarf', parentId: 'dwarf',
+      id: 'hill_dwarf', name: 'Hill Dwarf', parentId: 'dwarf', srd: true,
       features: [
         {
           id: 'hill_dwarf_asi',
@@ -233,7 +236,7 @@ export const raceDwarf: Race = {
       ],
     },
     {
-      id: 'mountain_dwarf', name: 'Mountain Dwarf', parentId: 'dwarf',
+      id: 'mountain_dwarf', name: 'Mountain Dwarf', parentId: 'dwarf', srd: true,
       features: [
         {
           id: 'mountain_dwarf_asi',
@@ -258,6 +261,7 @@ export const raceDwarf: Race = {
 export const raceHalfling: Race = {
   id: 'halfling',
   name: 'Halfling',
+  srd: true,
   features: [
     {
       id: 'halfling_asi',
@@ -303,7 +307,7 @@ export const raceHalfling: Race = {
   ],
   subraces: [
     {
-      id: 'lightfoot_halfling', name: 'Lightfoot Halfling', parentId: 'halfling',
+      id: 'lightfoot_halfling', name: 'Lightfoot Halfling', parentId: 'halfling', srd: true,
       features: [
         {
           id: 'lightfoot_asi',
@@ -323,7 +327,7 @@ export const raceHalfling: Race = {
       ],
     },
     {
-      id: 'stout_halfling', name: 'Stout Halfling', parentId: 'halfling',
+      id: 'stout_halfling', name: 'Stout Halfling', parentId: 'halfling', srd: true,
       features: [
         {
           id: 'stout_asi',
@@ -349,6 +353,7 @@ export const raceHalfling: Race = {
 export const raceDragonborn: Race = {
   id: 'dragonborn',
   name: 'Dragonborn',
+  srd: true,
   features: [
     {
       id: 'dragonborn_asi',
@@ -402,6 +407,7 @@ export const raceDragonborn: Race = {
 export const raceGnome: Race = {
   id: 'gnome',
   name: 'Gnome',
+  srd: true,
   features: [
     {
       id: 'gnome_asi',
@@ -443,6 +449,7 @@ export const raceGnome: Race = {
 export const raceHalfElf: Race = {
   id: 'half_elf',
   name: 'Half-Elf',
+  srd: true,
   features: [
     {
       id: 'half_elf_asi',
@@ -481,6 +488,7 @@ export const raceHalfElf: Race = {
 export const raceHalfOrc: Race = {
   id: 'half_orc',
   name: 'Half-Orc',
+  srd: true,
   features: [
     {
       id: 'half_orc_asi',
@@ -530,6 +538,7 @@ export const raceHalfOrc: Race = {
 export const raceTiefling: Race = {
   id: 'tiefling',
   name: 'Tiefling',
+  srd: true,
   features: [
     {
       id: 'tiefling_asi',
@@ -569,9 +578,15 @@ export const raceTiefling: Race = {
   ],
 };
 
+// NOT SRD — original homebrew race (references 'Notongue' invented language,
+// Abyss Knight-adjacent lore). Not WotC content, so no legal risk, but
+// doesn't belong presented as "official" content — same content-honesty
+// treatment as the Abyssal Claim spell (see cantrips.ts). Should eventually
+// move to an example-homebrew content pack (ROADMAP_1.0.md Step 1.3).
 export const raceSkeleton: Race = {
   id: 'skeleton',
   name: 'Skeleton',
+  srd: false,
   features: [
     {
       id: 'skeleton_undead_nature',
@@ -644,7 +659,7 @@ export const raceSkeleton: Race = {
   ],
   subraces: [
     {
-      id: 'skeleton_giant', name: 'Giant', parentId: 'skeleton',
+      id: 'skeleton_giant', name: 'Giant', parentId: 'skeleton', srd: false,
       features: [
         {
           id: 'skeleton_giant_remains',

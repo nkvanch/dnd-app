@@ -73,6 +73,8 @@ export type Subrace = {
   name:     string;
   parentId: string;    // id of the parent Race
   features: Feature[];
+  /** SRD 5.1 legal status — same semantics as Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4. */
+  srd?:     boolean;
 };
 
 export type Race = {
@@ -80,6 +82,14 @@ export type Race = {
   name:      string;
   features:  Feature[];    // base race features — all subraces get these
   subraces?: Subrace[];    // if present, player must pick one before confirming race
+  /**
+   * SRD 5.1 (CC-BY-4.0) legal status. Unlike subclasses, races do not follow
+   * a documented "one variant per group" SRD restriction — SRD 5.1 appears to
+   * include the full standard PHB race roster (mirroring the generous
+   * treatment classes/spells got). Same semantics as Spell.srd —
+   * undefined = not yet audited = unsafe for public builds.
+   */
+  srd?:      boolean;
 };
 export type CharClass  = {
   id:          string;
@@ -109,7 +119,19 @@ export type CharClass  = {
    */
   rawProgression?:        ClassProgression;
 };
-export type Background = { id: string; name: string; features: Feature[] };
+export type Background = {
+  id: string;
+  name: string;
+  features: Feature[];
+  /**
+   * SRD 5.1 legal status. Like races, backgrounds show no documented
+   * "pick one" SRD restriction — SRD 5.1's demonstrated generous pattern
+   * (near-full spell list, full class chassis, full race roster) suggests
+   * the full background roster is included too. Same semantics as
+   * Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
+   */
+  srd?: boolean;
+};
 export type Condition  = { id: string; name: string; description: string; features: Feature[] };
 
 export type Item = {

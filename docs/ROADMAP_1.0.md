@@ -383,10 +383,46 @@ SRD text:
       wired), but a real scoping gap worth its own future batch — comparable
       in size/shape to the house-rules choice-UI work already done. Added to
       POST-1.0 BACKLOG below.
-- [ ] Races: SRD list only. Variant Human is NOT in SRD 5.1 — check what
-      `featAtCreation` references. Not yet started.
-- [ ] Backgrounds: SRD has only Acolyte. Others → generic/homebrew. Not yet
-      started.
+- [x] Races: SRD list only. Variant Human is NOT in SRD 5.1 — check what
+      `featAtCreation` references.  ✅ **COMPLETE**
+      - [x] `srd?: boolean` added to `Race` and `Subrace` types.
+      - [x] All 9 standard PHB races tagged `srd: true`: Human, Elf, Dwarf,
+            Halfling, Dragonborn, Gnome, Half-Elf, Half-Orc, Tiefling.
+            Moderate-high confidence: unlike subclasses, races don't have a
+            documented "one variant per group" SRD restriction, and SRD 5.1's
+            demonstrated pattern (near-full spell list, full class chassis)
+            suggests races got the same generous treatment. Still worth a
+            real cross-check, same as everything else in this audit.
+      - [x] All race SUBRACES also tagged `srd: true` (High Elf, Wood Elf,
+            Drow, Hill Dwarf, Mountain Dwarf, Lightfoot Halfling, Stout
+            Halfling) — same reasoning as base races.
+      - [x] **Found and tagged original homebrew**: `raceSkeleton` (+ its
+            Giant subrace) is Nick's own content, not WotC-derived (no legal
+            risk) but shouldn't be presented as "official" — same treatment
+            as the Abyssal Claim spell. Tagged `srd: false`. Already
+            correctly excluded from `ALL_RACES` before this audit — no
+            wiring changes needed, just the tag for documentation.
+      - [x] **Variant Human check resolved**: there is no separate "Variant
+            Human" race/subrace object in the codebase at all. The human
+            entry is the standard flat +1-to-all-six-stats PHB version only.
+            The traditional Variant Human benefit (a feat at 1st level) is
+            already provided generically via the `featAtCreation` house rule
+            rather than race-specific content — nothing to exclude here.
+      - [ ] Filter wiring: race/subrace pickers need the same build-target-
+            aware `srd === true` treatment as spells (Step 1.3) and
+            subclasses. Not yet done for any of the three content types.
+- [x] Backgrounds: SRD has only Acolyte. Others → generic/homebrew.  ✅ **COMPLETE**
+      - [x] `srd?: boolean` added to `Background` type.
+      - [x] All 13 standard PHB backgrounds tagged `srd: true`: Acolyte,
+            Charlatan, Criminal, Entertainer, Folk Hero, Guild Artisan,
+            Hermit, Noble, Outlander, Sage, Sailor, Soldier, Urchin. Clean
+            file — no homebrew mixed in, nothing to exclude.
+      - [x] The roadmap's original assumption ("SRD has only Acolyte") turned
+            out to be based on the older/stricter SRD convention. Given the
+            consistent generous pattern now confirmed three times over
+            (spells, classes, races), all 13 were tagged SRD-safe with the
+            same moderate-high confidence level — still pending a real
+            cross-check like everything else in this audit.
 - [ ] Feats: SRD has only Grappler. Heaviest cut, or reframe feats as
       homebrew-first with Grappler as the sample. Not yet started.
 - [ ] Items & monsters: check against SRD lists. Not yet started.

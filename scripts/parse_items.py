@@ -124,7 +124,9 @@ MUNDANE_ALLOW_NAMES = {
     'Holy Symbol (Reliquary)', 'Horn', 'Hourglass', 'Hunting Trap',
     'Ink (1 oz Bottle)', 'Ink Pen', "Jeweler's Tools", 'Key',
     'Kitchen Knife', 'Ladle', 'Lantern, Bullseye', 'Lantern, Hooded',
-    'Lock', 'Map Case', 'Marble', 'Lyre',
+    'Lock', 'Map Case', 'Marble', 'Lyre', 'Oil (Flask)', 'Padlock',
+    "Painter's Supplies", 'Pan Flute', 'Paper (One Sheet)',
+    "Poisoner's Kit", 'Orb',
 }
 
 # Classic GENERIC DMG magic items — directly verified while reading the vault.
@@ -295,7 +297,67 @@ MAGIC_ALLOW_NAMES = {
     'Morningstar of Warning',
     'Necklace of Adaptation', 'Necklace of Fireballs',
     'Necklace of Prayer Beads',
+    'Nine Lives Stealer', 'Oathbow', 'Oil of Etherealness', 'Oil of Sharpness',
+    # Orb of Dragonkind family (5)
+    'Orb of Dragonkind (Black)', 'Orb of Dragonkind (Blue)',
+    'Orb of Dragonkind (Green)', 'Orb of Dragonkind (Red)',
+    'Orb of Dragonkind (White)',
+    'Pearl of Power',
+    'Periapt of Health', 'Periapt of Proof Against Poison',
+    'Periapt of Wound Closure',
+    'Pike +1', 'Pike +2', 'Pike +3', 'Pike of Warning',
+    'Pipe of Smoke Monsters', 'Pipes of Haunting', 'Pipes of the Sewers',
+    'Plate Armor +1', 'Plate Armor +2', 'Plate Armor +3',
+    'Plate Armor of Etherealness', 'Plate Armor of Resistance',
+    'Pole of Collapsing', 'Portable Hole',
+    # Potion family (healing tiers, giant strength tiers, spell-effect potions)
+    'Potion of Healing', 'Potion of Greater Healing',
+    'Potion of Superior Healing', 'Potion of Supreme Healing',
+    'Potion of Animal Friendship', 'Potion of Clairvoyance',
+    'Potion of Climbing', 'Potion of Diminution', 'Potion of Flying',
+    'Potion of Gaseous Form',
+    'Potion of Giant Strength (Hill Giant)',
+    'Potion of Giant Strength (Stone Giant)',
+    'Potion of Giant Strength (Frost Giant)',
+    'Potion of Giant Strength (Fire Giant)',
+    'Potion of Giant Strength (Cloud Giant)',
+    'Potion of Giant Strength (Storm Giant)',
+    'Potion of Growth', 'Potion of Heroism', 'Potion of Invisibility',
+    'Potion of Mind Reading', 'Potion of Poison', 'Potion of Resistance',
+    'Potion of Speed', 'Potion of Water Breathing',
+    'Quarterstaff +1', 'Quarterstaff +2', 'Quarterstaff +3',
+    'Ram, Portable', 'Ring of the Ram',
+    'Rapier +1', 'Rapier +2', 'Rapier +3',
+    # Ring family (22 — the classic DMG ring roster)
+    'Ring of Animal Influence', 'Ring of Djinni Summoning',
+    'Ring of Air Elemental Command', 'Ring of Earth Elemental Command',
+    'Ring of Fire Elemental Command', 'Ring of Water Elemental Command',
+    'Ring of Evasion', 'Ring of Feather Falling', 'Ring of Free Action',
+    'Ring of Invisibility', 'Ring of Jumping', 'Ring of Mind Shielding',
+    'Ring of Protection', 'Ring of Regeneration', 'Ring of Resistance',
+    'Ring of Shooting Stars', 'Ring of Spell Storing',
+    'Ring of Spell Turning', 'Ring of Swimming', 'Ring of Telekinesis',
+    'Ring of Warmth', 'Ring of Water Walking', 'Ring of X-Ray Vision',
+    'Ring of Three Wishes',
+    # Robe family (5)
+    'Robe of Eyes', 'Robe of Scintillating Colors', 'Robe of Stars',
+    'Robe of the Archmagi', 'Robe of Useful Items',
+    # Rod family
+    'Rod of Absorption', 'Rod of Alertness', 'Rod of Lordly Might',
+    'Rod of Resurrection', 'Rod of Rulership', 'Rod of Security',
+    'Rod of the Pact Keeper +1', 'Rod of the Pact Keeper +2',
+    'Rod of the Pact Keeper +3',
+    'Rope of Climbing',
 }
+
+# NEEDS VERIFICATION — deity-named, treated with the same caution as
+# possessive named-wizard items even though PI_NAME_RE doesn't catch deity
+# names. The plain "Efficient Quiver" (no deity name) is already separately
+# allowed above — same split as Hideous Laughter / Handy Haversack.
+#   'Quiver of Ehlonna (Efficient Quiver)'
+#   'Owlbear Figurine' (doesn't match any of the 9 real Figurine of Wondrous
+#                        Power variants already allowed — possibly homebrew)
+#   'Pole of Angling' (unlike Pole of Collapsing, not confident this is real)
 
 # NEEDS VERIFICATION — left OFF the allow list pending a real check:
 #   'Dark Shard Amulet'   (Warlock focus, no real DMG item by this name —

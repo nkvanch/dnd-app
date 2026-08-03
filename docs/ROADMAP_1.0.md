@@ -619,6 +619,29 @@ SRD text:
                   ```
                   408/835 (49%) classified — essentially the halfway point
                   of the whole catalog.
+            - [x] **Fifth pass**: read Necklace of Prayer Beads through Rope
+                  of Climbing (556 more items scanned) — the biggest single
+                  batch yet, ~135 new ALLOW entries:
+                  - The complete classic DMG Ring family (22 items: Ring of
+                    Protection, Free Action, Spell Storing, all 4 Elemental
+                    Command rings, etc.)
+                  - The complete Potion family (18: 4 healing tiers, 6 giant
+                    strength tiers, 8 spell-effect potions)
+                  - Robe family (5), Rod family (9), Orb of Dragonkind (5)
+                  - Flagged 3 more NEEDS VERIFICATION rather than guess:
+                    'Quiver of Ehlonna (Efficient Quiver)' (deity-named —
+                    the plain 'Efficient Quiver' is already separately
+                    allowed, same split pattern as Hideous Laughter),
+                    'Owlbear Figurine' (doesn't match the 9 real Figurine of
+                    Wondrous Power variants already allowed), 'Pole of
+                    Angling' (unlike Pole of Collapsing, not confident real).
+            - [ ] **NEXT:** re-run, confirm count, commit, continue from
+                  "Rope of Climbing" onward.
+            - [x] **Confirmed:**
+                  ```
+                  SRD classification: 507 allowed, 6 denied, 322 unaudited
+                  ```
+                  513/835 (61%) classified.
       - [ ] Filter wiring: none of spells/subclasses/races/backgrounds/feats/
             monsters/items have their `srd === true` filter actually wired
             into pickers yet EXCEPT spells (Step 1.3). Worth doing as one

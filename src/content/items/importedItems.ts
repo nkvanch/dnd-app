@@ -12147,7 +12147,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "oathbow",
@@ -12174,7 +12175,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "oil_flask",
@@ -12197,7 +12199,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "oil_of_etherealness",
@@ -12222,7 +12225,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "oil_of_sharpness",
@@ -12247,7 +12251,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "orb_of_dragonkind_black",
@@ -12274,7 +12279,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "orb_of_dragonkind_blue",
@@ -12301,7 +12307,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "orb_of_dragonkind_green",
@@ -12328,7 +12335,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "orb_of_dragonkind_red",
@@ -12355,7 +12363,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "orb_of_dragonkind_white",
@@ -12382,7 +12391,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "orb",
@@ -12405,7 +12415,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "owlbear_figurine",
@@ -12454,7 +12465,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "painter_s_supplies",
@@ -12477,7 +12489,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pan_flute",
@@ -12500,7 +12513,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "paper_one_sheet",
@@ -12523,7 +12537,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pearl_of_power",
@@ -12550,7 +12565,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "periapt_of_health",
@@ -12576,7 +12592,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "periapt_of_proof_against_poison",
@@ -12602,7 +12619,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "periapt_of_wound_closure",
@@ -12629,7 +12647,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pike",
@@ -12698,7 +12717,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pike_2",
@@ -12725,7 +12745,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pike_3",
@@ -12752,7 +12773,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pike_of_warning",
@@ -12779,7 +12801,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pipe_of_smoke_monsters",
@@ -12805,7 +12828,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pipes_of_haunting",
@@ -12832,7 +12856,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pipes_of_the_sewers",
@@ -12859,7 +12884,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "plate_armor",
@@ -12911,7 +12937,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "plate_armor_2",
@@ -12937,7 +12964,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "plate_armor_3",
@@ -12963,7 +12991,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "plate_armor_of_etherealness",
@@ -12989,7 +13018,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "plate_armor_of_resistance",
@@ -13015,7 +13045,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "poisoner_s_kit",
@@ -13038,7 +13069,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "pole_of_angling",
@@ -13090,7 +13122,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "portable_hole",
@@ -13116,7 +13149,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_healing",
@@ -13141,7 +13175,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_greater_healing",
@@ -13166,7 +13201,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_superior_healing",
@@ -13191,7 +13227,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_supreme_healing",
@@ -13216,7 +13253,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_animal_friendship",
@@ -13241,7 +13279,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_clairvoyance",
@@ -13266,7 +13305,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_climbing",
@@ -13291,7 +13331,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_diminution",
@@ -13316,7 +13357,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_flying",
@@ -13341,7 +13383,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_gaseous_form",
@@ -13366,7 +13409,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_giant_strength_hill_giant",
@@ -13391,7 +13435,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_giant_strength_stone_giant",
@@ -13416,7 +13461,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_giant_strength_frost_giant",
@@ -13441,7 +13487,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_giant_strength_fire_giant",
@@ -13466,7 +13513,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_giant_strength_cloud_giant",
@@ -13491,7 +13539,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_giant_strength_storm_giant",
@@ -13516,7 +13565,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_growth",
@@ -13541,7 +13591,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_heroism",
@@ -13566,7 +13617,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_invisibility",
@@ -13591,7 +13643,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_mind_reading",
@@ -13616,7 +13669,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_poison",
@@ -13641,7 +13695,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_resistance",
@@ -13666,7 +13721,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_speed",
@@ -13691,7 +13747,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "potion_of_water_breathing",
@@ -13716,7 +13773,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "quarterstaff",
@@ -13783,7 +13841,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "quarterstaff_2",
@@ -13810,7 +13869,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "quarterstaff_3",
@@ -13837,7 +13897,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "quiver_of_ehlonna_efficient_quiver",
@@ -13886,7 +13947,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_the_ram",
@@ -13912,7 +13974,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rapier",
@@ -13979,7 +14042,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rapier_2",
@@ -14006,7 +14070,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rapier_3",
@@ -14033,7 +14098,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_animal_influence",
@@ -14058,7 +14124,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_djinni_summoning",
@@ -14084,7 +14151,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_air_elemental_command",
@@ -14109,7 +14177,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_earth_elemental_command",
@@ -14134,7 +14203,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_fire_elemental_command",
@@ -14159,7 +14229,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_water_elemental_command",
@@ -14184,7 +14255,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_evasion",
@@ -14209,7 +14281,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_feather_falling",
@@ -14234,7 +14307,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_free_action",
@@ -14259,7 +14333,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_invisibility",
@@ -14284,7 +14359,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_jumping",
@@ -14309,7 +14385,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_mind_shielding",
@@ -14334,7 +14411,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_protection",
@@ -14359,7 +14437,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_regeneration",
@@ -14384,7 +14463,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_resistance",
@@ -14409,7 +14489,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_shooting_stars",
@@ -14434,7 +14515,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_spell_storing",
@@ -14459,7 +14541,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_spell_turning",
@@ -14484,7 +14567,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_swimming",
@@ -14509,7 +14593,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_telekinesis",
@@ -14534,7 +14619,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_warmth",
@@ -14559,7 +14645,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_water_walking",
@@ -14584,7 +14671,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_x_ray_vision",
@@ -14609,7 +14697,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "ring_of_three_wishes",
@@ -14634,7 +14723,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "robe_of_eyes",
@@ -14660,7 +14750,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "robe_of_scintillating_colors",
@@ -14686,7 +14777,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "robe_of_stars",
@@ -14712,7 +14804,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "robe_of_the_archmagi",
@@ -14738,7 +14831,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "robe_of_useful_items",
@@ -14764,7 +14858,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rod_of_absorption",
@@ -14789,7 +14884,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rod_of_alertness",
@@ -14814,7 +14910,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rod_of_lordly_might",
@@ -14839,7 +14936,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rod_of_resurrection",
@@ -14864,7 +14962,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rod_of_rulership",
@@ -14889,7 +14988,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rod_of_security",
@@ -14914,7 +15014,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rod_of_the_pact_keeper_1",
@@ -14939,7 +15040,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rod_of_the_pact_keeper_2",
@@ -14964,7 +15066,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rod_of_the_pact_keeper_3",
@@ -14989,7 +15092,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rope_of_climbing",
@@ -15015,7 +15119,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "rope_of_entanglement",

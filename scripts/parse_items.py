@@ -92,7 +92,7 @@ MAGIC_RE = re.compile(r'\+(\d)\b')
 # what's likely several hundred items. Left for a dedicated future session.
 PI_NAME_RE = re.compile(
     r"\b(Tasha|Melf|Bigby|Otiluke|Leomund|Otto|Rary|Evard|Nystul|Drawmij|"
-    r"Mordenkainen|Tenser|Aganazzar|Snilloc|Abi-Dalzim|Maximilian)('s)?\b",
+    r"Mordenkainen|Tenser|Aganazzar|Snilloc|Abi-Dalzim|Maximilian|Daern|Heward)('s)?\b",
     re.I,
 )
 
@@ -114,7 +114,13 @@ MUNDANE_ALLOW_NAMES = {
     'Bottle', "Brewer's Supplies", 'Bucket', "Burglar's Key",
     'Burnt Othur Fumes', "Calligrapher's Supplies", 'Candle',
     "Carpenter's Tools", 'Carrion Crawler Mucus', "Cartographer's Tools",
-    'Case, Crossbow Bolt', 'Case, Map or Scroll',
+    'Case, Crossbow Bolt', 'Case, Map or Scroll', 'Chalk', 'Chest',
+    'Component Pouch', "Cook's Utensils", 'Crossbow Bolt Case', 'Crowbar',
+    'Crystal', 'Fine Clothes', 'Fishing Tackle', 'Flask', 'Flute',
+    'Forgery Kit', 'Frying Pan', "Glassblower's Tools", 'Gold Piece',
+    "Grinder's Tools", "Gunner's Pack", 'Hammer', 'Harp', "Healer's Kit",
+    'Herbalism Kit', 'Holy Symbol (Amulet)', 'Holy Symbol (Emblem)',
+    'Holy Symbol (Reliquary)', 'Horn', 'Hourglass',
 }
 
 # Classic GENERIC DMG magic items — directly verified while reading the vault.
@@ -155,7 +161,102 @@ MAGIC_ALLOW_NAMES = {
     'Breastplate Armor of Resistance', 'Cape of the Mountebank',
     'Carpet of Flying', 'Censer of Controlling Air Elementals',
     'Chain Mail +1', 'Chain Mail +2', 'Chain Mail +3',
+    # Chain Shirt / Cloak / Club families
+    'Chain Shirt +1', 'Chain Shirt +2', 'Chain Shirt +3', 'Chime of Opening',
+    'Cloak of Arachnida', 'Cloak of Displacement', 'Cloak of Elvenkind',
+    'Cloak of Protection', 'Cloak of the Bat', 'Cloak of the Manta Ray',
+    'Club +1', 'Club +2', 'Club +3', 'Club of Warning',
+    # Dragon Scale Mail family (generic + all 10 colors)
+    'Dragon Scale Mail', 'Black Dragon Scale Mail', 'Blue Dragon Scale Mail',
+    'Brass Dragon Scale Mail', 'Bronze Dragon Scale Mail',
+    'Copper Dragon Scale Mail', 'Gold Dragon Scale Mail',
+    'Green Dragon Scale Mail', 'Red Dragon Scale Mail',
+    'Silver Dragon Scale Mail', 'White Dragon Scale Mail',
+    'Cornucopia of Plenty',
+    'Crystal Ball', 'Crystal Ball of Mind Reading',
+    'Crystal Ball of Telepathy', 'Crystal Ball of True Seeing',
+    'Cube of Force', 'Cubic Gate',
+    'Dagger +1', 'Dagger +2', 'Dagger +3', 'Dagger of Venom',
+    'Dagger of Warning',
+    'Dancing Greatsword', 'Dancing Longsword', 'Dancing Rapier',
+    'Dancing Scimitar', 'Dancing Shortsword',
+    'Dart +1', 'Dart +2', 'Dart +3', 'Dart of Warning',
+    'Decanter of Endless Water', 'Deck of Illusions', 'Deck of Many Things',
+    # Defender weapon family (17 variants)
+    'Defender Club', 'Defender Dagger', 'Defender Greatclub',
+    'Defender Handaxe', 'Defender Javelin', 'Defender Light Hammer',
+    'Defender Mace', 'Defender Quarterstaff', 'Defender Rapier',
+    'Defender Scimitar', 'Defender Shortsword', 'Defender Sickle',
+    'Defender Spear', 'Defender Trident', 'Defender War Pick',
+    'Defender Warhammer', 'Defender Whip',
+    'Demon Armor', 'Dimensional Shackles',
+    # Dragon Slayer weapon family (8 variants)
+    'Dragon Slayer Battleaxe', 'Dragon Slayer Dagger',
+    'Dragon Slayer Greatsword', 'Dragon Slayer Longsword',
+    'Dragon Slayer Quarterstaff', 'Dragon Slayer Spear',
+    'Dragon Slayer Trident', 'Dragon Slayer Warhammer',
+    'Dust of Disappearance', 'Dust of Dryness',
+    'Dust of Sneezing and Choking',
+    'Dwarven Half Plate Armor', 'Dwarven Plate Armor', 'Dwarven Thrower',
+    'Ebony Fly', 'Efficient Quiver',
+    'Efreeti Bottle', 'Efreeti Chain Mail', 'Efreeti Chain Shirt',
+    # Elemental Gem family (completing all 4 with Blue Sapphire above)
+    'Emerald Elemental Gem', 'Red Corundum Elemental Gem',
+    'Yellow Diamond Elemental Gem',
+    'Elixir of Health', 'Elven Chain', 'Energy Longbow', 'Energy Shortbow',
+    'Eversmoking Bottle', 'Eyes of Charming', 'Eyes of Minute Seeing',
+    'Eyes of the Eagle',
+    # Feather Token family (6)
+    'Feather Token (Anchor)', 'Feather Token (Bird)', 'Feather Token (Fan)',
+    'Feather Token (Swan Boat)', 'Feather Token (Tree)',
+    'Feather Token (Whip)',
+    # Figurine of Wondrous Power family (9)
+    'Figurine of Wondrous Power (Bronze Griffon)',
+    'Figurine of Wondrous Power (Ebony Fly)',
+    'Figurine of Wondrous Power (Golden Lions)',
+    'Figurine of Wondrous Power (Ivory Goats)',
+    'Figurine of Wondrous Power (Marble Elephant)',
+    'Figurine of Wondrous Power (Obsidian Steed)',
+    'Figurine of Wondrous Power (Onyx Dog)',
+    'Figurine of Wondrous Power (Serpentine Owl)',
+    'Figurine of Wondrous Power (Silver Raven)',
+    # Flame Tongue family (7)
+    'Flame Tongue Battleaxe', 'Flame Tongue Glaive',
+    'Flame Tongue Greatsword', 'Flame Tongue Longsword',
+    'Flame Tongue Rapier', 'Flame Tongue Scimitar',
+    'Flame Tongue Shortsword',
+    'Flying Carpet (3x5)', 'Flying Carpet (4x6)', 'Flying Carpet (5x7)',
+    'Flying Carpet (6x9)', 'Folding Boat',
+    # Frost Brand family (6)
+    'Frost Brand Battleaxe', 'Frost Brand Greatsword',
+    'Frost Brand Longsword', 'Frost Brand Rapier', 'Frost Brand Scimitar',
+    'Frost Brand Shortsword',
+    'Gauntlets of Ogre Power', 'Gem of Brightness', 'Gem of Seeing',
+    'Giant Slayer Battleaxe', 'Giant Slayer Greatsword',
+    'Giant Slayer Longsword', 'Giant Slayer Warhammer',
+    'Glaive +1', 'Glaive +2', 'Glaive +3', 'Glaive of Warning',
+    'Gloves of Missile Snaring', 'Gloves of Swimming and Climbing',
+    'Goggles of Night',
+    'Greataxe +1', 'Greataxe +2', 'Greataxe +3', 'Greataxe of Sharpness',
+    'Greatclub +1', 'Greatclub +2', 'Greatclub +3', 'Greatclub of Warning',
+    'Greatsword +1', 'Greatsword +2', 'Greatsword +3',
+    'Greatsword of Sharpness',
+    'Halberd +1', 'Halberd +2', 'Halberd +3', 'Halberd of Warning',
+    'Hammer of Thunderbolts', 'Handaxe +1', 'Handaxe +2', 'Handaxe +3',
+    'Handy Haversack', 'Harp of Charming', 'Hat of Disguise',
+    'Headband of Intellect', 'Holy Avenger', 'Horn of Blasting',
+    'Horn of Silent Alarm', 'Horn of Valhalla (Silver)',
+    'Horn of Valhalla (Brass)', 'Horn of Valhalla (Bronze)',
+    'Horn of Valhalla (Iron)', 'Horseshoes of Speed',
+    'Horseshoes of a Zephyr',
 }
+
+# NEEDS VERIFICATION — left OFF the allow list pending a real check:
+#   'Dark Shard Amulet'   (Warlock focus, no real DMG item by this name —
+#                          likely vault-original homebrew)
+#   'Green Dragon Mask'   (adventure-module-specific item, likely from
+#                          Hoard of the Dragon Queen / Rise of Tiamat, not
+#                          core DMG — uncertain SRD status either way)
 
 # NEEDS VERIFICATION — real DMG item names differ slightly from the vault's
 # versions and might be renamed/modified variants rather than exact SRD text.
@@ -341,6 +442,15 @@ if previous_count > 20 and len(items) < previous_count * 0.5:
 
 with open(OUT, 'w', encoding='utf-8') as f:
     f.write('\n'.join(out))
+
+# SRD classification summary — was missing compared to convert-spells.mjs,
+# which is why the last two runs looked like "nothing happened" even though
+# the classifications were correctly applied both times.
+srd_true  = sum(1 for it in items if it.get('srd') is True)
+srd_false = sum(1 for it in items if it.get('srd') is False)
+srd_unset = len(items) - srd_true - srd_false
+print(f'\nSRD classification: {srd_true} allowed, {srd_false} denied, {srd_unset} unaudited (excluded by default).')
+print('See docs/ROADMAP_1.0.md Phase 1 for how to extend the ALLOW/DENY lists.')
 
 print(f'Parsed {len(items)} unique items from {len(blocks)} blocks.')
 print(f'Wrote {OUT}')

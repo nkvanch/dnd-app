@@ -543,6 +543,63 @@ SRD text:
                   in `parse_items.py`, re-running and confirming the count
                   after each batch — same rhythm as the 6-pass spell audit.
                   835 items will likely take several more passes.
+            - [x] **Second pass**: read Chain Shirt through Eyes of Minute
+                  Seeing (~200 more items). Findings:
+                  - Confirms the pattern further: whole magic item FAMILIES
+                    with generic names — Defender weapons (17 variants),
+                    Dragon Slayer weapons (8), Dancing weapons (5), the
+                    complete 10-color + generic Dragon Scale Mail set (11),
+                    the 4-gem Elemental Gem family. None PI-named.
+                  - Added 'Daern' to `PI_NAME_RE` after spotting "Daern's
+                    Instant Fortress" — a real classic named-wizard-style
+                    item I'd missed from the regex list (defense-in-depth;
+                    it wasn't misclassified, just correctly falling through
+                    to unaudited before this addition).
+                  - Flagged 'Dark Shard Amulet' as likely vault-original
+                    homebrew (generic Warlock-focus flavor text, no match to
+                    any real DMG item) — left unclassified pending check.
+                  - `MAGIC_ALLOW_NAMES` grew by ~65 entries this pass.
+            - [ ] **NEXT:** re-run `python scripts/parse_items.py`, confirm
+                  the srd-classification counts, commit, continue from
+                  "Eyes of the Eagle" onward.
+            - [x] **Confirmed** (after fixing the missing summary printout —
+                  see incident note below):
+                  ```
+                  SRD classification: 211 allowed, 3 denied, 621 unaudited
+                  ```
+                  214/835 items now classified (26%). The 3 denied confirms
+                  the PI regex is doing real work beyond the explicit
+                  `DENY_NAMES` entry (Antimatter Rifle) — likely also caught
+                  Daern's Instant Fortress plus one more automatically.
+            - [x] ⚠️ **Incident (minor, self-caught)**: `parse_items.py` was
+                  missing the SRD classification summary printout that
+                  `convert-spells.mjs` has. Both the first and second passes
+                  actually applied correctly, but with no visible
+                  confirmation, making it look like nothing happened ("was
+                  done let's continue" / "nothing was added"). Fixed by
+                  adding the same summary print — no data was ever lost,
+                  just invisible. Verified by direct file inspection before
+                  concluding it was a reporting gap, not a real failure.
+            - [x] **Third pass**: read Eyes of the Eagle through Hourglass
+                  (336 more items scanned). Findings:
+                  - Another ~85 confirmed ALLOW entries — more whole magic
+                    item families (Flame Tongue ×7, Frost Brand ×6, Figurine
+                    of Wondrous Power ×9, Feather Token ×6, Horn of Valhalla
+                    ×4, Giant Slayer ×4).
+                  - Added 'Heward' to `PI_NAME_RE` after finding "Heward's
+                    Handy Haversack" alongside a separate, already-allowed
+                    "Handy Haversack" entry — same pattern as Tasha's Hideous
+                    Laughter / Hideous Laughter: the SRD-stripped name
+                    already exists as its own vault entry, so excluding the
+                    PI-named duplicate needed no rename map, just the regex.
+                  - Flagged 'Green Dragon Mask' NEEDS VERIFICATION
+                    (adventure-module item, likely not core DMG/SRD).
+            - [x] **Confirmed:**
+                  ```
+                  SRD classification: 311 allowed, 5 denied, 519 unaudited
+                  ```
+                  316/835 (38%) classified. The +2 denied exactly matches
+                  the 2 Heward's items caught by the regex addition.
       - [ ] Filter wiring: none of spells/subclasses/races/backgrounds/feats/
             monsters/items have their `srd === true` filter actually wired
             into pickers yet EXCEPT spells (Step 1.3). Worth doing as one

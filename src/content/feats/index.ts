@@ -72,7 +72,7 @@ const GG  = 'Glory of the Giants';
 
 // ── feats ───────────────────────────────────────────────────────────────────
 
-export const ALL_FEATS: Feat[] = [
+const allFeatEntries: Feat[] = [
   feat('actor', 'Actor', null,
     '+1 Charisma. Advantage on Deception and Performance checks made to pass yourself off as a different person, and you can mimic the speech of a person or the sounds made by a creature.',
     PHB, [abilityBonus('cha')]),
@@ -408,6 +408,23 @@ export const ALL_FEATS: Feat[] = [
     'You learn one druid cantrip and can cast Longstrider and Pass Without Trace once per long rest each.',
     XGE),
 ];
+
+/** Every feat, unfiltered. Prefer ALL_FEATS below in app code. */
+export const FULL_FEAT_LIBRARY: Feat[] = allFeatEntries;
+
+const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
+
+/**
+ * The feat list the app should use — filtered to srd === true only on the
+ * EAS `production` build profile (see eas.json). Same build-target-aware
+ * pattern as spells/subclasses/races/backgrounds. srd is computed
+ * automatically per-feat from its source constant (see the feat() helper
+ * above) — see the HIGH-STAKES JUDGMENT CALL note on Feat.srd in
+ * engine/types.ts before trusting this for a real public release.
+ */
+export const ALL_FEATS: Feat[] = SRD_ONLY
+  ? FULL_FEAT_LIBRARY.filter(f => f.srd === true)
+  : FULL_FEAT_LIBRARY;
 
 /** Lookup map: featId → Feat. */
 export const FEATS_BY_ID: Record<string, Feat> = Object.fromEntries(

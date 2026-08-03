@@ -342,7 +342,8 @@ export const bgUrchin: Background = {
   ],
 };
 
-export const ALL_BACKGROUNDS: Background[] = [
+/** Every background, unfiltered. Prefer ALL_BACKGROUNDS below in app code. */
+export const FULL_BACKGROUND_LIBRARY: Background[] = [
   bgAcolyte,
   bgCharlatan,
   bgCriminal,
@@ -357,3 +358,14 @@ export const ALL_BACKGROUNDS: Background[] = [
   bgSoldier,
   bgUrchin,
 ];
+
+const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
+
+/**
+ * The background list the app should use — filtered to srd === true only
+ * on the EAS `production` build profile (see eas.json). Same build-target-
+ * aware pattern as spells/subclasses/races. See docs/ROADMAP_1.0.md Phase 1.
+ */
+export const ALL_BACKGROUNDS: Background[] = SRD_ONLY
+  ? FULL_BACKGROUND_LIBRARY.filter(b => b.srd === true)
+  : FULL_BACKGROUND_LIBRARY;

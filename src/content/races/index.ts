@@ -673,7 +673,11 @@ export const raceSkeleton: Race = {
   ],
 };
 
-export const ALL_RACES = [
+/**
+ * Every playable race, unfiltered. Prefer ALL_RACES below in app code.
+ * (raceSkeleton is intentionally not included here — see its own comment.)
+ */
+export const FULL_RACE_LIBRARY: Race[] = [
   raceHuman,
   raceElf,
   raceDwarf,
@@ -684,3 +688,15 @@ export const ALL_RACES = [
   raceHalfOrc,
   raceTiefling,
 ];
+
+const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
+
+/**
+ * The race list the app should use — filtered to srd === true only on the
+ * EAS `production` build profile (see eas.json). Personal/dev/preview
+ * builds see every race unfiltered, same build-target-aware pattern as
+ * spells (Step 1.3) and subclasses. See docs/ROADMAP_1.0.md Phase 1.
+ */
+export const ALL_RACES: Race[] = SRD_ONLY
+  ? FULL_RACE_LIBRARY.filter(r => r.srd === true)
+  : FULL_RACE_LIBRARY;

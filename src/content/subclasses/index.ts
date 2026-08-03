@@ -1,6 +1,12 @@
 // ============================================================================
 // FILE: src/content/subclasses/index.ts
 // Registry of all subclass progressions, keyed by classId.
+//
+// LEGAL FILTERING (see docs/ROADMAP_1.0.md Phase 1 Step 1.4): same
+// build-target-aware pattern as spells (src/content/spells/index.ts, Step
+// 1.3). Personal/dev/preview builds see every subclass; only the EAS
+// `production` build profile (EXPO_PUBLIC_SRD_ONLY=true, set in eas.json)
+// filters to srd === true.
 // ============================================================================
 import { FIGHTER_SUBCLASSES }   from './fighter';
 import { ROGUE_SUBCLASSES }     from './rogue';
@@ -18,7 +24,8 @@ import { ClassProgression }     from '../../engine/types';
 
 export type SubclassProgression = ClassProgression & { name: string };
 
-export const ALL_SUBCLASSES: SubclassProgression[] = [
+/** Every subclass, unfiltered. Prefer ALL_SUBCLASSES below in app code. */
+export const FULL_SUBCLASS_LIBRARY: SubclassProgression[] = [
   ...FIGHTER_SUBCLASSES,
   ...ROGUE_SUBCLASSES,
   ...WIZARD_SUBCLASSES,
@@ -32,6 +39,13 @@ export const ALL_SUBCLASSES: SubclassProgression[] = [
   ...SORCERER_SUBCLASSES,
   ...WARLOCK_SUBCLASSES,
 ];
+
+const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
+
+/** The subclass list the app should use \u2014 filtered on public builds only. */
+export const ALL_SUBCLASSES: SubclassProgression[] = SRD_ONLY
+  ? FULL_SUBCLASS_LIBRARY.filter(s => s.srd === true)
+  : FULL_SUBCLASS_LIBRARY;
 
 /** Returns all subclasses for a given classId. */
 export function getSubclassesForClass(classId: string): SubclassProgression[] {

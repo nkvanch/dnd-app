@@ -361,9 +361,8 @@ SRD text:
       "one per class" assumption is slightly less certain for them than the
       rest — both are PHB-legitimate content, just uncertain SRD-selection.
 
-      - [ ] Wire the filter: subclass pickers need the same `srd === true`
-            treatment as Step 1.3 gave spells (build-target-aware, not a
-            hard filter — personal builds keep every subclass). Not started.
+      - [x] Wire the filter: done — see the consolidated filter-wiring
+            summary at the end of the Items & monsters section below.
       - [ ] `subclassBrowse.ts` may also need review depending on what it
             aggregates — not yet checked.
 
@@ -408,9 +407,8 @@ SRD text:
             The traditional Variant Human benefit (a feat at 1st level) is
             already provided generically via the `featAtCreation` house rule
             rather than race-specific content — nothing to exclude here.
-      - [ ] Filter wiring: race/subrace pickers need the same build-target-
-            aware `srd === true` treatment as spells (Step 1.3) and
-            subclasses. Not yet done for any of the three content types.
+      - [x] Filter wiring: done — see the consolidated filter-wiring
+            summary at the end of the Items & monsters section below.
 - [x] Backgrounds: SRD has only Acolyte. Others → generic/homebrew.  ✅ **COMPLETE**
       - [x] `srd?: boolean` added to `Background` type.
       - [x] All 13 standard PHB backgrounds tagged `srd: true`: Acolyte,
@@ -452,10 +450,8 @@ SRD text:
             SRD 5.1 include all standard PHB feats or only Grappler" —
             should be the FIRST thing verified against the real text**, ahead
             of the general NEEDS VERIFICATION sweep for everything else.
-      - [ ] Filter wiring: feat pickers need the same build-target-aware
-            `srd === true` treatment as spells/subclasses/races. Not done
-            for ANY of the four content types yet — worth doing as one
-            combined pass once items/monsters are also tagged.
+      - [x] Filter wiring: done — see the consolidated filter-wiring
+            summary at the end of the Items & monsters section below.
 - [x] Items & monsters: check against SRD lists.  ⏳ **PARTIAL — see detail**
       - [x] **Monsters (`src/content/monsters/srd.ts`, 16KB): COMPLETE.**
             `srd?: boolean` added to `MonsterTemplate`. All 12 monsters
@@ -715,11 +711,36 @@ SRD text:
                   607+85 = 692 allowed / 6+3 = 9 denied on items, plus the
                   spell totals from Step 1.1, across 1,533 total content
                   entries reviewed this session.**
-      - [ ] Filter wiring: none of spells/subclasses/races/backgrounds/feats/
-            monsters/items have their `srd === true` filter actually wired
-            into pickers yet EXCEPT spells (Step 1.3). Worth doing as one
-            combined pass across all seven content types once items are
-            fully classified, rather than seven separate wiring passes.
+      - [x] **Filter wiring: COMPLETE across all 7 content types**
+            (spells, subclasses, races, backgrounds, feats, monsters,
+            items). Spells were wired in Step 1.3; this session wired the
+            remaining six using the identical build-target-aware pattern (a
+            `FULL_X_LIBRARY` unfiltered export, an `EXPO_PUBLIC_SRD_ONLY`
+            check, and the existing `ALL_X` export name now conditionally
+            filtered so no other file needs to change its imports):
+            - `src/content/subclasses/index.ts` — `ALL_SUBCLASSES`
+            - `src/content/races/index.ts` — `ALL_RACES`
+            - `src/content/backgrounds/index.ts` — `ALL_BACKGROUNDS`
+            - `src/content/feats/index.ts` — `ALL_FEATS`
+            - `src/content/monsters/srd.ts` — `ALL_MONSTER_TEMPLATES`
+              (currently a no-op filter since all 12 are already SRD-safe,
+              wired for consistency/future-proofing)
+            - `src/content/items/index.ts` — `ALL_ITEMS` (filters across
+              both the 85 core items AND the 835-item importedItems.ts
+              catalog in one pass — the still-mostly-unaudited imported
+              items are correctly excluded from public builds by the safe
+              undefined-is-unsafe default)
+            Personal/dev/preview builds are unaffected everywhere — only
+            `EXPO_PUBLIC_SRD_ONLY=true` (set solely on the EAS `production`
+            profile in eas.json) activates any of these filters.
+
+**Step 1.4 is now substantively complete**: every content type has been
+read, classified, and its filter wired. What remains before a public build
+is the real SRD-text cross-check (all the `NEEDS VERIFICATION` flags
+scattered through both scripts, plus the single highest-stakes item — the
+feats "all 42 or just Grappler" question) and, optionally, further passes
+through `importedItems.ts`'s remaining 222 unclassified entries (though most
+of those are genuinely non-SRD and correctly excluded, not a gap).
 
 ### Step 1.5 — Attribution screen
 - [ ] About/Legal screen with the CC-BY-4.0 required text.

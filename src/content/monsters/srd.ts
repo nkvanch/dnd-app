@@ -346,7 +346,8 @@ export const monsterLich: MonsterTemplate = {
   ],
 };
 
-export const ALL_MONSTER_TEMPLATES: MonsterTemplate[] = [
+/** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
+export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
   monsterOrc,
   monsterSkeleton,
@@ -360,3 +361,15 @@ export const ALL_MONSTER_TEMPLATES: MonsterTemplate[] = [
   monsterYoungRedDragon,
   monsterLich,
 ];
+
+const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
+
+/**
+ * The monster list the app should use. All 12 templates here are already
+ * SRD-safe, so this filter is currently a no-op — wired for consistency and
+ * to protect any non-SRD monster added here in the future, same pattern as
+ * spells/subclasses/races/backgrounds/feats. See docs/ROADMAP_1.0.md Phase 1.
+ */
+export const ALL_MONSTER_TEMPLATES: MonsterTemplate[] = SRD_ONLY
+  ? FULL_MONSTER_LIBRARY.filter(m => m.srd === true)
+  : FULL_MONSTER_LIBRARY;

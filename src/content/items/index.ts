@@ -763,7 +763,22 @@ const CORE_ITEMS: Item[] = [
  * mechanically-correct hand-authored version always wins.
  */
 const CORE_IDS = new Set(CORE_ITEMS.map(i => i.id));
-export const ALL_ITEMS: Item[] = [
+export const FULL_ITEM_LIBRARY: Item[] = [
   ...CORE_ITEMS,
   ...IMPORTED_ITEMS.filter(i => !CORE_IDS.has(i.id)),
 ];
+
+const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
+
+/**
+ * The item list the app should use — filtered to srd === true only on the
+ * EAS `production` build profile (see eas.json). Same build-target-aware
+ * pattern as spells/subclasses/races/backgrounds/feats/monsters. See
+ * docs/ROADMAP_1.0.md Phase 1 — note that most of importedItems.ts is still
+ * unclassified (undefined) rather than confirmed true/false, so it's
+ * correctly excluded from public builds by the safe default until audited
+ * further.
+ */
+export const ALL_ITEMS: Item[] = SRD_ONLY
+  ? FULL_ITEM_LIBRARY.filter(i => i.srd === true)
+  : FULL_ITEM_LIBRARY;

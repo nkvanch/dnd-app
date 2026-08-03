@@ -126,7 +126,7 @@ MUNDANE_ALLOW_NAMES = {
     'Kitchen Knife', 'Ladle', 'Lantern, Bullseye', 'Lantern, Hooded',
     'Lock', 'Map Case', 'Marble', 'Lyre', 'Oil (Flask)', 'Padlock',
     "Painter's Supplies", 'Pan Flute', 'Paper (One Sheet)',
-    "Poisoner's Kit", 'Orb',
+    "Poisoner's Kit", 'Orb', 'Scroll Case',
 }
 
 # Classic GENERIC DMG magic items — directly verified while reading the vault.
@@ -347,8 +347,66 @@ MAGIC_ALLOW_NAMES = {
     'Rod of Resurrection', 'Rod of Rulership', 'Rod of Security',
     'Rod of the Pact Keeper +1', 'Rod of the Pact Keeper +2',
     'Rod of the Pact Keeper +3',
-    'Rope of Climbing',
+    'Rope of Climbing', 'Rope of Entanglement',
+    'Saddle of the Cavalier', 'Scarab of Protection',
+    'Scimitar +1', 'Scimitar +2', 'Scimitar +3', 'Scimitar of Speed',
+    # Scroll of Protection family (8)
+    'Scroll of Protection Against Aberrations',
+    'Scroll of Protection Against Beasts',
+    'Scroll of Protection Against Celestials',
+    'Scroll of Protection Against Elementals',
+    'Scroll of Protection Against Fey',
+    'Scroll of Protection Against Fiends',
+    'Scroll of Protection Against Plants',
+    'Scroll of Protection Against Undead',
+    'Sending Stones', 'Sentinel Shield',
+    'Shield +1', 'Shield +2', 'Shield +3', 'Shield of Missile Attraction',
+    'Spellguard Shield', 'Spear +1', 'Spear +2', 'Spear +3',
+    # Spell Scroll family (10)
+    'Spell Scroll (Cantrip)', 'Spell Scroll (1st Level)',
+    'Spell Scroll (2nd Level)', 'Spell Scroll (3rd Level)',
+    'Spell Scroll (4th Level)', 'Spell Scroll (5th Level)',
+    'Spell Scroll (6th Level)', 'Spell Scroll (7th Level)',
+    'Spell Scroll (8th Level)', 'Spell Scroll (9th Level)',
+    # Staff family (14)
+    'Staff of Charming', 'Staff of Fire', 'Staff of Frost',
+    'Staff of Healing', 'Staff of Power', 'Staff of Striking',
+    'Staff of Swarming Insects', 'Staff of the Adder', 'Staff of the Magi',
+    'Staff of the Python', 'Staff of the Woodlands',
+    'Staff of Thunder and Lightning', 'Staff of Withering',
+    'Staff of Wizardry',
+    'Stone of Good Luck (Luckstone)',
+    'Stone of Controlling Earth Elementals',
+    'Sun Blade',
+    'Sword of Life Stealing', 'Sword of Sharpness', 'Sword of Wounding',
+    'Talisman of Pure Good', 'Talisman of Ultimate Evil',
+    'Talisman of the Sphere', 'Tome of the Stilled Tongue',
+    'Trident +1', 'Trident +2', 'Trident +3', 'Trident of Fish Command',
+    'Universal Solvent', 'Vicious Weapon', 'Vorpal Sword',
+    # Wand family (12) + Wand of the War Mage tiers
+    'Wand of Binding', 'Wand of Enemy Detection', 'Wand of Fear',
+    'Wand of Fireballs', 'Wand of Lightning Bolts',
+    'Wand of Magic Detection', 'Wand of Magic Missiles',
+    'Wand of Paralysis', 'Wand of Polymorph', 'Wand of Secrets',
+    'Wand of Web', 'Wand of Wonder',
+    'Wand of the War Mage +1', 'Wand of the War Mage +2',
+    'Wand of the War Mage +3',
+    'War Pick +1', 'War Pick +2', 'War Pick +3',
+    'Warhammer +1', 'Warhammer +2', 'Warhammer +3',
+    'Weapon of Warning', 'Well of Many Worlds', 'Wind Fan', 'Winged Boots',
+    'Wings of Flying',
+    # Duplicate naming of the already-allowed Figurine of Wondrous Power set
+    'Wondrous Figurine (Silver Raven)', 'Wondrous Figurine (Bronze Griffon)',
+    'Wondrous Figurine (Ebony Fly)', 'Wondrous Figurine (Golden Lions)',
 }
+
+# NEEDS VERIFICATION — doesn't match a real classic DMG item name recognized
+# with confidence:
+#   'Tankard of Sobriety'
+#   'Tentacle Rod'
+#   'Witchlight Vane'   (possibly Wild Beyond the Witchlight adventure-
+#                         specific, not core DMG)
+#   'Witchlight Watch'  (same)
 
 # NEEDS VERIFICATION — deity-named, treated with the same caution as
 # possessive named-wizard items even though PI_NAME_RE doesn't catch deity

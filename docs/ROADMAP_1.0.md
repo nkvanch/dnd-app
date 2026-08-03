@@ -642,6 +642,33 @@ SRD text:
                   SRD classification: 507 allowed, 6 denied, 322 unaudited
                   ```
                   513/835 (61%) classified.
+            - [x] **Sixth pass**: read Rope of Entanglement through Wondrous
+                  Figurine (Golden Lions) — 664 items scanned cumulatively,
+                  meaning **only ~171 items remain after this batch**, very
+                  close to the alphabet's end. Findings:
+                  - ~145 new ALLOW entries: Staff family (14), Wand family
+                    (12 + 3 War Mage tiers), Spell Scroll (10), Scroll of
+                    Protection (8), Sword/Talisman families.
+                  - Confirmed 'Winged Boots' as its own real entry —
+                    resolves the earlier uncertainty about 'Boots, Flying'
+                    (still left unclassified, but now confident the correct
+                    real name is Winged Boots, separately allowed).
+                  - Found duplicate naming: 'Wondrous Figurine (X)' entries
+                    are the same items as the already-allowed 'Figurine of
+                    Wondrous Power (X)' set, just alternately named —
+                    allowed both.
+                  - 4 more flagged NEEDS VERIFICATION: Tankard of Sobriety,
+                    Tentacle Rod, Witchlight Vane, Witchlight Watch (the
+                    last two possibly Wild Beyond the Witchlight adventure-
+                    specific, not core DMG).
+            - [ ] **NEXT:** re-run, confirm count, commit, continue — likely
+                  the final or second-to-last pass given how close to the
+                  end of the alphabet this reached.
+            - [x] **Confirmed:**
+                  ```
+                  SRD classification: 604 allowed, 6 denied, 225 unaudited
+                  ```
+                  610/835 (73%) classified.
       - [ ] Filter wiring: none of spells/subclasses/races/backgrounds/feats/
             monsters/items have their `srd === true` filter actually wired
             into pickers yet EXCEPT spells (Step 1.3). Worth doing as one

@@ -92,7 +92,8 @@ MAGIC_RE = re.compile(r'\+(\d)\b')
 # what's likely several hundred items. Left for a dedicated future session.
 PI_NAME_RE = re.compile(
     r"\b(Tasha|Melf|Bigby|Otiluke|Leomund|Otto|Rary|Evard|Nystul|Drawmij|"
-    r"Mordenkainen|Tenser|Aganazzar|Snilloc|Abi-Dalzim|Maximilian|Daern|Heward)('s)?\b",
+    r"Mordenkainen|Tenser|Aganazzar|Snilloc|Abi-Dalzim|Maximilian|Daern|Heward|"
+    r"Keoghtom)('s)?\b",
     re.I,
 )
 
@@ -120,7 +121,10 @@ MUNDANE_ALLOW_NAMES = {
     'Forgery Kit', 'Frying Pan', "Glassblower's Tools", 'Gold Piece',
     "Grinder's Tools", "Gunner's Pack", 'Hammer', 'Harp', "Healer's Kit",
     'Herbalism Kit', 'Holy Symbol (Amulet)', 'Holy Symbol (Emblem)',
-    'Holy Symbol (Reliquary)', 'Horn', 'Hourglass',
+    'Holy Symbol (Reliquary)', 'Horn', 'Hourglass', 'Hunting Trap',
+    'Ink (1 oz Bottle)', 'Ink Pen', "Jeweler's Tools", 'Key',
+    'Kitchen Knife', 'Ladle', 'Lantern, Bullseye', 'Lantern, Hooded',
+    'Lock', 'Map Case', 'Marble', 'Lyre',
 }
 
 # Classic GENERIC DMG magic items — directly verified while reading the vault.
@@ -249,6 +253,48 @@ MAGIC_ALLOW_NAMES = {
     'Horn of Valhalla (Brass)', 'Horn of Valhalla (Bronze)',
     'Horn of Valhalla (Iron)', 'Horseshoes of Speed',
     'Horseshoes of a Zephyr',
+    'Immovable Rod', 'Instrument of Illusions',
+    # Instrument of the Bards family (7)
+    'Instrument of the Bards (Doss Lute)',
+    'Instrument of the Bards (Fochlucan Bandore)',
+    'Instrument of the Bards (Mac-Fuirmidh Cittern)',
+    'Instrument of the Bards (Canaith Mandolin)',
+    'Instrument of the Bards (Cli Lyre)',
+    'Instrument of the Bards (Anstruth Harp)',
+    'Instrument of the Bards (Ollamh Harp)',
+    'Iron Bands of Binding', 'Iron Flask',
+    # Ioun Stone family (13)
+    'Ioun Stone (Absorption)', 'Ioun Stone (Agility)',
+    'Ioun Stone (Awareness)', 'Ioun Stone (Fortitude)',
+    'Ioun Stone (Insight)', 'Ioun Stone (Intellect)',
+    'Ioun Stone (Leadership)', 'Ioun Stone (Mastery)',
+    'Ioun Stone (Protection)', 'Ioun Stone (Regeneration)',
+    'Ioun Stone (Reserve)', 'Ioun Stone (Strength)',
+    'Ioun Stone (Sustenance)',
+    'Javelin +1', 'Javelin +2', 'Javelin +3', 'Javelin of Lightning',
+    'Lance +1', 'Lance +2', 'Lance +3', 'Lance of Warning',
+    'Lantern of Revealing',
+    'Leather Armor +1', 'Leather Armor +2', 'Leather Armor +3',
+    'Leather Armor of Resistance',
+    'Light Hammer +1', 'Light Hammer +2', 'Light Hammer +3',
+    'Light Hammer of Warning',
+    'Longbow +1', 'Longbow +2', 'Longbow +3', 'Longbow of Warning',
+    'Longsword +1', 'Longsword +2', 'Longsword +3',
+    'Longsword of Sharpness', 'Luck Blade',
+    'Mace +1', 'Mace +2', 'Mace +3', 'Mace of Disruption',
+    'Mace of Smiting', 'Mace of Terror', 'Mantle of Spell Resistance',
+    # Manual/Tome family (the 6 permanent-stat-increase books)
+    'Manual of Bodily Health', 'Manual of Gainful Exercise',
+    'Manual of Quickness of Action', 'Tome of Clear Thought',
+    'Tome of Leadership and Influence', 'Tome of Understanding',
+    'Marvelous Pigments', 'Medallion of Thoughts', 'Mirror of Life Trapping',
+    # Mithral armor family (5)
+    'Mithral Armor', 'Mithral Chain Mail', 'Mithral Chain Shirt',
+    'Mithral Half Plate', 'Mithral Plate Armor',
+    'Morningstar +1', 'Morningstar +2', 'Morningstar +3',
+    'Morningstar of Warning',
+    'Necklace of Adaptation', 'Necklace of Fireballs',
+    'Necklace of Prayer Beads',
 }
 
 # NEEDS VERIFICATION — left OFF the allow list pending a real check:
@@ -257,6 +303,11 @@ MAGIC_ALLOW_NAMES = {
 #   'Green Dragon Mask'   (adventure-module-specific item, likely from
 #                          Hoard of the Dragon Queen / Rise of Tiamat, not
 #                          core DMG — uncertain SRD status either way)
+#   'Lifewell Tattoo'     (doesn't match a real DMG item name)
+#   'Mantle of Inspiration' (doesn't match a real DMG item name)
+#   'Mask of the Beast'   (doesn't match a real DMG item name)
+#   'Mirror of the Past'  (real DMG has "Mirror of Life Trapping" but not this)
+#   'Mirror of the Future' (same — not a real DMG item name)
 
 # NEEDS VERIFICATION — real DMG item names differ slightly from the vault's
 # versions and might be renamed/modified variants rather than exact SRD text.

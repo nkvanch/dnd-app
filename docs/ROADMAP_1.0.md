@@ -600,6 +600,25 @@ SRD text:
                   ```
                   316/835 (38%) classified. The +2 denied exactly matches
                   the 2 Heward's items caught by the regex addition.
+            - [x] **Fourth pass**: read Hunting Trap through Necklace of
+                  Prayer Beads (443 more items scanned). Findings:
+                  - Another ~90 confirmed ALLOW entries — more whole
+                    families (Instrument of the Bards ×7, Ioun Stone ×13,
+                    the 6 stat-boosting Manuals/Tomes, Mithral armor ×5).
+                  - Added 'Keoghtom' to `PI_NAME_RE` (Keoghtom's Ointment).
+                  - 5 more items flagged NEEDS VERIFICATION, left
+                    unclassified rather than guessed: Lifewell Tattoo,
+                    Mantle of Inspiration, Mask of the Beast, Mirror of the
+                    Past, Mirror of the Future — none match a real DMG item
+                    name recognized with confidence.
+            - [ ] **NEXT:** re-run, confirm count, commit, continue from
+                  "Necklace of Prayer Beads" onward.
+            - [x] **Confirmed:**
+                  ```
+                  SRD classification: 402 allowed, 6 denied, 427 unaudited
+                  ```
+                  408/835 (49%) classified — essentially the halfway point
+                  of the whole catalog.
       - [ ] Filter wiring: none of spells/subclasses/races/backgrounds/feats/
             monsters/items have their `srd === true` filter actually wired
             into pickers yet EXCEPT spells (Step 1.3). Worth doing as one

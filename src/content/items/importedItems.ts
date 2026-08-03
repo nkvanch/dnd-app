@@ -18459,7 +18459,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "weapon_2",
@@ -18486,7 +18487,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "weapon_3",
@@ -18513,7 +18515,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "absorbing_tattoo",

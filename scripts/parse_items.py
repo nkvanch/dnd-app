@@ -398,6 +398,7 @@ MAGIC_ALLOW_NAMES = {
     # Duplicate naming of the already-allowed Figurine of Wondrous Power set
     'Wondrous Figurine (Silver Raven)', 'Wondrous Figurine (Bronze Griffon)',
     'Wondrous Figurine (Ebony Fly)', 'Wondrous Figurine (Golden Lions)',
+    'Weapon +1', 'Weapon +2', 'Weapon +3',
 }
 
 # NEEDS VERIFICATION — doesn't match a real classic DMG item name recognized

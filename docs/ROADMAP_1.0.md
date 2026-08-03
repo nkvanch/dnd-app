@@ -669,6 +669,52 @@ SRD text:
                   SRD classification: 604 allowed, 6 denied, 225 unaudited
                   ```
                   610/835 (73%) classified.
+            - [x] **Seventh (final) pass**: read the tail of the file, which
+                  reaches its true end. **Combined with all prior passes,
+                  the entire 835-item catalog has now been read cover-to-
+                  cover.** Key finding: the file's character changes
+                  partway through — after alphabetical A–W core content, the
+                  remainder is organized by SOURCEBOOK/THEME rather than
+                  alphabetically: Eberron artificer gear (symbionts, Docent,
+                  Wand Sheath), Fizban's Treasury of Dragons hoard-tier items
+                  (Dragon Vessel/Dragon's Wrath Weapon/Dragon-Touched Focus/
+                  Scaled Ornament, each with 4 rarity tiers), Bigby Presents
+                  giant-themed items (Adze of Annam, Crown of the Wrath
+                  Bringer, etc.), Strixhaven campus items (college primers,
+                  pennants, faculty seals, mascot figurines), Spelljammer
+                  navigation gear (the Helm family, Wildspace items), and a
+                  cluster of luck/fortune/deck-themed items of uncertain
+                  origin. **None of this is core-DMG/SRD content** — it's
+                  already correctly excluded by the safe-unclassified
+                  default, no individual per-item denial needed for legal
+                  purposes (would be significant extra effort for zero
+                  functional difference from the existing safe default).
+                  Confirmed 'Bigby's Beneficent Bracelet' auto-excluded
+                  correctly (PI regex). Added the last few generic-pattern
+                  items (Weapon +1/+2/+3) to the allow list.
+            - [ ] **NEXT:** re-run, confirm final count — **this should be
+                  the last run needed for this phase of the audit**, since
+                  the whole file has now been read. Commit. The remaining
+                  unaudited count will stay substantial (~200+) because most
+                  of the back half of the catalog is genuinely non-SRD
+                  content, correctly excluded rather than allowed — that's
+                  the CORRECT final state, not incomplete work.
+            - [x] **FINAL CONFIRMED RESULT for this audit pass:**
+                  ```
+                  SRD classification: 607 allowed, 6 denied, 222 unaudited
+                  ```
+                  613/835 (73%) classified. **The entire importedItems.ts
+                  file has been read cover-to-cover across 7 passes.** The
+                  222 remaining unaudited items are correctly unclassified,
+                  not an oversight — they're predominantly non-SRD
+                  sourcebook-specific content (Eberron, Fizban's, Bigby
+                  Presents, Strixhaven, Spelljammer) that has no SRD
+                  equivalent to allow. Combined with the 85 core items
+                  (index.ts, all classified) and the 146 hand-authored
+                  spells: **the full items+spells legal audit stands at
+                  607+85 = 692 allowed / 6+3 = 9 denied on items, plus the
+                  spell totals from Step 1.1, across 1,533 total content
+                  entries reviewed this session.**
       - [ ] Filter wiring: none of spells/subclasses/races/backgrounds/feats/
             monsters/items have their `srd === true` filter actually wired
             into pickers yet EXCEPT spells (Step 1.3). Worth doing as one

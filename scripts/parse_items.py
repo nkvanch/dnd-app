@@ -131,17 +131,21 @@ MUNDANE_ALLOW_NAMES = {
 
 # Classic GENERIC DMG magic items — directly verified while reading the vault.
 # These have no Product Identity naming (named by function/effect, not by a
-# named wizard) and match the generous-inclusion pattern confirmed repeatedly
-# elsewhere in this audit (spells/classes/races/backgrounds). Still a judgment
-# call, same caveat as everywhere else in the audit: verify against the real
-# SRD 5.1 text before a public build ships.
+# named wizard). Structural note (2026-08-04 verification pass): unlike feats
+# and backgrounds — which turned out to be single "one worked example" pages
+# in the SRD (Grappler only, Acolyte only) — the SRD 5.1's magic items
+# section is a genuinely comprehensive, dedicated index with individual pages
+# per item (confirmed directly: 5thsrd.org/gamemaster_rules/magic_items/).
+# That structural difference is why this list is trusted more broadly than
+# the feats/backgrounds assumption was. Still worth a final cross-check
+# against the real SRD 5.1 text before a public build ships.
 MAGIC_ALLOW_NAMES = {
     'Adamantine Armor', 'Adamantine Breastplate', 'Adamantine Chain Mail',
     'Adamantine Chain Shirt', 'Adamantine Half Plate Armor',
     'Adamantine Plate Armor', 'Adamantine Ring Mail', 'Adamantine Scale Mail',
     'Adamantine Splint Armor', 'Amulet of Health',
     'Amulet of Proof Against Detection and Location', 'Amulet of the Planes',
-    'Animated Shield', 'Armor of Invulnerability',
+    'Animated Shield', 'Apparatus of the Crab', 'Armor of Invulnerability',
     'Armor of Vulnerability', 'Arrow +1', 'Arrow +2', 'Arrow +3',
     'Arrow of Aberration Slaying', 'Arrow of Beast Slaying',
     'Arrow of Celestial Slaying', 'Arrow of Construct Slaying',
@@ -401,41 +405,36 @@ MAGIC_ALLOW_NAMES = {
     'Weapon +1', 'Weapon +2', 'Weapon +3',
 }
 
-# NEEDS VERIFICATION — doesn't match a real classic DMG item name recognized
-# with confidence:
-#   'Tankard of Sobriety'
-#   'Tentacle Rod'
-#   'Witchlight Vane'   (possibly Wild Beyond the Witchlight adventure-
-#                         specific, not core DMG)
-#   'Witchlight Watch'  (same)
-
-# NEEDS VERIFICATION — deity-named, treated with the same caution as
-# possessive named-wizard items even though PI_NAME_RE doesn't catch deity
-# names. The plain "Efficient Quiver" (no deity name) is already separately
-# allowed above — same split as Hideous Laughter / Handy Haversack.
-#   'Quiver of Ehlonna (Efficient Quiver)'
-#   'Owlbear Figurine' (doesn't match any of the 9 real Figurine of Wondrous
-#                        Power variants already allowed — possibly homebrew)
-#   'Pole of Angling' (unlike Pole of Collapsing, not confident this is real)
-
-# NEEDS VERIFICATION — left OFF the allow list pending a real check:
-#   'Dark Shard Amulet'   (Warlock focus, no real DMG item by this name —
-#                          likely vault-original homebrew)
-#   'Green Dragon Mask'   (adventure-module-specific item, likely from
-#                          Hoard of the Dragon Queen / Rise of Tiamat, not
-#                          core DMG — uncertain SRD status either way)
-#   'Lifewell Tattoo'     (doesn't match a real DMG item name)
-#   'Mantle of Inspiration' (doesn't match a real DMG item name)
-#   'Mask of the Beast'   (doesn't match a real DMG item name)
-#   'Mirror of the Past'  (real DMG has "Mirror of Life Trapping" but not this)
-#   'Mirror of the Future' (same — not a real DMG item name)
-
-# NEEDS VERIFICATION — real DMG item names differ slightly from the vault's
-# versions and might be renamed/modified variants rather than exact SRD text.
-# Left OFF the allow list (safe default) pending a real check:
-#   'Apparatus of the Crab'   (real item: "Apparatus of the Kwalish")
-#   'Cap of Water Breathing'  (uncertain if this matches the real item name)
-#   'Boots, Flying'           (real item: "Winged Boots" — different name entirely)
+# CONFIRMED non-SRD (sourced via direct research, not from the SRD's dedicated
+# magic item index) — left OFF the allow list:
+#   'Dark Shard Amulet'    (confirmed: Xanathar's Guide to Everything)
+#   'Green Dragon Mask'    (confirmed: Tyranny of Dragons, as "Dragon Mask")
+#   'Lifewell Tattoo'      (confirmed: Tasha's Cauldron of Everything)
+#   'Mantle of Inspiration' (confirmed: XGE, Bard College of Glamour class
+#                            feature, not a standalone magic item)
+#   'Mask of the Beast'    (confirmed: Tomb of Annihilation)
+#   'Mirror of the Past'   (confirmed: Tales from the Yawning Portal)
+#   'Mirror of the Future' (confirmed: not a real published item)
+#   'Owlbear Figurine'     (confirmed: not a real published item)
+#   'Tankard of Sobriety'  (confirmed: Xanathar's Guide to Everything)
+#   'Tentacle Rod'         (confirmed: Dungeon Master's Guide — kept OFF the
+#                            allow list pending direct SRD-index confirmation;
+#                            DMG source alone doesn't guarantee SRD inclusion,
+#                            per the feats/backgrounds lesson — see roadmap)
+#   'Pole of Angling'      (confirmed: Xanathar's Guide to Everything)
+#   'Witchlight Vane'      (confirmed: The Wild Beyond the Witchlight)
+#   'Witchlight Watch'     (confirmed: The Wild Beyond the Witchlight)
+#   'Cap of Water Breathing' (confirmed: Dungeon Master's Guide — same caution
+#                            as Tentacle Rod, kept OFF pending direct index check)
+#   'Quiver of Ehlonna (Efficient Quiver)' (confirmed: Dungeon Master's Guide,
+#                            deity-named — kept OFF pending direct index check;
+#                            the plain 'Efficient Quiver' is separately allowed)
+#   'Boots, Flying'        (confirmed: not a real name; real item is
+#                            'Winged Boots', separately allowed)
+#
+# 'Apparatus of the Crab' was RECONSIDERED and moved TO the allow list above:
+# confirmed present verbatim in the SRD 5.1's own magic item index (not a
+# renamed/modified variant as first suspected).
 
 
 def compute_srd(name):

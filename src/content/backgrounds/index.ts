@@ -33,7 +33,7 @@ export const bgAcolyte: Background = {
 export const bgCharlatan: Background = {
   id: 'charlatan',
   name: 'Charlatan',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'charlatan_proficiencies',
@@ -59,7 +59,7 @@ export const bgCharlatan: Background = {
 export const bgCriminal: Background = {
   id: 'criminal',
   name: 'Criminal',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'criminal_proficiencies',
@@ -85,7 +85,7 @@ export const bgCriminal: Background = {
 export const bgEntertainer: Background = {
   id: 'entertainer',
   name: 'Entertainer',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'entertainer_proficiencies',
@@ -111,7 +111,7 @@ export const bgEntertainer: Background = {
 export const bgFolkHero: Background = {
   id: 'folk_hero',
   name: 'Folk Hero',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'folk_hero_proficiencies',
@@ -137,7 +137,7 @@ export const bgFolkHero: Background = {
 export const bgGuildArtisan: Background = {
   id: 'guild_artisan',
   name: 'Guild Artisan',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'guild_artisan_proficiencies',
@@ -163,7 +163,7 @@ export const bgGuildArtisan: Background = {
 export const bgHermit: Background = {
   id: 'hermit',
   name: 'Hermit',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'hermit_proficiencies',
@@ -189,7 +189,7 @@ export const bgHermit: Background = {
 export const bgNoble: Background = {
   id: 'noble',
   name: 'Noble',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'noble_proficiencies',
@@ -215,7 +215,7 @@ export const bgNoble: Background = {
 export const bgOutlander: Background = {
   id: 'outlander',
   name: 'Outlander',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'outlander_proficiencies',
@@ -241,7 +241,7 @@ export const bgOutlander: Background = {
 export const bgSage: Background = {
   id: 'sage',
   name: 'Sage',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'sage_proficiencies',
@@ -267,7 +267,7 @@ export const bgSage: Background = {
 export const bgSailor: Background = {
   id: 'sailor',
   name: 'Sailor',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'sailor_proficiencies',
@@ -293,7 +293,7 @@ export const bgSailor: Background = {
 export const bgSoldier: Background = {
   id: 'soldier',
   name: 'Soldier',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'soldier_proficiencies',
@@ -319,7 +319,7 @@ export const bgSoldier: Background = {
 export const bgUrchin: Background = {
   id: 'urchin',
   name: 'Urchin',
-  srd: true,
+  srd: false,
   features: [
     {
       id: 'urchin_proficiencies',

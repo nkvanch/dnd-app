@@ -742,6 +742,101 @@ feats "all 42 or just Grappler" question) and, optionally, further passes
 through `importedItems.ts`'s remaining 222 unclassified entries (though most
 of those are genuinely non-SRD and correctly excluded, not a gap).
 
+## ⚠️ PHASE 1 VERIFICATION PASS (2026-08-04) — MAJOR CORRECTIONS
+
+Nick did real research (dndbeyond.com sourcebook attributions) and flagged
+several items, which led to a live verification session against the actual
+SRD 5.1 text via 5thsrd.org (a faithful CC-BY mirror, confirmed by its
+footer attribution matching the About screen word-for-word). **This
+surfaced two real errors from earlier "generous pattern" guesses — caught
+before any public release, exactly what this verification step is for.**
+
+### ❌ CORRECTED: Feats — was wrong
+Earlier tagging assumed all 42 PHB feats were SRD-safe, following the
+generous-inclusion pattern seen in spells/classes/races. **Confirmed wrong**:
+the actual SRD 5.1 Feats page contains ONLY Grappler. Fixed:
+`src/content/feats/index.ts`'s `feat()` helper now computes
+`srd = id === 'grappler'` instead of `source === PHB`. This was the audit's
+self-flagged "highest-stakes judgment call" — good that it got checked
+before shipping; would have been a real legal exposure otherwise.
+
+### ❌ CORRECTED: Backgrounds — was wrong
+Same mistake, same fix. All 13 PHB backgrounds were tagged SRD-safe;
+**confirmed wrong** — SRD 5.1 contains ONLY Acolyte (the site literally
+states "Wizards of the Coast only included the Acolyte as a background
+option"). Fixed: the other 12 (Charlatan, Criminal, Entertainer, Folk Hero,
+Guild Artisan, Hermit, Noble, Outlander, Sage, Sailor, Soldier, Urchin) in
+`src/content/backgrounds/index.ts` flipped from `srd: true` to `srd: false`.
+
+### ✅ CONFIRMED CORRECT: Subclasses (no change needed)
+Briefly suspected Barbarian/Druid/Bard might have BOTH subclasses SRD-safe
+(their intro text says "X or Y, both/all detailed at the end") — but direct
+full-page fetches proved this phrasing is boilerplate copied verbatim from
+the full PHB regardless of what the SRD excerpt actually contains. Every
+class checked (Wizard, Cleric, Fighter, Barbarian, Druid, Paladin, Warlock)
+confirmed the ORIGINAL one-true-one-false classification was right,
+including both of Nick's specifically-flagged ones: Path of the Totem
+Warrior and The Great Old One are both confirmed non-SRD (real PHB content,
+just not the one WotC chose to fully detail in the SRD excerpt). Updated
+the NEEDS VERIFICATION comments on both to CONFIRMED.
+
+### ✅ CONFIRMED CORRECT: Races (no change needed)
+All 9 standard races confirmed present as individual dedicated SRD pages.
+Unlike feats/backgrounds, races got comprehensive treatment. Comment updated
+from pattern-inference to direct confirmation.
+
+### ✅ Items — mostly confirmed sound, one addition
+The magic items ALLOW list was NOT built on the same shaky "generous
+pattern" logic that failed for feats/backgrounds — verified the SRD 5.1
+magic items section is a genuinely comprehensive, dedicated index (individual
+pages per item, e.g. `5thsrd.org/gamemaster_rules/magic_items/ring_of_protection/`),
+structurally different from the single "one worked example" pattern that
+burned feats/backgrounds. Added `'Apparatus of the Crab'` to the allow list
+(confirmed present verbatim in the SRD's own index — the earlier suspicion
+that it was a renamed variant of "Apparatus of the Kwalish" was wrong).
+Updated ~14 NEEDS VERIFICATION comments to CONFIRMED non-SRD status using
+Nick's sourcebook research (Xanathar's Guide, Tasha's Cauldron, Tomb of
+Annihilation, Tyranny of Dragons, Tales from the Yawning Portal, The Wild
+Beyond the Witchlight all confirmed as the real sources — none SRD-eligible).
+Two items (Tentacle Rod, Cap of Water Breathing) confirmed DMG-sourced by
+Nick but kept OFF the allow list pending direct SRD-index confirmation,
+since DMG-sourced alone doesn't guarantee SRD inclusion (same lesson as
+feats/backgrounds) — these specifically need the direct-index check, not
+just source-book confirmation.
+
+### ✅ RESOLVED: Spells — Arms of Hadar / Hunger of Hadar confirmed excluded
+Fetched the complete SRD 5.1 "Spells by Name" index (5thsrd.org, every
+spell, not a search snippet) and confirmed definitively: neither spell
+appears. The "A" section runs continuously from "Arcanist's Magic Aura"
+directly to "Astral Projection"; the "H" section runs continuously from
+"Hallow" to "Hypnotic Pattern". **Both spells stay excluded — confirmed
+correct, not just conservatively assumed.**
+
+**Bonus value from having the complete list:** cross-checked all 9 existing
+`SRD_RENAME_MAP` entries against it — every one matches the real SRD name
+exactly. Also **found 6 more rename opportunities** not yet actioned: the
+SRD list includes "Magnificent Mansion", "Instant Summons", "Faithful
+Hound", "Arcane Sword", "Secret Chest", and "Telepathic Bond" — meaning the
+vault's PI-named versions (Mordenkainen's Magnificent Mansion, Drawmij's
+Instant Summons, Mordenkainen's Faithful Hound, Mordenkainen's Sword,
+Leomund's Secret Chest, Rary's Telepathic Bond) likely qualify for the same
+rename treatment as the existing 9. Not actioned this pass (would need the
+same real-description verification each existing rename got) — flagged for
+a future spell-audit session. Note: Magnificent Mansion is the one with the
+known vault markdown parsing bug (empty range/components/duration) flagged
+earlier — fix that first before attempting its rename.
+
+### Key methodological lesson for any future verification
+The phrase "X, Y, or Z, all/both detailed at the end of the class
+description" appearing in a class's intro text is **boilerplate copied
+verbatim from the full PHB** and does NOT reliably indicate how many options
+the SRD excerpt actually elaborates. The ONLY reliable check is fetching the
+full page and confirming the actual detailed section exists (checking the
+page's own table of contents is a fast proxy — 5thsrd.org's TOC only lists
+subsections that actually exist on the page).
+
+---
+
 ### Step 1.5 — Attribution screen
 - [ ] About/Legal screen with the CC-BY-4.0 required text.
 - [ ] Scrub "D&D"/"Dungeons & Dragons" from user-facing strings; use

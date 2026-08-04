@@ -83,11 +83,15 @@ export type Race = {
   features:  Feature[];    // base race features — all subraces get these
   subraces?: Subrace[];    // if present, player must pick one before confirming race
   /**
-   * SRD 5.1 (CC-BY-4.0) legal status. Unlike subclasses, races do not follow
-   * a documented "one variant per group" SRD restriction — SRD 5.1 appears to
-   * include the full standard PHB race roster (mirroring the generous
-   * treatment classes/spells got). Same semantics as Spell.srd —
-   * undefined = not yet audited = unsafe for public builds.
+   * SRD 5.1 (CC-BY-4.0) legal status. CONFIRMED via direct verification
+   * against the actual SRD 5.1 text (5thsrd.org) on 2026-08-04: individual
+   * dedicated pages exist for all 9 standard PHB races. This held up where
+   * the equivalent "generous inclusion" assumption did NOT for feats or
+   * backgrounds (both turned out to be single "one worked example" pages) —
+   * races, like magic items, get a genuinely comprehensive treatment rather
+   * than a curated sample. Same semantics as Spell.srd — undefined = not
+   * yet audited = unsafe for public builds. See docs/ROADMAP_1.0.md Phase 1
+   * Step 1.4 for the full verification writeup.
    */
   srd?:      boolean;
 };
@@ -124,11 +128,14 @@ export type Background = {
   name: string;
   features: Feature[];
   /**
-   * SRD 5.1 legal status. Like races, backgrounds show no documented
-   * "pick one" SRD restriction — SRD 5.1's demonstrated generous pattern
-   * (near-full spell list, full class chassis, full race roster) suggests
-   * the full background roster is included too. Same semantics as
-   * Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
+   * SRD 5.1 legal status. CONFIRMED via direct verification against the
+   * actual SRD 5.1 text (5thsrd.org) on 2026-08-04: the Backgrounds section
+   * contains ONLY Acolyte, explicitly framed as "the sample background" —
+   * WotC's own site notes state "far, far more options available" outside
+   * the SRD. This CORRECTS a prior optimistic tagging of all 13 standard
+   * PHB backgrounds, based on a "generous inclusion" pattern that turned
+   * out not to apply here (same lesson learned for feats — see Feat.srd).
+   * See docs/ROADMAP_1.0.md Phase 1 Step 1.4 for the full verification.
    */
   srd?: boolean;
 };
@@ -187,19 +194,15 @@ export type Feat = {
     picks: { id: string; label: string; mode: 'proficiency' | 'expertise'; from: 'any' | 'proficient' }[];
   };
   /**
-   * SRD 5.1 legal status. `source` already labels the real sourcebook
-   * (PHB/XGE/TCE/FTD/GG) for every feat in this codebase — see
-   * src/content/feats/index.ts, where this is computed automatically from
-   * that string rather than tagged per-feat. HIGH-STAKES JUDGMENT CALL:
-   * the older/stricter SRD convention says only Grappler was ever public;
-   * but the pattern confirmed repeatedly elsewhere in this audit (near-full
-   * spell list, full class chassis, full race/background rosters) suggests
-   * SRD 5.1 may include all 42 PHB feats, not just Grappler. Tagged
-   * optimistically (all PHB feats = true) following that evidenced pattern,
-   * but this is explicitly the single highest-stakes unverified assumption
-   * in the whole legal audit (42x exposure difference if wrong) — confirm
-   * against the real SRD 5.1 text before any public build ships.
-   * See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
+   * SRD 5.1 legal status. CONFIRMED via direct verification against the
+   * actual SRD 5.1 text (5thsrd.org) on 2026-08-04: the Feats section
+   * contains ONLY Grappler. This resolved a prior optimistic guess (all 42
+   * PHB feats, based on a "generous inclusion" pattern seen in other
+   * content types) that turned out NOT to apply to feats — the same
+   * verification pass found the identical narrow-inclusion pattern for
+   * backgrounds (only Acolyte). Computed in src/content/feats/index.ts as
+   * `id === 'grappler'`. See docs/ROADMAP_1.0.md Phase 1 Step 1.4 for the
+   * full verification writeup.
    */
   srd?: boolean;
 };

@@ -4,17 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "6d9c4f565e30533c",
+        "id": "c5316fa1a56746a4",
         "type": "tabs",
         "children": [
           {
-            "id": "9f1592afe47f2e06",
+            "id": "4a8eae8187561b68",
             "type": "leaf",
             "state": {
-              "type": "graph",
+              "type": "empty",
               "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "icon": "lucide-file",
+              "title": "New tab"
             }
           }
         ]
@@ -49,7 +49,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "Level 1 Spells.md",
+                "query": "NEEDS VERIFICATION",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -70,8 +70,7 @@
               "title": "Bookmarks"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "horizontal",
@@ -180,8 +179,11 @@
       "bases:Create new base": false
     }
   },
-  "active": "bb18cbc0dc8d995c",
+  "active": "4a8eae8187561b68",
   "lastOpenFiles": [
+    "src/engine/types.ts.735fa9de4b781cc961e17a40b17c8d5c.tmp",
+    "docs/ROADMAP_1.0.md",
+    "app/about.tsx",
     "AUDIT.md",
     "CLAUDE.md",
     "scripts/generate-obsidian-graph.js",

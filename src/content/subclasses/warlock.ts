@@ -18,11 +18,12 @@ export const fiendProgression: SubclassProgression = {
 
 export const greatOldOneProgression: SubclassProgression = {
   classId: 'warlock', name: 'The Great Old One',
-  // NEEDS VERIFICATION — unlike most excluded subclasses (which are from
-  // later expansion books), The Great Old One IS a core 2014 PHB warlock
-  // patron, same as The Fiend. Excluded per the standard one-per-class SRD
-  // convention, but this is a genuine "which one did SRD 5.1 pick" question
-  // rather than a source-legitimacy one — worth an extra-careful check.
+  // CONFIRMED correct via direct verification against the actual SRD 5.1
+  // text (5thsrd.org) on 2026-08-04: the Warlock page fully details only
+  // "The Fiend" — Great Old One appears solely as flavor text within the
+  // Fiend's own Pact Boon description ("If your patron is the Great Old
+  // One, your weapon might be..."), not as its own detailed subclass
+  // section. Confirmed non-SRD.
   srd: false,
   entries: [
     { level: 1, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'awakened_mind', name: 'Awakened Mind', description: 'Telepathically communicate with any creature within 30 feet that you can see. No shared language needed. Creature can\'t respond unless it has telepathy.', source: { kind: 'subclass', refId: 'great_old_one' }, level: 1, effects: [], actions: [], choices: [], passive: true } }] },

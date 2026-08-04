@@ -133,6 +133,14 @@ export default function SettingsScreen() {
         </Text>
       </Section>
 
+      {/* ── About ─────────────────────────────────────────────── */}
+      <Section title="About">
+        <Pressable style={styles.aboutRow} onPress={() => router.push('/about')}>
+          <Text style={styles.optionLabel}>About &amp; Legal</Text>
+          <Text style={styles.aboutChevron}>›</Text>
+        </Pressable>
+      </Section>
+
     </ScrollView>
   );
 }
@@ -252,4 +260,12 @@ const styles = StyleSheet.create({
   },
   toggleText:  { flex: 1 },
   toggleLabel: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+
+  aboutRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    padding:        Spacing.md,
+  },
+  aboutChevron: { fontSize: FontSize.lg, color: Colors.textSecondary },
 });

@@ -41,11 +41,16 @@ function feat(
     choices: [],
     passive: true,
   };
-  // SRD status computed automatically from the source constant passed in —
-  // see the HIGH-STAKES JUDGMENT CALL note on Feat.srd in engine/types.ts.
-  // Only PHB-sourced feats are tagged safe; XGE/TCE/FTD/GG are all later
-  // expansion books with no SRD ambiguity — confidently excluded.
-  const srd = source === PHB;
+  // SRD status: CONFIRMED via direct verification against the actual SRD 5.1
+  // text (5thsrd.org, a faithful CC-BY mirror) on 2026-08-04. The SRD 5.1
+  // Feats section contains ONLY Grappler — the "optional feats rule" framing
+  // in the class text names Grappler as the sole worked example, unlike
+  // classes/races/backgrounds/monsters which got much fuller treatment.
+  // This CORRECTS an earlier optimistic guess (all 42 PHB feats) that was
+  // based on a pattern from other content types that turned out NOT to
+  // apply to feats. See docs/ROADMAP_1.0.md Phase 1 Step 1.4 for the full
+  // verification writeup and links.
+  const srd = id === 'grappler';
   return { id, name, prerequisite, description, source, feature, abilityChoice, skillChoice, srd };
 }
 

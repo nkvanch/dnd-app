@@ -45,10 +45,13 @@ export const berserkerProgression: SubclassProgression = {
 export const totemWarriorProgression: SubclassProgression = {
   classId: 'barbarian',
   name: 'Path of the Totem Warrior',
-  // NEEDS VERIFICATION — excluded per the standard one-subclass-per-class SRD
-  // convention (matches Berserker's status as the sole SRD Barbarian path in
-  // the original 5.0 SRD lineage). Low-moderate chance SRD 5.1 expanded this;
-  // verify against the real text before assuming either way.
+  // CONFIRMED correct via direct verification against the actual SRD 5.1
+  // text (5thsrd.org) on 2026-08-04: the Barbarian page's table of contents
+  // and full content show only "Path of the Berserker" actually detailed —
+  // Totem Warrior is named in the class's intro sentence ("choose X or Y,
+  // both detailed at the end") but that phrasing is boilerplate copied
+  // verbatim from the full PHB and does NOT reliably indicate what the SRD
+  // excerpt actually includes. Confirmed non-SRD.
   srd: false,
   entries: [
     {

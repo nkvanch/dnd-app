@@ -837,25 +837,62 @@ subsections that actually exist on the page).
 
 ---
 
-### Step 1.5 — Attribution screen
-- [ ] About/Legal screen with the CC-BY-4.0 required text.
+### Step 1.5 — Attribution screen  ⏳ IN PROGRESS
+- [x] About/Legal screen built: `app/about.tsx`. Contains the CC-BY-4.0
+      required attribution text, a link to the actual SRD 5.1 document, a
+      WotC non-affiliation/trademark disclaimer, and an honest note about
+      original homebrew content not being official game material. Linked
+      from the app Settings screen (Settings → About).
 - [ ] Scrub "D&D"/"Dungeons & Dragons" from user-facing strings; use
-      "5th-edition-compatible" phrasing.
+      "5th-edition-compatible" phrasing. Search command given to Nick:
+      `Select-String -Path "app\**\*.tsx","src\**\*.tsx","src\**\*.ts"
+      -Pattern "D&D|Dungeons\s*&?\s*Dragons" -Recurse` — **awaiting results**,
+      not yet actioned.
 
 **Exit criteria:** a build where every shipped rules-content item is SRD 5.1
-or original, with attribution visible in-app.
+or original, with attribution visible in-app, and no unlicensed trademark
+usage in user-facing copy.
 
 ---
 
 ## PHASE 2 — IDENTITY & STORE PLUMBING (1 day)
 
 - [ ] `app.json` package id → your own reverse domain. PERMANENT after first
-      upload.
-- [ ] Remove `EXPO_PUBLIC_ANTHROPIC_API_KEY` + any code reading it.
+      upload. **Needs Nick's decision on the exact domain** (e.g.
+      `com.nkvanch.grimoire`, matching the EAS account) before this can be
+      applied — not actioned yet, waiting on that input.
+- [ ] Remove `EXPO_PUBLIC_ANTHROPIC_API_KEY` + any code reading it. `.env`
+      currently only has a placeholder value (`your_key_here`), no real
+      secret exposed. Given a content-search tool isn't available for this
+      drive, asked Nick to run:
+      `Select-String -Path "app\**\*.tsx","src\**\*.ts","src\**\*.tsx"
+      -Pattern "ANTHROPIC" -Recurse` to confirm it's genuinely unused
+      (expected, given the app's stated "no AI" principle) before deleting
+      — **awaiting result**.
 - [ ] `npx expo prebuild --clean`, fresh install, confirm campaigns/TCP work.
-- [ ] Privacy policy (one page, hosted anywhere public).
+- [x] Privacy policy drafted: `docs/PRIVACY_POLICY.md`. Covers: no data
+      collection, local-only storage, camera used only for QR scan (never
+      recorded/stored), LAN-only campaign sync (no server involved), no
+      accounts, no analytics/ads/third-party SDKs, no location use (post
+      expo-network swap). **Still needs before publishing:** fill in the
+      `[DATE]` and `[CONTACT EMAIL]` placeholders, and **host it at a
+      public URL** — Play Console requires a real link, a markdown file in
+      the repo isn't sufficient. GitHub Pages is the easiest free option if
+      this repo (or just this one file) can be public.
 - [ ] Play Console: app entry, Data Safety (no data collected), content
       rating, upload keystore via Play App Signing.
+
+### Settings/Campaign Settings UX consolidation (done alongside Phase 1, not originally scoped in Phase 2 but related — noting here for completeness)
+- [x] Moved HP on Level Up, Maximum Level, Table Rules (feats/multiclass/
+      XP), and Ability Score Maximum from the general app Settings screen
+      into Campaign Settings (`app/creation/rules.tsx`), since they're
+      campaign-rule concerns, not app-level ones. App Settings
+      (`app/settings.tsx`) is now lightweight: just links to Campaign
+      Settings and About & Legal.
+- [x] Campaign Settings is now a collapsible accordion (all sections
+      collapsed by default, tap to expand) — directly addresses the
+      "overwhelming" feedback; previously every section rendered fully
+      expanded on one long scroll.
 
 ---
 
@@ -969,6 +1006,56 @@ early 1.1 if Phase 1–4 run long. Do not let it delay Phase 1.
 ---
 
 ## POST-1.0 BACKLOG (resist until shipped)
+- **Wire generic magic item bonuses** — discovered while auditing what
+  actually influences stats (2026-08-04): almost none of the 835-item
+  imported magic item catalog (`importedItems.ts`) has real mechanical
+  effects. `scripts/parse_items.py` only generates `abilityEffects` when an
+  item has a `Damage:` field (i.e. weapons) — every other item, including
+  ones that obviously should modify stats (Ring of Protection, Cloak of
+  Protection, Bracers of Defense, Belt of Giant Strength, Headband of
+  Intellect, +N armor/weapons/shields), becomes a purely descriptive feature
+  with `effects: []`. Not "fake functionality" (nothing pretends to work),
+  but a real, currently-undisclosed gap — equipping a Ring of Protection
+  right now does not change AC or saves.
+
+  **Why this needs a separate mechanism, not a parser fix:**
+  `importedItems.ts` is auto-generated from free-text descriptions ("Items
+  with descriptions.md") — regex-parsing reliable numeric bonuses out of
+  hundreds of varied description strings is fragile and error-prone at that
+  scale. The maintainable approach is a **hand-authored override layer**,
+  same spirit as `CORE_ITEMS` already taking precedence over
+  `IMPORTED_ITEMS` on id collision:
+  - A curated `id → extra effects` map (e.g. `ITEM_EFFECT_OVERRIDES` in
+    `src/content/items/index.ts`) applied on top of the auto-imported base
+    item at load time, not by editing the generated file.
+  - **Tractable, high-value first batch** (regular patterns, cover a lot of
+    ground): the `+1/+2/+3` weapon/armor/shield family (very regular
+    naming, straightforward `stat_modifier` bonus to AC or the existing
+    weapon damage/attack effect), Ring/Cloak of Protection (+1 AC and all
+    saves), Bracers of Defense (+2 AC, conditional on no armor/shield worn
+    — needs a conditional-effect check, more involved), the ability-score-
+    setting family (Belt of Giant Strength, Gauntlets of Ogre Power,
+    Headband of Intellect, Amulet of Health — these SET a score to a fixed
+    value rather than add to it, which may need a new effect operation if
+    `stat_modifier` only supports `add`/`multiply` today — check
+    `engine/types.ts` before starting).
+  - **Explicitly out of scope / stays description-only by nature**: anything
+    granting advantage on checks (Cloak/Boots of Elvenkind) unless the
+    engine already has an advantage-grant effect type (check first), and
+    narrative/utility items (Deck of Many Things, Bag of Holding, Portable
+    Hole) that don't map to a stat at all — these are correctly
+    description-only and shouldn't be forced into the effect system.
+  - Core hand-authored items (`items/index.ts`) are unaffected — weapons/
+    armor/shield there are already correctly wired; this backlog item is
+    scoped to the imported catalog only.
+- **Wire feat effects more broadly** — same audit found most of the 83
+  feats are description-only (`effects: []`), including — notably —
+  Grappler, the ONE feat that survives the SRD filter into a public build.
+  A public 1.0 build's entire feat system currently does nothing
+  mechanically. Lower priority than items (feats are opt-in, and 42 of the
+  content is going to be excluded from public builds anyway per the Step
+  1.4 feats finding), but worth scoping alongside the items work since both
+  use the same `Feature.effects` mechanism.
 - **Subclass choice wiring** — Totem Warrior's totem pick, Hunter's Prey,
   Battle Master maneuvers, Metamagic, Eldritch Invocations, Fighting Style,
   Divine Domain spells, etc. currently exist only as description text with

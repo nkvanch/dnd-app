@@ -66,6 +66,21 @@ def clean_desc(text):
     return text.strip()
 
 
+def scrub_trademark(text):
+    """Strip WotC trademark mentions from free-text descriptions — never use
+    "D&D"/"Dungeons & Dragons" in user-facing copy (Play Store guidance,
+    see docs/ROADMAP_1.0.md Phase 1 Step 1.5). Applied to every parsed
+    description so it's durable across future vault edits, not a one-time
+    patch. Doesn't attempt full grammatical awareness — handles the known
+    phrasings found in the vault as of 2026-08-04; spot-check any new hits
+    a future regeneration surfaces (search generated output for 'D&D')."""
+    text = re.sub(r'\bD&D weapons\b', 'tabletop weapons', text, flags=re.I)
+    text = re.sub(r'\bD&D\s*5E\b', '5th edition', text, flags=re.I)
+    text = re.sub(r'\bD&D\b', 'the game', text)
+    text = re.sub(r'\bDungeons\s*(?:&|and)\s*Dragons\b', 'the game', text, flags=re.I)
+    return text
+
+
 def slugify(name):
     s = name.lower()
     s = re.sub(r'[^a-z0-9]+', '_', s)
@@ -469,6 +484,7 @@ def parse_block(b):
     desc = fields.get('Description', '') or ' '.join(desc_lines)
     desc = re.sub(r'^Description:\s*', '', desc)
     desc = clean_desc(desc)
+    desc = scrub_trademark(desc)
 
     item_id = slugify(name)
     itype = fields.get('Type', '')

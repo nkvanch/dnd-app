@@ -174,7 +174,7 @@ export default function CreationRulesScreen() {
         <Text style={styles.ruleDesc}>
           {rules.maxAbilityScore === null
             ? 'Currently: Uncapped. Ability Score Improvements and feats always apply in full, with no ceiling.'
-            : `Currently: ${rules.maxAbilityScore ?? 20}. Applies to ability score improvements. Standard D&D 5e is 20.`}
+            : `Currently: ${rules.maxAbilityScore ?? 20}. Applies to ability score improvements. Standard 5th-edition rules use 20.`}
         </Text>
       </Accordion>
 

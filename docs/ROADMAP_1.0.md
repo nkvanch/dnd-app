@@ -837,21 +837,33 @@ subsections that actually exist on the page).
 
 ---
 
-### Step 1.5 — Attribution screen  ⏳ IN PROGRESS
+### Step 1.5 — Attribution screen  ✅ COMPLETE
 - [x] About/Legal screen built: `app/about.tsx`. Contains the CC-BY-4.0
       required attribution text, a link to the actual SRD 5.1 document, a
       WotC non-affiliation/trademark disclaimer, and an honest note about
       original homebrew content not being official game material. Linked
       from the app Settings screen (Settings → About).
-- [ ] Scrub "D&D"/"Dungeons & Dragons" from user-facing strings; use
-      "5th-edition-compatible" phrasing. Search command given to Nick:
-      `Select-String -Path "app\**\*.tsx","src\**\*.tsx","src\**\*.ts"
-      -Pattern "D&D|Dungeons\s*&?\s*Dragons" -Recurse` — **awaiting results**,
-      not yet actioned.
+- [x] D&D string scrub complete. Search found 11 hits; classified each:
+      - **3 genuinely user-facing, fixed:**
+        - `app/(tabs)/index.tsx` — the home screen's top-bar app title was
+          literally "D&D Companion", shown every time the app opens. This
+          was the single highest-visibility branding issue in the whole
+          audit. Fixed to "Grimoire", matching `app.json`'s display name.
+        - `app/creation/rules.tsx` — Campaign Settings' Ability Score
+          Maximum description said "Standard D&D 5e is 20"; reworded to
+          "Standard 5th-edition rules use 20."
+        - `src/content/items/importedItems.ts` — 4 item descriptions
+          mentioned "D&D"/"D&D 5E" in their flavor text. Since this file is
+          auto-generated, fixed at the source: added `scrub_trademark()` to
+          `scripts/parse_items.py`, applied to every parsed description.
+          Durable across future vault regenerations, not a one-time patch.
+      - **8 hits were internal code comments** (TabInventory.tsx ×2,
+        schema.ts, dice.ts, types.ts) — correctly left alone, comments never
+        render to users.
 
 **Exit criteria:** a build where every shipped rules-content item is SRD 5.1
 or original, with attribution visible in-app, and no unlicensed trademark
-usage in user-facing copy.
+usage in user-facing copy.  **All met.**
 
 ---
 
@@ -861,14 +873,12 @@ usage in user-facing copy.
       upload. **Needs Nick's decision on the exact domain** (e.g.
       `com.nkvanch.grimoire`, matching the EAS account) before this can be
       applied — not actioned yet, waiting on that input.
-- [ ] Remove `EXPO_PUBLIC_ANTHROPIC_API_KEY` + any code reading it. `.env`
-      currently only has a placeholder value (`your_key_here`), no real
-      secret exposed. Given a content-search tool isn't available for this
-      drive, asked Nick to run:
-      `Select-String -Path "app\**\*.tsx","src\**\*.ts","src\**\*.tsx"
-      -Pattern "ANTHROPIC" -Recurse` to confirm it's genuinely unused
-      (expected, given the app's stated "no AI" principle) before deleting
-      — **awaiting result**.
+- [x] Remove `EXPO_PUBLIC_ANTHROPIC_API_KEY` + any code reading it. `.env`
+      had only a placeholder value (`your_key_here`), no real secret was
+      ever exposed. Searched and confirmed the only reference anywhere was
+      a comment in `src/engine/wikiImporter.ts` documenting its own removal
+      ("this module previously called the Anthropic API... The app no
+      longer includes any AI features") — genuinely dead. `.env` cleared.
 - [ ] `npx expo prebuild --clean`, fresh install, confirm campaigns/TCP work.
 - [x] Privacy policy drafted: `docs/PRIVACY_POLICY.md`. Covers: no data
       collection, local-only storage, camera used only for QR scan (never

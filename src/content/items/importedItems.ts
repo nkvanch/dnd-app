@@ -590,7 +590,8 @@ export const IMPORTED_ITEMS: Item[] = [
         "choices": [],
         "passive": true
       }
-    ]
+    ],
+    "srd": true
   },
   {
     "id": "armor_of_invulnerability",
@@ -12900,7 +12901,7 @@ export const IMPORTED_ITEMS: Item[] = [
       {
         "id": "plate_armor_desc",
         "name": "Plate Armor",
-        "description": "The strongest standard armor available in D&D 5E.",
+        "description": "The strongest standard armor available in 5th edition.",
         "source": {
           "kind": "item",
           "refId": "plate_armor"
@@ -16447,7 +16448,7 @@ export const IMPORTED_ITEMS: Item[] = [
       {
         "id": "staff_of_the_magi_desc",
         "name": "Staff of the Magi",
-        "description": "Arguably the most powerful staff in D&D 5E, storing numerous spells, granting magical defenses, and capable of a catastrophic Retributive Strike.",
+        "description": "Arguably the most powerful staff in 5th edition, storing numerous spells, granting magical defenses, and capable of a catastrophic Retributive Strike.",
         "source": {
           "kind": "item",
           "refId": "staff_of_the_magi"
@@ -17150,7 +17151,7 @@ export const IMPORTED_ITEMS: Item[] = [
       {
         "id": "vorpal_sword_desc",
         "name": "Vorpal Sword",
-        "description": "Famous blade capable of decapitating enemies on a critical hit. One of the most iconic D&D weapons ever created. Community discussions consistently place it among the most recognizable legendary items.",
+        "description": "Famous blade capable of decapitating enemies on a critical hit. One of the most iconic tabletop weapons ever created. Community discussions consistently place it among the most recognizable legendary items.",
         "source": {
           "kind": "item",
           "refId": "vorpal_sword"
@@ -17549,7 +17550,7 @@ export const IMPORTED_ITEMS: Item[] = [
       {
         "id": "wand_of_wonder_desc",
         "name": "Wand of Wonder",
-        "description": "Produces wildly unpredictable magical effects ranging from harmless to spectacular. One of the most chaotic items in D&D.",
+        "description": "Produces wildly unpredictable magical effects ranging from harmless to spectacular. One of the most chaotic items in the game.",
         "source": {
           "kind": "item",
           "refId": "wand_of_wonder"

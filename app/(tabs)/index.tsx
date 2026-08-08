@@ -259,7 +259,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.topBar}>
-        <Text style={styles.appTitle}>D&D Companion</Text>
+        <Text style={styles.appTitle}>Grimoire</Text>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>

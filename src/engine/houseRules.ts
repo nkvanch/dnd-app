@@ -163,12 +163,12 @@ export const HOUSE_RULES: HouseRuleDef[] = [
     key: 'deathSavesPersist', label: 'Death save failures persist', kind: 'boolean',
     section: 'Death & Recovery',
     description:
-      'Reminder only — death saves are not yet tracked per-entity in this app. ' +
-      'When enabled, remind your table that failed death saves carry over until a long rest ' +
-      'instead of clearing when a character stabilises.',
+      'Book: death saves reset fully (0 successes, 0 failures) every time you drop ' +
+      'to 0 HP, even if you\'ve stabilized and been dropped again since. When enabled, ' +
+      'accumulated failures instead carry over between dying episodes until your next ' +
+      'long rest, making repeated near-death more dangerous.',
     bookDefault: false,
     bookLabel: 'Clear on stabilise (book)', homebrewLabel: 'Persist to long rest',
-    reminderOnly: true,
   },
 
   // ── Monster Info ─────────────────────────────────────────────────────────

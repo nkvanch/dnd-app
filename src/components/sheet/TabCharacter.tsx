@@ -54,8 +54,10 @@ const CONDITION_WARNINGS: Record<string, string> = {
   unconscious:'Incapacitated, prone; auto-fail STR/DEX saves; attacks have advantage',
 };
 
-// Death saves are session-local state — not persisted to entity.notes.
-// They reset when HP drops to 0 (start of dying) or rises above 0 (revived/stabilised).
+// Death saves live in entity.resources.deathSaves — persisted and synced,
+// same as HP. combat.ts resets them automatically when HP drops to 0 for the
+// first time or rises above 0 (healed/revived); this component only handles
+// recording each save result and the stabilize/nat-20 special cases.
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -172,7 +174,16 @@ function DeathSavesSection({
     timerRef.current = setTimeout(() => setLastRoll(null), 3000);
   }
 
-  function revive() {
+  function stabilize() {
+    // 3 successes = STABLE at 0 HP (book rule) — NOT healed. The creature
+    // stops making death saves and stays at 0 HP, unconscious, until healed
+    // by any means. Only a natural 20 heals to 1 HP (see reviveNat20 below).
+    onSavesChange({ ...saves, successes: 3 });
+  }
+
+  function reviveNat20() {
+    // Natural 20 on a death save: regain 1 HP immediately (book rule) and
+    // clear both counters, since the creature is no longer dying.
     const updated: Entity = {
       ...entity,
       resources: { ...entity.resources, hp: { ...entity.resources.hp, current: 1 } },
@@ -184,7 +195,7 @@ function DeathSavesSection({
   function addSuccess() {
     if (isDead || isStable) return;
     const next = Math.min(3, saves.successes + 1);
-    if (next >= 3) { revive(); showResult('Stable — 1 HP'); }
+    if (next >= 3) { stabilize(); showResult('Stable at 0 HP'); }
     else { onSavesChange({ ...saves, successes: next }); showResult(`Success (${next}/3)`); }
   }
 
@@ -200,14 +211,14 @@ function DeathSavesSection({
     const result = rollExpression('1d20').total;
     if (result === 20) {
       showResult('Natural 20 — revived!');
-      revive();
+      reviveNat20();
     } else if (result === 1) {
       const next = Math.min(3, saves.failures + 2);
       onSavesChange({ ...saves, failures: next });
       showResult(next >= 3 ? '1 — Dead' : `1 — Two failures! (${next}/3)`);
     } else if (result >= 10) {
       const next = Math.min(3, saves.successes + 1);
-      if (next >= 3) { revive(); showResult('Stable — 1 HP'); }
+      if (next >= 3) { stabilize(); showResult(`${result} — Stable at 0 HP`); }
       else { onSavesChange({ ...saves, successes: next }); showResult(`${result} — Success (${next}/3)`); }
     } else {
       const next = Math.min(3, saves.failures + 1);
@@ -608,7 +619,6 @@ export function TabCharacter({
   const [manualHpOpen, setManualHpOpen] = useState(false);
   const [maxHpOpen,    setMaxHpOpen]    = useState(false);
   const [tempHpOpen,   setTempHpOpen]   = useState(false);
-  const [deathSaves, setDeathSaves] = useState({ successes: 0, failures: 0 });
   const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
   const [sensesOpen, setSensesOpen] = useState(false);
   const [addFeatOpen, setAddFeatOpen] = useState(false);
@@ -656,6 +666,23 @@ export function TabCharacter({
   function handleClearTempHp() {
     onEntityUpdate(recomputeDerived(
       { ...entity, resources: { ...entity.resources, hp: { ...entity.resources.hp, temp: 0 } } },
+      rules,
+    ));
+  }
+  // Death saves used to be session-local React state that never persisted or
+  // synced (see git history) — now writes into entity.resources.deathSaves,
+  // same mutate-then-recompute pattern as every other HP change, so it
+  // survives app restarts and syncs to other devices via the normal entity
+  // broadcast path.
+  function handleDeathSavesChange(next: { successes: number; failures: number }) {
+    onEntityUpdate(recomputeDerived(
+      {
+        ...entity,
+        resources: {
+          ...entity.resources,
+          deathSaves: { successes: next.successes, failures: next.failures, stable: next.successes >= 3 },
+        },
+      },
       rules,
     ));
   }
@@ -761,8 +788,8 @@ export function TabCharacter({
         <DeathSavesSection
           entity={entity}
           rules={rules}
-          saves={deathSaves}
-          onSavesChange={setDeathSaves}
+          saves={resources.deathSaves}
+          onSavesChange={handleDeathSavesChange}
           onEntityUpdate={onEntityUpdate}
         />
       )}
@@ -882,7 +909,7 @@ export function TabCharacter({
         )}
 
         {/* Stabilized — shown when at 0 HP with 3 death save successes */}
-        {entity.resources.hp.current <= 0 && deathSaves.successes >= 3 && (
+        {entity.resources.hp.current <= 0 && resources.deathSaves.successes >= 3 && (
           <View style={styles.stabilizedChip}>
             <Text style={styles.stabilizedTxt}>♥ STABILIZED</Text>
           </View>

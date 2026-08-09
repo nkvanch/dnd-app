@@ -139,6 +139,7 @@ export function makeEmptyEntity(id: string, kind: Entity['kind'] = 'character'):
       speed:   30,
       ac:      0,
       custom:  [],
+      deathSaves: { successes: 0, failures: 0, stable: false },
     },
     spellcasting: null,
     inventory: {

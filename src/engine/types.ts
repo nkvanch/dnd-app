@@ -317,12 +317,28 @@ export type CustomResource = {
   recharge: 'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
 };
 
+/**
+ * Death save tracking. Only meaningful while hp.current === 0 and the
+ * entity hasn't stabilized. 3 successes -> stable (stops rolling, stays at
+ * 0 HP until healed). 3 failures -> dead. A natural 20 on the save
+ * instead heals 1 HP and clears both counters (handled in the UI action,
+ * not stored as separate state here). Reset on any HP gain above 0 or on
+ * stabilizing, per the book rule. See docs/ROADMAP_1.0.md Phase 3.1 and
+ * the `deathSavesPersist` house rule in houseRules.ts.
+ */
+export type DeathSaves = {
+  successes: number;   // 0-3
+  failures:  number;   // 0-3
+  stable:    boolean;  // true once 3 successes are reached
+};
+
 export type ResourceBlock = {
-  hp:      HPBlock;
-  hitDice: HitDiceBlock;
-  speed:   number;
-  ac:      number;   // 0 = no armor; pipeline falls back to 10 + DEX
-  custom:  CustomResource[];
+  hp:         HPBlock;
+  hitDice:    HitDiceBlock;
+  speed:      number;
+  ac:         number;   // 0 = no armor; pipeline falls back to 10 + DEX
+  custom:     CustomResource[];
+  deathSaves: DeathSaves;
 };
 
 export type ChoiceOption = {

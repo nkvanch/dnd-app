@@ -7,6 +7,7 @@ import { recomputeDerived } from './pipeline';
 import { tickDurations } from './conditions';
 import { rollD20 as rollD20Dice } from './dice';
 import { DEFAULT_RULES } from '../store/characterStore';
+import { deathSavesPersist } from './houseRules';
 
 // ── Initiative ────────────────────────────────────────────────────────────────
 
@@ -246,9 +247,32 @@ export function applyDamage(
   if (damage <= 0) return entity;
 
   const { hp } = entity.resources;
-  const tempAbsorbed  = Math.min(hp.temp, damage);
-  const remainingDmg  = damage - tempAbsorbed;
-  const newCurrent    = Math.max(0, hp.current - remainingDmg);
+  const wasAtZero    = hp.current === 0;
+  const tempAbsorbed = Math.min(hp.temp, damage);
+  const remainingDmg = damage - tempAbsorbed;
+  const newCurrent   = Math.max(0, hp.current - remainingDmg);
+
+  // Death saves: dropping to 0 for the first time starts a fresh count —
+  // unless the deathSavesPersist house rule is on, in which case accumulated
+  // failures from a prior dying episode carry over (cleared only by a long
+  // rest, see rest.ts). Successes/stable always reset on a fresh drop either
+  // way — only failures are ever persisted.
+  // Taking damage while ALREADY at 0 HP counts as one automatic failure
+  // (book rule) — this only applies to real damage getting through, not
+  // damage fully absorbed by temp HP while already at 0.
+  let deathSaves = entity.resources.deathSaves;
+  if (newCurrent === 0 && !wasAtZero) {
+    deathSaves = {
+      successes: 0,
+      failures:  deathSavesPersist(rules) ? deathSaves.failures : 0,
+      stable:    false,
+    };
+  } else if (newCurrent === 0 && wasAtZero && remainingDmg > 0 && !deathSaves.stable) {
+    deathSaves = {
+      ...deathSaves,
+      failures: Math.min(3, deathSaves.failures + 1),
+    };
+  }
 
   const updated = {
     ...entity,
@@ -259,6 +283,7 @@ export function applyDamage(
         current: newCurrent,
         temp:    hp.temp - tempAbsorbed,
       },
+      deathSaves,
     },
   };
 
@@ -267,7 +292,7 @@ export function applyDamage(
   return recomputeDerived(updated, rules);
 }
 
-/** Heals an entity, capped at maximum HP. */
+/** Heals an entity, capped at maximum HP. Any healing above 0 HP clears death saves. */
 export function applyHealing(
   entity:  Entity,
   amount:  number,
@@ -283,7 +308,41 @@ export function applyHealing(
     resources: {
       ...entity.resources,
       hp: { ...entity.resources.hp, current: newCurrent },
+      deathSaves: newCurrent > 0
+        ? { successes: 0, failures: 0, stable: false }
+        : entity.resources.deathSaves,
     },
+  };
+  return recomputeDerived(updated, rules);
+}
+
+/**
+ * Records one death saving throw result while an entity is at 0 HP.
+ * Success on 3 -> stable (stops rolling; still at 0 HP until healed).
+ * Failure on 3 -> dead (UI is responsible for showing this state; the
+ * engine doesn't have a separate "dead" flag beyond failures === 3).
+ * A natural 20 (isNatural20) instead heals 1 HP immediately and clears
+ * both counters, per the book rule — call applyHealing(entity, 1, rules)
+ * from the UI in that case instead of this function.
+ * No-op if already stable, already dead, or entity isn't at 0 HP.
+ */
+export function recordDeathSave(
+  entity:  Entity,
+  outcome: 'success' | 'failure',
+  rules:   CampaignRules = DEFAULT_RULES
+): Entity {
+  const { hp, deathSaves } = entity.resources;
+  if (hp.current !== 0) return entity;
+  if (deathSaves.stable || deathSaves.failures >= 3) return entity;
+
+  const next = outcome === 'success'
+    ? { ...deathSaves, successes: Math.min(3, deathSaves.successes + 1) }
+    : { ...deathSaves, failures:  Math.min(3, deathSaves.failures  + 1) };
+  const stabilized = { ...next, stable: next.successes >= 3 };
+
+  const updated = {
+    ...entity,
+    resources: { ...entity.resources, deathSaves: stabilized },
   };
   return recomputeDerived(updated, rules);
 }

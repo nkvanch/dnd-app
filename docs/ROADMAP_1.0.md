@@ -908,10 +908,41 @@ usage in user-facing copy.  **All met.**
 
 ## PHASE 3 — 1.0 FEATURES (in this order)
 
-### 3.1 Death saves
-`ResourceBlock` += `deathSaves`. Sheet shows pips at 0 HP; 3 successes =
-stable, 3 failures = dead. Wires the existing `deathSavesPersist` house rule
-into real reset logic. Syncs via the existing entity-sync path.
+### 3.1 Death saves  ✅ COMPLETE
+- [x] `DeathSaves` type added (`successes`, `failures`, `stable`), wired into
+      `ResourceBlock` as a required field — same ripple-effect fix pattern as
+      earlier type additions this session (`makeEmptyEntity` in
+      characterStore.ts, the test entity in test-engine.ts).
+- [x] **Major discovery mid-implementation**: the death-saves UI already
+      existed, fully built (pips, roll button, manual success/failure
+      buttons, natural-20 handling, dead/stable states) — but as **session-
+      local React state** that reset on navigating away from the tab and
+      never synced to other devices. The task became migrating existing,
+      working UI to real persistence, not building from scratch.
+- [x] **Found and fixed a real rules bug while migrating**: reaching 3
+      successes was calling the same `revive()` path as a natural 20,
+      setting HP to 1. Per RAW, 3 successes means STABLE at 0 HP (stops
+      rolling, stays unconscious) — only a natural 20 heals to 1 HP. Split
+      into separate `stabilize()` (no HP change) and `reviveNat20()`
+      (HP → 1) functions.
+- [x] Real engine logic in `src/engine/combat.ts`: `applyDamage` starts a
+      fresh death-save count on first dropping to 0 HP, and correctly
+      applies the book rule that taking damage while ALREADY at 0 HP counts
+      as one automatic failure. `applyHealing` clears death saves on any
+      healing above 0 HP. New `recordDeathSave()` export for programmatic
+      use alongside the existing UI-driven flow.
+- [x] `deathSavesPersist` house rule wired to actually do something — no
+      longer `reminderOnly`. When off (book default): failures fully reset
+      every time you drop to 0 HP. When on: failures carry over between
+      dying episodes, cleared only by a long rest. Found and fixed a real
+      gap while wiring this: `rest.ts`'s long-rest HP restoration sets HP
+      directly rather than going through `applyHealing`, so it needed its
+      own explicit death-saves clear — otherwise "persist to long rest"
+      would never actually resolve.
+- [x] Sync: confirmed death saves need no special sync wiring — they live
+      inside `entity.resources`, which the existing `updateCharacter` →
+      `syncManager.broadcastEntity` path already propagates on every entity
+      mutation. Same mechanism as HP, conditions, everything else.
 
 ### 3.2 Backup / export-import
 Serialize to JSON via expo-file-system + share sheet; import via file picker

@@ -66,7 +66,11 @@ function shortRest(entity: Entity): Entity {
 function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity {
   let updated = entity;
 
-  // 1. HP
+  // 1. HP (and death saves — a long rest fully restores HP, which would
+  //    clear death saves via applyHealing's own logic, but this path sets
+  //    HP directly rather than going through applyHealing, so it needs its
+  //    own explicit clear. This is also where the deathSavesPersist house
+  //    rule's promised failures reset actually happens.)
   updated = {
     ...updated,
     resources: {
@@ -76,6 +80,7 @@ function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity 
         maximum: updated.resources.hp.maximum,
         temp:    0,
       },
+      deathSaves: { successes: 0, failures: 0, stable: false },
     },
   };
 

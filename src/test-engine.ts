@@ -36,7 +36,8 @@ const createTestEntity = (): Entity => ({
     hp: { current: 12, maximum: 12, temp: 0 },
     speed: 30, ac: 16,
     hitDice: { die: 10, total: 1, remaining: 1 },
-    custom: [{ id: 'second_wind_pool', name: 'Second Wind Use', current: 0, maximum: 1, recharge: 'short_rest' }]
+    custom: [{ id: 'second_wind_pool', name: 'Second Wind Use', current: 0, maximum: 1, recharge: 'short_rest' }],
+    deathSaves: { successes: 0, failures: 0, stable: false }
   },
   spellcasting: null,
   inventory: { equipped: [], carried: [], currency: { pp: 0, gp: 10, ep: 0, sp: 0, cp: 0 } },

@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.dndapp",
+      "package": "com.nkvanch.grimoire",
       "permissions": [
         "ACCESS_WIFI_STATE",
         "ACCESS_NETWORK_STATE"

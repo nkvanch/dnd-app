@@ -1,0 +1,90 @@
+// src/io/backupIO.ts
+// Export/import for .grimoire-pack backup files (docs/ROADMAP_1.0.md Phase
+// 3.2). This is the ONLY way a character survives a lost or reset device —
+// there is no cloud backup by design (see docs/PRIVACY_POLICY.md). Export
+// writes a file and opens the OS share sheet so the user chooses where it
+// goes (their own cloud drive, email to themselves, etc.) — Grimoire itself
+// never transmits it anywhere.
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
+import Constants from 'expo-constants';
+import { Entity } from '../engine/types';
+import {
+  GrimoirePack, GrimoirePackHomebrew, createBackupPack,
+  validateGrimoirePack, countHomebrew,
+} from '../engine/backup';
+
+/**
+ * Exports the given characters plus whichever homebrew content they actually
+ * reference to a .grimoire-pack file, then opens the OS share sheet. The
+ * caller decides which characters/homebrew to include — see the Settings
+ * screen for "back up everything" vs. a future per-character export.
+ */
+export async function exportBackup(
+  characters: Entity[],
+  homebrew:   GrimoirePackHomebrew,
+  deviceId:   string | null,
+): Promise<void> {
+  const pack = createBackupPack(
+    characters,
+    homebrew,
+    deviceId,
+    Constants.expoConfig?.version ?? '1.0.0',
+  );
+
+  const json     = JSON.stringify(pack, null, 2);
+  const stamp    = new Date().toISOString().slice(0, 10);
+  const filename = `grimoire-backup-${stamp}.grimoire-pack`;
+  const uri      = FileSystem.cacheDirectory + filename;
+
+  await FileSystem.writeAsStringAsync(uri, json, { encoding: FileSystem.EncodingType.UTF8 });
+
+  const canShare = await Sharing.isAvailableAsync();
+  if (!canShare) {
+    throw new Error('Sharing isn\u2019t available on this device. The backup file was written but couldn\u2019t be shared.');
+  }
+  await Sharing.shareAsync(uri, {
+    mimeType:    'application/json',
+    dialogTitle: 'Save your Grimoire backup',
+  });
+}
+
+export type ImportPreview = {
+  pack:            GrimoirePack;
+  characterCount:  number;
+  homebrewCount:   number;
+};
+
+/**
+ * Opens the file picker and validates the selected file, but does NOT import
+ * yet — returns a preview for the caller to show the user before committing.
+ * Matches the "Review Screen" stage in docs/Future/HOMEBREW_IMPORT_PIPELINE.md
+ * even in this minimal v1 form: never import silently.
+ * Returns null if the user cancels the picker.
+ */
+export async function pickAndValidateBackup(): Promise<ImportPreview | null> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: '*/*',   // .grimoire-pack has no registered MIME type — accept broadly
+    copyToCacheDirectory: true,
+  });
+  if (result.canceled || !result.assets?.[0]) return null;
+
+  const content = await FileSystem.readAsStringAsync(result.assets[0].uri);
+  let data: unknown;
+  try {
+    data = JSON.parse(content);
+  } catch {
+    throw new Error('That file isn\u2019t valid JSON \u2014 is it really a .grimoire-pack file?');
+  }
+
+  const problem = validateGrimoirePack(data);
+  if (problem) throw new Error(problem);
+
+  const pack = data as GrimoirePack;
+  return {
+    pack,
+    characterCount: pack.characters.length,
+    homebrewCount:  countHomebrew(pack.homebrew),
+  };
+}

@@ -2,12 +2,13 @@
 // Root layout — initializes SQLite DB + loads characters + hydrates session
 // on startup, then renders the navigation stack.
 import { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Colors } from '../src/theme';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { initDb } from '../src/db/db';
+import { getMeta } from '../src/db/appMetaRepo';
 import { useCharacterStore } from '../src/store/characterStore';
 import { useSessionStore }   from '../src/store/sessionStore';
 import { useCampaignStore }  from '../src/store/campaignStore';
@@ -28,6 +29,7 @@ function BootScreen() {
 
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
+  const router = useRouter();
 
   const loadCharacters = useCharacterStore(s => s.loadCharacters);
   const initSession    = useSessionStore(s => s.initSession);
@@ -90,6 +92,16 @@ export default function RootLayout() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // First-launch onboarding redirect — fires once, right after boot finishes.
+  // See app/onboarding.tsx and docs/ROADMAP_1.0.md Phase 3.3.
+  useEffect(() => {
+    if (!dbReady) return;
+    getMeta('onboarding_complete').then(v => {
+      if (v !== 'true') router.replace('/onboarding' as any);
+    }).catch(() => { /* if the check fails, just skip onboarding rather than block startup */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbReady]);
+
   if (!dbReady) return <BootScreen />;
 
   return (
@@ -118,6 +130,9 @@ export default function RootLayout() {
         <Stack.Screen name="homebrew/race-builder"       options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/feature-editor"     options={{ headerShown: false }} />
         <Stack.Screen name="settings"                      options={{ headerShown: false }} />
+        <Stack.Screen name="about"                         options={{ headerShown: false }} />
+        <Stack.Screen name="backup"                        options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding"                    options={{ headerShown: false }} />
       </Stack>
     </View>
     </ErrorBoundary>

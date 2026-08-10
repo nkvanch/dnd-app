@@ -34,6 +34,13 @@ export default function SettingsScreen() {
         </Pressable>
       </Section>
 
+      <Section title="Data">
+        <Pressable style={styles.linkRow} onPress={() => router.push('/backup')}>
+          <Text style={styles.optionLabel}>Backup &amp; Restore</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+      </Section>
+
       <Section title="About">
         <Pressable style={styles.linkRow} onPress={() => router.push('/about')}>
           <Text style={styles.optionLabel}>About &amp; Legal</Text>

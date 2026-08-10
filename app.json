@@ -36,7 +36,8 @@
           "root": "app"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-sharing"
     ],
     "extra": {
       "router": {

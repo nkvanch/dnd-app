@@ -190,11 +190,35 @@ class SyncManagerClass {
 
   /**
    * Broadcast a full entity snapshot to all connected peers.
-   * DM-only operation — players can't broadcast.
+   * DM-only operation — players can't broadcast directly to the whole table
+   * (they don't run the server), which is why this alone was a silent no-op
+   * when called from a player's device. Kept for DM-only call sites and for
+   * `syncEntity` below to delegate to.
    */
   broadcastEntity(entity: Entity): void {
     if (this.role === 'dm' && this.server) {
       this.server.broadcastEntity(entity);
+    }
+  }
+
+  /**
+   * Role-aware entity sync — the method the rest of the app should call on
+   * every entity mutation, regardless of whether this device is the DM or a
+   * player. Dispatches to the correct underlying transport:
+   *   DM:     broadcasts directly to every connected player (server → all clients).
+   *   Player: pushes up to the DM, who relays it onward to the rest of the
+   *           table (see onEntityReceived in app/_layout.tsx).
+   *   Offline: no-op — nothing to sync to yet.
+   * Before this existed, characterStore's updateCharacter only ever called
+   * broadcastEntity, which is a no-op for players — so a player editing their
+   * own character (taking damage, marking a death save, spending a slot)
+   * never left their device. See docs/ROADMAP_1.0.md Phase 3 for the fix.
+   */
+  syncEntity(entity: Entity): void {
+    if (this.role === 'dm' && this.server) {
+      this.server.broadcastEntity(entity);
+    } else if (this.role === 'player' && this.client) {
+      this.client.send({ type: 'entity_snapshot', entity });
     }
   }
 

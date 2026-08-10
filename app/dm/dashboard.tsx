@@ -21,8 +21,14 @@ function PartyCard({ entity, onPress }: { entity: Entity; onPress: () => void })
   const concentrating = spellcasting?.concentrating ?? null;
   const keyResources  = resources.custom.slice(0, 3); // show first 3 resources as pips
 
+  // Death state — deathSaves is real persisted/synced data now, so the DM
+  // dashboard can show it at a glance without needing to open the character.
+  const isDead   = resources.deathSaves.failures >= 3;
+  const isStable = resources.hp.current === 0 && resources.deathSaves.stable;
+  const isDying  = resources.hp.current === 0 && !isStable && !isDead;
+
   return (
-    <Pressable style={styles.partyCard} onPress={onPress}>
+    <Pressable style={[styles.partyCard, isDead && styles.partyCardDead]} onPress={onPress}>
       {/* Name row */}
       <View style={styles.cardTop}>
         <View>
@@ -32,6 +38,23 @@ function PartyCard({ entity, onPress }: { entity: Entity; onPress: () => void })
           </Text>
         </View>
         <View style={styles.cardBadges}>
+          {isDead && (
+            <View style={[styles.badge, styles.deathBadge]}>
+              <Text style={styles.deathBadgeTxt}>💀 DEAD</Text>
+            </View>
+          )}
+          {isDying && (
+            <View style={[styles.badge, styles.dyingBadge]}>
+              <Text style={styles.dyingBadgeTxt}>
+                ⚠ DYING {resources.deathSaves.successes}✓/{resources.deathSaves.failures}✗
+              </Text>
+            </View>
+          )}
+          {isStable && (
+            <View style={[styles.badge, styles.stableBadge]}>
+              <Text style={styles.stableBadgeTxt}>♥ STABLE</Text>
+            </View>
+          )}
           <View style={styles.badge}>
             <Text style={styles.badgeLbl}>AC</Text>
             <Text style={styles.badgeVal}>{derived.ac}</Text>
@@ -280,16 +303,26 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
     padding: Spacing.md, gap: Spacing.sm,
   },
+  partyCardDead: {
+    borderColor: Colors.red + '88',
+    backgroundColor: Colors.red + '0c',
+  },
   cardTop:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardName:  { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   cardSub:   { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
-  cardBadges:{ flexDirection: 'row', gap: Spacing.xs },
+  cardBadges:{ flexDirection: 'row', gap: Spacing.xs, flexWrap: 'wrap', justifyContent: 'flex-end' },
   badge: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,
     paddingHorizontal: Spacing.sm, paddingVertical: 2, alignItems: 'center',
   },
   badgeLbl: { fontSize: FontSize.xs, color: Colors.textDim },
   badgeVal: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  deathBadge:    { backgroundColor: Colors.red + '33', borderWidth: 1, borderColor: Colors.red },
+  deathBadgeTxt: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.red },
+  dyingBadge:    { backgroundColor: Colors.red + '22', borderWidth: 1, borderColor: Colors.red + '77' },
+  dyingBadgeTxt: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.red },
+  stableBadge:    { backgroundColor: Colors.green + '22', borderWidth: 1, borderColor: Colors.green + '77' },
+  stableBadgeTxt: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.green },
 
   hpRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   hpBarOuter:{ flex: 1, height: 6, backgroundColor: Colors.border, borderRadius: Radius.full, overflow: 'hidden' },

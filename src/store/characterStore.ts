@@ -294,8 +294,11 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       saveEntity(updated).catch(e =>
         console.error('[characterStore] updateCharacter → saveEntity failed:', e)
       );
-      // Broadcast the full entity to connected peers (DM-only; no-op when offline/player)
-      syncManager.broadcastEntity(updated);
+      // Sync the change to the rest of the table — role-aware: broadcasts
+      // directly if we're the DM, or pushes up to the DM (who relays onward)
+      // if we're a player. No-op if offline. See syncManager.syncEntity for
+      // why this replaced the DM-only broadcastEntity call here.
+      syncManager.syncEntity(updated);
     }
   },
 

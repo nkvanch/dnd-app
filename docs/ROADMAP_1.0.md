@@ -944,16 +944,111 @@ usage in user-facing copy.  **All met.**
       `syncManager.broadcastEntity` path already propagates on every entity
       mutation. Same mechanism as HP, conditions, everything else.
 
-### 3.2 Backup / export-import
-Serialize to JSON via expo-file-system + share sheet; import via file picker
-with a version field. **Design this as the same `.grimoire-pack` schema the
-Future/HOMEBREW_IMPORT_PIPELINE.md doc wants for V1 package import** — one
-schema, two features, no rework later.
+### 3.2 Backup / export-import  ✅ COMPLETE (pending package install + rebuild)
+- [x] **Schema designed to match the roadmap's explicit instruction** — reused
+      the `.grimoire-pack` concept from `docs/Future/HOMEBREW_IMPORT_PIPELINE.md`
+      ("Package Imports" section) rather than inventing a separate backup
+      format. `src/engine/backup.ts` defines `GrimoirePack` with a
+      `packType: 'backup' | 'content-pack'` discriminator — personal backup
+      (v1, implemented) populates `characters`; a future shared homebrew
+      pack (not yet built) would use the same envelope with `characters: []`
+      and just the `homebrew` payload. One schema, two features, as asked.
+- [x] **Deliberate scope cut**: homebrew FEATS excluded from the schema.
+      Discovered while checking `homebrewStore.ts`'s actual API that there is
+      no homebrew-feat mechanism anywhere in the app (`saveItem` has no
+      'feat' case) — including a feats field would have promised
+      functionality that doesn't exist. Races/classes/spells/backgrounds/
+      features/items are all real, supported categories.
+- [x] `validateGrimoirePack()` — conservative shape validation (format
+      version, pack type, characters array) before ever trusting a picked
+      file, with a forward-compatible "this pack is from a newer Grimoire"
+      message if formatVersion is ahead of what this build understands.
+- [x] `src/io/backupIO.ts`: `exportBackup()` writes the pack JSON via
+      `expo-file-system` and opens the OS share sheet via `expo-sharing`
+      (user picks where it goes — their own cloud, email, etc.; Grimoire
+      never transmits it anywhere itself, consistent with the privacy
+      policy). `pickAndValidateBackup()` uses `expo-document-picker`,
+      validates, and returns a preview WITHOUT importing yet.
+- [x] `app/backup.tsx`: new screen, linked from Settings → Data. Export is
+      one tap. Import shows a **review/confirm step before committing**
+      (character count, homebrew count, pack creation date, source app
+      version) — matches the "Review Screen" stage in the import pipeline
+      doc even in this minimal v1 form; nothing imports silently.
+- [x] Import commit reuses existing store primitives rather than
+      duplicating logic: `characterStore.applyIncomingEntity` (the same
+      function the sync system uses — add-or-replace-by-id, persists to
+      SQLite) for characters, `homebrewStore.saveItem` (per-category
+      upsert) for homebrew.
+- [x] ⚠️ **Caught and fixed a real bug while writing the UI**: initially
+      used `\uXXXX`-style escape sequences directly as raw JSX text content
+      (e.g. `>\u2190 Back<`) — escape sequences only interpret inside JS
+      string literals, not raw JSX children, so this would have literally
+      rendered the text "\u2190" instead of an arrow character on five
+      separate lines. Fixed by using the actual Unicode characters directly,
+      matching the convention already used everywhere else in the app.
+- [ ] **Needs 3 new packages** (none were installed): `expo-file-system`,
+      `expo-sharing`, `expo-document-picker`. Install via `npx expo install`
+      (not plain npm, so SDK-matching versions get picked correctly), then
+      the standard native rebuild cycle (`prebuild --clean` + worklets
+      CMake step + `run:android`) since these are native modules. Not yet
+      confirmed compiling or tested on-device — do both once installed.
+- [x] **Packages installed, prebuild + worklets build succeeded.**
+      `run:android` itself failed only because no device/emulator was
+      connected at that moment — not a code issue, retry once a
+      device/emulator is available.
+- [x] ⚠️ **Real `tsc` error found and fixed**: SDK 56's `expo-file-system`
+      defaults to an entirely new class-based API (`Paths`/`File`/
+      `Directory`) — `cacheDirectory`, `writeAsStringAsync`,
+      `readAsStringAsync` etc. (the API this code was written against) don't
+      exist on the default import anymore. Fixed by importing from
+      `expo-file-system/legacy` instead, a dedicated compatibility subpath
+      that exports the exact same old API unchanged — confirmed by reading
+      the actual installed package source (`node_modules/expo-file-system/
+      src/legacy/FileSystem.ts`) rather than guessing. One-line fix
+      (`from 'expo-file-system'` → `from 'expo-file-system/legacy'`), no
+      logic changes needed. **Not yet re-confirmed with a clean `tsc` run
+      after this fix** — do that next.
 
-### 3.3 Onboarding + demo character
-2–3 skippable intro screens; "Add sample character" seeds a real level-3
-SRD-only character through the normal `levelUp` engine path (not hand-written
-JSON), so it stays valid as the engine evolves.
+### 3.3 Onboarding + demo character  ✅ COMPLETE (pending tsc + on-device test)
+- [x] **Demo character built entirely through real engine calls, not hand-
+      written JSON** — `src/engine/demoCharacter.ts` mirrors the exact
+      patterns the real creation screens use (`applyGrant` loops for race/
+      background, matching `app/creation/race-detail.tsx`; `levelUp()` for
+      all 3 class levels in one call, matching `app/creation/class-
+      detail.tsx`). This is the actual instruction from the roadmap — "stays
+      valid as the engine evolves" — satisfied by construction, not just
+      claimed.
+- [x] **Content choice deliberate**: Human Fighter (Soldier background) —
+      all three confirmed SRD-safe in the Phase 1 legal audit, so the demo
+      character needs zero extra filtering logic to be legally clean in a
+      public build.
+- [x] **Honest choice-resolution scope**: only auto-resolves 'skill' and
+      'equipment' choices (picks the first N pool options — a sensible
+      default, not a random/fake one), so the character has real trained
+      skills and starting gear. Subclass (Martial Archetype) and any other
+      judgment-call choice are deliberately left PENDING, same as any real
+      level-3 fighter who hasn't picked yet — resolving your first pending
+      choice on a sample character is reasonable onboarding, not a gap to
+      hide.
+- [x] `app/onboarding.tsx`: 3 skippable panels (what Grimoire is, offline-
+      first/no-account privacy note, then a real choice — "Try Sample
+      Character" or "Create My Own"). Skip is available on panels 1-2.
+- [x] First-launch detection reuses the existing `app_meta` key-value store
+      (`getMeta`/`setMeta`, the same mechanism `homebrewStore.ts` already
+      uses for deleted-builtin tracking) rather than inventing new
+      persistence — `onboarding_complete` flag, checked once in
+      `app/_layout.tsx` right after boot and redirects via `router.replace`
+      if unset.
+- [ ] **Not yet verified**: needs a clean `tsc` pass and an actual on-device
+      first-launch test (clear app data or fresh install) to confirm the
+      redirect fires correctly and "Try Sample Character" produces a
+      genuinely playable level-3 Fighter on the sheet screen.
+
+**`npx tsc --noEmit` confirmed clean across 3.1, 3.2, and 3.3 combined** (death
+saves, backup/restore, onboarding + demo character). On-device testing
+(backup/restore file picker + share sheet, first-launch onboarding redirect,
+demo character) is still outstanding — no device currently connected. Not a
+blocker for continuing; do it whenever the phone's reconnected.
 
 ### 3.4 Wild Shape  🆕 NEW GOAL — see full design below
 Genuinely well-suited to the existing architecture (see design section). Not

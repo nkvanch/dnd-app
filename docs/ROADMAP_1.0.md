@@ -1050,10 +1050,94 @@ saves, backup/restore, onboarding + demo character). On-device testing
 demo character) is still outstanding — no device currently connected. Not a
 blocker for continuing; do it whenever the phone's reconnected.
 
-### 3.4 Wild Shape  🆕 NEW GOAL — see full design below
+### 3.4 Wild Shape  ✅ COMPLETE (pending on-device test)
 Genuinely well-suited to the existing architecture (see design section). Not
 a 1.0 blocker, but small enough to fold into 3.x if it goes smoothly; treat
 as a stretch goal for 1.0, hard cutline for 1.1.
+
+**⚠️ MAJOR DISCOVERY WHILE BUILDING THIS: `abilityEffects` were never
+actually applied anywhere in the app.** `actionCards.ts` only generates card
+display text and availability; `TabActions.tsx`'s `handleUse` only spent the
+resource cost. This meant **Rage's `set_flag: rage_active` never fired when
+you tapped Use** — so Rage's damage resistance (gated on that same flag)
+silently never activated, even though the resource was correctly spent and
+the card displayed correctly. This is a real bug in already-shipped
+functionality, discovered as a side effect of Wild Shape needing the same
+missing plumbing for its `transform` effect. **Fixed first, before building
+Wild Shape on top of it** — building a new feature on a broken foundation
+would have silently inherited the same bug.
+
+**What's actually built and real, not just scaffolded:**
+- [x] New `applyAbilityEffects()` in `combat.ts` — the missing general
+      effect-processor, wired into `TabActions.tsx`'s `handleUse`. Handles
+      `set_flag` (fixes Rage) and `transform` (Wild Shape). Deliberately does
+      NOT handle `damage`/`heal` (stays a manual player decision via the
+      roll+HP-modal flow, consistent with the app having no attack-roll
+      automation anywhere) — and deliberately does NOT yet handle
+      `apply_condition`/`remove_condition`/`grant_speed`/`restore_resource`,
+      documented as a known gap rather than silently claimed as done.
+- [x] `pipeline.ts`'s `recomputeDerived` now checks `wildShapeState.active`
+      and swaps AC/speed/senses/movement/physical stats (STR/DEX/CON) to the
+      beast form's while keeping the player's own mental scores (INT/WIS/
+      CHA) and class features — per the book rule. Same non-mutating
+      "apply on top" philosophy as `DmOverride`; nothing touches
+      `entity.stats` itself.
+- [x] `combat.ts`: `startWildShape()` (sets `wildShapeState`, computes
+      duration as half druid level in hours per the book rule),
+      `endWildShape()` (reverts — player's real HP was never touched while
+      transformed, so it's already correct on revert, no carryover math
+      needed), `applyWildShapeDamage()` (damages the BEAST's hp pool, not
+      the player's real HP; auto-reverts at 0 with no carryover damage, per
+      the book rule).
+- [x] Druid's level-2 progression (`classes/index.ts`) now grants 3 real
+      activatable features — Wild Shape: Wolf / Giant Spider / Brown Bear —
+      each with a real `activation` and `abilityEffects: [{type:'transform'}]`,
+      replacing the single passive-only placeholder that existed before.
+      All 3 share the existing `wild_shape_pool` resource (already correctly
+      granted at level 2, 2 uses, short rest).
+      **Design choice**: one card per beast form rather than a picker UI,
+      since `AbilityEffect`'s `transform` type takes a single fixed `formId`
+      — matches the existing "one feature = one card" action-card system
+      without inventing new UI patterns, and fits the deliberately small
+      curated beast list (3 forms, not a builder).
+- [x] `TabActions.tsx`: a status banner shown only while transformed (beast
+      HP display + Revert button calling `endWildShape` directly — revert
+      isn't resource-gated like other abilities, so it doesn't fit the
+      standard resource-cost action-card pattern).
+
+**Both previously-flagged integration gaps are now closed:**
+- [x] **Damage routing while transformed.** `app/sheet/[id].tsx`'s
+      `handleDamage` — the single central point ALL damage flows through —
+      now checks `wildShapeState.active` and routes to `applyWildShapeDamage`
+      (hits the beast's hp pool) instead of `applyDamage` (the player's real
+      HP). Also fixed `handleHeal` while I was in there: per the book rule,
+      healing has no effect on a Wild Shape beast form, so it's now
+      correctly a no-op while transformed rather than silently touching the
+      wrong pool. The header's HP pill also now shows beast HP (labeled
+      "BEAST HP") while transformed, instead of the player's real HP sitting
+      untouched and looking misleadingly unchanged.
+- [x] **Duration expiry.** No hour-by-hour game clock exists anywhere else
+      in the app to tick `wildShapeState.expiresAt` against, so implemented
+      a documented practical proxy instead of building a full time-tracking
+      system out of scope for this feature: Wild Shape now auto-reverts on
+      any rest (short or long) in `handleRest`. This is an approximation,
+      not exact RAW duration tracking — stated plainly as a simplification
+      in the code comment, not silently passed off as precise.
+
+**Remaining, smaller items:**
+- [ ] Beast stat blocks (`src/content/beastforms/index.ts`) were written
+      from memory, not cross-checked against the live SRD 5.1 monster
+      appendix — still flagged in that file's own header comment.
+- [ ] Not tested on-device at all.
+- [ ] Circle of the Moon's Combat Wild Shape / Elemental Wild Shape (bonus-
+      action shapeshifting, higher CR access) — out of scope for v1 per the
+      design's own cut list, base Wild Shape only.
+
+**Honest overall assessment**: the mechanic is now fully wired end-to-end —
+transform, fight as the beast (damage hits the right pool), revert (manual
+or via rest), with the player's real HP correctly untouched throughout. What
+remains is verification (real SRD stat blocks, on-device testing), not open
+integration work.
 
 ### 3.5 Polish sweep
 Audit all fixed-height TextInputs for the Android padding bug fixed in

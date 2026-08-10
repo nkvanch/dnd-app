@@ -15,6 +15,7 @@ import {
   Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense,
 } from './types';
 import { resolveEffectsForTarget } from './resolver';
+import { ALL_BEAST_FORMS } from '../content/beastforms';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,8 +66,26 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   let entity = entityParam;
 
   const allEffects    = collectAllEffects(entity);
-  const effectiveStats = applyStatModifiers(entity.stats, allEffects);
+  let effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const profBonus     = Math.ceil(1 + entity.identity.level / 4);
+
+  // ── Wild Shape: physical stats (STR/DEX/CON) come from the beast form;
+  //    mental scores (INT/WIS/CHA) stay the player's own, per the book rule
+  //    ("you retain your own... Intelligence, Wisdom, and Charisma scores").
+  //    Same non-mutating "apply on top" philosophy as DmOverride — nothing
+  //    here touches entity.stats itself. See docs/ROADMAP_1.0.md "FEATURE
+  //    DESIGN: Wild Shape".
+  const beastForm = entity.wildShapeState?.active
+    ? ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId) ?? null
+    : null;
+  if (beastForm) {
+    effectiveStats = {
+      ...effectiveStats,
+      str: beastForm.stats.str,
+      dex: beastForm.stats.dex,
+      con: beastForm.stats.con,
+    };
+  }
 
   // ── Apply grant_proficiency effects to the skill block ────────────────────
   // These come from race/class features (Elf Keen Senses → Perception, etc.)
@@ -105,8 +124,9 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   // 2. entity.resources.ac  (set when armor is equipped — 0 = no armor)
   // 3. Fallback: 10 + DEX modifier
   const formulaEffects   = allEffects.filter(ae => ae.effect.type === 'base_ac_formula');
-  const calculatedBaseAc =
-    formulaEffects.length > 0
+  const calculatedBaseAc = beastForm
+    ? beastForm.ac
+    : formulaEffects.length > 0
       ? Math.max(...formulaEffects.map(ae => {
           const baseValue    = ae.effect.value as number;
           const abilityBonus = (ae.effect.formulaAbilities ?? [])
@@ -122,23 +142,23 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
         ? entity.resources.ac
         : 10 + modifier(effectiveStats.dex);
 
-  // Shields and magic AC bonuses stack on top of the base formula.
-  // base_ac_formula effects are already consumed by calculatedBaseAc above —
-  // they must NOT also be counted here, or the formula base (e.g. 10) gets
-  // added a second time as a "bonus" (Barbarian AC 11 → wrongly 21).
-  const acBonus = resolveEffectsForTarget(
+  // Beast form AC is a flat total (no magic armor while transformed) — skip
+  // the shield/magic-bonus stacking that normally applies on top.
+  const acBonus = beastForm ? 0 : (resolveEffectsForTarget(
     'ac',
     allEffects.filter(ae => ae.effect.type !== 'base_ac_formula'),
     rules,
-  ) as number;
+  ) as number);
 
   // ── Speed: respect 'set' operations (Dwarf/Halfling/Gnome 25 ft) ─────────
   const speedEffects  = allEffects.filter(ae => ae.effect.target === 'speed');
   const hasSetSpeed   = speedEffects.some(ae => ae.effect.operation === 'set');
   const speedResolved = resolveEffectsForTarget('speed', allEffects, rules) as number;
-  const finalSpeed    = hasSetSpeed
-    ? speedResolved
-    : entity.resources.speed + speedResolved;
+  const finalSpeed    = beastForm
+    ? beastForm.speed
+    : hasSetSpeed
+      ? speedResolved
+      : entity.resources.speed + speedResolved;
 
   // ── Senses: aggregate grant_sense effects, dedup by type (largest range) ──
   const senseEffects = allEffects.filter(ae => ae.effect.type === 'grant_sense');
@@ -153,16 +173,28 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
       senseMap.set(e.senseType, { type: e.senseType, range, note: e.senseNote });
     }
   }
-  const senses = Array.from(senseMap.values()).sort((a, b) => b.range - a.range);
+  // Beast form senses fully replace the player's own while transformed — you
+  // perceive the world as the beast does, per the book rule.
+  const senses = beastForm
+    ? (beastForm.senses ?? [])
+    : Array.from(senseMap.values()).sort((a, b) => b.range - a.range);
 
   // ── Movement: aggregate grant_movement effects, keep largest per type ──
   const moveEffects = allEffects.filter(ae => ae.effect.type === 'grant_movement');
-  const movement: import('./types').MovementSpeeds = {};
-  for (const ae of moveEffects) {
-    const t = ae.effect.movementType;
-    const r = ae.effect.movementRange ?? 0;
-    if (!t) continue;
-    if ((movement[t] ?? 0) < r) movement[t] = r;
+  const movement: import('./types').MovementSpeeds = beastForm
+    ? {
+        ...(beastForm.flySpeed   ? { fly:   beastForm.flySpeed }   : {}),
+        ...(beastForm.swimSpeed  ? { swim:  beastForm.swimSpeed }  : {}),
+        ...(beastForm.climbSpeed ? { climb: beastForm.climbSpeed } : {}),
+      }
+    : {};
+  if (!beastForm) {
+    for (const ae of moveEffects) {
+      const t = ae.effect.movementType;
+      const r = ae.effect.movementRange ?? 0;
+      if (!t) continue;
+      if ((movement[t] ?? 0) < r) movement[t] = r;
+    }
   }
 
   // ── Build derived stats object ────────────────────────────────────────────

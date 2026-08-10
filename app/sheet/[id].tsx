@@ -8,7 +8,7 @@ import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore
 import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { applyDamage, applyHealing } from '../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage, endWildShape } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { takeRest } from '../../src/engine/rest';
 import { expireOverrides } from '../../src/engine/dmOverride';
@@ -93,11 +93,19 @@ export default function CharacterSheetScreen() {
   // ── Handlers (all pure engine calls → mutate) ─────────────────────────────
 
   const handleDamage = useCallback((amount: number) => {
-    mutate(e => applyDamage(e, amount, rules));
+    // While Wild Shaped, damage hits the BEAST's hp pool, not the player's
+    // real HP underneath (which is untouched and resumes exactly where it
+    // was on revert, per the book rule). See combat.ts's applyWildShapeDamage.
+    mutate(e => e.wildShapeState?.active
+      ? applyWildShapeDamage(e, amount, rules)
+      : applyDamage(e, amount, rules));
   }, [mutate, rules]);
 
   const handleHeal = useCallback((amount: number) => {
-    mutate(e => applyHealing(e, amount, rules));
+    // Per the book rule, healing has no effect on a Wild Shape beast form's
+    // hit points — no-op while transformed, rather than incorrectly healing
+    // the player's real HP underneath (which isn't the pool being damaged).
+    mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amount, rules));
   }, [mutate, rules]);
 
   const handleAddCondition = useCallback((condId: string) => {
@@ -231,6 +239,15 @@ export default function CharacterSheetScreen() {
       let updated = takeRest(e, kind, rules);
       // Long rest also expires 'end_of_session' DM overrides
       if (kind === 'long') updated = expireOverrides(updated, 'end_of_session', rules);
+      // Wild Shape duration is tracked in hours (wildShapeState.expiresAt),
+      // but the app has no granular hour-by-hour game clock anywhere else to
+      // tick it down against. A rest (short or long) always represents at
+      // least the beast form's remaining duration passing in practice, so
+      // reverting on any rest is a reasonable practical proxy for real
+      // duration expiry rather than building a full time-tracking system
+      // that doesn't exist elsewhere in the app. See docs/ROADMAP_1.0.md
+      // Phase 3.4 for the honest gap this simplifies.
+      if (updated.wildShapeState?.active) updated = endWildShape(updated, rules);
       return updated;
     });
   }, [mutate, rules]);
@@ -254,9 +271,13 @@ export default function CharacterSheetScreen() {
 
   const { identity, resources, derived } = entity;
 
-  // Header stat colours
-  const hpPct   = resources.hp.maximum > 0
-    ? resources.hp.current / resources.hp.maximum : 0;
+  // Header stat colours — while Wild Shaped, show the beast's hp pool (the
+  // one actually taking damage right now), not the player's real HP
+  // underneath, which is untouched and would misleadingly look unchanged.
+  const wildShaped = entity.wildShapeState?.active;
+  const headerHpCurrent = wildShaped ? entity.wildShapeState!.beastHp    : resources.hp.current;
+  const headerHpMax     = wildShaped ? entity.wildShapeState!.beastHpMax : resources.hp.maximum;
+  const hpPct   = headerHpMax > 0 ? headerHpCurrent / headerHpMax : 0;
   const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
 
   return (
@@ -287,10 +308,10 @@ export default function CharacterSheetScreen() {
             {/* HP */}
             <View style={[styles.statPill, { borderColor: hpColor + '88' }]}>
               <Text style={[styles.statPillValue, { color: hpColor }]}>
-                {resources.hp.current}
-                <Text style={styles.statPillMax}>/{resources.hp.maximum}</Text>
+                {headerHpCurrent}
+                <Text style={styles.statPillMax}>/{headerHpMax}</Text>
               </Text>
-              <Text style={styles.statPillLabel}>HP</Text>
+              <Text style={styles.statPillLabel}>{wildShaped ? 'BEAST HP' : 'HP'}</Text>
             </View>
             {/* AC */}
             <View style={styles.statPill}>

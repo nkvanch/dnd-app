@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules } from '../../engine/types';
 import { generateAllActionCards } from '../../engine/actionCards';
+import { applyAbilityEffects, endWildShape } from '../../engine/combat';
 import { rollExpression } from '../../engine/dice';
 import { DiceRoll } from '../../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -195,6 +196,23 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
     }
 
     onEntityUpdate(updated);
+
+    // Apply the feature's actual ability effects (set_flag, transform, etc.) —
+    // previously only the resource cost was spent here; the effects themselves
+    // never fired (e.g. Rage's set_flag: rage_active). See combat.ts's
+    // applyAbilityEffects doc comment for the full history. Find the source
+    // feature to get its abilityEffects array; look in both entity.features
+    // and equipped-item features since either can produce an action card.
+    const sourceFeature =
+      updated.features.find(f => f.id === card.featureId) ??
+      updated.inventory.equipped
+        .flatMap(inst => inst.features)
+        .find(f => f.id === card.featureId);
+    if (sourceFeature?.abilityEffects && sourceFeature.abilityEffects.length > 0 && rules) {
+      updated = applyAbilityEffects(updated, sourceFeature.abilityEffects, rules);
+      onEntityUpdate(updated);
+    }
+
     setActiveCard(card);
   }, [entity, rules, onEntityUpdate]);
 
@@ -208,8 +226,26 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
 
   const isEmpty = all.length === 0;
 
+  function handleRevert() {
+    if (!rules || !onEntityUpdate) return;
+    onEntityUpdate(endWildShape(entity, rules));
+  }
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      {entity.wildShapeState?.active && (
+        <View style={styles.wildShapeBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.wildShapeBannerTitle}>🐾 Wild Shape Active</Text>
+            <Text style={styles.wildShapeBannerSub}>
+              Beast HP: {entity.wildShapeState.beastHp}/{entity.wildShapeState.beastHpMax}
+            </Text>
+          </View>
+          <Pressable style={styles.revertBtn} onPress={handleRevert}>
+            <Text style={styles.revertBtnTxt}>Revert</Text>
+          </Pressable>
+        </View>
+      )}
       {isEmpty && (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>⚔️</Text>
@@ -258,6 +294,17 @@ const styles = StyleSheet.create({
   emptyIcon:  { fontSize: 48 },
   emptyTxt:   { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textSecondary },
   emptySubTxt:{ fontSize: FontSize.sm, color: Colors.textDim },
+
+  wildShapeBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    backgroundColor: Colors.purple + '18', borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.purple + '66',
+    padding: Spacing.md,
+  },
+  wildShapeBannerTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.purple },
+  wildShapeBannerSub:   { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+  revertBtn: { backgroundColor: Colors.purple, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  revertBtnTxt: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: '#000000bb', justifyContent: 'flex-end' },

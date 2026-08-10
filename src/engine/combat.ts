@@ -2,12 +2,13 @@
 // FILE: src/engine/combat.ts
 // PROJECT: Initiative Tracker, Concentration Gate & Combat Clock
 // ============================================================================
-import { Entity, CampaignRules, Spell, FeatureInstance } from './types';
+import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect } from './types';
 import { recomputeDerived } from './pipeline';
 import { tickDurations } from './conditions';
 import { rollD20 as rollD20Dice } from './dice';
 import { DEFAULT_RULES } from '../store/characterStore';
 import { deathSavesPersist } from './houseRules';
+import { ALL_BEAST_FORMS } from '../content/beastforms';
 
 // ── Initiative ────────────────────────────────────────────────────────────────
 
@@ -343,6 +344,133 @@ export function recordDeathSave(
   const updated = {
     ...entity,
     resources: { ...entity.resources, deathSaves: stabilized },
+  };
+  return recomputeDerived(updated, rules);
+}
+
+/**
+ * Applies the non-dice AbilityEffects of a used Feature to the entity.
+ *
+ * BEFORE this existed, tapping "Use" on a card only spent its resource cost
+ * (see app/components/sheet/TabActions.tsx) — the actual AbilityEffects were
+ * never applied. This meant Rage's `set_flag: rage_active` never fired, so
+ * Rage's damage-resistance effects (gated on that same flag in
+ * collectAllEffects) silently never activated even though the resource was
+ * spent and the card displayed correctly. Discovered while building Wild
+ * Shape, which needed the same missing plumbing for its `transform` effect —
+ * see docs/ROADMAP_1.0.md Phase 3.4 for the full writeup.
+ *
+ * Deliberately does NOT handle 'damage'/'heal' here — those stay a manual
+ * player decision via the roll modal + HP modal, consistent with the app
+ * having no attack-roll/hit resolution anywhere else. Everything else
+ * (set_flag, transform) is a pure state change on the player's own entity
+ * that has no combat-resolution ambiguity, so it applies immediately.
+ *
+ * Effect types not yet handled here (apply_condition, remove_condition,
+ * grant_speed, restore_resource, spend_resource beyond the base cost) are
+ * intentionally left for a future pass — not silently claimed as done.
+ */
+export function applyAbilityEffects(
+  entity:  Entity,
+  effects: AbilityEffect[],
+  rules:   CampaignRules = DEFAULT_RULES,
+): Entity {
+  let updated = entity;
+
+  for (const effect of effects) {
+    if (effect.type === 'set_flag') {
+      updated = {
+        ...updated,
+        conditionMonitor: {
+          ...updated.conditionMonitor,
+          flags: { ...updated.conditionMonitor.flags, [effect.flag]: effect.value },
+        },
+      };
+    } else if (effect.type === 'transform') {
+      updated = startWildShape(updated, effect.formId, rules);
+    }
+    // 'damage' / 'heal': intentionally left to the manual roll+HP-modal flow.
+    // 'apply_condition' / 'remove_condition' / 'grant_speed' / 'restore_resource'
+    // / 'spend_resource': not yet wired — see the doc comment above.
+  }
+
+  return recomputeDerived(updated, rules);
+}
+
+/**
+ * Starts Wild Shape: sets wildShapeState, which recomputeDerived (pipeline.ts)
+ * reads to swap AC/speed/senses/movement/physical stats to the beast form's
+ * while keeping the player's own mental scores and class features — same
+ * non-mutating "apply on top" philosophy as DmOverride. The beast's own HP
+ * pool is tracked separately in wildShapeState.beastHp; the player's real HP
+ * is untouched and resumes exactly where it was on revert.
+ * No-op if already transformed or the formId doesn't exist.
+ */
+export function startWildShape(
+  entity: Entity,
+  formId: string,
+  rules:  CampaignRules = DEFAULT_RULES,
+): Entity {
+  if (entity.wildShapeState?.active) return entity;
+  const form = ALL_BEAST_FORMS.find(f => f.id === formId);
+  if (!form) return entity;
+
+  // Duration: half druid level in hours, minimum 1 (book rule). Falls back to
+  // character level if this isn't (yet) tracked as a separate class level.
+  const hours = Math.max(1, Math.floor(entity.identity.level / 2));
+
+  const updated: Entity = {
+    ...entity,
+    wildShapeState: {
+      active:     true,
+      formId:     form.id,
+      beastHp:    form.hp,
+      beastHpMax: form.hp,
+      expiresAt:  { unit: 'hours', remaining: hours },
+    },
+  };
+  return recomputeDerived(updated, rules);
+}
+
+/**
+ * Ends Wild Shape, reverting to the player's normal stats. Per the book rule,
+ * excess damage the beast form took does NOT carry over to the player's real
+ * HP — only the state that was tracked is discarded; the player's own HP was
+ * never touched while transformed, so it's simply already correct on revert.
+ * Safe to call even if not currently transformed (no-op).
+ */
+export function endWildShape(
+  entity: Entity,
+  rules:  CampaignRules = DEFAULT_RULES,
+): Entity {
+  if (!entity.wildShapeState?.active) return entity;
+  const updated: Entity = { ...entity, wildShapeState: null };
+  return recomputeDerived(updated, rules);
+}
+
+/**
+ * Applies damage to a Wild-Shaped entity's BEAST hp pool, not the player's
+ * real HP. Per the book rule, if the beast's hp pool hits 0, the player
+ * reverts to their normal form immediately with 0 hp gained/lost beyond
+ * what was already on their sheet — excess damage past the beast's pool does
+ * NOT carry over. Call this INSTEAD of applyDamage while transformed; the
+ * caller (UI) is responsible for checking wildShapeState.active first.
+ */
+export function applyWildShapeDamage(
+  entity: Entity,
+  damage: number,
+  rules:  CampaignRules = DEFAULT_RULES,
+): Entity {
+  if (!entity.wildShapeState?.active || damage <= 0) return entity;
+  const newBeastHp = Math.max(0, entity.wildShapeState.beastHp - damage);
+
+  if (newBeastHp === 0) {
+    // Beast form "dies" -> revert immediately, no carryover damage.
+    return endWildShape(entity, rules);
+  }
+  const updated: Entity = {
+    ...entity,
+    wildShapeState: { ...entity.wildShapeState, beastHp: newBeastHp },
   };
   return recomputeDerived(updated, rules);
 }

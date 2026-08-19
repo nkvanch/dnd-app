@@ -1139,11 +1139,70 @@ or via rest), with the player's real HP correctly untouched throughout. What
 remains is verification (real SRD stat blocks, on-device testing), not open
 integration work.
 
-### 3.5 Polish sweep
+### 3.5 Polish sweep  ⏳ code-level items done, device-level items still need you
 Audit all fixed-height TextInputs for the Android padding bug fixed in
 FreeEditModal. FlatList for the spellbook if 300+ SRD spells stutter. Icon
 legibility at 48px. Full crash-free session test on the oldest Android
 device available.
+
+**TextInput audit — checked the highest-traffic input screens, found and
+fixed one real instance of the bug:**
+- [x] `app/creation/scores.tsx`'s manual ability-score input — same symptom
+      as the original FreeEditModal bug (small fixed width, `paddingVertical:
+      Spacing.xs` with a large font, no `textAlignVertical`/`includeFontPadding`).
+      Applied the identical fix: `height: 40, paddingVertical: 0,
+      textAlignVertical: 'center', includeFontPadding: false`.
+- [x] Checked and confirmed SAFE (generous padding, no fixed-height
+      collision): `HpModal.tsx`, `TabInventory.tsx`'s currency/search/quick-
+      add inputs, `creation/name.tsx`'s name/campaign inputs.
+- [ ] **Not exhaustively checked** — the app has many more TextInput usages
+      (homebrew builders, DM screens, notes) not individually reviewed this
+      pass. The pattern is now well-understood (fixed/small height +
+      insufficient padding = bug; generous padding with no fixed height =
+      safe) if a future pass wants to finish the sweep.
+
+**Two real scrolling bugs found and fixed (reported directly by testing):**
+- [x] **"Can only scroll on a specific line, left/right breaks it"** — root
+      cause: `TabInventory.tsx`'s `AddItemModal` had `sortInlineRow: {
+      flexGrow: 1 }` on a horizontal sort-chip `ScrollView` whose actual
+      content (4 short labels) was much narrower than the row. `flexGrow: 1`
+      stretched its *touchable* area to fill the whole row width, creating
+      an invisible strip that stole vertical swipe gestures attempted near
+      it. The sibling horizontal `ScrollView` in the same file (`chipRow`)
+      already correctly used `flexGrow: 0` — this one just didn't match that
+      established pattern. One-line fix.
+- [x] **"Laggy/stuttery scroll"** — root cause: the same modal's item list
+      rendered via plain `ScrollView.map()`, and a search query force-
+      expands every matching category at once across the 920-item combined
+      catalog (85 core + 835 imported) — unvirtualized, exactly the same
+      risk class as the `AddSpellModal` fix earlier in this phase, just
+      never checked on the item side. Converted to `SectionList` with the
+      same collapsible-category UX preserved (collapsed sections keep their
+      header but pass an empty `data` array, so virtualization applies to
+      whichever section(s) are actually showing items).
+
+**Spellbook virtualization — found and fixed the real instance:**
+- [x] `src/components/sheet/TabSpells.tsx`'s main spell list: confirmed
+      SAFE without changes — it's bounded by the character's actual known/
+      prepared spells (realistically 20-40 even at level 20), never the
+      full corpus. `ScrollView` is fine here.
+- [x] `app/creation/spells.tsx` (creation-flow spell picker): confirmed SAFE
+      — filtered to level 0-1 only during creation (10-30 items).
+- [x] **`src/components/sheet/AddSpellModal.tsx` (the in-play "Add Spell"
+      browser) — this WAS the real risk.** With no search/filters applied,
+      it rendered the entire spell corpus (potentially 600+ across vault +
+      hand-authored + homebrew) inside a plain `ScrollView.map()`, fully
+      unvirtualized. Converted to `SectionList` rather than flat `FlatList`
+      — the data is naturally grouped by spell level with headers, which
+      `SectionList` handles natively with the same virtualization benefit
+      (only renders visible rows + buffer, not all 600+ at once).
+
+**Not done — inherently device/visual work, not something to fake progress
+on from chat:**
+- [ ] Icon legibility at 48px — needs an actual device or emulator screen to
+      judge, not something verifiable by reading code.
+- [ ] Full crash-free session test on the oldest Android device available
+      — needs a real device test pass, can't be done from here.
 
 ---
 

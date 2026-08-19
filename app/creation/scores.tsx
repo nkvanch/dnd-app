@@ -430,7 +430,10 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.black,
     textAlign: 'center',
     width: 64,
-    paddingVertical: Spacing.xs,
+    height: 40,
+    paddingVertical: 0,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   manualBonus: { fontSize: FontSize.xs, color: Colors.gold, marginTop: 2 },
 

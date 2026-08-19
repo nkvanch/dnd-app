@@ -9,7 +9,7 @@
 // would be unreliable. They can be added once spell data is enriched.
 import { useState, useMemo } from 'react';
 import {
-  Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView,
+  Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, SectionList,
 } from 'react-native';
 import { Entity, Spell } from '../../engine/types';
 import { ALL_VAULT_SPELLS } from '../../content/spells/generated';
@@ -89,8 +89,10 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
     return true;
   });
 
-  // Group by level for gold level-division headers.
-  const byLevel = useMemo(() => {
+  // Grouped by level for SectionList (virtualized — previously a plain
+  // ScrollView.map() over the full spell corpus, which could be 300+ spells
+  // with no filters applied. See docs/ROADMAP_1.0.md Phase 3.5.)
+  const sections = useMemo(() => {
     const m = new Map<number, Spell[]>();
     for (const s of filtered) {
       if (!m.has(s.level)) m.set(s.level, []);
@@ -101,10 +103,13 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
         ? a.name.localeCompare(b.name)
         : (a.school.localeCompare(b.school) || a.name.localeCompare(b.name)));
     }
-    return m;
+    const levels = Array.from(m.keys()).sort((a, b) => a - b);
+    return levels.map(lvl => ({
+      level: lvl,
+      title: lvl === 0 ? 'CANTRIPS' : `LEVEL ${lvl}`,
+      data:  m.get(lvl)!,
+    }));
   }, [filtered, sort]);
-
-  const levels = Array.from(byLevel.keys()).sort((a, b) => a - b);
 
   const activeFilterCount =
     (levelFilter !== null ? 1 : 0) + (schoolFilter ? 1 : 0) + (classFilter ? 1 : 0) +
@@ -200,54 +205,55 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
             </View>
           )}
 
-          {/* Results grouped by level with gold headers */}
-          <ScrollView style={s.results} showsVerticalScrollIndicator={false}>
-            {levels.length === 0 && (
-              <Text style={s.empty}>No spells match these filters.</Text>
-            )}
-            {levels.map(lvl => (
-              <View key={lvl} style={s.levelBlock}>
-                <View style={s.levelHeaderRow}>
-                  <Text style={s.levelHeader}>
-                    {lvl === 0 ? 'CANTRIPS' : `LEVEL ${lvl}`}
-                  </Text>
-                  <View style={s.levelHeaderLine} />
-                  <Text style={s.levelHeaderCount}>{byLevel.get(lvl)!.length}</Text>
-                </View>
-                {byLevel.get(lvl)!.map(spell => {
-                  const owned = ownedIds.has(spell.id);
-                  const open  = expandedId === spell.id;
-                  return (
-                    <View key={spell.id} style={[s.spellRow, owned && s.spellRowOwned]}>
-                      <Pressable style={s.spellMain} onPress={() => setExpandedId(o => o === spell.id ? null : spell.id)}>
-                        <View style={s.spellInfo}>
-                          <View style={s.spellNameRow}>
-                            <Text style={[s.spellName, owned && s.spellNameOwned]}>{spell.name}</Text>
-                            {homebrewIds.has(spell.id) && (
-                              <View style={s.hbTag}><Text style={s.hbTagTxt}>HB</Text></View>
-                            )}
-                          </View>
-                          <Text style={s.spellMeta} numberOfLines={1}>
-                            {spell.school} · {spell.castingTime}
-                            {spell.concentration ? ' · Conc' : ''}
-                            {spell.ritual ? ' · Ritual' : ''}
-                          </Text>
-                          {open && <Text style={s.spellDesc}>{spell.description}</Text>}
-                        </View>
-                      </Pressable>
-                      {owned ? (
-                        <Text style={s.ownedBadge}>Known</Text>
-                      ) : (
-                        <Pressable style={s.addBtn} onPress={() => onAdd(spell.id, spell.level === 0)}>
-                          <Text style={s.addBtnTxt}>+ Add</Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  );
-                })}
+          {/* Results grouped by level with gold headers — SectionList for
+              virtualization, since this can be the full spell corpus with no
+              filters applied. */}
+          <SectionList
+            style={s.results}
+            sections={sections}
+            keyExtractor={item => item.id}
+            showsVerticalScrollIndicator={false}
+            stickySectionHeadersEnabled={false}
+            ListEmptyComponent={<Text style={s.empty}>No spells match these filters.</Text>}
+            renderSectionHeader={({ section }) => (
+              <View style={s.levelHeaderRow}>
+                <Text style={s.levelHeader}>{section.title}</Text>
+                <View style={s.levelHeaderLine} />
+                <Text style={s.levelHeaderCount}>{section.data.length}</Text>
               </View>
-            ))}
-          </ScrollView>
+            )}
+            renderItem={({ item: spell }) => {
+              const owned = ownedIds.has(spell.id);
+              const open  = expandedId === spell.id;
+              return (
+                <View style={[s.spellRow, owned && s.spellRowOwned]}>
+                  <Pressable style={s.spellMain} onPress={() => setExpandedId(o => o === spell.id ? null : spell.id)}>
+                    <View style={s.spellInfo}>
+                      <View style={s.spellNameRow}>
+                        <Text style={[s.spellName, owned && s.spellNameOwned]}>{spell.name}</Text>
+                        {homebrewIds.has(spell.id) && (
+                          <View style={s.hbTag}><Text style={s.hbTagTxt}>HB</Text></View>
+                        )}
+                      </View>
+                      <Text style={s.spellMeta} numberOfLines={1}>
+                        {spell.school} · {spell.castingTime}
+                        {spell.concentration ? ' · Conc' : ''}
+                        {spell.ritual ? ' · Ritual' : ''}
+                      </Text>
+                      {open && <Text style={s.spellDesc}>{spell.description}</Text>}
+                    </View>
+                  </Pressable>
+                  {owned ? (
+                    <Text style={s.ownedBadge}>Known</Text>
+                  ) : (
+                    <Pressable style={s.addBtn} onPress={() => onAdd(spell.id, spell.level === 0)}>
+                      <Text style={s.addBtnTxt}>+ Add</Text>
+                    </Pressable>
+                  )}
+                </View>
+              );
+            }}
+          />
 
           <Pressable style={s.doneBtn} onPress={onClose}>
             <Text style={s.doneTxt}>Done</Text>

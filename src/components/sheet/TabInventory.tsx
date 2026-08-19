@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import {
   ScrollView, View, Text, Pressable, StyleSheet,
-  Modal, TextInput, Alert,
+  Modal, TextInput, Alert, SectionList,
 } from 'react-native';
 import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engine/types';
 import { globalContentDB } from '../../content/classes/library';
@@ -494,56 +494,71 @@ function AddItemModal({
             </View>
           )}
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-            {groups.map(({ cat, items }) => (
-              <View key={cat.label} style={addStyles.group}>
+          {/* Results grouped by category — SectionList for virtualization,
+              since a broad search can force-expand many categories at once
+              across a 920-item catalog. See docs/ROADMAP_1.0.md Phase 3.5. */}
+          {groups.length === 0 ? (
+            <Text style={addStyles.empty}>No items match "{search}".</Text>
+          ) : (
+            <SectionList
+              style={{ maxHeight: 420 }}
+              sections={groups.map(({ cat, items }) => ({
+                catLabel:   cat.label,
+                emoji:      cat.emoji,
+                totalCount: items.length,
+                // Collapsed categories render zero items (still show their
+                // header) — same UX as before, but now virtualized for
+                // whichever section(s) actually have visible data.
+                data: (expanded === cat.label || !!q || catFilter === cat.label) ? items : [],
+              }))}
+              keyExtractor={item => item.id}
+              showsVerticalScrollIndicator={false}
+              stickySectionHeadersEnabled={false}
+              renderSectionHeader={({ section }) => (
                 <Pressable
                   style={addStyles.groupHeader}
-                  onPress={() => setExpanded(e => e === cat.label ? null : cat.label)}
+                  onPress={() => setExpanded(e => e === section.catLabel ? null : section.catLabel)}
                 >
-                  <Text style={addStyles.groupEmoji}>{cat.emoji}</Text>
-                  <Text style={addStyles.groupLabel}>{cat.label}</Text>
-                  <Text style={addStyles.groupCount}>({items.length})</Text>
+                  <Text style={addStyles.groupEmoji}>{section.emoji}</Text>
+                  <Text style={addStyles.groupLabel}>{section.catLabel}</Text>
+                  <Text style={addStyles.groupCount}>({section.totalCount})</Text>
                   <Text style={addStyles.groupCaret}>
-                    {expanded === cat.label || q ? '▲' : '▼'}
+                    {expanded === section.catLabel || q ? '▲' : '▼'}
                   </Text>
                 </Pressable>
-                {(expanded === cat.label || !!q || catFilter === cat.label) && items.map(item => {
-                  const owned = equippedIds.has(item.id) || carriedIds.has(item.id);
-                  return (
-                    <View key={item.id} style={[addStyles.itemRow, owned && addStyles.itemRowOwned]}>
-                      <View style={addStyles.itemInfo}>
-                        <Text style={[addStyles.itemName, owned && addStyles.itemNameOwned]}>
-                          {item.name}
+              )}
+              renderItem={({ item }) => {
+                const owned = equippedIds.has(item.id) || carriedIds.has(item.id);
+                return (
+                  <View style={[addStyles.itemRow, owned && addStyles.itemRowOwned]}>
+                    <View style={addStyles.itemInfo}>
+                      <Text style={[addStyles.itemName, owned && addStyles.itemNameOwned]}>
+                        {item.name}
+                      </Text>
+                      {item.properties.length > 0 && (
+                        <Text style={addStyles.itemProps} numberOfLines={1}>
+                          {item.properties.join(' · ')}
                         </Text>
-                        {item.properties.length > 0 && (
-                          <Text style={addStyles.itemProps} numberOfLines={1}>
-                            {item.properties.join(' · ')}
-                          </Text>
-                        )}
-                        {item.cost !== '0 gp' && item.cost && (
-                          <Text style={addStyles.itemCost}>{item.cost}</Text>
-                        )}
-                      </View>
-                      {owned ? (
-                        <Text style={addStyles.ownedBadge}>In bag</Text>
-                      ) : (
-                        <Pressable
-                          style={addStyles.addBtn}
-                          onPress={() => { onAdd(item.id); }}
-                        >
-                          <Text style={addStyles.addBtnTxt}>+ Add</Text>
-                        </Pressable>
+                      )}
+                      {item.cost !== '0 gp' && item.cost && (
+                        <Text style={addStyles.itemCost}>{item.cost}</Text>
                       )}
                     </View>
-                  );
-                })}
-              </View>
-            ))}
-            {groups.length === 0 && (
-              <Text style={addStyles.empty}>No items match "{search}".</Text>
-            )}
-          </ScrollView>
+                    {owned ? (
+                      <Text style={addStyles.ownedBadge}>In bag</Text>
+                    ) : (
+                      <Pressable
+                        style={addStyles.addBtn}
+                        onPress={() => { onAdd(item.id); }}
+                      >
+                        <Text style={addStyles.addBtnTxt}>+ Add</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              }}
+            />
+          )}
           <Pressable style={addStyles.cancelBtn} onPress={onClose}>
             <Text style={addStyles.cancelTxt}>Close</Text>
           </Pressable>
@@ -605,7 +620,7 @@ const addStyles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 5,
   },
   filterToggleTxt: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
-  sortInlineRow: { flexGrow: 1 },
+  sortInlineRow: { flexGrow: 0 },
   filterPanel: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,

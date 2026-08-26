@@ -5,16 +5,18 @@
 // those are campaign concerns, not app-level ones. This screen links to it.
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeGoBack } from '../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../src/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
 
       <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={safeGoBack}>
           <Text style={styles.back}>← Back</Text>
         </Pressable>
         <Text style={styles.title}>Settings</Text>

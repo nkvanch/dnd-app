@@ -146,11 +146,10 @@ const styles = StyleSheet.create({
     borderColor:     Colors.border,
     alignItems:      'center',
     justifyContent:  'center',
-    elevation:       4,
-    shadowColor:     '#000',
-    shadowOffset:    { width: 0, height: 2 },
-    shadowOpacity:   0.3,
-    shadowRadius:    4,
+    ...Platform.select({
+      web:     { boxShadow: '0px 2px 4px rgba(0,0,0,0.3)' },
+      default: { elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
+    }),
   },
   fabTxt: { fontSize: 22 },
 

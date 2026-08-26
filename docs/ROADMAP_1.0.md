@@ -1284,6 +1284,229 @@ early 1.1 if Phase 1–4 run long. Do not let it delay Phase 1.
 
 ---
 
+## SESSION BATCH (2026-08-20) — DM visibility, generator refactor, unit tests
+
+- [x] **DM visibility house rule** (`dmFullStatVisibility`, DM Visibility
+      section, book default OFF). Dashboard party cards now always show
+      AC/Speed/Passive Perception/Passive Investigation/HP (what a DM could
+      reasonably observe at a glance); conditions, concentration, and
+      resource pips are gated behind the rule. DM Override (the AuditModal)
+      on the character detail screen is gated the same way — confirmed
+      first that `isDm` only controls the override modal, not damage/heal/
+      condition tools, so those stay available regardless.
+- [x] **Generator refactor — spells AND items.** SRD classification used to
+      be baked directly into `generated.ts` (558KB) and `importedItems.ts`
+      (~541KB), so every classification-only re-run rewrote the entire
+      file. Split into pure content + a small separate `srdClassification.
+      json` per content type, merged in at load time by `index.ts`. Content
+      files now only change when the vault itself changes; classification
+      passes only touch the small JSON. Applied to BOTH spells and items —
+      these were the only two places with this pattern in the codebase.
+      Added `resolveJsonModule: true` to tsconfig.json for the new JSON
+      imports; placeholder `{}` classification files created so `tsc`
+      doesn't fail before the scripts are re-run with real data.
+      **ACTION NEEDED:** run `node scripts/convert-spells.mjs` and
+      `python scripts/parse_items.py` once to populate the real
+      classification data (currently placeholder-empty).
+- [x] **Unit tests — first real suite.** No test framework existed at all.
+      Added `jest-expo` (the standard Expo SDK 56 setup) + `jest.config.js`
+      + `src/engine/__tests__/combat.test.ts`: 17 tests covering
+      `applyDamage`/`applyHealing`/`recordDeathSave`/Wild Shape
+      (`startWildShape`/`endWildShape`/`applyWildShapeDamage`). Deliberately
+      targeted this session's newest code, since it's exactly where real
+      bugs were already found and fixed (the stabilize-vs-revive
+      conflation, the damage-routing gap) — these tests would have caught
+      both automatically. **ACTION NEEDED:** run `npm install` to pull in
+      jest-expo, then `npm test`.
+      - [x] ⚠️ **Two real setup bugs found on first run, both fixed:**
+            (1) `tsconfig.json` had `@types/jest` installed but never added
+            `"jest"` to the `types` array, so `describe`/`it`/`expect`
+            weren't recognized — 84 false tsc errors. Fixed.
+            (2) The engine tests import `characterStore.ts` (for test
+            helpers), which imports the sync layer, which imports
+            `react-native-tcp-socket` — a native module that doesn't exist
+            in Jest's environment and crashes at require-time regardless of
+            whether anything in it is called. Fixed with a standard manual
+            mock (`__mocks__/react-native-tcp-socket.js`, Jest auto-detects
+            root-level mocks for node_modules packages) — universal practice
+            for testing any React-Native app with native modules, not a
+            sign of anything wrong architecturally.
+- [x] **Character sheet PDF export.** `src/io/characterSheetPdf.ts` —
+      generates a printable HTML character sheet (ability scores, saves,
+      skills, combat stats, equipment, features, spells) via `expo-print`,
+      shared via the existing `expo-sharing`. Two `resolveName` lookups
+      left as caller-supplied (spell/item/race/class/background name
+      resolution) rather than guessed against content-DB import paths.
+      **ACTION NEEDED:** `npx expo install expo-print`, then wire
+      `resolveName` to the real content lookups and add an entry point
+      (e.g. a button on the sheet screen or in Settings).
+- [ ] **Hotspot/mobile-data sync support** — investigated, not yet coded.
+      A mobile hotspot IS a WiFi network from the connecting devices'
+      perspective (the phone acts as an access point), so the existing
+      TCP-over-LAN sync mechanism should work identically in principle —
+      no code currently special-cases "real WiFi" vs. a hotspot. The likely
+      real risk is IP/network detection: `expo-network`'s WiFi-state APIs
+      have inconsistent behavior across Android versions specifically for
+      hotspot-mode connections (some report no WiFi even while acting as
+      or connected to a hotspot AP). Needs actual device testing to confirm
+      whether this is a real problem before writing a fix — flagged rather
+      than guessed at blind.
+- [x] **"Delta base synchronization" issue — FIXED.** Root cause confirmed:
+      every mutation sent the ENTIRE entity over the wire (even a 1-point HP
+      change), and the receiving side did a wholesale REPLACE, not a merge
+      — so if two devices made different small edits close together,
+      whichever full snapshot arrived last simply overwrote the other's
+      change entirely, even in completely unrelated fields. Exactly matches
+      what was reported: "it updates everything instead of changes... keeps
+      overriding whole stuff on every minor change."
+      - [x] New `src/sync/diff.ts`: `deepDiff`/`deepMerge`, recursive at any
+            nesting depth. `deepDiff(previous, next)` returns only the
+            fields that actually changed; `deepMerge(local, patch)` applies
+            a patch onto the RECEIVER's own current copy, never a
+            wholesale replace — this is the actual fix, since an unrelated
+            field the receiver already has that the patch doesn't mention
+            is now always preserved.
+      - [x] New `entity_patch` message type (`protocol.ts`), relayed
+            opaquely by the DM's server to other players exactly like
+            `entity_snapshot` and `sync_event` already were — no change to
+            the DM-as-hub relay architecture itself, just a smaller payload.
+      - [x] `characterStore.ts`'s `updateCharacter` now captures the
+            previous entity state (already available in the mutation
+            closure) and calls the new `syncManager.syncEntityPatch(id,
+            previous, updated)` instead of always sending the full entity.
+            Falls back to a full snapshot only when there's no previous
+            state to diff against (brand-new entity).
+      - [x] New `applyIncomingPatch` in `characterStore.ts` — merges an
+            incoming patch onto the local copy via `deepMerge`. The
+            existing `applyIncomingEntity` (full replace) is UNCHANGED and
+            still used for the initial full sync when a player first
+            connects/reconnects (server.ts's `onEntitySyncRequested` fires
+            on every 'hello') — patches only apply to a known-good baseline
+            that a full snapshot always establishes first.
+      - [x] **Real tests**: `src/sync/__tests__/diff.test.ts`, including a
+            test named for exactly the reported bug — two devices each
+            make a small, unrelated change; asserts the merge preserves
+            both instead of one clobbering the other.
+      - [x] ⚠️ **Honest known limitation documented, not silently left**:
+            true key REMOVAL (a field going from present to absent) doesn't
+            survive JSON serialization (`JSON.stringify` drops `undefined`
+            values), so `deepDiff`'s in-memory `{key: undefined}` signal
+            would be lost over the wire. Doesn't affect this app in
+            practice — every `Entity` field is always initialized via
+            `makeEmptyEntity` and never truly deleted, only ever changed to
+            a different value — but flagged in the code rather than left as
+            an untested blind spot.
+      - [ ] **Not yet tested on-device with two real phones** — the logic is
+            unit-tested and the message-passing wiring is complete, but a
+            real two-device sync session (DM + player, both making changes)
+            hasn't been run since this fix. Worth doing before fully
+            trusting it in actual play.
+
+## SESSION BATCH (2026-08-26) — nav crash fix, shadow-prop fix, subrace/subclass attachment
+
+- [x] **`GO_BACK was not handled by any navigator` crash — FIXED.** Root
+      cause: 5 screens called raw `router.back()` inside a mount-time
+      `useEffect` guard with no history check (`race-detail.tsx`,
+      `class-detail.tsx`, `background.tsx`, `subclass-detail.tsx`, and
+      `rules.tsx`'s `handleDone()`) — crashes whenever reached with empty
+      nav history. `src/hooks/useSafeGoBack.ts` already solved exactly this
+      for the 6 homebrew builder screens but was never applied to the
+      `app/creation/` wizard. Applied there, plus swept 15 more button-press
+      `router.back()` sites (same latent crash class, lower risk today) —
+      including `src/components/CreationHeader.tsx`, the shared back button
+      used across most wizard screens, for outsized leverage. Zero raw
+      `router.back()` calls remain anywhere in the app.
+- [x] **Deprecated `shadow*` style props warning — FIXED.** Isolated to one
+      file, `src/components/GlobalDiceRoller.tsx`'s dice FAB. Fixed with
+      `Platform.select` — native keeps real `shadow*`/`elevation`, web gets
+      `boxShadow` (RN-Web-only; not interchangeable with the native props,
+      so this couldn't be a blind find/replace without breaking native
+      shadows).
+- [x] **Subrace/subclass attachment to ANY existing race/class.** Previously,
+      `race-builder.tsx`'s subrace editor only worked on races the player
+      already owned (`homebrewRaces.find`, no path to an official SRD race),
+      and subclasses had no homebrew path at all — no builder, no
+      `ContentCacheType` entry, no store field, 100% static registry.
+      - [x] **Data model: standalone records with `parentId`/`classId`, not
+            nested-only.** `Subrace.parentId` already existed in the type;
+            widened `ContentCacheType`/`HomebrewContent` (`contentCacheRepo.
+            ts`) to add `'subrace'`/`'subclass'`, added a `HomebrewSubclass`
+            type (`ClassProgression & {id, name}` — explicit id, since
+            official subclasses derive theirs by scanning features, which
+            doesn't suit freshly-authored homebrew). Rejected a "clone the
+            official parent into a homebrew shadow copy" alternative — it
+            would either mint a new id (breaking existing characters'
+            `identity.raceId` references) or reuse the SRD id (colliding
+            with the official-vs-SQLite split `getMergedContentDB()` relies
+            on).
+      - [x] **`getMergedContentDB()` rewritten** (was dead code — defined,
+            never called; most consumers spliced homebrew in ad hoc instead)
+            to attach standalone subraces onto their parent race by
+            `parentId` at read time. Subclasses use a parallel merge — see
+            `subclassEntriesForClassMerged`/`getSubclassEntryMerged` in
+            `subclassBrowse.ts` — since subclasses live outside `ContentDB`
+            entirely (no `subclasses` field on it), a divergence from races
+            that only became clear mid-implementation.
+      - [x] **Shared trait/effect editor extracted** from
+            `race-builder.tsx` into `src/content/traitCompiler.ts` (pure
+            compilation logic — `buildTraitFeature`, `buildSubrace`, no
+            React/RN imports, so `progressions.ts` can use it without
+            violating the `src/content/**` layering rule in
+            `docs/IMPLEMENTATION.md`) + `src/components/homebrew/TraitEditor.
+            tsx` (the React UI: `TraitEditorModal`, `TraitListEditor`,
+            `AbilityScoreGrid`). `race-builder.tsx`'s inline `SubraceEditor`
+            kept as-is for authoring subraces while building a brand-new
+            race from scratch — still correct when you own the whole race;
+            the new standalone builder covers attaching to a race you don't.
+      - [x] **Class features gain real effect kinds** (parity with race
+            traits, prerequisite for homebrew subclass features to be
+            mechanically meaningful, not just flavor text).
+            `CharClass.levelFeatures` widened from `{level, name,
+            description}` to `DraftTrait & {level}`; `progressions.ts`
+            compiles the chosen effect into `Feature.effects` instead of
+            hardcoding `effects: []`. Backward-compat: a missing
+            `effectKind` on classes saved before this defaults to `'none'`
+            (flavor-only) at compile time — old homebrew classes keep
+            working unchanged.
+      - [x] New screens: `app/homebrew/subrace-builder.tsx`,
+            `app/homebrew/subclass-builder.tsx` — parent picker (official OR
+            homebrew) + the same trait/feature authoring UI as the other
+            builders. Both wired into the Homebrew tab's Create/Library
+            panels, showing the parent race/class name alongside each entry.
+      - [x] `race-detail.tsx` now sources races via `getMergedContentDB()`
+            instead of a raw `globalContentDB.races` + `homebrewRaces`
+            concat — otherwise a subrace attached to an official race would
+            never reach the picker. `class-detail.tsx`/`subclass-detail.tsx`
+            similarly switched to the merged subclass lookups.
+      - [ ] **Scope note, not a regression**: this makes homebrew subraces/
+            subclasses author-able and browsable at parity with official
+            ones. It does NOT wire subclass *selection* during play — the
+            `subclass_unlock` pending choice still queues an empty pool for
+            every class, official or homebrew — that's the already-tracked
+            "Subclass choice wiring" backlog item below, untouched by this
+            session.
+      - [x] **Manually tested end-to-end on web** (`expo start --web`):
+            created a "Sun Elf" homebrew subrace attached to the official SRD
+            Elf, confirmed it appeared in the creation wizard's subrace
+            picker alongside High Elf/Wood Elf/Dark Elf, selected it, and
+            confirmed Race marked complete on the creation hub. Both new
+            builder screens confirmed crash-free.
+            **Not yet tested on a real device/native build** — SQLite is a
+            web no-op (`db.ts`), so this only verified the in-memory
+            store/merge logic, not actual on-device persistence across app
+            restarts.
+      - [x] ⚠️ **Real bug found and fixed during that test**: both new
+            builder screens and `race-detail.tsx` initially selected
+            `useHomebrewStore(s => s.getMergedContentDB())` directly — since
+            that returns a brand-new object every call, `useSyncExternalStore`
+            read it as "the store changed" on every render and infinite-
+            looped ("Maximum update depth exceeded"). Fixed by selecting the
+            stable function reference (`useHomebrewStore(s =>
+            s.getMergedContentDB)`) and calling it in the render body
+            instead — a real gotcha worth remembering for any future zustand
+            selector that calls a store method rather than reading a plain
+            state field.
+
 ## POST-1.0 BACKLOG (resist until shipped)
 - **Wire generic magic item bonuses** — discovered while auditing what
   actually influences stats (2026-08-04): almost none of the 835-item
@@ -1349,6 +1572,32 @@ early 1.1 if Phase 1–4 run long. Do not let it delay Phase 1.
 - Character portraits, 3D dice, iOS build
 - Homebrew import adapters (DandWiki/Homebrewery) — post-1.1, expect
   60–70% automatic coverage per VISION_ASSESSMENT.md
+- **Subclass content authoring across the 12 official classes** — most
+  official subclass files are still feature descriptions with `effects: []`
+  (see the "Subclass choice wiring" item above). Now more tractable: the new
+  `app/homebrew/subclass-builder.tsx` effect-kind tooling (2026-08-26 batch)
+  can author real mechanical effects, so re-authoring official subclasses
+  could reuse that UI/compiler path instead of hand-writing more raw
+  `ClassProgression` TS files from scratch.
+- **Feature editor functional effect verification + structured picker** —
+  `app/homebrew/feature-editor.tsx` is the most "raw" builder (hand-authors a
+  Feature's effects directly via `EFFECT_TYPES`); worth auditing that every
+  effect type it exposes actually does something at runtime, and considering
+  whether it should adopt the same trait/effect-kind picker pattern
+  (`src/components/homebrew/TraitEditor.tsx`) other builders now share.
+- **Character rename** — no rename affordance found for a saved character.
+- **PDF per-page + classical layout** — current PDF export
+  (`src/io/characterSheetPdf.ts`) is a single flowing HTML page; a proper
+  per-page paginated layout closer to the classic 5e character sheet is a
+  separate, larger effort.
+- **Shareable single-character export/auto-import** — `app/backup.tsx`
+  exports/imports the WHOLE backup (all characters + homebrew); a
+  single-character share/import flow is a distinct, smaller feature.
+- **No homebrew builder for Feats or Monsters** — self-identified gap while
+  auditing `app/homebrew/` this session: race, class, subrace, subclass,
+  background, item, spell, and generic-feature builders all exist; feats and
+  monsters remain static-registry-only, no `ContentCacheType` entry, no
+  authoring UI.
 
 ---
 

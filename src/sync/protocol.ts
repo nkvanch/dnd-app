@@ -26,6 +26,7 @@ export type SyncMessage =
   | { type: 'sync_event';     event: SyncEvent }
   | { type: 'request_entity'; entityId: string }
   | { type: 'entity_snapshot'; entity: Entity }
+  | { type: 'entity_patch';   entityId: string; patch: Record<string, unknown> }
   | { type: 'claim_character'; characterId: string | null }
   | { type: 'error';          message: string };
 

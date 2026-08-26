@@ -11,10 +11,14 @@
             "id": "4a8eae8187561b68",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "docs/DESIGN.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "DESIGN"
             }
           }
         ]
@@ -37,7 +41,9 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
               },
               "icon": "lucide-folder-closed",
               "title": "Files"
@@ -181,17 +187,25 @@
   },
   "active": "4a8eae8187561b68",
   "lastOpenFiles": [
-    "src/engine/types.ts.735fa9de4b781cc961e17a40b17c8d5c.tmp",
+    "docs/DATA_MODEL.md",
+    "docs/ABOUT.md",
     "docs/ROADMAP_1.0.md",
+    "docs/VISION_ASSESSMENT.md",
+    "docs/QA_GUIDE.md",
+    "docs/RELEASE_AUDIT.md",
+    "docs/UI_RULES.md",
+    "docs/IMPLEMENTATION.md",
+    "docs/MULTI_SYSTEM_VISION.md",
+    "docs/PROJECT_WALKTHROUGH.md",
+    "docs/PRIVACY_POLICY.md",
+    "docs/PRODUCT_PRINCIPLES.md",
+    "src/engine/types.ts.735fa9de4b781cc961e17a40b17c8d5c.tmp",
     "app/about.tsx",
     "AUDIT.md",
     "CLAUDE.md",
     "scripts/generate-obsidian-graph.js",
     "AGENTS.md",
-    "docs/DATA_MODEL.md",
-    "docs/ABOUT.md",
     "docs/ROADMAP.md",
-    "src/components/sheet/TabSpells.tsx",
-    "docs/QA_GUIDE.md"
+    "src/components/sheet/TabSpells.tsx"
   ]
 }

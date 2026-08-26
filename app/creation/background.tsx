@@ -9,6 +9,7 @@ import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { globalContentDB } from '../../src/content/classes/library';
 import { Background, SkillName } from '../../src/engine/types';
 import { applyGrant } from '../../src/engine/leveling';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── BG_DETAIL — all 13 PHB backgrounds ───────────────────────────────────────
@@ -231,6 +232,7 @@ export default function BackgroundScreen() {
 
 function BackgroundDetail({ id }: { id: string }) {
   const router   = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
   const homebrewBackgrounds = useHomebrewStore(s => s.backgrounds);
@@ -245,7 +247,7 @@ function BackgroundDetail({ id }: { id: string }) {
 
   // Fix: navigate in useEffect, never during render
   useEffect(() => {
-    if (!bg || !draft) router.back();
+    if (!bg || !draft) safeGoBack();
   }, []);
 
   if (!bg || !draft) return null;

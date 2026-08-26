@@ -7,13 +7,15 @@ import { useCampaignStore } from '../../src/store/campaignStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useCombatStore }    from '../../src/store/combatStore';
 import { Entity } from '../../src/engine/types';
+import { dmFullStatVisibility } from '../../src/engine/houseRules';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { SyncStatusDot } from '../../src/components/SyncStatusDot';
 import { useSyncStore }  from '../../src/store/syncStore';
 
 // ── Party Character Card ──────────────────────────────────────────────────────
 
-function PartyCard({ entity, onPress }: { entity: Entity; onPress: () => void }) {
+function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: boolean; onPress: () => void }) {
   const { identity, resources, derived, conditions, spellcasting, features } = entity;
   const hpPct   = resources.hp.maximum > 0 ? resources.hp.current / resources.hp.maximum : 0;
   const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
@@ -55,18 +57,30 @@ function PartyCard({ entity, onPress }: { entity: Entity; onPress: () => void })
               <Text style={styles.stableBadgeTxt}>♥ STABLE</Text>
             </View>
           )}
+          {/* AC, movement, and passive stats — what a DM could reasonably
+              observe at a glance. Shown regardless of the visibility rule. */}
           <View style={styles.badge}>
             <Text style={styles.badgeLbl}>AC</Text>
             <Text style={styles.badgeVal}>{derived.ac}</Text>
           </View>
           <View style={styles.badge}>
+            <Text style={styles.badgeLbl}>SPD</Text>
+            <Text style={styles.badgeVal}>{resources.speed}</Text>
+          </View>
+          <View style={styles.badge}>
             <Text style={styles.badgeLbl}>PP</Text>
             <Text style={styles.badgeVal}>{derived.passivePerception}</Text>
           </View>
+          {derived.passiveInvestigation !== undefined && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeLbl}>PI</Text>
+              <Text style={styles.badgeVal}>{derived.passiveInvestigation}</Text>
+            </View>
+          )}
         </View>
       </View>
 
-      {/* HP bar */}
+      {/* HP bar — always visible, same reasoning as AC/movement/passives above */}
       <View style={styles.hpRow}>
         <View style={styles.hpBarOuter}>
           <View style={[styles.hpBarFill, {
@@ -77,37 +91,43 @@ function PartyCard({ entity, onPress }: { entity: Entity; onPress: () => void })
         <Text style={styles.hpTxt}>{resources.hp.current}/{resources.hp.maximum}</Text>
       </View>
 
-      {/* Conditions + Concentration */}
-      <View style={styles.condRow}>
-        {conditions.map(c => (
-          <View key={c.id} style={styles.condPill}>
-            <Text style={styles.condTxt}>{c.id}</Text>
-          </View>
-        ))}
-        {concentrating && (
-          <View style={[styles.condPill, styles.concPill]}>
-            <Text style={styles.condTxt}>⟳ {concentrating}</Text>
-          </View>
-        )}
-        {conditions.length === 0 && !concentrating && (
-          <Text style={styles.noCondTxt}>No conditions</Text>
-        )}
-      </View>
-
-      {/* Resource pips */}
-      {keyResources.length > 0 && (
-        <View style={styles.resourcePips}>
-          {keyResources.map(r => (
-            <View key={r.id} style={styles.pipGroup}>
-              <Text style={styles.pipLabel}>{r.name}</Text>
-              <View style={styles.pips}>
-                {Array.from({ length: r.maximum }).map((_, i) => (
-                  <View key={i} style={[styles.pip, i >= r.current && styles.pipEmpty]} />
-                ))}
+      {/* Everything below is more than a DM could observe at a glance —
+          gated behind the dmFullStatVisibility house rule (book default: off). */}
+      {showFull && (
+        <>
+          {/* Conditions + Concentration */}
+          <View style={styles.condRow}>
+            {conditions.map(c => (
+              <View key={c.id} style={styles.condPill}>
+                <Text style={styles.condTxt}>{c.id}</Text>
               </View>
+            ))}
+            {concentrating && (
+              <View style={[styles.condPill, styles.concPill]}>
+                <Text style={styles.condTxt}>⟳ {concentrating}</Text>
+              </View>
+            )}
+            {conditions.length === 0 && !concentrating && (
+              <Text style={styles.noCondTxt}>No conditions</Text>
+            )}
+          </View>
+
+          {/* Resource pips */}
+          {keyResources.length > 0 && (
+            <View style={styles.resourcePips}>
+              {keyResources.map(r => (
+                <View key={r.id} style={styles.pipGroup}>
+                  <Text style={styles.pipLabel}>{r.name}</Text>
+                  <View style={styles.pips}>
+                    {Array.from({ length: r.maximum }).map((_, i) => (
+                      <View key={i} style={[styles.pip, i >= r.current && styles.pipEmpty]} />
+                    ))}
+                  </View>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          )}
+        </>
       )}
     </Pressable>
   );
@@ -117,17 +137,20 @@ function PartyCard({ entity, onPress }: { entity: Entity; onPress: () => void })
 
 export default function DmDashboard() {
   const router         = useRouter();
+  const safeGoBack     = useSafeGoBack('/(tabs)');
   const isDm           = useCampaignStore(s => s.isDm);
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
   const characters     = useCharacterStore(s => s.characters);
+  const rules          = useCharacterStore(s => s.rules);
   const startCombat    = useCombatStore(s => s.startCombat);
   const syncStatus     = useSyncStore(s => s.status);
+  const showFull       = dmFullStatVisibility(rules);
 
   // Guard: only DMs see this screen
   if (!isDm) {
     return (
       <View style={styles.screen}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
         <View style={styles.center}>
@@ -153,7 +176,7 @@ export default function DmDashboard() {
     <View style={styles.screen}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -228,7 +251,12 @@ export default function DmDashboard() {
           </>
         )}
 
-        <Text style={styles.sectionLabel}>PARTY ({partyChars.length})</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={styles.sectionLabel}>PARTY ({partyChars.length})</Text>
+          {!showFull && (
+            <Text style={styles.restrictedNote}>Passive view — see Campaign Settings</Text>
+          )}
+        </View>
 
         {partyChars.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -242,6 +270,7 @@ export default function DmDashboard() {
             <PartyCard
               key={c.id}
               entity={c}
+              showFull={showFull}
               onPress={() => router.push(`/dm/character/${c.id}` as any)}
             />
           ))
@@ -276,6 +305,7 @@ const styles = StyleSheet.create({
   scroll:       { flex: 1 },
   content:      { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },
   sectionLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2, fontWeight: FontWeight.bold },
+  restrictedNote: { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
 
   roomCard: {
     backgroundColor: Colors.gold + '14', borderRadius: Radius.lg,

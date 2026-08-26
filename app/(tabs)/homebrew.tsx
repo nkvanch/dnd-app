@@ -11,7 +11,10 @@ function CreatePanel() {
   const router = useRouter();
   const ITEMS = [
     { label: '⚔️  New Race',        route: '/homebrew/race-builder'  },
+    { label: '🧬  New Subrace',      route: '/homebrew/subrace-builder' },
     { label: '🎓  New Class',        route: '/homebrew/class-builder' },
+    { label: '🎭  New Subclass',     route: '/homebrew/subclass-builder' },
+    { label: '📜  New Background',   route: '/homebrew/background-builder' },
     { label: '🧰  New Item',         route: '/homebrew/item-builder'  },
     { label: '✨  New Spell',        route: '/homebrew/spell-builder' },
     { label: '📖  New Feature',      route: '/homebrew/feature-editor' },
@@ -39,16 +42,35 @@ function CreatePanel() {
 // ── Library Panel ─────────────────────────────────────────────────────────────
 
 function LibraryPanel() {
-  const { races, classes, spells, backgrounds, features, items, deleteItem } = useHomebrewStore();
+  const router = useRouter();
+  const {
+    races, subraces, classes, subclasses, spells, backgrounds, features, items, deleteItem,
+    getMergedContentDB,
+  } = useHomebrewStore();
+  const allRaces = getMergedContentDB().races;
+  const allClasses = getMergedContentDB().classes;
 
   const all = [
     ...races.map(r       => ({ type: 'race'       as const, item: r })),
+    ...subraces.map(sr   => ({ type: 'subrace'    as const, item: sr, parentName: allRaces.find(r => r.id === sr.parentId)?.name })),
     ...classes.map(c     => ({ type: 'class'      as const, item: c })),
+    ...subclasses.map(sc => ({ type: 'subclass'   as const, item: sc, parentName: allClasses.find(c => c.id === sc.classId)?.name })),
     ...items.map(it      => ({ type: 'item'       as const, item: it })),
     ...spells.map(s      => ({ type: 'spell'      as const, item: s })),
     ...backgrounds.map(b => ({ type: 'background' as const, item: b })),
     ...features.map(f    => ({ type: 'feature'    as const, item: f })),
   ];
+
+  const EDIT_ROUTES: Partial<Record<string, string>> = {
+    race: '/homebrew/race-builder',
+    subrace: '/homebrew/subrace-builder',
+    class: '/homebrew/class-builder',
+    subclass: '/homebrew/subclass-builder',
+    item: '/homebrew/item-builder',
+    spell: '/homebrew/spell-builder',
+    background: '/homebrew/background-builder',
+    feature: '/homebrew/feature-editor',
+  };
 
   if (all.length === 0) {
     return (
@@ -62,29 +84,43 @@ function LibraryPanel() {
   return (
     <View style={styles.panel}>
       <Text style={styles.panelTitle}>📚 Library ({all.length})</Text>
-      {all.map(({ type, item }) => (
-        <View key={`${type}:${item.id}`} style={styles.libraryRow}>
-          <View style={styles.libraryInfo}>
-            <Text style={styles.libraryName}>{item.name}</Text>
-            <View style={[styles.typeBadge, styles[`typeBadge_${type}`] ?? {}]}>
-              <Text style={styles.typeBadgeTxt}>{type}</Text>
+      {all.map(({ type, item, ...rest }) => {
+        const editRoute = EDIT_ROUTES[type];
+        const parentName = 'parentName' in rest ? rest.parentName : undefined;
+        return (
+          <View key={`${type}:${item.id}`} style={styles.libraryRow}>
+            <View style={styles.libraryInfo}>
+              <Text style={styles.libraryName}>
+                {item.name}{parentName ? ` (${parentName})` : ''}
+              </Text>
+              <View style={[styles.typeBadge, styles[`typeBadge_${type}`] ?? {}]}>
+                <Text style={styles.typeBadgeTxt}>{type}</Text>
+              </View>
+            </View>
+            <View style={styles.libraryActions}>
+              {editRoute && (
+                <Pressable
+                  style={styles.libBtn}
+                  onPress={() => router.push(`${editRoute}?editId=${item.id}` as any)}
+                >
+                  <Text style={styles.libBtnTxt}>✏️</Text>
+                </Pressable>
+              )}
+              <Pressable
+                style={styles.libBtn}
+                onPress={() => {
+                  Alert.alert('Delete', `Delete "${item.name}"?`, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: () => deleteItem(type, item.id) },
+                  ]);
+                }}
+              >
+                <Text style={styles.libBtnTxt}>🗑</Text>
+              </Pressable>
             </View>
           </View>
-          <View style={styles.libraryActions}>
-            <Pressable
-              style={styles.libBtn}
-              onPress={() => {
-                Alert.alert('Delete', `Delete "${item.name}"?`, [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: () => deleteItem(type, item.id) },
-                ]);
-              }}
-            >
-              <Text style={styles.libBtnTxt}>🗑</Text>
-            </Pressable>
-          </View>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -142,7 +178,9 @@ const styles = StyleSheet.create({
   typeBadge:      { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm, paddingHorizontal: 6, paddingVertical: 2 },
   typeBadgeTxt:   { fontSize: FontSize.xs, color: Colors.textDim },
   typeBadge_race:       { backgroundColor: Colors.green  + '22' },
+  typeBadge_subrace:    { backgroundColor: Colors.green  + '22' },
   typeBadge_class:      { backgroundColor: Colors.gold   + '22' },
+  typeBadge_subclass:   { backgroundColor: Colors.gold   + '22' },
   typeBadge_spell:      { backgroundColor: Colors.blue   + '22' },
   typeBadge_background: { backgroundColor: Colors.purple + '22' },
   typeBadge_feature:    { backgroundColor: Colors.surfaceHigh },

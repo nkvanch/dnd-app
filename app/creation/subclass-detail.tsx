@@ -7,20 +7,24 @@
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getSubclassEntry, subclassFeaturesByLevel, subclassProgressionTable } from '../../src/content/subclasses/subclassBrowse';
+import { getSubclassEntryMerged, subclassFeaturesByLevel, subclassProgressionTable } from '../../src/content/subclasses/subclassBrowse';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 export default function SubclassDetailScreen() {
   const router = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const { classId, subclassId } = useLocalSearchParams<{ classId: string; subclassId: string }>();
+  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
 
   const [browseLayer, setBrowseLayer] = useState<'progression' | 'features'>('features');
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
 
-  const sub = classId && subclassId ? getSubclassEntry(classId, subclassId) : null;
+  const sub = classId && subclassId ? getSubclassEntryMerged(classId, subclassId, homebrewSubclasses) : null;
 
   useEffect(() => {
-    if (!sub) router.back();
+    if (!sub) safeGoBack();
   }, []);
 
   if (!sub) return null;
@@ -136,7 +140,7 @@ export default function SubclassDetailScreen() {
         </Text>
       </View>
 
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
+      <Pressable style={styles.backBtn} onPress={safeGoBack}>
         <Text style={styles.backBtnTxt}>← Back</Text>
       </Pressable>
     </ScrollView>

@@ -10,6 +10,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { resolveChoice } from '../../src/engine/leveling';
 import { skillOverlapMode } from '../../src/engine/houseRules';
 import { ChoiceOption, SkillName } from '../../src/engine/types';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const SKILL_LABELS: Record<string, string> = {
@@ -23,6 +24,7 @@ const SKILL_LABELS: Record<string, string> = {
 
 export default function SkillsScreen() {
   const router   = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
@@ -197,7 +199,7 @@ export default function SkillsScreen() {
   if (allSkillChoices.length === 0) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backBtnTxt}>← Back</Text>
         </Pressable>
         <Text style={styles.heading}>Skill Selection</Text>
@@ -214,7 +216,7 @@ export default function SkillsScreen() {
   if (pendingSkillChoices.length === 0) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backBtnTxt}>← Back</Text>
         </Pressable>
         <Text style={styles.heading}>Skill Selection</Text>
@@ -245,7 +247,7 @@ export default function SkillsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
+      <Pressable style={styles.backBtn} onPress={safeGoBack}>
         <Text style={styles.backBtnTxt}>← Back</Text>
       </Pressable>
       <Text style={styles.heading}>Skill Selection</Text>

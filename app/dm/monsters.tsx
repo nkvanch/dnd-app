@@ -11,6 +11,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { spawnMonster }     from '../../src/engine/monsterFactory';
 import { ALL_MONSTER_TEMPLATES } from '../../src/content/monsters/srd';
 import { MonsterTemplate }  from '../../src/content/monsters/types';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 function crLabel(cr: number): string {
@@ -105,6 +106,7 @@ function MonsterPreview({ template, onSpawn, onClose }: {
 
 export default function MonstersScreen() {
   const router       = useRouter();
+  const safeGoBack   = useSafeGoBack('/(tabs)');
   const rules        = useCharacterStore(s => s.rules);
   const addEntity    = useCombatStore(s => s.updateEntity);
   const inCombat     = useCombatStore(s => s.combat.active);
@@ -135,14 +137,14 @@ export default function MonstersScreen() {
     }));
     setPreview(null);
     if (inCombat) {
-      router.back();
+      safeGoBack();
     }
   }
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
         <Text style={styles.title}>Monster Library</Text>

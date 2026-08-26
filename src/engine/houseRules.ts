@@ -171,6 +171,21 @@ export const HOUSE_RULES: HouseRuleDef[] = [
     bookLabel: 'Clear on stabilise (book)', homebrewLabel: 'Persist to long rest',
   },
 
+  // ── DM Visibility ───────────────────────────────────────────────
+  {
+    key: 'dmFullStatVisibility', label: 'DM sees full character stats', kind: 'boolean',
+    section: 'DM Visibility',
+    description:
+      'Book: the DM dashboard shows only what a DM could reasonably observe at ' +
+      'a glance — passive stats (Perception/Investigation), HP, movement speed, ' +
+      'and AC. Enabling this reveals full stat blocks (all six abilities, ' +
+      'skills, saving throws, inventory) on the dashboard AND enables DM ' +
+      'Override there — overriding a stat the DM can\'t normally see doesn\'t ' +
+      'make sense, so the two are gated together.',
+    bookDefault: false,
+    bookLabel: 'Passive stats only (book)', homebrewLabel: 'Full visibility + override',
+  },
+
   // ── Monster Info ─────────────────────────────────────────────────────────
   {
     key: 'monsterHpDisplay', label: 'Show monster HP to players', kind: 'choice',
@@ -361,6 +376,9 @@ export function bloodiedThreshold(rules: CampaignRules): number {
 export function revealMonsterAc(rules: CampaignRules): 'never' | 'after_hit' | 'always' {
   const v = getHouseChoice(rules, 'revealMonsterAc');
   return (v === 'after_hit' || v === 'always') ? v : 'never';
+}
+export function dmFullStatVisibility(rules: CampaignRules): boolean {
+  return getHouseRule(rules, 'dmFullStatVisibility');
 }
 export function activeReminders(rules: CampaignRules): string[] {
   return HOUSE_RULES

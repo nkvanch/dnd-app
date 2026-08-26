@@ -10,7 +10,9 @@
 // to SQLite; on next load the SQLite copy takes precedence over the built-in.
 // ============================================================================
 import { create } from 'zustand';
-import { Race, CharClass, Spell, Feature, Background, Item, ContentDB } from '../engine/types';
+import {
+  Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, ContentDB,
+} from '../engine/types';
 import {
   saveHomebrewContent, loadAllHomebrew, deleteHomebrewContent,
   ContentCacheType, HomebrewContent,
@@ -42,7 +44,9 @@ async function loadDeletedBuiltins(): Promise<Set<string>> {
 
 type HomebrewStore = {
   races:       Race[];
+  subraces:    Subrace[];
   classes:     CharClass[];
+  subclasses:  HomebrewSubclass[];
   spells:      Spell[];
   backgrounds: Background[];
   features:    Feature[];
@@ -64,7 +68,9 @@ type HomebrewStore = {
 
 export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   races:       [],
+  subraces:    [],
   classes:     [],
+  subclasses:  [],
   spells:      [],
   backgrounds: [],
   features:    [],
@@ -99,6 +105,8 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         // SQLite copies filtered out by id above, order doesn't matter.
         classes:     [...builtinClasses, ...sqliteClasses],
         races:       [...builtinRaces,   ...sqliteRaces],
+        subraces:    (all.subrace    ?? []) as Subrace[],
+        subclasses:  (all.subclass   ?? []) as HomebrewSubclass[],
         spells:      (all.spell      ?? []) as Spell[],
         backgrounds: (all.background ?? []) as Background[],
         features:    (all.feature    ?? []) as Feature[],
@@ -112,9 +120,25 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   },
 
   getMergedContentDB: (): ContentDB => {
-    const { races, classes, spells, backgrounds, features, items } = get();
+    const { races, subraces, classes, spells, backgrounds, features, items } = get();
+    const allRaces = [...globalContentDB.races, ...races];
+    // Attach standalone subraces (parentId may point at an official OR a
+    // homebrew race) onto their parent at read time, rather than requiring
+    // a subrace to be nested inside a race the user owns/authored — see
+    // Subrace.parentId's doc comment. A race's own natively-nested subraces
+    // (authored inline while building that race from scratch) win on id
+    // collision since they're the race's own authored data.
+    const racesWithStandaloneSubraces = allRaces.map(race => {
+      const attached = subraces.filter(sr => sr.parentId === race.id);
+      if (attached.length === 0) return race;
+      const existingIds = new Set((race.subraces ?? []).map(s => s.id));
+      return {
+        ...race,
+        subraces: [...(race.subraces ?? []), ...attached.filter(s => !existingIds.has(s.id))],
+      };
+    });
     return {
-      races:       [...globalContentDB.races,       ...races],
+      races:       racesWithStandaloneSubraces,
       classes:     [...globalContentDB.classes,     ...classes],
       spells:      [...globalContentDB.spells,      ...spells],
       backgrounds: [...globalContentDB.backgrounds, ...backgrounds],
@@ -130,7 +154,9 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     set(state => {
       switch (type) {
         case 'race':       return { races:       [...state.races.filter(r => r.id !== (item as Race).id),             item as Race] };
+        case 'subrace':    return { subraces:    [...state.subraces.filter(sr => sr.id !== (item as Subrace).id),      item as Subrace] };
         case 'class':      return { classes:     [...state.classes.filter(c => c.id !== (item as CharClass).id),     item as CharClass] };
+        case 'subclass':   return { subclasses:  [...state.subclasses.filter(sc => sc.id !== (item as HomebrewSubclass).id), item as HomebrewSubclass] };
         case 'spell':      return { spells:      [...state.spells.filter(s => s.id !== (item as Spell).id),          item as Spell] };
         case 'background': return { backgrounds: [...state.backgrounds.filter(b => b.id !== (item as Background).id), item as Background] };
         case 'feature':    return { features:    [...state.features.filter(f => f.id !== (item as Feature).id),      item as Feature] };
@@ -154,7 +180,9 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     set(state => {
       switch (type) {
         case 'race':       return { races:       state.races.filter(r => r.id !== id) };
+        case 'subrace':    return { subraces:    state.subraces.filter(sr => sr.id !== id) };
         case 'class':      return { classes:     state.classes.filter(c => c.id !== id) };
+        case 'subclass':   return { subclasses:  state.subclasses.filter(sc => sc.id !== id) };
         case 'spell':      return { spells:      state.spells.filter(s => s.id !== id) };
         case 'background': return { backgrounds: state.backgrounds.filter(b => b.id !== id) };
         case 'feature':    return { features:    state.features.filter(f => f.id !== id) };

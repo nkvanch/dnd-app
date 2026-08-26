@@ -28,6 +28,7 @@ import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
 import { GlobalDiceRoller } from '../../src/components/GlobalDiceRoller';
 import { SyncStatusDot }   from '../../src/components/SyncStatusDot';
 import { SafeBottomView }  from '../../src/components/SafeBottomView';
+import { useSafeGoBack }   from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 type TabId = 'character' | 'actions' | 'spells' | 'abilities' | 'features' | 'inventory' | 'notes';
@@ -59,6 +60,7 @@ export default function CharacterSheetScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('character');
   const [sheetMode, setSheetMode] = useState<'combat' | 'exploration'>('combat');
   const [freeEditOpen, setFreeEditOpen] = useState(false);
+  const goBack = useSafeGoBack('/(tabs)');
 
   // Free-edit a character's own data. Hidden only when a DM has explicitly
   // locked player edits via the house rule (the DM keeps the button). Being
@@ -259,7 +261,7 @@ export default function CharacterSheetScreen() {
   if (!entity) {
     return (
       <View style={styles.screen}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={goBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
         <View style={styles.center}>
@@ -286,7 +288,7 @@ export default function CharacterSheetScreen() {
       {/* Header — name + always-visible HP / AC / Speed */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={goBack}>
             <Text style={styles.backTxt}>← Back</Text>
           </Pressable>
           <Text style={styles.charName} numberOfLines={1}>

@@ -62,6 +62,13 @@ const ASI_SECTION: Section = {
   done:  d => d.choices.filter(c => c.definition.kind === 'asi' && !c.resolved).length === 0,
 };
 
+const SPELLCASTING_ABILITY_SECTION: Section = {
+  key:   'spellcasting_ability',
+  label: 'Spellcasting Ability',
+  route: '/creation/spellcasting-ability',
+  done:  d => d.choices.filter(c => c.definition.kind === 'spellcasting_ability' && !c.resolved).length === 0,
+};
+
 export default function HubScreen() {
   const router = useRouter();
   const draft  = useCharacterStore(s => s.draft);
@@ -81,9 +88,18 @@ export default function HubScreen() {
 
   // Conditionally include ASI section only when there are pending ASI choices
   const asiChoices = draft.choices.filter(c => c.definition.kind === 'asi');
-  const sections   = asiChoices.length > 0
+  let sections = asiChoices.length > 0
     ? [...baseSections, ASI_SECTION]
     : baseSections;
+
+  // Same pattern for the rare-case spellcasting-ability choice (homebrew
+  // classes with 2+ spellcastingAbilityOptions) — was previously never
+  // tracked or routed to at all, so this pending choice just sat unresolved
+  // forever with no way for the player to reach it.
+  const spellAbilityChoices = draft.choices.filter(c => c.definition.kind === 'spellcasting_ability');
+  if (spellAbilityChoices.length > 0) {
+    sections = [...sections, SPELLCASTING_ABILITY_SECTION];
+  }
 
   const allDone = sections.every(s => s.done(draft));
 

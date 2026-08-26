@@ -4,18 +4,20 @@
 // note and a link to the source document.
 import { View, Text, Pressable, StyleSheet, ScrollView, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeGoBack } from '../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../src/theme';
 
 const SRD_URL = 'https://dnd.wizards.com/resources/systems-reference-document';
 
 export default function AboutScreen() {
   const router = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
 
       <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={safeGoBack}>
           <Text style={styles.back}>← Back</Text>
         </Pressable>
         <Text style={styles.title}>About &amp; Legal</Text>

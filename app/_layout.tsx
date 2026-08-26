@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../src/theme';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { initDb } from '../src/db/db';
@@ -56,7 +57,7 @@ export default function RootLayout() {
         }).catch(() => { /* non-critical */ });
 
         // 4. Wire up the sync manager — must run after stores are hydrated
-        const { applyIncomingEntity } = useCharacterStore.getState();
+        const { applyIncomingEntity, applyIncomingPatch } = useCharacterStore.getState();
         const { setStatus }           = useSyncStore.getState();
 
         syncManager.initialise({
@@ -65,6 +66,9 @@ export default function RootLayout() {
           },
           onEntityReceived: (entity) => {
             applyIncomingEntity(entity);
+          },
+          onEntityPatchReceived: (entityId, patch) => {
+            applyIncomingPatch(entityId, patch);
           },
           onSyncEvent: (event) => {
             // DM responds to entity_full_sync requests from players
@@ -105,6 +109,7 @@ export default function RootLayout() {
   if (!dbReady) return <BootScreen />;
 
   return (
+    <SafeAreaProvider>
     <ErrorBoundary>
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -128,6 +133,7 @@ export default function RootLayout() {
         <Stack.Screen name="homebrew/spell-builder"      options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/class-builder"      options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/race-builder"       options={{ headerShown: false }} />
+        <Stack.Screen name="homebrew/background-builder" options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/feature-editor"     options={{ headerShown: false }} />
         <Stack.Screen name="settings"                      options={{ headerShown: false }} />
         <Stack.Screen name="about"                         options={{ headerShown: false }} />
@@ -136,6 +142,7 @@ export default function RootLayout() {
       </Stack>
     </View>
     </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 

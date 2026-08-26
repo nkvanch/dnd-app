@@ -18,6 +18,7 @@ import { ConnectedPlayer } from './protocol';
 import { decodeRoomCode, encodeRoomCode, getLocalIp } from './discovery';
 import { queueSyncEvent, markEventApplied, getUnflushedEvents } from '../db/syncRepo';
 import { saveEntity } from '../db/entityRepo';
+import { deepDiff } from './diff';
 
 // Lazy import to avoid circular dependency: characterStore → syncManager → characterStore.
 // We call getState() at runtime, not at module evaluation time.
@@ -43,6 +44,8 @@ export type SyncStatus = {
 export type SyncManagerCallbacks = {
   onStatusChange:   (status: SyncStatus) => void;
   onEntityReceived: (entity: Entity) => void;
+  /** A partial patch arrived instead of a full entity — merge, don't replace. */
+  onEntityPatchReceived: (entityId: string, patch: Record<string, unknown>) => void;
   onSyncEvent:      (event: SyncEvent) => void;
 };
 
@@ -133,6 +136,9 @@ class SyncManagerClass {
         // A player pushed their character up to us (the DM). Apply locally.
         this.callbacks?.onEntityReceived(entity);
       },
+      onEntityPatchReceived: (entityId, patch) => {
+        this.callbacks?.onEntityPatchReceived(entityId, patch);
+      },
     });
 
     await this.server.start();
@@ -180,6 +186,13 @@ class SyncManagerClass {
         // Also persist to local SQLite so offline access still works
         saveEntity(entity).catch(e => console.error('[syncManager] saveEntity failed:', e));
       },
+      onEntityPatch: (entityId, patch) => {
+        this.callbacks?.onEntityPatchReceived(entityId, patch);
+        // Note: NOT persisted here directly (unlike the full-snapshot case
+        // above) — the merged result is persisted by characterStore's
+        // applyIncomingPatch, which is the one that actually knows the
+        // merged entity shape.
+      },
     });
 
     this.client.connect(ip, port);
@@ -219,6 +232,36 @@ class SyncManagerClass {
       this.server.broadcastEntity(entity);
     } else if (this.role === 'player' && this.client) {
       this.client.send({ type: 'entity_snapshot', entity });
+    }
+  }
+
+  /**
+   * Role-aware entity PATCH sync — sends only what changed between
+   * `previous` and `next` (via deepDiff), not the whole entity. This is what
+   * characterStore.updateCharacter calls on every mutation now, replacing
+   * the old "always send the full entity" approach, which had two real
+   * problems: (1) every minor change sent the entire character over the
+   * wire, and (2) the receiving side did a wholesale replace, so two
+   * devices making different small edits close together could have one
+   * fully overwrite the other's unrelated change. See src/sync/diff.ts for
+   * the full writeup.
+   *
+   * Falls back to a full snapshot if there's no meaningful diff to send
+   * (e.g. `previous` is null — first save of a brand-new entity, nothing to
+   * diff against yet).
+   */
+  syncEntityPatch(id: string, previous: Entity | null, next: Entity): void {
+    if (!previous) {
+      this.syncEntity(next);
+      return;
+    }
+    const patch = deepDiff(previous, next) as Record<string, unknown> | undefined;
+    if (!patch) return; // nothing actually changed — nothing to send
+
+    if (this.role === 'dm' && this.server) {
+      this.server.broadcastEntityPatch(id, patch);
+    } else if (this.role === 'player' && this.client) {
+      this.client.send({ type: 'entity_patch', entityId: id, patch });
     }
   }
 

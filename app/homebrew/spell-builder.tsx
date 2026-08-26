@@ -1,53 +1,158 @@
 // app/homebrew/spell-builder.tsx
-// Homebrew spell builder — all Spell fields with validation + save.
-import { useState } from 'react';
+// Homebrew spell builder — rebuilt with quick-pick presets (+ custom fallback)
+// for level/school/casting time/range/duration, real V/S/M component
+// checkboxes instead of comma-separated text, and spell-type tagging.
+import { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  TextInput, Alert,
+  TextInput, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Spell } from '../../src/engine/types';
 import { validateSpell } from '../../src/engine/homebrewValidator';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
+const LEVELS  = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 const SCHOOLS = ['Abjuration','Conjuration','Divination','Enchantment','Evocation','Illusion','Necromancy','Transmutation'];
-const LEVELS  = [0,1,2,3,4,5,6,7,8,9];
+
+const CASTING_TIMES = ['1 action', '1 bonus action', '1 reaction', '1 minute', '10 minutes', '1 hour', '8 hours', '24 hours'];
+const RANGES = ['Self', 'Touch', '30 feet', '60 feet', '90 feet', '120 feet', '150 feet', 'Sight', 'Unlimited'];
+const DURATIONS = ['Instantaneous', '1 round', '1 minute', '10 minutes', '1 hour', '8 hours', '24 hours', 'Until dispelled'];
+
+const COMPONENT_OPTIONS: { key: 'V' | 'S' | 'M'; label: string }[] = [
+  { key: 'V', label: 'Verbal' }, { key: 'S', label: 'Somatic' }, { key: 'M', label: 'Material' },
+];
+
+const SPELL_TYPES = ['Damage', 'Buff', 'Debuff', 'Healing', 'Control', 'Utility', 'Summoning'];
 
 function toId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
 
+/** A chip row with a built-in "Custom" option that reveals a free-text/number fallback. */
+function PickOrCustom({ options, value, onChange, numeric }: {
+  options: (string | number)[];
+  value: string | number;
+  onChange: (v: string | number) => void;
+  numeric?: boolean;
+}) {
+  const isPreset = options.includes(value);
+  const [customMode, setCustomMode] = useState(!isPreset);
+
+  return (
+    <View>
+      <View style={styles.chipRow}>
+        {options.map(opt => (
+          <Pressable
+            key={opt}
+            style={[styles.chip, !customMode && value === opt && styles.chipActive]}
+            onPress={() => { setCustomMode(false); onChange(opt); }}
+          >
+            <Text style={[styles.chipTxt, !customMode && value === opt && styles.chipTxtActive]}>{opt}</Text>
+          </Pressable>
+        ))}
+        <Pressable
+          style={[styles.chip, customMode && styles.chipActive]}
+          onPress={() => setCustomMode(true)}
+        >
+          <Text style={[styles.chipTxt, customMode && styles.chipTxtActive]}>Custom</Text>
+        </Pressable>
+      </View>
+      {customMode && (
+        <TextInput
+          style={[styles.input, { marginTop: Spacing.xs }]}
+          value={String(value)}
+          onChangeText={v => onChange(numeric ? (parseInt(v, 10) || 0) : v)}
+          keyboardType={numeric ? 'number-pad' : 'default'}
+          placeholder={numeric ? 'Enter level' : "Enter your own..."}
+          placeholderTextColor={Colors.textDim}
+        />
+      )}
+    </View>
+  );
+}
+
+/** Moved to module scope — was previously defined INSIDE SpellBuilderScreen's
+ *  function body, which meant React treated it as a brand-new component type
+ *  on every render, tearing down and rebuilding any TextInput inside it after
+ *  every keystroke. That's what caused "only one character types at a time."
+ *  Classic React mistake, now fixed by giving it a stable identity here. */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
 export default function SpellBuilderScreen() {
-  const router   = useRouter();
+  const goBack   = useSafeGoBack('/(tabs)');
   const saveItem = useHomebrewStore(s => s.saveItem);
+  const spells   = useHomebrewStore(s => s.spells);
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const editing  = editId ? spells.find(s => s.id === editId) ?? null : null;
 
   const [name,        setName]        = useState('');
   const [level,       setLevel]       = useState<number>(0);
   const [school,      setSchool]      = useState('Evocation');
   const [castingTime, setCastingTime] = useState('1 action');
   const [range,       setRange]       = useState('60 feet');
-  const [components,  setComponents]  = useState('V, S');
+  const [components,  setComponents]  = useState<Set<'V'|'S'|'M'>>(new Set(['V', 'S']));
   const [duration,    setDuration]    = useState('Instantaneous');
   const [description, setDescription] = useState('');
   const [upcast,      setUpcast]      = useState('');
   const [ritual,      setRitual]      = useState(false);
   const [concentration, setConcentration] = useState(false);
+  const [spellTypes,  setSpellTypes]  = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  // Edit mode: load the existing spell's fields once, when it first resolves.
+  useEffect(() => {
+    if (!editing) return;
+    setName(editing.name);
+    setLevel(editing.level);
+    setSchool(editing.school);
+    setCastingTime(editing.castingTime);
+    setRange(editing.range);
+    setComponents(new Set(editing.components as ('V'|'S'|'M')[]));
+    setDuration(editing.duration);
+    setDescription(editing.description);
+    setUpcast(editing.upcast ?? '');
+    setRitual(editing.ritual);
+    setConcentration(editing.concentration);
+    setSpellTypes(editing.spellType ?? []);
+  }, [editing?.id]);
+
+  function toggleComponent(c: 'V' | 'S' | 'M') {
+    setComponents(prev => {
+      const next = new Set(prev);
+      next.has(c) ? next.delete(c) : next.add(c);
+      return next;
+    });
+  }
+  function toggleSpellType(t: string) {
+    setSpellTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  }
 
   function buildSpell(): Spell {
     return {
-      id:            toId(name) || 'homebrew_spell',
+      id:            editing?.id ?? (toId(name) || 'homebrew_spell'),
       name:          name.trim(),
-      level:         level as Spell['level'],
-      school,
+      level,
+      school:        school.trim(),
       castingTime:   castingTime.trim(),
       range:         range.trim(),
-      components:    components.split(',').map(s => s.trim()).filter(Boolean),
+      components:    Array.from(components),
       duration:      duration.trim(),
       description:   description.trim(),
       upcast:        upcast.trim() || null,
       ritual,
       concentration,
+      spellType:     spellTypes.length > 0 ? spellTypes : undefined,
     };
   }
 
@@ -68,27 +173,32 @@ export default function SpellBuilderScreen() {
     doSave(spell);
   }
 
+  // Doesn't wait on the confirmation Alert's dismissal to navigate — saves
+  // and goes back immediately, then shows the Alert as a non-blocking
+  // confirmation. Alert's multi-button callback behavior can be unreliable
+  // on web specifically; not depending on it for the actual save+navigate
+  // is the more robust choice regardless of platform.
   async function doSave(spell: Spell) {
-    await saveItem('spell', spell);
-    Alert.alert('Saved!', `"${spell.name}" added to your homebrew library.`, [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+    if (saving) return;
+    setSaving(true);
+    try {
+      await saveItem('spell', spell);
+      goBack();
+    } catch (e) {
+      console.error('[spell-builder] save failed:', e);
+      Alert.alert('Save failed', e instanceof Error ? e.message : 'Something went wrong. Check the console for details.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
-    </View>
-  );
-
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backTxt}>← Back</Text>
+        <Pressable style={styles.backBtn} onPress={goBack}>
+          <Text style={styles.backTxt}>{'<- Back'}</Text>
         </Pressable>
-        <Text style={styles.title}>New Spell</Text>
+        <Text style={styles.title}>{editing ? 'Edit Spell' : 'New Spell'}</Text>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -99,36 +209,64 @@ export default function SpellBuilderScreen() {
         </Field>
 
         <Field label="Level (0 = cantrip)">
-          <View style={styles.chipRow}>
-            {LEVELS.map(l => (
-              <Pressable key={l} style={[styles.chip, level === l && styles.chipActive]} onPress={() => setLevel(l)}>
-                <Text style={[styles.chipTxt, level === l && styles.chipTxtActive]}>{l}</Text>
-              </Pressable>
-            ))}
-          </View>
+          <PickOrCustom options={LEVELS} value={level} onChange={v => setLevel(v as number)} numeric />
+          {level > 9 && (
+            <Text style={styles.warnNote}>
+              Note: levels beyond 9 have no spell-slot tier to consume from -- this spell
+              will display correctly but can't be tracked as "slots remaining" the way
+              standard levels are.
+            </Text>
+          )}
         </Field>
 
         <Field label="School">
+          <PickOrCustom options={SCHOOLS} value={school} onChange={v => setSchool(v as string)} />
+        </Field>
+
+        <Field label="Casting Time">
+          <PickOrCustom options={CASTING_TIMES} value={castingTime} onChange={v => setCastingTime(v as string)} />
+        </Field>
+
+        <Field label="Range">
+          <PickOrCustom options={RANGES} value={range} onChange={v => setRange(v as string)} />
+        </Field>
+
+        <Field label="Duration">
+          <PickOrCustom options={DURATIONS} value={duration} onChange={v => setDuration(v as string)} />
+        </Field>
+
+        <Field label="Components">
           <View style={styles.chipRow}>
-            {SCHOOLS.map(s => (
-              <Pressable key={s} style={[styles.chip, school === s && styles.chipActive]} onPress={() => setSchool(s)}>
-                <Text style={[styles.chipTxt, school === s && styles.chipTxtActive]}>{s}</Text>
-              </Pressable>
-            ))}
+            {COMPONENT_OPTIONS.map(c => {
+              const active = components.has(c.key);
+              return (
+                <Pressable key={c.key} style={[styles.chip, active && styles.chipActive]} onPress={() => toggleComponent(c.key)}>
+                  <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{c.key} - {c.label}</Text>
+                </Pressable>
+              );
+            })}
           </View>
         </Field>
 
-        <Field label="Casting Time"><TextInput style={styles.input} value={castingTime} onChangeText={setCastingTime} placeholderTextColor={Colors.textDim} /></Field>
-        <Field label="Range"><TextInput style={styles.input} value={range} onChangeText={setRange} placeholderTextColor={Colors.textDim} /></Field>
-        <Field label="Components (comma-separated)"><TextInput style={styles.input} value={components} onChangeText={setComponents} placeholderTextColor={Colors.textDim} /></Field>
-        <Field label="Duration"><TextInput style={styles.input} value={duration} onChangeText={setDuration} placeholderTextColor={Colors.textDim} /></Field>
+        <Field label="Spell Type (optional, for filtering/browsing)">
+          <View style={styles.chipRow}>
+            {SPELL_TYPES.map(t => {
+              const active = spellTypes.includes(t);
+              return (
+                <Pressable key={t} style={[styles.chip, active && styles.chipActive]} onPress={() => toggleSpellType(t)}>
+                  <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{t}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Field>
 
         <Field label="Description *">
           <TextInput
             style={[styles.input, styles.textArea]}
             value={description}
             onChangeText={setDescription}
-            placeholder="Spell description…"
+            placeholder="Spell description..."
             placeholderTextColor={Colors.textDim}
             multiline textAlignVertical="top"
           />
@@ -139,7 +277,7 @@ export default function SpellBuilderScreen() {
             style={[styles.input, styles.textArea]}
             value={upcast}
             onChangeText={setUpcast}
-            placeholder="When cast using a higher slot…"
+            placeholder="When cast using a higher slot..."
             placeholderTextColor={Colors.textDim}
             multiline textAlignVertical="top"
           />
@@ -147,21 +285,23 @@ export default function SpellBuilderScreen() {
 
         <View style={styles.toggleRow}>
           <Pressable style={[styles.toggle, ritual && styles.toggleActive]} onPress={() => setRitual(r => !r)}>
-            <Text style={[styles.toggleTxt, ritual && styles.toggleTxtActive]}>🔮 Ritual</Text>
+            <Text style={[styles.toggleTxt, ritual && styles.toggleTxtActive]}>Ritual</Text>
           </Pressable>
           <Pressable style={[styles.toggle, concentration && styles.toggleActive]} onPress={() => setConcentration(c => !c)}>
-            <Text style={[styles.toggleTxt, concentration && styles.toggleTxtActive]}>🧠 Concentration</Text>
+            <Text style={[styles.toggleTxt, concentration && styles.toggleTxtActive]}>Concentration</Text>
           </Pressable>
         </View>
 
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Pressable style={[styles.saveBtn, !name.trim() && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim()}>
-          <Text style={styles.saveBtnTxt}>💾 Save Spell</Text>
-        </Pressable>
-      </View>
-    </View>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
+            <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Spell'}</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -188,6 +328,7 @@ const styles = StyleSheet.create({
   chipActive:{ borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
   chipTxt:   { fontSize: FontSize.xs, color: Colors.textSecondary },
   chipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
+  warnNote: { fontSize: FontSize.xs, color: Colors.gold, lineHeight: 16, marginTop: 4 },
   toggleRow: { flexDirection: 'row', gap: Spacing.sm },
   toggle:    { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
   toggleActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },

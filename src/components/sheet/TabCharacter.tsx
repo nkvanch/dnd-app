@@ -936,6 +936,20 @@ export function TabCharacter({
             ⚠ <Text style={styles.condWarningName}>{c.id}:</Text> {CONDITION_WARNINGS[c.id]}
           </Text>
         ))}
+
+        {/* Advantage/Disadvantage grants from race/class traits, items, etc.
+            Reminder only, same as condition warnings above — the app has no
+            attack-roll automation anywhere, so this doesn't change how any
+            roll button behaves, it just makes sure these aren't forgotten. */}
+        {derived.advantageStates.length > 0 && (
+          <View style={styles.advList}>
+            {derived.advantageStates.map((a, i) => (
+              <Text key={i} style={[styles.condWarning, a.state === 'advantage' ? styles.advTxt : styles.disadvTxt]}>
+                {a.state === 'advantage' ? '↑ Advantage: ' : '↓ Disadvantage: '}{a.target}
+              </Text>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Concentration indicator */}
@@ -1219,6 +1233,9 @@ const styles = StyleSheet.create({
   // Condition warnings
   condWarning:     { fontSize: FontSize.xs, color: Colors.gold, marginTop: 4, lineHeight: 16 },
   condWarningName: { fontWeight: FontWeight.bold, textTransform: 'capitalize' },
+  advList: { marginTop: 4, gap: 2 },
+  advTxt:    { color: Colors.green },
+  disadvTxt: { color: Colors.red },
 
   // Number prompt modal input
   numInput: {

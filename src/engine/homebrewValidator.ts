@@ -116,8 +116,10 @@ export function validateSpell(data: unknown): ValidationResult {
   if (!spell.range       || typeof spell.range       !== 'string') errors.push('range: required string');
   if (!spell.duration    || typeof spell.duration    !== 'string') errors.push('duration: required string');
   if (!spell.description || typeof spell.description !== 'string') errors.push('description: required string');
-  if (typeof spell.level !== 'number' || spell.level < 0 || spell.level > 9) {
-    errors.push('level: must be 0–9');
+  if (typeof spell.level !== 'number' || spell.level < 0 || !Number.isInteger(spell.level)) {
+    errors.push('level: must be a whole number, 0 or higher');
+  } else if (spell.level > 9) {
+    warnings.push('level: beyond 9 has no spell-slot tier to consume from (will display correctly, but can\'t be tracked as "slots remaining")');
   }
   if (typeof spell.ritual        !== 'boolean') warnings.push('ritual: missing (defaulting false)');
   if (typeof spell.concentration !== 'boolean') warnings.push('concentration: missing (defaulting false)');

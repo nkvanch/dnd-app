@@ -12,7 +12,8 @@ import { getProgressionForClass } from '../../src/content/classes/progressions';
 import {
   classMeta, featuresByLevel, progressionTable, abilityFullName,
 } from '../../src/content/classes/classBrowse';
-import { subclassEntriesForClass } from '../../src/content/subclasses/subclassBrowse';
+import { subclassEntriesForClassMerged } from '../../src/content/subclasses/subclassBrowse';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Entity } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -263,6 +264,7 @@ function clearClassData(entity: Entity, hitDie: number): Entity {
 
 export default function ClassDetailScreen() {
   const router = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const { id } = useLocalSearchParams<{ id: string }>();
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
@@ -282,12 +284,13 @@ export default function ClassDetailScreen() {
     lines: string[]; className: string; onConfirm: () => void;
   } | null>(null);
   const homebrewClasses = useHomebrewStore(s => s.classes);
+  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
 
   const cls    = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === id);
   const detail = id ? CLASS_DETAIL[id] : null;
 
   useEffect(() => {
-    if (!cls || !draft) router.back();
+    if (!cls || !draft) safeGoBack();
   }, []);
 
   if (!cls || !draft) return null;
@@ -582,7 +585,7 @@ export default function ClassDetailScreen() {
             </CollapsibleSection>
 
             {/* Homebrew with incomplete spellcasting config gets a gentle hint */}
-            {!detail && cls.spellcastingAbility === undefined && (
+            {!detail && cls.spellcastingAbility === undefined && !cls.spellcastingAbilityOptions?.length && (
               <View style={styles.infoCard}>
                 <Text style={styles.infoCardTxt}>
                   If this is a spellcasting class, configure spellcasting in the
@@ -596,7 +599,7 @@ export default function ClassDetailScreen() {
 
       {/* ── Subclasses ── */}
       {(() => {
-        const subs = subclassEntriesForClass(cls.id);
+        const subs = subclassEntriesForClassMerged(cls.id, homebrewSubclasses);
         if (subs.length === 0) return null;
         return (
           <>

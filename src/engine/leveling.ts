@@ -234,6 +234,21 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
       };
     }
 
+    case "starting_item": {
+      // Fixed gear granted automatically at level 1 — no player choice, unlike
+      // the existing 'equipment' CHOICE kind (which needs a pool of
+      // alternatives). Adds a fresh ItemInstance to carried inventory, same
+      // shape resolveChoice's equipment handling already produces.
+      const itemId = grant.value as string;
+      return {
+        ...entity,
+        inventory: {
+          ...entity.inventory,
+          carried: [...entity.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }],
+        },
+      };
+    }
+
     default:
       return entity;
   }
@@ -246,13 +261,16 @@ export function applyHP(
   die: number,
   mode: CampaignRules["hpMode"],
   atLevel: number,
-  rules?: CampaignRules
+  rules?: CampaignRules,
+  hpAbility: Ability = 'con',
 ): Entity {
-  // Use effectiveStats.con so race bonuses (e.g. Dwarf +2 CON) feed into HP.
-  // This matters even mid-wizard if the player set scores before choosing class.
+  // Use effectiveStats[hpAbility] so race bonuses (e.g. Dwarf +2 CON) feed
+  // into HP. Defaults to CON (standard 5e RAW) — every existing class passes
+  // no explicit ability and is completely unaffected. hpAbility lets a
+  // homebrew class reflavor HP around a different score (e.g. CHA).
   const allEffects    = collectAllEffects(entity);
   const effectiveStats = applyStatModifiers(entity.stats, allEffects);
-  const conMod        = modifier(effectiveStats.con);
+  const abilityMod    = modifier(effectiveStats[hpAbility]);
 
   let rolled = atLevel === 1
     ? die                                           // Level 1: always max die
@@ -268,7 +286,7 @@ export function applyHP(
     if (rolled < halfDie) rolled = halfDie;
   }
 
-  const gain = Math.max(1, rolled + conMod);
+  const gain = Math.max(1, rolled + abilityMod);
 
   return {
     ...entity,
@@ -303,7 +321,7 @@ export function applyHP(
  * Level 1:   always max die + CON mod (minimum 1).
  * Level 2+:  fixed = floor(die/2)+1+CON mod, max = die+CON mod (min 1 each).
  */
-export function recalculateAllHP(entity: Entity, rules: CampaignRules): Entity {
+export function recalculateAllHP(entity: Entity, rules: CampaignRules, hpAbility: Ability = 'con'): Entity {
   const level = entity.identity.level;
   if (level <= 0) return entity;
 
@@ -312,16 +330,16 @@ export function recalculateAllHP(entity: Entity, rules: CampaignRules): Entity {
   // Use effectiveStats so race bonuses count
   const allEffects     = collectAllEffects(entity);
   const effectiveStats = applyStatModifiers(entity.stats, allEffects);
-  const conMod         = modifier(effectiveStats.con);
+  const abilityMod     = modifier(effectiveStats[hpAbility]);
 
   // Level 1: always max die
-  let totalHP = Math.max(1, die + conMod);
+  let totalHP = Math.max(1, die + abilityMod);
 
   // Levels 2+
   for (let lvl = 2; lvl <= level; lvl++) {
     const gained = rules.hpMode === 'max'
-      ? die + conMod
-      : Math.floor(die / 2) + 1 + conMod;
+      ? die + abilityMod
+      : Math.floor(die / 2) + 1 + abilityMod;
     totalHP += Math.max(1, gained);
   }
 
@@ -558,7 +576,7 @@ export function levelUp(
     if (!entry) continue;
 
     // HP
-    updated = applyHP(updated, entry.hpDie, rules.hpMode, lvl, rules);
+    updated = applyHP(updated, entry.hpDie, rules.hpMode, lvl, rules, progression.hpAbility ?? 'con');
 
     // Grants
     for (const grant of entry.grants) {
@@ -683,6 +701,14 @@ export function resolveChoice(
           }
         };
       }
+    }
+
+    // Spellcasting ability choice: rare-case homebrew classes whose casting
+    // ability isn't fixed (see CharClass.spellcastingAbilityOptions). The
+    // option's value is the chosen Ability; initialise spellcasting with it
+    // exactly like the init_spellcasting grant would for a fixed-ability class.
+    if (pending.definition.kind === "spellcasting_ability") {
+      updated = applyGrant(updated, { kind: 'init_spellcasting', value: { ability: option.value as Ability } }, pending.grantedAt);
     }
   }
 

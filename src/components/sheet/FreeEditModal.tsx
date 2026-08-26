@@ -159,7 +159,7 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
             <Text style={styles.subtitle}>Manual overrides — not in a campaign</Text>
           </View>
 
-          <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
 
             {/* Ability Scores */}
             <Text style={styles.section}>ABILITY SCORES</Text>
@@ -328,6 +328,14 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', gap: 2 },
   title:    { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
   subtitle: { fontSize: FontSize.xs, color: Colors.textDim },
+
+  // flexShrink (not a fixed pixel maxHeight) lets this fill whatever space
+  // is actually left between the fixed header and Done button, bounded by
+  // the outer sheet's maxHeight: '92%' — a hardcoded pixel value here could
+  // exceed the real available space on a shorter screen (or with the
+  // keyboard open shrinking things further), which broke the scroll gesture
+  // mapping rather than just clipping content.
+  scrollArea: { flexShrink: 1 },
 
   section: {
     fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2,

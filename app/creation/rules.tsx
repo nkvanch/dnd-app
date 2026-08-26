@@ -23,6 +23,7 @@ import {
   getHouseRule, getHouseChoice, getHouseNumber, setHouseRuleValue,
 } from '../../src/engine/houseRules';
 import { Entity } from '../../src/engine/types';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 type HpMode = 'fixed' | 'rolled' | 'max';
@@ -35,6 +36,7 @@ const HP_MODES: { value: HpMode; label: string; description: string }[] = [
 
 export default function CreationRulesScreen() {
   const router   = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
@@ -59,7 +61,7 @@ export default function CreationRulesScreen() {
   }
 
   function handleDone() {
-    if (!hasDraft) { router.back(); return; }
+    if (!hasDraft) { safeGoBack(); return; }
     const notes = (() => { try { return JSON.parse(draft!.notes || '{}'); } catch { return {}; } })();
     const updated: Entity = { ...draft!, notes: JSON.stringify({ ...notes, rulesVisited: true }) };
     setDraft(updated);

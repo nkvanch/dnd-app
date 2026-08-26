@@ -14,7 +14,7 @@ import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
   Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense,
 } from './types';
-import { resolveEffectsForTarget } from './resolver';
+import { resolveEffectsForTarget, resolveBinary } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,7 +92,9 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   const profEffects = allEffects.filter(ae => ae.effect.type === 'grant_proficiency');
   if (profEffects.length > 0) {
     let updatedSkills = { ...entity.skills.skills };
+    let updatedTools   = [...entity.proficiencies.tools];
     let changed = false;
+    let toolsChanged = false;
     for (const ae of profEffects) {
       // target format: 'skill:perception', 'skill:athletics', etc.
       if (ae.effect.target.startsWith('skill:')) {
@@ -112,9 +114,24 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
           }
         }
       }
+      // target format: 'tool:thieves_tools', 'tool:herbalism_kit', etc. — same
+      // pattern as skills, previously declared in the type system (Effect.type
+      // already included 'grant_proficiency') but this branch never existed,
+      // so a trait authored with a tool: target was silently a no-op even
+      // though a builder UI could have let someone create it.
+      if (ae.effect.target.startsWith('tool:') && ae.effect.operation === 'add') {
+        const toolName = ae.effect.target.slice(5).replace(/_/g, ' ');
+        if (!updatedTools.some(t => t.toLowerCase() === toolName.toLowerCase())) {
+          updatedTools = [...updatedTools, toolName];
+          toolsChanged = true;
+        }
+      }
     }
     if (changed) {
       entity = { ...entity, skills: { skills: updatedSkills } };
+    }
+    if (toolsChanged) {
+      entity = { ...entity, proficiencies: { ...entity.proficiencies, tools: updatedTools } };
     }
   }
 
@@ -198,6 +215,16 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   }
 
   // ── Build derived stats object ────────────────────────────────────────────
+  const advDisadvEffects = allEffects.filter(ae =>
+    ae.effect.operation === 'advantage' || ae.effect.operation === 'disadvantage'
+  );
+  const advTargets = new Set(advDisadvEffects.map(ae => ae.effect.target));
+  const advantageStates: DerivedStats['advantageStates'] = [];
+  for (const target of advTargets) {
+    const state = resolveBinary(advDisadvEffects.filter(ae => ae.effect.target === target));
+    if (state !== 'straight') advantageStates.push({ target, state });
+  }
+
   const derived: DerivedStats = {
     proficiencyBonus: profBonus,
     ac:               calculatedBaseAc + acBonus,
@@ -211,6 +238,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     movement,
     savingThrows:     resolveSavingThrows(effectiveStats, entity.proficiencies.savingThrows, profBonus),
     attackBonuses:    [],
+    advantageStates,
     spellSaveDC:  entity.spellcasting
       ? 8 + profBonus + modifier(effectiveStats[entity.spellcasting.ability])
           // Accept either target spelling so feature authors aren't tripped by

@@ -11,7 +11,9 @@ import { useSessionStore }   from '../../../src/store/sessionStore';
 import { recomputeDerived }  from '../../../src/engine/pipeline';
 import { applyDamage, applyHealing } from '../../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../../src/engine/conditions';
+import { dmFullStatVisibility } from '../../../src/engine/houseRules';
 import { Entity } from '../../../src/engine/types';
+import { useSafeGoBack } from '../../../src/hooks/useSafeGoBack';
 import { TabCharacter } from '../../../src/components/sheet/TabCharacter';
 import { TabAbilities } from '../../../src/components/sheet/TabAbilities';
 import { TabFeatures }  from '../../../src/components/sheet/TabFeatures';
@@ -30,6 +32,7 @@ const TABS: { id: TabId; label: string }[] = [
 export default function DmCharacterView() {
   const { id }  = useLocalSearchParams<{ id: string }>();
   const router  = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const characters      = useCharacterStore(s => s.characters);
   const updateCharacter = useCharacterStore(s => s.updateCharacter);
   const rules           = useCharacterStore(s => s.rules);
@@ -38,6 +41,13 @@ export default function DmCharacterView() {
 
   const entity     = characters.find(c => c.id === id);
   const [activeTab, setActiveTab] = useState<TabId>('character');
+  // DM Override (the AuditModal, opened by tapping a stat box) is gated
+  // behind the dmFullStatVisibility house rule — book default restricts the
+  // DM to what they could reasonably observe (passive stats/HP/movement/AC,
+  // handled on the dashboard) without full override capability. Damage,
+  // healing, and condition controls below are NOT gated by this — those are
+  // core GM tools needed to run the game regardless of the visibility rule.
+  const showFull = dmFullStatVisibility(rules);
 
   const mutate = useCallback((updater: (e: Entity) => Entity) => {
     if (!id) return;
@@ -47,7 +57,7 @@ export default function DmCharacterView() {
   if (!entity) {
     return (
       <View style={styles.screen}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
         <View style={styles.center}>
@@ -60,7 +70,7 @@ export default function DmCharacterView() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
         <View style={styles.headerInfo}>
@@ -96,7 +106,7 @@ export default function DmCharacterView() {
           <TabCharacter
             entity={entity}
             rules={rules}
-            isDm={true}
+            isDm={showFull}
             campaignId={campaignId}
             deviceId={deviceId}
             onDamage={amt => mutate(e => applyDamage(e, amt, rules))}
@@ -132,7 +142,7 @@ export default function DmCharacterView() {
           <TabAbilities
             entity={entity}
             rules={rules}
-            isDm={true}
+            isDm={showFull}
             campaignId={campaignId}
             deviceId={deviceId}
             onEntityUpdate={updated => mutate(() => updated)}

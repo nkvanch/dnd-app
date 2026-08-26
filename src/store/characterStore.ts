@@ -15,6 +15,7 @@ import {
   saveEntity, loadAllEntities, deleteEntity, loadAllEntityMeta, EntityMeta,
 } from '../db/entityRepo';
 import { syncManager } from '../sync/syncManager';
+import { deepMerge } from '../sync/diff';
 import { ALL_ITEMS } from '../content/items/index';
 
 export type { EntityMeta };
@@ -105,6 +106,7 @@ export function makeEmptyEntity(id: string, kind: Entity['kind'] = 'character'):
     movement:          {},
     savingThrows:      { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 },
     attackBonuses:     [],
+    advantageStates:   [],
     spellSaveDC:       null,
     spellAttackBonus:  null,
   };
@@ -211,6 +213,17 @@ type CharacterStore = {
    */
   applyIncomingEntity: (entity: Entity) => void;
 
+  /**
+   * Apply a PARTIAL entity patch received from a sync peer (see
+   * src/sync/diff.ts). Deep-merges onto THIS device's own current local
+   * copy of the entity — never a wholesale replace — so a field this
+   * device already has that the patch doesn't mention is preserved exactly.
+   * This is the fix for the old "minor change overwrites unrelated fields"
+   * sync problem. No-op if we don't have a local copy of this entity yet
+   * (shouldn't normally happen — a full snapshot always precedes patches).
+   */
+  applyIncomingPatch: (entityId: string, patch: Record<string, unknown>) => void;
+
   // ── Rules ────────────────────────────────────────────────────────────────
 
   setRules: (rules: Partial<CampaignRules>) => void;
@@ -279,10 +292,12 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
 
   updateCharacter: (id, updater) => {
     let updated: Entity | null = null;
+    let previous: Entity | null = null;
 
     set(state => {
       const next = state.characters.map(c => {
         if (c.id !== id) return c;
+        previous = c;
         updated = updater(c);
         return updated;
       });
@@ -294,11 +309,13 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       saveEntity(updated).catch(e =>
         console.error('[characterStore] updateCharacter → saveEntity failed:', e)
       );
-      // Sync the change to the rest of the table — role-aware: broadcasts
+      // Sync only what changed since `previous` — role-aware: broadcasts
       // directly if we're the DM, or pushes up to the DM (who relays onward)
-      // if we're a player. No-op if offline. See syncManager.syncEntity for
-      // why this replaced the DM-only broadcastEntity call here.
-      syncManager.syncEntity(updated);
+      // if we're a player. No-op if offline. Sending a diff instead of the
+      // full entity (and merging on receive, not replacing) is what fixes
+      // "every minor change overwrites unrelated fields on other devices" —
+      // see syncEntityPatch's doc comment in syncManager.ts.
+      syncManager.syncEntityPatch(id, previous, updated);
     }
   },
 
@@ -314,6 +331,27 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     saveEntity(entity).catch(e =>
       console.error('[characterStore] applyIncomingEntity → saveEntity failed:', e)
     );
+  },
+
+  applyIncomingPatch: (entityId, patch) => {
+    let merged: Entity | null = null;
+    set(state => {
+      const next = state.characters.map(c => {
+        if (c.id !== entityId) return c;
+        merged = deepMerge(c, patch);
+        return merged;
+      });
+      return { characters: next };
+    });
+    if (merged) {
+      saveEntity(merged).catch(e =>
+        console.error('[characterStore] applyIncomingPatch → saveEntity failed:', e)
+      );
+    }
+    // If we don't have a local copy at all, there's nothing to merge onto —
+    // this shouldn't normally happen since a full snapshot always precedes
+    // patches (see server.ts's onEntitySyncRequested on every 'hello'), but
+    // silently doing nothing is the safe behavior rather than guessing.
   },
 
   deleteCharacter: (id) => {

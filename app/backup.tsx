@@ -10,10 +10,12 @@ import { useCharacterStore } from '../src/store/characterStore';
 import { useHomebrewStore } from '../src/store/homebrewStore';
 import { useSessionStore } from '../src/store/sessionStore';
 import { exportBackup, pickAndValidateBackup, ImportPreview } from '../src/io/backupIO';
+import { useSafeGoBack } from '../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../src/theme';
 
 export default function BackupScreen() {
   const router = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const characters = useCharacterStore(s => s.characters);
   const applyIncomingEntity = useCharacterStore(s => s.applyIncomingEntity);
   const homebrew = useHomebrewStore(s => s);
@@ -97,7 +99,7 @@ export default function BackupScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
 
       <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={safeGoBack}>
           <Text style={styles.back}>← Back</Text>
         </Pressable>
         <Text style={styles.title}>Backup & Restore</Text>

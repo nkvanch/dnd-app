@@ -73,8 +73,24 @@ export type Subrace = {
   name:     string;
   parentId: string;    // id of the parent Race
   features: Feature[];
+  /**
+   * Resource pools this subrace grants (e.g. a limited-use racial ability).
+   * Applied the same way class-level resource grants are — via applyGrant
+   * with {kind:'resource', value: r} — reusing existing, already-tested
+   * engine code rather than inventing new application logic for races.
+   */
+  resources?: ResourceGrant[];
   /** SRD 5.1 legal status — same semantics as Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4. */
   srd?:     boolean;
+  /**
+   * Raw builder state, same purpose as Race.homebrewDraft (see that field's
+   * doc comment) — lets app/homebrew/subrace-builder.tsx reload a standalone
+   * subrace's exact authoring state on edit. A subrace authored inline while
+   * building a brand-new race (race-builder.tsx's SubraceEditor) doesn't need
+   * this — that flow's parent Race.homebrewDraft.subraces already carries the
+   * full draft. The engine itself never reads this field.
+   */
+  homebrewDraft?: Record<string, unknown>;
 };
 
 export type Race = {
@@ -82,6 +98,30 @@ export type Race = {
   name:      string;
   features:  Feature[];    // base race features — all subraces get these
   subraces?: Subrace[];    // if present, player must pick one before confirming race
+  /** Same as Subrace.resources — see that field's doc comment. */
+  resources?: ResourceGrant[];
+  /**
+   * Flavor/reference fields shown on the race detail screen. Official races
+   * get this data from a hardcoded lookup table (app/creation/race-
+   * detail.tsx's RACE_DETAIL) for historical reasons; homebrew races have
+   * no such table to fall into, so these fields let a homebrew race
+   * self-describe directly. race-detail.tsx prefers these when present,
+   * falling back to RACE_DETAIL for the 9 official races that don't set them.
+   */
+  age?:       string;
+  size?:      'Tiny' | 'Small' | 'Medium' | 'Large';
+  languages?: string[];
+  /**
+   * Raw builder state (traits, subrace drafts, etc.) preserved alongside the
+   * compiled `features`/`subraces` above, so editing an existing homebrew
+   * race in the builder can reload the exact authoring state losslessly
+   * instead of reverse-engineering it from compiled Effects (which loses
+   * information — e.g. a flavor-only trait and a trait whose effect
+   * resolved to nothing look identical once compiled). The engine itself
+   * never reads this field; only race-builder.tsx does. Opaque/untyped
+   * deliberately — this is builder-internal shape, not an engine contract.
+   */
+  homebrewDraft?: Record<string, unknown>;
   /**
    * SRD 5.1 (CC-BY-4.0) legal status. CONFIRMED via direct verification
    * against the actual SRD 5.1 text (5thsrd.org) on 2026-08-04: individual
@@ -107,12 +147,51 @@ export type CharClass  = {
   savingThrows?:          Ability[];     // e.g. ['str', 'con']
   armorProfs?:            string[];      // 'light' | 'medium' | 'heavy' | 'shield'
   weaponProfs?:           string[];      // 'simple' | 'martial'
-  spellcastingAbility?:   Ability;       // 'int' | 'wis' | 'cha'
+  /** e.g. ["Thieves' Tools", "Herbalism Kit"] — free text, granted at level 1. */
+  toolProfs?:             string[];
+  /**
+   * Fixed gear granted automatically at level 1 (item ids from the official +
+   * homebrew item catalog). Unlike official classes' "(a) chain mail or (b)
+   * leather armor" equipment CHOICES, this is guaranteed starting gear with
+   * no alternative — simpler to author, and covers what most homebrew
+   * classes actually need. See the 'starting_item' Grant kind.
+   */
+  startingEquipment?:     string[];
+  /**
+   * Free-text notes for gear that doesn't correspond to a real catalog item
+   * (e.g. "a set of masterwork lockpicks" or setting-specific gear). Purely
+   * descriptive — unlike startingEquipment, this is never turned into an
+   * inventory grant, since there's no real Item for the engine to reference.
+   */
+  equipmentNotes?:        string;
+  spellcastingAbility?:   Ability;       // 'int' | 'wis' | 'cha' — kept for backward compat; single-ability classes still just set this
+  /**
+   * Rare case: a class whose casting ability isn't fixed (the player picks
+   * one at creation, e.g. "cast with INT or WIS, your choice"). When this has
+   * 2+ entries, buildProgressionFromClass queues a 'spellcasting_ability'
+   * choice instead of a fixed init_spellcasting grant — spellcastingAbility
+   * above is ignored in that case. A single entry here behaves identically to
+   * just setting spellcastingAbility.
+   */
+  spellcastingAbilityOptions?: Ability[];
   spellcastingStyle?:     'full' | 'half' | 'pact'; // slot table to use
   spellcastingStartLevel?: number;       // first level that gets spell slots (default 1)
   asiLevels?:             number[];      // defaults to [4,8,12,16,19]
-  // Per-level features authored by the player (replaces cls.features for level 1+)
-  levelFeatures?:         { level: number; name: string; description: string }[];
+  /**
+   * Which ability modifier applies to HP gain per level. Defaults to 'con'
+   * (standard 5e RAW) when absent — every existing class is unaffected.
+   * Homebrew classes that reflavor HP around a different ability (e.g. an
+   * "Abyss Knight" whose vitality comes from CHA instead) can override this.
+   */
+  hpAbility?:             Ability;
+  // Per-level features authored by the player (replaces cls.features for level 1+).
+  // DraftTrait (see the "5b" section below) so these carry a real mechanical
+  // effect kind, same as race traits — not just flavor text. Classes saved
+  // before this existed only have {level, name, description}; readers must
+  // treat the rest of DraftTrait's fields (effectKind included) as optional
+  // at runtime even though the type says otherwise — see progressions.ts's
+  // buildProgressionFromClass, which defaults a missing effectKind to 'none'.
+  levelFeatures?:         (DraftTrait & { level: number })[];
   /**
    * Escape hatch for hand-authored classes too complex for the simplified
    * builder fields (subclass features, known-spell grants, custom slot tables,
@@ -127,6 +206,8 @@ export type Background = {
   id: string;
   name: string;
   features: Feature[];
+  /** Same rationale as Race.homebrewDraft — lossless edit-mode round-tripping. */
+  homebrewDraft?: Record<string, unknown>;
   /**
    * SRD 5.1 legal status. CONFIRMED via direct verification against the
    * actual SRD 5.1 text (5thsrd.org) on 2026-08-04: the Backgrounds section
@@ -148,6 +229,8 @@ export type Item = {
   cost:       string;
   properties: string[];
   features:   Feature[];
+  /** Same rationale as Race.homebrewDraft — lossless edit-mode round-tripping. */
+  homebrewDraft?: Record<string, unknown>;
   /**
    * SRD 5.1 legal status. Standard PHB weapons/armor/gear (Dagger, Chain
    * Mail, Explorer's Pack, etc.) carry no Product Identity naming risk at
@@ -265,6 +348,20 @@ export type DerivedStats = {
   attackBonuses:     AttackBonus[];
   spellSaveDC:       number | null;
   spellAttackBonus:  number | null;
+  /**
+   * Active advantage/disadvantage grants, aggregated from any Effect with
+   * operation 'advantage'/'disadvantage' (see resolver.ts's resolveBinary
+   * for the neutralization rule — if both are present for the same target,
+   * they cancel to straight and don't appear here at all). `target` is a
+   * free-text description of what it applies to (e.g. "Wisdom saving
+   * throws against being charmed"), matching the same free-text pattern
+   * already used for condition mechanical reminders (CONDITION_WARNINGS in
+   * TabCharacter.tsx) — 5e's variety here is too large to enumerate as a
+   * fixed set of targets. Display/reminder only, same as everywhere else
+   * in the app with no attack-roll automation: shown to the player so they
+   * remember to roll 2d20, not auto-applied to any roll.
+   */
+  advantageStates:   { target: string; state: 'advantage' | 'disadvantage' }[];
 };
 
 /**
@@ -350,7 +447,8 @@ export type ChoiceOption = {
 export type ChoiceDefinition = {
   id:       string;
   prompt:   string;
-  kind:     'skill' | 'spell' | 'language' | 'tool' | 'equipment' | 'feat' | 'asi' | 'custom';
+  kind:     'skill' | 'spell' | 'language' | 'tool' | 'equipment' | 'feat' | 'asi' | 'custom'
+          | 'spellcasting_ability';
   count:    number;
   pool:     ChoiceOption[] | 'all' | FilterExpression;
   grants:   Grant[];
@@ -381,7 +479,16 @@ export type SpellcastingBlock = {
 export type Spell = {
   id:                       string;
   name:                     string;
-  level:                    0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  /**
+   * Widened from a strict `0|1|2|...|9` union to allow homebrew levels
+   * beyond the standard range. KNOWN LIMITATION, disclosed not hidden: the
+   * spell slot system (SpellSlots type) only has tiers 1-9 — a homebrew
+   * spell authored at level 10+ has no slot tier to consume from, so it
+   * displays correctly but can't be tracked as "slots remaining" the way
+   * levels 1-9 are. Same reminder-only pattern used elsewhere in the app
+   * for mechanics the engine doesn't fully model.
+   */
+  level:                    number;
   school:                   string;
   castingTime:              string;
   range:                    string;
@@ -393,6 +500,12 @@ export type Spell = {
   concentration:            boolean;
   /** Class IDs that can cast this spell (lowercased, e.g. 'wizard'). Drives class-filtered spell lists. */
   classes?:                 string[];
+  /**
+   * Free-form categorization tags (e.g. 'damage', 'buff', 'debuff', 'healing',
+   * 'control', 'utility', 'summoning') for filtering/browsing. Display and
+   * search aid only — not mechanically enforced by the engine.
+   */
+  spellType?:               string[];
   /** Features applied to caster while concentrating — removed when concentration drops. */
   onConcentrationFeatures?: Feature[];
   /**
@@ -575,6 +688,48 @@ export type FeatureInstance = Feature & {
   isActive: boolean;
 };
 
+// ── 5b. Homebrew draft-trait model ───────────────────────────────────────────
+// The in-progress shape a single "trait" (racial trait, class/subclass feature)
+// is authored in across every homebrew builder, before being compiled into a
+// real Feature (+ possibly a ResourceGrant) by buildTraitFeature() in
+// src/components/homebrew/TraitEditor.tsx. Lives here (not in that component
+// file) so CharClass.levelFeatures — read by the plain-TS progression compiler
+// in src/content/classes/progressions.ts — can reference it without a
+// components → engine dependency.
+
+export type TraitEffectKind =
+  | 'none' | 'ability_score' | 'skill_proficiency' | 'tool_proficiency'
+  | 'advantage_disadvantage' | 'sense' | 'movement' | 'resource_ability';
+
+export type DraftTrait = {
+  localId:     string;
+  name:        string;
+  description: string;
+  effectKind:  TraitEffectKind;
+  // ability_score
+  abilityTarget: Ability;
+  abilityAmount: string;
+  // skill_proficiency
+  skillTarget:    SkillName;
+  skillExpertise: boolean;
+  // tool_proficiency
+  toolName: string;
+  // advantage_disadvantage
+  advDirection: 'advantage' | 'disadvantage';
+  advTarget:    string;
+  // sense
+  senseType:  SenseType;
+  senseRange: string;
+  // movement
+  moveType:  'fly' | 'swim' | 'climb' | 'burrow';
+  moveRange: string;
+  // resource_ability (e.g. Chi Pulse: bonus action, 1/rest, heal)
+  actionType: 'action' | 'bonus_action' | 'reaction';
+  recharge:   'short_rest' | 'long_rest';
+  uses:       string;
+  healDice:   string;
+};
+
 // ── 6. Entity master type ────────────────────────────────────────────────────
 
 /**
@@ -636,6 +791,12 @@ export type ClassProgression = {
   classId: string;
   entries: LevelEntry[];
   /**
+   * Which ability governs HP gain per level. Defaults to 'con' when absent
+   * (standard 5e RAW) — see CharClass.hpAbility's doc comment for why this
+   * exists. leveling.ts's applyHP/recalculateAllHP read this.
+   */
+  hpAbility?: Ability;
+  /**
    * SRD 5.1 (CC-BY-4.0) legal status. All 12 core PHB classes are SRD-safe
    * (SRD 5.1 includes the full class chassis, not just a stripped subset) —
    * true for all of them. For SUBCLASSES (see SubclassProgression in
@@ -647,9 +808,25 @@ export type ClassProgression = {
   srd?: boolean;
 };
 
+/**
+ * A homebrew subclass, attachable to ANY class (official or homebrew) via
+ * `classId`. Unlike SubclassProgression (src/content/subclasses/), which
+ * derives its id by scanning features for a `source.refId` (fine for
+ * hand-authored official files), homebrew subclasses need an explicit `id`
+ * since src/db/contentCacheRepo.ts keys storage rows off it directly.
+ * Selection itself is out of scope (see the subclass_unlock choice in
+ * leveling.ts) — this only makes homebrew subclasses author-able and
+ * browsable at parity with official ones.
+ */
+export type HomebrewSubclass = ClassProgression & {
+  id:   string;
+  name: string;
+};
+
 export type Grant = {
   kind:  'feature' | 'resource' | 'resource_upgrade' | 'spell_slots' | 'proficiency'
-       | 'speed' | 'subclass_unlock' | 'init_spellcasting' | 'known_spells';
+       | 'speed' | 'subclass_unlock' | 'init_spellcasting' | 'known_spells'
+       | 'starting_item';
   value: unknown;
 };
 

@@ -49,6 +49,8 @@ export type ServerCallbacks = {
   onRosterChanged:       (roster: ConnectedPlayer[]) => void;
   /** Called when a player pushes their own entity snapshot up to the DM. */
   onEntityReceived:      (entity: Entity) => void;
+  /** Called when a player pushes an entity PATCH (not a full snapshot) up to the DM. */
+  onEntityPatchReceived: (entityId: string, patch: Record<string, unknown>) => void;
 };
 
 // ── SyncServer ────────────────────────────────────────────────────────────────
@@ -156,6 +158,11 @@ export class SyncServer {
   /** Push a full entity snapshot to every connected player. */
   broadcastEntity(entity: Entity): void {
     this.broadcast({ type: 'entity_snapshot', entity });
+  }
+
+  /** Push an entity PATCH (partial, from deepDiff) to every connected player. */
+  broadcastEntityPatch(entityId: string, patch: Record<string, unknown>): void {
+    this.broadcast({ type: 'entity_patch', entityId, patch });
   }
 
   /** Number of currently connected player clients. */
@@ -266,6 +273,18 @@ export class SyncServer {
         // whole table converges on the same entity state.
         this.cb.onEntityReceived(msg.entity);
         this.broadcast({ type: 'entity_snapshot', entity: msg.entity }, conn.id);
+        break;
+
+      case 'entity_patch':
+        // Same relay shape as entity_snapshot, but for a partial patch
+        // (see src/sync/diff.ts) instead of the whole entity — this is the
+        // normal path for ongoing small changes (HP, conditions, resources),
+        // not just the initial sync. The DM applies it locally as a MERGE
+        // (via onEntityPatchReceived, not a replace) and relays the raw
+        // patch onward opaquely, same as sync_event/entity_snapshot — each
+        // receiving player merges it into their own local copy independently.
+        this.cb.onEntityPatchReceived(msg.entityId, msg.patch);
+        this.broadcast({ type: 'entity_patch', entityId: msg.entityId, patch: msg.patch }, conn.id);
         break;
 
       case 'request_entity':

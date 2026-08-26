@@ -1,10 +1,11 @@
 import { ALL_PROGRESSIONS } from './index';
 import {
-  ClassProgression, CharClass, LevelEntry, ChoiceDefinition, Grant, Feature, Ability,
+  ClassProgression, CharClass, LevelEntry, ChoiceDefinition, Grant, Ability,
 } from '../../engine/types';
 import {
   FULL_CASTER_SLOTS, HALF_CASTER_SLOTS, WARLOCK_SLOTS,
 } from './spellSlotTables';
+import { buildTraitFeature } from '../traitCompiler';
 
 /** Alias of the canonical map in ./index. */
 export const PROGRESSIONS = ALL_PROGRESSIONS;
@@ -63,14 +64,19 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
 
   const asiLevels = new Set(cls.asiLevels ?? STUB_ASI_LEVELS);
 
-  // Resolve spell slot table if spellcasting is configured
-  const slotTable = (cls.spellcastingAbility && cls.spellcastingStyle)
+  // Resolve spell slot table if spellcasting is configured. Checks BOTH the
+  // single-ability field and the multi-ability options array — a class using
+  // spellcastingAbilityOptions (2+ entries) would otherwise fail this check
+  // since cls.spellcastingAbility stays unset for that case, silently losing
+  // its slot table.
+  const hasSpellcasting = !!cls.spellcastingAbility || (cls.spellcastingAbilityOptions?.length ?? 0) > 0;
+  const slotTable = (hasSpellcasting && cls.spellcastingStyle)
     ? slotTableForStyle(cls.spellcastingStyle)
     : null;
   const spellStartLevel = cls.spellcastingStartLevel ?? 1;
 
   // Group authored level features by level number
-  const featuresByLevel = new Map<number, { name: string; description: string }[]>();
+  const featuresByLevel = new Map<number, NonNullable<CharClass['levelFeatures']>>();
   for (const f of (cls.levelFeatures ?? [])) {
     if (!featuresByLevel.has(f.level)) featuresByLevel.set(f.level, []);
     featuresByLevel.get(f.level)!.push(f);
@@ -80,13 +86,20 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
 
   for (let level = 1; level <= 20; level++) {
     const grants: Grant[] = [];
+    const levelChoices: ChoiceDefinition[] = [];
 
     // ─ Level 1: proficiency grant ──────────────────────────────────────────────
-    if (level === 1 && (cls.armorProfs?.length || cls.weaponProfs?.length)) {
+    if (level === 1 && (cls.armorProfs?.length || cls.weaponProfs?.length || cls.toolProfs?.length)) {
       grants.push({
         kind:  'proficiency',
-        value: { armor: cls.armorProfs ?? [], weapons: cls.weaponProfs ?? [] },
+        value: { armor: cls.armorProfs ?? [], weapons: cls.weaponProfs ?? [], tools: cls.toolProfs ?? [] },
       });
+    }
+
+    if (level === 1 && cls.startingEquipment?.length) {
+      for (const itemId of cls.startingEquipment) {
+        grants.push({ kind: 'starting_item', value: itemId });
+      }
     }
 
     // ─ Backward-compat: legacy cls.features at level 1 ─────────────────────────
@@ -100,35 +113,54 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
     }
 
     // ─ Authored per-level features from levelFeatures ──────────────────────────
+    // Classes saved before class features gained real effect kinds only have
+    // {level, name, description} — effectKind defaults to 'none' (flavor-only),
+    // matching what buildTraitFeature already does for an unset/unrecognized kind.
     const authoredFeatures = featuresByLevel.get(level);
     if (authoredFeatures) {
       for (const f of authoredFeatures) {
-        const feature: Feature = {
-          id:          `${cls.id}_feat_l${level}_${f.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30)}`,
-          name:        f.name,
-          description: f.description,
-          source:      { kind: 'class', refId: cls.id },
-          level,
-          effects:     [],
-          actions:     [],
-          choices:     [],
-          passive:     true,
-        };
+        const { feature, resource } = buildTraitFeature(
+          { ...f, effectKind: f.effectKind ?? 'none' },
+          { idPrefix: `${cls.id}_l${level}`, sourceKind: 'class', sourceRefId: cls.id, level },
+        );
         grants.push({ kind: 'feature', value: feature });
+        if (resource) grants.push({ kind: 'resource', value: resource });
       }
     }
 
     // ─ Spellcasting ───────────────────────────────────────────────────────────────
-    if (cls.spellcastingAbility) {
+    const multiAbility  = (cls.spellcastingAbilityOptions?.length ?? 0) >= 2;
+    const singleAbility = multiAbility ? undefined : (cls.spellcastingAbilityOptions?.[0] ?? cls.spellcastingAbility);
+
+    if (singleAbility) {
       // init_spellcasting must come before spell_slots in the grants array
       if (level === spellStartLevel) {
         grants.push({
           kind:  'init_spellcasting',
-          value: { ability: cls.spellcastingAbility },
+          value: { ability: singleAbility },
         });
       }
       // Emit spell_slots every level at or above start level so the slot
       // count is refreshed as the character levels up through the table.
+      if (slotTable && level >= spellStartLevel) {
+        grants.push({
+          kind:  'spell_slots',
+          value: { level, slotsTable: slotTable },
+        });
+      }
+    } else if (multiAbility) {
+      if (level === spellStartLevel) {
+        levelChoices.push({
+          id:       `${cls.id}_spellcasting_ability`,
+          prompt:   `Choose your spellcasting ability: ${cls.spellcastingAbilityOptions!.map(a => a.toUpperCase()).join(', ')}.`,
+          kind:     'spellcasting_ability',
+          count:    1,
+          pool:     cls.spellcastingAbilityOptions!.map(a => ({ id: a, label: a.toUpperCase(), value: a })),
+          grants:   [],
+          required: true,
+          resolved: false,
+        });
+      }
       if (slotTable && level >= spellStartLevel) {
         grants.push({
           kind:  'spell_slots',
@@ -140,12 +172,15 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
     entries.push({
       level,
       hpDie:   cls.hitDie as 4 | 6 | 8 | 10 | 12,
-      choices: asiLevels.has(level) ? [makeAsiChoice(`${cls.id}_asi_${level}`)] : [],
+      choices: [
+        ...levelChoices,
+        ...(asiLevels.has(level) ? [makeAsiChoice(`${cls.id}_asi_${level}`)] : []),
+      ],
       grants,
     });
   }
 
-  return { classId: cls.id, entries };
+  return { classId: cls.id, entries, hpAbility: cls.hpAbility };
 }
 
 /** Backward-compat alias. Existing callers that import buildStubProgression continue to work. */

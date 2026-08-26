@@ -2,13 +2,18 @@
 // Homebrew class builder — Phase 2 full authoring UI.
 // Sections: Basics → Saving Throws → Proficiencies →
 //           Spellcasting → Per-Level Features → ASI Levels → Save
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert, Modal,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { CharClass, Ability } from '../../src/engine/types';
+import { useLocalSearchParams } from 'expo-router';
+import { CharClass, Ability, DraftTrait } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { ALL_ITEMS } from '../../src/content/items/index';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
+import { newDraftTrait, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -32,11 +37,31 @@ const SPELL_STYLES = [
 
 const DEFAULT_ASI_LEVELS = [4, 8, 12, 16, 19];
 
+const COMMON_TOOLS = [
+  "Thieves' Tools", 'Herbalism Kit', "Alchemist's Supplies", "Smith's Tools",
+  "Carpenter's Tools", "Mason's Tools", "Weaver's Tools", "Woodcarver's Tools",
+  "Cook's Utensils", "Brewer's Supplies", "Calligrapher's Supplies", "Painter's Supplies",
+  "Potter's Tools", "Leatherworker's Tools", 'Navigator\'s Tools', "Cartographer's Tools",
+  'Disguise Kit', 'Forgery Kit', 'Poisoner\'s Kit', 'Vehicles (land)', 'Vehicles (water)',
+];
+
 function toId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
 
-type LevelFeature = { level: number; name: string; description: string };
+type LevelFeature = DraftTrait & { level: number };
+
+/**
+ * Classes saved before class features gained real effect kinds have
+ * levelFeatures entries shaped as just {level, name, description} — fill in
+ * DraftTrait's other fields (effectKind defaulting to 'none', a fresh
+ * localId if missing) so editing an old homebrew class in the builder
+ * doesn't hand the trait editor an incomplete object.
+ */
+function normalizeLevelFeature(f: Partial<DraftTrait> & { level: number; name: string; description?: string }): LevelFeature {
+  const base = newDraftTrait(f.name);
+  return { ...base, ...f, localId: f.localId ?? base.localId, effectKind: f.effectKind ?? 'none' };
+}
 
 // ── Section header component ───────────────────────────────────────────────────
 
@@ -52,12 +77,17 @@ function SectionHeader({ title, n }: { title: string; n: number }) {
 // ── Main screen ────────────────────────────────────────────────────────────────
 
 export default function ClassBuilderScreen() {
-  const router   = useRouter();
+  const goBack   = useSafeGoBack('/(tabs)');
   const saveItem = useHomebrewStore(s => s.saveItem);
+  const homebrewItems = useHomebrewStore(s => s.items);
+  const homebrewClasses = useHomebrewStore(s => s.classes);
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const editing = editId ? homebrewClasses.find(c => c.id === editId) ?? null : null;
 
   // ── Basics
   const [name,        setName]        = useState('');
   const [hitDie,      setHitDie]      = useState<4|6|8|10|12>(8);
+  const [hpAbility,   setHpAbility]   = useState<Ability>('con');
   const [description, setDescription] = useState('');
 
   // ── Saving Throws
@@ -66,22 +96,71 @@ export default function ClassBuilderScreen() {
   // ── Proficiencies
   const [armorProfs,  setArmorProfs]  = useState<string[]>([]);
   const [weaponProfs, setWeaponProfs] = useState<string[]>([]);
+  const [toolProfs,   setToolProfs]   = useState<string[]>([]);
+  const [newTool,     setNewTool]     = useState('');
+
+  // ── Starting Equipment
+  const [startingEquipment, setStartingEquipment] = useState<{ id: string; name: string }[]>([]);
+  const [equipSearch, setEquipSearch] = useState('');
+  // Purely descriptive — deliberately NOT added to startingEquipment (which
+  // holds real item ids the engine grants via a 'starting_item' Grant). A
+  // fake item id here would push an unresolvable inventory entry onto any
+  // character who takes this class — broken, not just incomplete. This is
+  // shown as flavor text instead, same honest tradeoff as the background
+  // builder's equipment field.
+  const [equipmentNotes, setEquipmentNotes] = useState('');
+
+  const [saving, setSaving] = useState(false);
 
   // ── Spellcasting
   const [isCaster,        setIsCaster]        = useState(false);
-  const [spellAbility,    setSpellAbility]    = useState<Ability>('cha');
+  // Multi-select: 1 selected = fixed ability (backward-compat behavior); 2+
+  // selected = the player picks at creation (spellcastingAbilityOptions).
+  const [spellAbilities,  setSpellAbilities]  = useState<Ability[]>(['cha']);
   const [spellStyle,      setSpellStyle]      = useState<'full'|'half'|'pact'>('full');
   const [spellStartLevel, setSpellStartLevel] = useState('1');
 
   // ── Per-level features
   const [levelFeatures, setLevelFeatures] = useState<LevelFeature[]>([]);
-  const [addModal, setAddModal] = useState(false);
   const [addLevel, setAddLevel] = useState('1');
   const [addName,  setAddName]  = useState('');
-  const [addDesc,  setAddDesc]  = useState('');
+  const [openFeatureId, setOpenFeatureId] = useState<string | null>(null);
 
   // ── ASI levels
   const [asiLevels, setAsiLevels] = useState<number[]>([...DEFAULT_ASI_LEVELS]);
+
+  // Edit mode: CharClass already stores every authoring field directly (it's
+  // the same simplified shape the builder writes), so reloading is a direct
+  // 1:1 field copy — no reverse-engineering from the compiled progression
+  // needed. Runs once when the existing class first resolves.
+  useEffect(() => {
+    if (!editing) return;
+    setName(editing.name);
+    setHitDie(editing.hitDie as 4|6|8|10|12);
+    setHpAbility(editing.hpAbility ?? 'con');
+    setDescription(editing.description ?? '');
+    setSavingThrows(editing.savingThrows ?? []);
+    setArmorProfs(editing.armorProfs ?? []);
+    setWeaponProfs(editing.weaponProfs ?? []);
+    setToolProfs(editing.toolProfs ?? []);
+    setStartingEquipment(
+      (editing.startingEquipment ?? []).map(id => {
+        const found = [...ALL_ITEMS, ...homebrewItems].find(i => i.id === id);
+        return { id, name: found?.name ?? id };
+      })
+    );
+    setEquipmentNotes(editing.equipmentNotes ?? '');
+    setIsCaster(!!editing.spellcastingAbility || (editing.spellcastingAbilityOptions?.length ?? 0) > 0);
+    setSpellAbilities(
+      editing.spellcastingAbilityOptions?.length ? editing.spellcastingAbilityOptions
+      : editing.spellcastingAbility ? [editing.spellcastingAbility]
+      : ['cha']
+    );
+    setSpellStyle(editing.spellcastingStyle ?? 'full');
+    setSpellStartLevel(String(editing.spellcastingStartLevel ?? 1));
+    setLevelFeatures((editing.levelFeatures ?? []).map(normalizeLevelFeature));
+    setAsiLevels(editing.asiLevels ?? [...DEFAULT_ASI_LEVELS]);
+  }, [editing?.id]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -100,6 +179,38 @@ export default function ClassBuilderScreen() {
       prev.includes(prof) ? prev.filter(p => p !== prof) : [...prev, prof]
     );
   }
+  function addTool() {
+    const t = newTool.trim();
+    if (!t || toolProfs.includes(t)) return;
+    setToolProfs(prev => [...prev, t]);
+    setNewTool('');
+  }
+  function toggleTool(t: string) {
+    setToolProfs(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  }
+  function removeTool(t: string) {
+    setToolProfs(prev => prev.filter(x => x !== t));
+  }
+  function toggleSpellAbility(ab: Ability) {
+    setSpellAbilities(prev =>
+      prev.includes(ab)
+        ? prev.length > 1 ? prev.filter(a => a !== ab) : prev  // keep at least 1 selected
+        : [...prev, ab]
+    );
+  }
+  function addStartingItem(id: string, name: string) {
+    if (startingEquipment.some(i => i.id === id)) return;
+    setStartingEquipment(prev => [...prev, { id, name }]);
+    setEquipSearch('');
+  }
+  function removeStartingItem(id: string) {
+    setStartingEquipment(prev => prev.filter(i => i.id !== id));
+  }
+  const equipResults = equipSearch.trim().length >= 2
+    ? [...ALL_ITEMS, ...homebrewItems]
+        .filter(i => i.name.toLowerCase().includes(equipSearch.trim().toLowerCase()))
+        .slice(0, 12)
+    : [];
   function toggleAsiLevel(lvl: number) {
     setAsiLevels(prev =>
       prev.includes(lvl) ? prev.filter(l => l !== lvl) : [...prev, lvl].sort((a, b) => a - b)
@@ -107,67 +218,90 @@ export default function ClassBuilderScreen() {
   }
   function addFeature() {
     const lvl = parseInt(addLevel, 10);
-    if (!addName.trim() || isNaN(lvl) || lvl < 1 || lvl > 20) return;
-    setLevelFeatures(prev => [
-      ...prev,
-      { level: lvl, name: addName.trim(), description: addDesc.trim() },
-    ]);
+    const nm  = addName.trim();
+    if (!nm || isNaN(lvl) || lvl < 1 || lvl > 20) return;
+    const f: LevelFeature = { ...newDraftTrait(nm), level: lvl };
+    setLevelFeatures(prev => [...prev, f]);
     setAddName('');
-    setAddDesc('');
-    setAddLevel('1');
-    setAddModal(false);
+    setOpenFeatureId(f.localId); // auto-open the editor — same pattern as race traits
   }
-  function deleteFeature(idx: number) {
-    setLevelFeatures(prev => prev.filter((_, i) => i !== idx));
+  function updateFeature(f: LevelFeature) {
+    setLevelFeatures(prev => prev.map(x => x.localId === f.localId ? f : x));
+  }
+  function deleteFeature(localId: string) {
+    setLevelFeatures(prev => prev.filter(x => x.localId !== localId));
+    setOpenFeatureId(null);
   }
 
   // ── Save ───────────────────────────────────────────────────────────────────
 
   async function handleSave() {
-    if (!name.trim()) { Alert.alert('Name required'); return; }
+    if (!name.trim() || saving) return;
+    setSaving(true);
     const startLvl = parseInt(spellStartLevel, 10);
     const cls: CharClass = {
-      id:          toId(name) || 'homebrew_class',
+      id:          editing?.id ?? (toId(name) || 'homebrew_class'),
       name:        name.trim(),
       hitDie,
-      features:    [],
+      features:    editing?.features ?? [],
       description: description.trim() || undefined,
       savingThrows:            savingThrows.length > 0 ? savingThrows : undefined,
       armorProfs:              armorProfs.length > 0   ? armorProfs   : undefined,
       weaponProfs:             weaponProfs.length > 0  ? weaponProfs  : undefined,
-      spellcastingAbility:     isCaster ? spellAbility : undefined,
+      toolProfs:               toolProfs.length > 0    ? toolProfs    : undefined,
+      startingEquipment:       startingEquipment.length > 0 ? startingEquipment.map(i => i.id) : undefined,
+      equipmentNotes:          equipmentNotes.trim() || undefined,
+      hpAbility:               hpAbility !== 'con' ? hpAbility : undefined,
+      spellcastingAbility:     isCaster && spellAbilities.length === 1 ? spellAbilities[0] : undefined,
+      spellcastingAbilityOptions: isCaster && spellAbilities.length >= 2 ? spellAbilities : undefined,
       spellcastingStyle:       isCaster ? spellStyle   : undefined,
       spellcastingStartLevel:  isCaster && startLvl > 1 ? startLvl : undefined,
       asiLevels:               JSON.stringify(asiLevels) !== JSON.stringify(DEFAULT_ASI_LEVELS)
                                  ? asiLevels : undefined,
       levelFeatures:           levelFeatures.length > 0 ? levelFeatures : undefined,
     };
-    await saveItem('class', cls);
-    Alert.alert('Saved!', `"${cls.name}" is ready to use in character creation.`, [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+    // Saves and navigates immediately rather than waiting on Alert's OK
+    // button dismissal — React Native Web's Alert.alert has unreliable
+    // callback-firing in some versions, so the actual save+navigate
+    // shouldn't depend on it completing.
+    try {
+      await saveItem('class', cls);
+      goBack();
+    } catch (e) {
+      console.error('[class-builder] save failed:', e);
+      Alert.alert('Save failed', e instanceof Error ? e.message : 'Something went wrong. Check the console for details.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   // ── Feature list grouped by level ─────────────────────────────────────────
 
-  const featuresByLevel = new Map<number, { idx: number; name: string; description: string }[]>();
-  levelFeatures.forEach((f, idx) => {
+  const featuresByLevel = new Map<number, LevelFeature[]>();
+  levelFeatures.forEach(f => {
     if (!featuresByLevel.has(f.level)) featuresByLevel.set(f.level, []);
-    featuresByLevel.get(f.level)!.push({ idx, ...f });
+    featuresByLevel.get(f.level)!.push(f);
   });
   const sortedLevels = Array.from(featuresByLevel.keys()).sort((a, b) => a - b);
+  const openFeature = levelFeatures.find(f => f.localId === openFeatureId) ?? null;
+
+  const EFFECT_KIND_LABELS: Record<string, string> = {
+    none: 'Flavor only', ability_score: 'Ability score bonus', skill_proficiency: 'Skill proficiency',
+    tool_proficiency: 'Tool proficiency', advantage_disadvantage: 'Advantage/Disadvantage',
+    sense: 'Grants a sense', movement: 'Grants movement', resource_ability: 'Limited-use ability',
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={goBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
-        <Text style={styles.title}>New Class</Text>
+        <Text style={styles.title}>{editing ? 'Edit Class' : 'New Class'}</Text>
       </View>
 
       <ScrollView
@@ -189,6 +323,17 @@ export default function ClassBuilderScreen() {
             <Pressable key={d} style={[styles.chip, hitDie === d && styles.chipActive]}
               onPress={() => setHitDie(d)}>
               <Text style={[styles.chipTxt, hitDie === d && styles.chipTxtActive]}>d{d}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.fieldLabel}>HP Ability</Text>
+        <Text style={styles.hint}>Which ability's modifier adds to HP gain each level. Standard is Constitution.</Text>
+        <View style={styles.chipRow}>
+          {ABILITIES.map(ab => (
+            <Pressable key={ab} style={[styles.chip, hpAbility === ab && styles.chipActive]}
+              onPress={() => setHpAbility(ab)}>
+              <Text style={[styles.chipTxt, hpAbility === ab && styles.chipTxtActive]}>{ABILITY_LABELS[ab]}</Text>
             </Pressable>
           ))}
         </View>
@@ -267,6 +412,72 @@ export default function ClassBuilderScreen() {
           })}
         </View>
 
+        <Text style={styles.fieldLabel}>Tools</Text>
+        <Text style={styles.hint}>Tap to add a common tool, or type your own below.</Text>
+        <View style={styles.chipRow}>
+          {COMMON_TOOLS.map(t => {
+            const active = toolProfs.includes(t);
+            return (
+              <Pressable key={t} style={[styles.chip, active && styles.chipActive]} onPress={() => toggleTool(t)}>
+                <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{t}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {toolProfs.filter(t => !COMMON_TOOLS.includes(t)).length > 0 && (
+          <View style={styles.chipRow}>
+            {toolProfs.filter(t => !COMMON_TOOLS.includes(t)).map(t => (
+              <Pressable key={t} style={[styles.chip, styles.chipActive]} onPress={() => removeTool(t)}>
+                <Text style={[styles.chipTxt, styles.chipTxtActive]}>{t} ✕</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <View style={styles.inlineAddRow}>
+          <TextInput style={[styles.input, { flex: 1 }]} value={newTool} onChangeText={setNewTool}
+            placeholder="Something not listed above" placeholderTextColor={Colors.textDim} onSubmitEditing={addTool} />
+          <Pressable style={styles.inlineAddBtn} onPress={addTool}>
+            <Text style={styles.inlineAddTxt}>Add</Text>
+          </Pressable>
+        </View>
+
+        {/* ── 3b. Starting Equipment ───────────────────────────── */}
+        <View style={styles.divider} />
+        <Text style={styles.fieldLabel}>Starting Equipment</Text>
+        <Text style={styles.hint}>
+          Fixed gear granted automatically — not a choice between options,
+          just what this class always starts with.
+        </Text>
+        {startingEquipment.length > 0 && (
+          <View style={styles.chipRow}>
+            {startingEquipment.map(i => (
+              <Pressable key={i.id} style={[styles.chip, styles.chipActive]} onPress={() => removeStartingItem(i.id)}>
+                <Text style={[styles.chipTxt, styles.chipTxtActive]}>{i.name} ✕</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <TextInput style={styles.input} value={equipSearch} onChangeText={setEquipSearch}
+          placeholder="Search items to add…" placeholderTextColor={Colors.textDim} />
+        {equipResults.length > 0 && (
+          <View style={styles.equipResults}>
+            {equipResults.map(item => (
+              <Pressable key={item.id} style={styles.equipResultRow} onPress={() => addStartingItem(item.id, item.name)}>
+                <Text style={styles.equipResultTxt}>{item.name}</Text>
+                <Text style={styles.equipResultAdd}>+ Add</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.sm }]}>Other Equipment Notes (optional)</Text>
+        <Text style={styles.hint}>
+          For gear that isn't a real item in the catalog — shown as flavor text only,
+          not granted as an actual inventory item (there'd be nothing for it to resolve to).
+        </Text>
+        <TextInput style={[styles.input, styles.textArea]} value={equipmentNotes} onChangeText={setEquipmentNotes}
+          placeholder="e.g. a set of masterwork lockpicks, a tattered field journal…"
+          placeholderTextColor={Colors.textDim} multiline textAlignVertical="top" />
+
         {/* ── 4. Spellcasting ───────────────────────────────────────────── */}
         <View style={styles.divider} />
         <SectionHeader title="Spellcasting" n={4} />
@@ -283,13 +494,17 @@ export default function ClassBuilderScreen() {
         {isCaster && (
           <View style={styles.spellConfig}>
             <Text style={styles.fieldLabel}>Spellcasting Ability</Text>
+            <Text style={styles.hint}>
+              Select one for a fixed ability, or two+ for a rare case where the
+              player chooses their casting ability at creation.
+            </Text>
             <View style={styles.chipRow}>
               {SPELL_ABILITIES.map(ab => {
-                const active = spellAbility === ab;
+                const active = spellAbilities.includes(ab);
                 return (
                   <Pressable key={ab}
                     style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => setSpellAbility(ab)}
+                    onPress={() => toggleSpellAbility(ab)}
                   >
                     <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>
                       {ABILITY_LABELS[ab]}
@@ -298,6 +513,11 @@ export default function ClassBuilderScreen() {
                 );
               })}
             </View>
+            {spellAbilities.length >= 2 && (
+              <Text style={styles.warn}>
+                ℹ Player will choose between {spellAbilities.map(a => a.toUpperCase()).join(', ')} at creation.
+              </Text>
+            )}
 
             <Text style={styles.fieldLabel}>Slot Table</Text>
             {SPELL_STYLES.map(s => {
@@ -348,30 +568,51 @@ export default function ClassBuilderScreen() {
           sortedLevels.map(lvl => (
             <View key={lvl} style={styles.featureLevelGroup}>
               <Text style={styles.featureLevelLabel}>LEVEL {lvl}</Text>
-              {featuresByLevel.get(lvl)!.map(({ idx, name: fn, description: fd }) => (
-                <View key={idx} style={styles.featureItem}>
+              {featuresByLevel.get(lvl)!.map(f => (
+                <Pressable key={f.localId} style={styles.featureItem} onPress={() => setOpenFeatureId(f.localId)}>
                   <View style={styles.featureItemBody}>
-                    <Text style={styles.featureItemName}>{fn}</Text>
-                    {fd ? (
-                      <Text style={styles.featureItemDesc} numberOfLines={2}>{fd}</Text>
-                    ) : null}
+                    <Text style={styles.featureItemName}>{f.name}</Text>
+                    <Text style={styles.featureItemDesc} numberOfLines={1}>{EFFECT_KIND_LABELS[f.effectKind]}</Text>
                   </View>
                   <Pressable
                     style={styles.featureDeleteBtn}
-                    onPress={() => deleteFeature(idx)}
+                    onPress={() => deleteFeature(f.localId)}
                     hitSlop={8}
                   >
                     <Text style={styles.featureDeleteTxt}>✕</Text>
                   </Pressable>
-                </View>
+                </Pressable>
               ))}
             </View>
           ))
         )}
 
-        <Pressable style={styles.addFeatureBtn} onPress={() => setAddModal(true)}>
-          <Text style={styles.addFeatureBtnTxt}>+ Add Feature</Text>
-        </Pressable>
+        <Text style={styles.hint}>
+          Add a feature by name and level, then tap it to optionally add a description and
+          choose what it actually does — an ability score bonus, a skill proficiency, a sense,
+          extra movement, or a limited-use ability.
+        </Text>
+        <View style={styles.inlineAddRow}>
+          <TextInput
+            style={[styles.input, styles.smallInput]}
+            value={addLevel}
+            onChangeText={setAddLevel}
+            keyboardType="number-pad"
+            placeholder="Lv"
+            placeholderTextColor={Colors.textDim}
+          />
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={addName}
+            onChangeText={setAddName}
+            placeholder="Feature name (e.g. Second Wind)"
+            placeholderTextColor={Colors.textDim}
+            onSubmitEditing={addFeature}
+          />
+          <Pressable style={styles.inlineAddBtn} onPress={addFeature}>
+            <Text style={styles.inlineAddTxt}>Add</Text>
+          </Pressable>
+        </View>
 
         {/* ── 6. ASI Levels ─────────────────────────────────────────────── */}
         <View style={styles.divider} />
@@ -403,74 +644,28 @@ export default function ClassBuilderScreen() {
       </ScrollView>
 
       {/* Footer: Save */}
-      <View style={styles.footer}>
-        <Pressable
-          style={[styles.saveBtn, !name.trim() && styles.btnDisabled]}
-          onPress={handleSave}
-          disabled={!name.trim()}
-        >
-          <Text style={styles.saveBtnTxt}>💾 Save Class</Text>
-        </Pressable>
-      </View>
-
-      {/* ── Add Feature Modal ─────────────────────────────────────────────── */}
-      <Modal
-        visible={addModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setAddModal(false)}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={() => setAddModal(false)}>
-          <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Add Feature</Text>
-
-            <Text style={styles.fieldLabel}>Level (1–20)</Text>
-            <TextInput
-              style={[styles.input, styles.smallInput]}
-              value={addLevel}
-              onChangeText={setAddLevel}
-              keyboardType="number-pad"
-              placeholder="1"
-              placeholderTextColor={Colors.textDim}
-            />
-
-            <Text style={styles.fieldLabel}>Feature Name *</Text>
-            <TextInput
-              style={styles.input}
-              value={addName}
-              onChangeText={setAddName}
-              placeholder="e.g. Second Wind"
-              placeholderTextColor={Colors.textDim}
-            />
-
-            <Text style={styles.fieldLabel}>Description</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={addDesc}
-              onChangeText={setAddDesc}
-              placeholder="Describe what this feature does…"
-              placeholderTextColor={Colors.textDim}
-              multiline
-              textAlignVertical="top"
-            />
-
-            <View style={styles.modalBtns}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setAddModal(false)}>
-                <Text style={styles.modalCancelTxt}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalAddBtn, !addName.trim() && styles.btnDisabled]}
-                onPress={addFeature}
-                disabled={!addName.trim()}
-              >
-                <Text style={styles.modalAddTxt}>Add Feature</Text>
-              </Pressable>
-            </View>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable
+            style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]}
+            onPress={handleSave}
+            disabled={!name.trim() || saving}
+          >
+            <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Class'}</Text>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </View>
+      </SafeBottomView>
 
-    </View>
+      {/* ── Feature effect editor — same component race traits use ───────────── */}
+      <TraitEditorModal
+        trait={openFeature}
+        visible={!!openFeature}
+        onChange={t => updateFeature(t as LevelFeature)}
+        onDone={() => setOpenFeatureId(null)}
+        onDelete={() => openFeature && deleteFeature(openFeature.localId)}
+      />
+
+    </KeyboardAvoidingView>
   );
 }
 
@@ -537,6 +732,21 @@ const styles = StyleSheet.create({
   chipActive:    { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
   chipTxt:       { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
   chipTxtActive: { color: Colors.gold },
+
+  inlineAddRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },
+  inlineAddBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.md, justifyContent: 'center' },
+  inlineAddTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+
+  equipResults: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, marginTop: 4, overflow: 'hidden',
+  },
+  equipResultRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  equipResultTxt: { color: Colors.textPrimary, fontSize: FontSize.sm, flex: 1 },
+  equipResultAdd: { color: Colors.gold, fontSize: FontSize.xs, fontWeight: FontWeight.bold },
 
   // Spellcasting toggle
   toggleRow: {

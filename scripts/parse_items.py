@@ -39,6 +39,7 @@ REPO = os.path.dirname(HERE)
 # EDIT this default to point at your vault file, or pass it as argv[1].
 DEFAULT_SRC = r'D:\Documents\Sort later\YSB\Obsidian Vault\DND\DND ჩემი\Items\Items with descriptions.md'
 DEFAULT_OUT = os.path.join(REPO, 'src', 'content', 'items', 'importedItems.ts')
+DEFAULT_SRD_OUT = os.path.join(REPO, 'src', 'content', 'items', 'srdClassification.json')
 
 SRC = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SRC
 OUT = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_OUT
@@ -555,21 +556,28 @@ def parse_block(b):
 
     result = {'id': item_id, 'name': name, 'weight': weight,
               'cost': '\u2014', 'properties': props, 'features': features}
+    # NOTE: srd is intentionally NOT included here. It's returned alongside
+    # the item and written to its own small srdClassification.json, merged
+    # in at load time by items/index.ts. Before this split, every
+    # classification-only re-run rewrote the entire ~541KB importedItems.ts
+    # even though the item content itself never changed. See
+    # docs/ROADMAP_1.0.md for the full writeup (same fix as spells).
     srd = compute_srd(name)
-    if srd is not None:
-        result['srd'] = srd
-    return result
+    return result, srd
 
 
 items, ids = [], set()
+classification = {}
 for b in blocks:
     if not b['name']:
         continue
-    it = parse_block(b)
+    it, srd = parse_block(b)
     if it['id'] in ids:
         continue
     ids.add(it['id'])
     items.append(it)
+    if srd is not None:
+        classification[it['id']] = srd
 
 
 def ts(v, indent=0):
@@ -630,14 +638,19 @@ if previous_count > 20 and len(items) < previous_count * 0.5:
 with open(OUT, 'w', encoding='utf-8') as f:
     f.write('\n'.join(out))
 
+with open(DEFAULT_SRD_OUT, 'w', encoding='utf-8') as f:
+    json.dump(classification, f, indent=2, ensure_ascii=False)
+    f.write('\n')
+
 # SRD classification summary — was missing compared to convert-spells.mjs,
 # which is why the last two runs looked like "nothing happened" even though
 # the classifications were correctly applied both times.
-srd_true  = sum(1 for it in items if it.get('srd') is True)
-srd_false = sum(1 for it in items if it.get('srd') is False)
+srd_true  = sum(1 for v in classification.values() if v is True)
+srd_false = sum(1 for v in classification.values() if v is False)
 srd_unset = len(items) - srd_true - srd_false
 print(f'\nSRD classification: {srd_true} allowed, {srd_false} denied, {srd_unset} unaudited (excluded by default).')
 print('See docs/ROADMAP_1.0.md Phase 1 for how to extend the ALLOW/DENY lists.')
 
 print(f'Parsed {len(items)} unique items from {len(blocks)} blocks.')
 print(f'Wrote {OUT}')
+print(f'Wrote {len(classification)} classification entries \u2192 {DEFAULT_SRD_OUT}')

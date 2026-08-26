@@ -6,7 +6,8 @@
 `IMPLEMENTATION.md` for concrete schemas and protocols.*
 
 *Last updated: after the engine audit / conditions-as-content / grant fixes / armor cap
-/ feature hydration pass. See §3 changelog for the full list.*
+/ feature hydration pass, plus the 2026-08-26 nav-crash fix / subrace & subclass
+attachment session. See §3 changelog for the full list.*
 
 ---
 
@@ -140,14 +141,46 @@ on hand — two-device reconnect/conflict handling unverified.
 
 ### Homebrew ⚠️ built, unverified end-to-end
 
-Spell builder (full, validates), race builder (full), class builder (scaffold),
-feature editor (partial). Import pipeline (Claude parses URL → content) built but
-untested on real input. **Not yet wired into creation** — homebrew saves to library
-but doesn't appear in the creation wizard.
+Spell builder (full, validates), race builder (full), class builder (full — as of
+2026-08-26, per-level features carry real mechanical effect kinds, same as race
+traits, not just flavor text), feature editor (partial). **New (2026-08-26): subrace
+builder and subclass builder**, both attaching to ANY existing race/class — official
+SRD or homebrew — not just ones the player authored themselves; see `docs/
+ROADMAP_1.0.md`'s 2026-08-26 session batch for the data-model writeup. Import
+pipeline (Claude parses URL → content) built but untested on real input.
+**Homebrew races/classes/backgrounds still not wired into the creation wizard's own
+pickers** — homebrew saves to library but doesn't appear as a selectable option there
+(pre-release blocker, tracked in §4 below). Subraces and subclasses are the
+exception: they DO now appear correctly in `race-detail.tsx` / `class-detail.tsx` /
+`subclass-detail.tsx` once their parent is reached, since those screens read through
+the merged content DB — but subclass *selection* during play is a separate, already-
+tracked gap (see "Subclass features not authored" below) that predates homebrew
+subclasses and isn't resolved by this addition.
 
 ---
 
 ## 3. Recent changelog (since last status update)
+
+### Navigation & UI fixes (2026-08-26)
+
+- **`GO_BACK was not handled by any navigator` crash fixed.** 5 creation-wizard
+  screens called raw `router.back()` in a mount-time effect guard with no history
+  check; `src/hooks/useSafeGoBack.ts` (already used by every homebrew builder)
+  applied there and swept across 15 more latent call sites app-wide.
+- **Deprecated `shadow*` style prop warning fixed** in `GlobalDiceRoller.tsx` via
+  `Platform.select` (native keeps real shadow props, web gets `boxShadow`).
+
+### Homebrew — subrace/subclass attachment (2026-08-26)
+
+- New `app/homebrew/subrace-builder.tsx` / `app/homebrew/subclass-builder.tsx` —
+  attach a homebrew subrace/subclass to any existing race/class, official or
+  homebrew, via a standalone `parentId`/`classId` record rather than requiring the
+  player to own/fork the whole parent.
+- Class features (`CharClass.levelFeatures`) gained the same real effect-kind system
+  race traits already had — see `docs/ROADMAP_1.0.md`'s 2026-08-26 session batch for
+  the full writeup (data model, `getMergedContentDB()` rewrite, the `src/content/
+  traitCompiler.ts` / `src/components/homebrew/TraitEditor.tsx` split that keeps
+  `src/content/**` free of React/RN imports).
 
 ### Engine fixes
 
@@ -269,6 +302,7 @@ pools, full session replay. These wait for a proven second use case.
 | Feat prerequisites not enforced | Player/DM judgment only | Minor |
 | No portraits/identity art | Flat character cards | Minor |
 | `src/screens/` directory | Predates expo-router, dead code | Cleanup |
+| No Feat or Monster homebrew builder | Every other content type (race, subrace, class, subclass, background, item, spell, generic feature) has one; feats/monsters remain static-registry-only | Known |
 
 ---
 

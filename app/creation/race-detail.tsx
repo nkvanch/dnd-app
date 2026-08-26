@@ -4,15 +4,15 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useEffect, useState } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
-import { globalContentDB } from '../../src/content/classes/library';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { applyGrant } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { Entity } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const RACE_DETAIL: Record<string, {
-  description: string; size: string; speed: number; languages: string[];
+  description: string; size: string; speed: number; languages: string[]; age?: string;
 }> = {
   human: {
     description: 'Humans are the most adaptable and ambitious people among the common races. Whatever drives them, humans are the innovators, the achievers, and the pioneers of the worlds.',
@@ -81,14 +81,28 @@ function clearRaceFeatures(entity: Entity): Entity {
 
 export default function RaceDetailScreen() {
   const router   = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const { id }   = useLocalSearchParams<{ id: string }>();
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
-  const homebrewRaces = useHomebrewStore(s => s.races);
+  // getMergedContentDB() (not a raw globalContentDB+homebrewRaces concat) so
+  // standalone subraces attached to an OFFICIAL race — via the subrace
+  // builder, see src/store/homebrewStore.ts — are visible here too, not just
+  // subraces nested inside a race the player authored themselves. Select the
+  // FUNCTION reference and call it in the render body — selecting the call's
+  // result directly hands useSyncExternalStore a new object every render,
+  // which it reads as "the store changed" and infinite-loops.
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  const mergedRaces = getMergedContentDB().races;
 
-  const race   = [...globalContentDB.races, ...homebrewRaces].find(r => r.id === id);
-  const detail = id ? RACE_DETAIL[id] : null;
+  const race   = mergedRaces.find(r => r.id === id);
+  // Homebrew races self-describe via race.age/size/languages (see the Race
+  // type's doc comment); official races fall back to the hardcoded table,
+  // which predates those fields and still covers all 9 of them.
+  const detail = race?.age || race?.size || race?.languages
+    ? { description: '', size: race.size ?? '', speed: 30, languages: race.languages ?? [], age: race.age }
+    : (id ? RACE_DETAIL[id] : null);
 
   // Subrace selection — mandatory when the race defines subraces.
   const [subRaceId, setSubRaceId] = useState<string | null>(null);
@@ -98,7 +112,7 @@ export default function RaceDetailScreen() {
   const canSelect   = !hasSubraces || subRaceId !== null;
 
   useEffect(() => {
-    if (!race || !draft) router.back();
+    if (!race || !draft) safeGoBack();
   }, []);
 
   if (!race || !draft) return null;
@@ -120,10 +134,20 @@ export default function RaceDetailScreen() {
     for (const feature of race!.features) {
       updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
     }
+    // ...and any resource pools the base race grants (e.g. a limited-use
+    // racial ability) — same applyGrant mechanism classes already use for
+    // their own resource grants, just called directly at race-selection
+    // time instead of through the leveling system.
+    for (const resource of race!.resources ?? []) {
+      updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);
+    }
     // ...then the chosen subrace's features (e.g. Hill Dwarf WIS +1, Mountain Dwarf STR +2).
     if (chosenSubrace) {
       for (const feature of chosenSubrace.features) {
         updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
+      }
+      for (const resource of chosenSubrace.resources ?? []) {
+        updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);
       }
     }
     updated = recomputeDerived(updated, rules);
@@ -139,13 +163,18 @@ export default function RaceDetailScreen() {
 
       {detail && (
         <>
-          <Text style={styles.description}>{detail.description}</Text>
+          {detail.description ? <Text style={styles.description}>{detail.description}</Text> : null}
           <View style={styles.divider} />
-          <InfoRow label="Size"  value={detail.size} />
+          {detail.age ? <InfoRow label="Age" value={detail.age} /> : null}
+          {detail.size ? <InfoRow label="Size"  value={detail.size} /> : null}
           <InfoRow label="Speed" value={`${detail.speed} feet`} />
-          <View style={styles.divider} />
-          <Text style={styles.sectionTitle}>Languages</Text>
-          {detail.languages.map((l, i) => <Text key={i} style={styles.bullet}>• {l}</Text>)}
+          {detail.languages.length > 0 && (
+            <>
+              <View style={styles.divider} />
+              <Text style={styles.sectionTitle}>Languages</Text>
+              {detail.languages.map((l, i) => <Text key={i} style={styles.bullet}>• {l}</Text>)}
+            </>
+          )}
         </>
       )}
 

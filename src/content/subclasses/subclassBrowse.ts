@@ -4,7 +4,7 @@
 // ClassProgression), so the feature-list and progression-table derivations are
 // the same logic pointed at a subclass's entries. Kept separate from
 // classBrowse so each stays focused on its own content type.
-import { Feature } from '../../engine/types';
+import { Feature, HomebrewSubclass } from '../../engine/types';
 import { SubclassProgression, getSubclassesForClass } from './index';
 
 /** A subclass paired with a stable id derived from its feature sources. */
@@ -91,4 +91,37 @@ export function subclassEntriesForClass(classId: string): SubclassEntry[] {
 /** Look up a single subclass entry by classId + subclass id. */
 export function getSubclassEntry(classId: string, subclassId: string): SubclassEntry | null {
   return subclassEntriesForClass(classId).find(s => s.id === subclassId) ?? null;
+}
+
+/** Shapes a homebrew subclass (explicit id, unlike official ones) as a SubclassEntry. */
+function homebrewSubclassEntry(sub: HomebrewSubclass): SubclassEntry {
+  const byLevel = subclassFeaturesByLevel(sub);
+  const first = byLevel[0]?.feature;
+  const blurb = first?.description
+    ? (first.description.length > 120 ? first.description.slice(0, 117) + '…' : first.description)
+    : 'A subclass option.';
+  return {
+    id: sub.id, name: sub.name, classId: sub.classId, progression: sub,
+    unlockLevel: byLevel.length > 0 ? byLevel[0].level : 3,
+    blurb,
+  };
+}
+
+/**
+ * Official + homebrew subclasses for a class, shaped for the browse list.
+ * Makes homebrew subclasses (see app/homebrew/subclass-builder.tsx) appear
+ * alongside official ones in class-detail.tsx / subclass-detail.tsx. Doesn't
+ * wire subclass SELECTION (see the subclass_unlock choice in leveling.ts) —
+ * that's a separate, already-tracked gap that predates homebrew subclasses.
+ */
+export function subclassEntriesForClassMerged(classId: string, homebrew: HomebrewSubclass[]): SubclassEntry[] {
+  return [
+    ...subclassEntriesForClass(classId),
+    ...homebrew.filter(s => s.classId === classId).map(homebrewSubclassEntry),
+  ];
+}
+
+/** Look up a single subclass entry (official or homebrew) by classId + subclass id. */
+export function getSubclassEntryMerged(classId: string, subclassId: string, homebrew: HomebrewSubclass[]): SubclassEntry | null {
+  return subclassEntriesForClassMerged(classId, homebrew).find(s => s.id === subclassId) ?? null;
 }

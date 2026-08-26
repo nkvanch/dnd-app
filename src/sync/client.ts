@@ -19,6 +19,8 @@ export type ClientCallbacks = {
   onDisconnected:   () => void;
   onSyncEvent:      (event: SyncEvent) => void;
   onEntitySnapshot: (entity: Entity) => void;
+  /** Fired when the DM relays a partial entity PATCH instead of a full snapshot. */
+  onEntityPatch?:   (entityId: string, patch: Record<string, unknown>) => void;
   /** Fired whenever a connection attempt fails, with a human-readable reason. */
   onError?:         (reason: string) => void;
 };
@@ -173,6 +175,10 @@ export class SyncClient {
 
       case 'entity_snapshot':
         this.cb.onEntitySnapshot(msg.entity);
+        break;
+
+      case 'entity_patch':
+        this.cb.onEntityPatch?.(msg.entityId, msg.patch);
         break;
 
       default: break;

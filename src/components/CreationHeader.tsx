@@ -7,6 +7,7 @@ import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../store/characterStore';
+import { useSafeGoBack } from '../hooks/useSafeGoBack';
 import { Colors, Spacing, FontSize, FontWeight } from '../theme';
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 export function CreationHeader({ showBack = true, onBack }: Props) {
   const insets    = useSafeAreaInsets();
   const router    = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const clearDraft = useCharacterStore(s => s.clearDraft);
 
   function handleCancel() {
@@ -44,7 +46,7 @@ export function CreationHeader({ showBack = true, onBack }: Props) {
       {showBack ? (
         <Pressable
           style={styles.btn}
-          onPress={() => (onBack ? onBack() : router.back())}
+          onPress={() => (onBack ? onBack() : safeGoBack())}
           hitSlop={8}
         >
           <Text style={styles.backTxt}>← Back</Text>

@@ -19,6 +19,7 @@
 // and continue to see every spell, exactly as before this filter existed.
 // ============================================================================
 import { Spell } from '../../engine/types';
+import { ContentRegistry } from '../ContentRegistry';
 
 // ── New spells from level files ───────────────────────────────────────────────
 export * from './cantrips';
@@ -43,6 +44,18 @@ import { NEW_LEVEL7 }    from './level7';
 import { NEW_LEVEL8 }    from './level8';
 import { NEW_LEVEL9 }    from './level9';
 import { ALL_VAULT_SPELLS } from './generated';
+import srdClassification from './srdClassification.json';
+
+// Vault spells carry no srd field in generated.ts itself (see that file's
+// header) — classification is merged in here, at load time, from the small
+// separate srdClassification.json. This is why re-running
+// convert-spells.mjs after a classification-only change leaves
+// generated.ts completely untouched: only this tiny JSON updates, so a
+// classification pass no longer rewrites the entire 500+KB spell file.
+const CLASSIFIED_VAULT_SPELLS: Spell[] = ALL_VAULT_SPELLS.map(s => ({
+  ...s,
+  srd: (srdClassification as Record<string, boolean>)[s.id],
+}));
 
 // ── Original cantrips (level 0) ───────────────────────────────────────────────
 
@@ -477,8 +490,8 @@ export const FULL_SPELL_LIBRARY: Spell[] = [
   // ── Level 9 ──────────────────────────────────────────────────────────────
   spellWish, spellMeteorSwarm,
   ...NEW_LEVEL9,
-  // ── Vault-sourced library (auto-generated, SRD-tagged) ───────────────────
-  ...ALL_VAULT_SPELLS,
+  // ── Vault-sourced library (auto-generated content, SRD status merged in) ──
+  ...CLASSIFIED_VAULT_SPELLS,
 ];
 
 /**
@@ -498,3 +511,14 @@ const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 export const ALL_SPELLS: Spell[] = SRD_ONLY
   ? FULL_SPELL_LIBRARY.filter(s => s.srd === true)
   : FULL_SPELL_LIBRARY;
+
+// ── Lazy id-lookup registry ─────────────────────────────────────────────────
+// ALL_SPELLS/FULL_SPELL_LIBRARY stay eager arrays above — changing that would
+// mean touching every one of the 50+ files that import them as plain Spell[],
+// far too large a refactor to risk here. What genuinely helps without that:
+// an O(1) id lookup instead of a linear .find() scan, built lazily (only on
+// first actual lookup) and memoized. See ContentRegistry.ts for the full
+// rationale. Use this anywhere doing repeated by-id lookups (e.g. resolving
+// spell names for the character sheet PDF export, or homebrew edit-mode
+// loading an existing spell's data back into the builder).
+export const spellRegistry = new ContentRegistry<Spell>(() => ALL_SPELLS);

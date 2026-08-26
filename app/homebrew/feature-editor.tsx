@@ -1,10 +1,12 @@
 // app/homebrew/feature-editor.tsx
 // Homebrew feature editor — name, description, effects, activation toggle.
-import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { Feature, Effect } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const EFFECT_TYPES = [
@@ -71,35 +73,56 @@ function AddEffectPanel({ onAdd }: { onAdd: (e: Effect) => void }) {
 }
 
 export default function FeatureEditorScreen() {
-  const router   = useRouter();
+  const goBack   = useSafeGoBack('/(tabs)');
   const saveItem = useHomebrewStore(s => s.saveItem);
+  const homebrewFeatures = useHomebrewStore(s => s.features);
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const editing  = editId ? homebrewFeatures.find(f => f.id === editId) ?? null : null;
 
   const [name,        setName]        = useState('');
   const [description, setDescription] = useState('');
   const [effects,     setEffects]     = useState<Effect[]>([]);
   const [passive,     setPassive]     = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Edit mode: Feature.effects is stored as the exact same shape used at
+  // runtime (unlike Race/Item, there's no separate compiled-vs-draft split
+  // here), so this is a direct 1:1 reload, no reverse-engineering needed.
+  useEffect(() => {
+    if (!editing) return;
+    setName(editing.name);
+    setDescription(editing.description);
+    setEffects(editing.effects);
+    setPassive(editing.passive);
+  }, [editing?.id]);
 
   async function handleSave() {
-    if (!name.trim()) { Alert.alert('Name required'); return; }
-    const id = toId(name) || 'homebrew_feature';
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    const id = editing?.id ?? (toId(name) || 'homebrew_feature');
     const feature: Feature = {
       id, name: name.trim(), description: description.trim(),
-      source: { kind: 'feat', refId: id },
-      level: null, effects, actions: [], choices: [], passive,
+      source: editing?.source ?? { kind: 'feat', refId: id },
+      level: editing?.level ?? null, effects, actions: editing?.actions ?? [], choices: editing?.choices ?? [], passive,
     };
-    await saveItem('feature', feature);
-    Alert.alert('Saved!', `"${feature.name}" added to your homebrew library.`, [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+    try {
+      await saveItem('feature', feature);
+      goBack();
+    } catch (e) {
+      console.error('[feature-editor] save failed:', e);
+      Alert.alert('Save failed', e instanceof Error ? e.message : 'Something went wrong. Check the console for details.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={goBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
-        <Text style={styles.title}>New Feature</Text>
+        <Text style={styles.title}>{editing ? 'Edit Feature' : 'New Feature'}</Text>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -130,12 +153,14 @@ export default function FeatureEditorScreen() {
         <AddEffectPanel onAdd={e => setEffects(prev => [...prev, e])} />
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Pressable style={[styles.saveBtn, !name.trim() && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim()}>
-          <Text style={styles.saveBtnTxt}>💾 Save Feature</Text>
-        </Pressable>
-      </View>
-    </View>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
+            <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Feature'}</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
+    </KeyboardAvoidingView>
   );
 }
 

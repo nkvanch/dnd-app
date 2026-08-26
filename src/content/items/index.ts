@@ -4,6 +4,8 @@
 // ============================================================================
 import { Item } from '../../engine/types';
 import { IMPORTED_ITEMS } from './importedItems';
+import importedSrdClassification from './srdClassification.json';
+import { ContentRegistry } from '../ContentRegistry';
 
 // ── Simple Melee Weapons ──────────────────────────────────────────────────────
 
@@ -763,9 +765,22 @@ const CORE_ITEMS: Item[] = [
  * mechanically-correct hand-authored version always wins.
  */
 const CORE_IDS = new Set(CORE_ITEMS.map(i => i.id));
+
+// importedItems.ts carries no srd field itself (see that file's header) —
+// classification is merged in here, at load time, from the small separate
+// srdClassification.json. This means re-running parse_items.py after a
+// classification-only change leaves importedItems.ts completely untouched
+// (only this tiny JSON updates), instead of rewriting the entire ~541KB
+// item file every time — same fix applied to spells, see
+// src/content/spells/index.ts.
+const CLASSIFIED_IMPORTED_ITEMS: Item[] = IMPORTED_ITEMS.map(i => ({
+  ...i,
+  srd: (importedSrdClassification as Record<string, boolean>)[i.id],
+}));
+
 export const FULL_ITEM_LIBRARY: Item[] = [
   ...CORE_ITEMS,
-  ...IMPORTED_ITEMS.filter(i => !CORE_IDS.has(i.id)),
+  ...CLASSIFIED_IMPORTED_ITEMS.filter(i => !CORE_IDS.has(i.id)),
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
@@ -782,3 +797,10 @@ const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 export const ALL_ITEMS: Item[] = SRD_ONLY
   ? FULL_ITEM_LIBRARY.filter(i => i.srd === true)
   : FULL_ITEM_LIBRARY;
+
+// ── Lazy id-lookup registry ─────────────────────────────────────────────────
+// Same rationale as spells/index.ts's spellRegistry — O(1) id lookup instead
+// of a linear scan over 920 items, built lazily and memoized once on first
+// real access. ALL_ITEMS itself stays an eager array since 50+ files import
+// it directly as Item[].
+export const itemRegistry = new ContentRegistry<Item>(() => ALL_ITEMS);

@@ -116,7 +116,7 @@ function potency(effect: Effect): number {
  * Processes boolean tracks. If advantage and disadvantage modifiers are present
  * simultaneously, they neutralize down to a straight check regardless of volume.
  */
-function resolveBinary(effects: ActiveEffect[]): AdvantageState {
+export function resolveBinary(effects: ActiveEffect[]): AdvantageState {
   const hasAdv  = effects.some(ae => ae.effect.operation === "advantage");
   const hasDisadv = effects.some(ae => ae.effect.operation === "disadvantage");
   if (hasAdv && hasDisadv) return "straight";

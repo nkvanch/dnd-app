@@ -13,6 +13,7 @@ import { useSessionStore }   from '../../src/store/sessionStore';
 import { applyDamage, applyHealing } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { expireOverrides } from '../../src/engine/dmOverride';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { Entity, CampaignRules } from '../../src/engine/types';
 import { InitiativeEntry } from '../../src/engine/combat';
@@ -219,6 +220,7 @@ function CombatantRow({ entry, entity, isCurrent, onPress }: CombatantRowProps) 
 
 export default function EncounterScreen() {
   const router          = useRouter();
+  const safeGoBack      = useSafeGoBack('/(tabs)');
   const isDm            = useCampaignStore(s => s.isDm);
   const characters      = useCharacterStore(s => s.characters);
   const updateCharacter = useCharacterStore(s => s.updateCharacter);
@@ -281,7 +283,7 @@ export default function EncounterScreen() {
             }
           });
           endCombat();
-          router.back();
+          safeGoBack();
         },
       },
     ]);
@@ -301,7 +303,7 @@ export default function EncounterScreen() {
     return (
       <View style={styles.screen}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={safeGoBack}>
             <Text style={styles.backTxt}>← Back</Text>
           </Pressable>
           <Text style={styles.title}>Set Up Encounter</Text>
@@ -341,7 +343,7 @@ export default function EncounterScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
         <View>

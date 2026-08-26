@@ -5,9 +5,13 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { recalculateAllHP } from '../../src/engine/leveling';
+import { globalContentDB } from '../../src/content/classes/library';
+import { getProgressionForClass } from '../../src/content/classes/progressions';
 import { Ability } from '../../src/engine/types';
+import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -18,6 +22,7 @@ const ABILITY_LABELS: Record<Ability, string> = {
 export default function ReviewScreen() {
   // ── ALL hooks first — never declare a hook after a conditional return ──
   const router    = useRouter();
+  const safeGoBack = useSafeGoBack('/(tabs)');
   const draft     = useCharacterStore(s => s.draft);
   const saveDraft = useCharacterStore(s => s.saveDraft);
   // These were previously declared AFTER the `if (!draft) return null` guard
@@ -25,6 +30,7 @@ export default function ReviewScreen() {
   // changed and React threw "Rendered fewer hooks than expected".
   const setDraft  = useCharacterStore(s => s.setDraft);
   const rules     = useCharacterStore(s => s.rules);
+  const homebrewClasses = useHomebrewStore(s => s.classes);
 
   useEffect(() => {
     if (!draft) router.replace('/creation/name');
@@ -62,9 +68,15 @@ export default function ReviewScreen() {
     if (!draft) return;
     // 1. Recompute all derived stats with final scores + race bonuses applied.
     // 2. Recalculate HP from scratch so creation order doesn't affect the result.
-    //    (If class was chosen before scores, HP was computed with CON mod 0.)
+    //    (If class was chosen before scores, HP was computed with ability mod 0.)
+    //    Resolve the real hpAbility from the class's progression — defaults to
+    //    CON for every official class and any homebrew class that didn't set
+    //    one, so this is a no-op change for everything except homebrew classes
+    //    that explicitly reflavor HP around a different ability.
+    const cls = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === draft.identity.classId);
+    const hpAbility: Ability = (cls ? getProgressionForClass(cls).hpAbility : undefined) ?? 'con';
     let finalDraft = recomputeDerived(draft, rules);
-    finalDraft     = recalculateAllHP(finalDraft, rules);
+    finalDraft     = recalculateAllHP(finalDraft, rules, hpAbility);
     // 3. Run recomputeDerived one more time so derived.ac etc. use the corrected stats.
     finalDraft     = recomputeDerived(finalDraft, rules);
     setDraft(finalDraft);
@@ -141,7 +153,7 @@ export default function ReviewScreen() {
         <Text style={styles.saveBtnText}>⚔️  Save Character</Text>
       </Pressable>
 
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
+      <Pressable style={styles.backBtn} onPress={safeGoBack}>
         <Text style={styles.backBtnText}>← Go back</Text>
       </Pressable>
     </ScrollView>

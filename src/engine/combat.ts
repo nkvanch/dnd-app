@@ -3,7 +3,8 @@
 // PROJECT: Initiative Tracker, Concentration Gate & Combat Clock
 // ============================================================================
 import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect } from './types';
-import { recomputeDerived } from './pipeline';
+import { recomputeDerived, collectAllEffects } from './pipeline';
+import { resolveResistance } from './resolver';
 import { tickDurations } from './conditions';
 import { rollD20 as rollD20Dice } from './dice';
 import { DEFAULT_RULES } from '../store/characterStore';
@@ -243,14 +244,26 @@ export function concentrationCheck(
 export function applyDamage(
   entity:      Entity,
   damage:      number,
-  rules:       CampaignRules = DEFAULT_RULES
+  rules:       CampaignRules = DEFAULT_RULES,
+  /** Optional — when omitted, behaves exactly as before (no resistance math).
+   * Manual player-typed damage often has no declared type, and that's a
+   * legitimate choice, not a missing feature. */
+  damageType?: string,
 ): Entity {
   if (damage <= 0) return entity;
 
+  let resolvedDamage = damage;
+  if (damageType) {
+    const response = resolveResistance(damageType, collectAllEffects(entity));
+    if (response === 'immunity') return entity;
+    if (response === 'resistance') resolvedDamage = Math.floor(damage / 2);
+    else if (response === 'vulnerability') resolvedDamage = damage * 2;
+  }
+
   const { hp } = entity.resources;
   const wasAtZero    = hp.current === 0;
-  const tempAbsorbed = Math.min(hp.temp, damage);
-  const remainingDmg = damage - tempAbsorbed;
+  const tempAbsorbed = Math.min(hp.temp, resolvedDamage);
+  const remainingDmg = resolvedDamage - tempAbsorbed;
   const newCurrent   = Math.max(0, hp.current - remainingDmg);
 
   // Death saves: dropping to 0 for the first time starts a fresh count —

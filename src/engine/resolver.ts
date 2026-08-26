@@ -151,7 +151,11 @@ export function resolveExtraAttack(effects: ActiveEffect[]): number {
  * and vulnerability flags target the same type, they neutralize each other.
  */
 export function resolveResistance(damageType: string, effects: ActiveEffect[]): 'none' | 'resistance' | 'immunity' | 'vulnerability' {
-  const relevant = effects.filter(ae => ae.effect.target === `damage_type.${damageType}`);
+  // Plain target match (e.g. 'fire', 'poison') — matches how every real
+  // grant_resistance/grant_immunity effect is actually authored (see
+  // src/content/races/index.ts, src/content/traitCompiler.ts), not a
+  // 'damage_type.'-prefixed target that no content anywhere ever writes.
+  const relevant = effects.filter(ae => ae.effect.target === damageType);
   
   // Total immunity overrides all other modifications
   if (relevant.some(ae => ae.effect.operation === "immunity")) return "immunity";

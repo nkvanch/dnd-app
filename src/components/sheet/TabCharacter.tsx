@@ -16,12 +16,14 @@ import { levelUp } from '../../engine/leveling';
 import { spendHitDie, discardHitDie } from '../../engine/rest';
 import { rollD20, rollExpression } from '../../engine/dice';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
-import { getProgressionForClass } from '../../content/classes/progressions';
+import { getProgressionForClass, mergeSubclassIntoProgression } from '../../content/classes/progressions';
+import { getSubclassEntryMerged } from '../../content/subclasses/subclassBrowse';
 import { globalContentDB } from '../../content/classes/library';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
+import { CompanionSection } from './CompanionSection';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // Class progressions are looked up from the content library — no hardcoded names.
@@ -67,7 +69,7 @@ interface Props {
   isDm:         boolean;
   campaignId:   string;
   deviceId:     string;
-  onDamage:     (amount: number) => void;
+  onDamage:     (amount: number, damageType?: string) => void;
   onHeal:       (amount: number) => void;
   onAddCondition:    (id: string) => void;
   onRemoveCondition: (id: string) => void;
@@ -291,8 +293,16 @@ function LevelUpSection({
 }) {
   const classId     = entity.identity.classId;
   const homebrewClasses = useHomebrewStore(s => s.classes);
+  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
   const cls = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === classId);
-  const progression = cls ? getProgressionForClass(cls) : (ALL_PROGRESSIONS[classId] ?? null);
+  let progression = cls ? getProgressionForClass(cls) : (ALL_PROGRESSIONS[classId] ?? null);
+  // Once a subclass has been chosen (see SubclassPicker/applySubclassToEntity),
+  // future level-ups must apply ITS entries too, not just the base class's —
+  // levelUp() only ever sees whatever single ClassProgression it's handed.
+  if (progression && entity.identity.subclassId) {
+    const subEntry = getSubclassEntryMerged(classId, entity.identity.subclassId, homebrewSubclasses);
+    if (subEntry) progression = mergeSubclassIntoProgression(progression, subEntry.progression);
+  }
   const maxLevel    = rules.maxLevel ?? 20;
 
   if (!progression) return null;
@@ -708,8 +718,8 @@ export function TabCharacter({
   // Damage handler — triggers concentration check modal if needed.
   // Reads fresh entity state AFTER onDamage (Zustand is synchronous)
   // so the modal gets the correct entity, not the stale prop.
-  const handleDamage = useCallback((amount: number) => {
-    onDamage(amount);
+  const handleDamage = useCallback((amount: number, damageType?: string) => {
+    onDamage(amount, damageType);
     const { characters } = useCharacterStore.getState();
     const fresh = characters.find(c => c.id === entity.id);
     if (fresh?.spellcasting?.concentrating) {
@@ -833,6 +843,10 @@ export function TabCharacter({
           <Text style={styles.addFeatTxt}>+ Feat</Text>
         </Pressable>
       </View>
+
+      {/* Companion (Steel Defender, Eldritch Cannon, etc.) — self-contained,
+          renders nothing if this entity has no companion-granting feature. */}
+      <CompanionSection owner={entity} rules={rules} />
 
       {/* Weapon Attacks */}
       <View style={styles.section}>

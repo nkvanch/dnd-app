@@ -13,11 +13,15 @@ import { DEFAULT_RULES } from '../store/characterStore';
  * Immunity prevents the condition from being applied at all.
  */
 export function isImmuneToCondition(entity: Entity, conditionId: string): boolean {
+  // Plain target match (e.g. 'poisoned') — matches how every real
+  // condition_immunity effect is actually authored (Skeleton, Nature's Ward,
+  // Mindless Rage, Divine Health), not a 'condition.'-prefixed target that
+  // no content anywhere writes.
   return entity.features.some(f =>
     f.isActive &&
     f.effects.some(e =>
       e.type === 'condition_immunity' &&
-      e.target === `condition.${conditionId}`
+      e.target === conditionId
     )
   );
 }
@@ -31,13 +35,18 @@ export function isImmuneToCondition(entity: Entity, conditionId: string): boolea
  * the Blinded condition itself remains on the entity.
  */
 export function collectSuppressors(entity: Entity, conditionId: string): string[] {
+  // Plain target match — same convention fix as isImmuneToCondition above.
+  // suppress_condition_effects had zero real content usage before
+  // movement_condition traits (src/content/traitCompiler.ts) started
+  // authoring it, so there's no existing-data compatibility concern here,
+  // but standardizing on the plain convention keeps it consistent.
   return entity.features
     .filter(f => f.isActive)
     .flatMap(f =>
       f.effects
         .filter(e =>
           e.type === 'suppress_condition_effects' &&
-          e.target === `condition.${conditionId}`
+          e.target === conditionId
         )
         .map(() => f.id)
     );

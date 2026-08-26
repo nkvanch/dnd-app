@@ -13,8 +13,9 @@ import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { takeRest } from '../../src/engine/rest';
 import { expireOverrides } from '../../src/engine/dmOverride';
 import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
-import { Entity } from '../../src/engine/types';
+import { Entity, ItemInstance } from '../../src/engine/types';
 import { ALL_ITEMS } from '../../src/content/items/index';
+import { getInfusion, maxInfusedItems } from '../../src/content/infusions';
 import { CONDITIONS_BY_ID } from '../../src/content/conditions/index';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
 import { TabExploration } from '../../src/components/sheet/TabExploration';
@@ -94,13 +95,15 @@ export default function CharacterSheetScreen() {
 
   // ── Handlers (all pure engine calls → mutate) ─────────────────────────────
 
-  const handleDamage = useCallback((amount: number) => {
+  const handleDamage = useCallback((amount: number, damageType?: string) => {
     // While Wild Shaped, damage hits the BEAST's hp pool, not the player's
     // real HP underneath (which is untouched and resumes exactly where it
     // was on revert, per the book rule). See combat.ts's applyWildShapeDamage.
+    // Wild Shape beast HP has no resistance concept, so damageType only
+    // applies to the real-HP path.
     mutate(e => e.wildShapeState?.active
       ? applyWildShapeDamage(e, amount, rules)
-      : applyDamage(e, amount, rules));
+      : applyDamage(e, amount, rules, damageType));
   }, [mutate, rules]);
 
   const handleHeal = useCallback((amount: number) => {
@@ -226,6 +229,67 @@ export default function CharacterSheetScreen() {
         carried:  e.inventory.carried.filter(i => i.itemId !== itemId),
       },
     }));
+  }, [mutate]);
+
+  const handleApplyInfusion = useCallback((itemId: string, infusionId: string, damageType?: string) => {
+    mutate(e => {
+      const infusion = getInfusion(infusionId);
+      if (!infusion) return e;
+      const cap = maxInfusedItems(e.identity.level);
+      const infusedCount = [...e.inventory.equipped, ...e.inventory.carried].filter(i => i.infusedWith).length;
+      if (infusedCount >= cap) return e;
+
+      // Resistant Armor ships with a placeholder target — substitute the
+      // player's chosen damage type before the feature is appended.
+      let feature = infusion.feature;
+      if (feature && infusion.id === 'resistant_armor' && damageType) {
+        feature = {
+          ...feature,
+          effects: feature.effects.map(eff =>
+            eff.target === '__CHOOSE_DAMAGE_TYPE__' ? { ...eff, target: damageType } : eff
+          ),
+        };
+      }
+
+      // Additive — unlike handleEquip's hydration, which replaces an item
+      // instance's features wholesale, an infusion must stack alongside
+      // whatever features the base item definition already carries.
+      function applyTo(inst: ItemInstance): ItemInstance {
+        if (inst.itemId !== itemId || inst.infusedWith) return inst;
+        return {
+          ...inst,
+          infusedWith: infusionId,
+          features: feature ? [...inst.features, feature] : inst.features,
+        };
+      }
+
+      return {
+        ...e,
+        inventory: {
+          ...e.inventory,
+          equipped: e.inventory.equipped.map(applyTo),
+          carried:  e.inventory.carried.map(applyTo),
+        },
+      };
+    });
+  }, [mutate]);
+
+  const handleRemoveInfusion = useCallback((itemId: string) => {
+    mutate(e => {
+      function removeFrom(inst: ItemInstance): ItemInstance {
+        if (inst.itemId !== itemId || !inst.infusedWith) return inst;
+        const featureId = `infusion_${inst.infusedWith}`;
+        return { ...inst, infusedWith: null, features: inst.features.filter(f => f.id !== featureId) };
+      }
+      return {
+        ...e,
+        inventory: {
+          ...e.inventory,
+          equipped: e.inventory.equipped.map(removeFrom),
+          carried:  e.inventory.carried.map(removeFrom),
+        },
+      };
+    });
   }, [mutate]);
 
   const handleUpdateCurrency = useCallback((currency: import('../../src/engine/types').Currency) => {
@@ -447,6 +511,8 @@ export default function CharacterSheetScreen() {
             onAddItem={handleAddItem}
             onRemoveItem={handleRemoveItem}
             onUpdateCurrency={handleUpdateCurrency}
+            onApplyInfusion={handleApplyInfusion}
+            onRemoveInfusion={handleRemoveInfusion}
           />
         )}
         {activeTab === 'notes' && (

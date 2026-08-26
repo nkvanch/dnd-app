@@ -255,8 +255,13 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       const entities = await loadAllEntities();
       // Hydrate item features on load — ItemInstances are stored with features:[]
       // so we re-attach definition features before the engine sees them.
+      // Companions (kind:'monster' with identity.companionOf set — Steel
+      // Defender, Eldritch Cannon) load into this same array so their owner
+      // can find them by id, same as any normal character; they're
+      // deliberately excluded from characterMeta/the character list below,
+      // since they're not independently-playable characters.
       const characters = entities
-        .filter(e => e.kind === 'character')
+        .filter(e => e.kind === 'character' || (e.kind === 'monster' && !!e.identity.companionOf))
         .map(hydrateItemFeatures);
       set({ characters, isLoading: false });
     } catch (e) {

@@ -257,9 +257,10 @@ export default function RaceBuilderScreen() {
     }
 
     for (const t of traits) {
-      const { feature, resource } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'race', sourceRefId: id, level: null });
-      features.push(feature);
+      const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'race', sourceRefId: id, level: null });
+      features.push(feature, ...(extraFeatures ?? []));
       if (resource) resources.push(resource);
+      resources.push(...(extraResources ?? []));
     }
 
     const compiledSubraces: Subrace[] = subraces.map(sr => buildSubrace(sr, id));

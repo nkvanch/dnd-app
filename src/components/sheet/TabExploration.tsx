@@ -92,7 +92,7 @@ interface Props {
   entity: Entity;
   rules: CampaignRules;
   onEntityUpdate: (updated: Entity) => void;
-  onDamage: (amount: number) => void;
+  onDamage: (amount: number, damageType?: string) => void;
   onHeal: (amount: number) => void;
   onAddCondition: (condId: string) => void;
   onRemoveCondition: (condId: string) => void;
@@ -352,7 +352,7 @@ export function TabExploration({
         visible={hpOpen}
         currentHp={resources.hp.current}
         maxHp={resources.hp.maximum}
-        onDamage={(n) => { onDamage(n); }}
+        onDamage={(n, dt) => { onDamage(n, dt); }}
         onHeal={(n) => { onHeal(n); }}
         onClose={() => setHpOpen(false)}
       />

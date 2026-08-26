@@ -6,8 +6,10 @@
 `IMPLEMENTATION.md` for concrete schemas and protocols.*
 
 *Last updated: after the engine audit / conditions-as-content / grant fixes / armor cap
-/ feature hydration pass, plus the 2026-08-26 nav-crash fix / subrace & subclass
-attachment session. See §3 changelog for the full list.*
+/ feature hydration pass, the 2026-08-26 nav-crash fix / subrace & subclass
+attachment session, and the same-day follow-up that added real subclass selection
+(all classes), a companion-creature subsystem, an item-infusion subsystem, and the
+Artificer class (5 specialists). See §3 changelog for the full list.*
 
 ---
 
@@ -69,12 +71,16 @@ color-coded by purpose. Cards grey out with reason when unaffordable.
 throws, passive scores, all 18 skills with proficiency dots. Tapping any value opens
 the audit modal.
 
-**Features** — features by source (Race / Class / Background / Feat). Pending Choices
-section at the top: skill choices resolve inline, ASI/feat choices open the picker,
-subclass choices show a "resolve with DM" note.
+**Features** — features by source (Race / Class / Subclass / Background / Feat).
+Pending Choices section at the top: skill choices resolve inline, ASI/feat choices
+open the picker, subclass choices open a real picker (applies the chosen subclass's
+features immediately, for every class), infusion choices (Artificer) open a picker
+too.
 
 **Inventory** — weight bar, currency, equipped/carried with equip toggle. Equipping
-armor updates AC immediately through the pipeline.
+armor updates AC immediately through the pipeline. Artificer characters also get an
+Infusions section: learn known infusions, apply one additively to an owned item
+(cap-enforced), remove it again.
 
 **Notes** — free text, auto-saves.
 
@@ -96,7 +102,7 @@ armor updates AC immediately through the pipeline.
 | Retroactive CON→HP on ASI | ✅ reconcileConHp applied |
 | Proficiency grants from class | ✅ Populates armor/weapons/tools/languages |
 | Speed grants from class | ✅ Adds to entity.resources.speed |
-| Subclass unlock at level 3 | ✅ Queues pending choice (resolves with DM) |
+| Subclass unlock | ✅ Real picker; applies chosen subclass's features immediately, all classes |
 | Spell slots on level-up | ✅ Grow from PHB table automatically |
 | Conditions enforce mechanical effects | ✅ Grappled/Restrained/Paralyzed/Stunned/Petrified set speed 0 |
 | Equipped armor persists after restart | ✅ Hydrated in loadCharacters |
@@ -112,15 +118,17 @@ bonuses appear correctly in breakdowns).
 
 In-play level-up button → engine applies new level → ASI/feat picker opens if needed.
 Shared `AsiFeatPicker` used by both creation and in-play (no drift). 82 feats available.
-Subclass unlock queues a visible pending choice at level 3.
+Subclass unlock opens a real picker (`SubclassPicker`) at the class's actual unlock
+level; the chosen subclass's own progression is merged in so later level-ups keep
+granting its features too (`mergeSubclassIntoProgression`).
 
 ### Content
 
 | Category | Count | Status |
 |---|---|---|
 | Races | 9 (+subraces) | ✅ Full |
-| Classes | 12 | ✅ L1–20 progressions; mid/high levels often HP-only stubs |
-| Subclasses | 24 files | ⚠️ Files exist, features not authored into progressions |
+| Classes | 13 | ✅ L1–20 progressions; mid/high levels often HP-only stubs |
+| Subclasses | 29 files | ✅ Selection wired for all classes; feature depth varies by file |
 | Backgrounds | 13 | ✅ Full |
 | Feats | 82 | ✅ Full |
 | Spells | 487 (vault) + ~181 (legacy) | ✅ Class-filtered in creation |
@@ -161,6 +169,19 @@ subclasses and isn't resolved by this addition.
 
 ## 3. Recent changelog (since last status update)
 
+### Real subclass selection, companions, infusions, Artificer (2026-08-26, cont'd 2)
+
+- **Subclass selection now works for real, for every class** — previously either
+  missing entirely (11/12 classes) or throwing (Rogue's lone broken choice).
+  Full writeup, verification notes, and the companion/infusion/Artificer work in
+  `docs/ROADMAP_1.0.md`'s matching session batch.
+- **Companion creatures** (Steel Defender, Eldritch Cannon) — live HP/level sync
+  from the owner, own action cards, own HP/AC tracked separately.
+- **Item infusions** (Artificer's Infuse Item) — learn, apply additively to an
+  owned item, remove; cap-enforced by level.
+- **Artificer added**: Armorer, Alchemist, Artillerist, Battle Smith (official,
+  TCE/Eberron) plus Archivist (Unearthed Arcana, explicitly labeled non-official).
+
 ### Navigation & UI fixes (2026-08-26)
 
 - **`GO_BACK was not handled by any navigator` crash fixed.** 5 creation-wizard
@@ -181,6 +202,23 @@ subclasses and isn't resolved by this addition.
   the full writeup (data model, `getMergedContentDB()` rewrite, the `src/content/
   traitCompiler.ts` / `src/components/homebrew/TraitEditor.tsx` split that keeps
   `src/content/**` free of React/RN imports).
+
+### Trait/effect system expansion (2026-08-26, cont'd)
+
+- 6 new trait effect kinds (Unarmored Defense, searchable tool proficiency,
+  richer limited-use abilities, movement conditions, resistance/immunity/
+  vulnerability, spell granting) — full writeup in `docs/ROADMAP_1.0.md`'s
+  second 2026-08-26 session batch.
+- ⚠️ **Resistance/immunity are now actually functional in combat** — they
+  were previously authored as data (Dwarf's poison resistance, etc.) but
+  never consulted by damage application at all (`resolveResistance()` was
+  dead code with a target-string bug). Fixed for both new homebrew content
+  and existing official races. `HpModal`/DM QuickPanel gained an optional
+  damage-type selector.
+- Spell granting required real engine additions: a `cast_spell` ability
+  effect, a new level-gate mechanism for race/subrace features (previously
+  nonexistent — levels were silently zeroed), and an additive widening of
+  `buildTraitFeature()`'s return shape.
 
 ### Engine fixes
 
@@ -293,7 +331,7 @@ pools, full session replay. These wait for a proven second use case.
 | Homebrew not wired into creation | Core differentiator incomplete | Pre-release blocker |
 | No Spellbook tab | Casters manage spells across two tabs | Pre-release blocker |
 | No character header AC | Players ask "what's my AC?" constantly | Pre-release blocker |
-| Subclass features not authored | Level 3 subclass pick shows "resolve with DM" | Major gap |
+| Some subclass files are feature-thin | Selection works everywhere; a few subclasses have fewer authored levels than others | Minor |
 | Many mid/high-level class entries are HP stubs | Level 6+ is mechanically thin | Major gap |
 | Conditions only auto-enforce speed | Poisoned/Blinded etc. are reminders only | Known |
 | Attack bonuses not in pipeline | No audit trail for attack rolls | Known |

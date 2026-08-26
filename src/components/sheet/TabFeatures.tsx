@@ -5,6 +5,8 @@ import { ScrollView, View, Text, Pressable, StyleSheet, Modal, Alert } from 'rea
 import { Entity, FeatureInstance, ActionCard, CampaignRules } from '../../engine/types';
 import { resolveChoice } from '../../engine/leveling';
 import { AsiFeatPicker } from '../AsiFeatPicker';
+import { SubclassPicker } from '../SubclassPicker';
+import { InfusionPicker } from '../InfusionPicker';
 import { generateAllActionCards } from '../../engine/actionCards';
 import { globalContentDB } from '../../content/classes/library';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -82,6 +84,8 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
   const { features, spellcasting, derived } = entity;
   const [skillSelections, setSkillSelections] = useState<Record<string, string[]>>({});
   const [asiChoiceOpen, setAsiChoiceOpen] = useState<string | null>(null);
+  const [subclassChoiceOpen, setSubclassChoiceOpen] = useState<string | null>(null);
+  const [infusionChoiceOpen, setInfusionChoiceOpen] = useState<string | null>(null);
 
   const pendingChoices = entity.choices.filter(c => !c.resolved);
   const canResolve     = !!rules && !!onEntityUpdate;
@@ -154,6 +158,26 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                   </Pressable>
                 )}
 
+                {def.kind === 'subclass' && (
+                  <Pressable
+                    style={[styles.resolveBtn, !canResolve && styles.resolveBtnDisabled]}
+                    disabled={!canResolve}
+                    onPress={() => setSubclassChoiceOpen(c.id)}
+                  >
+                    <Text style={styles.resolveBtnTxt}>Resolve — Choose Subclass →</Text>
+                  </Pressable>
+                )}
+
+                {def.kind === 'infusion' && (
+                  <Pressable
+                    style={[styles.resolveBtn, !canResolve && styles.resolveBtnDisabled]}
+                    disabled={!canResolve}
+                    onPress={() => setInfusionChoiceOpen(c.id)}
+                  >
+                    <Text style={styles.resolveBtnTxt}>Resolve — Learn Infusions →</Text>
+                  </Pressable>
+                )}
+
                 {isSkill && (
                   <>
                     <View style={styles.chipRow}>
@@ -186,7 +210,7 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                   </>
                 )}
 
-                {def.kind !== 'asi' && !isSkill && (
+                {def.kind !== 'asi' && def.kind !== 'subclass' && def.kind !== 'infusion' && !isSkill && (
                   <Text style={styles.pendingNote}>
                     Resolve this with your DM for now — an in-app picker for this choice type is coming.
                   </Text>
@@ -294,6 +318,62 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                 rules={rules}
                 onClose={() => setAsiChoiceOpen(null)}
                 onResolved={(updated) => { onEntityUpdate(updated); setAsiChoiceOpen(null); }}
+              />
+            );
+          })()}
+        </View>
+      </Modal>
+
+      {/* Subclass resolution modal */}
+      <Modal visible={subclassChoiceOpen !== null} animationType="slide" onRequestClose={() => setSubclassChoiceOpen(null)}>
+        <View style={styles.asiModalRoot}>
+          {(() => {
+            const ch = entity.choices.find(c => c.id === subclassChoiceOpen && !c.resolved);
+            if (!ch || !rules || !onEntityUpdate) {
+              return (
+                <View style={styles.asiDone}>
+                  <Text style={styles.asiDoneTxt}>Nothing to resolve.</Text>
+                  <Pressable style={styles.resolveBtn} onPress={() => setSubclassChoiceOpen(null)}>
+                    <Text style={styles.resolveBtnTxt}>Close</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            return (
+              <SubclassPicker
+                entity={entity}
+                choice={ch}
+                rules={rules}
+                onClose={() => setSubclassChoiceOpen(null)}
+                onResolved={(updated) => { onEntityUpdate(updated); setSubclassChoiceOpen(null); }}
+              />
+            );
+          })()}
+        </View>
+      </Modal>
+
+      {/* Infusion resolution modal */}
+      <Modal visible={infusionChoiceOpen !== null} animationType="slide" onRequestClose={() => setInfusionChoiceOpen(null)}>
+        <View style={styles.asiModalRoot}>
+          {(() => {
+            const ch = entity.choices.find(c => c.id === infusionChoiceOpen && !c.resolved);
+            if (!ch || !rules || !onEntityUpdate) {
+              return (
+                <View style={styles.asiDone}>
+                  <Text style={styles.asiDoneTxt}>Nothing to resolve.</Text>
+                  <Pressable style={styles.resolveBtn} onPress={() => setInfusionChoiceOpen(null)}>
+                    <Text style={styles.resolveBtnTxt}>Close</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            return (
+              <InfusionPicker
+                entity={entity}
+                choice={ch}
+                rules={rules}
+                onClose={() => setInfusionChoiceOpen(null)}
+                onResolved={(updated) => { onEntityUpdate(updated); setInfusionChoiceOpen(null); }}
               />
             );
           })()}

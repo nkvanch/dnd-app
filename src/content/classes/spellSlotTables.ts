@@ -53,6 +53,16 @@ export const HALF_CASTER_SLOTS: SpellSlotRow[] = [
   { level: 20, slots: [4,3,3,3,2,0,0,0,0] },
 ];
 
+/**
+ * Artificer — identical to the half-caster table from level 2 on, but
+ * (unusually for a half-caster) already casts at level 1, using the same
+ * slot allocation the half-caster table gives at level 2 (2 first-level
+ * slots) instead of the usual empty level-1 row.
+ */
+export const ARTIFICER_SLOTS: SpellSlotRow[] = HALF_CASTER_SLOTS.map(row =>
+  row.level === 1 ? { level: 1, slots: HALF_CASTER_SLOTS[1].slots } : row
+);
+
 /** Warlock (pact magic — all slots same tier, recharge short rest). */
 export const WARLOCK_SLOTS: SpellSlotRow[] = [
   { level:  1, slots: [1,0,0,0,0,0,0,0,0] },
@@ -141,6 +151,7 @@ const SLOT_TABLES: Record<string, SpellSlotRow[]> = {
   ranger:   HALF_CASTER_SLOTS,
   warlock:  WARLOCK_SLOTS,
   abyss_knight: ABYSS_KNIGHT_SLOTS,
+  artificer: ARTIFICER_SLOTS,
 };
 
 /**

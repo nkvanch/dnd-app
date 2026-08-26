@@ -135,6 +135,9 @@ export default function RootLayout() {
         <Stack.Screen name="homebrew/race-builder"       options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/background-builder" options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/feature-editor"     options={{ headerShown: false }} />
+        <Stack.Screen name="homebrew/item-builder"       options={{ headerShown: false }} />
+        <Stack.Screen name="homebrew/subrace-builder"    options={{ headerShown: false }} />
+        <Stack.Screen name="homebrew/subclass-builder"   options={{ headerShown: false }} />
         <Stack.Screen name="settings"                      options={{ headerShown: false }} />
         <Stack.Screen name="about"                         options={{ headerShown: false }} />
         <Stack.Screen name="backup"                        options={{ headerShown: false }} />

@@ -560,6 +560,85 @@ function queueChoice(entity: Entity, choice: ChoiceDefinition, atLevel: number):
   };
 }
 
+// ── Subclass selection ───────────────────────────────────────────────────────
+
+/**
+ * Resolves a 'subclass' pending choice by actually taking the subclass: sets
+ * identity.subclassId, then applies every one of the subclass's OWN
+ * ClassProgression entries already reached (its unlock level, and any
+ * earlier level for domain-style subclasses that grant something at level
+ * 1). Bypasses resolveChoice entirely — same reason applyAsiToEntity/
+ * applyFeatToEntity do: the pool is the 'all' sentinel (the picker supplies
+ * the real subclass list, not the engine), so resolveChoice's array-walk
+ * would just skip it. Future level-ups pick up the subclass's remaining
+ * entries via progressions.ts's mergeSubclassIntoProgression, not this
+ * function — this only back-fills what's already due right now.
+ */
+export function applySubclassToEntity(
+  entity:              Entity,
+  choiceId:            string,
+  subclassId:          string,
+  subclassProgression: ClassProgression,
+  rules:               CampaignRules,
+): Entity {
+  let updated: Entity = {
+    ...entity,
+    identity: { ...entity.identity, subclassId },
+  };
+  for (const entry of subclassProgression.entries) {
+    if (entry.level > updated.identity.level) continue;
+    for (const grant of entry.grants) {
+      updated = applyGrant(updated, grant, entry.level);
+    }
+    for (const choice of entry.choices) {
+      if (canAutoResolve(choice)) {
+        if (Array.isArray(choice.pool) && choice.pool.length > 0) {
+          for (const grant of choice.grants) {
+            updated = applyGrant(updated, grant, entry.level);
+          }
+        }
+      } else {
+        updated = queueChoice(updated, choice, entry.level);
+      }
+    }
+  }
+  updated = {
+    ...updated,
+    choices: updated.choices.map(c =>
+      c.id === choiceId ? { ...c, resolved: true, selections: [subclassId] } : c
+    ),
+  };
+  return recomputeDerived(updated, rules);
+}
+
+// ── Infusion selection ───────────────────────────────────────────────────────
+
+/**
+ * Resolves an 'infusion' pending choice (learning new infusions, e.g.
+ * Artificer at levels 2/6/10/14/18) — appends the picked infusion ids to
+ * knownInfusionIds. Bypasses resolveChoice for the same reason
+ * applySubclassToEntity does: the pool is the 'all' sentinel (the picker
+ * supplies the real catalog, not the engine), so resolveChoice's array-walk
+ * would just skip it. This only grants KNOWLEDGE of the infusion — actually
+ * applying one to an owned item is a separate step (see app/sheet/[id].tsx's
+ * handleApplyInfusion).
+ */
+export function applyInfusionChoiceToEntity(
+  entity:      Entity,
+  choiceId:    string,
+  infusionIds: string[],
+  rules:       CampaignRules,
+): Entity {
+  const updated: Entity = {
+    ...entity,
+    knownInfusionIds: [...(entity.knownInfusionIds ?? []), ...infusionIds],
+    choices: entity.choices.map(c =>
+      c.id === choiceId ? { ...c, resolved: true, selections: infusionIds } : c
+    ),
+  };
+  return recomputeDerived(updated, rules);
+}
+
 // ── levelUp ───────────────────────────────────────────────────────────────────
 
 export function levelUp(

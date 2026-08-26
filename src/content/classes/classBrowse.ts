@@ -136,6 +136,15 @@ export const CLASS_META: Record<string, ClassMeta> = {
     complexity: 'Complex',
     recommendation: 'Make Dexterity your highest ability score, followed by Wisdom, then Constitution. The Hermit background suits a monk.',
   },
+  artificer: {
+    role: 'Support / Utility Half-Caster',
+    primaryAbility: 'int',
+    shortDescription: 'An inventor who channels magic through tools and infusions, casting spells from level 1 and enhancing gear for the whole party.',
+    keyMechanics: ['Magical Tinkering', 'Spellcasting', 'Infuse Item', 'Artificer Specialist'],
+    playstyle: 'Gear-focused support and utility, with a specialist subclass shaping combat role.',
+    complexity: 'Moderate',
+    recommendation: 'Make Intelligence your highest ability score, followed by Constitution, then Dexterity. The Guild Artisan background suits an artificer.',
+  },
 };
 
 const ABILITY_NAMES: Record<Ability, string> = {

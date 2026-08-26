@@ -13,6 +13,7 @@ import { useSessionStore }   from '../../src/store/sessionStore';
 import { applyDamage, applyHealing } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { expireOverrides } from '../../src/engine/dmOverride';
+import { COMMON_DAMAGE_TYPES } from '../../src/content/traitCompiler';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { Entity, CampaignRules } from '../../src/engine/types';
@@ -38,6 +39,7 @@ interface QuickPanelProps {
 function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
   const [mode,     setMode]     = useState<'damage'|'heal'|'condition'|null>(null);
   const [valueStr, setValueStr] = useState('');
+  const [damageType, setDamageType] = useState('');
   const [condSearch, setCondSearch] = useState('');
 
   const amount = parseInt(valueStr, 10);
@@ -45,8 +47,8 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
 
   function submitDamage() {
     if (!validNum) return;
-    onUpdate(applyDamage(entity, amount, rules));
-    setMode(null); setValueStr('');
+    onUpdate(applyDamage(entity, amount, rules, damageType.trim() || undefined));
+    setMode(null); setValueStr(''); setDamageType('');
   }
 
   function submitHeal() {
@@ -114,6 +116,17 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
           >
             <Text style={styles.submitBtnTxt}>{mode === 'damage' ? 'Apply Damage' : 'Apply Heal'}</Text>
           </Pressable>
+        </View>
+      )}
+
+      {mode === 'damage' && (
+        <View style={styles.dmgTypeWrap}>
+          {COMMON_DAMAGE_TYPES.map(t => (
+            <Pressable key={t} style={[styles.dmgTypeChip, damageType === t && styles.dmgTypeChipActive]}
+              onPress={() => setDamageType(damageType === t ? '' : t)}>
+              <Text style={[styles.dmgTypeChipTxt, damageType === t && styles.dmgTypeChipTxtActive]}>{t}</Text>
+            </Pressable>
+          ))}
         </View>
       )}
 
@@ -469,6 +482,14 @@ const styles = StyleSheet.create({
   qBtnTxt:    { fontSize: FontSize.xs, color: Colors.textPrimary, fontWeight: FontWeight.bold },
 
   inputRow:      { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' },
+  dmgTypeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: Spacing.xs },
+  dmgTypeChip: {
+    backgroundColor: Colors.surface, borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border,
+  },
+  dmgTypeChipActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  dmgTypeChipTxt:    { fontSize: 11, color: Colors.textSecondary },
+  dmgTypeChipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
   numInput: {
     flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,

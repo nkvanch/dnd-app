@@ -313,6 +313,16 @@ export type Identity = {
   backgroundId: string;
   alignment:    string | null;
   xp:           number;
+  /**
+   * Set on a companion Entity (kind: 'monster') to the owning player
+   * Entity's id — e.g. an Artificer's Steel Defender or Eldritch Cannon.
+   * null for every normal character/monster. The companion is otherwise a
+   * completely ordinary Entity (own id, own row in storage); this is the
+   * only link back to its owner. See src/engine/combat.ts's
+   * syncCompanionFromOwner for how level/ability-score-dependent stats stay
+   * current without a one-shot spawn-time bake.
+   */
+  companionOf?: string | null;
 };
 
 export type AbilityScores = Record<Ability, number>;
@@ -448,7 +458,7 @@ export type ChoiceDefinition = {
   id:       string;
   prompt:   string;
   kind:     'skill' | 'spell' | 'language' | 'tool' | 'equipment' | 'feat' | 'asi' | 'custom'
-          | 'spellcasting_ability';
+          | 'spellcasting_ability' | 'subclass' | 'infusion';
   count:    number;
   pool:     ChoiceOption[] | 'all' | FilterExpression;
   grants:   Grant[];
@@ -552,6 +562,15 @@ export type ItemInstance = {
   quantity: number;
   attuned:  boolean;
   features: Feature[];
+  /**
+   * Id of the infusion (src/content/infusions/index.ts) currently occupying
+   * this specific item instance, if any — null/undefined for an uninfused
+   * item. The infusion's own Feature is additively appended to `features`
+   * (never replacing the base item's own features, unlike equip hydration —
+   * see app/sheet/[id].tsx's handleApplyInfusion), so removing it means
+   * both stripping that Feature back out AND clearing this field.
+   */
+  infusedWith?: string | null;
 };
 
 export type InventoryBlock = {
@@ -698,8 +717,10 @@ export type FeatureInstance = Feature & {
 // components → engine dependency.
 
 export type TraitEffectKind =
-  | 'none' | 'ability_score' | 'skill_proficiency' | 'tool_proficiency'
-  | 'advantage_disadvantage' | 'sense' | 'movement' | 'resource_ability';
+  | 'none' | 'ability_score' | 'unarmored_defense' | 'skill_proficiency' | 'tool_proficiency'
+  | 'advantage_disadvantage' | 'sense' | 'movement' | 'movement_condition'
+  | 'damage_resistance' | 'damage_immunity' | 'damage_vulnerability'
+  | 'spell_grant' | 'resource_ability';
 
 export type DraftTrait = {
   localId:     string;
@@ -709,6 +730,10 @@ export type DraftTrait = {
   // ability_score
   abilityTarget: Ability;
   abilityAmount: string;
+  // unarmored_defense
+  unarmoredBase:      string;
+  unarmoredAbilities: Ability[];
+  unarmoredCaps:      Partial<Record<Ability, string>>;
   // skill_proficiency
   skillTarget:    SkillName;
   skillExpertise: boolean;
@@ -723,11 +748,41 @@ export type DraftTrait = {
   // movement
   moveType:  'fly' | 'swim' | 'climb' | 'burrow';
   moveRange: string;
+  // movement_condition — immunity to specific conditions' speed-zeroing effect,
+  // plus an explicitly-flavor-only note for movement rules the engine has no
+  // hook for at all (e.g. difficult terrain — see traitCompiler.ts).
+  moveCondTargets: string[];
+  moveCondFlavor:  string;
+  // damage_resistance / damage_immunity / damage_vulnerability
+  damageType: string;
+  // spell_grant — an at-will cantrip plus any number of level-gated leveled
+  // spells, each independently resource-pool- or spell-slot-consuming.
+  spellGrantCantripId: string;
+  spellGrantAbility:   Ability;
+  spellGrants: {
+    localId:      string;
+    spellId:      string;
+    spellName:    string;
+    // Derived from the real Spell's own castingTime when picked in the UI
+    // (src/components/homebrew/TraitEditor.tsx) — kept here rather than
+    // looked up inside buildTraitFeature() so src/content/traitCompiler.ts
+    // never needs to import spell content (it's used by progressions.ts,
+    // which must stay import-cycle-safe with the content layer).
+    actionType:   'action' | 'bonus_action' | 'reaction';
+    unlockLevel:  string;
+    mode:         'resource' | 'slot';
+    recharge:     'short_rest' | 'long_rest' | 'other';
+    rechargeOther: string;
+    uses:         string;
+    minSlotLevel: string;
+  }[];
   // resource_ability (e.g. Chi Pulse: bonus action, 1/rest, heal)
-  actionType: 'action' | 'bonus_action' | 'reaction';
-  recharge:   'short_rest' | 'long_rest';
-  uses:       string;
-  healDice:   string;
+  actionType:      'action' | 'bonus_action' | 'reaction' | 'other';
+  actionTypeOther: string;
+  recharge:        'short_rest' | 'long_rest' | 'other';
+  rechargeOther:   string;
+  uses:            string;
+  healDice:        string;
 };
 
 // ── 6. Entity master type ────────────────────────────────────────────────────
@@ -776,6 +831,14 @@ export type Entity = {
   dmOverrides:      DmOverride[];     // always [] for new entities
   wildShapeState:   WildShapeState | null;
   notes:            string;
+  /**
+   * Infusion ids (see src/content/infusions/index.ts) this entity currently
+   * KNOWS — separate from which items are actually infused right now (that's
+   * ItemInstance.infusedWith). Grows via 'infusion'-kind ChoiceDefinitions,
+   * same shape as ASI's level-gated choice injection. Optional/defaults to
+   * [] so existing saved entities parse unchanged.
+   */
+  knownInfusionIds?: string[];
 };
 
 // ── 7. Leveling schemas ──────────────────────────────────────────────────────
@@ -857,7 +920,10 @@ export type ResourceGrant = {
   resourceId: string;
   name:       string;
   maximum:    number;
-  recharge:   'short_rest' | 'long_rest' | 'dawn' | 'never';
+  /** `string` covers a homebrew-authored custom recharge description (see
+   * DraftTrait's 'other' recharge option) — displayed as-is by CustomResource,
+   * which already allows the same free-text escape hatch. */
+  recharge:   'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
 };
 
 export type ResourceUpgrade = {
@@ -998,7 +1064,12 @@ export type AbilityEffect =
   | { type: 'transform';        formId: string }
   | { type: 'set_flag';         flag: string; value: boolean }
   | { type: 'spend_resource';   resourceId: string; amount: number }
-  | { type: 'restore_resource'; resourceId: string; amount: number | 'full' };
+  | { type: 'restore_resource'; resourceId: string; amount: number | 'full' }
+  /** Casts a known spell by id, spending whatever this Feature's own
+   * activation.resourceCost specifies (a dedicated pool OR a real spell
+   * slot) — NOT entity.spellcasting.known's normal slot-consumption path.
+   * See traitCompiler.ts's spell_grant effect kind. */
+  | { type: 'cast_spell';       spellId: string };
 
 /** Tags used to classify a feature and choose its card type. */
 export type ActionCardTag =

@@ -13,7 +13,7 @@ import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { ALL_ITEMS } from '../../src/content/items/index';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
-import { newDraftTrait, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
+import { newDraftTrait, TraitEditorModal, COMMON_TOOLS } from '../../src/components/homebrew/TraitEditor';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -36,14 +36,6 @@ const SPELL_STYLES = [
 ] as const;
 
 const DEFAULT_ASI_LEVELS = [4, 8, 12, 16, 19];
-
-const COMMON_TOOLS = [
-  "Thieves' Tools", 'Herbalism Kit', "Alchemist's Supplies", "Smith's Tools",
-  "Carpenter's Tools", "Mason's Tools", "Weaver's Tools", "Woodcarver's Tools",
-  "Cook's Utensils", "Brewer's Supplies", "Calligrapher's Supplies", "Painter's Supplies",
-  "Potter's Tools", "Leatherworker's Tools", 'Navigator\'s Tools', "Cartographer's Tools",
-  'Disguise Kit', 'Forgery Kit', 'Poisoner\'s Kit', 'Vehicles (land)', 'Vehicles (water)',
-];
 
 function toId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');

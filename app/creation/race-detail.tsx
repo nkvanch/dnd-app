@@ -130,9 +130,13 @@ export default function RaceDetailScreen() {
         subRaceId: chosenSubrace ? chosenSubrace.id : null,
       },
     };
-    // Apply base race features...
+    // Apply base race features... applyGrant's 3rd param OVERWRITES
+    // Feature.level with whatever's passed — feature.level ?? 0 (not a
+    // hardcoded 0) so an authored unlock level (e.g. a spell_grant trait's
+    // leveled spell) actually survives onto the entity instead of always
+    // being zeroed. See actionCards.ts's generateAllActionCards level-gate.
     for (const feature of race!.features) {
-      updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
+      updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, feature.level ?? 0);
     }
     // ...and any resource pools the base race grants (e.g. a limited-use
     // racial ability) — same applyGrant mechanism classes already use for
@@ -144,7 +148,7 @@ export default function RaceDetailScreen() {
     // ...then the chosen subrace's features (e.g. Hill Dwarf WIS +1, Mountain Dwarf STR +2).
     if (chosenSubrace) {
       for (const feature of chosenSubrace.features) {
-        updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
+        updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, feature.level ?? 0);
       }
       for (const resource of chosenSubrace.resources ?? []) {
         updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);

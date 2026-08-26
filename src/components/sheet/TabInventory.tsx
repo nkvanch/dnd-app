@@ -12,7 +12,13 @@ import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engin
 import { globalContentDB } from '../../content/classes/library';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { usesLargeCreatureWeaponDice } from '../../engine/houseRules';
+import { ALL_INFUSIONS, maxInfusedItems } from '../../content/infusions';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+
+const DAMAGE_TYPES = [
+  'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic',
+  'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+];
 
 // ── Large creature detection ───────────────────────────────────────────────────
 
@@ -763,22 +769,150 @@ const currStyles = StyleSheet.create({
   saveTxt:   { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });
 
+// ── Infuse Item Modal ───────────────────────────────────────────────────────────
+
+function InfuseItemModal({
+  visible, entity, allItems, onApply, onClose,
+}: {
+  visible:  boolean;
+  entity:   Entity;
+  allItems: Item[];
+  onApply:  (itemId: string, infusionId: string, damageType?: string) => void;
+  onClose:  () => void;
+}) {
+  const known = entity.knownInfusionIds ?? [];
+  const knownInfusions = ALL_INFUSIONS.filter(i => known.includes(i.id));
+  const [selectedInfusion, setSelectedInfusion] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [damageType, setDamageType] = useState<string>('fire');
+
+  const cap = maxInfusedItems(entity.identity.level);
+  const infusedInstances = [...entity.inventory.equipped, ...entity.inventory.carried].filter(i => i.infusedWith);
+  const atCap = infusedInstances.length >= cap;
+  const ownedInstances = [...entity.inventory.equipped, ...entity.inventory.carried].filter(i => !i.infusedWith);
+
+  function reset() {
+    setSelectedInfusion(null);
+    setSelectedItem(null);
+    setDamageType('fire');
+  }
+
+  function handleClose() {
+    reset();
+    onClose();
+  }
+
+  function handleApply() {
+    if (!selectedInfusion || !selectedItem || atCap) return;
+    onApply(selectedItem, selectedInfusion, selectedInfusion === 'resistant_armor' ? damageType : undefined);
+    reset();
+    onClose();
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+      <Pressable style={addStyles.backdrop} onPress={handleClose}>
+        <Pressable style={addStyles.sheet} onPress={e => e.stopPropagation()}>
+          <Text style={addStyles.title}>Infuse an Item</Text>
+          <Text style={infuseStyles.capNote}>{infusedInstances.length}/{cap} items currently infused</Text>
+          {atCap && <Text style={infuseStyles.warn}>At capacity — remove an infusion before adding another.</Text>}
+
+          <Text style={infuseStyles.stepLabel}>1. Choose infusion</Text>
+          <ScrollView style={infuseStyles.pickList}>
+            {knownInfusions.map(inf => (
+              <Pressable
+                key={inf.id}
+                style={[infuseStyles.row, selectedInfusion === inf.id && infuseStyles.rowSelected]}
+                onPress={() => setSelectedInfusion(inf.id)}
+              >
+                <Text style={infuseStyles.rowTxt}>{inf.name}{!inf.feature ? ' (flavor-only)' : ''}</Text>
+              </Pressable>
+            ))}
+            {knownInfusions.length === 0 && <Text style={addStyles.empty}>No infusions known yet.</Text>}
+          </ScrollView>
+
+          {selectedInfusion === 'resistant_armor' && (
+            <>
+              <Text style={infuseStyles.stepLabel}>Damage type</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={addStyles.chipRowContent}>
+                {DAMAGE_TYPES.map(dt => (
+                  <Pressable
+                    key={dt}
+                    style={[addStyles.chip, damageType === dt && addStyles.chipActive]}
+                    onPress={() => setDamageType(dt)}
+                  >
+                    <Text style={[addStyles.chipTxt, damageType === dt && addStyles.chipTxtActive]}>{dt}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </>
+          )}
+
+          <Text style={infuseStyles.stepLabel}>2. Choose item</Text>
+          <ScrollView style={infuseStyles.pickList}>
+            {ownedInstances.map((inst, idx) => {
+              const def = allItems.find(i => i.id === inst.itemId);
+              return (
+                <Pressable
+                  key={`${inst.itemId}_${idx}`}
+                  style={[infuseStyles.row, selectedItem === inst.itemId && infuseStyles.rowSelected]}
+                  onPress={() => setSelectedItem(inst.itemId)}
+                >
+                  <Text style={infuseStyles.rowTxt}>{def?.name ?? inst.itemId}</Text>
+                </Pressable>
+              );
+            })}
+            {ownedInstances.length === 0 && <Text style={addStyles.empty}>No un-infused items to choose from.</Text>}
+          </ScrollView>
+
+          <Pressable
+            style={[addStyles.quickAddBtn, (!selectedInfusion || !selectedItem || atCap) && addStyles.quickAddBtnDisabled]}
+            disabled={!selectedInfusion || !selectedItem || atCap}
+            onPress={handleApply}
+          >
+            <Text style={addStyles.quickAddBtnTxt}>Infuse Item</Text>
+          </Pressable>
+          <Pressable style={addStyles.cancelBtn} onPress={handleClose}>
+            <Text style={addStyles.cancelTxt}>Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const infuseStyles = StyleSheet.create({
+  capNote:   { fontSize: FontSize.xs, color: Colors.textSecondary },
+  warn:      { fontSize: FontSize.xs, color: Colors.red },
+  stepLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.gold, marginTop: Spacing.xs },
+  pickList:  { maxHeight: 140 },
+  row: {
+    backgroundColor: Colors.surface, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, marginBottom: 4,
+  },
+  rowSelected: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  rowTxt:      { fontSize: FontSize.sm, color: Colors.textPrimary },
+});
+
 // ── Item Row ───────────────────────────────────────────────────────────────────
 
 function ItemRow({
-  instance, equipped, allItems, onToggle, onRemove,
+  instance, equipped, allItems, onToggle, onRemove, onRemoveInfusion,
 }: {
   instance: ItemInstance;
   equipped: boolean;
   allItems: Item[];
   onToggle: () => void;
   onRemove: () => void;
+  onRemoveInfusion?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const item  = allItems.find(i => i.id === instance.itemId);
   const name  = item?.name ?? instance.itemId;
   const props = item?.properties ?? [];
   const desc  = item?.features?.[0]?.description;
+  const infusion = instance.infusedWith ? ALL_INFUSIONS.find(i => i.id === instance.infusedWith) : null;
 
   return (
     <View style={styles.itemWrap}>
@@ -793,6 +927,9 @@ function ItemRow({
             )}
             {instance.quantity > 1 && (
               <Text style={styles.itemQty}>×{instance.quantity}</Text>
+            )}
+            {infusion && (
+              <Text style={styles.itemInfused}>✨ Infused: {infusion.name}</Text>
             )}
           </View>
           <Text style={styles.expandCaret}>{expanded ? '▲' : '▼'}</Text>
@@ -814,6 +951,11 @@ function ItemRow({
           <Text style={styles.itemDescTxt}>{desc}</Text>
         </View>
       )}
+      {expanded && infusion && onRemoveInfusion && (
+        <Pressable style={styles.removeInfusionBtn} onPress={onRemoveInfusion}>
+          <Text style={styles.removeInfusionTxt}>Remove Infusion</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -829,15 +971,21 @@ interface Props {
   onUpdateCurrency:  (currency: Currency) => void;
   /** Active campaign rules — used to honour homebrew toggles (e.g. large-creature dice). */
   rules?:            CampaignRules;
+  /** Present only for classes with Infuse Item (Artificer) — omitted elsewhere. */
+  onApplyInfusion?:  (itemId: string, infusionId: string, damageType?: string) => void;
+  onRemoveInfusion?: (itemId: string) => void;
 }
 
 export function TabInventory({
   entity, onEquip, onUnequip, onAddItem, onRemoveItem, onUpdateCurrency, rules,
+  onApplyInfusion, onRemoveInfusion,
 }: Props) {
   const { inventory } = entity;
   const { currency }  = inventory;
-  const [addOpen,  setAddOpen]  = useState(false);
-  const [currOpen, setCurrOpen] = useState(false);
+  const [addOpen,    setAddOpen]    = useState(false);
+  const [currOpen,   setCurrOpen]   = useState(false);
+  const [infuseOpen, setInfuseOpen] = useState(false);
+  const knownInfusionIds = entity.knownInfusionIds ?? [];
 
   const homebrewItemList = useHomebrewStore(s => s.items);
   const allItems = [...globalContentDB.items, ...homebrewItemList];
@@ -908,6 +1056,23 @@ export function TabInventory({
         </View>
       </View>
 
+      {/* Infusions — only shown for classes that know at least one (Artificer) */}
+      {onApplyInfusion && knownInfusionIds.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>
+              INFUSIONS ({[...inventory.equipped, ...inventory.carried].filter(i => i.infusedWith).length}/{maxInfusedItems(entity.identity.level)})
+            </Text>
+            <Pressable style={styles.addBtn} onPress={() => setInfuseOpen(true)}>
+              <Text style={styles.addBtnTxt}>+ Infuse Item</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.emptyNote}>
+            Known: {knownInfusionIds.map(id => ALL_INFUSIONS.find(i => i.id === id)?.name ?? id).join(', ')}
+          </Text>
+        </View>
+      )}
+
       {/* Equipped */}
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
@@ -927,6 +1092,7 @@ export function TabInventory({
               allItems={allItems}
               onToggle={() => onUnequip(inst.itemId)}
               onRemove={() => confirmRemove(inst.itemId)}
+              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId) : undefined}
             />
           ))
         )}
@@ -953,6 +1119,7 @@ export function TabInventory({
               allItems={allItems}
               onToggle={() => onEquip(inst.itemId)}
               onRemove={() => confirmRemove(inst.itemId)}
+              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId) : undefined}
             />
           ))
         )}
@@ -978,6 +1145,16 @@ export function TabInventory({
         onSave={onUpdateCurrency}
         onClose={() => setCurrOpen(false)}
       />
+
+      {onApplyInfusion && (
+        <InfuseItemModal
+          visible={infuseOpen}
+          entity={entity}
+          allItems={allItems}
+          onApply={onApplyInfusion}
+          onClose={() => setInfuseOpen(false)}
+        />
+      )}
 
     </ScrollView>
   );
@@ -1044,6 +1221,12 @@ const styles = StyleSheet.create({
   itemName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   itemProps: { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 1, lineHeight: 14 },
   itemQty:   { fontSize: FontSize.sm, color: Colors.textSecondary },
+  itemInfused: { fontSize: FontSize.xs, color: Colors.purple, marginTop: 2, fontWeight: FontWeight.bold },
+  removeInfusionBtn: {
+    alignItems: 'center', paddingVertical: Spacing.xs, marginBottom: Spacing.xs,
+    backgroundColor: Colors.red + '11', borderRadius: Radius.sm,
+  },
+  removeInfusionTxt: { fontSize: FontSize.xs, color: Colors.red, fontWeight: FontWeight.bold },
   expandCaret: { fontSize: FontSize.xs, color: Colors.textDim, paddingHorizontal: 4 },
   itemDesc: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,

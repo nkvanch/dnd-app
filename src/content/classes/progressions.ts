@@ -15,6 +15,31 @@ export function getProgression(classId: string): ClassProgression | null {
   return ALL_PROGRESSIONS[classId] ?? null;
 }
 
+/**
+ * Merges a selected subclass's own ClassProgression entries into the base
+ * class's, per matching level, so a future levelUp() call applies both
+ * together — grants/choices at the same level are concatenated, not
+ * replaced (a level-3 subclass unlock plus a level-3 subclass feature both
+ * need to fire). Only meaningful once entity.identity.subclassId is set;
+ * callers (app/creation/class-detail.tsx, TabCharacter.tsx) look up the
+ * chosen SubclassEntry themselves and pass its .progression here before
+ * calling levelUp — this function is pure data merging, no content lookups,
+ * so it stays in the content layer rather than the engine.
+ */
+export function mergeSubclassIntoProgression(base: ClassProgression, subclass: ClassProgression): ClassProgression {
+  const merged = new Map<number, LevelEntry>();
+  for (const entry of base.entries) merged.set(entry.level, entry);
+  for (const entry of subclass.entries) {
+    const existing = merged.get(entry.level);
+    merged.set(entry.level, existing ? {
+      ...existing,
+      grants:  [...existing.grants, ...entry.grants],
+      choices: [...existing.choices, ...entry.choices],
+    } : entry);
+  }
+  return { ...base, entries: Array.from(merged.values()).sort((a, b) => a.level - b.level) };
+}
+
 // ── Homebrew class progression builder (4B Phase 1 + Phase 2) ──────────────────
 //
 // Builds a full ClassProgression from the fields authored in a CharClass.
@@ -119,12 +144,20 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
     const authoredFeatures = featuresByLevel.get(level);
     if (authoredFeatures) {
       for (const f of authoredFeatures) {
-        const { feature, resource } = buildTraitFeature(
+        const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(
           { ...f, effectKind: f.effectKind ?? 'none' },
           { idPrefix: `${cls.id}_l${level}`, sourceKind: 'class', sourceRefId: cls.id, level },
         );
         grants.push({ kind: 'feature', value: feature });
         if (resource) grants.push({ kind: 'resource', value: resource });
+        // spell_grant's leveled sub-grants each carry their OWN authored
+        // level (used by the action-card gate); they're still added to
+        // entity.features at this outer level's grant-time, same as the
+        // primary feature — the gate independently re-checks their level
+        // against the character's, so an earlier-granted-but-later-unlocked
+        // sub-grant simply won't produce a card until then.
+        for (const ef of extraFeatures ?? []) grants.push({ kind: 'feature', value: ef });
+        for (const er of extraResources ?? []) grants.push({ kind: 'resource', value: er });
       }
     }
 

@@ -111,10 +111,28 @@ function fmtBonus(n: number): string {
 // ── Classification ────────────────────────────────────────────────────────────
 
 /**
+ * A spell_grant leveled-spell Feature (see traitCompiler.ts) carries a
+ * `cast_spell` abilityEffect referencing a real Spell by id, rather than
+ * being merged into entity.spellcasting.known — this looks up that Spell so
+ * the card can render identically to a normally-known spell's card, just
+ * sourced from a different Feature. Returns null for every ordinary feature.
+ */
+function findGrantedSpell(feature: Feature): Spell | null {
+  const castEffect = (feature.abilityEffects ?? []).find(
+    (e): e is Extract<AbilityEffect, { type: 'cast_spell' }> => e.type === 'cast_spell'
+  );
+  if (!castEffect) return null;
+  return globalContentDB.spells.find(s => s.id === castEffect.spellId) ?? null;
+}
+
+/**
  * Determines the card type from a feature's abilityEffects and tags.
- * Priority: explicit tags → effect-type inference → default 'utility'.
+ * Priority: granted-spell delegation → explicit tags → effect-type inference → default 'utility'.
  */
 export function classifyFeature(feature: Feature): ActionCardType {
+  const grantedSpell = findGrantedSpell(feature);
+  if (grantedSpell) return classifySpell(grantedSpell);
+
   // Explicit tags win first
   if (feature.tags) {
     if (feature.tags.includes('transformation')) return 'transformation';
@@ -193,6 +211,9 @@ function cardColor(type: ActionCardType): ActionCardColor {
  * Examples: "Lv 3 Spell • Damage", "Class Feature • Buff", "Bonus Action • Healing"
  */
 export function buildLayer1(feature: Feature, cardType: ActionCardType): string {
+  const grantedSpell = findGrantedSpell(feature);
+  if (grantedSpell) return buildLayer1ForSpell(grantedSpell, cardType);
+
   const typeLabel = capitalize(cardType);
   const action    = feature.activation;
 
@@ -224,6 +245,9 @@ export function buildLayer1ForSpell(spell: Spell, cardType: ActionCardType): str
  * Examples: "8d6 Fire • 20 ft radius", "+2 damage, B/P/S resistance"
  */
 export function buildLayer2(feature: Feature, entity?: Entity, opts: CardGenOptions = {}): string {
+  const grantedSpell = findGrantedSpell(feature);
+  if (grantedSpell) return buildLayer2ForSpell(grantedSpell);
+
   const fx = feature.abilityEffects ?? [];
 
   const parts: string[] = [];
@@ -306,6 +330,9 @@ export function buildLayer2ForSpell(spell: Spell): string {
  * Examples: "Dex Save (half)", "Concentration • 1 min", null
  */
 export function buildLayer3(feature: Feature): string | null {
+  const grantedSpell = findGrantedSpell(feature);
+  if (grantedSpell) return buildLayer3ForSpell(grantedSpell);
+
   const action = feature.activation;
   const parts: string[] = [];
 
@@ -502,6 +529,15 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
   // 1. Feature-based cards (class abilities, race abilities, background features)
   for (const fi of entity.features) {
     if (!fi.isActive) continue;
+    // Level-gate: a Feature can be present on the entity (already granted,
+    // already applied) but not yet "switch on" until the character reaches
+    // its authored level — needed for spell_grant traits, where one trait
+    // can contain several leveled sub-grants at different levels (so it
+    // can't be gated at grant-time the way class leveling already is).
+    // Self-healing on manual level edits; class/subclass features are
+    // unaffected since their level is always <= the character's by
+    // construction of levelUp()'s crossing loop.
+    if (fi.level !== null && fi.level > entity.identity.level) continue;
     const card = generateActionCard(fi, entity, opts);
     if (card) cards.push(card);
   }

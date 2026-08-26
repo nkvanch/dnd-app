@@ -39,10 +39,36 @@ export const ACTION_TYPES = [
   { key: 'action' as const, label: 'Action' },
   { key: 'bonus_action' as const, label: 'Bonus Action' },
   { key: 'reaction' as const, label: 'Reaction' },
+  { key: 'other' as const, label: 'Other' },
 ];
 export const RECHARGE_TYPES = [
   { key: 'short_rest' as const, label: 'Short Rest' },
   { key: 'long_rest' as const, label: 'Long Rest' },
+  { key: 'other' as const, label: 'Other' },
+];
+// Common 5e tool/kit proficiencies — a starting point for the searchable
+// tool_proficiency picker; the field stays free-text, this is just a
+// tap-to-fill suggestion list, not a closed catalog.
+export const COMMON_TOOLS: string[] = [
+  "Thieves' Tools", 'Herbalism Kit', "Alchemist's Supplies", "Smith's Tools",
+  "Carpenter's Tools", "Mason's Tools", "Weaver's Tools", "Woodcarver's Tools",
+  "Cook's Utensils", "Brewer's Supplies", "Calligrapher's Supplies", "Painter's Supplies",
+  "Potter's Tools", "Leatherworker's Tools", "Navigator's Tools", "Cartographer's Tools",
+  'Disguise Kit', 'Forgery Kit', "Poisoner's Kit", 'Vehicles (land)', 'Vehicles (water)',
+];
+// Standard 5e damage types — same free-text-with-suggestions pattern as
+// COMMON_TOOLS, used by the damage_resistance/immunity/vulnerability kinds.
+export const COMMON_DAMAGE_TYPES: string[] = [
+  'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic',
+  'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+];
+// The 6 conditions that zero speed (src/content/conditions/index.ts's
+// speedZeroFeature) — the only movement-related conditions the engine can
+// actually suppress today via suppress_condition_effects.
+export const SPEED_ZEROING_CONDITIONS: { key: string; label: string }[] = [
+  { key: 'grappled', label: 'Grappled' }, { key: 'restrained', label: 'Restrained' },
+  { key: 'paralyzed', label: 'Paralyzed' }, { key: 'petrified', label: 'Petrified' },
+  { key: 'stunned', label: 'Stunned' }, { key: 'unconscious', label: 'Unconscious' },
 ];
 
 export function toId(name: string): string {
@@ -56,12 +82,17 @@ export function newDraftTrait(name: string): DraftTrait {
     localId: `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
     name, description: '', effectKind: 'none',
     abilityTarget: 'str', abilityAmount: '1',
+    unarmoredBase: '10', unarmoredAbilities: ['dex'], unarmoredCaps: {},
     skillTarget: 'history', skillExpertise: false,
     toolName: '',
     advDirection: 'advantage', advTarget: '',
     senseType: 'darkvision', senseRange: '60',
     moveType: 'fly', moveRange: '30',
-    actionType: 'bonus_action', recharge: 'short_rest', uses: '1', healDice: '1d8',
+    moveCondTargets: [], moveCondFlavor: '',
+    damageType: 'fire',
+    spellGrantCantripId: '', spellGrantAbility: 'cha', spellGrants: [],
+    actionType: 'bonus_action', actionTypeOther: '',
+    recharge: 'short_rest', rechargeOther: '', uses: '1', healDice: '1d8',
   };
 }
 
@@ -72,11 +103,20 @@ export function newDraftTrait(name: string): DraftTrait {
  * builders use `${classOrSubclassId}_l${level}`). `sourceKind`/`sourceRefId`
  * populate Feature.source so Features-tab grouping-by-source stays correct
  * regardless of which builder produced the feature.
+ *
+ * `extraFeatures`/`extraResources` exist because spell_grant is the one
+ * effect kind that doesn't fit "one Feature (+one optional Resource)" — a
+ * single trait can grant an at-will cantrip AND any number of independently
+ * level-gated leveled spells, each needing its own Feature/Resource. They're
+ * optional so every existing caller that only destructures
+ * `{feature, resource}` keeps working unchanged; callers that might receive
+ * a spell_grant trait must also splice these in (see buildSubrace below,
+ * progressions.ts, race-builder.tsx, subclass-builder.tsx).
  */
 export function buildTraitFeature(
   t: DraftTrait,
   opts: { idPrefix: string; sourceKind: FeatureSource['kind']; sourceRefId: string; level: number | null },
-): { feature: Feature; resource: ResourceGrant | null } {
+): { feature: Feature; resource: ResourceGrant | null; extraFeatures?: Feature[]; extraResources?: ResourceGrant[] } {
   const fid = `${opts.idPrefix}_${toId(t.name)}`;
   const base: Omit<Feature, 'effects' | 'activation' | 'abilityEffects'> = {
     id: fid, name: t.name,
@@ -92,6 +132,26 @@ export function buildTraitFeature(
         type: 'stat_modifier', target: t.abilityTarget, operation: 'add',
         value: amount, condition: null,
       }] : [] },
+      resource: null,
+    };
+  }
+  if (t.effectKind === 'unarmored_defense') {
+    const base_ = parseInt(t.unarmoredBase, 10);
+    if (t.unarmoredAbilities.length === 0 || isNaN(base_)) {
+      return { feature: { ...base, effects: [] }, resource: null };
+    }
+    const caps: Partial<Record<Ability, number>> = {};
+    for (const a of t.unarmoredAbilities) {
+      const capStr = t.unarmoredCaps[a];
+      const cap = capStr !== undefined ? parseInt(capStr, 10) : NaN;
+      if (!isNaN(cap)) caps[a] = cap;
+    }
+    return {
+      feature: { ...base, effects: [{
+        type: 'base_ac_formula', target: 'ac', operation: 'set', value: base_, condition: null,
+        formulaAbilities: t.unarmoredAbilities,
+        formulaAbilityCap: Object.keys(caps).length > 0 ? caps : undefined,
+      }] },
       resource: null,
     };
   }
@@ -140,19 +200,99 @@ export function buildTraitFeature(
       resource: null,
     };
   }
-  if (t.effectKind === 'resource_ability') {
-    const resourceId = `${fid}_pool`;
-    const maxUses = Math.max(1, parseInt(t.uses, 10) || 1);
-    const resource: ResourceGrant = {
-      resourceId, name: t.name, maximum: maxUses, recharge: t.recharge,
-    };
+  if (t.effectKind === 'movement_condition') {
+    const effects: Effect[] = t.moveCondTargets.map(conditionId => ({
+      type: 'suppress_condition_effects', target: conditionId, operation: 'suppress',
+      value: ['speed'], condition: null,
+    }));
+    const flavor = t.moveCondFlavor.trim();
     return {
       feature: {
         ...base,
+        description: flavor ? `${base.description}${base.description.endsWith('.') ? '' : '.'} ${flavor}` : base.description,
+        effects,
+      },
+      resource: null,
+    };
+  }
+  if (t.effectKind === 'damage_resistance' || t.effectKind === 'damage_immunity' || t.effectKind === 'damage_vulnerability') {
+    const damageType = t.damageType.trim().toLowerCase();
+    if (!damageType) return { feature: { ...base, effects: [] }, resource: null };
+    const effect: Effect = {
+      type: t.effectKind === 'damage_immunity' ? 'grant_immunity' : 'grant_resistance',
+      target: damageType,
+      operation: t.effectKind === 'damage_resistance' ? 'resistance'
+               : t.effectKind === 'damage_immunity' ? 'immunity' : 'vulnerability',
+      value: null, condition: null,
+    };
+    return { feature: { ...base, effects: [effect] }, resource: null };
+  }
+  if (t.effectKind === 'spell_grant') {
+    // At-will cantrip: unchanged mechanism, merges into
+    // entity.spellcasting.cantrips via applyGrant() — same path Skeleton's
+    // Doomed Touch already uses for an at-will racial cantrip.
+    const effects: Effect[] = t.spellGrantCantripId ? [{
+      type: 'grant_spell', target: '', operation: 'add', value: null, condition: null,
+      cantripIds: [t.spellGrantCantripId], spellcastingAbility: t.spellGrantAbility,
+    }] : [];
+
+    // Leveled spells: each becomes its OWN Feature (never merged into
+    // .known — that path hard-codes "always consumes a real slot at exactly
+    // spell.level", incompatible with a dedicated resource pool or an
+    // authored minimum slot tier), gated by its own authored unlock level.
+    const extraFeatures: Feature[] = [];
+    const extraResources: ResourceGrant[] = [];
+    for (const g of t.spellGrants) {
+      if (!g.spellId) continue;
+      const grantFid = `${fid}_grant_${g.spellId}`;
+      const level = parseInt(g.unlockLevel, 10) || 1;
+      const resourceCost = g.mode === 'slot'
+        ? {
+            resourceId: 'spell_slots', quantity: 1,
+            spellSlotTier: Math.min(9, Math.max(1, parseInt(g.minSlotLevel, 10) || 1)) as 1|2|3|4|5|6|7|8|9,
+          }
+        : (() => {
+            const poolId = `${grantFid}_pool`;
+            const maxUses = Math.max(1, parseInt(g.uses, 10) || 1);
+            const recharge = g.recharge === 'other' ? (g.rechargeOther.trim() || 'other') : g.recharge;
+            extraResources.push({ resourceId: poolId, name: `${t.name}: ${g.spellName || g.spellId}`, maximum: maxUses, recharge });
+            return { resourceId: poolId, quantity: 1 };
+          })();
+      extraFeatures.push({
+        id: grantFid, name: g.spellName || t.name,
+        description: `Granted by ${t.name}.`,
+        source: base.source, level, actions: [], choices: [], passive: false,
+        effects: [],
+        activation: { actionType: g.actionType, resourceCost, range: 'self', target: 'single', requiresSave: null },
+        abilityEffects: [{ type: 'cast_spell', spellId: g.spellId }],
+      });
+    }
+
+    return {
+      feature: { ...base, effects },
+      resource: null,
+      extraFeatures: extraFeatures.length > 0 ? extraFeatures : undefined,
+      extraResources: extraResources.length > 0 ? extraResources : undefined,
+    };
+  }
+  if (t.effectKind === 'resource_ability') {
+    const resourceId = `${fid}_pool`;
+    const maxUses = Math.max(1, parseInt(t.uses, 10) || 1);
+    const recharge = t.recharge === 'other' ? (t.rechargeOther.trim() || 'other') : t.recharge;
+    const resource: ResourceGrant = {
+      resourceId, name: t.name, maximum: maxUses, recharge,
+    };
+    const actionType = t.actionType === 'other' ? 'free' : t.actionType;
+    const descPrefix = t.actionType === 'other' && t.actionTypeOther.trim()
+      ? `${t.actionTypeOther.trim()} — ` : '';
+    return {
+      feature: {
+        ...base,
+        description: descPrefix + base.description,
         effects: [],
         passive: false,
         activation: {
-          actionType: t.actionType,
+          actionType,
           resourceCost: { resourceId, quantity: 1 },
           range: 'self', target: 'self', requiresSave: null,
         },
@@ -207,9 +347,10 @@ export function buildSubrace(draft: DraftSubrace, parentRaceId: string): Subrace
     });
   }
   for (const t of draft.traits) {
-    const { feature, resource } = buildTraitFeature(t, { idPrefix: srId, sourceKind: 'race', sourceRefId: srId, level: null });
-    features.push(feature);
+    const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: srId, sourceKind: 'race', sourceRefId: srId, level: null });
+    features.push(feature, ...(extraFeatures ?? []));
     if (resource) resources.push(resource);
+    resources.push(...(extraResources ?? []));
   }
   return {
     id: srId, name: draft.name, parentId: parentRaceId,

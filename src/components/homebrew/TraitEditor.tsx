@@ -9,7 +9,7 @@
 // imports, so src/content/classes/progressions.ts (the class progression
 // compiler) can use it without pulling UI code into the content layer. This
 // file re-exports that logic alongside the React components that edit it.
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal,
   KeyboardAvoidingView, Platform,
@@ -17,14 +17,22 @@ import {
 import { DraftTrait, TraitEffectKind, Ability } from '../../engine/types';
 import {
   ABILITIES, SENSE_TYPES, MOVE_TYPES, SKILLS, ACTION_TYPES, RECHARGE_TYPES,
+  COMMON_TOOLS, COMMON_DAMAGE_TYPES, SPEED_ZEROING_CONDITIONS,
   toId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace,
 } from '../../content/traitCompiler';
 import type { MoveType, DraftSubrace } from '../../content/traitCompiler';
+// The one trait-editor field needing live content-DB/store access — every
+// other panel here is pure form state. Merge pattern copied from
+// AddSpellModal.tsx (vault + fallback + homebrew, homebrew wins on id).
+import { ALL_VAULT_SPELLS } from '../../content/spells/generated';
+import { globalContentDB } from '../../content/classes/library';
+import { useHomebrewStore } from '../../store/homebrewStore';
 import { SafeBottomView } from '../SafeBottomView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 export {
   ABILITIES, SENSE_TYPES, MOVE_TYPES, SKILLS, ACTION_TYPES, RECHARGE_TYPES,
+  COMMON_TOOLS, COMMON_DAMAGE_TYPES, SPEED_ZEROING_CONDITIONS,
   toId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace,
 };
 export type { MoveType, DraftSubrace };
@@ -64,18 +72,57 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
   onDone: () => void;
   onDelete: () => void;
 }) {
+  // Hooks must run unconditionally every render (this component instance
+  // stays mounted while `trait` toggles null <-> non-null as the caller
+  // opens/closes different traits) — so these live above the early return.
+  const homebrewSpells = useHomebrewStore(s => s.spells);
+  const [cantripSearch, setCantripSearch] = useState('');
+  const [leveledSearch, setLeveledSearch] = useState('');
+  const allSpells = useMemo(() => {
+    const vaultIds    = new Set(ALL_VAULT_SPELLS.map(s => s.id));
+    const fallbacks   = globalContentDB.spells.filter(s => !vaultIds.has(s.id));
+    const homebrewIds = new Set(homebrewSpells.map(s => s.id));
+    const official     = [...ALL_VAULT_SPELLS, ...fallbacks].filter(s => !homebrewIds.has(s.id));
+    return [...official, ...homebrewSpells];
+  }, [homebrewSpells]);
+
   if (!trait) return null;
   const set = (patch: Partial<DraftTrait>) => onChange({ ...trait, ...patch });
+  function updateGrant(localId: string, patch: Partial<DraftTrait['spellGrants'][number]>) {
+    set({ spellGrants: trait!.spellGrants.map(x => x.localId === localId ? { ...x, ...patch } : x) });
+  }
 
-  const EFFECT_KINDS: { key: TraitEffectKind; label: string }[] = [
-    { key: 'none', label: 'Flavor only' },
-    { key: 'ability_score', label: 'Ability score bonus' },
-    { key: 'skill_proficiency', label: 'Skill proficiency' },
-    { key: 'tool_proficiency', label: 'Tool/kit proficiency' },
-    { key: 'advantage_disadvantage', label: 'Advantage/Disadvantage' },
-    { key: 'sense', label: 'Grants a sense' },
-    { key: 'movement', label: 'Grants movement' },
-    { key: 'resource_ability', label: 'Limited-use ability' },
+  const EFFECT_KIND_GROUPS: { group: string; kinds: { key: TraitEffectKind; label: string }[] }[] = [
+    { group: 'Stats & Combat', kinds: [
+      { key: 'ability_score', label: 'Ability score bonus' },
+      { key: 'unarmored_defense', label: 'Unarmored Defense (AC formula)' },
+    ] },
+    { group: 'Proficiencies', kinds: [
+      { key: 'skill_proficiency', label: 'Skill proficiency' },
+      { key: 'tool_proficiency', label: 'Tool/kit proficiency' },
+    ] },
+    { group: 'Senses & Movement', kinds: [
+      { key: 'sense', label: 'Grants a sense' },
+      { key: 'movement', label: 'Grants movement' },
+      { key: 'movement_condition', label: 'Movement conditions' },
+    ] },
+    { group: 'Damage Response', kinds: [
+      { key: 'damage_resistance', label: 'Resistance' },
+      { key: 'damage_immunity', label: 'Immunity' },
+      { key: 'damage_vulnerability', label: 'Vulnerability' },
+    ] },
+    { group: 'Advantage/Reminders', kinds: [
+      { key: 'advantage_disadvantage', label: 'Advantage/Disadvantage' },
+    ] },
+    { group: 'Spellcasting', kinds: [
+      { key: 'spell_grant', label: 'Grants spells' },
+    ] },
+    { group: 'Limited-Use Ability', kinds: [
+      { key: 'resource_ability', label: 'Limited-use ability' },
+    ] },
+    { group: 'Flavor Only', kinds: [
+      { key: 'none', label: 'Flavor only' },
+    ] },
   ];
 
   return (
@@ -97,17 +144,22 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
             />
 
             <Text style={styles.fieldLabel}>Mechanical effect</Text>
-            <View style={styles.chipWrap}>
-              {EFFECT_KINDS.map(k => (
-                <Pressable
-                  key={k.key}
-                  style={[styles.chip, trait.effectKind === k.key && styles.chipActive]}
-                  onPress={() => set({ effectKind: k.key })}
-                >
-                  <Text style={[styles.chipTxt, trait.effectKind === k.key && styles.chipTxtActive]}>{k.label}</Text>
-                </Pressable>
-              ))}
-            </View>
+            {EFFECT_KIND_GROUPS.map(g => (
+              <View key={g.group} style={styles.effectGroupBlock}>
+                <Text style={styles.effectGroupLabel}>{g.group}</Text>
+                <View style={styles.chipWrap}>
+                  {g.kinds.map(k => (
+                    <Pressable
+                      key={k.key}
+                      style={[styles.chip, trait.effectKind === k.key && styles.chipActive]}
+                      onPress={() => set({ effectKind: k.key })}
+                    >
+                      <Text style={[styles.chipTxt, trait.effectKind === k.key && styles.chipTxtActive]}>{k.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            ))}
 
             {trait.effectKind === 'ability_score' && (
               <View style={styles.effectPanel}>
@@ -124,6 +176,45 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
                   <TextInput style={[styles.input, styles.smallInput]} value={trait.abilityAmount}
                     onChangeText={v => set({ abilityAmount: v })} keyboardType="numbers-and-punctuation" />
                 </View>
+              </View>
+            )}
+
+            {trait.effectKind === 'unarmored_defense' && (
+              <View style={styles.effectPanel}>
+                <View style={styles.rowInline}>
+                  <Text style={styles.inlineLabel}>Base AC:</Text>
+                  <TextInput style={[styles.input, styles.smallInput]} value={trait.unarmoredBase}
+                    onChangeText={v => set({ unarmoredBase: v })} keyboardType="number-pad" />
+                </View>
+                <Text style={styles.inlineLabel}>Add these ability modifiers</Text>
+                <View style={styles.chipWrap}>
+                  {ABILITIES.map(a => {
+                    const active = trait.unarmoredAbilities.includes(a);
+                    return (
+                      <Pressable key={a} style={[styles.chip, active && styles.chipActive]}
+                        onPress={() => set({
+                          unarmoredAbilities: active
+                            ? trait.unarmoredAbilities.filter(x => x !== a)
+                            : [...trait.unarmoredAbilities, a],
+                        })}>
+                        <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{a.toUpperCase()}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {trait.unarmoredAbilities.map(a => (
+                  <View key={a} style={styles.rowInline}>
+                    <Text style={styles.inlineLabel}>{a.toUpperCase()} cap:</Text>
+                    <TextInput style={[styles.input, styles.smallInput]}
+                      value={trait.unarmoredCaps[a] ?? ''}
+                      onChangeText={v => set({ unarmoredCaps: { ...trait.unarmoredCaps, [a]: v } })}
+                      keyboardType="number-pad" placeholder="uncapped" placeholderTextColor={Colors.textDim} />
+                  </View>
+                ))}
+                <Text style={styles.effectNote}>
+                  AC = base + the selected modifiers, each capped if you set one (blank means
+                  uncapped) -- e.g. Barbarian's Unarmored Defense is 10 + DEX + CON, both uncapped.
+                </Text>
               </View>
             )}
 
@@ -155,8 +246,25 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
                 <Text style={styles.inlineLabel}>Tool or kit name</Text>
                 <TextInput style={styles.input} value={trait.toolName}
                   onChangeText={v => set({ toolName: v })}
-                  placeholder="e.g. Thieves' Tools, Alchemist's Supplies"
+                  placeholder="Search or type your own — e.g. Thieves' Tools"
                   placeholderTextColor={Colors.textDim} />
+                {(() => {
+                  const q = trait.toolName.trim().toLowerCase();
+                  const matches = q.length >= 2
+                    ? COMMON_TOOLS.filter(n => n.toLowerCase().includes(q) && n !== trait.toolName).slice(0, 12)
+                    : [];
+                  if (matches.length === 0) return null;
+                  return (
+                    <View style={styles.searchResults}>
+                      {matches.map(name => (
+                        <Pressable key={name} style={styles.searchResultRow} onPress={() => set({ toolName: name })}>
+                          <Text style={styles.searchResultTxt}>{name}</Text>
+                          <Text style={styles.searchResultAdd}>Use</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  );
+                })()}
               </View>
             )}
 
@@ -222,6 +330,202 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
               </View>
             )}
 
+            {trait.effectKind === 'movement_condition' && (
+              <View style={styles.effectPanel}>
+                <Text style={styles.inlineLabel}>Immune to being slowed by</Text>
+                <View style={styles.chipWrap}>
+                  {SPEED_ZEROING_CONDITIONS.map(c => {
+                    const active = trait.moveCondTargets.includes(c.key);
+                    return (
+                      <Pressable key={c.key} style={[styles.chip, active && styles.chipActive]}
+                        onPress={() => set({
+                          moveCondTargets: active
+                            ? trait.moveCondTargets.filter(x => x !== c.key)
+                            : [...trait.moveCondTargets, c.key],
+                        })}>
+                        <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{c.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={styles.inlineLabel}>Flavor note (not mechanically enforced)</Text>
+                <TextInput style={[styles.input, styles.textArea]} value={trait.moveCondFlavor}
+                  onChangeText={v => set({ moveCondFlavor: v })}
+                  placeholder="e.g. ignores difficult terrain"
+                  placeholderTextColor={Colors.textDim} multiline textAlignVertical="top" />
+                <Text style={styles.effectNote}>
+                  The chips above are real and enforced (your speed won't drop to 0 from those
+                  conditions). Difficult terrain and similar movement rules aren't tracked
+                  anywhere in the engine, so a note about them here is reminder-only, same
+                  honest tradeoff as "Flavor only" traits elsewhere in this app.
+                </Text>
+              </View>
+            )}
+
+            {(trait.effectKind === 'damage_resistance' || trait.effectKind === 'damage_immunity' || trait.effectKind === 'damage_vulnerability') && (
+              <View style={styles.effectPanel}>
+                <Text style={styles.inlineLabel}>Damage type</Text>
+                <TextInput style={styles.input} value={trait.damageType}
+                  onChangeText={v => set({ damageType: v })}
+                  placeholder="Search or type your own — e.g. fire"
+                  placeholderTextColor={Colors.textDim} />
+                {(() => {
+                  const q = trait.damageType.trim().toLowerCase();
+                  const matches = q.length >= 1
+                    ? COMMON_DAMAGE_TYPES.filter(n => n.includes(q) && n !== trait.damageType).slice(0, 13)
+                    : COMMON_DAMAGE_TYPES.filter(n => n !== trait.damageType);
+                  return (
+                    <View style={styles.chipWrap}>
+                      {matches.map(name => (
+                        <Pressable key={name} style={styles.chip} onPress={() => set({ damageType: name })}>
+                          <Text style={styles.chipTxt}>{name}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  );
+                })()}
+              </View>
+            )}
+
+            {trait.effectKind === 'spell_grant' && (
+              <View style={styles.effectPanel}>
+                <Text style={styles.inlineLabel}>At-will cantrip (optional)</Text>
+                {trait.spellGrantCantripId ? (
+                  <Pressable style={styles.selectedSpellRow} onPress={() => set({ spellGrantCantripId: '' })}>
+                    <Text style={styles.selectedSpellTxt}>
+                      {allSpells.find(s => s.id === trait.spellGrantCantripId)?.name ?? trait.spellGrantCantripId}
+                    </Text>
+                    <Text style={styles.selectedSpellChange}>Clear</Text>
+                  </Pressable>
+                ) : (
+                  <>
+                    <TextInput style={styles.input} value={cantripSearch} onChangeText={setCantripSearch}
+                      placeholder="Search cantrips…" placeholderTextColor={Colors.textDim} />
+                    {cantripSearch.trim().length >= 2 && (
+                      <View style={styles.searchResults}>
+                        {allSpells
+                          .filter(s => s.level === 0 && s.name.toLowerCase().includes(cantripSearch.trim().toLowerCase()))
+                          .slice(0, 8).map(s => (
+                            <Pressable key={s.id} style={styles.searchResultRow}
+                              onPress={() => { set({ spellGrantCantripId: s.id }); setCantripSearch(''); }}>
+                              <Text style={styles.searchResultTxt}>{s.name}</Text>
+                              <Text style={styles.searchResultAdd}>Use</Text>
+                            </Pressable>
+                          ))}
+                      </View>
+                    )}
+                  </>
+                )}
+                {!!trait.spellGrantCantripId && (
+                  <>
+                    <Text style={styles.inlineLabel}>Casting ability</Text>
+                    <View style={styles.chipWrap}>
+                      {ABILITIES.map(a => (
+                        <Pressable key={a} style={[styles.chip, trait.spellGrantAbility === a && styles.chipActive]}
+                          onPress={() => set({ spellGrantAbility: a })}>
+                          <Text style={[styles.chipTxt, trait.spellGrantAbility === a && styles.chipTxtActive]}>{a.toUpperCase()}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                <Text style={[styles.inlineLabel, { marginTop: Spacing.sm }]}>Leveled spell grants</Text>
+                {trait.spellGrants.map(g => (
+                  <View key={g.localId} style={styles.spellGrantCard}>
+                    <View style={styles.rowInline}>
+                      <Text style={styles.spellGrantName}>{g.spellName}</Text>
+                      <Pressable
+                        onPress={() => set({ spellGrants: trait.spellGrants.filter(x => x.localId !== g.localId) })}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.traitDeleteTxt}>✕</Text>
+                      </Pressable>
+                    </View>
+                    <View style={styles.rowInline}>
+                      <Text style={styles.inlineLabel}>Unlocks at level:</Text>
+                      <TextInput style={[styles.input, styles.smallInput]} value={g.unlockLevel}
+                        onChangeText={v => updateGrant(g.localId, { unlockLevel: v })} keyboardType="number-pad" />
+                    </View>
+                    <View style={styles.chipWrap}>
+                      <Pressable style={[styles.chip, g.mode === 'resource' && styles.chipActive]}
+                        onPress={() => updateGrant(g.localId, { mode: 'resource' })}>
+                        <Text style={[styles.chipTxt, g.mode === 'resource' && styles.chipTxtActive]}>Resource pool</Text>
+                      </Pressable>
+                      <Pressable style={[styles.chip, g.mode === 'slot' && styles.chipActive]}
+                        onPress={() => updateGrant(g.localId, { mode: 'slot' })}>
+                        <Text style={[styles.chipTxt, g.mode === 'slot' && styles.chipTxtActive]}>Spell slot</Text>
+                      </Pressable>
+                    </View>
+                    {g.mode === 'resource' ? (
+                      <>
+                        <View style={styles.chipWrap}>
+                          {RECHARGE_TYPES.map(r => (
+                            <Pressable key={r.key} style={[styles.chip, g.recharge === r.key && styles.chipActive]}
+                              onPress={() => updateGrant(g.localId, { recharge: r.key })}>
+                              <Text style={[styles.chipTxt, g.recharge === r.key && styles.chipTxtActive]}>{r.label}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                        {g.recharge === 'other' && (
+                          <TextInput style={styles.input} value={g.rechargeOther}
+                            onChangeText={v => updateGrant(g.localId, { rechargeOther: v })}
+                            placeholder="e.g. Dawn" placeholderTextColor={Colors.textDim} />
+                        )}
+                        <View style={styles.rowInline}>
+                          <Text style={styles.inlineLabel}>Uses:</Text>
+                          <TextInput style={[styles.input, styles.smallInput]} value={g.uses}
+                            onChangeText={v => updateGrant(g.localId, { uses: v })} keyboardType="number-pad" />
+                        </View>
+                      </>
+                    ) : (
+                      <View style={styles.rowInline}>
+                        <Text style={styles.inlineLabel}>Minimum slot level:</Text>
+                        <TextInput style={[styles.input, styles.smallInput]} value={g.minSlotLevel}
+                          onChangeText={v => updateGrant(g.localId, { minSlotLevel: v })} keyboardType="number-pad" />
+                      </View>
+                    )}
+                  </View>
+                ))}
+
+                <TextInput style={styles.input} value={leveledSearch} onChangeText={setLeveledSearch}
+                  placeholder="Search a spell to add…" placeholderTextColor={Colors.textDim} />
+                {leveledSearch.trim().length >= 2 && (
+                  <View style={styles.searchResults}>
+                    {allSpells
+                      .filter(s => s.level > 0 && s.name.toLowerCase().includes(leveledSearch.trim().toLowerCase()))
+                      .slice(0, 8).map(s => (
+                        <Pressable key={s.id} style={styles.searchResultRow}
+                          onPress={() => {
+                            const ct = s.castingTime.toLowerCase();
+                            const actionType: 'action' | 'bonus_action' | 'reaction' =
+                              ct.includes('bonus') ? 'bonus_action' : ct.includes('reaction') ? 'reaction' : 'action';
+                            set({
+                              spellGrants: [...trait.spellGrants, {
+                                localId: `sg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+                                spellId: s.id, spellName: s.name, actionType,
+                                unlockLevel: '3', mode: 'resource', recharge: 'long_rest', rechargeOther: '',
+                                uses: '1', minSlotLevel: String(s.level),
+                              }],
+                            });
+                            setLeveledSearch('');
+                          }}
+                        >
+                          <Text style={styles.searchResultTxt}>{s.name} (Lv {s.level})</Text>
+                          <Text style={styles.searchResultAdd}>Add</Text>
+                        </Pressable>
+                      ))}
+                  </View>
+                )}
+                <Text style={styles.effectNote}>
+                  Resource pool: spends a dedicated limited-use charge, like a racial "1/long
+                  rest" spell. Spell slot: spends one of the character's own spell slots at or
+                  above the minimum level -- only meaningful if they end up with real
+                  spellcasting from their class.
+                </Text>
+              </View>
+            )}
+
             {trait.effectKind === 'resource_ability' && (
               <View style={styles.effectPanel}>
                 <Text style={styles.inlineLabel}>Action type</Text>
@@ -233,6 +537,11 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
                     </Pressable>
                   ))}
                 </View>
+                {trait.actionType === 'other' && (
+                  <TextInput style={styles.input} value={trait.actionTypeOther}
+                    onChangeText={v => set({ actionTypeOther: v })}
+                    placeholder="e.g. Reflexive, Special" placeholderTextColor={Colors.textDim} />
+                )}
                 <Text style={styles.inlineLabel}>Recharges on</Text>
                 <View style={styles.chipWrap}>
                   {RECHARGE_TYPES.map(r => (
@@ -242,13 +551,18 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
                     </Pressable>
                   ))}
                 </View>
+                {trait.recharge === 'other' && (
+                  <TextInput style={styles.input} value={trait.rechargeOther}
+                    onChangeText={v => set({ rechargeOther: v })}
+                    placeholder="e.g. Dawn, 1/day" placeholderTextColor={Colors.textDim} />
+                )}
                 <View style={styles.rowInline}>
                   <Text style={styles.inlineLabel}>Uses per recharge:</Text>
                   <TextInput style={[styles.input, styles.smallInput]} value={trait.uses}
                     onChangeText={v => set({ uses: v })} keyboardType="number-pad" />
                 </View>
                 <View style={styles.rowInline}>
-                  <Text style={styles.inlineLabel}>Heals (dice, optional):</Text>
+                  <Text style={styles.inlineLabel}>Dice (optional):</Text>
                   <TextInput style={[styles.input, styles.smallInput]} value={trait.healDice}
                     onChangeText={v => set({ healDice: v })} placeholder="e.g. 1d8" placeholderTextColor={Colors.textDim} />
                 </View>
@@ -316,12 +630,18 @@ export function TraitListEditor({ traits, onChange }: {
             <Text style={styles.traitCardMeta}>
               {t.effectKind === 'none' ? 'Flavor only' :
                t.effectKind === 'ability_score' ? `+${t.abilityAmount || 0} ${t.abilityTarget.toUpperCase()}` :
+               t.effectKind === 'unarmored_defense' ? `AC = ${t.unarmoredBase} + ${t.unarmoredAbilities.map(a => a.toUpperCase()).join('+') || '—'}` :
                t.effectKind === 'skill_proficiency' ? `${t.skillExpertise ? 'Expertise' : 'Proficiency'}: ${t.skillTarget}` :
                t.effectKind === 'tool_proficiency' ? `Proficiency: ${t.toolName || '(unnamed tool)'}` :
                t.effectKind === 'advantage_disadvantage' ? `${t.advDirection === 'advantage' ? 'Advantage' : 'Disadvantage'}: ${t.advTarget || '(unspecified)'}` :
                t.effectKind === 'sense' ? `${t.senseType} ${t.senseRange}ft` :
                t.effectKind === 'movement' ? `${t.moveType} ${t.moveRange}ft` :
-               `${t.uses}/${t.recharge === 'short_rest' ? 'short rest' : 'long rest'}`}
+               t.effectKind === 'movement_condition' ? `Immune to slow from ${t.moveCondTargets.length} condition${t.moveCondTargets.length !== 1 ? 's' : ''}` :
+               t.effectKind === 'damage_resistance' ? `Resist ${t.damageType || '(unspecified)'}` :
+               t.effectKind === 'damage_immunity' ? `Immune to ${t.damageType || '(unspecified)'}` :
+               t.effectKind === 'damage_vulnerability' ? `Vulnerable to ${t.damageType || '(unspecified)'}` :
+               t.effectKind === 'spell_grant' ? `${t.spellGrantCantripId ? '1 cantrip' : '0 cantrips'} + ${t.spellGrants.length} leveled spell${t.spellGrants.length !== 1 ? 's' : ''}` :
+               `${t.uses}/${t.recharge === 'other' ? (t.rechargeOther || 'other') : t.recharge === 'short_rest' ? 'short rest' : 'long rest'}`}
             </Text>
           </View>
           <Text style={styles.traitCardCaret}>{'>'}</Text>
@@ -366,6 +686,30 @@ export const styles = StyleSheet.create({
   chipTxt:   { fontSize: FontSize.xs, color: Colors.textSecondary },
   chipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  effectGroupBlock: { marginTop: Spacing.xs, gap: 4 },
+  effectGroupLabel: { fontSize: 10, color: Colors.textDim, letterSpacing: 1, fontWeight: FontWeight.bold, textTransform: 'uppercase' },
+  searchResults: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, marginTop: 4, overflow: 'hidden',
+  },
+  searchResultRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  searchResultTxt: { color: Colors.textPrimary, fontSize: FontSize.sm, flex: 1 },
+  searchResultAdd: { color: Colors.gold, fontSize: FontSize.xs, fontWeight: FontWeight.bold },
+  selectedSpellRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.gold + '11', borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold + '66',
+    padding: Spacing.sm,
+  },
+  selectedSpellTxt: { color: Colors.textPrimary, fontSize: FontSize.md, fontWeight: FontWeight.bold },
+  selectedSpellChange: { color: Colors.gold, fontSize: FontSize.xs, fontWeight: FontWeight.bold },
+  spellGrantCard: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, gap: 6,
+  },
+  spellGrantName: { flex: 1, color: Colors.textPrimary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
   senseInputRow: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
   senseAddBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.md, justifyContent: 'center' },
   senseAddTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },

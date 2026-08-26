@@ -20,6 +20,7 @@ import { BARD_SUBCLASSES }      from './bard';
 import { MONK_SUBCLASSES }      from './monk';
 import { SORCERER_SUBCLASSES }  from './sorcerer';
 import { WARLOCK_SUBCLASSES }   from './warlock';
+import { ARTIFICER_SUBCLASSES } from './artificer';
 import { ClassProgression }     from '../../engine/types';
 
 export type SubclassProgression = ClassProgression & { name: string };
@@ -38,6 +39,7 @@ export const FULL_SUBCLASS_LIBRARY: SubclassProgression[] = [
   ...MONK_SUBCLASSES,
   ...SORCERER_SUBCLASSES,
   ...WARLOCK_SUBCLASSES,
+  ...ARTIFICER_SUBCLASSES,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

@@ -1507,6 +1507,210 @@ early 1.1 if Phase 1–4 run long. Do not let it delay Phase 1.
             selector that calls a store method rather than reading a plain
             state field.
 
+## SESSION BATCH (2026-08-26, cont'd) — trait/effect system expansion, real resistance/immunity, spell granting
+
+- [x] **Header duplication fixed.** `subrace-builder`/`subclass-builder`/
+      `item-builder` were missing from `app/_layout.tsx`'s per-screen
+      `headerShown: false` list, so a native stack header rendered on top of
+      each screen's own custom header. Added.
+- [x] **6 new trait effect kinds**, all authored through the same shared
+      `TraitEditorModal`/`buildTraitFeature` pattern every homebrew builder
+      already uses (race, subrace, class, subclass):
+      - **Unarmored Defense** — flat base + any combination of ability
+        modifiers, each independently cap-able or uncapped. Compiles to the
+        existing `base_ac_formula` effect (already proven via medium armor's
+        DEX cap — no new engine mechanism needed).
+      - **Searchable tool/kit proficiency** — the free-text field stays the
+        source of truth, but now shows a filtered dropdown of common tools
+        as you type (same pattern as class-builder's equipment search).
+      - **Limited-use ability enhancements** — `action`/`recharge` both gained
+        an `'other'` option with a free-text field (`ResourceGrant.recharge`
+        widened to accept a custom string, matching `CustomResource` which
+        already did); the "Heals (dice, optional)" label became "Dice
+        (optional)" per explicit user scoping (wording only, same
+        heal-effect semantics).
+      - **Movement conditions** — immunity to the *speed-zeroing* effect of
+        Grappled/Restrained/Paralyzed/Petrified/Stunned/Unconscious via
+        `suppress_condition_effects`, plus an explicitly-flavor-only note for
+        movement rules with no engine hook (difficult terrain etc.) — no
+        pretending something is enforced when it isn't.
+      - **Resistance / Immunity / Vulnerability** — see the engine fix below;
+        this is the one that turned out to need real wiring, not just a UI.
+      - **Spell granting** — an at-will cantrip plus any number of
+        independently level-gated leveled spells, each spent either from a
+        dedicated resource pool OR the character's own spell slots (author's
+        choice per spell). See the design notes below — this needed several
+        real engine additions, not just a picker.
+      - Picker UI reorganized from one flat 8-chip row into labeled groups
+        (Stats & Combat / Proficiencies / Senses & Movement / Damage Response
+        / Advantage-Reminders / Spellcasting / Limited-Use Ability / Flavor
+        Only) now that it's grown to 14 kinds.
+- [x] ⚠️ **Resistance/immunity were silently non-functional — now fixed for
+      real.** Official races already authored resistance/immunity data
+      (Dwarf's poison resistance, Elf's Fey Ancestry, Skeleton's poison
+      condition-immunity, Nature's Ward, Mindless Rage, Divine Health), but
+      two bugs meant none of it ever did anything: (1) `resolveResistance()`
+      in `resolver.ts` existed and had correct logic but was **never called
+      anywhere** — confirmed via repo-wide search; (2) both it and
+      `isImmuneToCondition()`/`collectSuppressors()` in `conditions.ts`
+      filtered on a `` `damage_type.${x}` ``/`` `condition.${x}` ``-prefixed
+      target string that **no content anywhere actually writes** — every
+      real author (official and the new homebrew traits) uses the plain
+      unprefixed form (`'poison'`, `'poisoned'`). Fixed both target-string
+      conventions to match reality, then actually wired `resolveResistance`
+      into `combat.ts`'s `applyDamage()` (new optional `damageType` param,
+      fully backward-compatible when omitted — halves/zeroes/doubles damage
+      before the existing temp-HP math). Added a damage-type selector
+      (default "Unspecified", preserving today's behavior) to `HpModal.tsx`
+      and `dm/encounter.tsx`'s `QuickPanel`, threaded through their 3 call
+      sites. This also means **official content that was silently inert
+      starts working** — Dwarf's poison resistance, Skeleton's poison
+      immunity, etc. — not just new homebrew.
+- [x] **Spell granting engine work** (the largest, most novel piece):
+      - `AbilityEffect` gained a `cast_spell` variant — a leveled spell grant
+        compiles to its own Feature (never merged into
+        `entity.spellcasting.known`, since that path hard-codes "always
+        consumes a real slot at exactly spell.level," incompatible with a
+        resource pool or an authored minimum tier).
+      - `actionCards.ts` gained a `findGrantedSpell()` lookup so
+        `classifyFeature`/`buildLayer1`/`buildLayer2`/`buildLayer3` delegate
+        to the real spell's own card-building logic — a granted spell's card
+        looks identical to a normally-known spell's, just sourced from a
+        different Feature. Resource spend (pool or real slot) was already
+        fully generic in `TabActions.tsx`'s `handleUse` — no changes needed
+        there.
+      - **New level-gate mechanism**: race/subrace features had *no*
+        level-gating at all — `race-detail.tsx` hardcoded `applyGrant(...,
+        0)`, silently zeroing whatever `Feature.level` was authored. Fixed to
+        pass `feature.level ?? 0` through, and added a one-line guard in
+        `generateAllActionCards()` skipping card generation when
+        `fi.level > entity.identity.level` — self-healing on manual level
+        edits, no level-up-time work needed, same "apply on top, recompute"
+        philosophy as DmOverride/Wild Shape. Class/subclass features are
+        unaffected (their level is already ≤ the character's by
+        construction).
+      - `buildTraitFeature()`'s return signature widened additively
+        (`extraFeatures?`/`extraResources?`) — the first effect kind that
+        doesn't fit "one Feature (+one optional Resource)." All 4 existing
+        call sites (race-builder, subclass-builder, `buildSubrace`,
+        `progressions.ts`) updated to splice these in; the fields are
+        optional so nothing broke in the process.
+      - `TraitEditorModal` gained its first live content-DB/store-dependent
+        field (a spell search picker, merge pattern copied from
+        `AddSpellModal.tsx`) — every other panel in this file is pure form
+        state.
+- [x] ⚠️ **Real bug found and fixed during manual browser testing**:
+      `{trait.spellGrantCantripId && (<CastingAbilityChips/>)}` — a classic
+      JS gotcha. When the left operand of `&&` is a falsy *string* (`''`,
+      not `false`), the expression evaluates to that empty string, and React
+      renders it as a literal (invisible but real) text-node child of a
+      `View`, which react-native-web logs as "Unexpected text node ... " on
+      every render. Fixed with `!!trait.spellGrantCantripId &&`. Caught by
+      instrumenting `console.error` during a live browser walkthrough, not
+      by `tsc` (which is blind to this class of bug) — worth remembering
+      that type-checking alone doesn't catch conditional-rendering mistakes
+      like this.
+      - [x] Manually tested end-to-end on web: authored a Tiefling-style
+            "Infernal Legacy" subrace trait (Thaumaturgy at-will cantrip +
+            Hellish Rebuke as a 1/long-rest resource-pool leveled spell,
+            unlock level 3) on the official SRD Tiefling race, saved, and
+            confirmed every new panel (Unarmored Defense, movement
+            conditions, all 3 damage-response kinds, both "Other" fields)
+            renders and updates its live card-summary text correctly with
+            zero console errors after the fix above.
+      - [ ] Not tested on a real device/native build (web-only, SQLite still
+            a no-op there — same caveat as last session).
+
+## SESSION BATCH (2026-08-26, cont'd 2) — real subclass selection, companion subsystem, infusion subsystem, Artificer class
+
+- [x] **Real subclass selection, for ALL classes, not just the new one.**
+      Resolving a subclass choice previously either didn't exist (11 of 12
+      classes granted the subclass-unlock level as flavor text with no
+      `choices` array) or actively threw (`resolveChoice`'s generic
+      array-pool walk on Rogue's lone `pool:'all'` choice). Added `'subclass'`
+      to `ChoiceDefinition['kind']` (same `pool:'all'` sentinel convention as
+      ASI/feat), a real subclass-unlock choice at each class's actual unlock
+      level in `src/content/classes/index.ts`/`fighter.ts` (fixed Rogue's
+      broken one too), a dedicated `applySubclassToEntity()` in
+      `leveling.ts` (bypasses `resolveChoice` the same way ASI/feat do,
+      applies every ≤-current-level grant from the chosen subclass, marks
+      the choice resolved), a `mergeSubclassIntoProgression()` helper in
+      `progressions.ts` so future `levelUp()` calls pull in the subclass's
+      own entries once selected, and `SubclassPicker.tsx` (mirrors
+      `AsiFeatPicker.tsx`) wired into `TabFeatures.tsx`'s pending-choices
+      section. Verified live: leveled an Artificer to 3, the real picker
+      opened (not the old "resolve with your DM" note), selecting Battle
+      Smith applied all 4 of its level-3 features
+      immediately including a `known_spells` grant, and leveling further
+      correctly carried the subclass's own progression forward.
+- [x] **Companion creature subsystem** (`src/engine/companion.ts`, new) — a
+      companion (Steel Defender, Eldritch Cannon) is an ordinary
+      `kind:'monster'` Entity tagged `identity.companionOf`, stored in the
+      same `characterStore.characters` array (widened `loadCharacters()`'s
+      filter to include it; `loadCharactersMeta()` deliberately unchanged so
+      companions don't clutter the character list). `syncCompanionFromOwner()`
+      re-derives level/HP-max/speed from the owner on every read — never a
+      frozen spawn-time snapshot — same non-destructive "apply on top,
+      recompute" philosophy as `DmOverride`/`WildShapeState`. New
+      `CompanionSection.tsx` renders on the owner's Combat tab: a "Summon X"
+      button when not yet summoned, else a compact HP/AC panel with real
+      action cards. No initiative/turn-order changes needed (companions act
+      on the owner's turn per RAW). Verified live: leveling the owner from 3
+      to 4 correctly grew the Steel Defender's max HP from 20 to 25 while
+      preserving its current HP at 20 (not free-healing it).
+- [x] **Infusion subsystem** — new `src/content/infusions/index.ts` (16
+      TCE infusions, honestly flagged flavor-only where no engine hook
+      exists — no attack/damage-roll bonus mechanism, no reaction-trigger
+      automation, etc.), a new `'infusion'` choice kind + dedicated
+      `applyInfusionChoiceToEntity()` (same ASI/feat/subclass bypass
+      pattern), `InfusionPicker.tsx` for learning infusions, and — the part
+      with no existing precedent — an **additive** apply-to-item flow
+      (`handleApplyInfusion`/`handleRemoveInfusion` in `app/sheet/[id].tsx`,
+      new `ItemInstance.infusedWith` field) that appends a Feature onto a
+      specific item instance rather than replacing its features wholesale
+      (unlike `handleEquip`'s existing hydration, which does replace — this
+      is genuinely additive since an infusion stacks on top of whatever the
+      base item already grants). New "Infusions" section in `TabInventory.tsx`
+      with cap enforcement (`maxInfusedItems()`, the real TCE 2/3/4/5/6
+      table) and a damage-type substitution UI for Resistant Armor's
+      placeholder target. Verified live end-to-end: learned 4 infusions,
+      equipped Leather Armor (AC 13), infused it with Enhanced Defense (AC
+      → 14, "✨ Infused" badge, cap counter → 1/2, item excluded from the
+      picker's item list), then removed the infusion (AC back to 13, cap
+      back to 0/2).
+- [x] **Artificer class + 5 subclasses** (`src/content/classes/artificer.ts`,
+      `src/content/subclasses/artificer.ts`) — INT half-caster that casts
+      from level 1 (`ARTIFICER_SLOTS` in `spellSlotTables.ts`: identical to
+      the Paladin/Ranger half-caster table except level 1 gets level 2's
+      slot row instead of an empty one), Infuse Item at level 2, subclass
+      unlock at 3. **Armorer, Alchemist, Artillerist, Battle Smith** (all
+      TCE/Eberron, `srd:false`) plus **Archivist** — Feb 2019 Unearthed
+      Arcana "Prototype Artificer" content that never shipped in a final
+      book, explicitly labeled non-official in both its subclass name and
+      an in-app feature description, included at the user's request. Real
+      mechanical hooks wired where the engine supports them (Arcane
+      Armor/base AC formulas, Extra Attack, resource pools for Experimental
+      Elixir/Arcane Jolt, `known_spells` grants for each specialist's
+      "always prepared" list); everything else (Tool Expertise, Flash of
+      Genius, Magic Item Adept/Savant/Master, Soul of Artifice, per-mode
+      Armor Model damage riders) ships flavor-only with an explicit
+      in-description note of the missing engine hook, same disclosure
+      pattern as the infusions. Also fixed two small pre-existing gaps that
+      only became visible once a 13th class existed: `class.tsx`'s
+      `CASTER_TYPE`/`CLASS_DESCRIPTIONS` and `class-detail.tsx`'s
+      `CLASS_DETAIL` maps are keyed per-classId with no fallback, so an
+      unlisted class silently showed as "Homebrew" with wrong saving
+      throws (Strength/Constitution default) — added real entries for
+      `artificer` to both, plus `classBrowse.ts`'s `CLASS_META`.
+- [x] Manually tested end-to-end on web (`expo start --web`): full
+      character creation flow for a Gnome Artificer through level 4 —
+      class/subclass browsing, ability scores, background, the class's own
+      skill/equipment choices, subclass selection (Battle Smith), infusion
+      learn/apply/remove, and companion summon/level-sync all confirmed
+      working with correct numbers at each step.
+- [ ] Not tested on a real device/native build (web-only, same caveat as
+      every prior session).
+
 ## POST-1.0 BACKLOG (resist until shipped)
 - **Wire generic magic item bonuses** — discovered while auditing what
   actually influences stats (2026-08-04): almost none of the 835-item

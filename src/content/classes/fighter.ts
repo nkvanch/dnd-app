@@ -83,7 +83,7 @@ export const fighterProgression: ClassProgression = {
       ]
     },
     {
-      level: 3, hpDie: 10, choices: [],
+      level: 3, hpDie: 10, choices: [{ id: 'martial_archetype_choice', prompt: 'Choose a Martial Archetype.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }],
       grants: [
         { kind: "feature", value: { id: "martial_archetype", name: "Martial Archetype", description: "You choose an archetype that you strive to emulate in your combat styles and techniques.", source: { kind: "class", refId: "fighter" }, level: 3, effects: [], actions: [], choices: [], passive: true } },
       ]

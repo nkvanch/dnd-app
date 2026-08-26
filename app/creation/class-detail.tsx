@@ -149,6 +149,16 @@ const CLASS_DETAIL: Record<string, ClassDetail> = {
     toolProf: 'None',
     spellcasting: true,
   },
+  artificer: {
+    description: 'An inventor who infuses mundane objects with magic, casting spells from level 1 and unlocking Infuse Item at level 2.',
+    savingThrows: ['Constitution', 'Intelligence'],
+    savingThrowAbilities: ['con', 'int'],
+    primaryFeatures: ['Magical Tinkering', 'Spellcasting', 'Infuse Item', 'Artificer Specialist'],
+    armorProf: 'Light, medium, shields',
+    weaponProf: 'Simple weapons',
+    toolProf: "Thieves' tools, tinker's tools, one type of artisan's tools",
+    spellcasting: true,
+  },
   abyss_knight: {
     description: 'A warrior bound by pact to a demon lord of the Abyss, channeling dark power through their hit dice to fuel both their attacks and their nascent spellcasting.',
     savingThrows: ['Strength', 'Constitution'],

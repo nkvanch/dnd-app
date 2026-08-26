@@ -109,7 +109,7 @@ export default function DmCharacterView() {
             isDm={showFull}
             campaignId={campaignId}
             deviceId={deviceId}
-            onDamage={amt => mutate(e => applyDamage(e, amt, rules))}
+            onDamage={(amt, dt) => mutate(e => applyDamage(e, amt, rules, dt))}
             onHeal={amt => mutate(e => applyHealing(e, amt, rules))}
             onAddCondition={cId => mutate(e => applyCondition(e, cId, 'dm', rules))}
             onRemoveCondition={cId => mutate(e => removeCondition(e, cId, rules))}

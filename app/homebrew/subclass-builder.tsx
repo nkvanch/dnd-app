@@ -125,11 +125,13 @@ export default function SubclassBuilderScreen() {
     for (let level = 1; level <= 20; level++) {
       const grants: Grant[] = [];
       for (const f of (featuresByLevel.get(level) ?? [])) {
-        const { feature, resource } = buildTraitFeature(f, {
+        const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(f, {
           idPrefix: `${subclassId}_l${level}`, sourceKind: 'subclass', sourceRefId: subclassId, level,
         });
         grants.push({ kind: 'feature', value: feature });
         if (resource) grants.push({ kind: 'resource', value: resource });
+        for (const ef of extraFeatures ?? []) grants.push({ kind: 'feature', value: ef });
+        for (const er of extraResources ?? []) grants.push({ kind: 'resource', value: er });
       }
       entries.push({ level, hpDie, choices: [], grants });
     }

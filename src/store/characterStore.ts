@@ -10,13 +10,17 @@
 // On startup: call loadCharacters() after initDb() to hydrate from SQLite.
 // ============================================================================
 import { create } from 'zustand';
+import { AppState } from 'react-native';
 import { Entity, CampaignRules, SkillName, SkillEntry, AbilityScores, ItemInstance } from '../engine/types';
 import {
   saveEntity, loadAllEntities, deleteEntity, loadAllEntityMeta, EntityMeta,
 } from '../db/entityRepo';
 import { syncManager } from '../sync/syncManager';
 import { deepMerge } from '../sync/diff';
-import { ALL_ITEMS } from '../content/items/index';
+import { spellRepo } from '../content/spellRepo';
+import { spellIdsOnEntity } from '../content/spellRepo.types';
+import { itemRepo } from '../content/itemRepo';
+import { itemIdsOnEntity } from '../content/itemRepo.types';
 
 export type { EntityMeta };
 
@@ -27,11 +31,15 @@ export type { EntityMeta };
  * definitions. ItemInstances are serialised with features:[] (only itemId is
  * stored) so on load we must re-attach the definition's features. Without this,
  * equipping armor has no AC effect after an app restart.
+ *
+ * Reads from itemRepo's Tier-2 cache, which the caller (loadCharacters(),
+ * below) must have already warmed via ensureLoaded — this function itself
+ * stays synchronous so it's a drop-in map over the character list.
  */
 function hydrateItemFeatures(entity: Entity): Entity {
   function hydrateInstance(inst: ItemInstance): ItemInstance {
     if (inst.features.length > 0) return inst;   // already hydrated (e.g. from equip path)
-    const def = ALL_ITEMS.find(i => i.id === inst.itemId);
+    const def = itemRepo.getItemSync(inst.itemId);
     return def ? { ...inst, features: def.features } : inst;
   }
   const equippedHydrated = entity.inventory.equipped.map(hydrateInstance);
@@ -45,6 +53,56 @@ function hydrateItemFeatures(entity: Entity): Entity {
     inventory: { ...entity.inventory, equipped: equippedHydrated, carried: carriedHydrated },
   };
 }
+
+// ── Debounced SQLite writes ───────────────────────────────────────────────────
+// updateCharacter() fires on every HP tap, condition toggle, resource spend —
+// far more often than the SQLite write actually needs to happen. Debouncing
+// per entity id (trailing edge) collapses a burst of taps into one write,
+// cutting both write volume and battery drain. Zustand state itself still
+// updates synchronously on every call — this only delays the disk write.
+const SAVE_DEBOUNCE_MS = 600;
+const pendingSaves = new Map<string, Entity>();
+const saveTimers   = new Map<string, ReturnType<typeof setTimeout>>();
+
+function scheduleSave(entity: Entity): void {
+  pendingSaves.set(entity.id, entity);
+  const existing = saveTimers.get(entity.id);
+  if (existing) clearTimeout(existing);
+  saveTimers.set(entity.id, setTimeout(() => {
+    saveTimers.delete(entity.id);
+    const toSave = pendingSaves.get(entity.id);
+    pendingSaves.delete(entity.id);
+    if (toSave) {
+      saveEntity(toSave).catch(e =>
+        console.error('[characterStore] debounced saveEntity failed:', e)
+      );
+    }
+  }, SAVE_DEBOUNCE_MS));
+}
+
+/**
+ * Immediately persists every pending debounced write, bypassing the delay.
+ * Wired to AppState below — mobile apps can be killed at any point once
+ * backgrounded, with no further JS execution guaranteed, so a write still
+ * sitting in the debounce window when that happens must be flushed first.
+ */
+export function flushPendingSaves(): void {
+  for (const timer of saveTimers.values()) clearTimeout(timer);
+  saveTimers.clear();
+  const toFlush = Array.from(pendingSaves.values());
+  pendingSaves.clear();
+  for (const entity of toFlush) {
+    saveEntity(entity).catch(e =>
+      console.error('[characterStore] flushPendingSaves → saveEntity failed:', e)
+    );
+  }
+}
+
+AppState.addEventListener('change', (state) => {
+  if (state === 'background' || state === 'inactive') {
+    flushPendingSaves();
+  }
+});
 
 // ── Default campaign rules ────────────────────────────────────────────────────
 
@@ -211,7 +269,7 @@ type CharacterStore = {
    * Merges into the local list and persists to SQLite.
    * No sync broadcast — we are the receiver, not the sender.
    */
-  applyIncomingEntity: (entity: Entity) => void;
+  applyIncomingEntity: (entity: Entity) => Promise<void>;
 
   /**
    * Apply a PARTIAL entity patch received from a sync peer (see
@@ -222,7 +280,7 @@ type CharacterStore = {
    * sync problem. No-op if we don't have a local copy of this entity yet
    * (shouldn't normally happen — a full snapshot always precedes patches).
    */
-  applyIncomingPatch: (entityId: string, patch: Record<string, unknown>) => void;
+  applyIncomingPatch: (entityId: string, patch: Record<string, unknown>) => Promise<void>;
 
   // ── Rules ────────────────────────────────────────────────────────────────
 
@@ -253,6 +311,19 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     set({ isLoading: true });
     try {
       const entities = await loadAllEntities();
+      const preHydration = entities
+        .filter(e => e.kind === 'character' || (e.kind === 'monster' && !!e.identity.companionOf));
+
+      // Warm the Tier-2 item cache BEFORE hydrateItemFeatures — it reads
+      // itemRepo.getItemSync() synchronously for every equipped/carried
+      // instance, so the cache must already hold them by this point. This is
+      // the single highest-priority ensureLoaded call in the app: every
+      // equipped item's AC/attack effects depend on it running first, on
+      // every boot.
+      const allItemIds = new Set<string>();
+      for (const e of preHydration) for (const id of itemIdsOnEntity(e)) allItemIds.add(id);
+      await itemRepo.ensureLoaded(Array.from(allItemIds));
+
       // Hydrate item features on load — ItemInstances are stored with features:[]
       // so we re-attach definition features before the engine sees them.
       // Companions (kind:'monster' with identity.companionOf set — Steel
@@ -260,9 +331,15 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       // can find them by id, same as any normal character; they're
       // deliberately excluded from characterMeta/the character list below,
       // since they're not independently-playable characters.
-      const characters = entities
-        .filter(e => e.kind === 'character' || (e.kind === 'monster' && !!e.identity.companionOf))
-        .map(hydrateItemFeatures);
+      const characters = preHydration.map(hydrateItemFeatures);
+
+      // Warm the Tier-2 spell cache for every known/prepared/cantrip spell
+      // across every loaded character, once, before the engine pipeline
+      // (recomputeDerived, generateAllActionCards) runs against them.
+      const allSpellIds = new Set<string>();
+      for (const c of characters) for (const id of spellIdsOnEntity(c)) allSpellIds.add(id);
+      await spellRepo.ensureLoaded(Array.from(allSpellIds));
+
       set({ characters, isLoading: false });
     } catch (e) {
       console.error('[characterStore] loadCharacters failed:', e);
@@ -310,10 +387,10 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     });
 
     if (updated) {
-      // Async SQLite persist
-      saveEntity(updated).catch(e =>
-        console.error('[characterStore] updateCharacter → saveEntity failed:', e)
-      );
+      // Debounced SQLite persist — see scheduleSave's doc comment above.
+      // Zustand state (read by every screen) is already updated synchronously
+      // above; this only delays the disk write, not the UI.
+      scheduleSave(updated);
       // Sync only what changed since `previous` — role-aware: broadcasts
       // directly if we're the DM, or pushes up to the DM (who relays onward)
       // if we're a player. No-op if offline. Sending a diff instead of the
@@ -324,7 +401,14 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     }
   },
 
-  applyIncomingEntity: (entity) => {
+  applyIncomingEntity: async (entity) => {
+    // A remote device can push spell/item ids this device has never locally
+    // browsed — warm Tier 2 before the entity lands in state so the engine
+    // pipeline never hits a synchronous cache miss for it.
+    await Promise.all([
+      spellRepo.ensureLoaded(spellIdsOnEntity(entity)),
+      itemRepo.ensureLoaded(itemIdsOnEntity(entity)),
+    ]);
     set(state => {
       const exists  = state.characters.some(c => c.id === entity.id);
       const updated = exists
@@ -338,7 +422,21 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     );
   },
 
-  applyIncomingPatch: (entityId, patch) => {
+  applyIncomingPatch: async (entityId, patch) => {
+    // The patch may introduce spell ids this device has never seen (a
+    // remote player learned a new spell) — warm Tier 2 for anything in the
+    // incoming spellcasting block before merging, same rationale as
+    // applyIncomingEntity above.
+    if (patch.spellcasting) {
+      await spellRepo.ensureLoaded(spellIdsOnEntity({
+        spellcasting: patch.spellcasting as Partial<Entity['spellcasting']>,
+      }));
+    }
+    if (patch.inventory) {
+      await itemRepo.ensureLoaded(itemIdsOnEntity({
+        inventory: patch.inventory as Entity['inventory'],
+      }));
+    }
     let merged: Entity | null = null;
     set(state => {
       const next = state.characters.map(c => {
@@ -363,6 +461,13 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     set(state => ({
       characters: state.characters.filter(c => c.id !== id),
     }));
+
+    // Cancel any debounced write still pending for this id — otherwise it
+    // could fire after deleteEntity() below and resurrect the row.
+    const timer = saveTimers.get(id);
+    if (timer) clearTimeout(timer);
+    saveTimers.delete(id);
+    pendingSaves.delete(id);
 
     deleteEntity(id).catch(e =>
       console.error('[characterStore] deleteCharacter → deleteEntity failed:', e)

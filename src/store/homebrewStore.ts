@@ -140,10 +140,19 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     return {
       races:       racesWithStandaloneSubraces,
       classes:     [...globalContentDB.classes,     ...classes],
-      spells:      [...globalContentDB.spells,      ...spells],
+      // Official spell content moved out of globalContentDB and into
+      // spellRepo (SQLite-backed on native, still eager on web) — see
+      // src/content/spellRepo.ts. Nothing currently reads ContentDB.spells
+      // off this merged object (only .races/.classes are consumed), so this
+      // intentionally carries homebrew spells only from here on; browse UIs
+      // that need the full official+homebrew spell list use
+      // spellRepo.getIndex() directly instead.
+      spells:      spells,
       backgrounds: [...globalContentDB.backgrounds, ...backgrounds],
       conditions:  globalContentDB.conditions,
-      items:       [...globalContentDB.items,       ...items],
+      // Same rationale as .spells above — official item content lives in
+      // itemRepo now, not globalContentDB.
+      items:       items,
       features:    [...globalContentDB.features,    ...features],
       feats:       globalContentDB.feats,
     };

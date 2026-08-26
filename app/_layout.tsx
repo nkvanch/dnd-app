@@ -9,6 +9,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../src/theme';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { initDb } from '../src/db/db';
+import { initContentDb } from '../src/db/contentDb';
+import { spellRepo } from '../src/content/spellRepo';
+import { itemRepo } from '../src/content/itemRepo';
 import { getMeta } from '../src/db/appMetaRepo';
 import { useCharacterStore } from '../src/store/characterStore';
 import { useSessionStore }   from '../src/store/sessionStore';
@@ -41,6 +44,13 @@ export default function RootLayout() {
       try {
         // 1. Open / migrate the database (idempotent)
         await initDb();
+        // 1b. Open the static-content DB (spells + items, seeded from a
+        //     bundled asset on first launch — see src/db/contentDb.ts) and
+        //     build the Tier-1 indexes. Must finish before loadCharacters(),
+        //     which warms Tier-2 for every loaded character's known spells
+        //     and equipped/carried items.
+        await initContentDb();
+        await Promise.all([spellRepo.init(), itemRepo.init()]);
         // 2. Hydrate stores from SQLite — run in parallel
         //    loadHomebrew merges built-in homebrew (Abyss Knight, Skeleton)
         //    directly from BUILTIN_HOMEBREW — no separate seeding step needed.

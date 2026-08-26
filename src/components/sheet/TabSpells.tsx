@@ -13,10 +13,8 @@
 // ============================================================================
 import { useState, useCallback, useMemo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
-import { Entity, CampaignRules, ActionCard } from '../../engine/types';
-import { generateAllActionCards } from '../../engine/actionCards';
-import { ALL_VAULT_SPELLS } from '../../content/spells/generated';
-import { globalContentDB } from '../../content/classes/library';
+import { Entity, CampaignRules, ActionCard, Spell } from '../../engine/types';
+import { spellRepo } from '../../content/spellRepo';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { rollExpression } from '../../engine/dice';
 import { UseModal } from './TabActions';
@@ -70,7 +68,10 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
   // Add a spell/cantrip to the character. Initialises the spellcasting block
   // if the entity didn't have one. Cantrips (level 0) go to .cantrips; leveled
   // spells go to .known.
-  function addSpell(spellId: string, level: number) {
+  async function addSpell(spellId: string, level: number) {
+    // Warm Tier 2 before this id ever reaches the engine pipeline (spellMap
+    // lookup / generateAllActionCards on the next render).
+    await spellRepo.ensureLoaded([spellId]);
     const block = entity.spellcasting ?? {
       ability: 'con' as const,
       slots: { '1':{total:0,used:0}, '2':{total:0,used:0}, '3':{total:0,used:0}, '4':{total:0,used:0}, '5':{total:0,used:0}, '6':{total:0,used:0}, '7':{total:0,used:0}, '8':{total:0,used:0}, '9':{total:0,used:0} },
@@ -87,25 +88,29 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
 
   // ── Spell cards ───────────────────────────────────────────────────────────
   // ActionCard instances already know slot availability. We filter to the
-  // 'spellcasting' tab to exclude non-spell feature cards.
+  // 'spellcasting' tab to exclude non-spell feature cards. Cards themselves
+  // are computed once per mutation by recomputeDerived(), not here — no
+  // useMemo needed, entity.actionCards is already stable per entity version.
 
-  const spellCards = useMemo(
-    () => generateAllActionCards(entity, rules).filter(c => c.tabs.includes('spellcasting')),
-    [entity, rules],
-  );
+  const spellCards = (entity.actionCards ?? []).filter(c => c.tabs.includes('spellcasting'));
 
   // ── Spell detail lookup ───────────────────────────────────────────────────
-  // Merge vault + hand-authored + homebrew so description expansion works for
-  // vault spells too. Vault spells have no hand-authored entry; if a spell
-  // isn't found here the expand panel shows the action-card layer2/layer3
-  // summary instead of a full description.
+  // Only ever needs ids the character actually knows (spellCards' featureIds)
+  // — those are already warmed into spellRepo's Tier-2 cache by
+  // characterStore.ts's loadCharacters()/mutation paths, so this is a
+  // synchronous lookup, not a fetch. Homebrew spells aren't in the repo at
+  // all (they're user-authored, not static content) and win on id collision,
+  // same precedence as before this migration.
 
   const spellMap = useMemo(() => {
-    const vaultIds  = new Set(ALL_VAULT_SPELLS.map(s => s.id));
-    const fallbacks = globalContentDB.spells.filter(s => !vaultIds.has(s.id));
-    const all       = [...ALL_VAULT_SPELLS, ...fallbacks, ...homebrewSpells];
-    return new Map(all.map(s => [s.id, s]));
-  }, [homebrewSpells]);
+    const map = new Map<string, Spell>();
+    for (const card of spellCards) {
+      const sp = spellRepo.getSpellSync(card.featureId);
+      if (sp) map.set(card.featureId, sp);
+    }
+    for (const s of homebrewSpells) map.set(s.id, s);
+    return map;
+  }, [spellCards, homebrewSpells]);
 
   // ── Group cards by spell level ────────────────────────────────────────────
   // Level is inferred from resourceCost.spellSlotTier; cantrips have null cost → level 0.

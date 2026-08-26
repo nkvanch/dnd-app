@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules } from '../../engine/types';
-import { generateAllActionCards } from '../../engine/actionCards';
 import { applyAbilityEffects, endWildShape } from '../../engine/combat';
 import { rollExpression } from '../../engine/dice';
 import { DiceRoll } from '../../engine/types';
@@ -143,7 +142,7 @@ interface Props {
 export function TabActions({ entity, rules, onEntityUpdate }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
 
-  const all        = generateAllActionCards(entity, rules).filter(c => c.tabs.includes('actions'));
+  const all        = (entity.actionCards ?? []).filter(c => c.tabs.includes('actions'));
   const actions      = all.filter(c => c.activation.actionType === 'action');
   const bonusActions = all.filter(c => c.activation.actionType === 'bonus_action');
   const reactions    = all.filter(c => c.activation.actionType === 'reaction');

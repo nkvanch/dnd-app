@@ -13,7 +13,8 @@ import {
   Feature, Entity, ActionCard, ActionCardType, ActionCardColor,
   ActionCardTag, AbilityEffect, FeatureActivation, Spell,
 } from './types';
-import { globalContentDB } from '../content/classes/library';
+import { spellRepo } from '../content/spellRepo';
+import { itemRepo } from '../content/itemRepo';
 import { modifier } from './pipeline';
 import { usesLargeCreatureWeaponDice } from './houseRules';
 import { CampaignRules } from './types';
@@ -66,7 +67,7 @@ function parseMagicBonus(feature: Feature): number {
  */
 function weaponAbilityMod(feature: Feature, entity: Entity): { mod: number; ability: 'str' | 'dex' } {
   const itemId = feature.source?.kind === 'item' ? feature.source.refId : null;
-  const item   = itemId ? globalContentDB.items.find(i => i.id === itemId) : null;
+  const item   = itemId ? itemRepo.getItemSync(itemId) ?? null : null;
   const props  = (item?.properties ?? []).map(p => p.toLowerCase()).join(' ');
 
   const strMod = modifier(entity.stats.str);
@@ -122,7 +123,7 @@ function findGrantedSpell(feature: Feature): Spell | null {
     (e): e is Extract<AbilityEffect, { type: 'cast_spell' }> => e.type === 'cast_spell'
   );
   if (!castEffect) return null;
-  return globalContentDB.spells.find(s => s.id === castEffect.spellId) ?? null;
+  return spellRepo.getSpellSync(castEffect.spellId) ?? null;
 }
 
 /**
@@ -222,7 +223,7 @@ export function buildLayer1(feature: Feature, cardType: ActionCardType): string 
   const actionLabel = actionTypeLabel(action.actionType);
 
   if (feature.source.kind === 'spell') {
-    const spell = globalContentDB.spells.find(s => s.id === feature.source.refId);
+    const spell = spellRepo.getSpellSync(feature.source.refId);
     if (spell) {
       const lvl = spell.level === 0 ? 'Cantrip' : `Lv ${spell.level} Spell`;
       return `${lvl} • ${typeLabel}`;
@@ -458,13 +459,13 @@ export function generateActionCard(
 
 /**
  * Generates an ActionCard for a known/prepared spell.
- * The spell is looked up from globalContentDB by ID.
+ * The spell is looked up from spellRepo's Tier-2 cache by ID.
  */
 export function generateSpellCard(
   spellId: string,
   entity: Entity,
 ): ActionCard | null {
-  const spell = globalContentDB.spells.find(s => s.id === spellId);
+  const spell = spellRepo.getSpellSync(spellId);
   if (!spell) return null;
 
   const cardType = classifySpell(spell);
@@ -550,7 +551,7 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
   for (const inst of entity.inventory.equipped) {
     const feats = (inst.features && inst.features.length > 0)
       ? inst.features
-      : (globalContentDB.items.find(i => i.id === inst.itemId)?.features ?? []);
+      : (itemRepo.getItemSync(inst.itemId)?.features ?? []);
     for (const fi of feats) {
       // Only features with an activation produce cards (attacks, usable items);
       // passive AC features (armor) are handled by collectAllEffects, not here.

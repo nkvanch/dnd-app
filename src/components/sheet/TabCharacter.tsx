@@ -19,6 +19,9 @@ import { ALL_PROGRESSIONS } from '../../content/classes/index';
 import { getProgressionForClass, mergeSubclassIntoProgression } from '../../content/classes/progressions';
 import { getSubclassEntryMerged } from '../../content/subclasses/subclassBrowse';
 import { globalContentDB } from '../../content/classes/library';
+import { spellRepo } from '../../content/spellRepo';
+import { spellIdsOnEntity } from '../../content/spellRepo.types';
+import { itemRepo } from '../../content/itemRepo';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
@@ -310,8 +313,11 @@ function LevelUpSection({
 
   const nextLevel = entity.identity.level + 1;
 
-  function doLevelUp() {
+  async function doLevelUp() {
     const updated = levelUp(entity, nextLevel, progression!, rules);
+    // levelUp() can grant fixed cantrips/spells for this level — warm Tier 2
+    // for anything new before the entity reaches the engine pipeline.
+    await spellRepo.ensureLoaded(spellIdsOnEntity(updated));
     onEntityUpdate(updated);
     onLeveled(updated);
   }
@@ -391,7 +397,7 @@ function getEquippedWeapons(entity: Entity, profBonus: number): WeaponInfo[] {
   const result: WeaponInfo[] = [];
 
   for (const inst of entity.inventory.equipped) {
-    const def = globalContentDB.items.find(i => i.id === inst.itemId);
+    const def = itemRepo.getItemSync(inst.itemId);
     if (!def) continue;
     // A weapon is any item whose feature carries a 'damage' ability effect.
     let dice: string | null = null;

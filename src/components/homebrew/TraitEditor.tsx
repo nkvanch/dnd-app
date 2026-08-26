@@ -22,10 +22,10 @@ import {
 } from '../../content/traitCompiler';
 import type { MoveType, DraftSubrace } from '../../content/traitCompiler';
 // The one trait-editor field needing live content-DB/store access — every
-// other panel here is pure form state. Merge pattern copied from
-// AddSpellModal.tsx (vault + fallback + homebrew, homebrew wins on id).
-import { ALL_VAULT_SPELLS } from '../../content/spells/generated';
-import { globalContentDB } from '../../content/classes/library';
+// other panel here is pure form state. Only ever reads id/name/level/
+// castingTime, so the lightweight Tier-1 index is sufficient — no need to
+// fetch full spell records just to search/reference a spell by name.
+import { spellRepo } from '../../content/spellRepo';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { SafeBottomView } from '../SafeBottomView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -79,10 +79,8 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
   const [cantripSearch, setCantripSearch] = useState('');
   const [leveledSearch, setLeveledSearch] = useState('');
   const allSpells = useMemo(() => {
-    const vaultIds    = new Set(ALL_VAULT_SPELLS.map(s => s.id));
-    const fallbacks   = globalContentDB.spells.filter(s => !vaultIds.has(s.id));
     const homebrewIds = new Set(homebrewSpells.map(s => s.id));
-    const official     = [...ALL_VAULT_SPELLS, ...fallbacks].filter(s => !homebrewIds.has(s.id));
+    const official     = spellRepo.getIndex().filter(s => !homebrewIds.has(s.id));
     return [...official, ...homebrewSpells];
   }, [homebrewSpells]);
 

@@ -16,6 +16,7 @@ import {
 } from './types';
 import { resolveEffectsForTarget, resolveBinary } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
+import { generateAllActionCards } from './actionCards';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -274,7 +275,17 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
       : current + override.value;
   }
 
-  return { ...entity, derived };
+  const withDerived = { ...entity, derived };
+
+  // Action cards depend on the just-computed `derived` (available-slot
+  // checks, etc.) and on entity.features/inventory — compute them once,
+  // here, at the single choke point every mutation passes through, instead
+  // of leaving each consuming tab to regenerate them on every render (the
+  // actual cause of the "elementary operations lag" this was built to fix
+  // — see the SQLite/render-loop plan). Safe to call synchronously:
+  // spellRepo/itemRepo's Tier-2 caches are guaranteed warm for every id
+  // this entity references by the time any mutation reaches here.
+  return { ...withDerived, actionCards: generateAllActionCards(withDerived, rules) };
 }
 
 // ── Effect collection ─────────────────────────────────────────────────────────

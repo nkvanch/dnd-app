@@ -11,7 +11,6 @@ import { Entity, CampaignRules } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { createCompanion, syncCompanionFromOwner } from '../../engine/companion';
 import { COMPANION_TEMPLATES_BY_GRANT_FEATURE } from '../../content/companions';
-import { generateAllActionCards } from '../../engine/actionCards';
 import { applyDamage, applyHealing } from '../../engine/combat';
 import { HpModal } from './HpModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -71,7 +70,10 @@ export function CompanionSection({ owner, rules }: { owner: Entity; rules: Campa
   }
 
   const hp = companion.resources.hp;
-  const cards = generateAllActionCards(companion, rules);
+  // syncCompanionFromOwner() above already calls recomputeDerived(), which
+  // computes actionCards as part of the same pass — reading it here avoids
+  // a second, redundant generateAllActionCards() call on every render.
+  const cards = companion.actionCards ?? [];
 
   return (
     <View style={styles.panel}>

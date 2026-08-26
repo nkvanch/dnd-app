@@ -10,7 +10,7 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { CharClass, Ability, DraftTrait } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
-import { ALL_ITEMS } from '../../src/content/items/index';
+import { itemRepo } from '../../src/content/itemRepo';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, TraitEditorModal, COMMON_TOOLS } from '../../src/components/homebrew/TraitEditor';
@@ -137,7 +137,7 @@ export default function ClassBuilderScreen() {
     setToolProfs(editing.toolProfs ?? []);
     setStartingEquipment(
       (editing.startingEquipment ?? []).map(id => {
-        const found = [...ALL_ITEMS, ...homebrewItems].find(i => i.id === id);
+        const found = [...itemRepo.getIndex(), ...homebrewItems].find(i => i.id === id);
         return { id, name: found?.name ?? id };
       })
     );
@@ -199,7 +199,7 @@ export default function ClassBuilderScreen() {
     setStartingEquipment(prev => prev.filter(i => i.id !== id));
   }
   const equipResults = equipSearch.trim().length >= 2
-    ? [...ALL_ITEMS, ...homebrewItems]
+    ? [...itemRepo.getIndex(), ...homebrewItems]
         .filter(i => i.name.toLowerCase().includes(equipSearch.trim().toLowerCase()))
         .slice(0, 12)
     : [];

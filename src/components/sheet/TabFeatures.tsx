@@ -7,8 +7,7 @@ import { resolveChoice } from '../../engine/leveling';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { SubclassPicker } from '../SubclassPicker';
 import { InfusionPicker } from '../InfusionPicker';
-import { generateAllActionCards } from '../../engine/actionCards';
-import { globalContentDB } from '../../content/classes/library';
+import { spellRepo } from '../../content/spellRepo';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 const SOURCE_ORDER = ['race','class','subclass','background','feat','item','spell','condition','campaign'] as const;
@@ -35,7 +34,7 @@ function FeatureRow({ feature }: { feature: FeatureInstance }) {
 
 function SpellCardRow({ card }: { card: ActionCard }) {
   const [expanded, setExpanded] = useState(false);
-  const spell = globalContentDB.spells.find(s => s.id === card.featureId);
+  const spell = spellRepo.getSpellSync(card.featureId);
   const borderColor = card.color === 'red' ? Colors.red : card.color === 'green' ? Colors.green : card.color === 'blue' ? Colors.blue : card.color === 'purple' ? Colors.purple : Colors.textDim;
   return (
     <Pressable style={[styles.spellCard, { borderLeftColor: borderColor }]} onPress={() => setExpanded(e => !e)}>
@@ -121,15 +120,15 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
 
   // Spell cards (prepared + known + cantrips)
   const spellCards = spellcasting
-    ? generateAllActionCards(entity).filter(c => c.tabs.includes('spellcasting'))
+    ? (entity.actionCards ?? []).filter(c => c.tabs.includes('spellcasting'))
     : [];
 
   const cantrips = spellCards.filter(c => {
-    const sp = globalContentDB.spells.find(s => s.id === c.featureId);
+    const sp = spellRepo.getSpellSync(c.featureId);
     return sp?.level === 0;
   });
   const leveled = spellCards.filter(c => {
-    const sp = globalContentDB.spells.find(s => s.id === c.featureId);
+    const sp = spellRepo.getSpellSync(c.featureId);
     return sp && sp.level > 0;
   });
 

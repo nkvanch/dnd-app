@@ -7,13 +7,13 @@
 // Damage-type / saving-throw / subclass / source-book filters are intentionally
 // NOT offered: those fields aren't structured on the Spell type, so a filter
 // would be unreliable. They can be added once spell data is enriched.
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, SectionList,
 } from 'react-native';
 import { Entity, Spell } from '../../engine/types';
-import { ALL_VAULT_SPELLS } from '../../content/spells/generated';
-import { globalContentDB } from '../../content/classes/library';
+import { spellRepo } from '../../content/spellRepo';
+import type { SpellIndexEntry } from '../../content/spellRepo.types';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
@@ -25,7 +25,7 @@ interface Props {
 }
 
 // Casting-time → action-type bucket, for the action-type filter.
-function actionType(s: Spell): string {
+function actionType(s: SpellIndexEntry): string {
   const t = s.castingTime.toLowerCase();
   if (t.includes('bonus')) return 'Bonus Action';
   if (t.includes('reaction')) return 'Reaction';
@@ -40,16 +40,23 @@ const ACTION_TYPES = ['Action', 'Bonus Action', 'Reaction', 'Ritual / Long'];
 export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
   const homebrewSpells = useHomebrewStore(s => s.spells);
 
-  // Merge vault + fallback + homebrew, homebrew overriding by id.
-  const allSpells = useMemo(() => {
-    const vaultIds    = new Set(ALL_VAULT_SPELLS.map(s => s.id));
-    const fallbacks   = globalContentDB.spells.filter(s => !vaultIds.has(s.id));
+  // Merge the lightweight official index (Tier 1 — id/name/level/school/
+  // classes/castingTime/ritual/concentration, no description) with homebrew,
+  // which overrides by id. Homebrew spells are already full Spell objects,
+  // which structurally satisfy SpellIndexEntry (a superset of fields).
+  const allSpells = useMemo<SpellIndexEntry[]>(() => {
     const homebrewIds = new Set(homebrewSpells.map(s => s.id));
-    const official    = [...ALL_VAULT_SPELLS, ...fallbacks].filter(s => !homebrewIds.has(s.id));
+    const official     = spellRepo.getIndex().filter(s => !homebrewIds.has(s.id));
     return [...official, ...homebrewSpells];
   }, [homebrewSpells]);
 
   const homebrewIds = useMemo(() => new Set(homebrewSpells.map(s => s.id)), [homebrewSpells]);
+
+  // Full record for the currently-expanded row only — Tier 1 doesn't carry
+  // description/upcast/components/duration/range, so fetch them on demand
+  // (SQLite point-lookup by id, effectively instant) the moment a row is
+  // expanded, rather than pulling every spell's full data into memory.
+  const [expandedSpell, setExpandedSpell] = useState<Spell | null>(null);
 
   // Already on the character (cantrips + known)
   const ownedIds = useMemo(
@@ -93,7 +100,7 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
   // ScrollView.map() over the full spell corpus, which could be 300+ spells
   // with no filters applied. See docs/ROADMAP_1.0.md Phase 3.5.)
   const sections = useMemo(() => {
-    const m = new Map<number, Spell[]>();
+    const m = new Map<number, SpellIndexEntry[]>();
     for (const s of filtered) {
       if (!m.has(s.level)) m.set(s.level, []);
       m.get(s.level)!.push(s);
@@ -122,6 +129,18 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    if (!expandedId) { setExpandedSpell(null); return; }
+    const homebrew = homebrewSpells.find(s => s.id === expandedId);
+    if (homebrew) { setExpandedSpell(homebrew); return; }
+    let cancelled = false;
+    setExpandedSpell(null);
+    spellRepo.ensureLoaded([expandedId]).then(() => {
+      if (!cancelled) setExpandedSpell(spellRepo.getSpellSync(expandedId) ?? null);
+    });
+    return () => { cancelled = true; };
+  }, [expandedId, homebrewSpells]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -240,7 +259,11 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
                         {spell.concentration ? ' · Conc' : ''}
                         {spell.ritual ? ' · Ritual' : ''}
                       </Text>
-                      {open && <Text style={s.spellDesc}>{spell.description}</Text>}
+                      {open && (
+                        <Text style={s.spellDesc}>
+                          {expandedSpell?.id === spell.id ? expandedSpell.description : 'Loading…'}
+                        </Text>
+                      )}
                     </View>
                   </Pressable>
                   {owned ? (

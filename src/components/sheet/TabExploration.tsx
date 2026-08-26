@@ -20,8 +20,8 @@ import { modifier, collectAllEffects, applyStatModifiers, recomputeDerived } fro
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { HpModal } from './HpModal';
 import { useDiceLogStore } from '../../store/diceLogStore';
-import { ALL_ITEMS } from '../../content/items/index';
-import { ALL_SPELLS } from '../../content/spells/index';
+import { spellRepo } from '../../content/spellRepo';
+import { itemRepo } from '../../content/itemRepo';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 const SKILLS: { name: SkillName; label: string; ability: Ability }[] = [
@@ -56,8 +56,6 @@ const COMMON_CONDITIONS = [
   'blinded','charmed','deafened','frightened','grappled','invisible',
   'paralyzed','poisoned','prone','restrained','stunned','unconscious',
 ];
-
-const SPELLS_BY_ID: Record<string, Spell> = Object.fromEntries(ALL_SPELLS.map(s => [s.id, s]));
 
 // Structured notes are serialized into entity.notes as a JSON block fenced by a
 // marker so legacy plain-text notes still load. Anything before the marker is
@@ -146,7 +144,11 @@ export function TabExploration({
   const [hpOpen, setHpOpen] = useState(false);
   const [condOpen, setCondOpen] = useState(false);
   const [spellDetail, setSpellDetail] = useState<Spell | null>(null);
-  const [explorationOnly, setExplorationOnly] = useState(false);
+  // Favorites (starred via explorationTag) are always visible above the fold,
+  // with their own collapse toggle; the full feature list is a dropdown,
+  // collapsed by default so this section doesn't dominate the scroll.
+  const [favoritesCollapsed, setFavoritesCollapsed] = useState(false);
+  const [featuresExpanded, setFeaturesExpanded] = useState(false);
   const rollAndLog = useDiceLogStore(s => s.rollAndLog);
 
   const { resources, derived, skills, proficiencies, inventory, conditions, conditionMonitor, features } = entity;
@@ -163,7 +165,7 @@ export function TabExploration({
   }
 
   function itemName(inst: ItemInstance): string {
-    return ALL_ITEMS.find(i => i.id === inst.itemId)?.name ?? inst.itemId;
+    return itemRepo.getItemSync(inst.itemId)?.name ?? inst.itemId;
   }
   const allInv = [...inventory.equipped, ...inventory.carried];
   const languages = proficiencies.languages ?? [];
@@ -173,10 +175,9 @@ export function TabExploration({
   const notes = parseNotes(entity.notes);
   function updateNotes(next: StructuredNotes) { onSaveNotes(serializeNotes(next)); }
 
-  // Features list (optionally filtered to exploration-starred)
-  const shownFeatures = features
-    .filter(f => f.id !== MANUAL_SENSES_FEATURE_ID)
-    .filter(f => !explorationOnly || f.explorationTag === true);
+  // Features list — favorites (starred) shown separately from the full list
+  const allFeatures = features.filter(f => f.id !== MANUAL_SENSES_FEATURE_ID);
+  const favoriteFeatures = allFeatures.filter(f => f.explorationTag === true);
 
   // Movement rows
   const move = derived.movement;
@@ -285,32 +286,37 @@ export function TabExploration({
             </View>}
       </Section>
 
-      {/* Features & abilities — manual exploration star + filter */}
+      {/* Features & abilities — favorites always visible (collapsible),
+          full list tucked behind a dropdown so this section stays compact. */}
       <Section
         title="FEATURES & ABILITIES"
         action={{ label: '+ Feat', onPress: () => setAddFeatOpen(true) }}
       >
-        <Pressable style={styles.filterToggle} onPress={() => setExplorationOnly(v => !v)}>
-          <Text style={[styles.filterTxt, explorationOnly && styles.filterTxtActive]}>
-            {explorationOnly ? '★ Showing exploration-tagged only' : '☆ Show all  ·  tap to filter'}
-          </Text>
+        <Pressable style={styles.subHeader} onPress={() => setFavoritesCollapsed(v => !v)}>
+          <Text style={styles.subHeaderTxt}>★ FAVORITES ({favoriteFeatures.length})</Text>
+          <Text style={styles.chevron}>{favoritesCollapsed ? '▸' : '▾'}</Text>
         </Pressable>
-        {shownFeatures.length === 0
-          ? <Text style={styles.emptyNote}>{explorationOnly ? 'No exploration-tagged features yet. Tap a star to tag one.' : 'None'}</Text>
-          : shownFeatures.map(f => {
-              const tagged = f.explorationTag === true;
-              return (
-                <View key={f.id} style={styles.featRow}>
-                  <Pressable hitSlop={8} onPress={() => onEntityUpdate(toggleExplorationTag(entity, f.id, rules))}>
-                    <Text style={[styles.star, tagged && styles.starActive]}>{tagged ? '★' : '☆'}</Text>
-                  </Pressable>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.featName}>{f.name}</Text>
-                    {!!f.description && <Text style={styles.featDesc} numberOfLines={2}>{f.description}</Text>}
-                  </View>
-                </View>
-              );
-            })}
+        {!favoritesCollapsed && (
+          favoriteFeatures.length === 0
+            ? <Text style={styles.emptyNote}>No favorites yet — tap a star below to pin a feature here.</Text>
+            : favoriteFeatures.map(f => (
+                <FeatureRow key={f.id} feature={f}
+                  onToggleStar={() => onEntityUpdate(toggleExplorationTag(entity, f.id, rules))} />
+              ))
+        )}
+
+        <Pressable style={styles.subHeader} onPress={() => setFeaturesExpanded(v => !v)}>
+          <Text style={styles.subHeaderTxt}>ALL FEATURES ({allFeatures.length})</Text>
+          <Text style={styles.chevron}>{featuresExpanded ? '▾' : '▸'}</Text>
+        </Pressable>
+        {featuresExpanded && (
+          allFeatures.length === 0
+            ? <Text style={styles.emptyNote}>None</Text>
+            : allFeatures.map(f => (
+                <FeatureRow key={f.id} feature={f}
+                  onToggleStar={() => onEntityUpdate(toggleExplorationTag(entity, f.id, rules))} />
+              ))
+        )}
       </Section>
 
       {/* Spells — grouped by level, tap for description */}
@@ -419,13 +425,31 @@ export function TabExploration({
   );
 }
 
+// ── Feature row (favorite star + name/description) ──────────────────────────
+function FeatureRow({ feature, onToggleStar }: {
+  feature: Entity['features'][number]; onToggleStar: () => void;
+}) {
+  const tagged = feature.explorationTag === true;
+  return (
+    <View style={styles.featRow}>
+      <Pressable hitSlop={8} onPress={onToggleStar}>
+        <Text style={[styles.star, tagged && styles.starActive]}>{tagged ? '★' : '☆'}</Text>
+      </Pressable>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.featName}>{feature.name}</Text>
+        {!!feature.description && <Text style={styles.featDesc} numberOfLines={2}>{feature.description}</Text>}
+      </View>
+    </View>
+  );
+}
+
 // ── Spell list grouped by level ──────────────────────────────────────────────
 function SpellList({ ids, onTap }: { ids: string[]; onTap: (s: Spell) => void }) {
   const resolved = ids
-    .map(id => SPELLS_BY_ID[id])
+    .map(id => spellRepo.getSpellSync(id))
     .filter((s): s is Spell => !!s)
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
-  const unknown = ids.filter(id => !SPELLS_BY_ID[id]);
+  const unknown = ids.filter(id => !spellRepo.getSpellSync(id));
 
   if (resolved.length === 0 && unknown.length === 0) {
     return <Text style={styles.emptyNote}>None known</Text>;
@@ -647,9 +671,12 @@ const styles = StyleSheet.create({
   profDotActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
   profDotExpertise: { backgroundColor: Colors.blue, borderColor: Colors.blue },
 
-  filterToggle: { paddingVertical: 4 },
-  filterTxt: { fontSize: FontSize.xs, color: Colors.textDim },
-  filterTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
+  subHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 4,
+  },
+  subHeaderTxt: { fontSize: FontSize.xs, color: Colors.textDim, fontWeight: FontWeight.bold, letterSpacing: 1 },
+  chevron: { fontSize: FontSize.xs, color: Colors.textDim },
   star: { fontSize: FontSize.lg, color: Colors.textDim },
   starActive: { color: Colors.gold },
 

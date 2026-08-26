@@ -9,7 +9,9 @@ import {
   Modal, TextInput, Alert, SectionList,
 } from 'react-native';
 import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engine/types';
-import { globalContentDB } from '../../content/classes/library';
+import { itemRepo } from '../../content/itemRepo';
+import { toItemIndexEntry } from '../../content/itemRepo.types';
+import type { ItemIndexEntry } from '../../content/itemRepo.types';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { usesLargeCreatureWeaponDice } from '../../engine/houseRules';
 import { ALL_INFUSIONS, maxInfusedItems } from '../../content/infusions';
@@ -47,15 +49,22 @@ const COIN_COLORS: Record<keyof Currency, string> = {
 type ItemCategory = {
   label:  string;
   emoji:  string;
-  test:   (item: Item) => boolean;
+  test:   (item: ItemIndexEntry) => boolean;
 };
 
 // ── Classification helpers ─────────────────────────────────────────────
+// These all operate on ItemIndexEntry (Tier 1 — id/name/weight/cost/
+// properties/hasDamageEffect/weaponRange) rather than the full Item record,
+// since the Add Item browse list works off the lightweight index. A full
+// Item satisfies ItemIndexEntry structurally, so these are just as usable
+// wherever a real Item is already in hand (they're pure inspection
+// functions — no mutation, no dependency on `features` beyond the two
+// derived fields).
 
-function propsLower(i: Item): string[] {
+function propsLower(i: ItemIndexEntry): string[] {
   return i.properties.map(p => p.toLowerCase());
 }
-function isMagic(i: Item): boolean {
+function isMagic(i: ItemIndexEntry): boolean {
   return propsLower(i).some(p => p.includes('magic') || p.includes('wondrous') || p.includes('artifact'));
 }
 // Canonical D&D 5e base weapons → { martial, ranged }. Magic weapons are typed
@@ -122,12 +131,12 @@ const BASE_ARMORS: Record<string, ArmorWeight> = {
 // Weight is unknown for these, so they route to the "— Other" armor bucket.
 const ARMOR_WORD_HINTS = ['armor', 'mail', 'plate', 'cuirass', 'breastplate', 'chain'];
 
-function hasProp(i: Item, kw: string): boolean {
+function hasProp(i: ItemIndexEntry, kw: string): boolean {
   return propsLower(i).some(p => p.includes(kw));
 }
 
 /** Recover a weapon's { martial, ranged } class from its name, or null. */
-function classifyWeaponByName(i: Item): WeaponClass | null {
+function classifyWeaponByName(i: ItemIndexEntry): WeaponClass | null {
   const name = i.name.toLowerCase();
   const bases = Object.keys(BASE_WEAPONS).sort((a, b) => b.length - a.length);
   for (const base of bases) {
@@ -142,22 +151,20 @@ function classifyWeaponByName(i: Item): WeaponClass | null {
 
 /** True if the item is a weapon (mundane attack feature, "magic weapon"
  *  property, or a recognizable base-weapon name). */
-function isWeapon(i: Item): boolean {
-  if (i.features.some(f => f.abilityEffects?.some(e => e.type === 'damage'))) return true;
+function isWeapon(i: ItemIndexEntry): boolean {
+  if (i.hasDamageEffect) return true;
   if (hasProp(i, 'magic weapon')) return true;
   return classifyWeaponByName(i) !== null;
 }
-function isRangedWeapon(i: Item): boolean {
+function isRangedWeapon(i: ItemIndexEntry): boolean {
   const cls = classifyWeaponByName(i);
   if (cls) return cls.ranged;
   const p = propsLower(i);
   if (p.some(x => x.includes('ammunition') || x.includes('thrown'))) return true;
-  return i.features.some(f =>
-    f.abilityEffects?.some(e => e.type === 'damage') &&
-    f.activation?.range && !['5 feet', 'touch', '10 feet'].includes(f.activation.range)
-  );
+  return i.hasDamageEffect &&
+    !!i.weaponRange && !['5 feet', 'touch', '10 feet'].includes(i.weaponRange);
 }
-function isMartialWeapon(i: Item): boolean {
+function isMartialWeapon(i: ItemIndexEntry): boolean {
   const cls = classifyWeaponByName(i);
   if (cls) return cls.martial;
   const p = propsLower(i);
@@ -167,7 +174,7 @@ function isMartialWeapon(i: Item): boolean {
 }
 
 /** Recover armor weight from properties or base-armor name, or null. */
-function armorWeight(i: Item): ArmorWeight | null {
+function armorWeight(i: ItemIndexEntry): ArmorWeight | null {
   const p = propsLower(i);
   if (p.some(x => x.includes('heavy armor')))  return 'heavy';
   if (p.some(x => x.includes('medium armor'))) return 'medium';
@@ -180,7 +187,7 @@ function armorWeight(i: Item): ArmorWeight | null {
   return null;
 }
 /** True if the item is body armor (specific weight OR a generic armor name). */
-function isArmorItem(i: Item): boolean {
+function isArmorItem(i: ItemIndexEntry): boolean {
   if (hasProp(i, 'armor')) return true;
   if (armorWeight(i) !== null) return true;
   const name = i.name.toLowerCase();
@@ -188,21 +195,21 @@ function isArmorItem(i: Item): boolean {
   if (isShield(i)) return false;
   return ARMOR_WORD_HINTS.some(w => name.includes(w));
 }
-function isArmor(i: Item, weight: 'heavy' | 'medium' | 'light'): boolean {
+function isArmor(i: ItemIndexEntry, weight: 'heavy' | 'medium' | 'light'): boolean {
   return armorWeight(i) === weight;
 }
-function isShield(i: Item): boolean {
+function isShield(i: ItemIndexEntry): boolean {
   return hasProp(i, 'shield') || /\bshield\b/.test(i.name.toLowerCase());
 }
-function isAmmo(i: Item): boolean {
+function isAmmo(i: ItemIndexEntry): boolean {
   if (hasProp(i, 'ammunition')) return true;
   return /\b(arrow|arrows|bolt|bolts|bullet|bullets|sling stone|needle)\b/.test(i.name.toLowerCase());
 }
-function isToolOrKit(i: Item): boolean {
+function isToolOrKit(i: ItemIndexEntry): boolean {
   if (propsLower(i).some(p => ['tool', 'kit', 'instrument', 'artisan'].some(kw => p.includes(kw)))) return true;
   return /\b(tools|kit|instrument|utensils|supplies)\b/.test(i.name.toLowerCase());
 }
-function isFocus(i: Item): boolean {
+function isFocus(i: ItemIndexEntry): boolean {
   if (propsLower(i).some(p => ['focus', 'spellbook', 'component pouch'].some(kw => p.includes(kw)))) return true;
   return /\b(wand|rod|staff|orb|crystal|talisman|spellbook|component pouch)\b/.test(i.name.toLowerCase());
 }
@@ -262,8 +269,8 @@ const ITEM_CATEGORIES: ItemCategory[] = [
   { label: 'Adventuring Gear', emoji: '🎒', test: () => true }, // catch-all
 ];
 
-function categorise(items: Item[]): { cat: ItemCategory; items: Item[] }[] {
-  const result: { cat: ItemCategory; items: Item[] }[] = [];
+function categorise(items: ItemIndexEntry[]): { cat: ItemCategory; items: ItemIndexEntry[] }[] {
+  const result: { cat: ItemCategory; items: ItemIndexEntry[] }[] = [];
   const assigned = new Set<string>();
   for (const cat of ITEM_CATEGORIES) {
     const matched = items.filter(i => !assigned.has(i.id) && cat.test(i));
@@ -290,7 +297,7 @@ const SORT_LABELS: Record<SortMode, string> = {
 const RARITY_RANK: Record<string, number> = {
   common: 1, uncommon: 2, rare: 3, 'very rare': 4, legendary: 5, artifact: 6,
 };
-function rarityRank(i: Item): number {
+function rarityRank(i: ItemIndexEntry): number {
   for (const p of i.properties) {
     const r = RARITY_RANK[p.toLowerCase()];
     if (r) return r;
@@ -309,7 +316,7 @@ function costInCopper(cost: string): number {
   return amt * mult;
 }
 
-function sortItems(items: Item[], mode: SortMode): Item[] {
+function sortItems(items: ItemIndexEntry[], mode: SortMode): ItemIndexEntry[] {
   const copy = [...items];
   switch (mode) {
     case 'value':
@@ -375,7 +382,7 @@ function AddItemModal({
   }
 
 
-  const allItems = [...globalContentDB.items, ...homebrewItems];
+  const allItems: ItemIndexEntry[] = [...itemRepo.getIndex(), ...homebrewItems.map(toItemIndexEntry)];
   const q = search.trim().toLowerCase();
   const searchFiltered = q
     ? allItems.filter(i => i.name.toLowerCase().includes(q) ||
@@ -988,7 +995,19 @@ export function TabInventory({
   const knownInfusionIds = entity.knownInfusionIds ?? [];
 
   const homebrewItemList = useHomebrewStore(s => s.items);
-  const allItems = [...globalContentDB.items, ...homebrewItemList];
+  // Full records — only for equipped/carried instance ids (already warmed
+  // via characterStore.ts's loadCharacters()/handleEquip/handleAddItem) plus
+  // homebrew, which is always a full Item already. NOT the whole catalog —
+  // that's what itemRepo.getIndex() (Tier 1) is for, used by AddItemModal.
+  const homebrewItemIds = new Set(homebrewItemList.map(i => i.id));
+  const instanceIds = new Set([...inventory.equipped, ...inventory.carried].map(i => i.itemId));
+  const allItems: Item[] = [
+    ...Array.from(instanceIds)
+      .filter(id => !homebrewItemIds.has(id))
+      .map(id => itemRepo.getItemSync(id))
+      .filter((i): i is Item => !!i),
+    ...homebrewItemList,
+  ];
 
   const large          = isLargeCreature(entity);
   const carryCapacity  = entity.stats.str * (large ? 30 : 15);

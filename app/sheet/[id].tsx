@@ -14,7 +14,7 @@ import { takeRest } from '../../src/engine/rest';
 import { expireOverrides } from '../../src/engine/dmOverride';
 import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { Entity, ItemInstance } from '../../src/engine/types';
-import { ALL_ITEMS } from '../../src/content/items/index';
+import { itemRepo } from '../../src/content/itemRepo';
 import { getInfusion, maxInfusedItems } from '../../src/content/infusions';
 import { CONDITIONS_BY_ID } from '../../src/content/conditions/index';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
@@ -174,7 +174,11 @@ export default function CharacterSheetScreen() {
     });
   }, [mutate]);
 
-  const handleEquip = useCallback((itemId: string) => {
+  const handleEquip = useCallback(async (itemId: string) => {
+    // Warm Tier 2 before reading getItemSync below — covers items that
+    // reached `carried` without ever going through handleAddItem in this
+    // session (starting equipment, sync receive).
+    await itemRepo.ensureLoaded([itemId]);
     mutate(e => {
       const inst = e.inventory.carried.find(i => i.itemId === itemId);
       if (!inst) return e;
@@ -182,7 +186,7 @@ export default function CharacterSheetScreen() {
       // Inventory instances are created with `features: []` (resolveChoice and
       // the equipment screen only store the itemId) — without this, equipping
       // armor adds an item with zero effects and AC never changes.
-      const def      = ALL_ITEMS.find(i => i.id === itemId);
+      const def      = itemRepo.getItemSync(itemId);
       const hydrated = def ? { ...inst, features: def.features } : inst;
       return {
         ...e,
@@ -210,7 +214,8 @@ export default function CharacterSheetScreen() {
     });
   }, [mutate]);
 
-  const handleAddItem = useCallback((itemId: string) => {
+  const handleAddItem = useCallback(async (itemId: string) => {
+    await itemRepo.ensureLoaded([itemId]);
     mutate(e => ({
       ...e,
       inventory: {

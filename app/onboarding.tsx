@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import { setMeta } from '../src/db/appMetaRepo';
 import { useCharacterStore } from '../src/store/characterStore';
 import { buildDemoCharacter } from '../src/engine/demoCharacter';
+import { spellRepo } from '../src/content/spellRepo';
+import { spellIdsOnEntity } from '../src/content/spellRepo.types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../src/theme';
 
 const PANELS = [
@@ -59,6 +61,7 @@ export default function OnboardingScreen() {
     setBuildingDemo(true);
     try {
       const demo = buildDemoCharacter(rules);
+      await spellRepo.ensureLoaded(spellIdsOnEntity(demo));
       setDraft(demo);
       await saveDraft();
       await finish();

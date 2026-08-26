@@ -14,8 +14,8 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { resolveChoice } from '../../src/engine/leveling';
 import { ChoiceOption, Entity, Spell } from '../../src/engine/types';
-import { globalContentDB } from '../../src/content/classes/library';
-import { ALL_VAULT_SPELLS } from '../../src/content/spells/generated';
+import { spellRepo } from '../../src/content/spellRepo';
+import type { SpellIndexEntry } from '../../src/content/spellRepo.types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Starting spells known at level 1, by class. Prepared casters (Cleric/Druid)
@@ -43,9 +43,25 @@ function markVisited(entity: Entity): Entity {
 function SpellRow({
   spell, selected, disabled, isHomebrew, onToggle,
 }: {
-  spell: Spell; selected: boolean; disabled: boolean; isHomebrew?: boolean; onToggle: () => void;
+  spell: SpellIndexEntry; selected: boolean; disabled: boolean; isHomebrew?: boolean; onToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Tier 1 doesn't carry description — homebrew spells are already full
+  // Spell objects at runtime (structurally satisfy SpellIndexEntry), so
+  // their description is read straight off; official spells are fetched
+  // on demand the moment the row is expanded.
+  const [description, setDescription] = useState<string | null>(
+    isHomebrew ? (spell as unknown as Spell).description : null
+  );
+  useEffect(() => {
+    if (!open || description !== null || isHomebrew) return;
+    let cancelled = false;
+    spellRepo.ensureLoaded([spell.id]).then(() => {
+      if (!cancelled) setDescription(spellRepo.getSpellSync(spell.id)?.description ?? '');
+    });
+    return () => { cancelled = true; };
+  }, [open, spell.id, description, isHomebrew]);
+
   return (
     <View style={[styles.spellCard, selected && styles.spellCardSelected, disabled && styles.spellCardDisabled]}>
       <View style={styles.spellRowTop}>
@@ -73,7 +89,7 @@ function SpellRow({
         </Pressable>
       </View>
       {open && (
-        <Text style={styles.spellDesc}>{spell.description}</Text>
+        <Text style={styles.spellDesc}>{description ?? 'Loading…'}</Text>
       )}
     </View>
   );
@@ -112,15 +128,11 @@ export default function SpellsScreen() {
 
   const classId       = draft.identity.classId;
   const isSpellcaster = !!draft.spellcasting || spellChoices.length > 0;
-  const allSpells = (() => {
-    // Prefer vault spells (487 class-tagged) when they exist; fall back to
-    // the hand-authored corpus for any spell not in the vault (by id).
+  const allSpells: SpellIndexEntry[] = (() => {
     // Homebrew spells are merged in last and override official spells of the
     // same id, so a homebrew edit of an existing spell takes precedence.
-    const vaultIds    = new Set(ALL_VAULT_SPELLS.map(s => s.id));
-    const fallbacks   = globalContentDB.spells.filter(s => !vaultIds.has(s.id));
     const homebrewIds = new Set(homebrewSpells.map(s => s.id));
-    const official    = [...ALL_VAULT_SPELLS, ...fallbacks].filter(s => !homebrewIds.has(s.id));
+    const official     = spellRepo.getIndex().filter(s => !homebrewIds.has(s.id));
     return [...official, ...homebrewSpells];
   })();
   const homebrewSpellIds = new Set(homebrewSpells.map(s => s.id));
@@ -155,7 +167,9 @@ export default function SpellsScreen() {
         return { ...prev, [choiceId]: [...current, optionId] };
       });
     };
-    const handleConfirmChoices = () => {
+    const handleConfirmChoices = async () => {
+      const allChosen = Object.values(selections).flat();
+      await spellRepo.ensureLoaded(allChosen);
       let updated = draft!;
       for (const choice of spellChoices) {
         const chosen = selections[choice.id] ?? [];
@@ -212,9 +226,9 @@ export default function SpellsScreen() {
   // ── 3. Content-based selection ──────────────────────────────────────────────
   const targets        = SPELLS_AT_L1[classId] ?? { cantrips: 0, spells: 0 };
   const q              = search.trim().toLowerCase();
-  const matchesSearch  = (s: Spell) => q === '' || s.name.toLowerCase().includes(q) || s.school.toLowerCase().includes(q);
-  const matchesSchool  = (s: Spell) => !schoolFilter || s.school === schoolFilter;
-  const sortSpells = (list: Spell[]) => [...list].sort((a, b) =>
+  const matchesSearch  = (s: SpellIndexEntry) => q === '' || s.name.toLowerCase().includes(q) || s.school.toLowerCase().includes(q);
+  const matchesSchool  = (s: SpellIndexEntry) => !schoolFilter || s.school === schoolFilter;
+  const sortSpells = (list: SpellIndexEntry[]) => [...list].sort((a, b) =>
     spellSort === 'school'
       ? (a.school.localeCompare(b.school) || a.name.localeCompare(b.name))
       : a.name.localeCompare(b.name)
@@ -246,7 +260,8 @@ export default function SpellsScreen() {
   const spellsDone   = pickedSpells.length === targets.spells;
   const canConfirm   = cantripsDone && spellsDone;
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    await spellRepo.ensureLoaded([...pickedCantrips, ...pickedSpells]);
     let updated: Entity = draft!;
     if (updated.spellcasting) {
       updated = {

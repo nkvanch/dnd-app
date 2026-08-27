@@ -9,20 +9,22 @@
 // Designed once now so the bigger import pipeline doesn't need a new file
 // format later — exactly what the roadmap asked for.
 //
-// Note: homebrew feats/monsters are not yet included in GrimoirePackHomebrew's
-// fields below, even though homebrewStore now supports both (see saveItem).
-// Add feats?/monsters? fields here when the content-pack sharing phase lands.
-import { Entity, Race, CharClass, Item, Spell, Background, Feature } from './types';
+import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Background, Feature, Feat } from './types';
+import { MonsterTemplate } from '../content/monsters/types';
 
 export const GRIMOIRE_PACK_FORMAT_VERSION = 1;
 
 export type GrimoirePackHomebrew = {
   races?:       Race[];
+  subraces?:    Subrace[];
   classes?:     CharClass[];
+  subclasses?:  HomebrewSubclass[];
   items?:       Item[];
   spells?:      Spell[];
   backgrounds?: Background[];
   features?:    Feature[];
+  feats?:       Feat[];
+  monsters?:    MonsterTemplate[];
 };
 
 export type GrimoirePack = {
@@ -52,6 +54,23 @@ export function createBackupPack(
     appVersion,
     deviceId,
     characters,
+    homebrew,
+  };
+}
+
+/** A shareable homebrew content pack — no characters, just the payload. */
+export function createContentPack(
+  homebrew:   GrimoirePackHomebrew,
+  deviceId:   string | null,
+  appVersion: string,
+): GrimoirePack {
+  return {
+    formatVersion: GRIMOIRE_PACK_FORMAT_VERSION,
+    packType:      'content-pack',
+    createdAt:     Date.now(),
+    appVersion,
+    deviceId,
+    characters:    [],
     homebrew,
   };
 }

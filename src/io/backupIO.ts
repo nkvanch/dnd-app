@@ -11,7 +11,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import Constants from 'expo-constants';
 import { Entity } from '../engine/types';
 import {
-  GrimoirePack, GrimoirePackHomebrew, createBackupPack,
+  GrimoirePack, GrimoirePackHomebrew, createBackupPack, createContentPack,
   validateGrimoirePack, countHomebrew,
 } from '../engine/backup';
 
@@ -47,6 +47,39 @@ export async function exportBackup(
   await Sharing.shareAsync(uri, {
     mimeType:    'application/json',
     dialogTitle: 'Save your Grimoire backup',
+  });
+}
+
+/**
+ * Exports a shareable homebrew content pack (no characters) and opens the OS
+ * share sheet — this is how a homebrew item "leaves the device it was
+ * authored on." Imports through the exact same generic pack.homebrew loop as
+ * a full backup (see app/backup.tsx's handleConfirmImport) since the import
+ * side never branches on packType.
+ */
+export async function exportContentPack(
+  homebrew:     GrimoirePackHomebrew,
+  deviceId:     string | null,
+  filenameHint: string,
+): Promise<void> {
+  const pack = createContentPack(
+    homebrew,
+    deviceId,
+    Constants.expoConfig?.version ?? '1.0.0',
+  );
+
+  const json     = JSON.stringify(pack, null, 2);
+  const uri      = FileSystem.cacheDirectory + `${filenameHint}.grimoire-pack`;
+
+  await FileSystem.writeAsStringAsync(uri, json, { encoding: FileSystem.EncodingType.UTF8 });
+
+  const canShare = await Sharing.isAvailableAsync();
+  if (!canShare) {
+    throw new Error('Sharing isn’t available on this device. The pack file was written but couldn’t be shared.');
+  }
+  await Sharing.shareAsync(uri, {
+    mimeType:    'application/json',
+    dialogTitle: 'Share Grimoire homebrew',
   });
 }
 

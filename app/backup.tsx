@@ -36,11 +36,15 @@ export default function BackupScreen() {
         characters,
         {
           races:       homebrew.races,
+          subraces:    homebrew.subraces,
           classes:     homebrew.classes,
+          subclasses:  homebrew.subclasses,
           items:       homebrew.items,
           spells:      homebrew.spells,
           backgrounds: homebrew.backgrounds,
           features:    homebrew.features,
+          feats:       homebrew.feats,
+          monsters:    homebrew.monsters,
         },
         deviceId,
       );
@@ -77,11 +81,15 @@ export default function BackupScreen() {
       const hb = preview.pack.homebrew;
       if (hb) {
         for (const r of hb.races ?? [])       await saveHomebrewItem('race', r);
+        for (const sr of hb.subraces ?? [])   await saveHomebrewItem('subrace', sr);
         for (const c of hb.classes ?? [])     await saveHomebrewItem('class', c);
+        for (const sc of hb.subclasses ?? []) await saveHomebrewItem('subclass', sc);
         for (const s of hb.spells ?? [])      await saveHomebrewItem('spell', s);
         for (const b of hb.backgrounds ?? []) await saveHomebrewItem('background', b);
         for (const f of hb.features ?? [])    await saveHomebrewItem('feature', f);
         for (const it of hb.items ?? [])      await saveHomebrewItem('item', it);
+        for (const ft of hb.feats ?? [])      await saveHomebrewItem('feat', ft);
+        for (const m of hb.monsters ?? [])    await saveHomebrewItem('monster', m);
       }
       setResultMsg(
         `Imported ${preview.characterCount} character${preview.characterCount !== 1 ? 's' : ''}` +

@@ -26,8 +26,10 @@ import {
   buildSpellHtml, buildStandaloneFeatureHtml,
 } from './exportHtml';
 import { buildCharacterSheetHtml } from './characterSheetPdf';
+import { GrimoirePackHomebrew } from '../engine/backup';
+import { exportContentPack } from './backupIO';
 
-export type ExportFormat = 'pdf' | 'txt' | 'md';
+export type ExportFormat = 'pdf' | 'txt' | 'md' | 'pack';
 
 function sanitize(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'export';
@@ -98,7 +100,7 @@ export async function sharePdfHtml(html: string, dialogTitle: string): Promise<v
 }
 
 async function shareByFormat(
-  format: ExportFormat,
+  format: Exclude<ExportFormat, 'pack'>,
   buildMarkdown: () => string,
   buildHtml: () => string,
   baseName: string,
@@ -115,6 +117,7 @@ async function shareByFormat(
 // ── Character ─────────────────────────────────────────────────────────────────
 
 export async function exportCharacter(entity: Entity, format: ExportFormat): Promise<void> {
+  if (format === 'pack') return; // character sheet never offers this format — see ExportFormatSheet's showPackOption
   const db = useHomebrewStore.getState().getMergedContentDB();
 
   const spellIds = [
@@ -136,7 +139,27 @@ export async function exportCharacter(entity: Entity, format: ExportFormat): Pro
 
 // ── Homebrew ──────────────────────────────────────────────────────────────────
 
+/** Wraps a single item into the GrimoirePackHomebrew field matching its type. */
+function wrapAsHomebrewPack(type: ContentCacheType, item: HomebrewContent): GrimoirePackHomebrew {
+  switch (type) {
+    case 'race':       return { races: [item as Race] };
+    case 'subrace':    return { subraces: [item as Subrace] };
+    case 'class':      return { classes: [item as CharClass] };
+    case 'subclass':   return { subclasses: [item as HomebrewSubclass] };
+    case 'spell':      return { spells: [item as Spell] };
+    case 'background': return { backgrounds: [item as Background] };
+    case 'feature':    return { features: [item as Feature] };
+    case 'item':       return { items: [item as Item] };
+    case 'feat':       return { feats: [item as Feat] };
+    case 'monster':    return { monsters: [item as MonsterTemplate] };
+  }
+}
+
 export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewContent, format: ExportFormat): Promise<void> {
+  if (format === 'pack') {
+    await exportContentPack(wrapAsHomebrewPack(type, item), null, sanitize(`${item.name}-${type}`));
+    return;
+  }
   switch (type) {
     case 'race': {
       const race = item as Race;

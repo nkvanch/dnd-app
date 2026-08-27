@@ -1926,6 +1926,45 @@ early 1.1 if Phase 1–4 run long. Do not let it delay Phase 1.
         with the right data/timestamps, then restore the older one and
         confirm it becomes a new top-of-history current version rather than
         mutating anything in place.
+- [x] **Cross-device homebrew sharing ("leave the device it was authored
+  on")**, 2026-08-27 batch. `GrimoirePackHomebrew` (`src/engine/backup.ts`)
+  completed with the 4 fields it was missing (`subraces`/`subclasses`/
+  `feats`/`monsters`) — a real, pre-existing gap: `app/backup.tsx`'s full
+  backup silently dropped all four categories before this fix, independent
+  of the sharing feature. New `createContentPack()` sibling to
+  `createBackupPack()` (schema already had a `packType: 'backup' |
+  'content-pack'` discriminator built for exactly this, from the original
+  3.2 backup work — only `'backup'` had ever actually been produced). New
+  `exportContentPack()` in `src/io/backupIO.ts`. `ExportFormat` widened with
+  a `'pack'` option, gated behind a new `showPackOption` prop on
+  `ExportFormatSheet.tsx` so it only appears on the Homebrew Library's
+  per-item export sheet, not the character sheet's. Import needed **zero
+  code changes** — `app/backup.tsx`'s `handleConfirmImport` was already
+  fully generic over `pack.homebrew`'s categories (confirmed by reading it
+  directly before writing anything); a content-pack imports through the
+  exact same review-then-commit flow as a full backup.
+  - [x] Pack shape verified directly via a standalone script exercising
+        `createContentPack`/`createBackupPack`/`validateGrimoirePack`/
+        `countHomebrew` against all 4 new categories: correct `packType`,
+        `countHomebrew` returns 4, `validateGrimoirePack` accepts it, and it
+        survives a `JSON.stringify`/`JSON.parse` round trip unchanged.
+  - [x] UI wiring verified live in web preview: Homebrew Library → 📤 on a
+        row → "📦 Grimoire Pack" appears as a 4th format option (confirmed
+        absent from the character sheet's export sheet, which doesn't pass
+        `showPackOption`) → tapping it closes the sheet with no crash and no
+        console error (same `Sharing.isAvailableAsync()`-false path already
+        proven non-fatal on web for the original PDF/MD/TXT export).
+  - [ ] **The actual OS share sheet / file write is unverified** — same
+        `expo-sharing`/native-device limitation already disclosed for every
+        export feature this session; needs a real device or non-headless
+        browser to confirm the `.grimoire-pack` file is actually written and
+        handed to the OS share sheet.
+  - **Explicit scope cuts** (not built): no bulk "export all homebrew as one
+    pack" button (the existing full backup already covers "share
+    everything"; per-item export matches the user's own "an item leaves the
+    device" framing); no multi-select pack export; no conflict-resolution UI
+    beyond the existing upsert-by-id behavior already used for full-backup
+    import.
 
 ---
 

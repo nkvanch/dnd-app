@@ -17,14 +17,20 @@ const FORMATS: { id: ExportFormat; label: string; hint: string }[] = [
   { id: 'txt', label: '📃  Plain Text', hint: 'Universal, no formatting' },
 ];
 
+const PACK_FORMAT: { id: ExportFormat; label: string; hint: string } =
+  { id: 'pack', label: '📦  Grimoire Pack', hint: 'Share with another device — fully re-importable' };
+
 interface Props {
   visible: boolean;
   title:   string;
   onSelect: (format: ExportFormat) => void;
   onClose:  () => void;
+  /** Show the "Grimoire Pack" option — homebrew exports only, not characters. */
+  showPackOption?: boolean;
 }
 
-export function ExportFormatSheet({ visible, title, onSelect, onClose }: Props) {
+export function ExportFormatSheet({ visible, title, onSelect, onClose, showPackOption }: Props) {
+  const formats = showPackOption ? [...FORMATS, PACK_FORMAT] : FORMATS;
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -34,7 +40,7 @@ export function ExportFormatSheet({ visible, title, onSelect, onClose }: Props) 
             <Text style={styles.subtitle}>Choose a format to export</Text>
           </View>
 
-          {FORMATS.map(f => {
+          {formats.map(f => {
             const disabled = f.id === 'pdf' && !PDF_AVAILABLE_HERE;
             return (
               <Pressable

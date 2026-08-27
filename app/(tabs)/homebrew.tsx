@@ -171,6 +171,7 @@ function LibraryPanel() {
         title={exportTarget ? `Export "${exportTarget.item.name}"` : ''}
         onSelect={handleExportFormat}
         onClose={() => setExportTarget(null)}
+        showPackOption
       />
 
       <VersionHistoryModal

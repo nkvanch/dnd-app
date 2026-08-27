@@ -116,8 +116,8 @@ export const BLOOD_CURSE_POOL: ChoiceOption[] = [
   ) },
   { id: 'binding', label: 'Blood Curse of Binding', value: bloodCurse(
     'curse_binding', 'Blood Curse of Binding',
-    'As a bonus action, target a Large or smaller creature within 30 feet with a Strength save; on a failure its speed is reduced to 0 and it can\'t take reactions until the end of your next turn. Amplify: lasts 1 minute, affects any size, and the target repeats the save each turn to end it early.',
-    'bonus_action', { ability: 'str', dc: 'spell_save_dc' },
+    'As a bonus action, target a Large or smaller creature within 30 feet with a Strength save against your hemocraft save DC (8 + proficiency bonus + Hemocraft modifier — no formula slot exists for a non-spellcaster save DC, so requiresSave is omitted here); on a failure its speed is reduced to 0 and it can\'t take reactions until the end of your next turn. Amplify: lasts 1 minute, affects any size, and the target repeats the save each turn to end it early.',
+    'bonus_action', null,
   ) },
   { id: 'bloated_agony', label: 'Blood Curse of Bloated Agony', value: bloodCurse(
     'curse_bloated_agony', 'Blood Curse of Bloated Agony',
@@ -246,8 +246,8 @@ export const bloodHunterProgression: ClassProgression = {
       level: 13, hpDie: 10, choices: [],
       grants: [
         { kind: 'resource_upgrade', value: { resourceId: 'blood_maledict_pool', newMaximum: 3 } },
-        { kind: 'feature', value: { id: 'brand_of_tethering', name: 'Brand of Tethering', description: 'Brand of Castigation\'s psychic damage doubles to twice your Hemocraft modifier (minimum 2). A branded creature also can\'t Dash, and if it tries to teleport or leave the plane, it takes 4d6 psychic damage and must succeed on a Wisdom save or have the attempt fail.', source: { kind: 'class', refId: 'blood_hunter' }, level: 13, effects: [], actions: [], choices: [], passive: false,
-          activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'single', requiresSave: { ability: 'wis', dc: 'spell_save_dc' } },
+        { kind: 'feature', value: { id: 'brand_of_tethering', name: 'Brand of Tethering', description: 'Brand of Castigation\'s psychic damage doubles to twice your Hemocraft modifier (minimum 2). A branded creature also can\'t Dash, and if it tries to teleport or leave the plane, it takes 4d6 psychic damage and must succeed on a Wisdom save against your hemocraft save DC (8 + proficiency bonus + Hemocraft modifier — no formula slot exists for a non-spellcaster save DC, so requiresSave is omitted here) or have the attempt fail.', source: { kind: 'class', refId: 'blood_hunter' }, level: 13, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'single', requiresSave: null },
           abilityEffects: [{ type: 'damage', dice: '4d6', damageType: 'psychic' }] } },
       ],
     },

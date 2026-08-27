@@ -2,9 +2,17 @@
 // FILE: src/content/subclasses/bard.ts
 // Bard subclasses: College of Lore, College of Valor, College of Creation,
 // College of Eloquence, College of Glamour, College of Spirits,
-// College of Swords, College of Whispers
+// College of Swords, College of Whispers, plus five deferred Unearthed
+// Arcana entries: College of Creation (UA) and College of Spirits (UA) are
+// earlier drafts mechanically distinct from the official versions above
+// (different sub-feature names and, for Spirits, a different Spirit Tales
+// table); College of Satire never became an official subclass; Mage of
+// Lorehold and Mage of Silverquill are Strixhaven "universal" subclasses
+// usable by Bard, Warlock, or Wizard in the real rules — modeled here as
+// Bard-only, since porting the same content across three classes wasn't
+// judged worth the added complexity for two UA subclasses.
 // ============================================================================
-import { ClassProgression, ChoiceOption, Feature } from '../../engine/types';
+import { ChoiceDefinition, ClassProgression, ChoiceOption, Feature } from '../../engine/types';
 
 export type SubclassProgression = ClassProgression & { name: string };
 
@@ -228,8 +236,177 @@ export const whispersCollegeProgression: SubclassProgression = {
   ],
 };
 
+// ── College of Creation (UA) ─────────────────────────────────────────────────
+export const creationCollegeUaProgression: SubclassProgression = {
+  classId: 'bard', name: 'College of Creation (UA)', srd: false,
+  entries: [
+    { level: 3, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'note_of_potential_ua', name: 'Note of Potential', description: 'Whenever you give a creature a Bardic Inspiration die, create a Note of Potential that orbits it until the die is spent. On an attack roll, expend the note for a burst of thunder damage equal to the die roll to everything within 5 feet of the target (CON save against your spell save DC negates). On a saving throw, expend it for temporary hit points equal to the die roll plus your Charisma modifier. On an ability check, expend it to reroll the die and choose the better result.', source: { kind: 'subclass', refId: 'creation_ua' }, level: 3, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 6, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'animating_performance_ua_pool', name: 'Animating Performance', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'animating_performance_ua', name: 'Animating Performance', description: 'As an action, animate a Large or smaller nonmagical item within 30 feet into a Dancing Item construct ally under your control for 1 hour or until reduced to 0 HP. Usable once per long rest, or again by spending a 3rd-level spell slot.', source: { kind: 'subclass', refId: 'creation_ua' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: { resourceId: 'animating_performance_ua_pool', quantity: 1 }, range: '30 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 14, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'performance_of_creation_ua_pool', name: 'Performance of Creation', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'performance_of_creation_ua', name: 'Performance of Creation', description: 'As an action, create a nonmagical item of your choice (up to 20 gp times your bard level, Large or smaller) in an unoccupied space within 10 feet. It fades at the end of your next turn unless you spend your action to maintain it (up to 1 minute total), after which it lasts hours equal to your bard level. Usable once per long rest, or again by spending a 5th-level spell slot.', source: { kind: 'subclass', refId: 'creation_ua' }, level: 14, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: { resourceId: 'performance_of_creation_ua_pool', quantity: 1 }, range: '10 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+  ],
+};
+
+// ── College of Satire ────────────────────────────────────────────────────────
+export const satireCollegeProgression: SubclassProgression = {
+  classId: 'bard', name: 'College of Satire', srd: false,
+  entries: [
+    { level: 3, hpDie: 8,
+      choices: [{ id: 'satire_bonus_skill', prompt: 'Choose one additional skill.', kind: 'skill', count: 1, pool: 'all', grants: [], required: true, resolved: false } as ChoiceDefinition],
+      grants: [
+        { kind: 'feature', value: { id: 'satire_bonus_proficiencies', name: 'Bonus Proficiencies', description: 'Gain proficiency with thieves\' tools, in Sleight of Hand, and in one additional skill of your choice (substitute another skill for any you already have).', source: { kind: 'subclass', refId: 'satire' }, level: 3, effects: [
+          { type: 'grant_proficiency', target: 'tool:thieves_tools', operation: 'add', value: null, condition: null },
+          { type: 'grant_proficiency', target: 'skill:sleight_of_hand', operation: 'add', value: null, condition: null },
+        ], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'tumbling_fool', name: 'Tumbling Fool', description: 'As a bonus action, tumble: for the rest of the turn, gain the benefits of Dash and Disengage, a climbing speed equal to your current speed, and half damage from falling.', source: { kind: 'subclass', refId: 'satire' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'bonus_action', resourceCost: null, range: 'self', target: 'self', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 6, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'fools_insight_pool', name: 'Fool\'s Insight (scales with Charisma modifier)', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'fools_insight', name: "Fool's Insight", description: 'Cast Detect Thoughts a number of times equal to your Charisma modifier per long rest — tracked here as a single-use pool; increase its maximum to match. A creature that resists it suffers an embarrassing gaffe (loud gas, a burp, tripping, or an unwanted joke). Detect Thoughts isn\'t in this codebase\'s spell library yet — no cast_spell hook until it\'s added.', source: { kind: 'subclass', refId: 'satire' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: { resourceId: 'fools_insight_pool', quantity: 1 }, range: '30 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 14, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'fools_luck', name: "Fool's Luck", description: 'After failing an ability check, saving throw, or attack roll, expend a use of Bardic Inspiration to roll the die and add it to the failed roll, using the new total. If this turns it into a success, note the number rolled — the DM can later apply it as a penalty to one of your rolls (an embarrassing gaffe), and you can\'t use this feature again until that happens.', source: { kind: 'subclass', refId: 'satire' }, level: 14, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: { resourceId: 'bardic_inspiration_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+      abilityEffects: [] } }] },
+  ],
+};
+
+// ── College of Spirits (UA) ──────────────────────────────────────────────────
+export const spiritsCollegeUaProgression: SubclassProgression = {
+  classId: 'bard', name: 'College of Spirits (UA)', srd: false,
+  entries: [
+    { level: 3, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'guiding_whispers_ua', name: 'Guiding Whispers', description: 'Learn the Guidance cantrip (doesn\'t count against your cantrips known); for you it has a range of 60 feet.', source: { kind: 'subclass', refId: 'spirits_ua' }, level: 3, effects: [
+          { type: 'grant_spell', target: 'cantrip', operation: 'add', value: null, condition: null, cantripIds: ['guidance'] },
+        ], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'spiritual_focus_ua', name: 'Spiritual Focus', description: 'Use a candle, crystal ball, talking board, tarokka deck, or skull as a spellcasting focus for your bard spells.', source: { kind: 'subclass', refId: 'spirits_ua' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'tales_from_beyond_ua', name: 'Tales from Beyond', description: 'While holding your Spiritual Focus, use a bonus action and expend a use of Bardic Inspiration to roll on a 12-entry Spirits\' Tales table (each entry a distinct short-range attack, buff, or utility effect keyed to the die result — Beast, Warrior, Friends, Runaway, Avenger, Hero, Fey, Dark Spirit, Giant, Dragon, Celestial, or Unknown) and retain the tale until you spend it or finish a rest. As an action, bestow it on a creature within 30 feet (yourself included); any save DC equals your spell save DC.', source: { kind: 'subclass', refId: 'spirits_ua' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'bonus_action', resourceCost: { resourceId: 'bardic_inspiration_pool', quantity: 1 }, range: '30 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 6, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'spirit_session_ua_pool', name: 'Spirit Session', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'empowered_focus_ua', name: 'Empowered Focus', description: 'When you cast a bard spell that deals damage or restores hit points while holding your Spiritual Focus, roll a d6 and add it to one damage or healing roll.', source: { kind: 'subclass', refId: 'spirits_ua' }, level: 6, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'spirit_session_ua', name: 'Spirit Session', description: 'During a short or long rest, spend an hour in ritual with your Spiritual Focus and up to your proficiency bonus in willing participants. Afterward, temporarily learn one spell of any class of a level no higher than the number of participants and no higher than you can cast, until your next long rest; it counts as a bard spell but doesn\'t count against spells known. Usable once per long rest.', source: { kind: 'subclass', refId: 'spirits_ua' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: { resourceId: 'spirit_session_ua_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 14, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'mystical_connection_ua', name: 'Mystical Connection', description: 'Whenever you use Tales from Beyond, you can roll a d6 in place of expending a Bardic Inspiration die for the table roll — you still expend the Bardic Inspiration die for the tale\'s own effect, without losing it.', source: { kind: 'subclass', refId: 'spirits_ua' }, level: 14, effects: [], actions: [], choices: [], passive: true } }] },
+  ],
+};
+
+// ── Mage of Lorehold ─────────────────────────────────────────────────────────
+// Strixhaven "universal" subclass (real rules let Bard, Warlock, or Wizard
+// take it) — modeled as Bard-only here; see file header.
+const LOREHOLD_COMPANION_POOL: ChoiceOption[] = [
+  { id: 'healer', label: 'Healer', value: { id: 'ancient_companion_healer', name: 'Ancient Companion: Healer', description: 'Your ancient companion is a Healer spirit — Healer\'s Light lets it grant temporary hit points, and at level 6 your own hit point maximum grows and healing spells restore extra HP.', source: { kind: 'subclass', refId: 'mage_of_lorehold' }, level: null, effects: [], actions: [], choices: [], passive: true } as Feature },
+  { id: 'sage', label: 'Sage', value: { id: 'ancient_companion_sage', name: 'Ancient Companion: Sage', description: 'Your ancient companion is a Sage spirit — Sage\'s Counsel grants you and nearby allies a bonus to Intelligence and Wisdom checks, and at level 6 you gain skill advantage plus a spell-damage rider.', source: { kind: 'subclass', refId: 'mage_of_lorehold' }, level: null, effects: [], actions: [], choices: [], passive: true } as Feature },
+  { id: 'warrior', label: 'Warrior', value: { id: 'ancient_companion_warrior', name: 'Ancient Companion: Warrior', description: 'Your ancient companion is a Warrior spirit — Warrior\'s Protection helps nearby allies on Strength/Dexterity saves, and at level 6 casting a cantrip lets you also make a weapon attack with a radiant damage rider.', source: { kind: 'subclass', refId: 'mage_of_lorehold' }, level: null, effects: [], actions: [], choices: [], passive: true } as Feature },
+];
+export const mageOfLoreholdProgression: SubclassProgression = {
+  classId: 'bard', name: 'Mage of Lorehold', srd: false,
+  entries: [
+    { level: 3, hpDie: 8,
+      choices: [{ id: 'lorehold_companion_type', prompt: 'Choose your Ancient Companion\'s type.', kind: 'feature_pool', count: 1, pool: LOREHOLD_COMPANION_POOL, grants: [], required: true, resolved: false }],
+      grants: [
+        { kind: 'feature', value: { id: 'lorehold_spells', name: 'Lorehold Spells', description: 'Learn the Sacred Flame cantrip and the Comprehend Languages spell (neither counts against your spells known). Learn further spells at levels 5/7/9 (Speak with Dead, Spirit Guardians, Arcane Eye, Stone Shape, Destructive Wave, Legend Lore) — not wired via known_spells, several referenced spells aren\'t in the library yet.', source: { kind: 'subclass', refId: 'mage_of_lorehold' }, level: 3, effects: [
+          { type: 'grant_spell', target: 'cantrip', operation: 'add', value: null, condition: null, cantripIds: ['sacred_flame'] },
+        ], actions: [], choices: [], passive: true } },
+        { kind: 'resource', value: { resourceId: 'ancient_companion_pool', name: 'Ancient Companion', maximum: 1, recharge: 'short_rest' } },
+        { kind: 'feature', value: { id: 'ancient_companion', name: 'Ancient Companion', description: 'At the end of a short or long rest, bond with a spirit of the ancient dead that inhabits a Medium freestanding statue within 10 feet, serving as your companion (AC 14 + prof bonus, HP 5 + 5 per class level, obeys your commands) until it drops to 0 HP, you bond with a new one, or you die. As an action, touch it and expend a spell slot to heal it 10 HP per slot level.', source: { kind: 'subclass', refId: 'mage_of_lorehold' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: { resourceId: 'ancient_companion_pool', quantity: 1 }, range: '10 feet', target: 'self', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'lessons_of_the_past', name: 'Lessons of the Past', description: 'When you bond with your companion, also gain a benefit based on its type: Healer — your HP maximum and current HP increase by your class level, and healing spells restore an extra 1d8; Sage — advantage on Arcana/History/Nature/Religion checks, and once per turn a spell hit adds 1d8 force damage; Warrior — casting a cantrip lets you also make a weapon attack, dealing an extra 1d8 radiant damage on a hit. Switching companion type replaces the previous benefit.', source: { kind: 'subclass', refId: 'mage_of_lorehold' }, level: 6, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 10, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'war_echoes_pool', name: 'War Echoes (scales with proficiency bonus)', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'war_echoes', name: 'War Echoes', description: 'Once per turn when a creature you can see hits a target with an attack, use your reaction to force a Wisdom save against your spell save DC; on a failure, the target becomes vulnerable to one damage type from that attack until the end of its next turn (including the triggering damage). Usable a number of times equal to your proficiency bonus per long rest — tracked here as a single-use pool; increase its maximum to match.', source: { kind: 'subclass', refId: 'mage_of_lorehold' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'reaction', resourceCost: { resourceId: 'war_echoes_pool', quantity: 1 }, range: '60 feet', target: 'single', requiresSave: { ability: 'wis', dc: 'spell_save_dc' } },
+          abilityEffects: [] } },
+      ] },
+    { level: 14, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'historys_whims_pool', name: "History's Whims", maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'historys_whims', name: "History's Whims", description: 'As a bonus action, enter chronal chaos for 1 minute (ends early if incapacitated); at the start of the state and each subsequent turn, choose Luck (add a rolled d6 to a damaging saving throw), Resistance (resistance to bludgeoning/piercing/slashing), or Swiftness (+15 feet speed, no opportunity attacks) — never the same benefit twice in a row, each lasting until your next turn. Usable once per long rest, or again by spending a 4th-level spell slot.', source: { kind: 'subclass', refId: 'mage_of_lorehold' }, level: 14, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'bonus_action', resourceCost: { resourceId: 'historys_whims_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+  ],
+};
+
+// ── Mage of Silverquill ──────────────────────────────────────────────────────
+const SILVERQUILL_CANTRIP_POOL: ChoiceOption[] = [
+  { id: 'sacred_flame', label: 'Sacred Flame', value: { id: 'eloquent_apprentice_sacred_flame', name: 'Eloquent Apprentice: Sacred Flame', description: 'Learn the Sacred Flame cantrip.', source: { kind: 'subclass', refId: 'mage_of_silverquill' }, level: null, effects: [{ type: 'grant_spell', target: 'cantrip', operation: 'add', value: null, condition: null, cantripIds: ['sacred_flame'] }], actions: [], choices: [], passive: true } as Feature },
+  { id: 'vicious_mockery', label: 'Vicious Mockery', value: { id: 'eloquent_apprentice_vicious_mockery', name: 'Eloquent Apprentice: Vicious Mockery', description: 'Learn the Vicious Mockery cantrip.', source: { kind: 'subclass', refId: 'mage_of_silverquill' }, level: null, effects: [{ type: 'grant_spell', target: 'cantrip', operation: 'add', value: null, condition: null, cantripIds: ['vicious_mockery'] }], actions: [], choices: [], passive: true } as Feature },
+];
+export const mageOfSilverquillProgression: SubclassProgression = {
+  classId: 'bard', name: 'Mage of Silverquill', srd: false,
+  entries: [
+    { level: 3, hpDie: 8,
+      choices: [
+        { id: 'silverquill_cantrip', prompt: 'Choose Sacred Flame or Vicious Mockery.', kind: 'feature_pool', count: 1, pool: SILVERQUILL_CANTRIP_POOL, grants: [], required: true, resolved: false },
+        { id: 'silverquill_skills', prompt: 'Choose 2 skills: Deception, Intimidation, Performance, Persuasion, or Insight.', kind: 'skill', count: 2, pool: [
+          { id: 'deception', label: 'Deception', value: 'deception' },
+          { id: 'intimidation', label: 'Intimidation', value: 'intimidation' },
+          { id: 'performance', label: 'Performance', value: 'performance' },
+          { id: 'persuasion', label: 'Persuasion', value: 'persuasion' },
+          { id: 'insight', label: 'Insight', value: 'insight' },
+        ], grants: [], required: true, resolved: false },
+      ],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'silvery_barbs_pool', name: 'Silvery Barbs', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'silvery_barbs', name: 'Silvery Barbs', description: 'Immediately after a creature within 60 feet succeeds on an attack roll, ability check, or saving throw, use your reaction to force it (unless immune to charmed) to reroll and use the lower result. If that causes a failure, empower a different creature within 60 feet (yourself included) to reroll one attack/check/save within 1 minute and take the higher result; only one empowerment active per creature. Usable once per long rest, or again by spending a spell slot.', source: { kind: 'subclass', refId: 'mage_of_silverquill' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'reaction', resourceCost: { resourceId: 'silvery_barbs_pool', quantity: 1 }, range: '60 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 6, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'inky_shroud_pool', name: 'Inky Shroud', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'inky_shroud', name: 'Inky Shroud', description: 'Learn the Darkness spell (added to your spell list). Cast it without a slot once per long rest (or normally with a 2nd-level-or-higher slot); when cast for free, you see normally through it, and a creature that starts its turn in it that you can see takes 2d10 psychic damage.', source: { kind: 'subclass', refId: 'mage_of_silverquill' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: { resourceId: 'inky_shroud_pool', quantity: 1 }, range: '60 feet', target: 'area', requiresSave: null },
+          abilityEffects: [{ type: 'cast_spell', spellId: 'darkness' }] } },
+      ] },
+    { level: 10, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'infusion_eloquence_pool', name: 'Infusion of Eloquence (scales with proficiency bonus)', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'infusion_of_eloquence', name: 'Infusion of Eloquence', description: 'When you cast a damaging spell, change its damage type to psychic or radiant; a creature damaged takes extra damage equal to your proficiency bonus and is frightened of you (psychic) or charmed by you (radiant) until the start of your next turn. Usable a number of times equal to your proficiency bonus per long rest — tracked here as a single-use pool; increase its maximum to match.', source: { kind: 'subclass', refId: 'mage_of_silverquill' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: { resourceId: 'infusion_eloquence_pool', quantity: 1 }, range: '60 feet', target: 'single', requiresSave: null },
+          abilityEffects: [{ type: 'apply_condition', conditionId: 'frightened', duration: { unit: 'rounds', remaining: 1 } }] } },
+      ] },
+    { level: 14, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'deadly_despair', name: 'Word of Power: Deadly Despair', description: 'When the target of your Silvery Barbs fails its roll from the reroll, give it vulnerability to one damage type of your choice until the start of your next turn.', source: { kind: 'subclass', refId: 'mage_of_silverquill' }, level: 14, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: null, range: '60 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+        { kind: 'feature', value: { id: 'selfless_invocation', name: 'Word of Power: Selfless Invocation', description: 'When a creature within 60 feet takes damage, use your reaction to grant it resistance to that damage; you take psychic damage equal to the amount it resisted.', source: { kind: 'subclass', refId: 'mage_of_silverquill' }, level: 14, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'reaction', resourceCost: null, range: '60 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+  ],
+};
+
 export const BARD_SUBCLASSES: SubclassProgression[] = [
   loreCollegeProgression, valorCollegeProgression, creationCollegeProgression,
   eloquenceCollegeProgression, glamourCollegeProgression, spiritsCollegeProgression,
-  swordsCollegeProgression, whispersCollegeProgression,
+  swordsCollegeProgression, whispersCollegeProgression, creationCollegeUaProgression,
+  satireCollegeProgression, spiritsCollegeUaProgression, mageOfLoreholdProgression,
+  mageOfSilverquillProgression,
 ];

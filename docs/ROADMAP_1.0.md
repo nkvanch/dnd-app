@@ -1337,9 +1337,69 @@ early 1.1 if Phase 1–4 run long. Do not let it delay Phase 1.
       shared via the existing `expo-sharing`. Two `resolveName` lookups
       left as caller-supplied (spell/item/race/class/background name
       resolution) rather than guessed against content-DB import paths.
-      **ACTION NEEDED:** `npx expo install expo-print`, then wire
+      ~~**ACTION NEEDED:** `npx expo install expo-print`, then wire
       `resolveName` to the real content lookups and add an entry point
-      (e.g. a button on the sheet screen or in Settings).
+      (e.g. a button on the sheet screen or in Settings).~~
+- [x] **Human-readable export (PDF/TXT/MD) for characters AND all 8 homebrew
+      types**, 2026-08-27 batch. `resolveName`/`resolveContentName` now wired
+      for real (`src/io/exportText.ts`, correctly split: race/class/background
+      via the merged `ContentDB`, spell/item via `spellRepo`/`itemRepo` first
+      since those two fields on the merged `ContentDB` are homebrew-only, not
+      genuinely merged — see `homebrewStore.ts`). Entry points added: 📤 button
+      in the character sheet header (`app/sheet/[id].tsx`) and per-row in the
+      Homebrew Library screen (`app/(tabs)/homebrew.tsx`), both opening a
+      shared `ExportFormatSheet` (PDF/TXT/MD). New `src/io/exportText.ts`
+      (markdown builders + `stripMarkdown()` TXT derivative — one builder per
+      shape, not per type), `src/io/exportHtml.ts` (homebrew PDF via
+      `expo-print`, siblings to the untouched `characterSheetPdf.ts`),
+      `src/io/exportShare.ts` (format→file→share dispatch, mirrors
+      `backupIO.ts`'s exact `expo-file-system/legacy` pattern).
+      - [x] Content-generation logic (every markdown builder + `stripMarkdown`)
+            directly verified against sample data via `npx tsx` — correct
+            output confirmed for feature lists, spells, progressions (both
+            `rawProgression` and the `levelFeatures` fallback), standalone
+            features, and a full character. Required a real fix along the
+            way: `exportText.ts` originally imported `spellRepo`/`itemRepo`/
+            `useHomebrewStore` directly, which pulled in `react-native`
+            transitively and broke the "pure, trivially testable" goal —
+            refactored so `buildCharacterMarkdown` takes a caller-supplied
+            `resolveName` callback (same shape as `characterSheetPdf.ts`'s
+            existing pattern) instead, with the store/repo-aware
+            `resolveContentName` living in `exportShare.ts` alongside the
+            other RN-dependent code.
+      - [ ] **OS-level share step NOT actually observed, don't overclaim it**:
+            clicking through TXT/MD export in the web preview (this session's
+            headless Browser pane) produced no visible error AND no visible
+            share — traced to `navigator.share` being `undefined` in that
+            specific environment, so `expo-sharing`'s web shim's
+            `isAvailableAsync()` returns false, the code correctly throws,
+            and the catch block correctly calls `Alert.alert(...)` — but
+            `react-native-web`'s `Alert.alert` is a total no-op
+            (`node_modules/react-native-web/dist/exports/Alert/index.js`:
+            `static alert() {}`), so the failure is real but silent, not a
+            bug in this feature. This is the exact same
+            `Sharing.isAvailableAsync`→`shareAsync` code path
+            `backupIO.ts`/`backup.tsx` already ship and rely on, so it's not
+            a new risk — but it means the write-file→share-sheet round trip
+            itself is still unconfirmed on a real browser/device this
+            session. **ACTION NEEDED**: click through Export on a real
+            device or non-headless browser (where `navigator.share` exists)
+            to confirm a file actually reaches the OS share sheet.
+      - [ ] **PDF path still blocked, same root cause as above, not yet
+            resolved**: `expo-print` is in `package.json`/`node_modules`
+            (added 2026-08-22) but not linked into the native build —
+            `android/app/build.gradle` was generated 2026-08-09, 14 days
+            *before* expo-print existed in the project, and `app.json`'s
+            `plugins` array has no `expo-print` entry. `adb devices` returns
+            zero attached devices in this environment, so even a triggered
+            rebuild couldn't be exercised here. Code is written and
+            typechecks; the format sheet disables the PDF option on web
+            (`Platform.OS==='web'`, `expo-print` has no web implementation)
+            rather than let it fail with a confusing error. **ACTION NEEDED**:
+            `npx expo prebuild` (or `run:android`/`run:ios`) against a real
+            device/emulator, then confirm `Print.printToFileAsync` actually
+            produces a shareable PDF for both a character and one homebrew
+            item of each shape (feature-list, progression, spell).
 - [ ] **Hotspot/mobile-data sync support** — investigated, not yet coded.
       A mobile hotspot IS a WiFi network from the connecting devices'
       perspective (the phone acts as an access point), so the existing

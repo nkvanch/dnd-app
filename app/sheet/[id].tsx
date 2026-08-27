@@ -2,7 +2,7 @@
 // Character sheet — 6-tab sheet with persistent rest bar.
 // All values read from entity.derived — never computed in components.
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
 import { useCampaignStore } from '../../src/store/campaignStore';
@@ -26,6 +26,8 @@ import { TabInventory } from '../../src/components/sheet/TabInventory';
 import { TabNotes }     from '../../src/components/sheet/TabNotes';
 import { TabSpells }    from '../../src/components/sheet/TabSpells';
 import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
+import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
+import { exportCharacter, ExportFormat } from '../../src/io/exportShare';
 import { GlobalDiceRoller } from '../../src/components/GlobalDiceRoller';
 import { SyncStatusDot }   from '../../src/components/SyncStatusDot';
 import { SafeBottomView }  from '../../src/components/SafeBottomView';
@@ -61,7 +63,22 @@ export default function CharacterSheetScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('character');
   const [sheetMode, setSheetMode] = useState<'combat' | 'exploration'>('combat');
   const [freeEditOpen, setFreeEditOpen] = useState(false);
+  const [exportSheetOpen, setExportSheetOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const goBack = useSafeGoBack('/(tabs)');
+
+  const handleExportFormat = useCallback(async (format: ExportFormat) => {
+    setExportSheetOpen(false);
+    if (!entity) return;
+    setExporting(true);
+    try {
+      await exportCharacter(entity, format);
+    } catch (e: any) {
+      Alert.alert('Export failed', e?.message ?? 'Something went wrong.');
+    } finally {
+      setExporting(false);
+    }
+  }, [entity]);
 
   // Free-edit a character's own data. Hidden only when a DM has explicitly
   // locked player edits via the house rule (the DM keeps the button). Being
@@ -369,6 +386,15 @@ export default function CharacterSheetScreen() {
               <Text style={styles.freeEditTxt}>🔓 Edit</Text>
             </Pressable>
           )}
+          <Pressable
+            style={styles.freeEditBtn}
+            disabled={exporting}
+            onPress={() => setExportSheetOpen(true)}
+          >
+            {exporting
+              ? <ActivityIndicator size="small" color={Colors.gold} />
+              : <Text style={styles.freeEditTxt}>📤</Text>}
+          </Pressable>
           <SyncStatusDot />
         </View>
         <View style={styles.headerStats}>
@@ -549,6 +575,13 @@ export default function CharacterSheetScreen() {
         rules={rules}
         onApply={updated => mutate(() => updated)}
         onClose={() => setFreeEditOpen(false)}
+      />
+
+      <ExportFormatSheet
+        visible={exportSheetOpen}
+        title={`Export "${entity.identity.name || 'Character'}"`}
+        onSelect={handleExportFormat}
+        onClose={() => setExportSheetOpen(false)}
       />
 
     </View>

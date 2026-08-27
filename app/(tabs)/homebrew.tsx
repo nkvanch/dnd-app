@@ -1,8 +1,12 @@
 // app/(tabs)/homebrew.tsx
 // Homebrew tab — Create and Library sections.
-import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
+import { exportHomebrewItem, ExportFormat } from '../../src/io/exportShare';
+import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Create Panel ──────────────────────────────────────────────────────────────
@@ -49,6 +53,23 @@ function LibraryPanel() {
   } = useHomebrewStore();
   const allRaces = getMergedContentDB().races;
   const allClasses = getMergedContentDB().classes;
+
+  const [exportTarget, setExportTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
+  async function handleExportFormat(format: ExportFormat) {
+    if (!exportTarget) return;
+    const { type, item } = exportTarget;
+    setExportTarget(null);
+    setExportingId(item.id);
+    try {
+      await exportHomebrewItem(type, item, format);
+    } catch (e: any) {
+      Alert.alert('Export failed', e?.message ?? 'Something went wrong.');
+    } finally {
+      setExportingId(null);
+    }
+  }
 
   const all = [
     ...races.map(r       => ({ type: 'race'       as const, item: r })),
@@ -108,6 +129,15 @@ function LibraryPanel() {
               )}
               <Pressable
                 style={styles.libBtn}
+                disabled={exportingId === item.id}
+                onPress={() => setExportTarget({ type, item })}
+              >
+                {exportingId === item.id
+                  ? <ActivityIndicator size="small" color={Colors.textPrimary} />
+                  : <Text style={styles.libBtnTxt}>📤</Text>}
+              </Pressable>
+              <Pressable
+                style={styles.libBtn}
                 onPress={() => {
                   Alert.alert('Delete', `Delete "${item.name}"?`, [
                     { text: 'Cancel', style: 'cancel' },
@@ -121,6 +151,13 @@ function LibraryPanel() {
           </View>
         );
       })}
+
+      <ExportFormatSheet
+        visible={!!exportTarget}
+        title={exportTarget ? `Export "${exportTarget.item.name}"` : ''}
+        onSelect={handleExportFormat}
+        onClose={() => setExportTarget(null)}
+      />
     </View>
   );
 }

@@ -20,6 +20,16 @@ function statBonus(target: string, amount: number): Effect {
   return { type: 'stat_modifier', target, operation: 'add', value: amount, condition: null };
 }
 
+// Reminder-only, same mechanism DerivedStats.advantageStates already uses
+// elsewhere (e.g. infusions/index.ts, Barbarian's Feral Instinct) — shown to
+// the player so they remember to roll 2d20, not auto-applied to any roll.
+function advantage(target: string): Effect {
+  return { type: 'stat_modifier', target, operation: 'advantage', value: null, condition: null };
+}
+function resistance(damageType: string): Effect {
+  return { type: 'grant_resistance', target: damageType, operation: 'resistance', value: null, condition: null };
+}
+
 function feat(
   id: string,
   name: string,
@@ -136,7 +146,12 @@ const allFeatEntries: Feat[] = [
 
   feat('dungeon_delver', 'Dungeon Delver', null,
     'Advantage on Perception and Investigation checks to detect secret doors, advantage on saves against traps, resistance to trap damage, and you can search for traps at normal travel pace.',
-    PHB),
+    // "Resistance to trap damage" stays description-only — "trap damage" isn't
+    // a real 5e damage type the resistance system can key on.
+    PHB, [
+      advantage('Perception and Investigation checks to detect secret doors'),
+      advantage('saving throws against traps'),
+    ]),
 
   feat('durable', 'Durable', null,
     '+1 Constitution. When you regain hit points from spending Hit Dice, the minimum you regain is twice your Constitution modifier.',
@@ -198,9 +213,11 @@ const allFeatEntries: Feat[] = [
     '+1 Strength, Constitution, Wisdom, or Charisma. You can cast Cure Wounds once per long rest, and manifest protective wings as a reaction to grant +PB AC to a creature (proficiency bonus per long rest).',
     FTD, [], choose(['str', 'con', 'wis', 'cha'])),
 
+  // "Pin a grappled creature" stays description-only — not a passive stat
+  // bonus, no action/resource mechanism to automate it.
   feat('grappler', 'Grappler', 'Strength 13+',
     'You have advantage on attack rolls against a creature you are grappling, and can use your action to try to pin a grappled creature (restrained).',
-    PHB),
+    PHB, [advantage('attack rolls against a creature you are grappling')]),
 
   feat('great_weapon_master', 'Great Weapon Master', null,
     'On a critical hit or reducing a creature to 0 HP with a melee weapon, make one bonus-action melee attack. Before a heavy-weapon attack you can take -5 to hit for +10 damage.',
@@ -228,7 +245,10 @@ const allFeatEntries: Feat[] = [
 
   feat('infernal_constitution', 'Infernal Constitution', 'Tiefling',
     '+1 Constitution. You gain resistance to cold and poison damage and advantage on saves against being poisoned.',
-    XGE, [abilityBonus('con')]),
+    XGE, [
+      abilityBonus('con'), resistance('cold'), resistance('poison'),
+      advantage('saving throws against being poisoned'),
+    ]),
 
   feat('inspiring_leader', 'Inspiring Leader', 'Charisma 13+',
     'Spend 10 minutes to grant up to six friendly creatures temporary hit points equal to your level + your Charisma modifier.',
@@ -254,9 +274,12 @@ const allFeatEntries: Feat[] = [
     'You have 3 luck points per long rest. Spend one to roll an extra d20 for your own attack roll, ability check, or save, or to force an attacker to reroll.',
     PHB),
 
+  // The reaction attack and imposing disadvantage on the SPELLCASTER's
+  // concentration save both stay description-only — no mechanism for one
+  // entity's feature debuffing a different creature's stat block.
   feat('mage_slayer', 'Mage Slayer', null,
     'When a creature within 5 feet casts a spell you can use your reaction to attack it. You impose disadvantage on its concentration saves and have advantage on saves against its spells.',
-    PHB),
+    PHB, [advantage('saving throws against spells cast by a creature within 5 feet')]),
 
   feat('magic_initiate', 'Magic Initiate', null,
     'Choose a class: you learn two of its cantrips and one 1st-level spell, castable once per long rest without a slot.',
@@ -282,13 +305,16 @@ const allFeatEntries: Feat[] = [
     '+1 Strength or Dexterity (your choice). You gain proficiency with medium armor and shields.',
     PHB, [], choose(['str', 'dex'])),
 
+  // Redirecting attacks to yourself and the mount's Dex-save damage rule
+  // stay description-only — both reactive/active mechanics, not passive
+  // stat bonuses.
   feat('mounted_combatant', 'Mounted Combatant', null,
     'Advantage on melee attacks against unmounted creatures smaller than your mount, you can redirect attacks aimed at your mount to yourself, and your mount takes no damage on successful Dex saves (half on failure).',
-    PHB),
+    PHB, [advantage('melee attacks against unmounted creatures smaller than your mount')]),
 
   feat('observant', 'Observant', null,
     '+1 Intelligence or Wisdom (your choice). You can read lips, and you gain a +5 bonus to passive Perception and passive Investigation.',
-    PHB, [statBonus('passivePerception', 5)], choose(['int', 'wis'])),
+    PHB, [statBonus('passivePerception', 5), statBonus('passiveInvestigation', 5)], choose(['int', 'wis'])),
 
   feat('orcish_fury', 'Orcish Fury', 'Half-orc',
     '+1 Strength or Constitution (your choice). Once per short rest, add a weapon damage die when you hit, and you can attack as a reaction after using Relentless Endurance.',
@@ -306,9 +332,14 @@ const allFeatEntries: Feat[] = [
     'When wielding a glaive, halberd, quarterstaff, or spear you can make a bonus-action attack with the opposite end (1d4), and creatures provoke an opportunity attack when entering your reach.',
     PHB),
 
+  // Tool proficiency and language stay description-only — skillChoice is
+  // skills-only, no tool/language choice mechanism exists on Feat.
   feat('prodigy', 'Prodigy', 'Half-elf, half-orc, or human',
     'You gain one skill proficiency, one tool proficiency, and one language, plus expertise in one skill you\'re proficient with.',
-    XGE),
+    XGE, [], undefined, skillPicks([
+      { id: 'prodigy_prof',      label: 'Skill proficiency', mode: 'proficiency', from: 'any' },
+      { id: 'prodigy_expertise', label: 'Expertise',         mode: 'expertise',  from: 'proficient' },
+    ])),
 
   feat('resilient', 'Resilient', null,
     '+1 to one ability score of your choice, and you gain proficiency in saving throws using that ability.',
@@ -401,9 +432,11 @@ const allFeatEntries: Feat[] = [
     '+1 Strength, Constitution, or Wisdom. You can\'t be knocked prone unless willing, and when you spend a Hit Die you regain extra HP equal to your Constitution modifier + proficiency bonus.',
     GG, [], choose(['str', 'con', 'wis'])),
 
+  // Somatic-components-with-weapon-in-hand and opportunity-attack spellcasting
+  // stay description-only — genuinely not representable as a stat effect.
   feat('war_caster', 'War Caster', 'The ability to cast at least one spell',
     'Advantage on concentration saves, you can perform somatic components with weapons or a shield in hand, and you can cast a spell as an opportunity attack.',
-    PHB),
+    PHB, [advantage('Constitution saving throws to maintain concentration')]),
 
   feat('weapon_master', 'Weapon Master', null,
     '+1 Strength or Dexterity (your choice). You gain proficiency with four weapons of your choice.',

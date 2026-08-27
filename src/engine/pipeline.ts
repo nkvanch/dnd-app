@@ -39,16 +39,24 @@ export function applyStatModifiers(
   const abilities: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
   const result = { ...base };
   for (const ab of abilities) {
-    for (const ae of effects) {
-      if (
-        ae.effect.type      === 'stat_modifier' &&
-        ae.effect.target    === ab &&
-        ae.effect.operation === 'add' &&
-        typeof ae.effect.value === 'number'
-      ) {
-        result[ab] += ae.effect.value;
+    const relevant = effects.filter(
+      ae => ae.effect.type === 'stat_modifier' && ae.effect.target === ab
+    );
+    let value = base[ab];
+    // 'set' effects (e.g. Belt of Giant Strength) establish a new base —
+    // last one wins, same convention resolveCombine already uses for ac/speed —
+    // then 'add' effects stack on top of that base.
+    for (const ae of relevant) {
+      if (ae.effect.operation === 'set' && typeof ae.effect.value === 'number') {
+        value = ae.effect.value;
       }
     }
+    for (const ae of relevant) {
+      if (ae.effect.operation === 'add' && typeof ae.effect.value === 'number') {
+        value += ae.effect.value;
+      }
+    }
+    result[ab] = value;
   }
   return result;
 }
@@ -237,7 +245,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     passiveInsight:       10 + resolveSkill(entity, effectiveStats, 'insight', allEffects, profBonus),
     senses,
     movement,
-    savingThrows:     resolveSavingThrows(effectiveStats, entity.proficiencies.savingThrows, profBonus),
+    savingThrows:     resolveSavingThrows(effectiveStats, entity.proficiencies.savingThrows, profBonus, allEffects, rules),
     attackBonuses:    [],
     advantageStates,
     spellSaveDC:  entity.spellcasting
@@ -411,11 +419,18 @@ function resolveSavingThrows(
   stats:        Entity['stats'],
   proficientIn: Ability[],
   prof:         number,
+  effects:      ActiveEffect[],
+  rules:        CampaignRules,
 ): Record<Ability, number> {
   const abilities: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
   const output = {} as Record<Ability, number>;
   for (const ab of abilities) {
-    output[ab] = modifier(stats[ab]) + (proficientIn.includes(ab) ? prof : 0);
+    const base  = modifier(stats[ab]) + (proficientIn.includes(ab) ? prof : 0);
+    // Reuses the savingThrows.<ability> target convention DM overrides
+    // already use (see the "SIG-1" override loop above) so item/feat
+    // effects and DM overrides share one naming scheme.
+    const bonus = resolveEffectsForTarget(`savingThrows.${ab}`, effects, rules) as number;
+    output[ab] = base + bonus;
   }
   return output;
 }

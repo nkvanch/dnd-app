@@ -2,7 +2,7 @@
 // FILE: src/content/items/index.ts
 // Standard weapons, armor, and adventuring gear.
 // ============================================================================
-import { Item } from '../../engine/types';
+import { Item, Ability, Effect, Feature } from '../../engine/types';
 import { IMPORTED_ITEMS } from './importedItems';
 import importedSrdClassification from './srdClassification.json';
 import { ContentRegistry } from '../ContentRegistry';
@@ -766,6 +766,231 @@ const CORE_ITEMS: Item[] = [
  */
 const CORE_IDS = new Set(CORE_ITEMS.map(i => i.id));
 
+// ── Item mechanical-effect overrides ────────────────────────────────────────
+// Most of the auto-imported catalog (importedItems.ts) is description-only —
+// parse_items.py only generates abilityEffects for items with a `Damage:`
+// field (weapons). This layer patches real mechanics onto specific imported
+// items by id, same precedence pattern CORE_ITEMS already uses over
+// IMPORTED_ITEMS on id collision, just additive instead of replacing.
+//
+// Always APPEND a new Feature, never mutate features[0] — every imported
+// item already has one description-only Feature (`<id>_desc`); appending a
+// second, mechanical Feature keeps the flavor text intact and gives the
+// bonus its own audit-trail label.
+type ItemOverride = {
+  /** Merged (union) into the item's own `properties` array. */
+  extraProperties?: string[];
+  /** Appended to item.features. */
+  extraFeatures: Feature[];
+};
+
+const ITEM_EFFECT_OVERRIDES: Record<string, ItemOverride> = {};
+
+function passiveEffectFeature(id: string, itemId: string, name: string, description: string, effects: Effect[]): Feature {
+  return {
+    id, name, description, source: { kind: 'item', refId: itemId },
+    level: null, actions: [], choices: [], passive: true, effects,
+  };
+}
+
+const ALL_ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+/** e.g. Ring/Cloak of Protection's "+N to AC and all saving throws". */
+function allSavingThrowsBonus(amount: number): Effect[] {
+  return ALL_ABILITIES.map(ab => ({
+    type: 'stat_modifier', target: `savingThrows.${ab}`, operation: 'add', value: amount, condition: null,
+  }));
+}
+
+// ── +1/+2/+3 weapon family ───────────────────────────────────────────────────
+// Weapon attack/damage bonuses are NOT Effects in this engine —
+// actionCards.ts's computeWeaponAttack() requires abilityEffects+activation
+// to exist at all (a weapon with none generates no attack card whatsoever),
+// and reads the magic bonus via parseMagicBonus(), which regexes "+N" out of
+// the feature's name/description text — already correct in the imported
+// data ("Longsword +1" etc.), no edit needed there. So each override here
+// borrows the matching mundane weapon's dice/activation/type-tag properties
+// (finesse/versatile/ammunition/etc., needed for weaponAbilityMod's STR-vs-
+// DEX classification) rather than adding an Effect.
+const WEAPON_BASE_MAP: Record<string, Item> = {
+  battleaxe: itemBattleaxe, blowgun: itemBlowgun, club: itemClub,
+  dagger: itemDagger, dart: itemDart, glaive: itemGlaive,
+  greataxe: itemGreataxe, greatclub: itemGreatclub, greatsword: itemGreatsword,
+  halberd: itemHalberd, handaxe: itemHandaxe, javelin: itemJavelin,
+  lance: itemLance, light_hammer: itemLightHammer, longbow: itemLongbow,
+  longsword: itemLongsword, mace: itemMace, morningstar: itemMorningstar,
+  pike: itemPike, quarterstaff: itemQuarterstaff, rapier: itemRapier,
+  scimitar: itemScimitar, spear: itemSpear, trident: itemTrident,
+  war_pick: itemWarPick, warhammer: itemWarhammer,
+};
+
+for (const [base, baseItem] of Object.entries(WEAPON_BASE_MAP)) {
+  const baseFeature = baseItem.features[0];
+  for (const n of [1, 2, 3]) {
+    const id = `${base}_${n}`;
+    ITEM_EFFECT_OVERRIDES[id] = {
+      extraProperties: baseItem.properties,
+      extraFeatures: [{
+        ...baseFeature,
+        id: `${id}_magic_attack`,
+        name: `${baseItem.name} +${n}`,
+        description: `Melee or ranged weapon attack (+${n} bonus to attack and damage rolls).`,
+        source: { kind: 'item', refId: id },
+      }],
+    };
+  }
+}
+
+// ── +1/+2/+3 armor family ────────────────────────────────────────────────────
+// Armor REPLACES the base AC formula ('set') — worn instead of mundane armor,
+// matching how every CORE armor item's own base_ac_formula already works.
+// Confirmed real id: imported "Plate Armor +N" is `plate_armor_N`, but CORE's
+// own id is `plate_mail` — this one alias can't be inferred, hand-mapped here.
+const ARMOR_BASE_MAP: Record<string, { baseAc: number; formulaAbilities?: Ability[]; formulaAbilityCap?: Partial<Record<Ability, number>> }> = {
+  leather_armor: { baseAc: 11, formulaAbilities: ['dex'] },
+  chain_shirt:   { baseAc: 13, formulaAbilities: ['dex'], formulaAbilityCap: { dex: 2 } },
+  breastplate:   { baseAc: 14, formulaAbilities: ['dex'], formulaAbilityCap: { dex: 2 } },
+  chain_mail:    { baseAc: 16 },
+  plate_armor:   { baseAc: 18 }, // alias for CORE's 'plate_mail'
+};
+
+for (const [base, cfg] of Object.entries(ARMOR_BASE_MAP)) {
+  for (const n of [1, 2, 3]) {
+    const id = `${base}_${n}`;
+    ITEM_EFFECT_OVERRIDES[id] = {
+      extraFeatures: [passiveEffectFeature(
+        `${id}_ac_bonus`, id, `+${n} AC bonus`, `+${n} bonus to Armor Class.`,
+        [{
+          type: 'base_ac_formula', target: 'ac', operation: 'set',
+          value: cfg.baseAc + n, condition: null,
+          formulaAbilities: cfg.formulaAbilities, formulaAbilityCap: cfg.formulaAbilityCap,
+        }],
+      )],
+    };
+  }
+}
+
+// Shield ADDS on top of body armor (worn in addition to, not instead of) —
+// matches itemShieldItem's own stat_modifier/'add' +2, so a magic shield
+// needs the same 'add' treatment (2+N), not 'set' (which would incorrectly
+// replace the armor's base AC instead of adding to it).
+for (const n of [1, 2, 3]) {
+  const id = `shield_${n}`;
+  ITEM_EFFECT_OVERRIDES[id] = {
+    extraFeatures: [passiveEffectFeature(
+      `${id}_ac_bonus`, id, `Shield +${n} bonus`, `Additional +${n} bonus to AC while wielded.`,
+      [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 2 + n, condition: null }],
+    )],
+  };
+}
+
+// ── Named magic items ────────────────────────────────────────────────────────
+ITEM_EFFECT_OVERRIDES['ring_of_protection'] = {
+  extraFeatures: [passiveEffectFeature(
+    'ring_of_protection_bonus', 'ring_of_protection', 'Ring of Protection bonus', '+1 bonus to AC and all saving throws.',
+    [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 1, condition: null }, ...allSavingThrowsBonus(1)],
+  )],
+};
+ITEM_EFFECT_OVERRIDES['cloak_of_protection'] = {
+  extraFeatures: [passiveEffectFeature(
+    'cloak_of_protection_bonus', 'cloak_of_protection', 'Cloak of Protection bonus', '+1 bonus to AC and all saving throws.',
+    [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 1, condition: null }, ...allSavingThrowsBonus(1)],
+  )],
+};
+// No enforcement mechanism exists anywhere in the engine for "only while not
+// wearing armor/shield" (Effect.condition is real gating logic checked
+// against conditionMonitor flags — not free text — and no flag tracks
+// "is armor worn" today). Shipping unconditional, with the real caveat
+// staying in the description only, matches the app's existing
+// disclosed-but-unenforced pattern (same as advantageStates being
+// reminder-only). Known simplification: stacks incorrectly with worn armor.
+ITEM_EFFECT_OVERRIDES['bracers_of_defense'] = {
+  extraFeatures: [passiveEffectFeature(
+    'bracers_of_defense_bonus', 'bracers_of_defense', 'Bracers of Defense bonus',
+    '+2 bonus to AC while not wearing armor or using a shield (not enforced — applies unconditionally).',
+    [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 2, condition: null }],
+  )],
+};
+
+// Ability-score-SETTING items — requires applyStatModifiers() to handle
+// operation:'set' (fixed above; previously a silent no-op for ability
+// targets). "Amulet of Health": real text is "becomes 19 unless already
+// higher" (a max(), not a flat set) — 'set' here does a flat overwrite,
+// which would incorrectly LOWER an already-higher CON. Accepted, disclosed
+// simplification rather than adding a third engine primitive for one item.
+const STR_SETTING_ITEMS: Record<string, number> = {
+  belt_of_hill_giant_strength: 21,
+  belt_of_frost_giant_strength: 23,
+  belt_of_stone_giant_strength: 23,
+  belt_of_fire_giant_strength: 25,
+  belt_of_cloud_giant_strength: 27,
+  belt_of_storm_giant_strength: 29,
+  gauntlets_of_ogre_power: 19,
+};
+for (const [id, value] of Object.entries(STR_SETTING_ITEMS)) {
+  ITEM_EFFECT_OVERRIDES[id] = {
+    extraFeatures: [passiveEffectFeature(
+      `${id}_bonus`, id, 'Strength bonus', `Sets Strength score to ${value} while worn.`,
+      [{ type: 'stat_modifier', target: 'str', operation: 'set', value, condition: null }],
+    )],
+  };
+}
+ITEM_EFFECT_OVERRIDES['headband_of_intellect'] = {
+  extraFeatures: [passiveEffectFeature(
+    'headband_of_intellect_bonus', 'headband_of_intellect', 'Intelligence bonus', 'Sets Intelligence score to 19 while worn.',
+    [{ type: 'stat_modifier', target: 'int', operation: 'set', value: 19, condition: null }],
+  )],
+};
+ITEM_EFFECT_OVERRIDES['amulet_of_health'] = {
+  extraFeatures: [passiveEffectFeature(
+    'amulet_of_health_bonus', 'amulet_of_health', 'Constitution bonus',
+    'Sets Constitution score to 19 while worn (simplification: applies even if your Constitution is already higher).',
+    [{ type: 'stat_modifier', target: 'con', operation: 'set', value: 19, condition: null }],
+  )],
+};
+
+// ── Adamantine armor family ─────────────────────────────────────────────────
+// Sourced from the user's own Obsidian vault (Items with descriptions.md,
+// confirmed the same upstream file parse_items.py already ingests) — AC
+// values are structured `AC:` fields the existing parser doesn't read
+// (it only extracts `Damage:`). The "critical hits become normal hits"
+// clause has no engine mechanism (no crit-negation concept anywhere) and
+// stays description-only, same disclosed-simplification pattern as
+// Bracers of Defense above.
+const ADAMANTINE_ARMOR: Record<string, { baseAc: number; formulaAbilities?: Ability[]; formulaAbilityCap?: Partial<Record<Ability, number>> }> = {
+  adamantine_breastplate:      { baseAc: 14, formulaAbilities: ['dex'], formulaAbilityCap: { dex: 2 } },
+  adamantine_chain_mail:       { baseAc: 16 },
+  adamantine_chain_shirt:      { baseAc: 13, formulaAbilities: ['dex'], formulaAbilityCap: { dex: 2 } },
+  adamantine_half_plate_armor: { baseAc: 15, formulaAbilities: ['dex'], formulaAbilityCap: { dex: 2 } },
+  adamantine_plate_armor:      { baseAc: 18 },
+  adamantine_ring_mail:        { baseAc: 14 },
+  adamantine_scale_mail:       { baseAc: 14, formulaAbilities: ['dex'], formulaAbilityCap: { dex: 2 } },
+  adamantine_splint_armor:     { baseAc: 17 },
+};
+for (const [id, cfg] of Object.entries(ADAMANTINE_ARMOR)) {
+  ITEM_EFFECT_OVERRIDES[id] = {
+    extraFeatures: [passiveEffectFeature(
+      `${id}_ac`, id, 'Adamantine armor AC', `Base AC ${cfg.baseAc}${cfg.formulaAbilities ? ' + DEX modifier (max 2)' : ''}.`,
+      [{
+        type: 'base_ac_formula', target: 'ac', operation: 'set',
+        value: cfg.baseAc, condition: null,
+        formulaAbilities: cfg.formulaAbilities, formulaAbilityCap: cfg.formulaAbilityCap,
+      }],
+    )],
+  };
+}
+
+function applyItemOverride(item: Item): Item {
+  const o = ITEM_EFFECT_OVERRIDES[item.id];
+  if (!o) return item;
+  return {
+    ...item,
+    properties: o.extraProperties
+      ? Array.from(new Set([...item.properties, ...o.extraProperties]))
+      : item.properties,
+    features: [...item.features, ...o.extraFeatures],
+  };
+}
+
 // importedItems.ts carries no srd field itself (see that file's header) —
 // classification is merged in here, at load time, from the small separate
 // srdClassification.json. This means re-running parse_items.py after a
@@ -773,7 +998,7 @@ const CORE_IDS = new Set(CORE_ITEMS.map(i => i.id));
 // (only this tiny JSON updates), instead of rewriting the entire ~541KB
 // item file every time — same fix applied to spells, see
 // src/content/spells/index.ts.
-const CLASSIFIED_IMPORTED_ITEMS: Item[] = IMPORTED_ITEMS.map(i => ({
+const CLASSIFIED_IMPORTED_ITEMS: Item[] = IMPORTED_ITEMS.map(i => applyItemOverride({
   ...i,
   srd: (importedSrdClassification as Record<string, boolean>)[i.id],
 }));

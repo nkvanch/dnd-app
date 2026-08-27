@@ -169,7 +169,7 @@ function crimsonRite(id: string, name: string, damageType: string, description: 
     abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'necrotic' }],
   };
 }
-const CRIMSON_RITE_POOL: ChoiceOption[] = [
+export const CRIMSON_RITE_POOL: ChoiceOption[] = [
   { id: 'flame', label: 'Rite of the Flame', value: crimsonRite('rite_flame', 'Rite of the Flame', 'fire', 'As a bonus action on a weapon you\'re holding, take necrotic damage equal to your hemocraft die (activation cost, can\'t be reduced) to imbue it with fire: while active (until you finish a short or long rest), your attacks with that weapon are magical and deal extra fire damage equal to your hemocraft die. Only one rite active per weapon; the extra rite damage on a hit isn\'t auto-applied — add it manually.') },
   { id: 'frozen', label: 'Rite of the Frozen', value: crimsonRite('rite_frozen', 'Rite of the Frozen', 'cold', 'As Rite of the Flame, but the imbued weapon deals extra cold damage instead of fire.') },
   { id: 'storm', label: 'Rite of the Storm', value: crimsonRite('rite_storm', 'Rite of the Storm', 'lightning', 'As Rite of the Flame, but the imbued weapon deals extra lightning damage instead of fire.') },

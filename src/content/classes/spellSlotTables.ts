@@ -115,6 +115,40 @@ export const WARLOCK_SLOTS: SpellSlotRow[] = [
 ];
 
 /**
+ * Blood Hunter — Order of the Profane Soul pact magic (warlock-style, all
+ * slots the same tier, recharge short rest). Levels 1-2 are zero since the
+ * order isn't chosen until class level 3.
+ * Level  | Slots | Slot Level
+ *  3-5   |   1   |    1st
+ *   6    |   2   |    1st
+ *  7-12  |   2   |    2nd
+ * 13-18  |   2   |    3rd
+ * 19-20  |   2   |    4th
+ */
+export const PROFANE_SOUL_SLOTS: SpellSlotRow[] = [
+  { level:  1, slots: [0,0,0,0,0,0,0,0,0] },
+  { level:  2, slots: [0,0,0,0,0,0,0,0,0] },
+  { level:  3, slots: [1,0,0,0,0,0,0,0,0] },
+  { level:  4, slots: [1,0,0,0,0,0,0,0,0] },
+  { level:  5, slots: [1,0,0,0,0,0,0,0,0] },
+  { level:  6, slots: [2,0,0,0,0,0,0,0,0] },
+  { level:  7, slots: [0,2,0,0,0,0,0,0,0] },
+  { level:  8, slots: [0,2,0,0,0,0,0,0,0] },
+  { level:  9, slots: [0,2,0,0,0,0,0,0,0] },
+  { level: 10, slots: [0,2,0,0,0,0,0,0,0] },
+  { level: 11, slots: [0,2,0,0,0,0,0,0,0] },
+  { level: 12, slots: [0,2,0,0,0,0,0,0,0] },
+  { level: 13, slots: [0,0,2,0,0,0,0,0,0] },
+  { level: 14, slots: [0,0,2,0,0,0,0,0,0] },
+  { level: 15, slots: [0,0,2,0,0,0,0,0,0] },
+  { level: 16, slots: [0,0,2,0,0,0,0,0,0] },
+  { level: 17, slots: [0,0,2,0,0,0,0,0,0] },
+  { level: 18, slots: [0,0,2,0,0,0,0,0,0] },
+  { level: 19, slots: [0,0,0,2,0,0,0,0,0] },
+  { level: 20, slots: [0,0,0,2,0,0,0,0,0] },
+];
+
+/**
  * Abyss Knight pact magic — exact class table.
  * Level  | Slots | Slot Level
  *  2-4   |   2   |    1st

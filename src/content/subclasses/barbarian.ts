@@ -1,8 +1,14 @@
 // ============================================================================
 // FILE: src/content/subclasses/barbarian.ts
-// Barbarian subclasses: Berserker, Totem Warrior
+// Barbarian subclasses: Berserker, Totem Warrior, Beast, Wild Magic,
+// Ancestral Guardian, Battlerager, Giant, Storm Herald, Zealot, plus three
+// earlier Unearthed Arcana drafts that are mechanically distinct from their
+// same-named official counterparts already above: Path of the Beast (UA),
+// Path of the Giant (UA), and Path of the Wild Soul (UA — the UA working
+// title for what became the official Path of Wild Magic; different table,
+// different capstone features).
 // ============================================================================
-import { ClassProgression } from '../../engine/types';
+import { ChoiceOption, ClassProgression, Feature } from '../../engine/types';
 
 export type SubclassProgression = ClassProgression & { name: string };
 
@@ -350,6 +356,109 @@ export const pathOfTheZealotProgression: SubclassProgression = {
   ],
 };
 
+// ── Path of the Beast (UA) ───────────────────────────────────────────────────
+export const pathOfTheBeastUaProgression: SubclassProgression = {
+  classId: 'barbarian', name: 'Path of the Beast (UA)', srd: false,
+  entries: [
+    { level: 3, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'form_of_the_beast_bite_ua', name: 'Form of the Beast: Bite', description: 'While raging, your bite (a natural weapon you can choose each time you rage) deals 1d8 piercing damage; once per turn on a hit, regain HP equal to your Constitution modifier (minimum 1).', source: { kind: 'subclass', refId: 'path_of_the_beast_ua' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+          abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'piercing' }] } },
+        { kind: 'feature', value: { id: 'form_of_the_beast_claws_ua', name: 'Form of the Beast: Claws', description: 'While raging, your claws (a natural weapon you can choose each time you rage) deal 1d6 slashing damage; when you take the Attack action and attack with them, make one additional claw attack as part of the same action.', source: { kind: 'subclass', refId: 'path_of_the_beast_ua' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+          abilityEffects: [{ type: 'damage', dice: '1d6', damageType: 'slashing' }] } },
+        { kind: 'feature', value: { id: 'form_of_the_beast_tail_ua', name: 'Form of the Beast: Tail', description: 'While raging, your tail (a natural weapon you can choose each time you rage) deals 1d12 piercing damage and has the reach property.', source: { kind: 'subclass', refId: 'path_of_the_beast_ua' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+          abilityEffects: [{ type: 'damage', dice: '1d12', damageType: 'piercing' }] } },
+      ] },
+    { level: 6, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'bestial_soul_note_ua', name: 'Bestial Soul', description: 'Your Form of the Beast natural weapons count as magical for overcoming resistance and immunity to nonmagical attacks. At the end of a short or long rest, choose one adaptation below (lasting until your next short or long rest).', source: { kind: 'subclass', refId: 'path_of_the_beast_ua' }, level: 6, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'bestial_soul_swim_ua', name: 'Bestial Soul: Aquatic Adaptation', description: 'Gain a swimming speed equal to your walking speed and the ability to breathe underwater, until your next short or long rest.', source: { kind: 'subclass', refId: 'path_of_the_beast_ua' }, level: 6, effects: [
+          { type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'swim', movementRange: 30 },
+        ], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'bestial_soul_climb_ua', name: 'Bestial Soul: Climbing Adaptation', description: 'Gain a climbing speed equal to your walking speed and the ability to climb difficult surfaces (including upside down on ceilings) without an ability check, until your next short or long rest.', source: { kind: 'subclass', refId: 'path_of_the_beast_ua' }, level: 6, effects: [
+          { type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'climb', movementRange: 30 },
+        ], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'bestial_soul_jump_ua', name: 'Bestial Soul: Leaping Adaptation', description: 'Once per turn when you jump, make a Strength (Athletics) check and extend the jump\'s distance by a number of feet equal to the check total, until your next short or long rest.', source: { kind: 'subclass', refId: 'path_of_the_beast_ua' }, level: 6, effects: [], actions: [], choices: [], passive: true } },
+      ] },
+    { level: 10, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'infectious_fury_pool', name: 'Infectious Fury (scales with Constitution modifier)', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'infectious_fury', name: 'Infectious Fury', description: 'While raging, when you hit with a natural weapon, curse the target with a Wisdom save (DC 8 + Constitution modifier + proficiency bonus — no formula slot exists for this non-spellcaster DC) or suffer one of your choice: attack a creature of your choice with its reaction, or take 2d12 psychic damage. Usable a number of times equal to your Constitution modifier (minimum once) per long rest — tracked here as a single-use pool; increase its maximum to match.', source: { kind: 'subclass', refId: 'path_of_the_beast_ua' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: { resourceId: 'infectious_fury_pool', quantity: 1 }, range: '5 feet', target: 'single', requiresSave: null },
+          abilityEffects: [{ type: 'damage', dice: '2d12', damageType: 'psychic' }] } },
+      ] },
+    { level: 14, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'call_the_hunt_pool', name: 'Call the Hunt (scales with Constitution modifier)', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'call_the_hunt', name: 'Call the Hunt', description: 'When you enter your rage, choose willing creatures within 30 feet up to your Constitution modifier (minimum one): until your rage ends they gain Reckless Attack and you have advantage on saves against being frightened, and you gain 5 temporary hit points per creature that accepts. Usable a number of times equal to your Constitution modifier (minimum once) per long rest — tracked here as a single-use pool; increase its maximum to match.', source: { kind: 'subclass', refId: 'path_of_the_beast_ua' }, level: 14, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: { resourceId: 'call_the_hunt_pool', quantity: 1 }, range: '30 feet', target: 'multiple', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+  ],
+};
+
+// ── Path of the Giant (UA) ───────────────────────────────────────────────────
+const GIANT_CANTRIP_POOL_UA: ChoiceOption[] = [
+  { id: 'druidcraft', label: 'Druidcraft', value: { id: 'giant_power_druidcraft_ua', name: 'Giant Power: Druidcraft', description: 'Learn the Druidcraft cantrip (Wisdom-based).', source: { kind: 'subclass', refId: 'path_of_the_giant_ua' }, level: null, effects: [{ type: 'grant_spell', target: 'cantrip', operation: 'add', value: null, condition: null, cantripIds: ['druidcraft'] }], actions: [], choices: [], passive: true } as Feature },
+  { id: 'thaumaturgy', label: 'Thaumaturgy', value: { id: 'giant_power_thaumaturgy_ua', name: 'Giant Power: Thaumaturgy', description: 'Learn the Thaumaturgy cantrip (Wisdom-based).', source: { kind: 'subclass', refId: 'path_of_the_giant_ua' }, level: null, effects: [{ type: 'grant_spell', target: 'cantrip', operation: 'add', value: null, condition: null, cantripIds: ['thaumaturgy'] }], actions: [], choices: [], passive: true } as Feature },
+];
+export const pathOfTheGiantUaProgression: SubclassProgression = {
+  classId: 'barbarian', name: 'Path of the Giant (UA)', srd: false,
+  entries: [
+    { level: 3, hpDie: 12,
+      choices: [{ id: 'giant_power_cantrip_ua', prompt: 'Choose Druidcraft or Thaumaturgy.', kind: 'feature_pool', count: 1, pool: GIANT_CANTRIP_POOL_UA, grants: [], required: true, resolved: false }],
+      grants: [
+        { kind: 'feature', value: { id: 'giant_power_ua', name: 'Giant Power', description: 'Learn to speak, read, and write Giant (or another language if you already know it).', source: { kind: 'subclass', refId: 'path_of_the_giant_ua' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'giants_havoc_ua', name: "Giant's Havoc", description: 'While raging: add your rage damage bonus to successful Strength-based thrown weapon attacks; your reach increases by 5 feet and, if smaller than Large, you become Large (with your gear) if there\'s room.', source: { kind: 'subclass', refId: 'path_of_the_giant_ua' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
+      ] },
+    { level: 6, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'elemental_cleaver_ua', name: 'Elemental Cleaver', description: 'When you enter your rage, infuse a held weapon with acid, cold, fire, lightning, or thunder damage (your choice); while raging and wielding it, its damage type changes to that type, it deals an extra die of that damage on a hit, and it gains the thrown property (20/60 ft., returning to your hand after a throw). Suppressed if wielded by someone else.', source: { kind: 'subclass', refId: 'path_of_the_giant_ua' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'bonus_action', resourceCost: null, range: 'self', target: 'self', requiresSave: null },
+          abilityEffects: [{ type: 'damage', dice: '1d6', damageType: 'acid' }] } },
+        { kind: 'feature', value: { id: 'elemental_cleaver_retype_ua', name: 'Elemental Cleaver: Change Type', description: 'While raging and holding your infused weapon, use a bonus action to change its damage type to a different one of the five options.', source: { kind: 'subclass', refId: 'path_of_the_giant_ua' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'bonus_action', resourceCost: null, range: 'self', target: 'self', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 10, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'mighty_impel_ua', name: 'Mighty Impel', description: 'As a bonus action while raging, move a Medium or smaller creature within your reach to an unoccupied space within 30 feet; an unwilling creature resists with a Strength save (DC 8 + proficiency bonus + Strength modifier — no formula slot exists for this non-spellcaster DC). A creature that ends the movement unsupported falls, taking fall damage and landing prone.', source: { kind: 'subclass', refId: 'path_of_the_giant_ua' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'bonus_action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: null },
+      abilityEffects: [] } }] },
+    { level: 14, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'demiurgic_collussus_ua', name: 'Demiurgic Collussus', description: 'While raging, your reach increases by 10 feet (instead of 5), you can grow to Huge size, and Mighty Impel can move Large or smaller creatures. Elemental Cleaver\'s extra damage increases to 2 dice.', source: { kind: 'subclass', refId: 'path_of_the_giant_ua' }, level: 14, effects: [], actions: [], choices: [], passive: true } }] },
+  ],
+};
+
+// ── Path of the Wild Soul (UA) ───────────────────────────────────────────────
+// UA working title for the mechanic that shipped as the official Path of
+// Wild Magic above (compare "Magic Awareness"/"Bolstering Magic"/"Unstable
+// Backlash"/"Controlled Surge" there against this file's different feature
+// names and Wild Surge table) — different enough to keep as its own entry,
+// matching the Armorer/Armorer (UA) precedent.
+export const pathOfTheWildSoulUaProgression: SubclassProgression = {
+  classId: 'barbarian', name: 'Path of the Wild Soul (UA)', srd: false,
+  entries: [
+    { level: 3, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'detect_magic_wild_soul_pool', name: 'Detect Magic (scales with Constitution modifier)', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'wild_soul_detect_magic_ua', name: 'Wild Soul', description: 'Cast Detect Magic without a slot or components (Constitution-based); you glow with a color matching the school you detect. Usable a number of times equal to your Constitution modifier (minimum once) per long rest — tracked here as a single-use pool; increase its maximum to match.', source: { kind: 'subclass', refId: 'path_of_the_wild_soul_ua' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: { resourceId: 'detect_magic_wild_soul_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+          abilityEffects: [{ type: 'cast_spell', spellId: 'detect_magic' }] } },
+        { kind: 'feature', value: { id: 'wild_surge_ua', name: 'Wild Surge', description: 'Whenever you enter your rage, roll on this Wild Surge table (d8) for a random magical effect — necrotic burst with temp HP, self-teleport, exploding spirits, an AC bonus with retributive force damage, difficult terrain, a mind-reading disadvantage rider, a psychic-damage weapon infusion, or a blinding radiant line. Saves against these effects use DC 8 + proficiency bonus + Constitution modifier (no formula slot exists for this non-spellcaster DC). Resolve the rolled effect manually — the table\'s 8 distinct outcomes aren\'t individually wired into the engine.', source: { kind: 'subclass', refId: 'path_of_the_wild_soul_ua' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      ] },
+    { level: 6, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'magic_reserves_ua', name: 'Magic Reserves', description: 'As an action, touch a creature and roll a d4 (d6 at level 14): it recovers an expended spell slot of that level or lower, or (if it can\'t) gains temporary hit points equal to 5 times the roll. You take force damage equal to 5 times the roll.', source: { kind: 'subclass', refId: 'path_of_the_wild_soul_ua' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: 'touch', target: 'single', requiresSave: null },
+      abilityEffects: [] } }] },
+    { level: 10, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'arcane_rebuke_ua', name: 'Arcane Rebuke', description: 'While raging, when a creature forces you to make a saving throw, use your reaction to deal 3d6 force damage to it.', source: { kind: 'subclass', refId: 'path_of_the_wild_soul_ua' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'reaction', resourceCost: null, range: '60 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d6', damageType: 'force' }] } }] },
+    { level: 14, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'chaotic_fury_ua', name: 'Chaotic Fury', description: 'As a bonus action, reroll on the Wild Surge table, replacing your current effect with the new one.', source: { kind: 'subclass', refId: 'path_of_the_wild_soul_ua' }, level: 14, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'bonus_action', resourceCost: null, range: 'self', target: 'self', requiresSave: null },
+      abilityEffects: [] } }] },
+  ],
+};
+
 export const BARBARIAN_SUBCLASSES: SubclassProgression[] = [
   berserkerProgression,
   totemWarriorProgression,
@@ -360,4 +469,7 @@ export const BARBARIAN_SUBCLASSES: SubclassProgression[] = [
   pathOfTheGiantProgression,
   pathOfTheStormHeraldProgression,
   pathOfTheZealotProgression,
+  pathOfTheBeastUaProgression,
+  pathOfTheGiantUaProgression,
+  pathOfTheWildSoulUaProgression,
 ];

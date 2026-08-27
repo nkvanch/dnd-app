@@ -1,6 +1,8 @@
 // ============================================================================
 // FILE: src/content/subclasses/druid.ts
-// Druid subclasses: Circle of the Land, Circle of the Moon
+// Druid subclasses: Circle of the Land, Circle of the Moon, Dreams, Spores,
+// Stars, Wildfire, the Shepherd, plus Circle of the Primeval — a deferred
+// Unearthed Arcana entry (dinosaur-spirit companion), srd: false.
 // ============================================================================
 import { ClassProgression, Grant } from '../../engine/types';
 
@@ -205,6 +207,29 @@ export const circleOfTheShepherdProgression: SubclassProgression = {
   ],
 };
 
+// ── Circle of the Primeval (UA) ──────────────────────────────────────────────
+export const circleOfThePrimevalProgression: SubclassProgression = {
+  classId: 'druid', name: 'Circle of the Primeval (UA)', srd: false,
+  entries: [
+    { level: 2, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'keeper_of_old', name: 'Keeper of Old', description: 'Gain proficiency in History. On an Intelligence (History) check, roll a d4 and add it to the total.', source: { kind: 'subclass', refId: 'circle_primeval' }, level: 2, effects: [
+          { type: 'grant_proficiency', target: 'skill:history', operation: 'add', value: null, condition: null },
+        ], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'primeval_companion', name: 'Primeval Companion', description: 'As an action, expend a use of Wild Shape to summon your primeval companion (dinosaur or other ancient beast spirit) in an unoccupied space within 30 feet instead of transforming yourself. It\'s friendly, obeys your commands (AC 13 + prof bonus, HP 5 + 5 per druid level, a Strike attack, and Intercept Attack — redirecting half of an attack\'s damage from a nearby ally to itself), and lasts until reduced to 0 HP or you die.', source: { kind: 'subclass', refId: 'circle_primeval' }, level: 2, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: { resourceId: 'wild_shape_pool', quantity: 1 }, range: '30 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'prehistoric_conduit', name: 'Prehistoric Conduit', description: 'Spells you cast with a range other than self can originate from you or your primeval companion. Your companion has advantage on saving throws against your spells, and if it would normally take half damage on a success against one of your spells, it instead takes none on a success and half (with no additional effect) on a failure.', source: { kind: 'subclass', refId: 'circle_primeval' }, level: 6, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 10, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'titanic_bond', name: 'Titanic Bond', description: 'Your primeval companion grows to Large size, and you can grant it a climbing or swimming speed equal to its walking speed when summoned. Once per turn while it\'s summoned, when you hit with an attack or damage a creature you can see with a spell, force a Wisdom save (against your spell save DC) or frighten that creature until the end of your next turn.', source: { kind: 'subclass', refId: 'circle_primeval' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'wis', dc: 'spell_save_dc' } },
+      abilityEffects: [{ type: 'apply_condition', conditionId: 'frightened', duration: { unit: 'rounds', remaining: 1 } }] } }] },
+    { level: 14, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'scourge_of_the_ancients', name: 'Scourge of the Ancients', description: 'As part of the bonus action you use to command your companion, expend a spell slot of any level to empower it for 1 hour (or until it vanishes, or you use this again): it becomes Huge (or the largest size that fits) with temporary hit points equal to 10 times the slot\'s level, its Strike deals extra damage equal to 1d8 plus the slot\'s level, and its walking speed increases by 5 feet per slot level.', source: { kind: 'subclass', refId: 'circle_primeval' }, level: 14, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'bonus_action', resourceCost: null, range: 'self', target: 'self', requiresSave: null },
+      abilityEffects: [] } }] },
+  ],
+};
+
 export const DRUID_SUBCLASSES: SubclassProgression[] = [
   circleOfTheLandProgression,
   circleOfTheMoonProgression,
@@ -213,4 +238,5 @@ export const DRUID_SUBCLASSES: SubclassProgression[] = [
   circleOfStarsProgression,
   circleOfWildfireProgression,
   circleOfTheShepherdProgression,
+  circleOfThePrimevalProgression,
 ];

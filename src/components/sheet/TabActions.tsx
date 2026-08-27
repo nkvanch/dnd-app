@@ -146,6 +146,9 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
   const actions      = all.filter(c => c.activation.actionType === 'action');
   const bonusActions = all.filter(c => c.activation.actionType === 'bonus_action');
   const reactions    = all.filter(c => c.activation.actionType === 'reaction');
+  // 'free' — usable alongside another action (e.g. a maneuver riding a normal
+  // attack) rather than costing its own action/bonus action/reaction.
+  const freeActions  = all.filter(c => c.activation.actionType === 'free');
 
   const handleUse = useCallback((card: ActionCard) => {
     if (!onEntityUpdate || !rules) {
@@ -255,6 +258,7 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
       <Section title="ACTIONS"       cards={actions}      onUse={handleUse} />
       <Section title="BONUS ACTIONS" cards={bonusActions} onUse={handleUse} />
       <Section title="REACTIONS"     cards={reactions}    onUse={handleUse} />
+      <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} onUse={handleUse} />
 
       <UseModal
         card={activeCard}

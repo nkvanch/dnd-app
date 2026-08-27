@@ -61,8 +61,69 @@ export const formBrownBear: BeastForm = {
   ],
 };
 
+// Elemental forms for Circle of the Moon's Elemental Wild Shape (L10).
+// Same "written from memory, verify before shipping" caveat as the rest of
+// this file — CR 5 SRD elementals, not cross-checked against the live text.
+export const formAirElemental: BeastForm = {
+  id: 'air_elemental', name: 'Air Elemental', challengeRating: 5, size: 'Large',
+  stats: { str: 14, dex: 20, con: 14, int: 6, wis: 10, cha: 6 },
+  ac: 15, hp: 90, speed: 0, flySpeed: 90,
+  traits: [
+    'Air Form — can move through a space as narrow as 1 inch without squeezing',
+    'Whirlwind (action, 1/turn) — creatures in its space take bludgeoning damage and may be flung 20 feet away; not automated, resolve manually',
+  ],
+  attacks: [
+    { name: 'Slam', effect: { type: 'damage', dice: '2d8+5', damageType: 'bludgeoning' } },
+  ],
+};
+
+export const formEarthElemental: BeastForm = {
+  id: 'earth_elemental', name: 'Earth Elemental', challengeRating: 5, size: 'Large',
+  stats: { str: 20, dex: 8, con: 20, int: 5, wis: 10, cha: 5 },
+  ac: 17, hp: 126, speed: 30,
+  traits: [
+    'Burrow speed 30 ft — no dedicated burrowSpeed field in the engine, tracked as a trait note',
+    'Earth Glide — can burrow through nonmagical, unworked earth and stone without disturbing it',
+    'Siege Monster — deals double damage to objects and structures',
+  ],
+  attacks: [
+    { name: 'Slam', effect: { type: 'damage', dice: '2d8+5', damageType: 'bludgeoning' } },
+  ],
+};
+
+export const formFireElemental: BeastForm = {
+  id: 'fire_elemental', name: 'Fire Elemental', challengeRating: 5, size: 'Large',
+  stats: { str: 10, dex: 17, con: 16, int: 6, wis: 10, cha: 7 },
+  ac: 13, hp: 102, speed: 50,
+  traits: [
+    'Fire Form — a creature that touches it or hits it with a melee attack while within 5 feet takes fire damage; not automated, resolve manually',
+    'Illumination — sheds bright light in a 30-foot radius and dim light for an additional 30 feet',
+    'Water Susceptibility — takes damage and disadvantage on attacks when submerged or splashed with water',
+  ],
+  attacks: [
+    { name: 'Touch', effect: { type: 'damage', dice: '2d6+3', damageType: 'fire' } },
+  ],
+};
+
+export const formWaterElemental: BeastForm = {
+  id: 'water_elemental', name: 'Water Elemental', challengeRating: 5, size: 'Large',
+  stats: { str: 18, dex: 14, con: 18, int: 5, wis: 10, cha: 8 },
+  ac: 14, hp: 114, speed: 30, swimSpeed: 90,
+  traits: [
+    'Water Form — can enter a hostile creature\'s space and stop there',
+    'Freeze — if it takes cold damage, it partially freezes and its speed is reduced by 20 feet until the end of its next turn',
+  ],
+  attacks: [
+    { name: 'Slam', effect: { type: 'damage', dice: '2d8+4', damageType: 'bludgeoning' } },
+  ],
+};
+
 export const ALL_BEAST_FORMS: BeastForm[] = [
   formWolf,
   formGiantSpider,
   formBrownBear,
+  formAirElemental,
+  formEarthElemental,
+  formFireElemental,
+  formWaterElemental,
 ];

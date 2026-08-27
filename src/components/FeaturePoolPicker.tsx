@@ -1,0 +1,114 @@
+// src/components/FeaturePoolPicker.tsx
+// Resolves a 'feature_pool' pending choice — "pick N options, each granting
+// a different Feature" (Battle Master's maneuvers, Ranger Hunter's four
+// sub-choices). Mirrors InfusionPicker.tsx's shape: presentational, applies
+// through applyPoolChoiceToEntity (bypasses resolveChoice for the same
+// reason ASI/feat/subclass/infusion do — each option needs its own outcome,
+// not one shared `grants` array).
+import { useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { applyPoolChoiceToEntity } from '../engine/leveling';
+import { Entity, ChoiceState, CampaignRules, Feature } from '../engine/types';
+import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
+
+export function FeaturePoolPicker({
+  entity,
+  choice,
+  rules,
+  onResolved,
+  onClose,
+}: {
+  entity:     Entity;
+  choice:     ChoiceState;
+  rules:      CampaignRules;
+  onResolved: (updated: Entity) => void;
+  onClose?:   () => void;
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+  // A pool can be reused across multiple choice entries (e.g. Battle Master's
+  // maneuver pool at L3/L7/L15) — exclude options whose Feature id the
+  // character already has, so the same maneuver can't be picked twice.
+  const knownFeatureIds = new Set(entity.features.map(f => f.id));
+  const pool = (Array.isArray(choice.definition.pool) ? choice.definition.pool : [])
+    .filter(opt => !knownFeatureIds.has((opt.value as Feature | undefined)?.id ?? ''));
+
+  function toggle(id: string) {
+    setSelected(prev => {
+      if (prev.includes(id)) return prev.filter(x => x !== id);
+      if (prev.length >= choice.definition.count) return prev;
+      return [...prev, id];
+    });
+  }
+
+  function commit() {
+    if (selected.length !== choice.definition.count) return;
+    onResolved(applyPoolChoiceToEntity(entity, choice.id, selected, rules));
+  }
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.headerRow}>
+        <Text style={styles.heading}>{choice.definition.prompt}</Text>
+        {onClose && (
+          <Pressable onPress={onClose} hitSlop={8}>
+            <Text style={styles.close}>✕</Text>
+          </Pressable>
+        )}
+      </View>
+      <Text style={styles.count}>Selected {selected.length}/{choice.definition.count}</Text>
+
+      <View style={styles.list}>
+        {pool.map(opt => {
+          const feature = opt.value as Feature;
+          const isSel   = selected.includes(opt.id);
+          const isReal  = !!feature?.activation;
+          return (
+            <Pressable key={opt.id} style={[styles.row, isSel && styles.rowSelected]} onPress={() => toggle(opt.id)}>
+              <View style={styles.rowHeader}>
+                <Text style={styles.rowName}>{opt.label}{isSel ? ' ✓' : ''}</Text>
+                {!isReal && <Text style={styles.rowFlavorTag}>flavor-only</Text>}
+              </View>
+              {!!feature?.description && <Text style={styles.rowDesc}>{feature.description}</Text>}
+            </Pressable>
+          );
+        })}
+        {pool.length === 0 && (
+          <Text style={styles.empty}>No options available.</Text>
+        )}
+      </View>
+
+      <Pressable
+        style={[styles.applyBtn, selected.length !== choice.definition.count && styles.applyBtnDisabled]}
+        disabled={selected.length !== choice.definition.count}
+        onPress={commit}
+      >
+        <Text style={styles.applyTxt}>Confirm {selected.length} Choice{selected.length !== 1 ? 's' : ''} →</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.bg },
+  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heading:   { flex: 1, fontSize: FontSize.xl, fontWeight: FontWeight.black, color: Colors.gold, marginBottom: Spacing.xs },
+  close:     { fontSize: FontSize.xl, color: Colors.textSecondary, paddingLeft: Spacing.md },
+  count:     { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold, marginBottom: Spacing.md },
+  empty:     { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic', textAlign: 'center', padding: Spacing.lg },
+
+  list: { gap: Spacing.sm, marginBottom: Spacing.lg },
+  row: {
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.md,
+  },
+  rowSelected: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  rowName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, flexShrink: 1 },
+  rowFlavorTag: { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
+  rowDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 4, lineHeight: 18 },
+
+  applyBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center' },
+  applyBtnDisabled: { backgroundColor: Colors.goldDim },
+  applyTxt: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
+});

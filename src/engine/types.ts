@@ -458,7 +458,7 @@ export type ChoiceDefinition = {
   id:       string;
   prompt:   string;
   kind:     'skill' | 'spell' | 'language' | 'tool' | 'equipment' | 'feat' | 'asi' | 'custom'
-          | 'spellcasting_ability' | 'subclass' | 'infusion';
+          | 'spellcasting_ability' | 'subclass' | 'infusion' | 'feature_pool';
   count:    number;
   pool:     ChoiceOption[] | 'all' | FilterExpression;
   grants:   Grant[];

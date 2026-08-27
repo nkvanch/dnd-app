@@ -71,7 +71,32 @@ const ELDRITCH_CANNON: CompanionTemplate = {
   ],
 };
 
+const RANGERS_WOLF: CompanionTemplate = {
+  id:   'rangers_wolf',
+  name: "Ranger's Companion (Wolf)",
+  baseStats: { str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6 },
+  speed: 40,
+  hpForOwnerLevel: (level) => 4 * level,
+  features: [
+    {
+      id: 'rangers_wolf_bite', name: 'Bite',
+      description: "Melee weapon attack, reach 5 ft. On a hit: 2d4 piercing damage. Uses your (the Ranger's) proficiency bonus for the attack and damage rolls per Ranger's Companion — not auto-calculated, the engine has no formula path for an owner's proficiency bonus onto a companion's attack.",
+      source: { kind: 'class', refId: 'rangers_wolf' }, level: null, effects: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4', damageType: 'piercing' }],
+      actions: [],
+    },
+    {
+      id: 'rangers_wolf_pack_tactics', name: 'Pack Tactics',
+      description: 'The wolf has advantage on an attack roll against a creature if at least one of the wolf\'s allies is within 5 feet of the creature and the ally isn\'t incapacitated.',
+      source: { kind: 'class', refId: 'rangers_wolf' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'stat_modifier', target: 'attack rolls when an ally is within 5 feet of the target', operation: 'advantage', value: null, condition: null }],
+    },
+  ],
+};
+
 export const COMPANION_TEMPLATES_BY_GRANT_FEATURE: Record<string, CompanionTemplate> = {
   battle_smith_steel_defender: STEEL_DEFENDER,
   artillerist_eldritch_cannon: ELDRITCH_CANNON,
+  rangers_companion: RANGERS_WOLF,
 };

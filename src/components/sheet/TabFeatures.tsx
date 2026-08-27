@@ -7,6 +7,7 @@ import { resolveChoice } from '../../engine/leveling';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { SubclassPicker } from '../SubclassPicker';
 import { InfusionPicker } from '../InfusionPicker';
+import { FeaturePoolPicker } from '../FeaturePoolPicker';
 import { spellRepo } from '../../content/spellRepo';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
@@ -85,6 +86,7 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
   const [asiChoiceOpen, setAsiChoiceOpen] = useState<string | null>(null);
   const [subclassChoiceOpen, setSubclassChoiceOpen] = useState<string | null>(null);
   const [infusionChoiceOpen, setInfusionChoiceOpen] = useState<string | null>(null);
+  const [poolChoiceOpen, setPoolChoiceOpen] = useState<string | null>(null);
 
   const pendingChoices = entity.choices.filter(c => !c.resolved);
   const canResolve     = !!rules && !!onEntityUpdate;
@@ -177,6 +179,16 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                   </Pressable>
                 )}
 
+                {def.kind === 'feature_pool' && (
+                  <Pressable
+                    style={[styles.resolveBtn, !canResolve && styles.resolveBtnDisabled]}
+                    disabled={!canResolve}
+                    onPress={() => setPoolChoiceOpen(c.id)}
+                  >
+                    <Text style={styles.resolveBtnTxt}>Resolve — Choose →</Text>
+                  </Pressable>
+                )}
+
                 {isSkill && (
                   <>
                     <View style={styles.chipRow}>
@@ -209,7 +221,7 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                   </>
                 )}
 
-                {def.kind !== 'asi' && def.kind !== 'subclass' && def.kind !== 'infusion' && !isSkill && (
+                {def.kind !== 'asi' && def.kind !== 'subclass' && def.kind !== 'infusion' && def.kind !== 'feature_pool' && !isSkill && (
                   <Text style={styles.pendingNote}>
                     Resolve this with your DM for now — an in-app picker for this choice type is coming.
                   </Text>
@@ -373,6 +385,34 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                 rules={rules}
                 onClose={() => setInfusionChoiceOpen(null)}
                 onResolved={(updated) => { onEntityUpdate(updated); setInfusionChoiceOpen(null); }}
+              />
+            );
+          })()}
+        </View>
+      </Modal>
+
+      {/* Feature-pool resolution modal (Battle Master maneuvers, Ranger Hunter sub-choices) */}
+      <Modal visible={poolChoiceOpen !== null} animationType="slide" onRequestClose={() => setPoolChoiceOpen(null)}>
+        <View style={styles.asiModalRoot}>
+          {(() => {
+            const ch = entity.choices.find(c => c.id === poolChoiceOpen && !c.resolved);
+            if (!ch || !rules || !onEntityUpdate) {
+              return (
+                <View style={styles.asiDone}>
+                  <Text style={styles.asiDoneTxt}>Nothing to resolve.</Text>
+                  <Pressable style={styles.resolveBtn} onPress={() => setPoolChoiceOpen(null)}>
+                    <Text style={styles.resolveBtnTxt}>Close</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            return (
+              <FeaturePoolPicker
+                entity={entity}
+                choice={ch}
+                rules={rules}
+                onClose={() => setPoolChoiceOpen(null)}
+                onResolved={(updated) => { onEntityUpdate(updated); setPoolChoiceOpen(null); }}
               />
             );
           })()}

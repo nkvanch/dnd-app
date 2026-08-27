@@ -435,7 +435,11 @@ export function generateActionCard(
 
   const tabs: ActionCard['tabs'] = ['features'];
   const actionType = feature.activation.actionType;
-  if (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction') {
+  // 'free' (usable alongside another action, e.g. a maneuver riding a normal
+  // attack) still spends a resource and needs a discoverable [Use] button —
+  // the Actions tab is the only place that exists in the app. Only bare
+  // 'passive' features (no player-triggered use at all) are excluded.
+  if (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction' || actionType === 'free') {
     tabs.push('actions');
   }
   if (feature.source.kind === 'spell')     tabs.push('spellcasting');

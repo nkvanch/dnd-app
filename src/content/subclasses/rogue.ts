@@ -23,7 +23,7 @@ export const thiefProgression: SubclassProgression = {
     {
       level: 9, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'supreme_sneak', name: 'Supreme Sneak', description: 'Advantage on Stealth checks if you move no more than half your speed on the same turn.', source: { kind: 'subclass', refId: 'thief' }, level: 9, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'supreme_sneak', name: 'Supreme Sneak', description: 'Advantage on Stealth checks if you move no more than half your speed on the same turn.', source: { kind: 'subclass', refId: 'thief' }, level: 9, actions: [], choices: [], passive: true, effects: [{ type: 'stat_modifier', target: 'Stealth checks when you move no more than half your speed', operation: 'advantage', value: null, condition: null }] } },
       ],
     },
     {
@@ -51,8 +51,11 @@ export const assassinProgression: SubclassProgression = {
     {
       level: 3, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'assassinate', name: 'Assassinate', description: 'Advantage on attack rolls against creatures that haven\'t taken a turn yet. Any hit you score against a surprised creature is a critical hit.', source: { kind: 'subclass', refId: 'assassin' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
-        { kind: 'feature', value: { id: 'assassin_proficiencies', name: 'Bonus Proficiencies', description: 'Proficiency with disguise kit and poisoner\'s kit.', source: { kind: 'subclass', refId: 'assassin' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'assassinate', name: 'Assassinate', description: 'Advantage on attack rolls against creatures that haven\'t taken a turn yet. Any hit you score against a surprised creature is a critical hit (not automated — no crit mechanism in the engine, apply manually).', source: { kind: 'subclass', refId: 'assassin' }, level: 3, actions: [], choices: [], passive: true, effects: [{ type: 'stat_modifier', target: "attack rolls against creatures that haven't yet taken a turn in combat", operation: 'advantage', value: null, condition: null }] } },
+        { kind: 'feature', value: { id: 'assassin_proficiencies', name: 'Bonus Proficiencies', description: 'Proficiency with disguise kit and poisoner\'s kit.', source: { kind: 'subclass', refId: 'assassin' }, level: 3, actions: [], choices: [], passive: true, effects: [
+          { type: 'grant_proficiency', target: 'tool:disguise_kit', operation: 'add', value: null, condition: null },
+          { type: 'grant_proficiency', target: 'tool:poisoners_kit', operation: 'add', value: null, condition: null },
+        ] } },
       ],
     },
     {

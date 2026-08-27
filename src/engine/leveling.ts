@@ -533,6 +533,43 @@ export function applyFeatToEntity(
   return recomputeDerived(updated, rules);
 }
 
+/**
+ * Resolves a 'feature_pool' choice — "pick N options, each granting a
+ * DIFFERENT Feature" (Battle Master's maneuvers, Ranger Hunter's four
+ * sub-choices). resolveChoice() can't handle this: it applies the choice's
+ * single `grants` array identically to every selection, so it only works
+ * when every option in a pool shares the same outcome (skills, equipment).
+ * Bypasses resolveChoice entirely, same shape as applySubclassToEntity/
+ * applyInfusionChoiceToEntity/applyFeatToEntity above — each selected
+ * option's `value` is a full Feature literal, applied through the existing
+ * `applyGrant(..., {kind:'feature', ...})` path so its Effects fire exactly
+ * like any other granted feature.
+ */
+export function applyPoolChoiceToEntity(
+  entity:            Entity,
+  choiceId:           string,
+  selectedOptionIds:  string[],
+  rules:              CampaignRules,
+): Entity {
+  const pending = entity.choices.find(c => c.id === choiceId);
+  if (!pending || !Array.isArray(pending.definition.pool)) return entity;
+
+  let updated = entity;
+  for (const optId of selectedOptionIds) {
+    const option = pending.definition.pool.find(o => o.id === optId);
+    if (option?.value) {
+      updated = applyGrant(updated, { kind: 'feature', value: option.value as Feature }, pending.grantedAt);
+    }
+  }
+  updated = {
+    ...updated,
+    choices: updated.choices.map(c =>
+      c.id === choiceId ? { ...c, resolved: true, selections: selectedOptionIds } : c
+    ),
+  };
+  return recomputeDerived(updated, rules);
+}
+
 // ── canAutoResolve ────────────────────────────────────────────────────────────
 
 function canAutoResolve(choice: ChoiceDefinition): boolean {

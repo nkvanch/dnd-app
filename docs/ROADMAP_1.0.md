@@ -1899,6 +1899,33 @@ early 1.1 if Phase 1–4 run long. Do not let it delay Phase 1.
     it. This is pre-existing, not introduced by this batch, and equally
     affects every other homebrew builder — flagged here since it was
     directly observed while testing, not because this batch caused it.
+- [x] **Local homebrew version history**, 2026-08-27 batch. New
+  `content_cache_history` table (append-only) — `saveHomebrewContent()`
+  (`src/db/contentCacheRepo.ts`) now archives the outgoing row before
+  overwriting and increments the previously-dead `version` column, both
+  inside one transaction. New `loadContentHistory`/`restoreContentVersion`
+  repo functions, two thin `homebrewStore.ts` actions, and a new generic
+  `VersionHistoryModal.tsx` wired into the Homebrew Library's per-row icon
+  group (🕐, between ✏️ edit and 📤 export). Restoring an old version copies
+  it forward as a new version (v1→v2→v3, restore v1 → v4) rather than
+  rewriting history. Confirmed via direct code reading that this was safe to
+  scope narrowly: `applyGrant()`'s `'feature'` case snapshots `Feature`
+  objects into `entity.features` at grant time, so editing homebrew never
+  retroactively changes a character who already has it — no `Identity`
+  changes, no engine changes, no changes to any of the 10 builder screens
+  needed.
+  - [x] UI wiring verified live in web preview: 🕐 opens the modal, shows the
+        correct item name for whichever row was tapped, reports "No
+        previous versions yet.", Close dismisses cleanly.
+  - [ ] **The actual SQLite archive/restore round trip is unverified** —
+        same root cause as everywhere else this session hits it: SQLite is
+        native-only (`Platform.OS === 'web'` no-ops), so this entire
+        feature's real persistence behavior cannot be exercised in a web
+        session. **ACTION NEEDED**: on a native device, edit a homebrew item
+        twice, open its 🕐 history, confirm two archived versions appear
+        with the right data/timestamps, then restore the older one and
+        confirm it becomes a new top-of-history current version rather than
+        mutating anything in place.
 
 ---
 

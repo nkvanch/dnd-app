@@ -1,6 +1,11 @@
 // ============================================================================
 // FILE: src/content/subclasses/cleric.ts
-// Cleric subclasses: Life Domain, Light Domain
+// Cleric subclasses: Life, Light, Arcana, Death, Forge, Grave, Knowledge,
+// Nature, Order, Peace, Tempest, Trickery, Twilight, War, plus four deferred
+// entries: Fate Domain (Unearthed Arcana) and three Amonkhet-setting
+// reflavors (Zeal, Solidarity, Strength) built for Magic: The
+// Gathering's Amonkhet plane rather than a standard Forgotten Realms-style
+// pantheon — non-official either way, srd: false throughout.
 // ============================================================================
 import { ClassProgression, Grant } from '../../engine/types';
 
@@ -884,6 +889,123 @@ export const warDomainProgression: SubclassProgression = {
   ],
 };
 
+// ── Fate Domain (Unearthed Arcana) ───────────────────────────────────────────
+export const fateDomainUaProgression: SubclassProgression = {
+  classId: 'cleric', name: 'Fate Domain (UA)', srd: false,
+  entries: [
+    { level: 1, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'omens_and_portents_pool', name: 'Omens and Portents', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'omens_and_portents', name: 'Omens and Portents', description: 'Cast Augury without a slot or components once per long rest. Until you finish a long rest, reduce by 25% the chance a divination spell (Augury, Commune, Divination, etc.) gives you no answer or a random reading. Augury isn\'t in this codebase\'s spell library yet — no cast_spell hook until it\'s added.', source: { kind: 'subclass', refId: 'fate_domain_ua' }, level: 1, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: { resourceId: 'omens_and_portents_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+          abilityEffects: [] } },
+        { kind: 'feature', value: { id: 'ties_that_bind', name: 'Ties That Bind', description: 'As an action, tie a strand of fate to a touched object or creature for 1 hour or until you use this again (an unwilling creature resists with a Wisdom save against your spell save DC); while bound and on your plane, you sense its direction and whether it\'s moving. Once per turn when you deal damage or healing to it with a spell slot, roll a d6 and add it to that roll. Usable a number of times equal to your proficiency bonus per long rest.', source: { kind: 'subclass', refId: 'fate_domain_ua' }, level: 1, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: null, range: 'touch', target: 'single', requiresSave: { ability: 'wis', dc: 'spell_save_dc' } },
+          abilityEffects: [] } },
+      ] },
+    { level: 2, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'strands_of_fate', name: 'Channel Divinity: Strands of Fate', description: 'As a bonus action, use your Channel Divinity to enter a fate-weaving state for up to 1 minute or until your concentration ends: whenever another creature you can see makes an attack roll or ability check, use a reaction to grant it advantage or disadvantage (your choice).', source: { kind: 'subclass', refId: 'fate_domain_ua' }, level: 2, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'bonus_action', resourceCost: { resourceId: 'channel_divinity_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+      abilityEffects: [] } }] },
+    { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'insightful_striking', name: 'Insightful Striking', description: 'As a bonus action, glimpse a chosen creature\'s defenses within 30 feet: until the end of your next turn, choose to add a rolled d6 to your next attack roll against it, or subtract a rolled d6 from the next save it makes against your spell. Usable a number of times equal to your proficiency bonus per long rest.', source: { kind: 'subclass', refId: 'fate_domain_ua' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'bonus_action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: null },
+      abilityEffects: [] } }] },
+    { level: 8, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'potent_spellcasting_fate', name: 'Potent Spellcasting', description: 'Add your Wisdom modifier to the damage you deal with any cleric cantrip. No formula slot exists for this flat WIS-to-cantrip-damage bonus — apply manually.', source: { kind: 'subclass', refId: 'fate_domain_ua' }, level: 8, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 17, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'visions_of_the_future_pool', name: 'Visions of the Future', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'visions_of_the_future', name: 'Visions of the Future', description: 'Cast Foresight once without a spell slot (1-minute duration for this casting). Usable once per long rest.', source: { kind: 'subclass', refId: 'fate_domain_ua' }, level: 17, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: { resourceId: 'visions_of_the_future_pool', quantity: 1 }, range: 'touch', target: 'single', requiresSave: null },
+          abilityEffects: [{ type: 'cast_spell', spellId: 'foresight' }] } },
+      ] },
+  ],
+};
+
+// ── Zeal Domain (Amonkhet) ───────────────────────────────────────────────────
+export const zealDomainProgression: SubclassProgression = {
+  classId: 'cleric', name: 'Zeal Domain (Amonkhet)', srd: false,
+  entries: [
+    { level: 1, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'proficiency', value: { armor: ['heavy'], weapons: ['martial'] } },
+        { kind: 'resource', value: { resourceId: 'priest_of_zeal_pool', name: 'Priest of Zeal (scales with Wisdom modifier)', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'priest_of_zeal', name: 'Priest of Zeal', description: 'Gain proficiency with martial weapons and heavy armor. When you take the Attack action, make one weapon attack as a bonus action. Usable a number of times equal to your Wisdom modifier (minimum once) per long rest — tracked here as a single-use pool; increase its maximum to match.', source: { kind: 'subclass', refId: 'zeal_domain' }, level: 1, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: { resourceId: 'priest_of_zeal_pool', quantity: 1 }, range: '5 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 2, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'consuming_fervor', name: 'Channel Divinity: Consuming Fervor', description: 'When you roll fire or thunder damage, use your Channel Divinity to deal maximum damage instead of rolling.', source: { kind: 'subclass', refId: 'zeal_domain' }, level: 2, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: { resourceId: 'channel_divinity_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+      abilityEffects: [] } }] },
+    { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'resounding_strike', name: 'Resounding Strike', description: 'When you deal thunder damage to a Large or smaller creature, also push it up to 10 feet away from you.', source: { kind: 'subclass', refId: 'zeal_domain' }, level: 6, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 8, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'divine_strike_zeal', name: 'Divine Strike', description: 'Once per turn on a hit with a weapon attack, deal an extra 1d8 damage of the weapon\'s type (2d8 at level 14).', source: { kind: 'subclass', refId: 'zeal_domain' }, level: 8, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'weapon' }] } }] },
+    { level: 17, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'resource', value: { resourceId: 'blaze_of_glory_pool', name: 'Blaze of Glory', maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'blaze_of_glory', name: 'Blaze of Glory', description: 'When reduced to 0 HP by a visible attacker (even one that would kill you outright), use your reaction to move up to your speed toward it and make one melee weapon attack with advantage; on a hit it takes an extra 5d10 fire damage plus 5d10 of the weapon\'s type. You then fall unconscious and make death saves normally (or die if the original damage would have killed you outright). Usable once per long rest.', source: { kind: 'subclass', refId: 'zeal_domain' }, level: 17, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: { resourceId: 'blaze_of_glory_pool', quantity: 1 }, range: '5 feet', target: 'single', requiresSave: null },
+          abilityEffects: [{ type: 'damage', dice: '5d10', damageType: 'fire' }] } },
+      ] },
+  ],
+};
+
+// ── Solidarity Domain (Amonkhet) ─────────────────────────────────────────────
+export const solidarityDomainProgression: SubclassProgression = {
+  classId: 'cleric', name: 'Solidarity Domain (Amonkhet)', srd: false,
+  entries: [
+    { level: 1, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'proficiency', value: { armor: ['heavy'] } },
+        { kind: 'resource', value: { resourceId: 'solidaritys_action_pool', name: "Solidarity's Action (scales with Wisdom modifier)", maximum: 1, recharge: 'long_rest' } },
+        { kind: 'feature', value: { id: 'solidaritys_action', name: "Solidarity's Action", description: 'Gain proficiency with heavy armor. When you take the Help action to aid an ally\'s attack, make one weapon attack as a bonus action. Usable a number of times equal to your Wisdom modifier (minimum once) per long rest — tracked here as a single-use pool; increase its maximum to match.', source: { kind: 'subclass', refId: 'solidarity_domain' }, level: 1, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: { resourceId: 'solidaritys_action_pool', quantity: 1 }, range: '5 feet', target: 'single', requiresSave: null },
+          abilityEffects: [] } },
+      ] },
+    { level: 2, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'preserve_life', name: 'Channel Divinity: Preserve Life', description: 'As an action, restore hit points equal to five times your cleric level, divided among creatures you choose within 30 feet (none above half their HP maximum; not usable on undead or constructs). The total pool has no fixed die to attach — apply the healing manually.', source: { kind: 'subclass', refId: 'solidarity_domain' }, level: 2, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: { resourceId: 'channel_divinity_pool', quantity: 1 }, range: '30 feet', target: 'multiple', requiresSave: null },
+      abilityEffects: [] } }] },
+    { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'oketras_blessing', name: "Channel Divinity: Oketra's Blessing", description: 'When a creature within 30 feet makes an attack roll, use your reaction to grant it a +10 bonus after seeing the roll but before the result is known.', source: { kind: 'subclass', refId: 'solidarity_domain' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'reaction', resourceCost: { resourceId: 'channel_divinity_pool', quantity: 1 }, range: '30 feet', target: 'single', requiresSave: null },
+      abilityEffects: [] } }] },
+    { level: 8, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'divine_strike_solidarity', name: 'Divine Strike', description: 'Once per turn on a hit with a weapon attack, deal an extra 1d8 damage of the weapon\'s type (2d8 at level 14).', source: { kind: 'subclass', refId: 'solidarity_domain' }, level: 8, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'weapon' }] } }] },
+    { level: 17, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'supreme_healing', name: 'Supreme Healing', description: 'Whenever you roll dice to restore hit points with a spell, use the highest possible number for each die instead of rolling.', source: { kind: 'subclass', refId: 'solidarity_domain' }, level: 17, effects: [], actions: [], choices: [], passive: true } }] },
+  ],
+};
+
+// ── Strength Domain (Amonkhet) ───────────────────────────────────────────────
+export const strengthDomainProgression: SubclassProgression = {
+  classId: 'cleric', name: 'Strength Domain (Amonkhet)', srd: false,
+  entries: [
+    { level: 1, hpDie: 8,
+      choices: [{ id: 'acolyte_of_strength_skill', prompt: 'Choose a skill: Animal Handling, Athletics, Nature, or Survival.', kind: 'skill', count: 1, pool: [
+        { id: 'animal_handling', label: 'Animal Handling', value: 'animal_handling' },
+        { id: 'athletics', label: 'Athletics', value: 'athletics' },
+        { id: 'nature', label: 'Nature', value: 'nature' },
+        { id: 'survival', label: 'Survival', value: 'survival' },
+      ], grants: [], required: true, resolved: false }],
+      grants: [
+        { kind: 'proficiency', value: { armor: ['heavy'] } },
+        { kind: 'feature', value: { id: 'acolyte_of_strength', name: 'Acolyte of Strength', description: 'Gain proficiency with heavy armor and learn one druid cantrip of your choice. Druid cantrip choice isn\'t wired — no fixed spellId, it\'s a free pick from another class\'s list.', source: { kind: 'subclass', refId: 'strength_domain' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
+      ] },
+    { level: 2, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'feat_of_strength', name: 'Channel Divinity: Feat of Strength', description: 'When you make a Strength-based attack roll, ability check, or saving throw, use your Channel Divinity for a +10 bonus after seeing the roll but before the result is known.', source: { kind: 'subclass', refId: 'strength_domain' }, level: 2, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: { resourceId: 'channel_divinity_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+      abilityEffects: [] } }] },
+    { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'rhonas_blessing', name: "Channel Divinity: Rhonas' Blessing", description: 'When a creature within 30 feet makes a Strength-based attack roll, ability check, or saving throw, use your reaction to grant it a +10 bonus after seeing the roll but before the result is known.', source: { kind: 'subclass', refId: 'strength_domain' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'reaction', resourceCost: { resourceId: 'channel_divinity_pool', quantity: 1 }, range: '30 feet', target: 'single', requiresSave: null },
+      abilityEffects: [] } }] },
+    { level: 8, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'divine_strike_strength', name: 'Divine Strike', description: 'Once per turn on a hit with a weapon attack, deal an extra 1d8 damage of the weapon\'s type (2d8 at level 14).', source: { kind: 'subclass', refId: 'strength_domain' }, level: 8, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'weapon' }] } }] },
+    { level: 17, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'avatar_of_battle', name: 'Avatar of Battle', description: 'Gain resistance to bludgeoning, piercing, and slashing damage from nonmagical attacks.', source: { kind: 'subclass', refId: 'strength_domain' }, level: 17, effects: [
+      { type: 'grant_resistance', target: 'bludgeoning', operation: 'resistance', value: null, condition: null },
+      { type: 'grant_resistance', target: 'piercing', operation: 'resistance', value: null, condition: null },
+      { type: 'grant_resistance', target: 'slashing', operation: 'resistance', value: null, condition: null },
+    ], actions: [], choices: [], passive: true } }] },
+  ],
+};
+
 export const CLERIC_SUBCLASSES: SubclassProgression[] = [
   lifeDomainProgression,
   lightDomainProgression,
@@ -899,4 +1021,8 @@ export const CLERIC_SUBCLASSES: SubclassProgression[] = [
   trickeryDomainProgression,
   twilightDomainProgression,
   warDomainProgression,
+  fateDomainUaProgression,
+  zealDomainProgression,
+  solidarityDomainProgression,
+  strengthDomainProgression,
 ];

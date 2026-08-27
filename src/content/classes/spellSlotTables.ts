@@ -63,6 +63,33 @@ export const ARTIFICER_SLOTS: SpellSlotRow[] = HALF_CASTER_SLOTS.map(row =>
   row.level === 1 ? { level: 1, slots: HALF_CASTER_SLOTS[1].slots } : row
 );
 
+/**
+ * Third caster (Eldritch Knight, Arcane Trickster) — casting starts at
+ * class level 3, tops out at 4th-level spells.
+ */
+export const THIRD_CASTER_SLOTS: SpellSlotRow[] = [
+  { level:  1, slots: [0,0,0,0,0,0,0,0,0] },
+  { level:  2, slots: [0,0,0,0,0,0,0,0,0] },
+  { level:  3, slots: [2,0,0,0,0,0,0,0,0] },
+  { level:  4, slots: [3,0,0,0,0,0,0,0,0] },
+  { level:  5, slots: [3,0,0,0,0,0,0,0,0] },
+  { level:  6, slots: [3,0,0,0,0,0,0,0,0] },
+  { level:  7, slots: [4,2,0,0,0,0,0,0,0] },
+  { level:  8, slots: [4,2,0,0,0,0,0,0,0] },
+  { level:  9, slots: [4,2,0,0,0,0,0,0,0] },
+  { level: 10, slots: [4,3,0,0,0,0,0,0,0] },
+  { level: 11, slots: [4,3,0,0,0,0,0,0,0] },
+  { level: 12, slots: [4,3,0,0,0,0,0,0,0] },
+  { level: 13, slots: [4,3,2,0,0,0,0,0,0] },
+  { level: 14, slots: [4,3,2,0,0,0,0,0,0] },
+  { level: 15, slots: [4,3,2,0,0,0,0,0,0] },
+  { level: 16, slots: [4,3,3,0,0,0,0,0,0] },
+  { level: 17, slots: [4,3,3,0,0,0,0,0,0] },
+  { level: 18, slots: [4,3,3,0,0,0,0,0,0] },
+  { level: 19, slots: [4,3,3,1,0,0,0,0,0] },
+  { level: 20, slots: [4,3,3,1,0,0,0,0,0] },
+];
+
 /** Warlock (pact magic — all slots same tier, recharge short rest). */
 export const WARLOCK_SLOTS: SpellSlotRow[] = [
   { level:  1, slots: [1,0,0,0,0,0,0,0,0] },

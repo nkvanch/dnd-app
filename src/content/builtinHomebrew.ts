@@ -16,6 +16,7 @@
 // ============================================================================
 import { CharClass, Race } from '../engine/types';
 import { abyssKnightProgression } from './classes/abyssKnight';
+import { bloodHunterProgression } from './classes/bloodHunter';
 import { raceSkeleton } from './races/index';
 
 /**
@@ -41,9 +42,32 @@ const abyssKnightClass: CharClass = {
   rawProgression: abyssKnightProgression,
 };
 
+/**
+ * Blood Hunter as a homebrew CharClass — a third-party class (Matthew
+ * Mercer / Critical Role) never published by WotC, same treatment as Abyss
+ * Knight above. Base class only for now; the four Blood Hunter Orders are a
+ * separate, later authoring batch (Blood Hunter Order is already wired as a
+ * `kind: 'subclass'` choice at level 3, same mechanism every official class
+ * uses, so orders slot in the same way once authored).
+ */
+const bloodHunterClass: CharClass = {
+  id:      'blood_hunter',
+  name:    'Blood Hunter',
+  hitDie:  10,
+  features: [],
+  description:
+    'A grim warrior who sacrifices their own vitality to hunter monsters, ' +
+    'channeling hemocraft blood magic into weapon strikes and curses. ' +
+    'Martial half-caster-adjacent — no spellcasting of its own, but uses a ' +
+    'scaling hemocraft die (like Sneak Attack or Martial Arts) to fuel its ' +
+    'features.',
+  savingThrows: ['dex', 'int'],
+  rawProgression: bloodHunterProgression,
+};
+
 /** All built-in homebrew, grouped by content type for seeding. */
 export const BUILTIN_HOMEBREW = {
-  classes: [abyssKnightClass] as CharClass[],
+  classes: [abyssKnightClass, bloodHunterClass] as CharClass[],
   races:   [raceSkeleton]     as Race[],
 };
 

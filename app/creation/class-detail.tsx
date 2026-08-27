@@ -169,6 +169,16 @@ const CLASS_DETAIL: Record<string, ClassDetail> = {
     toolProf: 'None',
     spellcasting: true,
   },
+  blood_hunter: {
+    description: 'A grim warrior who sacrifices their own vitality to hunt monsters, channeling hemocraft blood magic into weapon strikes and curses.',
+    savingThrows: ['Dexterity', 'Intelligence'],
+    savingThrowAbilities: ['dex', 'int'],
+    primaryFeatures: ["Hunter's Bane", 'Blood Maledict', 'Crimson Rite', 'Blood Hunter Order', 'Extra Attack'],
+    armorProf: 'Light, medium, shields',
+    weaponProf: 'Simple weapons, martial weapons',
+    toolProf: "Alchemist's supplies",
+    spellcasting: false,
+  },
 };
 
 /**

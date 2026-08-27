@@ -32,10 +32,14 @@ export type ResistanceState  = 'none' | 'resistance' | 'immunity' | 'vulnerabili
 export type StrategyKind     = 'stat_modifier' | 'named_bonus' | 'advantage_track' | 'temp_hp' | 'base_ac_formula';
 
 export interface AttackBonus {
-  id:    string;
-  name:  string;
-  bonus: number;
-  type:  'melee' | 'ranged' | 'spell' | string;
+  id:          string;
+  name:        string;
+  bonus:       number;
+  type:        'melee' | 'ranged' | 'spell' | string;
+  ability:     'str' | 'dex';
+  damageBonus: number;
+  damageDice:  string;
+  damageType:  string;
 }
 
 export type FilterExpression = Record<string, unknown>;

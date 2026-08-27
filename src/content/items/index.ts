@@ -803,14 +803,14 @@ function allSavingThrowsBonus(amount: number): Effect[] {
 
 // ── +1/+2/+3 weapon family ───────────────────────────────────────────────────
 // Weapon attack/damage bonuses are NOT Effects in this engine —
-// actionCards.ts's computeWeaponAttack() requires abilityEffects+activation
-// to exist at all (a weapon with none generates no attack card whatsoever),
-// and reads the magic bonus via parseMagicBonus(), which regexes "+N" out of
+// pipeline.ts's computeWeaponAttackBonuses() requires abilityEffects+
+// activation to exist at all (a weapon with none generates no attack card
+// whatsoever), and reads the magic bonus via a regex that pulls "+N" out of
 // the feature's name/description text — already correct in the imported
 // data ("Longsword +1" etc.), no edit needed there. So each override here
 // borrows the matching mundane weapon's dice/activation/type-tag properties
-// (finesse/versatile/ammunition/etc., needed for weaponAbilityMod's STR-vs-
-// DEX classification) rather than adding an Effect.
+// (finesse/versatile/ammunition/etc., needed for the STR-vs-DEX
+// classification) rather than adding an Effect.
 const WEAPON_BASE_MAP: Record<string, Item> = {
   battleaxe: itemBattleaxe, blowgun: itemBlowgun, club: itemClub,
   dagger: itemDagger, dart: itemDart, glaive: itemGlaive,

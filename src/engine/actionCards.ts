@@ -15,7 +15,6 @@ import {
 } from './types';
 import { spellRepo } from '../content/spellRepo';
 import { itemRepo } from '../content/itemRepo';
-import { modifier } from './pipeline';
 import { usesLargeCreatureWeaponDice } from './houseRules';
 import { CampaignRules } from './types';
 
@@ -44,66 +43,10 @@ function doubleDice(dice: string): string {
 export type CardGenOptions = { doubleWeaponDice?: boolean };
 
 // ── Weapon attack / damage computation ────────────────────────────────────────
-
-/** Proficiency bonus from character level (PHB scaling). */
-function profBonusFor(entity: Entity): number {
-  return Math.ceil(1 + entity.identity.level / 4);
-}
-
-/**
- * Parses a magic bonus (+1/+2/+3) from an item's properties or feature name.
- * e.g. "+1 to attack and damage rolls" → 1; "+1 Life-Drinking Greatsword" → 1.
- */
-function parseMagicBonus(feature: Feature): number {
-  const hay = [feature.name, ...(feature.description ? [feature.description] : [])].join(' ');
-  const m = hay.match(/\+(\d)\b/);
-  return m ? parseInt(m[1], 10) : 0;
-}
-
-/**
- * Determines which ability modifier a weapon uses. Finesse weapons use the
- * higher of STR/DEX; ranged weapons use DEX; everything else uses STR.
- * Reads item properties via the feature's source item id.
- */
-function weaponAbilityMod(feature: Feature, entity: Entity): { mod: number; ability: 'str' | 'dex' } {
-  const itemId = feature.source?.kind === 'item' ? feature.source.refId : null;
-  const item   = itemId ? itemRepo.getItemSync(itemId) ?? null : null;
-  const props  = (item?.properties ?? []).map(p => p.toLowerCase()).join(' ');
-
-  const strMod = modifier(entity.stats.str);
-  const dexMod = modifier(entity.stats.dex);
-
-  const isFinesse = props.includes('finesse');
-  const isRanged  = props.includes('ammunition') || props.includes('thrown') && props.includes('range');
-
-  if (isFinesse) {
-    return dexMod >= strMod ? { mod: dexMod, ability: 'dex' } : { mod: strMod, ability: 'str' };
-  }
-  if (isRanged) return { mod: dexMod, ability: 'dex' };
-  return { mod: strMod, ability: 'str' };
-}
-
-/**
- * Computes a weapon's to-hit bonus and flat damage bonus.
- * to-hit = ability mod + proficiency (always proficient for now) + magic bonus
- * damage = ability mod + magic bonus
- */
-function computeWeaponAttack(feature: Feature, entity: Entity): { toHit: number; dmgBonus: number; ability: string } | null {
-  // Only item-sourced features with a damage ability effect are weapons
-  if (feature.source?.kind !== 'item') return null;
-  const hasDamage = (feature.abilityEffects ?? []).some(e => e.type === 'damage');
-  if (!hasDamage) return null;
-
-  const { mod, ability } = weaponAbilityMod(feature, entity);
-  const magic = parseMagicBonus(feature);
-  const prof  = profBonusFor(entity);
-
-  return {
-    toHit:    mod + prof + magic,
-    dmgBonus: mod + magic,
-    ability:  ability.toUpperCase(),
-  };
-}
+// Attack/damage bonuses are computed once in pipeline.ts's recomputeDerived
+// (entity.derived.attackBonuses) — see computeWeaponAttackBonuses there. This
+// file only looks the result up by item id, it doesn't recompute it (used to,
+// independently of TabCharacter.tsx's own copy, and the two had drifted).
 
 function fmtBonus(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;
@@ -253,10 +196,15 @@ export function buildLayer2(feature: Feature, entity?: Entity, opts: CardGenOpti
 
   const parts: string[] = [];
 
-  // Weapon attack: prepend to-hit and fold the flat damage bonus into the dice
-  const atk = entity ? computeWeaponAttack(feature, entity) : null;
+  // Weapon attack: prepend to-hit and fold the flat damage bonus into the dice.
+  // Only item-sourced features with a damage ability effect are weapons.
+  const isWeapon = entity && feature.source?.kind === 'item'
+    && (feature.abilityEffects ?? []).some(e => e.type === 'damage');
+  const atk = isWeapon
+    ? entity!.derived.attackBonuses.find(ab => ab.id === feature.source.refId) ?? null
+    : null;
   if (atk) {
-    parts.push(`${fmtBonus(atk.toHit)} to hit`);
+    parts.push(`${fmtBonus(atk.bonus)} to hit`);
   }
 
   // The large-creature rule doubles WEAPON dice only (item-sourced attacks),
@@ -270,8 +218,8 @@ export function buildLayer2(feature: Feature, entity?: Entity, opts: CardGenOpti
       // Only the FIRST damage effect gets the ability mod (the weapon swing);
       // rider damage (e.g. 3d6 necrotic) is shown without the mod.
       const isFirstDamage = fx.findIndex(x => x.type === 'damage') === fx.indexOf(e);
-      if (atk && isFirstDamage && atk.dmgBonus !== 0) {
-        parts.push(`${dice}${fmtBonus(atk.dmgBonus)} ${capitalize(e.damageType)}`);
+      if (atk && isFirstDamage && atk.damageBonus !== 0) {
+        parts.push(`${dice}${fmtBonus(atk.damageBonus)} ${capitalize(e.damageType)}`);
       } else {
         parts.push(`${dice} ${capitalize(e.damageType)}`);
       }

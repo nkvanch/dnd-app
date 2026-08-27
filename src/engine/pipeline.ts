@@ -12,11 +12,12 @@
 
 import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
-  Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense,
+  Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus,
 } from './types';
 import { resolveEffectsForTarget, resolveBinary } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
 import { generateAllActionCards } from './actionCards';
+import { itemRepo } from '../content/itemRepo';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -246,7 +247,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     senses,
     movement,
     savingThrows:     resolveSavingThrows(effectiveStats, entity.proficiencies.savingThrows, profBonus, allEffects, rules),
-    attackBonuses:    [],
+    attackBonuses:    computeWeaponAttackBonuses(entity, effectiveStats, profBonus),
     advantageStates,
     spellSaveDC:  entity.spellcasting
       ? 8 + profBonus + modifier(effectiveStats[entity.spellcasting.ability])
@@ -384,6 +385,75 @@ function doesSuppressTarget(
       Array.isArray(e.value) &&
       (e.value as string[]).includes(effectTarget),
   );
+}
+
+/**
+ * Computes to-hit and damage info for every equipped weapon. Single source
+ * of truth — TabCharacter's ATTACKS section and each weapon's action card
+ * both read this instead of recomputing (they used to, independently, and
+ * had drifted: one used max(str,dex) for ranged weapons, which is wrong
+ * per RAW, and one read raw base stats instead of effect-modified ones).
+ */
+function computeWeaponAttackBonuses(
+  entity:         Entity,
+  effectiveStats: Entity['stats'],
+  profBonus:      number,
+): AttackBonus[] {
+  const strMod = modifier(effectiveStats.str);
+  const dexMod = modifier(effectiveStats.dex);
+  const result: AttackBonus[] = [];
+
+  for (const inst of entity.inventory.equipped) {
+    const def = itemRepo.getItemSync(inst.itemId);
+    if (!def) continue;
+
+    // Prefer the instance's own (possibly infusion-augmented) features,
+    // same fallback actionCards.ts's card generator already uses — older
+    // saves may have only an itemId with no hydrated features.
+    const feats = (inst.features && inst.features.length > 0) ? inst.features : def.features;
+    let dice: string | null = null;
+    let dmgType = '';
+    let featureName = def.name;
+    for (const f of feats) {
+      const dmgFx = (f.abilityEffects ?? []).find(ae => ae.type === 'damage');
+      if (dmgFx) { dice = dmgFx.dice; dmgType = dmgFx.damageType; featureName = f.name; break; }
+    }
+    if (!dice) continue;
+
+    const props = def.properties.map(p => p.toLowerCase());
+    const isFinesse = props.some(p => p.includes('finesse'));
+    // Ammunition weapons, or thrown weapons that also list a range (a
+    // plain thrown-only weapon like a handaxe used in melee is STR).
+    const isRanged = props.some(p => p.includes('ammunition'))
+      || (props.some(p => p.includes('thrown')) && props.some(p => p.includes('range')));
+
+    let mod: number;
+    let ability: 'str' | 'dex';
+    if (isFinesse) {
+      ability = dexMod >= strMod ? 'dex' : 'str';
+      mod = Math.max(strMod, dexMod);
+    } else if (isRanged) {
+      ability = 'dex'; mod = dexMod;
+    } else {
+      ability = 'str'; mod = strMod;
+    }
+
+    // Magic bonus (+1/+2/+3), parsed from name/feature-name/properties text.
+    const magicHay = [def.name, featureName, ...def.properties].join(' ');
+    const magicBonus = parseInt(magicHay.match(/\+(\d)\b/)?.[1] ?? '0', 10);
+
+    result.push({
+      id:          inst.itemId,
+      name:        def.name,
+      bonus:       profBonus + mod + magicBonus,
+      type:        isRanged ? 'ranged' : 'melee',
+      ability,
+      damageBonus: mod + magicBonus,
+      damageDice:  dice,
+      damageType:  dmgType,
+    });
+  }
+  return result;
 }
 
 /** Computes the final bonus for a single skill. */

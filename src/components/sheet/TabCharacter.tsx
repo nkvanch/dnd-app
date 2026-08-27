@@ -11,7 +11,7 @@ import { Entity, CampaignRules } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
 import { dropConcentration } from '../../engine/combat';
-import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from '../../engine/pipeline';
+import { recomputeDerived, modifier } from '../../engine/pipeline';
 import { levelUp } from '../../engine/leveling';
 import { spendHitDie, discardHitDie } from '../../engine/rest';
 import { rollD20, rollExpression } from '../../engine/dice';
@@ -21,7 +21,6 @@ import { getSubclassEntryMerged } from '../../content/subclasses/subclassBrowse'
 import { globalContentDB } from '../../content/classes/library';
 import { spellRepo } from '../../content/spellRepo';
 import { spellIdsOnEntity } from '../../content/spellRepo.types';
-import { itemRepo } from '../../content/itemRepo';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
@@ -379,65 +378,6 @@ function NumberPromptModal({
   );
 }
 
-// ── Weapon attack helper ──────────────────────────────────────────────────────
-
-type WeaponInfo = {
-  itemId: string;
-  name: string;
-  attackBonus: number;
-  damage: string;
-  isRanged: boolean;
-};
-
-/** Builds attack/damage info for each equipped weapon. */
-function getEquippedWeapons(entity: Entity, profBonus: number): WeaponInfo[] {
-  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
-  const strMod = modifier(effectiveStats.str);
-  const dexMod = modifier(effectiveStats.dex);
-  const result: WeaponInfo[] = [];
-
-  for (const inst of entity.inventory.equipped) {
-    const def = itemRepo.getItemSync(inst.itemId);
-    if (!def) continue;
-    // A weapon is any item whose feature carries a 'damage' ability effect.
-    let dice: string | null = null;
-    let dmgType = '';
-    let featureName = def.name;
-    for (const f of def.features) {
-      for (const ae of (f.abilityEffects ?? [])) {
-        if (ae.type === 'damage') { dice = ae.dice; dmgType = ae.damageType; featureName = f.name; break; }
-      }
-      if (dice) break;
-    }
-    if (!dice) continue;
-
-    const props      = def.properties.map(p => p.toLowerCase());
-    const isFinesse  = props.some(p => p.includes('finesse'));
-    const isRanged   = props.some(p => p.includes('ammunition'));
-    const abMod      = (isFinesse || isRanged) ? Math.max(strMod, dexMod) : strMod;
-
-    // Parse a magic bonus (+1/+2/+3) from the item properties or name, matching
-    // the action-card calculation so both views agree. e.g. "+1 to attack and
-    // damage rolls" or a name like "+1 Life-Drinking Greatsword".
-    const magicHay = [def.name, featureName, ...def.properties].join(' ');
-    const magicMatch = magicHay.match(/\+(\d)\b/);
-    const magicBonus = magicMatch ? parseInt(magicMatch[1], 10) : 0;
-
-    const attackBonus = profBonus + abMod + magicBonus;
-    const dmgBonus    = abMod + magicBonus;
-    const modStr      = dmgBonus >= 0 ? `+${dmgBonus}` : `${dmgBonus}`;
-
-    result.push({
-      itemId: inst.itemId,
-      name: def.name,
-      attackBonus,
-      damage: `${dice}${dmgBonus !== 0 ? modStr : ''} ${dmgType}`.trim(),
-      isRanged,
-    });
-  }
-  return result;
-}
-
 // ── Ad-hoc feat choice ────────────────────────────────────────────────────────
 
 /**
@@ -651,7 +591,16 @@ export function TabCharacter({
   const { identity, resources, derived, conditions, spellcasting } = entity;
 
   // Equipped weapon attack/damage cards
-  const weapons = getEquippedWeapons(entity, derived.proficiencyBonus);
+  const weapons = derived.attackBonuses.map(ab => {
+    const modStr = ab.damageBonus >= 0 ? `+${ab.damageBonus}` : `${ab.damageBonus}`;
+    return {
+      itemId:      ab.id,
+      name:        ab.name,
+      attackBonus: ab.bonus,
+      damage:      `${ab.damageDice}${ab.damageBonus !== 0 ? modStr : ''} ${ab.damageType}`.trim(),
+      isRanged:    ab.type === 'ranged',
+    };
+  });
 
   // ── HP / Hit Dice handlers ──────────────────────────────────────────────────
   function handleSetHp(value: number) {

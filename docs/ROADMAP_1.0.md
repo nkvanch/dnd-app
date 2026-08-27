@@ -1857,11 +1857,48 @@ early 1.1 if Phase 1–4 run long. Do not let it delay Phase 1.
 - **Shareable single-character export/auto-import** — `app/backup.tsx`
   exports/imports the WHOLE backup (all characters + homebrew); a
   single-character share/import flow is a distinct, smaller feature.
-- **No homebrew builder for Feats or Monsters** — self-identified gap while
-  auditing `app/homebrew/` this session: race, class, subrace, subclass,
-  background, item, spell, and generic-feature builders all exist; feats and
-  monsters remain static-registry-only, no `ContentCacheType` entry, no
-  authoring UI.
+- [x] ~~**No homebrew builder for Feats or Monsters**~~ — CLOSED, 2026-08-27
+  batch. New `app/homebrew/feat-builder.tsx` and `app/homebrew/monster-builder.tsx`,
+  both reusing the shared `TraitEditor.tsx`/`traitCompiler.ts` effect-authoring
+  UI (no second editor built). `homebrewStore.feats`/`.monsters` added,
+  `ContentCacheType`/`HomebrewContent` widened, merged into `AsiFeatPicker.tsx`
+  (alongside the pre-existing Feature-Editor feat workaround — kept, not
+  migrated) and `app/dm/monsters.tsx`'s bestiary. Export (📤) parity added.
+  A real gap found and fixed along the way: `MonsterTemplate` had no
+  `resources` field, so a "Limited-use ability" trait on a monster had
+  nowhere to put its `ResourceGrant` — added the field, folded it through
+  `monsterFactory.ts`'s `spawnMonster()` via the same `applyGrant()` path
+  races/classes already use.
+  - [x] Both builders' authoring flow verified live (create → Library entry
+        with correct badge → edit mode hydrates all fields → export 📤
+        doesn't throw) — including confirming a resource_ability trait
+        (a monster's "Limited-use ability") saves and reopens correctly.
+  - [x] Feat application verified end-to-end: a homebrew feat with an
+        ability-score effect, taken via `AsiFeatPicker`, actually raised the
+        character's STR on the Abilities tab (16→17) — proves the full
+        pipeline, not just the authoring UI.
+  - [ ] **Monster resource-folding NOT exercised through the full DM spawn
+        flow** — `app/dm/monsters.tsx` requires an active campaign (DM
+        context) to reach, which wasn't set up this session, and direct deep-
+        link navigation to `/dm/monsters` resets app state in this dev
+        preview (unrelated pre-existing behavior). The `spawnMonster()` fix
+        itself is a straightforward loop over `applyGrant()` — the exact
+        function already proven correct for the identical 'resource' grant
+        kind throughout this session (Battle Master's superiority dice,
+        Cleric's Channel Divinity, etc.) — and `tsc` confirms it type-checks,
+        but it was verified by code review + reuse of a proven primitive,
+        not by actually spawning a resourced monster into a combat tracker.
+        **ACTION NEEDED**: with an active campaign set up, spawn a homebrew
+        monster that has a resource_ability trait and confirm the resource
+        pool actually appears as trackable on the spawned Entity.
+  - Also discovered, unrelated to this fix: on web specifically,
+    `saveHomebrewContent()` (`src/db/contentCacheRepo.ts`) is a no-op
+    (`if (Platform.OS === 'web') return;`) — homebrew content (ALL 10
+    categories, not just feat/monster) only persists in the in-memory
+    zustand store for the current page session; a hard reload on web loses
+    it. This is pre-existing, not introduced by this batch, and equally
+    affects every other homebrew builder — flagged here since it was
+    directly observed while testing, not because this batch caused it.
 
 ---
 

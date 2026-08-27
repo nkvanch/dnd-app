@@ -3,7 +3,7 @@
 // Monster template — a static content record, NOT a live Entity.
 // Templates are instantiated into full Entity objects via monsterFactory.ts.
 // ============================================================================
-import { AbilityScores, Ability, SkillName, Feature } from '../../engine/types';
+import { AbilityScores, Ability, SkillName, Feature, ResourceGrant } from '../../engine/types';
 
 /**
  * A static monster template stored in the content database.
@@ -33,6 +33,13 @@ export type MonsterTemplate = {
   languages:    string[];
   legendaryActions?: number;   // number of legendary actions per round
   lairActions?:  Feature[];    // lair action features
+  /**
+   * Limited-use abilities (e.g. Legendary Resistance, a rechargeable self-
+   * heal) authored via the homebrew builder's "Limited-use ability" trait
+   * kind. Official templates have none — folded into the spawned Entity's
+   * resources by monsterFactory.ts, same applyGrant() path races/classes use.
+   */
+  resources?: ResourceGrant[];
   /**
    * SRD 5.1 legal status. Monster STAT BLOCKS (numbers/abilities, as opposed
    * to unique named characters/villains) are explicitly covered by the SRD

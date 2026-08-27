@@ -65,12 +65,20 @@ export function AbilityScoreGrid({ values, onChange }: {
 
 // ── Trait editor modal — the "droppable window" ───────────────────────────────
 
-export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }: {
+export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, excludeKinds }: {
   trait: DraftTrait | null;
   visible: boolean;
   onChange: (t: DraftTrait) => void;
   onDone: () => void;
   onDelete: () => void;
+  /**
+   * Hides effect kinds the caller's content type has no path for. E.g. a
+   * Feat only ever applies ONE Feature (no resource/extra-feature carrying
+   * path — see leveling.ts's applyFeatToEntity), so 'resource_ability' and
+   * 'spell_grant' (which buildTraitFeature can return a resource/extra
+   * Features for) would silently drop that part of the effect if offered.
+   */
+  excludeKinds?: TraitEffectKind[];
 }) {
   // Hooks must run unconditionally every render (this component instance
   // stays mounted while `trait` toggles null <-> non-null as the caller
@@ -90,7 +98,8 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
     set({ spellGrants: trait!.spellGrants.map(x => x.localId === localId ? { ...x, ...patch } : x) });
   }
 
-  const EFFECT_KIND_GROUPS: { group: string; kinds: { key: TraitEffectKind; label: string }[] }[] = [
+  const excluded = new Set(excludeKinds ?? []);
+  const ALL_EFFECT_KIND_GROUPS: { group: string; kinds: { key: TraitEffectKind; label: string }[] }[] = [
     { group: 'Stats & Combat', kinds: [
       { key: 'ability_score', label: 'Ability score bonus' },
       { key: 'unarmored_defense', label: 'Unarmored Defense (AC formula)' },
@@ -122,6 +131,9 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete }:
       { key: 'none', label: 'Flavor only' },
     ] },
   ];
+  const EFFECT_KIND_GROUPS = ALL_EFFECT_KIND_GROUPS
+    .map(g => ({ ...g, kinds: g.kinds.filter(k => !excluded.has(k.key)) }))
+    .filter(g => g.kinds.length > 0);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDone}>

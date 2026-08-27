@@ -22,6 +22,8 @@ function CreatePanel() {
     { label: '🧰  New Item',         route: '/homebrew/item-builder'  },
     { label: '✨  New Spell',        route: '/homebrew/spell-builder' },
     { label: '📖  New Feature',      route: '/homebrew/feature-editor' },
+    { label: '🌟  New Feat',         route: '/homebrew/feat-builder' },
+    { label: '🐉  New Monster',      route: '/homebrew/monster-builder' },
   ];
 
   return (
@@ -48,7 +50,7 @@ function CreatePanel() {
 function LibraryPanel() {
   const router = useRouter();
   const {
-    races, subraces, classes, subclasses, spells, backgrounds, features, items, deleteItem,
+    races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, deleteItem,
     getMergedContentDB,
   } = useHomebrewStore();
   const allRaces = getMergedContentDB().races;
@@ -80,6 +82,8 @@ function LibraryPanel() {
     ...spells.map(s      => ({ type: 'spell'      as const, item: s })),
     ...backgrounds.map(b => ({ type: 'background' as const, item: b })),
     ...features.map(f    => ({ type: 'feature'    as const, item: f })),
+    ...feats.map(f       => ({ type: 'feat'       as const, item: f })),
+    ...monsters.map(m    => ({ type: 'monster'    as const, item: m })),
   ];
 
   const EDIT_ROUTES: Partial<Record<string, string>> = {
@@ -91,6 +95,8 @@ function LibraryPanel() {
     spell: '/homebrew/spell-builder',
     background: '/homebrew/background-builder',
     feature: '/homebrew/feature-editor',
+    feat: '/homebrew/feat-builder',
+    monster: '/homebrew/monster-builder',
   };
 
   if (all.length === 0) {
@@ -222,6 +228,8 @@ const styles = StyleSheet.create({
   typeBadge_background: { backgroundColor: Colors.purple + '22' },
   typeBadge_feature:    { backgroundColor: Colors.surfaceHigh },
   typeBadge_item:       { backgroundColor: Colors.red + '22' },
+  typeBadge_feat:       { backgroundColor: Colors.gold + '22' },
+  typeBadge_monster:    { backgroundColor: Colors.red + '22' },
   libraryActions: { flexDirection: 'row', gap: Spacing.xs },
   libBtn: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,

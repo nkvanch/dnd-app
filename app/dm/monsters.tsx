@@ -8,6 +8,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useCombatStore }   from '../../src/store/combatStore';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { spawnMonster }     from '../../src/engine/monsterFactory';
 import { ALL_MONSTER_TEMPLATES } from '../../src/content/monsters/srd';
 import { MonsterTemplate }  from '../../src/content/monsters/types';
@@ -116,8 +117,14 @@ export default function MonstersScreen() {
   const [crMax,    setCrMax]    = useState('');
   const [preview,  setPreview]  = useState<MonsterTemplate | null>(null);
 
+  const homebrewMonsters = useHomebrewStore(s => s.monsters);
+  const allTemplates = useMemo(
+    () => [...ALL_MONSTER_TEMPLATES, ...homebrewMonsters],
+    [homebrewMonsters],
+  );
+
   const filtered = useMemo(() => {
-    return ALL_MONSTER_TEMPLATES.filter(t => {
+    return allTemplates.filter(t => {
       const matchName = t.name.toLowerCase().includes(search.toLowerCase()) ||
                         t.type.toLowerCase().includes(search.toLowerCase());
       const min = parseFloat(crMin);
@@ -125,7 +132,7 @@ export default function MonstersScreen() {
       const matchCr = (isNaN(min) || t.cr >= min) && (isNaN(max) || t.cr <= max);
       return matchName && matchCr;
     });
-  }, [search, crMin, crMax]);
+  }, [allTemplates, search, crMin, crMax]);
 
   function handleSpawn(template: MonsterTemplate) {
     const monster = spawnMonster(template, rules);

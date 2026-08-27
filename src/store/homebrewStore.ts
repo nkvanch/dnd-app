@@ -11,8 +11,9 @@
 // ============================================================================
 import { create } from 'zustand';
 import {
-  Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, ContentDB,
+  Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, Feat, ContentDB,
 } from '../engine/types';
+import { MonsterTemplate } from '../content/monsters/types';
 import {
   saveHomebrewContent, loadAllHomebrew, deleteHomebrewContent,
   ContentCacheType, HomebrewContent,
@@ -51,6 +52,8 @@ type HomebrewStore = {
   backgrounds: Background[];
   features:    Feature[];
   items:       Item[];
+  feats:       Feat[];
+  monsters:    MonsterTemplate[];
   isLoading:   boolean;
 
   /** Load all homebrew from SQLite and merge built-in homebrew. */
@@ -75,6 +78,8 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   backgrounds: [],
   features:    [],
   items:       [],
+  feats:       [],
+  monsters:    [],
   isLoading:   false,
 
   loadHomebrew: async () => {
@@ -111,6 +116,8 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         backgrounds: (all.background ?? []) as Background[],
         features:    (all.feature    ?? []) as Feature[],
         items:       (all.item       ?? []) as Item[],
+        feats:       (all.feat       ?? []) as Feat[],
+        monsters:    (all.monster    ?? []) as MonsterTemplate[],
         isLoading:   false,
       });
     } catch (e) {
@@ -120,7 +127,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   },
 
   getMergedContentDB: (): ContentDB => {
-    const { races, subraces, classes, spells, backgrounds, features, items } = get();
+    const { races, subraces, classes, spells, backgrounds, features, items, feats } = get();
     const allRaces = [...globalContentDB.races, ...races];
     // Attach standalone subraces (parentId may point at an official OR a
     // homebrew race) onto their parent at read time, rather than requiring
@@ -154,7 +161,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       // itemRepo now, not globalContentDB.
       items:       items,
       features:    [...globalContentDB.features,    ...features],
-      feats:       globalContentDB.feats,
+      feats:       [...(globalContentDB.feats ?? []), ...feats],
     };
   },
 
@@ -170,6 +177,8 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'background': return { backgrounds: [...state.backgrounds.filter(b => b.id !== (item as Background).id), item as Background] };
         case 'feature':    return { features:    [...state.features.filter(f => f.id !== (item as Feature).id),      item as Feature] };
         case 'item':       return { items:       [...state.items.filter(it => it.id !== (item as Item).id),         item as Item] };
+        case 'feat':       return { feats:       [...state.feats.filter(f => f.id !== (item as Feat).id),           item as Feat] };
+        case 'monster':    return { monsters:    [...state.monsters.filter(m => m.id !== (item as MonsterTemplate).id), item as MonsterTemplate] };
         default:           return state;
       }
     });
@@ -196,6 +205,8 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'background': return { backgrounds: state.backgrounds.filter(b => b.id !== id) };
         case 'feature':    return { features:    state.features.filter(f => f.id !== id) };
         case 'item':       return { items:       state.items.filter(it => it.id !== id) };
+        case 'feat':       return { feats:       state.feats.filter(f => f.id !== id) };
+        case 'monster':    return { monsters:    state.monsters.filter(m => m.id !== id) };
         default:           return state;
       }
     });

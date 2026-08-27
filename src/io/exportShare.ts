@@ -9,8 +9,9 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { Platform } from 'react-native';
 import {
-  Entity, ContentDB, Race, Subrace, CharClass, HomebrewSubclass, Spell, Background, Feature, Item,
+  Entity, ContentDB, Race, Subrace, CharClass, HomebrewSubclass, Spell, Background, Feature, Item, Feat,
 } from '../engine/types';
+import { MonsterTemplate } from '../content/monsters/types';
 import { ContentCacheType, HomebrewContent } from '../db/contentCacheRepo';
 import { spellRepo } from '../content/spellRepo';
 import { itemRepo } from '../content/itemRepo';
@@ -220,6 +221,29 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildFeatureListMarkdown(it.name, subtitle, it.features),
         () => buildFeatureListHtml(it.name, subtitle, it.features),
         sanitize(`${it.name}-item`),
+      );
+      return;
+    }
+    case 'feat': {
+      const feat = item as Feat;
+      const meta = [feat.prerequisite ? `Prerequisite: ${feat.prerequisite}` : null, feat.source].filter(Boolean).join(' · ');
+      const feature = { ...feat.feature, description: meta ? `*${meta}*\n\n${feat.description}` : feat.description };
+      await shareByFormat(
+        format,
+        () => buildStandaloneFeatureMarkdown(feature),
+        () => buildStandaloneFeatureHtml(feature),
+        sanitize(`${feat.name}-feat`),
+      );
+      return;
+    }
+    case 'monster': {
+      const m = item as MonsterTemplate;
+      const subtitle = `${m.size} ${m.type}, ${m.alignment} · CR ${m.cr} · AC ${m.ac.value} · HP ${m.hp.average}`;
+      await shareByFormat(
+        format,
+        () => buildFeatureListMarkdown(m.name, subtitle, m.features),
+        () => buildFeatureListHtml(m.name, subtitle, m.features),
+        sanitize(`${m.name}-monster`),
       );
       return;
     }

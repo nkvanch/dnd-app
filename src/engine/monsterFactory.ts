@@ -11,6 +11,7 @@ import { makeEmptyEntity }  from '../store/characterStore';
 import { recomputeDerived } from './pipeline';
 import { rollExpression }   from './dice';
 import { DEFAULT_RULES }    from '../store/characterStore';
+import { applyGrant }       from './leveling';
 
 function uid(): string {
   return `m_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
@@ -97,5 +98,10 @@ export function spawnMonster(
     }),
   };
 
-  return recomputeDerived(assembled, rules);
+  let withResources = assembled;
+  for (const r of template.resources ?? []) {
+    withResources = applyGrant(withResources, { kind: 'resource', value: r }, assembled.identity.level);
+  }
+
+  return recomputeDerived(withResources, rules);
 }

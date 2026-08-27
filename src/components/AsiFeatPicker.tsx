@@ -100,7 +100,14 @@ export function AsiFeatPicker({
     })),
     [homebrewFeatures],
   );
-  const allFeats = useMemo(() => [...ALL_FEATS, ...homebrewFeats], [homebrewFeats]);
+  // Real homebrew feats authored via app/homebrew/feat-builder.tsx — merged
+  // alongside the Feature-Editor workaround above, not replacing it (no
+  // migration, existing homebrew feats made the old way keep working).
+  const homebrewRealFeats = useHomebrewStore(s => s.feats);
+  const allFeats = useMemo(
+    () => [...ALL_FEATS, ...homebrewFeats, ...homebrewRealFeats],
+    [homebrewFeats, homebrewRealFeats],
+  );
 
   // Evaluate each feat's prerequisite against the current entity once.
   const prereqById = useMemo(() => {

@@ -2,7 +2,8 @@
 // FILE: src/engine/homebrewValidator.ts
 // Validates homebrew content before it enters the content database.
 // ============================================================================
-import { Race, CharClass, Spell, Feature, Background } from './types';
+import { Race, CharClass, Spell, Feature, Background, Feat } from './types';
+import { MonsterTemplate } from '../content/monsters/types';
 
 export type ValidationResult = {
   valid:    boolean;
@@ -128,10 +129,96 @@ export function validateSpell(data: unknown): ValidationResult {
   return { valid: errors.length === 0, errors, warnings };
 }
 
+// ── Feat validator ────────────────────────────────────────────────────────────
+
+export function validateFeat(data: unknown): ValidationResult {
+  const errors:   string[] = [];
+  const warnings: string[] = [];
+
+  if (!data || typeof data !== 'object') {
+    return { valid: false, errors: ['Root: not an object'], warnings: [] };
+  }
+  const feat = data as Partial<Feat>;
+
+  if (!feat.id          || typeof feat.id          !== 'string') errors.push('id: required string');
+  if (!feat.name        || typeof feat.name        !== 'string') errors.push('name: required string');
+  if (!feat.description || typeof feat.description !== 'string') errors.push('description: required string');
+  if (!feat.feature || typeof feat.feature !== 'object') {
+    errors.push('feature: required object');
+  } else {
+    const r = validateFeature(feat.feature, 'feature');
+    errors.push(...r.errors);
+    warnings.push(...r.warnings);
+  }
+
+  if (feat.abilityChoice) {
+    if (!Array.isArray(feat.abilityChoice.options) || feat.abilityChoice.options.length === 0) {
+      errors.push('abilityChoice.options: must be a non-empty array');
+    }
+    if (typeof feat.abilityChoice.amount !== 'number' || feat.abilityChoice.amount <= 0) {
+      errors.push('abilityChoice.amount: must be a positive number');
+    }
+  }
+  if (feat.skillChoice) {
+    if (!Array.isArray(feat.skillChoice.picks) || feat.skillChoice.picks.length === 0) {
+      errors.push('skillChoice.picks: must be a non-empty array');
+    } else {
+      for (const [i, p] of feat.skillChoice.picks.entries()) {
+        if (!p.id || !p.label) errors.push(`skillChoice.picks[${i}]: id and label are required`);
+        if (p.mode !== 'proficiency' && p.mode !== 'expertise') errors.push(`skillChoice.picks[${i}].mode: must be "proficiency" or "expertise"`);
+        if (p.from !== 'any' && p.from !== 'proficient') errors.push(`skillChoice.picks[${i}].from: must be "any" or "proficient"`);
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+// ── Monster validator ─────────────────────────────────────────────────────────
+
+export function validateMonster(data: unknown): ValidationResult {
+  const errors:   string[] = [];
+  const warnings: string[] = [];
+
+  if (!data || typeof data !== 'object') {
+    return { valid: false, errors: ['Root: not an object'], warnings: [] };
+  }
+  const m = data as Partial<MonsterTemplate>;
+
+  if (!m.id        || typeof m.id        !== 'string') errors.push('id: required string');
+  if (!m.name      || typeof m.name      !== 'string') errors.push('name: required string');
+  if (typeof m.cr !== 'number' || m.cr < 0) errors.push('cr: must be a number, 0 or higher');
+  if (!m.size      || typeof m.size      !== 'string') errors.push('size: required string');
+  if (!m.type      || typeof m.type      !== 'string') errors.push('type: required string');
+  if (!m.alignment || typeof m.alignment !== 'string') errors.push('alignment: required string');
+
+  const abilities: (keyof MonsterTemplate['stats'])[] = ['str','dex','con','int','wis','cha'];
+  if (!m.stats || typeof m.stats !== 'object') {
+    errors.push('stats: required object');
+  } else {
+    for (const a of abilities) {
+      const v = m.stats[a];
+      if (typeof v !== 'number') errors.push(`stats.${a}: required number`);
+      else if (v < 1 || v > 30) warnings.push(`stats.${a}: ${v} is outside the usual 1-30 range`);
+    }
+  }
+
+  if (!m.hp || typeof m.hp.dice !== 'string' || !m.hp.dice.trim()) errors.push('hp.dice: required string');
+  else if (!/^\d+d\d+([+-]\d+)?$/.test(m.hp.dice.trim())) warnings.push(`hp.dice: "${m.hp.dice}" doesn't look like a dice expression (e.g. "2d6+2")`);
+  if (!m.hp || typeof m.hp.average !== 'number' || m.hp.average <= 0) errors.push('hp.average: must be a positive number');
+
+  if (!m.ac || typeof m.ac.value !== 'number' || m.ac.value <= 0) errors.push('ac.value: must be a positive number');
+
+  if (typeof m.speed !== 'number' || m.speed < 0) errors.push('speed: must be a number, 0 or higher');
+  if (!Array.isArray(m.features)) warnings.push('features: missing (using [])');
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
 // ── Generic content validator ─────────────────────────────────────────────────
 
 export function validateContent(
-  type: 'race' | 'class' | 'spell' | 'background' | 'feature',
+  type: 'race' | 'class' | 'spell' | 'background' | 'feature' | 'feat' | 'monster',
   data: unknown
 ): ValidationResult {
   switch (type) {
@@ -140,6 +227,8 @@ export function validateContent(
     case 'spell':      return validateSpell(data);
     case 'background': return validateRace(data); // same shape: id + name + features[]
     case 'feature':    return validateFeature(data, 'feature');
+    case 'feat':       return validateFeat(data);
+    case 'monster':    return validateMonster(data);
     default:           return { valid: false, errors: [`Unknown type: ${type}`], warnings: [] };
   }
 }

@@ -13,6 +13,7 @@ import { validateSpell } from '../../src/engine/homebrewValidator';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
+import { PickOrCustom } from '../../src/components/homebrew/PickOrCustom';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const LEVELS  = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -30,49 +31,6 @@ const SPELL_TYPES = ['Damage', 'Buff', 'Debuff', 'Healing', 'Control', 'Utility'
 
 function toId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-}
-
-/** A chip row with a built-in "Custom" option that reveals a free-text/number fallback. */
-function PickOrCustom({ options, value, onChange, numeric }: {
-  options: (string | number)[];
-  value: string | number;
-  onChange: (v: string | number) => void;
-  numeric?: boolean;
-}) {
-  const isPreset = options.includes(value);
-  const [customMode, setCustomMode] = useState(!isPreset);
-
-  return (
-    <View>
-      <View style={styles.chipRow}>
-        {options.map(opt => (
-          <Pressable
-            key={opt}
-            style={[styles.chip, !customMode && value === opt && styles.chipActive]}
-            onPress={() => { setCustomMode(false); onChange(opt); }}
-          >
-            <Text style={[styles.chipTxt, !customMode && value === opt && styles.chipTxtActive]}>{opt}</Text>
-          </Pressable>
-        ))}
-        <Pressable
-          style={[styles.chip, customMode && styles.chipActive]}
-          onPress={() => setCustomMode(true)}
-        >
-          <Text style={[styles.chipTxt, customMode && styles.chipTxtActive]}>Custom</Text>
-        </Pressable>
-      </View>
-      {customMode && (
-        <TextInput
-          style={[styles.input, { marginTop: Spacing.xs }]}
-          value={String(value)}
-          onChangeText={v => onChange(numeric ? (parseInt(v, 10) || 0) : v)}
-          keyboardType={numeric ? 'number-pad' : 'default'}
-          placeholder={numeric ? 'Enter level' : "Enter your own..."}
-          placeholderTextColor={Colors.textDim}
-        />
-      )}
-    </View>
-  );
 }
 
 /** Moved to module scope — was previously defined INSIDE SpellBuilderScreen's

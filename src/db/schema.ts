@@ -58,6 +58,21 @@ export const CREATE_CONTENT_CACHE_TABLE = `
   );
 `;
 
+// Prior versions of homebrew content, archived on every edit of an existing
+// item (see contentCacheRepo.ts's saveHomebrewContent). Append-only —
+// restoring an old version writes a NEW current version rather than
+// deleting forward history, so this table only ever gets INSERTs.
+export const CREATE_CONTENT_CACHE_HISTORY_TABLE = `
+  CREATE TABLE IF NOT EXISTS content_cache_history (
+    historyId INTEGER PRIMARY KEY AUTOINCREMENT,
+    contentId TEXT NOT NULL,
+    type      TEXT NOT NULL,
+    version   TEXT NOT NULL,
+    data      TEXT NOT NULL,
+    savedAt   INTEGER NOT NULL
+  );
+`;
+
 // Singleton row for active combat state (id always = 1)
 export const CREATE_COMBAT_STATE_TABLE = `
   CREATE TABLE IF NOT EXISTS combat_state (
@@ -80,6 +95,7 @@ export const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_entities_kind     ON entities    (kind);
   CREATE INDEX IF NOT EXISTS idx_sync_events_applied ON sync_events (applied, sessionId);
   CREATE INDEX IF NOT EXISTS idx_content_type      ON content_cache (type);
+  CREATE INDEX IF NOT EXISTS idx_content_history_contentId ON content_cache_history (contentId);
 `;
 
 export const ALL_TABLES = [
@@ -88,6 +104,7 @@ export const ALL_TABLES = [
   CREATE_SYNC_EVENTS_TABLE,
   CREATE_DEVICE_SESSION_TABLE,
   CREATE_CONTENT_CACHE_TABLE,
+  CREATE_CONTENT_CACHE_HISTORY_TABLE,
   CREATE_COMBAT_STATE_TABLE,
   CREATE_APP_META_TABLE,
   CREATE_INDEXES,

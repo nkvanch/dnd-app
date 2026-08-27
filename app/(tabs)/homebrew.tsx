@@ -7,6 +7,7 @@ import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
 import { exportHomebrewItem, ExportFormat } from '../../src/io/exportShare';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
+import { VersionHistoryModal } from '../../src/components/homebrew/VersionHistoryModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Create Panel ──────────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ function LibraryPanel() {
 
   const [exportTarget, setExportTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
 
   async function handleExportFormat(format: ExportFormat) {
     if (!exportTarget) return;
@@ -135,6 +137,12 @@ function LibraryPanel() {
               )}
               <Pressable
                 style={styles.libBtn}
+                onPress={() => setHistoryTarget({ type, item })}
+              >
+                <Text style={styles.libBtnTxt}>🕐</Text>
+              </Pressable>
+              <Pressable
+                style={styles.libBtn}
                 disabled={exportingId === item.id}
                 onPress={() => setExportTarget({ type, item })}
               >
@@ -163,6 +171,14 @@ function LibraryPanel() {
         title={exportTarget ? `Export "${exportTarget.item.name}"` : ''}
         onSelect={handleExportFormat}
         onClose={() => setExportTarget(null)}
+      />
+
+      <VersionHistoryModal
+        visible={!!historyTarget}
+        type={historyTarget?.type ?? null}
+        id={historyTarget?.item.id ?? null}
+        name={historyTarget?.item.name ?? ''}
+        onClose={() => setHistoryTarget(null)}
       />
     </View>
   );

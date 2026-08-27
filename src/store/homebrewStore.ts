@@ -16,7 +16,8 @@ import {
 import { MonsterTemplate } from '../content/monsters/types';
 import {
   saveHomebrewContent, loadAllHomebrew, deleteHomebrewContent,
-  ContentCacheType, HomebrewContent,
+  loadContentHistory, restoreContentVersion,
+  ContentCacheType, HomebrewContent, ContentVersionEntry,
 } from '../db/contentCacheRepo';
 import { getMeta, setMeta } from '../db/appMetaRepo';
 import { BUILTIN_HOMEBREW } from '../content/builtinHomebrew';
@@ -67,6 +68,12 @@ type HomebrewStore = {
 
   /** Delete a homebrew item by type and id. */
   deleteItem: (type: ContentCacheType, id: string) => Promise<void>;
+
+  /** Fetch version history for one item (on-demand, not cached in the store). */
+  loadVersionHistory: (type: ContentCacheType, id: string) => Promise<ContentVersionEntry[]>;
+
+  /** Restore an old version as current, then refresh the in-memory copy. */
+  restoreVersion: (type: ContentCacheType, id: string, version: string) => Promise<void>;
 };
 
 export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
@@ -207,6 +214,32 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'item':       return { items:       state.items.filter(it => it.id !== id) };
         case 'feat':       return { feats:       state.feats.filter(f => f.id !== id) };
         case 'monster':    return { monsters:    state.monsters.filter(m => m.id !== id) };
+        default:           return state;
+      }
+    });
+  },
+
+  loadVersionHistory: async (type, id) => {
+    return loadContentHistory(type, id);
+  },
+
+  restoreVersion: async (type, id, version) => {
+    const restored = await restoreContentVersion(type, id, version);
+    // Same per-type upsert-into-array shape as saveItem — patched directly
+    // rather than calling saveItem again, which would call
+    // saveHomebrewContent a second time and double-increment the version.
+    set(state => {
+      switch (type) {
+        case 'race':       return { races:       [...state.races.filter(r => r.id !== id),             restored as Race] };
+        case 'subrace':    return { subraces:    [...state.subraces.filter(sr => sr.id !== id),         restored as Subrace] };
+        case 'class':      return { classes:     [...state.classes.filter(c => c.id !== id),            restored as CharClass] };
+        case 'subclass':   return { subclasses:  [...state.subclasses.filter(sc => sc.id !== id),       restored as HomebrewSubclass] };
+        case 'spell':      return { spells:      [...state.spells.filter(s => s.id !== id),             restored as Spell] };
+        case 'background': return { backgrounds: [...state.backgrounds.filter(b => b.id !== id),        restored as Background] };
+        case 'feature':    return { features:    [...state.features.filter(f => f.id !== id),           restored as Feature] };
+        case 'item':       return { items:       [...state.items.filter(it => it.id !== id),            restored as Item] };
+        case 'feat':       return { feats:       [...state.feats.filter(f => f.id !== id),              restored as Feat] };
+        case 'monster':    return { monsters:    [...state.monsters.filter(m => m.id !== id),           restored as MonsterTemplate] };
         default:           return state;
       }
     });

@@ -9,10 +9,9 @@
 // Designed once now so the bigger import pipeline doesn't need a new file
 // format later — exactly what the roadmap asked for.
 //
-// Note: homebrew FEATS are intentionally not included here. There is no
-// homebrew feat mechanism anywhere in the app yet (homebrewStore has no
-// 'feat' case in saveItem) — including a feats field would promise
-// functionality that doesn't exist. Add it here if/when that changes.
+// Note: homebrew feats/monsters are not yet included in GrimoirePackHomebrew's
+// fields below, even though homebrewStore now supports both (see saveItem).
+// Add feats?/monsters? fields here when the content-pack sharing phase lands.
 import { Entity, Race, CharClass, Item, Spell, Background, Feature } from './types';
 
 export const GRIMOIRE_PACK_FORMAT_VERSION = 1;

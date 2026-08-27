@@ -82,7 +82,282 @@ export const totemWarriorProgression: SubclassProgression = {
   ],
 };
 
+// ── Path of the Beast ─────────────────────────────────────────────────────────
+
+export const pathOfTheBeastProgression: SubclassProgression = {
+  classId: 'barbarian',
+  name: 'Path of the Beast',
+  srd: false,
+  entries: [
+    {
+      level: 3, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'form_of_the_beast', name: 'Form of the Beast', description: 'When you rage, you can manifest a natural weapon — a bite (1d8 piercing, and once per turn heals you for your proficiency bonus if you\'re below half HP when it hits), claws (1d6 slashing, once per turn make an extra claw attack as part of the Attack action), or a reach tail (1d8 piercing, and as a reaction against an attacker within 10 feet, roll a d8 and add it to your AC against that attack). You choose the form each time you rage; it counts as a simple melee weapon using STR.', source: { kind: 'subclass', refId: 'path_of_the_beast' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+    {
+      level: 6, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'bestial_soul', name: 'Bestial Soul', description: 'Your natural weapons count as magical for overcoming resistance and immunity to nonmagical attacks. When you finish a short or long rest, choose one until your next rest: a swimming speed equal to your walking speed (and you can breathe underwater), a climbing speed equal to your walking speed (including upside-down and on sheer surfaces), or the ability to extend a jump by the result of a STR (Athletics) check once per turn.', source: { kind: 'subclass', refId: 'path_of_the_beast' }, level: 6, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+    {
+      level: 10, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'infectious_fury', name: 'Infectious Fury', description: 'When you hit with a natural weapon while raging, the target makes a WIS save (DC 8 + CON mod + proficiency bonus) or, your choice, is forced to attack another creature you designate with its reaction, or takes 2d12 psychic damage. Usable a number of times equal to your proficiency bonus per long rest.', source: { kind: 'subclass', refId: 'path_of_the_beast' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'wis', dc: 'spell_save_dc' } },
+          abilityEffects: [{ type: 'damage', dice: '2d12', damageType: 'psychic' }],
+        } },
+      ],
+    },
+    {
+      level: 14, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'call_the_hunt', name: 'Call the Hunt', description: 'When you enter your rage, choose willing creatures within 30 feet equal to your CON modifier (min 1) to join your hunt; you gain 5 temporary HP per creature that accepts. Until your rage ends, each of them can once per turn add a rolled d6 to damage dealt on a hit. Usable a number of times equal to your proficiency bonus per long rest.', source: { kind: 'subclass', refId: 'path_of_the_beast' }, level: 14, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+  ],
+};
+
+// ── Path of Wild Magic ────────────────────────────────────────────────────────
+
+export const pathOfWildMagicProgression: SubclassProgression = {
+  classId: 'barbarian',
+  name: 'Path of Wild Magic',
+  srd: false,
+  entries: [
+    {
+      level: 3, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'magic_awareness', name: 'Magic Awareness', description: 'As an action, sense the location and school of any spell or magic item within 60 feet not behind total cover, until the end of your next turn. Usable a number of times equal to your proficiency bonus per long rest.', source: { kind: 'subclass', refId: 'path_of_wild_magic' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: null, range: '60 feet', target: 'self', requiresSave: null },
+          abilityEffects: [],
+        } },
+        { kind: 'feature', value: { id: 'wild_surge', name: 'Wild Surge', description: 'Whenever you enter your rage, roll on the Wild Magic table (d8) to produce a random magical effect — damage, teleportation, a summoned exploding spirit, an elemental weapon infusion, retributive damage against attackers, a protective AC bonus, difficult terrain, or a blinding bolt of light. Saves against these effects use DC 8 + proficiency bonus + CON modifier. Resolve the rolled effect manually — the table\'s 8 distinct outcomes aren\'t individually wired into the engine.', source: { kind: 'subclass', refId: 'path_of_wild_magic' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+    {
+      level: 6, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'bolstering_magic', name: 'Bolstering Magic', description: 'As an action, touch a creature (possibly yourself) to grant one of: for 10 minutes, add a rolled d3 to attack rolls and ability checks; or roll a d3 and restore an expended spell slot of that level or lower (once per creature per long rest). Usable a number of times equal to your proficiency bonus per long rest.', source: { kind: 'subclass', refId: 'path_of_wild_magic' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'action', resourceCost: null, range: 'touch', target: 'single', requiresSave: null },
+          abilityEffects: [],
+        } },
+      ],
+    },
+    {
+      level: 10, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'unstable_backlash', name: 'Unstable Backlash', description: 'Immediately after you take damage or fail a save while raging, use your reaction to roll on the Wild Magic table and replace your current effect with the new roll.', source: { kind: 'subclass', refId: 'path_of_wild_magic' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'reaction', resourceCost: null, range: 'self', target: 'self', requiresSave: null },
+          abilityEffects: [],
+        } },
+      ],
+    },
+    {
+      level: 14, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'controlled_surge', name: 'Controlled Surge', description: 'Whenever you roll on the Wild Magic table, roll twice and choose which effect to use (or, on a matching pair, choose any effect on the table).', source: { kind: 'subclass', refId: 'path_of_wild_magic' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+  ],
+};
+
+// ── Path of the Ancestral Guardian ────────────────────────────────────────────
+
+export const pathOfTheAncestralGuardianProgression: SubclassProgression = {
+  classId: 'barbarian',
+  name: 'Path of the Ancestral Guardian',
+  srd: false,
+  entries: [
+    {
+      level: 3, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'ancestral_protectors', name: 'Ancestral Protectors', description: 'While raging, the first creature you hit each turn is marked by spectral warriors until the start of your next turn: it has disadvantage on attacks against anyone but you, and creatures it hits (other than you) gain resistance to that damage. Ends early if your rage ends.', source: { kind: 'subclass', refId: 'ancestral_guardian' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+    {
+      level: 6, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'spirit_shield', name: 'Spirit Shield', description: 'While raging, use your reaction when a creature you can see within 30 feet takes damage to reduce that damage by 2d6 (3d6 at level 10, 4d6 at level 14).', source: { kind: 'subclass', refId: 'ancestral_guardian' }, level: 6, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'reaction', resourceCost: null, range: '30 feet', target: 'single', requiresSave: null },
+          abilityEffects: [],
+        } },
+      ],
+    },
+    {
+      level: 10, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'consult_the_spirits', name: 'Consult the Spirits', description: 'Cast Augury or Clairvoyance (WIS-based, no slot or components needed — Clairvoyance instead summons an ancestral spirit to the chosen location) once per short or long rest.', source: { kind: 'subclass', refId: 'ancestral_guardian' }, level: 10, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+    {
+      level: 14, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'vengeful_ancestors', name: 'Vengeful Ancestors', description: 'When your Spirit Shield reduces an attack\'s damage, the attacker takes force damage equal to the amount prevented.', source: { kind: 'subclass', refId: 'ancestral_guardian' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+  ],
+};
+
+// ── Path of the Battlerager ───────────────────────────────────────────────────
+
+export const pathOfTheBattleragerProgression: SubclassProgression = {
+  classId: 'barbarian',
+  name: 'Path of the Battlerager',
+  srd: false,
+  entries: [
+    {
+      level: 3, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'battlerager_armor', name: 'Battlerager Armor', description: 'Restricted to dwarves (a DM may lift this). While wearing spiked armor and raging, use a bonus action to make a melee attack with your armor spikes (1d4 piercing, STR-based) against a target within 5 feet. A successful grapple against a target also deals 3 piercing damage from the spikes.', source: { kind: 'subclass', refId: 'battlerager' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'bonus_action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+          abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'piercing' }],
+        } },
+      ],
+    },
+    {
+      level: 6, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'reckless_abandon', name: 'Reckless Abandon', description: 'When you use Reckless Attack while raging, also gain temporary HP equal to your CON modifier (min 1); they vanish when your rage ends.', source: { kind: 'subclass', refId: 'battlerager' }, level: 6, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+    {
+      level: 10, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'battlerager_charge', name: 'Battlerager Charge', description: 'While raging, you can take the Dash action as a bonus action.', source: { kind: 'subclass', refId: 'battlerager' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+    {
+      level: 14, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'spiked_retribution', name: 'Spiked Retribution', description: 'While raging, not incapacitated, and wearing spiked armor, a creature within 5 feet that hits you with a melee attack takes 3 piercing damage.', source: { kind: 'subclass', refId: 'battlerager' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+  ],
+};
+
+// ── Path of the Giant ─────────────────────────────────────────────────────────
+
+export const pathOfTheGiantProgression: SubclassProgression = {
+  classId: 'barbarian',
+  name: 'Path of the Giant',
+  srd: false,
+  entries: [
+    {
+      level: 3, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'giant_ancestry', name: 'Giant Ancestry', description: 'Learn Giant (or another language, if you already know Giant) and one cantrip of your choice from druidcraft or thaumaturgy, using WIS as your spellcasting ability for it.', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'giants_havoc', name: "Giant's Havoc", description: 'While raging: a thrown Strength weapon attack adds your rage damage bonus, and your reach increases by 5 feet as you grow to Large size (if you were smaller than Large and there\'s room).', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+    {
+      level: 6, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'elemental_cleaver', name: 'Elemental Cleaver', description: 'When you rage, infuse one held weapon with acid, cold, fire, thunder, or lightning damage — while raging and wielding it, it deals a bonus 1d6 of that type, changes its damage type to match, and gains the thrown property (range 20/60, returning to your hand after a throw). Suppressed if wielded by someone else. As a bonus action while raging, you can change the infused type.', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 6, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+    {
+      level: 10, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'mighty_impel', name: 'Mighty Impel', description: 'As a bonus action while raging, move a Medium or smaller creature within your reach to an unoccupied space within 30 feet; an unwilling target makes a STR save (DC 8 + proficiency bonus + STR modifier) to resist. A thrown creature that lands without support falls, taking fall damage and landing prone.', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'bonus_action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: { ability: 'str', dc: 'spell_save_dc' } },
+          abilityEffects: [],
+        } },
+      ],
+    },
+    {
+      level: 14, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'demiurgic_colossus', name: 'Demiurgic Colossus', description: 'While raging, your reach increases by 10 feet, you can grow to Large or Huge, Mighty Impel can move Large or smaller creatures, and Elemental Cleaver\'s bonus damage increases to 2d6.', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+  ],
+};
+
+// ── Path of the Storm Herald ──────────────────────────────────────────────────
+
+export const pathOfTheStormHeraldProgression: SubclassProgression = {
+  classId: 'barbarian',
+  name: 'Path of the Storm Herald',
+  srd: false,
+  entries: [
+    {
+      level: 3, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'storm_aura', name: 'Storm Aura', description: 'While raging, you radiate a 10-foot magical aura (blocked by total cover) themed to desert, sea, or tundra (re-chosen freely on level-up in this class). It triggers when you enter your rage and again as a bonus action each turn: Desert deals scaling fire damage (2 at level 3, up to 6 at 20) to all other creatures in the aura; Sea forces a DEX save on one target for scaling lightning damage (half on success); Tundra grants scaling temporary HP to chosen creatures in the aura. Save DC is 8 + proficiency bonus + CON modifier.', source: { kind: 'subclass', refId: 'storm_herald' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+    {
+      level: 6, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'storm_soul', name: 'Storm Soul', description: 'Passive benefit matching your aura\'s environment, even outside rage: Desert grants fire resistance, immunity to extreme heat, and the ability to ignite flammable objects by touch; Sea grants lightning resistance, a 30-foot swim speed, and waterbreathing; Tundra grants cold resistance, immunity to extreme cold, and the ability to freeze a 5-foot cube of water by touch.', source: { kind: 'subclass', refId: 'storm_herald' }, level: 6, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+    {
+      level: 10, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'shielding_storm', name: 'Shielding Storm', description: 'Creatures you choose share your Storm Soul damage resistance while they stand inside your Storm Aura.', source: { kind: 'subclass', refId: 'storm_herald' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+    {
+      level: 14, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'raging_storm', name: 'Raging Storm', description: 'Your aura lashes out based on its environment: Desert lets you force a DEX save on an attacker for fire damage equal to half your barbarian level (reaction); Sea lets you force a STR save on a creature you hit to knock it prone (reaction); Tundra lets you reduce a chosen creature\'s speed to 0 until your next turn (STR save) whenever your aura effect activates.', source: { kind: 'subclass', refId: 'storm_herald' }, level: 14, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+  ],
+};
+
+// ── Path of the Zealot ────────────────────────────────────────────────────────
+
+export const pathOfTheZealotProgression: SubclassProgression = {
+  classId: 'barbarian',
+  name: 'Path of the Zealot',
+  srd: false,
+  entries: [
+    {
+      level: 3, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'divine_fury', name: 'Divine Fury', description: 'While raging, the first creature you hit with a weapon attack each turn takes extra necrotic or radiant damage (your choice at 3rd level) equal to 1d6 + half your barbarian level.', source: { kind: 'subclass', refId: 'zealot' }, level: 3, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'free', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+          abilityEffects: [{ type: 'damage', dice: '1d6', damageType: 'radiant' }],
+        } },
+        { kind: 'feature', value: { id: 'warrior_of_the_gods', name: 'Warrior of the Gods', description: 'A spell that only restores you to life (not undeath), such as Raise Dead, doesn\'t require material components when cast on you.', source: { kind: 'subclass', refId: 'zealot' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+    {
+      level: 6, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'fanatical_focus', name: 'Fanatical Focus', description: 'If you fail a saving throw while raging, you can reroll it and must use the new result. Usable once per rage.', source: { kind: 'subclass', refId: 'zealot' }, level: 6, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
+    {
+      level: 10, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'zealous_presence', name: 'Zealous Presence', description: 'As a bonus action, grant up to ten creatures of your choice within 60 feet who can hear you advantage on attack rolls and saving throws until the start of your next turn. Usable once per long rest.', source: { kind: 'subclass', refId: 'zealot' }, level: 10, effects: [], actions: [], choices: [], passive: false,
+          activation: { actionType: 'bonus_action', resourceCost: null, range: '60 feet', target: 'multiple', requiresSave: null },
+          abilityEffects: [],
+        } },
+      ],
+    },
+    {
+      level: 14, hpDie: 12, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'rage_beyond_death', name: 'Rage Beyond Death', description: 'While raging, dropping to 0 HP doesn\'t knock you unconscious (you still make death saves and suffer normal effects of damage at 0 HP). If you would die from failed death saves, you don\'t die until your rage ends — and only then if you\'re still at 0 HP.', source: { kind: 'subclass', refId: 'zealot' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
+      ],
+    },
+  ],
+};
+
 export const BARBARIAN_SUBCLASSES: SubclassProgression[] = [
   berserkerProgression,
   totemWarriorProgression,
+  pathOfTheBeastProgression,
+  pathOfWildMagicProgression,
+  pathOfTheAncestralGuardianProgression,
+  pathOfTheBattleragerProgression,
+  pathOfTheGiantProgression,
+  pathOfTheStormHeraldProgression,
+  pathOfTheZealotProgression,
 ];

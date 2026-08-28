@@ -1628,6 +1628,52 @@ export const raceHalfOrc: Race = {
       level: null, effects: [], actions: [], choices: [], passive: true,
     },
   ],
+  // Eberron: Rising from the Last War — dragonmark. Replaces every base
+  // trait except Age/Alignment/Size/Speed per the source text (Darkvision
+  // is re-listed there too, at the same 60ft value — redeclared here for
+  // completeness even though the practical effect is identical).
+  subracesOptional: true,
+  subraces: [
+    {
+      id: 'mark_of_finding', name: 'Mark of Finding', parentId: 'half_orc', srd: false,
+      replacesBaseFeatureIds: [
+        'half_orc_asi', 'half_orc_darkvision', 'half_orc_menacing',
+        'half_orc_relentless_endurance', 'half_orc_savage_attacks',
+      ],
+      features: [
+        {
+          id: 'mark_of_finding_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 2, and your Constitution score increases by 1.',
+          source: { kind: 'race', refId: 'mark_of_finding' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'wis', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'mark_of_finding_darkvision', name: 'Darkvision',
+          description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+          source: { kind: 'race', refId: 'mark_of_finding' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }],
+        },
+        {
+          id: 'hunters_intuition', name: "Hunter's Intuition",
+          description: 'Whenever you roll a Wisdom (Perception) or Wisdom (Survival) check, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_finding' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'finders_magic', name: "Finder's Magic",
+          description: 'You can cast Hunter\'s Mark with this trait, once per long rest. At 3rd level you can also cast Locate Object. Wisdom is your spellcasting ability for these spells. (Neither is a cantrip — this app has no mechanism to grant a limited-use LEVELED spell without a slot, so none of this is applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_finding' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'mark_of_finding_spells', name: 'Spells of the Mark',
+          description: 'If you have the Spellcasting or Pact Magic class feature, Faerie Fire, Longstrider, Locate Animals or Plants, Locate Object, Clairvoyance, Speak with Plants, Divination, Locate Creature, and Commune with Nature are added to your class\'s spell list. (No mechanism to add spells to a class spell list — not applied mechanically, tracked for reference.)',
+          source: { kind: 'race', refId: 'mark_of_finding' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+  ],
 };
 
 export const raceTiefling: Race = {

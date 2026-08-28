@@ -8,7 +8,7 @@
 import { makeEmptyEntity, DEFAULT_RULES } from '../../../store/characterStore';
 import { applyGrant, queueChoice, resolveChoice } from '../../../engine/leveling';
 import { recomputeDerived } from '../../../engine/pipeline';
-import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf, raceHalfling, raceTiefling } from '../index';
+import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf, raceHalfling, raceTiefling, raceHalfOrc } from '../index';
 import { resolveResistance } from '../../../engine/resolver';
 import { collectAllEffects } from '../../../engine/pipeline';
 import { Race, Subrace, Ability, Feature, Entity } from '../../../engine/types';
@@ -194,6 +194,22 @@ describe('Half-Elf Versatility — real ancestryChoice, was hardcoded to "2 skil
   it('Drow Magic heritage grants a real Dancing Lights cantrip', () => {
     const e = applyRaceSelection(raceHalfElf, null, [], 'drow_magic_heritage');
     expect(e.spellcasting?.cantrips).toContain('dancing_lights');
+  });
+});
+
+describe('Half-Orc dragonmark', () => {
+  it('Mark of Finding fully replaces WIS+2/CON+1, darkvision, and skill proficiency, dropping Menacing/Relentless Endurance/Savage Attacks', () => {
+    const mof = raceHalfOrc.subraces!.find(s => s.id === 'mark_of_finding')!;
+    const e = applyRaceSelection(raceHalfOrc, mof);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects.find(ef => ef.target === 'str')).toBeUndefined(); // base half_orc_asi's str+2 gone
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'wis', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+    ]));
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 60, note: undefined }]);
+    expect(e.skills.skills.intimidation.trained).toBe(false); // Menacing replaced, not inherited
+    expect(e.features.some(f => f.id === 'half_orc_savage_attacks')).toBe(false);
   });
 });
 

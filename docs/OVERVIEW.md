@@ -2,8 +2,9 @@
 
 > A single, current narrative of what this project is, what exists today, what's
 > coming, and what it's ultimately for. For deeper architectural detail see
-> `DESIGN.md`; for the sequenced build plan see `ROADMAP.md`; for the recruiting/
-> elevator pitch see `ABOUT.md`.
+> `DESIGN.md`; for current status and what's next see `STATUS.md` (`ROADMAP.md`
+> is an archived historical build log, no longer kept current); for the
+> recruiting/elevator pitch see `ABOUT.md`.
 
 ---
 

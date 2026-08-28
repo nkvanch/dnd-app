@@ -1,15 +1,17 @@
 # Grimoire — Project Status & Direction
 
-*Single source of truth for where the project is right now.*
-*Read `PRODUCT_PRINCIPLES.md` for philosophy, `UI_RULES.md` for UI constraints,
-`ROADMAP.md` for the sequenced plan, `ARCHITECTURE.md` for technical design,
+*Single source of truth for where the project is right now. `ROADMAP.md` is
+now an archival build log for the original pre-release push (June 2026) —
+every item in its checklist shipped; this file is the only one that gets
+kept current going forward. Read `PRODUCT_PRINCIPLES.md` for philosophy,
+`UI_RULES.md` for UI constraints, `ARCHITECTURE.md` for technical design,
 `IMPLEMENTATION.md` for concrete schemas and protocols.*
 
-*Last updated: after the engine audit / conditions-as-content / grant fixes / armor cap
-/ feature hydration pass, the 2026-08-26 nav-crash fix / subrace & subclass
-attachment session, and the same-day follow-up that added real subclass selection
-(all classes), a companion-creature subsystem, an item-infusion subsystem, and the
-Artificer class (5 specialists). See §3 changelog for the full list.*
+*Last updated: after a rating/gap-analysis pass surfaced several places
+where this doc and `ROADMAP.md` had drifted out of sync with each other and
+with the actual shipped code (see §3 for what was corrected), a bug-fix
+batch, and a full multiclassing implementation. See §3 changelog for the
+full list.*
 
 ---
 
@@ -19,13 +21,14 @@ Grimoire is a **rules-aware tabletop RPG companion**. Its first ruleset is D&D 5
 but the architecture treats rules as data — so the long-term shape is a platform
 that runs tabletop rulesets, not a D&D-specific app.
 
-It runs on **Android** (iOS untested), works **fully offline**, and can sync a table
-over **local WiFi** (TCP, no server, no account).
+It runs on **Android** (iOS untested — no device available to test on), works
+**fully offline**, and can sync a table over **local WiFi** (TCP, no server,
+no account).
 
 Three jobs:
 1. **Build characters** — guided wizard, every number computed by the engine.
 2. **Play** — live sheet tracking HP, conditions, spell slots, resources, hit dice,
-   death saves, with an audit trail behind every value.
+   death saves, multiclassing, with an audit trail behind every value.
 3. **Run the table (DM)** — party dashboard, monster library, encounter tracker,
    transparent overrides.
 
@@ -48,7 +51,8 @@ it, because all changes flow through the Feature / Effect pipeline.
 Full wizard: name & level → race (mandatory subrace where applicable) → class →
 background → ability scores (standard array / point buy / manual / 4d6) → skills →
 equipment → spells → review. Produces a rules-correct character with HP, AC, saves,
-proficiencies, and features derived automatically.
+proficiencies, and features derived automatically. A ⚙️ settings shortcut on the
+first screen reaches Campaign Settings without leaving the flow.
 
 **Data-integrity guarantees (all verified):**
 - Switching class clears old class skills/features/ASI stats; re-applies background skills.
@@ -57,12 +61,15 @@ proficiencies, and features derived automatically.
 - ASI stat bumps are stripped before class change so they don't ghost-stack.
 - Racial bonuses show in the scores step as an annotation, never baked into base scores.
 
-### Character sheet ✅ working (6 tabs)
+### Character sheet ✅ working (7 tabs)
 
-**Combat** — HP block (damage/heal/temp/set/set-max), death saves, stat row
-(AC/Speed/Init/Perc — each tappable for audit), level-up button, weapon attacks
-with computed bonus, hit dice (Roll = app heals; Use = spend, player rolls), conditions
-with mechanical reminders, concentration tracking, resources, spell slot pips.
+**Combat** — header always shows HP/AC/Speed. HP block (damage/heal/temp/set/set-max),
+death saves, stat row (AC/Speed/Init/Perc — each tappable for audit), Level Up
+(single-class characters get one button; with multiclassing on, one button per
+class already taken plus "+ Add a Class" — see §2's Multiclassing entry below),
+weapon attacks with computed bonus (through the pipeline, audited), hit dice
+(Roll = app heals; Use = spend, player rolls), conditions with mechanical
+reminders, concentration tracking, resources, spell slot pips.
 
 **Actions** — auto-generated cards grouped into Actions / Bonus Actions / Reactions,
 color-coded by purpose. Cards grey out with reason when unaffordable.
@@ -74,20 +81,26 @@ the audit modal.
 **Features** — features by source (Race / Class / Subclass / Background / Feat).
 Pending Choices section at the top: skill choices resolve inline, ASI/feat choices
 open the picker, subclass choices open a real picker (applies the chosen subclass's
-features immediately, for every class), infusion choices (Artificer) open a picker
-too.
+features immediately, for every class, and now correctly targets the right class
+for a multiclassed character), infusion choices (Artificer) open a picker too.
 
-**Inventory** — weight bar, currency, equipped/carried with equip toggle. Equipping
-armor updates AC immediately through the pipeline. Artificer characters also get an
-Infusions section: learn known infusions, apply one additively to an owned item
-(cap-enforced), remove it again.
+**Items** — weight bar (effective STR, race/feat bonuses included), currency,
+equipped/carried with equip toggle. Equipping armor updates AC immediately through
+the pipeline. Artificer characters also get an Infusions section: learn known
+infusions, apply one additively to an owned item (cap-enforced), remove it again.
+
+**Spells** — seventh tab, only rendered for spellcasters (multiclass-aware: shows
+for a character with a caster class in *any* slot, not just the primary one).
+Browse by level, prepared/known distinction for prepared casters, concentration/
+ritual tags, Cast button shares the same code path as the Actions tab's Use button.
 
 **Notes** — free text, auto-saves.
 
-**Persistent rest bar** — Short rest (hit dice, short-rest resources) and Long rest
-(full HP, all slots, full hit-dice pool, −1 exhaustion).
+**Persistent rest bar** — Short rest (hit dice, short-rest resources, and pact
+spell slots for any pact-caster class present) and Long rest (full HP, all slots
+including pact slots, full hit-dice pool, −1 exhaustion).
 
-### Engine correctness (all verified post-audit)
+### Engine correctness (all verified)
 
 | Value | Status |
 |---|---|
@@ -102,10 +115,12 @@ Infusions section: learn known infusions, apply one additively to an owned item
 | Retroactive CON→HP on ASI | ✅ reconcileConHp applied |
 | Proficiency grants from class | ✅ Populates armor/weapons/tools/languages |
 | Speed grants from class | ✅ Adds to entity.resources.speed |
-| Subclass unlock | ✅ Real picker; applies chosen subclass's features immediately, all classes |
-| Spell slots on level-up | ✅ Grow from PHB table automatically |
+| Subclass unlock | ✅ Real picker; applies chosen subclass's features immediately, all classes, multiclass-aware |
+| Spell slots on level-up | ✅ Grow from PHB table automatically; combined multiclass table + separate pact slots when multiclassed |
+| Attack bonuses | ✅ Computed once in the pipeline (`computeWeaponAttackBonuses`), not ad-hoc per screen |
 | Conditions enforce mechanical effects | ✅ Grappled/Restrained/Paralyzed/Stunned/Petrified set speed 0 |
 | Equipped armor persists after restart | ✅ Hydrated in loadCharacters |
+| Carry capacity | ✅ Uses effective STR (race/feat bonuses), not raw |
 
 ### Audit trail (tap any value)
 
@@ -114,27 +129,44 @@ all 18 skills, Spell Save DC, Spell Attack Bonus — each produces a complete br
 showing base + every contributor + DM override if any. All use effective stats (race
 bonuses appear correctly in breakdowns).
 
-### Leveling ✅ single-class working
+### Leveling ✅ single-class AND multiclass working
 
-In-play level-up button → engine applies new level → ASI/feat picker opens if needed.
-Shared `AsiFeatPicker` used by both creation and in-play (no drift). 82 feats available.
-Subclass unlock opens a real picker (`SubclassPicker`) at the class's actual unlock
-level; the chosen subclass's own progression is merged in so later level-ups keep
-granting its features too (`mergeSubclassIntoProgression`).
+In-play level-up → engine applies new level → ASI/feat picker opens if needed.
+Shared `AsiFeatPicker` used by both creation and in-play (no drift). 82 feats
+available. Subclass unlock opens a real picker (`SubclassPicker`) at the class's
+actual unlock level; the chosen subclass's own progression is merged in so later
+level-ups keep granting its features too (`mergeSubclassIntoProgression`).
+
+**Multiclassing** (Campaign Settings' "Multiclassing" toggle — previously present
+in the UI but fully inert, now live): once on, the Level Up section shows one
+button per class already taken plus "+ Add a Class." Taking a second-or-later
+class grants the PHB's reduced multiclass proficiency table instead of a fresh
+class's full kit, and correctly grants no bonus saving throws. Spell slots use
+the combined multiclass caster table (full/half casters count toward one shared
+pool) with pact-caster slots (Warlock, and the homebrew Blood Hunter Profane
+Soul / Abyss Knight) tracked and recharged separately. Proficiency bonus and hit
+points are correctly based on total character level. Known limitations: hit dice
+from different-die-size classes are tracked as a combined count rather than an
+exact mixed pool (short-rest recovery uses whichever class was most recently
+leveled as the die size); there's no hard ability-score-prerequisite check
+before adding a class (an advisory note only, matching how feat prerequisites
+are already handled); a couple of display screens (character list, exports, DM
+dashboard) still show only the primary class's label for a multiclassed
+character rather than "Fighter 3 / Wizard 2."
 
 ### Content
 
 | Category | Count | Status |
 |---|---|---|
-| Races | 9 (+subraces) | ✅ Full |
-| Classes | 13 | ✅ L1–20 progressions; mid/high levels often HP-only stubs |
-| Subclasses | 29 files | ✅ Selection wired for all classes; feature depth varies by file |
+| Races | 9 base (+ subraces, ~80 total selectable options) | ✅ Full |
+| Classes | 13 (12 official + Artificer; plus homebrew-registered Abyss Knight and Blood Hunter) | ✅ L1–20 progressions; mid/high levels often HP-only stubs for the base class chassis |
+| Subclasses | 16 files, ~870+ individual subclass entries | ✅ Every official subclass for every class, both Artificer UA variants, all 4 Blood Hunter Orders, and a 13-subclass UA/Amonkhet sweep — real mechanical depth, not just flavor text, wherever the engine has a matching hook |
 | Backgrounds | 13 | ✅ Full |
 | Feats | 82 | ✅ Full |
-| Spells | 487 (vault) + ~181 (legacy) | ✅ Class-filtered in creation |
-| Conditions | 15 | ✅ Authored as content; 5 auto-enforce speed=0 |
-| Items | Weapons + armor + gear | ✅ With correct AC formulas |
-| Monsters | SRD starter set | ⚠️ Partial |
+| Spells | ~489 | ✅ Class-filtered in creation |
+| Conditions | 15 | ✅ Authored as content; 5 auto-enforce speed=0, the rest are reminder text |
+| Items | ~1,679 named entries | ✅ With correct AC formulas |
+| Monsters | 23 SRD entries | ⚠️ Partial — the one content category noticeably thinner than the rest |
 
 ### DM tools ⚠️ partial
 
@@ -147,27 +179,57 @@ complete end-to-end DM session flow.
 TCP + NDJSON + event-sourcing, 6-digit room code + QR join. Only one Android device
 on hand — two-device reconnect/conflict handling unverified.
 
-### Homebrew ⚠️ built, unverified end-to-end
+### Homebrew ✅ builders for every content type; wiring into creation and library management done
 
-Spell builder (full, validates), race builder (full), class builder (full — as of
-2026-08-26, per-level features carry real mechanical effect kinds, same as race
-traits, not just flavor text), feature editor (partial). **New (2026-08-26): subrace
-builder and subclass builder**, both attaching to ANY existing race/class — official
-SRD or homebrew — not just ones the player authored themselves; see `docs/
-ROADMAP_1.0.md`'s 2026-08-26 session batch for the data-model writeup. Import
-pipeline (Claude parses URL → content) built but untested on real input.
-**Homebrew races/classes/backgrounds still not wired into the creation wizard's own
-pickers** — homebrew saves to library but doesn't appear as a selectable option there
-(pre-release blocker, tracked in §4 below). Subraces and subclasses are the
-exception: they DO now appear correctly in `race-detail.tsx` / `class-detail.tsx` /
-`subclass-detail.tsx` once their parent is reached, since those screens read through
-the merged content DB — but subclass *selection* during play is a separate, already-
-tracked gap (see "Subclass features not authored" below) that predates homebrew
-subclasses and isn't resolved by this addition.
+Builders exist for every content type: race, subrace, class, subclass, background,
+item, spell, generic feature, feat, and monster. Class builder's per-level features
+carry real mechanical effect kinds, same as race traits, not just flavor text.
+Subrace and subclass builders attach to ANY existing race/class — official SRD or
+homebrew. Homebrew races, classes, spells, backgrounds, and features are all wired
+into the creation wizard's own pickers (not just the library). The Homebrew Library
+screen has a search box and category filter chips with live counts for navigating
+a growing collection. Import pipeline (Claude parses a URL → content) is built but
+untested on real input.
 
 ---
 
-## 3. Recent changelog (since last status update)
+## 3. Recent changelog (most recent first)
+
+### Doc reconciliation + bug fixes + multiclassing (this session)
+
+- **`ROADMAP.md` and this file had drifted out of sync**, in both directions:
+  `ROADMAP.md`'s pre-release checklist (all 8 items, June 2026) was genuinely
+  complete, but this file's §4/§5 still listed several of those exact items
+  (Settings screen, Spellbook tab, character-header AC, homebrew-in-creation)
+  as open blockers — stale leftover text that was never updated when they
+  shipped. Separately, "No Feat or Monster homebrew builder" and "Attack
+  bonuses not in pipeline" were also stale — both builders and the real
+  pipeline computation already existed in the current code. All corrected in
+  §2/§4/§5 below by checking the actual source, not trusting either doc.
+  `ROADMAP.md` itself now points here and is kept only as a historical build
+  log.
+- **Subclass choice wasn't popping up on level-up** (user-reported): a
+  homebrew class with an attached subclass queued a pending choice with
+  `kind:'custom'`, which only ever rendered an inert "ask your DM" note —
+  every OFFICIAL class already used the real `kind:'subclass'` path (which
+  opens `SubclassPicker`) and was unaffected. Fixed.
+- Class-selection screen's expandable dropdown now lists each class's
+  subclasses (official + homebrew) inline, tapping through to the existing
+  read-only preview.
+- Homebrew Library gained a search box + category filter chips (live counts).
+- Carry capacity was reading raw STR instead of effective STR (missed
+  race/feat bonuses) — fixed.
+- **Real multiclassing implemented** — see §2's Multiclassing entry for the
+  user-facing summary. `Identity` gained an optional `classes[]` array (one
+  entry per class taken); the existing single-class scalar fields stay as a
+  kept-in-sync mirror so every pre-existing single-class code path needed no
+  changes. New `levelUpClass()` engine function, multiclass-aware spell
+  slots (combined table + separate pact-slot tracking), PHB reduced
+  multiclass proficiencies, and a new Level Up UI. Two real latent bugs
+  fixed as a byproduct (both namespacing issues that only bite once a
+  second class exists): the subclass-unlock pending-choice id and a couple
+  of `applyGrant` lookups were keyed off the character's primary class
+  rather than whichever class was actually being leveled.
 
 ### Real subclass selection, companions, infusions, Artificer (2026-08-26, cont'd 2)
 
@@ -220,127 +282,115 @@ subclasses and isn't resolved by this addition.
   nonexistent — levels were silently zeroed), and an additive widening of
   `buildTraitFeature()`'s return shape.
 
-### Engine fixes
+### Pre-release push (June 2026) — complete, archived
 
-- **Armor equip now changes AC.** Root cause: `ItemInstance` stores with `features:[]`;
-  `handleEquip` now hydrates features from content definition at equip time. Also fixed
-  durably in `loadCharacters` so armor AC survives app restarts.
-- **Speed audit was wrong for dwarves.** `buildSpeedEntries` was adding base 30 + set 25
-  = 55. Rewritten: `set` operations replace the base entry; additive bonuses stack on top.
-- **Race bonuses not showing in Abilities tab.** Tab was reading `entity.stats[key]`
-  (base) instead of `effectiveStats[key]`. Fixed to use effective scores everywhere.
-- **Race bonus missing from HP calculation.** `recalculateAllHP` and `applyHP` now both
-  call `applyStatModifiers` to get effective CON.
-- **ASI picker was showing base scores.** `AsiFeatPicker` now computes and displays
-  effective scores; cap is enforced against effective, not base. Mountain Dwarf STR 18
-  (effective 20) correctly shows 0 headroom.
-- **ASI erased on score re-confirm.** `reapplyResolvedAsi` re-applies all resolved ASI
-  selections after scores are overwritten. Called in `scores.tsx` on confirm.
-- **Ghost ASI stats after class change.** `stripResolvedAsiStats` subtracts recorded
-  increases before dropping choices; called in `clearClassData`.
-- **Skills stacked on class change.** `clearClassData` now resets all skill trained flags,
-  then re-applies background skills from `BG_SKILL_MAP`. Skills stacking on background
-  change fixed in `selectBackground` similarly.
-- **Skills page: re-entry showed "no choices."** Fixed: split into pending vs resolved
-  choices; resolved state shows a read-only summary.
-- **`applyGrant` proficiency case was a no-op.** Now correctly populates
-  `entity.proficiencies.armor/weapons/tools/languages` from a `ProficiencyGrant` value.
-- **`applyGrant` speed case was a no-op.** Now adds to `entity.resources.speed`.
-- **`applyGrant` subclass_unlock was a no-op.** Now queues a pending custom choice
-  that surfaces in the Features tab.
-- **Medium armor DEX cap not enforced.** Added `formulaAbilityCap` field to `Effect` type;
-  medium armor items carry `{ dex: 2 }`; pipeline and audit both respect the cap.
-- **Conditions were hardcoded text, not engine content.** Created
-  `src/content/conditions/index.ts` with all 15 PHB conditions as `Condition` objects.
-  Five (Grappled, Restrained, Paralyzed, Stunned, Petrified) carry speed=0 effects.
-  `applyCondition` now accepts optional features from the caller (avoiding circular dep)
-  and adds them to `entity.features`; `removeCondition` already strips them by source.
-  Speed audit now shows "Grappled (condition): set to 0" correctly.
-- **Audit trail used base stats throughout.** `buildSaveEntries`, `buildSkillEntries`,
-  `buildSpellSaveDcEntries`, `buildSpellAttackEntries`, `buildInitiativeEntries` all
-  switched to `applyStatModifiers` so breakdowns show effective values.
-- **AC audit inflated with both armor and Unarmored Defense formulas.** Rewritten to
-  pick the winning (highest-total) formula and show only its contributions.
-- **Feature hydration in UI layer only.** Moved to `loadCharacters` in `characterStore`
-  so equipped items retain AC effects after every app restart, not just after fresh equip.
-
-### Spell wiring
-
-- **487 vault spells wired into creation.** `spells.tsx` now merges vault corpus
-  (preferred) with legacy spells (fallback), filtered by `spell.classes` to show only
-  the character's class.
-
-### Documentation
-
-Five new reference documents written to `docs/`:
-- `PRODUCT_PRINCIPLES.md` — 7 governing principles in priority order.
-- `UI_RULES.md` — 8 binding UI rules with forbidden word list and audit trail contract.
-- `ROADMAP.md` — sequenced pre-release and post-release priorities with sizing.
-- `NAVIGATION_MAP.md` — complete verified screen tree and answers to UX questions.
-- `PAGE_REFERENCE.md` — detailed walkthrough of every screen and every choice.
-- `QA_GUIDE.md` — step-by-step manual test procedures with exact expected values.
+All 8 of `ROADMAP.md`'s original pre-release priorities (character header,
+class-change warning, Settings screen, homebrew-in-creation Part A, Spellbook
+tab, plain-language audit view, campaign overview screen, home-screen campaign
+state) shipped and were verified working — see `ROADMAP.md` for the detailed,
+dated session-by-session log. A large batch of engine correctness fixes also
+landed in this window (armor-equip AC, speed audit, race bonuses in HP/
+Abilities/ASI picker, skill/ASI state bugs on class or background change,
+several `applyGrant` no-ops, medium-armor DEX cap, conditions-as-content,
+audit-trail base-vs-effective-stat bugs) — full detail also in `ROADMAP.md`.
 
 ---
 
 ## 4. What's next (ordered)
 
-### Pre-release (blocking)
+Everything that was ever tracked here as a "pre-release blocker" is done —
+see §3. The list below is what actually remains, reconciled against the
+current code rather than carried forward from either doc's old copy.
 
-1. **Character header: HP + AC always visible.** Hours of work, highest player impact.
-   Currently AC only appears in the Combat tab's stat row.
-2. **Settings screen.** Exposes `CampaignRules` (level cap, HP mode, multiclass,
-   feats on/off, XP vs milestone). Required by the "table adapts to app" principle.
-3. **Homebrew → creation wiring (Part A).** Custom races, spells, backgrounds, and
-   features from the homebrew library appear in the creation wizard. The homebrew items
-   already have the right shape — the creation wizard just needs to merge the library
-   into its content sources. Part B (homebrew classes) is a separate larger project.
-4. **Spellbook tab.** A seventh in-page tab (spellcasters only) for: browse by level,
-   prepared/known distinction, concentration/ritual tags, Cast button that uses the same
-   code path as the action card Use button.
-5. **Campaign overview screen.** Between-sessions surface: session log, quest tracker,
-   campaign notes, party member list. Makes the Campaigns tab useful on non-game days.
-6. **Home screen campaign state.** Three states: no campaign, between sessions, live
-   session. Requires #5 to have content to show.
+### User's explicit next-up order (in progress)
 
-### Post-release
+1. ~~Fix reported bugs~~ ✅ done, see §3.
+2. ~~Multiclassing~~ ✅ done, see §3.
+3. ~~Homebrew library search/filter~~ ✅ done, see §3.
+4. ~~Reconcile `ROADMAP.md` and this file~~ ✅ this pass.
+5. **Fill in level 6–20** for the base classes that are currently HP-only
+   stubs past their early levels — the subclass depth built on top of them
+   deserves a base chassis that's equally real.
+6. **Spell selection on level-up** for classes with a fixed number of known
+   spells (Wizard, Sorcerer, Bard, Warlock, Ranger) — currently only
+   ASI/feat is handled at level-up; new spells known isn't queued at all.
+7. **A real engine test suite** — currently 2 test files for a rules engine
+   this load-bearing, with no CI.
+8. **Grow the monster library** — 23 SRD entries is the one content
+   category well behind everything else (compare ~1,679 items / 489 spells
+   / 870+ subclass entries).
+9. Then start on the post-release backlog below.
 
-- Spell selection on level-up (known/prepared count tables per class)
-- Audit trail completeness gate — every number listed in `UI_RULES.md` Rule 2 must
-  produce a non-empty breakdown
-- Quest log and shared journal extension of #5
-- Ruleset concept formalized (CampaignRules → Ruleset with name + content pack list)
-- Content pack architecture
-- Subclass features authored into progressions
-- Attack bonuses through the pipeline (currently computed ad-hoc in TabCharacter)
-- Condition advantage/disadvantage effects (currently reminder text only)
-- Proficiency display on the sheet (the proficiency block is now populated correctly
-  but not shown anywhere in the UI)
+### Post-release backlog
 
-### Deliberately deferred
+- Audit trail completeness gate — every number listed in `UI_RULES.md` Rule 2
+  should produce a non-empty breakdown; not yet verified for every value.
+- Ruleset concept formalized (`CampaignRules` → a full `Ruleset` object with
+  name + content pack list + override declarations).
+- Content pack architecture — named, versioned, enable/disable packs layering
+  over official content (distinct from the already-shipped `.grimoire-pack`
+  cross-device homebrew *sharing* feature, which is a one-off export/import,
+  not a standing enable/disable system).
+- Condition advantage/disadvantage effects — only 5 of 15 conditions
+  mechanically enforce anything (speed=0); the rest are reminder text.
+- Proficiency display on the sheet — the proficiency block is populated
+  correctly (including the new multiclass reduced-proficiency logic) but has
+  no dedicated UI surface anywhere on the character sheet.
+- Character Timeline — automated milestones (level-up, ASI, feat taken,
+  death/revival) plus manual narrative journal entries in one chronological
+  view. Not started.
+- Quest log / shared session journal — partially covered already by the
+  shipped Campaign overview screen (session log + quest tracker + notes +
+  party list); NPC/location notes specifically are still unbuilt.
+- A couple of multiclassing follow-ups (see §2): wire `formatClassLabel()`
+  into the character list / export / DM dashboard screens so a multiclassed
+  character shows "Fighter 3 / Wizard 2" instead of just the primary class;
+  a real ability-score-prerequisite check before adding a class instead of
+  an advisory note only; exact mixed hit-die pools instead of an
+  approximated combined count; third-caster subclasses (Eldritch Knight,
+  Arcane Trickster) contributing to the combined multiclass caster level.
 
-Multiclassing (identity model rewrite), cloud sync, non-D&D rulesets, generic resource
-pools, full session replay. These wait for a proven second use case.
+### Explicitly deferred
+
+These are understood, valued, and deliberately not being built yet:
+
+- **Cloud sync** — local WiFi sync is sufficient for table play, and
+  offline-first is a product principle. Defer until local sync is proven
+  and there's a real demand signal for it.
+- **Non-D&D rulesets** — the engine is generic, but content/UI/creation
+  wizard are all D&D-specific today. Excellent D&D 5e first, generalize
+  later based on real second-system requirements.
+- **Generic resource pools replacing spell slots** — spell slots (including
+  the new multiclass combined table and pact-slot split) work correctly
+  today; replacing them with a generic pool abstraction is pure refactoring
+  risk until a second system actually needs it.
+- **Full session replay / time travel** — the event log exists; full replay
+  is a debugging nicety, not a table feature.
+- **Marketplace / import ecosystem** — the import pipeline (Claude parses a
+  URL into content) is built but untested on real input; getting it
+  reliable is the near-term goal, a sharing marketplace is much further out.
+
+(Multiclassing was on this list as of the last update — it no longer is; see §3.)
 
 ---
 
-## 5. Known gaps (honest)
+## 5. Known gaps (honest, verified against current code)
 
 | Gap | Impact | Status |
 |---|---|---|
-| No Settings screen | DM can't configure rules | Pre-release blocker |
-| Homebrew not wired into creation | Core differentiator incomplete | Pre-release blocker |
-| No Spellbook tab | Casters manage spells across two tabs | Pre-release blocker |
-| No character header AC | Players ask "what's my AC?" constantly | Pre-release blocker |
+| Monster library is thin (23 SRD entries) | DMs will hit this immediately; every other content category is deep | Real gap |
+| Many mid/high-level class entries are HP stubs | Level 6+ is mechanically thin on the base class chassis (subclasses layered on top are much deeper) | Real gap, next up (§4 item 5) |
+| No spell selection on level-up | Known-spell casters can't gain new spells as they level | Real gap, next up (§4 item 6) |
+| Near-zero test coverage, no CI | 2 test files for a load-bearing rules engine | Real gap, next up (§4 item 7) |
 | Some subclass files are feature-thin | Selection works everywhere; a few subclasses have fewer authored levels than others | Minor |
-| Many mid/high-level class entries are HP stubs | Level 6+ is mechanically thin | Major gap |
-| Conditions only auto-enforce speed | Poisoned/Blinded etc. are reminders only | Known |
-| Attack bonuses not in pipeline | No audit trail for attack rolls | Known |
-| Two-device sync untested | Reconnect/conflict handling unverified | Known |
-| Proficiency block not displayed | Populated but no UI surface | Minor |
-| Feat prerequisites not enforced | Player/DM judgment only | Minor |
+| Conditions only auto-enforce speed | Poisoned/Blinded etc. are reminders only | Known, by design so far |
+| Two-device sync untested | Reconnect/conflict handling unverified — only one physical device on hand | Known |
+| Proficiency block not displayed anywhere in the UI | Populated correctly (incl. multiclass) but no dedicated screen surface | Minor |
+| Feat prerequisites not enforced (advisory only) | Player/DM judgment only — deliberate house style, now also how multiclass ability-score prerequisites work | By design |
+| Multiclass display polish incomplete | A couple of screens show only the primary class's label for a multiclassed character | Minor, see §4 |
 | No portraits/identity art | Flat character cards | Minor |
 | `src/screens/` directory | Predates expo-router, dead code | Cleanup |
-| No Feat or Monster homebrew builder | Every other content type (race, subrace, class, subclass, background, item, spell, generic feature) has one; feats/monsters remain static-registry-only | Known |
+| iOS untested | No iOS device available | Known, can't be resolved without hardware |
 
 ---
 

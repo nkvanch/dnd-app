@@ -31,6 +31,24 @@ import { exportContentPack } from './backupIO';
 
 export type ExportFormat = 'pdf' | 'txt' | 'md' | 'pack';
 
+/**
+ * Races a promise against a timeout so a hang anywhere downstream (a native
+ * module call, a stuck SQLite query) surfaces as a clear error instead of
+ * leaving the caller's loading spinner stuck indefinitely — this is what
+ * was happening with PDF export: nothing ever rejected, so the UI's
+ * try/finally never reached its finally block. Doesn't cancel the
+ * underlying work (JS has no way to abort an in-flight native call here),
+ * it just stops making the user wait on a promise that may never settle.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} took too long (over ${Math.round(ms / 1000)}s) and was abandoned. Try again — if it keeps happening, the app may need a restart.`)), ms)
+    ),
+  ]);
+}
+
 function sanitize(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'export';
 }
@@ -90,13 +108,13 @@ export async function shareText(content: string, filename: string, format: 'txt'
 }
 
 export async function sharePdfHtml(html: string, dialogTitle: string): Promise<void> {
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
+  const { uri } = await withTimeout(Print.printToFileAsync({ html, base64: false }), 30000, 'Generating the PDF');
 
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {
     throw new Error('Sharing isn’t available on this device. The PDF was created but couldn’t be shared.');
   }
-  await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle });
+  await withTimeout(Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle }), 60000, 'Opening the share sheet');
 }
 
 async function shareByFormat(
@@ -125,7 +143,7 @@ export async function exportCharacter(entity: Entity, format: ExportFormat): Pro
     ...(entity.spellcasting?.known ?? entity.spellcasting?.prepared ?? []),
   ];
   const itemIds = [...entity.inventory.equipped, ...entity.inventory.carried].map(i => i.itemId);
-  await ensureNamesLoaded(spellIds, itemIds);
+  await withTimeout(ensureNamesLoaded(spellIds, itemIds), 20000, 'Loading spell and item names');
 
   const resolveName: ResolveName = (kind, id) => resolveContentName(db, kind, id);
 

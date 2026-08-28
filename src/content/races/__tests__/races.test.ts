@@ -23,7 +23,9 @@ import { Race, Subrace, Ability, Feature, Entity } from '../../../engine/types';
  * verifying what the UI does.
  */
 function applyRaceSelection(
-  race: Race, subrace: Subrace | null, flexPicks: { ability: Ability; amount: number }[] = [],
+  race: Race, subrace: Subrace | null,
+  flexPicks: { ability: Ability; amount: number }[] = [],
+  ancestryOptionId: string | null = null,
 ): Entity {
   let e = makeEmptyEntity('e1');
   const replacedIds = new Set(subrace?.replacesBaseFeatureIds ?? []);
@@ -35,6 +37,13 @@ function applyRaceSelection(
   if (subrace) {
     for (const f of subrace.features) e = applyGrant(e, { kind: 'feature', value: { ...f, isActive: true } }, f.level ?? 0);
     for (const r of subrace.resources ?? []) e = applyGrant(e, { kind: 'resource', value: r }, 0);
+  }
+  // Subrace ancestryChoice OVERRIDES the race's (never combines) — mirrors
+  // race-detail.tsx's `ancestryDef = chosenSubraceForUi?.ancestryChoice ?? race?.ancestryChoice`.
+  const ancestryDef = subrace?.ancestryChoice ?? race.ancestryChoice;
+  const chosenAncestry = ancestryOptionId ? ancestryDef?.options.find(o => o.id === ancestryOptionId) ?? null : null;
+  if (chosenAncestry) {
+    e = applyGrant(e, { kind: 'feature', value: { ...chosenAncestry.feature, isActive: true } }, chosenAncestry.feature.level ?? 0);
   }
   const flexAsi = subrace?.flexibleAsi ?? race.flexibleAsi;
   if (flexAsi && flexPicks.length > 0) {
@@ -83,9 +92,11 @@ describe('Dragonborn — Draconic Ancestry', () => {
     expect(breathFeature.activation?.resourceCost).toEqual({ resourceId: 'dragonborn_breath_pool', quantity: 1 });
   });
 
-  it('Draconblood/Ravenite are optional subraces, not a mandatory split', () => {
+  it('every Dragonborn subrace is optional, not a mandatory split', () => {
     expect(raceDragonborn.subracesOptional).toBe(true);
-    expect(raceDragonborn.subraces?.map(s => s.id).sort()).toEqual(['draconblood', 'ravenite']);
+    expect(raceDragonborn.subraces?.map(s => s.id).sort()).toEqual([
+      'chromatic_dragonborn', 'draconblood', 'gem_dragonborn', 'metallic_dragonborn', 'ravenite',
+    ]);
   });
 
   it('Draconblood grants Int+2/Cha+1, REPLACING the base Str+2/Cha+1 ASI (not stacking — per the source "replacing the Ability Score Increase trait")', () => {
@@ -97,6 +108,58 @@ describe('Dragonborn — Draconic Ancestry', () => {
       { type: 'stat_modifier', target: 'int', operation: 'add', value: 2, condition: null },
       { type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null },
     ]));
+  });
+});
+
+describe('Fizban\'s Chromatic/Metallic/Gem Dragonborn', () => {
+  const chromatic = raceDragonborn.subraces!.find(s => s.id === 'chromatic_dragonborn')!;
+  const metallic  = raceDragonborn.subraces!.find(s => s.id === 'metallic_dragonborn')!;
+  const gem       = raceDragonborn.subraces!.find(s => s.id === 'gem_dragonborn')!;
+
+  it('each defines its own 5-color ancestryChoice, distinct from the base 10-color one', () => {
+    expect(chromatic.ancestryChoice!.options.map(o => o.id).sort()).toEqual(['black', 'blue', 'green', 'red', 'white']);
+    expect(metallic.ancestryChoice!.options.map(o => o.id).sort()).toEqual(['brass', 'bronze', 'copper', 'gold', 'silver']);
+    expect(gem.ancestryChoice!.options.map(o => o.id).sort()).toEqual(['amethyst', 'crystal', 'emerald', 'sapphire', 'topaz']);
+  });
+
+  it('the subrace ancestryChoice OVERRIDES the base race one, not adds to it', () => {
+    const e = applyRaceSelection(raceDragonborn, chromatic, [
+      { ability: 'cha', amount: 2 }, { ability: 'str', amount: 1 },
+    ], 'red');
+    // Only the chromatic Red breath weapon feature is present — none of the
+    // base race's 10 PHB ancestry options were ever offered/applied.
+    const breathFeatures = e.features.filter(f => f.name === 'Breath Weapon');
+    expect(breathFeatures).toHaveLength(1);
+    expect(breathFeatures[0].id).toBe('chromatic_breath_pool_red');
+  });
+
+  it('replaces the base ASI and applies the flexible two_one_or_three_one choice', () => {
+    const e = applyRaceSelection(raceDragonborn, metallic, [
+      { ability: 'cha', amount: 2 }, { ability: 'con', amount: 1 },
+    ], 'silver');
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects.find(ef => ef.target === 'str')).toBeUndefined(); // base dragonborn_asi gone
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'cha', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+    ]));
+  });
+
+  it('grants a resource-gated 1d10 breath weapon with the correct damage type and a long-rest pool', () => {
+    const e = applyRaceSelection(raceDragonborn, gem, [
+      { ability: 'wis', amount: 1 }, { ability: 'int', amount: 1 }, { ability: 'cha', amount: 1 },
+    ], 'sapphire');
+    expect(resolveResistance('thunder', collectAllEffects(e))).toBe('resistance');
+    const breath = e.features.find(f => f.id === 'gem_breath_pool_sapphire')!;
+    expect(breath.abilityEffects).toEqual([{ type: 'damage', dice: '1d10', damageType: 'thunder', saveOnSuccess: 'half' }]);
+    expect(e.resources.custom.find(r => r.id === 'gem_breath_pool')).toMatchObject({ maximum: 2, recharge: 'long_rest' });
+  });
+
+  it('Gem Dragonborn always has Psionic Mind regardless of chosen ancestry color', () => {
+    const e = applyRaceSelection(raceDragonborn, gem, [
+      { ability: 'wis', amount: 1 }, { ability: 'int', amount: 1 }, { ability: 'cha', amount: 1 },
+    ], 'topaz');
+    expect(e.features.some(f => f.id === 'psionic_mind')).toBe(true);
   });
 });
 

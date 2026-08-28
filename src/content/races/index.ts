@@ -2,7 +2,7 @@
 // FILE: src/content/races/index.ts
 // All PHB races expressed as Feature/Effect arrays.
 // ============================================================================
-import { Race, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption } from '../../engine/types';
+import { Race, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature } from '../../engine/types';
 
 const ALL_SKILL_OPTIONS: ChoiceOption[] = [
   'athletics', 'acrobatics', 'sleight_of_hand', 'stealth', 'arcana', 'history',
@@ -428,6 +428,58 @@ function draconicAncestryOption(
   };
 }
 
+/**
+ * Builds one Fizban's Treasury of Dragons ancestry option (Chromatic/
+ * Metallic/Gem Dragonborn each choose from their own 5-color list — a
+ * SUBRACE-level ancestryChoice that overrides the base 10-color PHB one,
+ * not a variant of it). Mechanically simplified in the same two disclosed
+ * ways as the PHB version above: flat level-1 damage die (1d10, not the
+ * RAW 2d10/3d10/4d10 scaling at 5th/11th/17th) and a fixed resourceCost
+ * (2 uses, this app's level-1-baseline convention) rather than RAW's
+ * "uses = proficiency bonus" formula, since ResourceGrant.maximum has no
+ * formula slot. Both disclosed in the description text. Each subrace's
+ * unique 5th-level bonus trait (Chromatic Warding / Metallic Breath Weapon
+ * / Gem Flight) is authored separately as a flavor-only Feature — this app
+ * has no mechanism to gate a RACIAL feature's activation to a later
+ * character level (only class progressions support per-level grants), so
+ * granting it for real here would incorrectly make it active from level 1.
+ */
+function fizbanAncestryOption(id: string, name: string, damageType: string, poolId: string): AncestryOption {
+  return {
+    id, name, blurb: `${damageType[0].toUpperCase()}${damageType.slice(1)} damage, 15 ft. cone breath weapon, DEX save.`,
+    feature: {
+      id: `${poolId}_${id}`,
+      name: 'Breath Weapon',
+      description: `When you take the Attack action, you can replace one of your attacks with an exhalation of ${damageType} energy in a 15-foot cone (DEX save, DC = 8 + proficiency bonus + Constitution modifier). Each creature in the area takes 1d10 ${damageType} damage on a failed save, half as much on a success — this increases to 2d10 at 5th level, 3d10 at 11th, and 4d10 at 17th. You also have resistance to ${damageType} damage. You can use this a number of times equal to your proficiency bonus (this app tracks a fixed pool of 2, the 1st-level value); all uses return on a long rest.`,
+      source: { kind: 'race', refId: 'dragonborn' },
+      level: null, actions: [], choices: [], passive: false,
+      effects: [
+        { type: 'grant_resistance', target: damageType, operation: 'resistance', value: null, condition: null },
+      ],
+      activation: {
+        actionType: 'action',
+        resourceCost: { resourceId: poolId, quantity: 1 },
+        range: '15 ft. cone',
+        target: 'area',
+        requiresSave: null,
+      },
+      abilityEffects: [
+        { type: 'damage', dice: '1d10', damageType, saveOnSuccess: 'half' },
+      ],
+    },
+  };
+}
+
+/** Flavor-only Feature for a 5th-level Fizban's Dragonborn bonus trait — see fizbanAncestryOption's doc comment for why this isn't a real mechanical grant. */
+function fizbanFifthLevelNote(id: string, name: string, description: string): Feature {
+  return {
+    id, name,
+    description: `${description} (Unlocks at 5th level — this app doesn't yet support level-gated racial features, so this is tracked for reference only and isn't automatically active.)`,
+    source: { kind: 'race', refId: 'dragonborn' },
+    level: null, effects: [], actions: [], choices: [], passive: true,
+  };
+}
+
 export const raceDragonborn: Race = {
   id: 'dragonborn',
   name: 'Dragonborn',
@@ -520,6 +572,98 @@ export const raceDragonborn: Race = {
           description: 'Once per short or long rest, when you take damage from a creature within range of a weapon you\'re wielding, you can use your reaction to attack that creature.',
           source: { kind: 'race', refId: 'ravenite' }, level: null, effects: [], actions: [], choices: [], passive: true,
         },
+      ],
+    },
+    // Fizban's Treasury of Dragons — the modern, definitive Dragonborn
+    // writeup for these three color families. Each has its own 5-color
+    // ancestryChoice (overriding the base 10-color one — see
+    // Subrace.ancestryChoice), its own flexible ASI, and replaces the base
+    // ASI entirely.
+    {
+      id: 'chromatic_dragonborn', name: 'Chromatic Dragonborn', parentId: 'dragonborn', srd: false,
+      replacesBaseFeatureIds: ['dragonborn_asi'],
+      flexibleAsi: {
+        prompt: 'Increase one ability score by 2 and a different one by 1, or increase three different ability scores by 1.',
+        mode: { kind: 'two_one_or_three_one' },
+      },
+      ancestryChoice: {
+        prompt: 'Choose a chromatic dragon. This determines your Breath Weapon\'s damage type and shape, and the type of damage you resist.',
+        options: [
+          fizbanAncestryOption('black', 'Black', 'acid', 'chromatic_breath_pool'),
+          fizbanAncestryOption('blue', 'Blue', 'lightning', 'chromatic_breath_pool'),
+          fizbanAncestryOption('green', 'Green', 'poison', 'chromatic_breath_pool'),
+          fizbanAncestryOption('red', 'Red', 'fire', 'chromatic_breath_pool'),
+          fizbanAncestryOption('white', 'White', 'cold', 'chromatic_breath_pool'),
+        ],
+      },
+      resources: [
+        { resourceId: 'chromatic_breath_pool', name: 'Breath Weapon', maximum: 2, recharge: 'long_rest' },
+      ],
+      features: [
+        fizbanFifthLevelNote(
+          'chromatic_warding', 'Chromatic Warding',
+          'As an action, you can channel your draconic energy to become immune to the damage type of your Chromatic Ancestry for 1 minute. Once per long rest.',
+        ),
+      ],
+    },
+    {
+      id: 'metallic_dragonborn', name: 'Metallic Dragonborn', parentId: 'dragonborn', srd: false,
+      replacesBaseFeatureIds: ['dragonborn_asi'],
+      flexibleAsi: {
+        prompt: 'Increase one ability score by 2 and a different one by 1, or increase three different ability scores by 1.',
+        mode: { kind: 'two_one_or_three_one' },
+      },
+      ancestryChoice: {
+        prompt: 'Choose a metallic dragon. This determines your Breath Weapon\'s damage type and shape, and the type of damage you resist.',
+        options: [
+          fizbanAncestryOption('brass', 'Brass', 'fire', 'metallic_breath_pool'),
+          fizbanAncestryOption('bronze', 'Bronze', 'lightning', 'metallic_breath_pool'),
+          fizbanAncestryOption('copper', 'Copper', 'acid', 'metallic_breath_pool'),
+          fizbanAncestryOption('gold', 'Gold', 'fire', 'metallic_breath_pool'),
+          fizbanAncestryOption('silver', 'Silver', 'cold', 'metallic_breath_pool'),
+        ],
+      },
+      resources: [
+        { resourceId: 'metallic_breath_pool', name: 'Breath Weapon', maximum: 2, recharge: 'long_rest' },
+      ],
+      features: [
+        fizbanFifthLevelNote(
+          'metallic_breath_weapon', 'Metallic Breath Weapon',
+          'You gain a second breath weapon: a 15-foot cone (DC = 8 + proficiency bonus + Constitution modifier) that either incapacitates creatures until the start of your next turn (CON save) or pushes them 20 feet away and knocks them prone (STR save), your choice each use. Once per long rest.',
+        ),
+      ],
+    },
+    {
+      id: 'gem_dragonborn', name: 'Gem Dragonborn', parentId: 'dragonborn', srd: false,
+      replacesBaseFeatureIds: ['dragonborn_asi'],
+      flexibleAsi: {
+        prompt: 'Increase one ability score by 2 and a different one by 1, or increase three different ability scores by 1.',
+        mode: { kind: 'two_one_or_three_one' },
+      },
+      ancestryChoice: {
+        prompt: 'Choose a gem dragon. This determines your Breath Weapon\'s damage type and shape, and the type of damage you resist.',
+        options: [
+          fizbanAncestryOption('amethyst', 'Amethyst', 'force', 'gem_breath_pool'),
+          fizbanAncestryOption('crystal', 'Crystal', 'radiant', 'gem_breath_pool'),
+          fizbanAncestryOption('emerald', 'Emerald', 'psychic', 'gem_breath_pool'),
+          fizbanAncestryOption('sapphire', 'Sapphire', 'thunder', 'gem_breath_pool'),
+          fizbanAncestryOption('topaz', 'Topaz', 'necrotic', 'gem_breath_pool'),
+        ],
+      },
+      resources: [
+        { resourceId: 'gem_breath_pool', name: 'Breath Weapon', maximum: 2, recharge: 'long_rest' },
+      ],
+      features: [
+        {
+          id: 'psionic_mind', name: 'Psionic Mind',
+          description: 'You can telepathically speak to any creature you can see within 30 feet of you. You don\'t need to share a language with the creature, but it must be able to understand at least one language.',
+          source: { kind: 'race', refId: 'gem_dragonborn' },
+          level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        fizbanFifthLevelNote(
+          'gem_flight', 'Gem Flight',
+          'As a bonus action, you can manifest spectral gem-colored wings for 1 minute, gaining a flying speed equal to your walking speed and the ability to hover. Once per long rest.',
+        ),
       ],
     },
   ],

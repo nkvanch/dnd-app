@@ -104,6 +104,17 @@ export type Subrace = {
    */
   flexibleAsi?: Race['flexibleAsi'];
   /**
+   * Subrace-scoped OVERRIDE of Race.ancestryChoice — for a subrace whose
+   * own ancestry-style choice replaces the base race's rather than adding
+   * to it (e.g. Fizban's Chromatic/Metallic/Gem Dragonborn each choose from
+   * their OWN narrower 5-color list with different mechanics, not the base
+   * 10-color PHB list). When set, race-detail.tsx uses THIS instead of
+   * `race.ancestryChoice` once the subrace is selected — the two never
+   * combine. Most subraces leave this unset and simply inherit the race's
+   * ancestryChoice unchanged (or the race has none at all).
+   */
+  ancestryChoice?: Race['ancestryChoice'];
+  /**
    * Base race Feature ids this subrace replaces rather than adds to — e.g.
    * Variant Human replaces `human_asi` (its flat all-abilities-+1) with its
    * own `flexibleAsi` choice instead of stacking on top of it. Filtered out

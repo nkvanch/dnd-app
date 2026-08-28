@@ -126,7 +126,11 @@ export default function RaceDetailScreen() {
   const hasSubraces      = subraces.length > 0;
   const subracesOptional = !!race?.subracesOptional;
   const chosenSubraceForUi = subraces.find(s => s.id === subRaceId) ?? null;
-  const ancestryOptions  = race?.ancestryChoice?.options ?? [];
+  // A subrace's own ancestryChoice OVERRIDES the race's (Fizban's Chromatic/
+  // Metallic/Gem Dragonborn each choose from their own 5-color list instead
+  // of the base 10) — the two never combine. See Subrace.ancestryChoice.
+  const ancestryDef      = chosenSubraceForUi?.ancestryChoice ?? race?.ancestryChoice;
+  const ancestryOptions  = ancestryDef?.options ?? [];
   const hasAncestry      = ancestryOptions.length > 0;
   // Flexible ability score choice (Half-Elf/Variant Human's "+1 to two
   // abilities of your choice", or Tasha's/Fizban's-style "+2/+1 split OR
@@ -160,10 +164,13 @@ export default function RaceDetailScreen() {
     if (!race || !draft) safeGoBack();
   }, []);
 
-  // Clear a stale flex-ASI pick if the player switches subrace (a different
-  // subrace, or none, may not carry the same flexibleAsi shape/count).
+  // Clear a stale flex-ASI pick / ancestry pick if the player switches
+  // subrace — a different subrace (or none) may not carry the same
+  // flexibleAsi shape/count, or may override ancestryChoice with its own
+  // different option list.
   useEffect(() => {
     setFlexPicks([]);
+    setAncestryId(null);
   }, [subRaceId]);
 
   if (!race || !draft) return null;
@@ -292,30 +299,6 @@ export default function RaceDetailScreen() {
         </>
       )}
 
-      {/* Ancestry picker — mandatory when the race defines one (e.g. Dragonborn) */}
-      {hasAncestry && (
-        <>
-          <View style={styles.divider} />
-          <Text style={styles.sectionTitle}>{race.ancestryChoice!.prompt}</Text>
-          {ancestryOptions.map(a => {
-            const isSel = ancestryId === a.id;
-            return (
-              <Pressable
-                key={a.id}
-                style={[styles.subraceCard, isSel && styles.subraceCardSelected]}
-                onPress={() => setAncestryId(isSel ? null : a.id)}
-              >
-                <View style={styles.subraceHeader}>
-                  <View style={[styles.radio, isSel && styles.radioSelected]} />
-                  <Text style={[styles.subraceName, isSel && styles.subraceNameSelected]}>{a.name}</Text>
-                </View>
-                <Text style={styles.subraceFeatures}>{a.blurb}</Text>
-              </Pressable>
-            );
-          })}
-        </>
-      )}
-
       {/* Subrace picker — mandatory when the race has subraces */}
       {hasSubraces && (
         <>
@@ -343,6 +326,31 @@ export default function RaceDetailScreen() {
                 {keyFeatures.length > 0 && (
                   <Text style={styles.subraceFeatures}>{keyFeatures.join(' · ')}</Text>
                 )}
+              </Pressable>
+            );
+          })}
+        </>
+      )}
+
+      {/* Ancestry picker — mandatory when the race (or the chosen subrace,
+          which overrides it — see Subrace.ancestryChoice) defines one. */}
+      {hasAncestry && (
+        <>
+          <View style={styles.divider} />
+          <Text style={styles.sectionTitle}>{ancestryDef!.prompt}</Text>
+          {ancestryOptions.map(a => {
+            const isSel = ancestryId === a.id;
+            return (
+              <Pressable
+                key={a.id}
+                style={[styles.subraceCard, isSel && styles.subraceCardSelected]}
+                onPress={() => setAncestryId(isSel ? null : a.id)}
+              >
+                <View style={styles.subraceHeader}>
+                  <View style={[styles.radio, isSel && styles.radioSelected]} />
+                  <Text style={[styles.subraceName, isSel && styles.subraceNameSelected]}>{a.name}</Text>
+                </View>
+                <Text style={styles.subraceFeatures}>{a.blurb}</Text>
               </Pressable>
             );
           })}
@@ -400,9 +408,9 @@ export default function RaceDetailScreen() {
         disabled={!canSelect}
       >
         <Text style={styles.selectBtnText}>
-          {!flexComplete ? 'Choose ability scores to continue'
+          {hasSubraces && !subRaceId && !subracesOptional ? 'Choose a subrace to continue'
             : hasAncestry && !ancestryId ? 'Choose an ancestry to continue'
-            : hasSubraces && !subRaceId && !subracesOptional ? 'Choose a subrace to continue'
+            : !flexComplete ? 'Choose ability scores to continue'
             : 'Select Race'}
         </Text>
       </Pressable>

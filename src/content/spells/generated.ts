@@ -211,7 +211,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     ]
   },
   {
-    "id": "fire_bolt",
+    "id": "firebolt",
     "name": "Fire Bolt",
     "level": 0,
     "school": "Evocation",
@@ -1923,7 +1923,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     ]
   },
   {
-    "id": "tashas_hideous_laughter",
+    "id": "hideous_laughter",
     "name": "Hideous Laughter",
     "level": 1,
     "school": "Enchantment",
@@ -2340,7 +2340,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     ]
   },
   {
-    "id": "sleep",
+    "id": "sleep_spell",
     "name": "Sleep",
     "level": 1,
     "school": "Enchantment",

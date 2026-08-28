@@ -245,6 +245,25 @@ const SRD_RENAME_MAP = {
   // is broken regardless of SRD status. Flagged separately in ROADMAP_1.0.md.
 };
 
+// ── Id aliases ────────────────────────────────────────────────────────────────
+// A handful of core PHB spells are also hand-authored in index.ts/level1.ts
+// (etc.) with ids chosen before this converter existed, so they don't match
+// slug(name). Most of the time that's harmless — the vault entry just adds
+// srd classification for a name already covered — but when the ids differ,
+// index.ts's id-based dedup (FULL_SPELL_LIBRARY, "first occurrence wins")
+// can't tell the two entries are the same spell, so both rows survive into
+// the picker as visible duplicates. Force the vault id to match the stable
+// hand-authored one so dedup collapses them, same as it already does (by
+// coincidence) for guidance/light/mending/sacred_flame. Keyed by the vault's
+// own slug(name) — i.e. computed BEFORE any SRD_RENAME_MAP rename, since
+// tashas_hideous_laughter's slug never changes even though its display name
+// does.
+const ID_ALIAS_MAP = {
+  fire_bolt: 'firebolt',                    // index.ts spellFirebolt
+  sleep: 'sleep_spell',                     // index.ts spellSleepSpell
+  tashas_hideous_laughter: 'hideous_laughter', // level1.ts hideous_laughter
+};
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function slug(name) {
@@ -317,14 +336,15 @@ function parseBlock(block) {
   const concentration = /concentration/i.test(duration);
   const ritual = /\britual\b/i.test(block);
 
-  const id = slug(name);
+  const rawId = slug(name);
+  const id = ID_ALIAS_MAP[rawId] || rawId;
   let srd = computeSrd(name, desc);
   let finalName = name;
 
   // Apply SRD_RENAME_MAP: only promote a PI-excluded spell to srd:true if we
   // actually have real description text to show — a rename doesn't help if
   // the vault only has a redacted "not OGL" placeholder for it.
-  const renamed = SRD_RENAME_MAP[id];
+  const renamed = SRD_RENAME_MAP[rawId];
   if (renamed && srd === false && !/not OGL/i.test(desc)) {
     finalName = renamed;
     srd = true;

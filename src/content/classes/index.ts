@@ -745,18 +745,43 @@ export const ALL_PROGRESSIONS: Record<string, ClassProgression> = Object.fromEnt
   ALL_CLASS_PROGRESSIONS.map(p => [p.classId, p])
 );
 
+// PHB "Multiclassing Proficiencies" table (p.164) — what each class grants
+// when taken as a SECOND-OR-LATER class, not your starting class. Sorcerer
+// and Wizard grant nothing per RAW (omitted below). Bard's "one skill of
+// your choice" and Ranger's "one skill from the class's skill list" and
+// Artificer's "thieves' tools or one type of artisan's tools" are all
+// choice-driven in the book; this app's ProficiencyGrant has no per-item
+// choice mechanism, so those are approximated with a fixed, reasonable pick
+// (Bard → Performance, Ranger → Survival, Artificer → Thieves' Tools) rather
+// than left off entirely — disclosed simplification, not a silent omission.
+const MULTICLASS_PROFICIENCIES: Record<string, import('../../engine/types').ProficiencyGrant> = {
+  barbarian: { weapons: ['simple', 'martial'], armor: ['shield'] },
+  bard:      { armor: ['light'], tools: ['Musical Instrument'] },
+  cleric:    { armor: ['light', 'medium', 'shield'] },
+  druid:     { armor: ['light', 'medium', 'shield'] },
+  fighter:   { armor: ['light', 'medium', 'shield'], weapons: ['simple', 'martial'] },
+  monk:      { weapons: ['simple'], tools: ['Shortsword'] },
+  paladin:   { armor: ['light', 'medium', 'shield'], weapons: ['simple', 'martial'] },
+  ranger:    { armor: ['light'], weapons: ['simple', 'martial'] },
+  rogue:     { armor: ['light'], tools: ["Thieves' Tools"] },
+  warlock:   { armor: ['light'], weapons: ['simple'] },
+  artificer: { armor: ['light'], weapons: ['simple'], tools: ["Thieves' Tools"] },
+  // sorcerer, wizard: grant nothing per RAW — omitted, see multiclassProficienciesFor()'s
+  // documented "undefined = grants nothing" semantics.
+};
+
 export const ALL_CHAR_CLASSES = [
-  { id: 'fighter',   name: 'Fighter',   hitDie: 10, features: [] },
-  { id: 'rogue',     name: 'Rogue',     hitDie: 8,  features: [] },
+  { id: 'fighter',   name: 'Fighter',   hitDie: 10, features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.fighter },
+  { id: 'rogue',     name: 'Rogue',     hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.rogue },
   { id: 'wizard',    name: 'Wizard',    hitDie: 6,  features: [] },
-  { id: 'cleric',    name: 'Cleric',    hitDie: 8,  features: [] },
-  { id: 'barbarian', name: 'Barbarian', hitDie: 12, features: [] },
-  { id: 'ranger',    name: 'Ranger',    hitDie: 10, features: [] },
-  { id: 'paladin',   name: 'Paladin',   hitDie: 10, features: [] },
-  { id: 'druid',     name: 'Druid',     hitDie: 8,  features: [] },
-  { id: 'bard',      name: 'Bard',      hitDie: 8,  features: [] },
-  { id: 'monk',      name: 'Monk',      hitDie: 8,  features: [] },
+  { id: 'cleric',    name: 'Cleric',    hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.cleric },
+  { id: 'barbarian', name: 'Barbarian', hitDie: 12, features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.barbarian },
+  { id: 'ranger',    name: 'Ranger',    hitDie: 10, features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.ranger },
+  { id: 'paladin',   name: 'Paladin',   hitDie: 10, features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.paladin },
+  { id: 'druid',     name: 'Druid',     hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.druid },
+  { id: 'bard',      name: 'Bard',      hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.bard },
+  { id: 'monk',      name: 'Monk',      hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.monk },
   { id: 'sorcerer',  name: 'Sorcerer',  hitDie: 6,  features: [] },
-  { id: 'warlock',   name: 'Warlock',   hitDie: 8,  features: [] },
-  { id: 'artificer', name: 'Artificer', hitDie: 8,  features: [] },
+  { id: 'warlock',   name: 'Warlock',   hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.warlock },
+  { id: 'artificer', name: 'Artificer', hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.artificer },
 ] as import('../../engine/types').CharClass[];

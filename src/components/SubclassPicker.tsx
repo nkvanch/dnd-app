@@ -30,15 +30,24 @@ export function SubclassPicker({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
 
+  // Multiclass-aware: a choice queued by levelUpClass() tags which class it
+  // belongs to (choice.definition.forClassId). Falls back to the primary
+  // classId for single-class characters and pre-existing choices without
+  // the tag, so nothing changes for the common case.
+  const forClassId = choice.definition.forClassId ?? entity.identity.classId;
+
   const options = useMemo(
-    () => subclassEntriesForClassMerged(entity.identity.classId, homebrewSubclasses),
-    [entity.identity.classId, homebrewSubclasses],
+    () => subclassEntriesForClassMerged(forClassId, homebrewSubclasses),
+    [forClassId, homebrewSubclasses],
   );
 
   function commit(subclassId: string) {
     const entry = options.find(o => o.id === subclassId);
     if (!entry) return;
-    const updated = applySubclassToEntity(entity, choice.id, subclassId, entry.progression, rules);
+    const updated = applySubclassToEntity(
+      entity, choice.id, subclassId, entry.progression, rules,
+      choice.definition.forClassId, // undefined for single-class — preserves existing behavior
+    );
     setExpandedId(null);
     onResolved(updated);
   }

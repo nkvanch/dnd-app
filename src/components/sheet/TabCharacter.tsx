@@ -7,12 +7,13 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Modal, TextInput,
 } from 'react-native';
-import { Entity, CampaignRules } from '../../engine/types';
+import { Entity, CampaignRules, CharClass } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
 import { dropConcentration } from '../../engine/combat';
 import { recomputeDerived, modifier } from '../../engine/pipeline';
-import { levelUp } from '../../engine/leveling';
+import { levelUp, levelUpClass } from '../../engine/leveling';
+import { getClassLevels } from '../../engine/multiclass';
 import { spendHitDie, discardHitDie } from '../../engine/rest';
 import { rollD20, rollExpression } from '../../engine/dice';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
@@ -293,38 +294,118 @@ function LevelUpSection({
 }: {
   entity: Entity; rules: CampaignRules; onEntityUpdate: (u: Entity) => void; onLeveled: (u: Entity) => void;
 }) {
-  const classId     = entity.identity.classId;
-  const homebrewClasses = useHomebrewStore(s => s.classes);
+  const homebrewClasses    = useHomebrewStore(s => s.classes);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
-  const cls = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === classId);
-  let progression = cls ? getProgressionForClass(cls) : (ALL_PROGRESSIONS[classId] ?? null);
-  // Once a subclass has been chosen (see SubclassPicker/applySubclassToEntity),
-  // future level-ups must apply ITS entries too, not just the base class's —
-  // levelUp() only ever sees whatever single ClassProgression it's handed.
-  if (progression && entity.identity.subclassId) {
-    const subEntry = getSubclassEntryMerged(classId, entity.identity.subclassId, homebrewSubclasses);
-    if (subEntry) progression = mergeSubclassIntoProgression(progression, subEntry.progression);
-  }
+  const [addClassOpen, setAddClassOpen] = useState(false);
+
+  const allClasses = [...globalContentDB.classes, ...homebrewClasses] as CharClass[];
   const maxLevel    = rules.maxLevel ?? 20;
 
-  if (!progression) return null;
+  function classLabel(id: string) {
+    return allClasses.find(c => c.id === id)?.name ?? id;
+  }
+
+  function resolveProgression(classId: string, subclassId: string | null) {
+    const cls = allClasses.find(c => c.id === classId);
+    let progression = cls ? getProgressionForClass(cls) : (ALL_PROGRESSIONS[classId] ?? null);
+    // Once a subclass has been chosen (see SubclassPicker/applySubclassToEntity),
+    // future level-ups must apply ITS entries too, not just the base class's.
+    if (progression && subclassId) {
+      const subEntry = getSubclassEntryMerged(classId, subclassId, homebrewSubclasses);
+      if (subEntry) progression = mergeSubclassIntoProgression(progression, subEntry.progression);
+    }
+    return progression;
+  }
+
   if (entity.identity.level >= maxLevel) return null;
 
-  const nextLevel = entity.identity.level + 1;
+  // ── Multiclassing off: exactly today's single-class behavior, unchanged. ──
+  if (!rules.allowMulticlass) {
+    const classId = entity.identity.classId;
+    const progression = resolveProgression(classId, entity.identity.subclassId);
+    if (!progression) return null;
+    const nextLevel = entity.identity.level + 1;
 
-  async function doLevelUp() {
-    const updated = levelUp(entity, nextLevel, progression!, rules);
-    // levelUp() can grant fixed cantrips/spells for this level — warm Tier 2
-    // for anything new before the entity reaches the engine pipeline.
+    async function doLevelUp() {
+      const updated = levelUp(entity, nextLevel, progression!, rules);
+      // levelUp() can grant fixed cantrips/spells for this level — warm Tier 2
+      // for anything new before the entity reaches the engine pipeline.
+      await spellRepo.ensureLoaded(spellIdsOnEntity(updated));
+      onEntityUpdate(updated);
+      onLeveled(updated);
+    }
+
+    return (
+      <Pressable style={styles.levelUpBtn} onPress={doLevelUp}>
+        <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
+      </Pressable>
+    );
+  }
+
+  // ── Multiclassing on: one "level up" button per class already taken, plus
+  //    "+ Add a Class" to take a brand-new one. ──
+  const classes = getClassLevels(entity);
+  const takenIds = new Set(classes.map(c => c.classId));
+  const availableToAdd = allClasses.filter(c => !takenIds.has(c.id));
+
+  async function doLevelUpClass(targetClassId: string, targetClass?: CharClass) {
+    const existing = classes.find(c => c.classId === targetClassId);
+    const progression = resolveProgression(targetClassId, existing?.subclassId ?? null);
+    if (!progression) return;
+    const updated = levelUpClass(entity, targetClassId, progression, rules, targetClass);
     await spellRepo.ensureLoaded(spellIdsOnEntity(updated));
     onEntityUpdate(updated);
     onLeveled(updated);
+    setAddClassOpen(false);
   }
 
   return (
-    <Pressable style={styles.levelUpBtn} onPress={doLevelUp}>
-      <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
-    </Pressable>
+    <View style={styles.levelUpMcWrap}>
+      {classes.map(c => (
+        <Pressable
+          key={c.classId}
+          style={styles.levelUpBtn}
+          onPress={() => doLevelUpClass(c.classId)}
+        >
+          <Text style={styles.levelUpBtnTxt}>⬆ Level Up {classLabel(c.classId)} (→ {c.level + 1})</Text>
+        </Pressable>
+      ))}
+
+      <Pressable style={styles.addClassBtn} onPress={() => setAddClassOpen(true)}>
+        <Text style={styles.addClassBtnTxt}>+ Add a Class</Text>
+      </Pressable>
+
+      <Modal visible={addClassOpen} animationType="slide" onRequestClose={() => setAddClassOpen(false)}>
+        <View style={styles.addClassModalRoot}>
+          <View style={styles.addClassHeaderRow}>
+            <Text style={styles.addClassHeading}>Add a Class</Text>
+            <Pressable onPress={() => setAddClassOpen(false)} hitSlop={8}>
+              <Text style={styles.addClassClose}>✕</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.addClassSub}>
+            Adding a class grants the PHB's reduced multiclass proficiencies
+            instead of a fresh class's full starting kit — this isn't a
+            hard requirement check, so double-check your ability scores
+            meet the prerequisite for both your current class(es) and the
+            one you're adding.
+          </Text>
+          <ScrollView contentContainerStyle={styles.addClassList}>
+            {availableToAdd.length === 0 ? (
+              <Text style={styles.addClassEmpty}>No other classes available to add.</Text>
+            ) : availableToAdd.map(c => (
+              <Pressable
+                key={c.id}
+                style={styles.addClassRow}
+                onPress={() => doLevelUpClass(c.id, c)}
+              >
+                <Text style={styles.addClassRowTxt}>{c.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -1324,6 +1405,25 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, alignItems: 'center',
   },
   levelUpBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  levelUpMcWrap: { gap: Spacing.xs },
+  addClassBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, borderStyle: 'dashed',
+    padding: Spacing.sm, alignItems: 'center',
+  },
+  addClassBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  addClassModalRoot: { flex: 1, backgroundColor: Colors.bg, padding: Spacing.lg },
+  addClassHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  addClassHeading: { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.gold },
+  addClassClose: { fontSize: FontSize.xl, color: Colors.textSecondary },
+  addClassSub: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20, marginTop: Spacing.sm, marginBottom: Spacing.lg },
+  addClassList: { gap: Spacing.sm, paddingBottom: Spacing.xxl },
+  addClassEmpty: { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic', textAlign: 'center', padding: Spacing.lg },
+  addClassRow: {
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.md,
+  },
+  addClassRowTxt: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
 
   section: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,

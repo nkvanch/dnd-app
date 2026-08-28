@@ -2,8 +2,10 @@ import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, Proficie
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
          KnownSpellsGrant } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
-import { getSpellSlotsForClassLevel } from '../content/classes/spellSlotTables';
+import { getSpellSlotsForClassLevel, multiclassCasterLevel, MULTICLASS_SPELLCASTER_SLOTS,
+         pactSlotTableFor, slotsForLevel } from '../content/classes/spellSlotTables';
 import { hpMinHalfDie, bonusFeatEveryLevel } from './houseRules';
+import { getClassLevels, isMulticlassed, syncLegacyIdentity, multiclassProficienciesFor } from './multiclass';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -13,7 +15,7 @@ export function rollDie(sides: number): number {
 
 // ── applyGrant ────────────────────────────────────────────────────────────────
 
-export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entity {
+export function applyGrant(entity: Entity, grant: Grant, atLevel: number, classId?: string): Entity {
   switch (grant.kind) {
 
     case "feature": {
@@ -22,7 +24,7 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
         ...entity,
         features: [...entity.features, {
           ...f,
-          source: f.source ?? { kind: "class", refId: entity.identity.classId },
+          source: f.source ?? { kind: "class", refId: classId ?? entity.identity.classId },
           level:  atLevel,
           isActive: true,
         }]
@@ -121,18 +123,24 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
       // subclassEntriesForClassMerged, and shows a graceful empty state if
       // none exist yet) instead of falling through to the generic
       // "ask your DM" placeholder.
-      const choiceId = `subclass_unlock_${atLevel}`;
+      // choiceId is namespaced by the OWNING class (not just atLevel) so a
+      // multiclass character with two classes unlocking a subclass at the
+      // same within-class level (e.g. two homebrew classes both unlocking at
+      // their own level 3) don't collide and silently drop the second one.
+      const grantClassId = classId ?? entity.identity.classId;
+      const choiceId = `subclass_unlock_${grantClassId}_${atLevel}`;
       const alreadyQueued = entity.choices.some(c => c.id === choiceId);
       if (alreadyQueued) return entity;
       const subclassChoice: ChoiceDefinition = {
         id:       choiceId,
-        prompt:   `Choose your ${entity.identity.classId} subclass`,
+        prompt:   `Choose your ${grantClassId} subclass`,
         kind:     'subclass',
         count:    1,
         pool:     [],
         grants:   [],
         required: true,
         resolved: false,
+        forClassId: grantClassId,
       };
       return {
         ...entity,
@@ -201,7 +209,7 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
       };
       const slotRow: number[] | null = slotGrant.slotsTable
         ? (slotGrant.slotsTable.find(r => r.level === slotGrant.level)?.slots ?? null)
-        : getSpellSlotsForClassLevel(entity.identity.classId, slotGrant.level);
+        : getSpellSlotsForClassLevel(classId ?? entity.identity.classId, slotGrant.level);
       if (!slotRow || !entity.spellcasting) return entity;
       const slots = slotRow;
       const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
@@ -266,6 +274,15 @@ export function applyHP(
   atLevel: number,
   rules?: CampaignRules,
   hpAbility: Ability = 'con',
+  /**
+   * Whether this is the character's very first level EVER (max die,
+   * standard 5e RAW) — defaults to `atLevel === 1`, which is exactly right
+   * for single-class characters (levelUp() only ever passes atLevel=1 once,
+   * at creation). Multiclass callers (levelUpClass()) pass this explicitly:
+   * a SECOND class's own level 1 must NOT re-max HP, only the character's
+   * true first level does.
+   */
+  isVeryFirstLevel: boolean = atLevel === 1,
 ): Entity {
   // Use effectiveStats[hpAbility] so race bonuses (e.g. Dwarf +2 CON) feed
   // into HP. Defaults to CON (standard 5e RAW) — every existing class passes
@@ -275,8 +292,8 @@ export function applyHP(
   const effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const abilityMod    = modifier(effectiveStats[hpAbility]);
 
-  let rolled = atLevel === 1
-    ? die                                           // Level 1: always max die
+  let rolled = isVeryFirstLevel
+    ? die                                           // Very first level: always max die
     : mode === "max"    ? die
     : mode === "fixed"  ? Math.floor(die / 2) + 1
     : rollDie(die);
@@ -284,7 +301,7 @@ export function applyHP(
   // House rule: HP minimum half-die. A rolled value below half the die is bumped
   // up to half (rounded up), e.g. d10 → minimum 5. Only affects rolled mode
   // beyond level 1 (fixed/max already meet or exceed this).
-  if (rules && mode === 'rolled' && atLevel > 1 && hpMinHalfDie(rules)) {
+  if (rules && mode === 'rolled' && !isVeryFirstLevel && hpMinHalfDie(rules)) {
     const halfDie = Math.ceil(die / 2);
     if (rolled < halfDie) rolled = halfDie;
   }
@@ -620,21 +637,45 @@ export function applySubclassToEntity(
   subclassId:          string,
   subclassProgression: ClassProgression,
   rules:               CampaignRules,
+  /**
+   * Which class this subclass belongs to. Omit for single-class characters
+   * (writes identity.subclassId directly, exactly as before — every
+   * existing call site keeps working unedited). Pass it for a multiclassed
+   * character so the right identity.classes[] entry is updated, and the
+   * subclass's own progression entries are gated against THAT class's own
+   * level (not total character level).
+   */
+  classId?: string,
 ): Entity {
-  let updated: Entity = {
-    ...entity,
-    identity: { ...entity.identity, subclassId },
-  };
+  const classes = entity.identity.classes;
+  const ownClassLevel = classId && classes
+    ? (classes.find(c => c.classId === classId)?.level ?? entity.identity.level)
+    : entity.identity.level;
+
+  let updated: Entity = classId && classes
+    ? {
+        ...entity,
+        identity: {
+          ...entity.identity,
+          classes: classes.map(c => c.classId === classId ? { ...c, subclassId } : c),
+        },
+      }
+    : {
+        ...entity,
+        identity: { ...entity.identity, subclassId },
+      };
+  if (classId && classes) updated = syncLegacyIdentity(updated);
+
   for (const entry of subclassProgression.entries) {
-    if (entry.level > updated.identity.level) continue;
+    if (entry.level > ownClassLevel) continue;
     for (const grant of entry.grants) {
-      updated = applyGrant(updated, grant, entry.level);
+      updated = applyGrant(updated, grant, entry.level, classId);
     }
     for (const choice of entry.choices) {
       if (canAutoResolve(choice)) {
         if (Array.isArray(choice.pool) && choice.pool.length > 0) {
           for (const grant of choice.grants) {
-            updated = applyGrant(updated, grant, entry.level);
+            updated = applyGrant(updated, grant, entry.level, classId);
           }
         }
       } else {
@@ -676,6 +717,136 @@ export function applyInfusionChoiceToEntity(
       c.id === choiceId ? { ...c, resolved: true, selections: infusionIds } : c
     ),
   };
+  return recomputeDerived(updated, rules);
+}
+
+// ── Multiclass level-up ──────────────────────────────────────────────────────
+
+/** Copies `used` counts from `prev` into `next` per tier, so recomputing slot
+ * totals never resets a caster's already-spent slots. Same convention the
+ * `spell_slots` applyGrant case already uses. */
+function preserveUsedSlots(prev: SpellSlots | undefined, next: SpellSlots): SpellSlots {
+  const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
+  const result = {} as SpellSlots;
+  tiers.forEach(t => {
+    const total = next[t]?.total ?? 0;
+    const used  = Math.min(prev?.[t]?.used ?? 0, total);
+    result[t] = { total, used };
+  });
+  return result;
+}
+
+/**
+ * Advances a (potentially multiclassed) character by exactly ONE level in
+ * targetClassId — either bumping an existing class in their build, or, if
+ * targetClassId isn't in identity.classes yet, taking a brand-new class.
+ * This is how "level up your class" and "add a new class" share one code
+ * path in play, matching how creation's levelUp(0 -> targetLevel) already
+ * unifies "pick class" and "gain levels" for the single-class case.
+ *
+ * `targetClass` (the CharClass content object, not just its id) is only
+ * needed when this call might be taking a BRAND NEW class after character
+ * level 1 — its multiclassProficiencies field supplies the reduced PHB
+ * multiclass proficiency table. Omit it for "level up an existing class."
+ */
+export function levelUpClass(
+  entity: Entity,
+  targetClassId: string,
+  progression: ClassProgression,
+  rules: CampaignRules,
+  targetClass?: import('./types').CharClass,
+): Entity {
+  const classes = getClassLevels(entity);
+  const existing = classes.find(c => c.classId === targetClassId);
+  const isNewClass = !existing;
+  const wasCharacterLevelZero = entity.identity.level === 0;
+  const newClassLevel = (existing?.level ?? 0) + 1;
+  const isVeryFirstLevel = wasCharacterLevelZero && newClassLevel === 1;
+  const characterLevelAfter = entity.identity.level + 1;
+
+  const entry = progression.entries.find(e => e.level === newClassLevel);
+  if (!entry) return entity;
+
+  // A second-or-later class taken after the character's very first level
+  // gets the REDUCED multiclass proficiency table instead of the class's
+  // own full level-1 grant (PHB "Multiclassing Proficiencies"), and gains
+  // no new saving-throw proficiencies at all — both per RAW.
+  const isReducedMulticlassEntry = isNewClass && !wasCharacterLevelZero;
+
+  let updated = entity;
+
+  // Capture the spellcasting ability before this level's grants apply, so a
+  // later class's init_spellcasting can't silently steal the spell-save-DC
+  // ability away from whichever caster class the character took first.
+  const abilityBefore = updated.spellcasting?.ability;
+
+  updated = applyHP(updated, entry.hpDie, rules.hpMode, newClassLevel, rules, progression.hpAbility ?? 'con', isVeryFirstLevel);
+
+  if (isReducedMulticlassEntry) {
+    const mcProf = multiclassProficienciesFor(targetClass);
+    if (mcProf) updated = applyGrant(updated, { kind: 'proficiency', value: mcProf }, newClassLevel, targetClassId);
+  }
+
+  for (const grant of entry.grants) {
+    if (isReducedMulticlassEntry && grant.kind === 'proficiency') continue; // superseded by the reduced table above
+    updated = applyGrant(updated, grant, newClassLevel, targetClassId);
+  }
+
+  for (const choice of entry.choices) {
+    if (canAutoResolve(choice)) {
+      if (Array.isArray(choice.pool) && choice.pool.length > 0) {
+        for (const grant of choice.grants) updated = applyGrant(updated, grant, newClassLevel, targetClassId);
+      }
+    } else {
+      updated = queueChoice(updated, { ...choice, forClassId: targetClassId }, newClassLevel);
+    }
+  }
+
+  // Bonus feat house rule — keyed by TOTAL character level (unique per
+  // level-up event regardless of which class advanced), not the per-class
+  // level, which two different classes could otherwise collide on.
+  if (bonusFeatEveryLevel(rules)) {
+    const bonusId = `bonus_feat_lvl_${characterLevelAfter}`;
+    if (!updated.choices.some(c => c.id === bonusId)) {
+      updated = queueChoice(updated, {
+        id: bonusId, prompt: `Bonus feat at level ${characterLevelAfter} (house rule).`,
+        kind: 'asi', count: 1, pool: 'all', grants: [], required: true, resolved: false,
+      }, characterLevelAfter);
+    }
+  }
+
+  if (abilityBefore && updated.spellcasting && updated.spellcasting.ability !== abilityBefore) {
+    updated = { ...updated, spellcasting: { ...updated.spellcasting, ability: abilityBefore } };
+  }
+
+  const nextClasses = isNewClass
+    ? [...classes, { classId: targetClassId, subclassId: null, level: 1 }]
+    : classes.map(c => c.classId === targetClassId ? { ...c, level: newClassLevel } : c);
+  updated = { ...updated, identity: { ...updated.identity, classes: nextClasses } };
+  updated = syncLegacyIdentity(updated);
+
+  // Once 2+ classes exist, per-class spell_slots grants above may have used
+  // the wrong classId (each grant only knows its own class) — recompute the
+  // combined multiclass slot pool from scratch as the authoritative result.
+  // Solo characters (still 1 class after this level-up) keep whatever their
+  // own class's grant already computed, which is already correct.
+  if (updated.spellcasting && isMulticlassed(updated)) {
+    const finalClasses = getClassLevels(updated);
+    const casterLevel = multiclassCasterLevel(finalClasses);
+    const nonPactSlots = casterLevel > 0
+      ? preserveUsedSlots(updated.spellcasting.slots, slotsForLevel(MULTICLASS_SPELLCASTER_SLOTS, casterLevel))
+      : preserveUsedSlots(undefined, slotsForLevel(MULTICLASS_SPELLCASTER_SLOTS, 1)); // all-zero row
+
+    let pactSlots = updated.spellcasting.pactSlots;
+    const pactClass = finalClasses.find(c => pactSlotTableFor(c.classId, c.subclassId));
+    if (pactClass) {
+      const table = pactSlotTableFor(pactClass.classId, pactClass.subclassId)!;
+      pactSlots = preserveUsedSlots(pactSlots, slotsForLevel(table, pactClass.level));
+    }
+
+    updated = { ...updated, spellcasting: { ...updated.spellcasting, slots: nonPactSlots, pactSlots } };
+  }
+
   return recomputeDerived(updated, rules);
 }
 

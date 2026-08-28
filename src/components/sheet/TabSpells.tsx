@@ -16,6 +16,7 @@ import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, CampaignRules, ActionCard, Spell } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
 import { useHomebrewStore } from '../../store/homebrewStore';
+import { getClassLevels } from '../../engine/multiclass';
 import { rollExpression } from '../../engine/dice';
 import { UseModal } from './TabActions';
 import { AddSpellModal } from './AddSpellModal';
@@ -83,7 +84,10 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
     onEntityUpdate({ ...entity, spellcasting: next });
   }
 
-  const isPreparedCaster = PREPARED_CASTERS.has(identity.classId);
+  // Multiclass-aware: a character is a "prepared caster" for this tab's
+  // purposes if ANY of their classes prepares spells — matches identity.classId
+  // for single-class characters (getClassLevels' legacy fallback).
+  const isPreparedCaster = getClassLevels(entity).some(c => PREPARED_CASTERS.has(c.classId));
   const preparedSet      = new Set(spellcasting.prepared);
 
   // ── Spell cards ───────────────────────────────────────────────────────────

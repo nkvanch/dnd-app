@@ -8,6 +8,8 @@ import { removeCondition, reduceExhaustion } from './conditions';
 import { dropConcentration } from './combat';
 import { longRestRestoresAllHitDice } from './houseRules';
 import { DEFAULT_RULES } from '../store/characterStore';
+import { getClassLevels } from './multiclass';
+import { pactSlotTableFor } from '../content/classes/spellSlotTables';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -37,12 +39,23 @@ function shortRest(entity: Entity): Entity {
     return r;
   });
 
-  // Only Warlocks recover spell slots on a short rest.
-  // All other spellcasting classes use long rest recovery.
-  const isWarlock = entity.identity.classId === 'warlock';
-  const rechargedSpellcasting = (entity.spellcasting && isWarlock)
-    ? rechargeSlots(entity.spellcasting)
-    : entity.spellcasting;
+  // Only pact casters (Warlock, and the homebrew Blood Hunter Profane Soul
+  // order / Abyss Knight, which reuse the same "pact magic" recharge rule)
+  // recover spell slots on a short rest. All other spellcasting classes use
+  // long rest recovery.
+  const classes    = getClassLevels(entity);
+  const isPactCaster = classes.some(c => pactSlotTableFor(c.classId, c.subclassId));
+  const multiclassed = classes.length > 1;
+  let rechargedSpellcasting = entity.spellcasting;
+  if (entity.spellcasting && isPactCaster) {
+    // Multiclassed with pact slots split out (see levelUpClass): recharge
+    // ONLY the pact pool, leaving the combined non-pact `.slots` alone.
+    // Solo pact caster (never multiclassed): pact slots live in `.slots`
+    // directly, exactly as before this change — same recharge call.
+    rechargedSpellcasting = (multiclassed && entity.spellcasting.pactSlots)
+      ? rechargePactSlots(entity.spellcasting)
+      : rechargeSlots(entity.spellcasting);
+  }
 
   return {
     ...entity,
@@ -112,12 +125,13 @@ function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity 
     },
   };
 
-  // 4. Spell slots — long rest restores all slots for all spellcasting classes
+  // 4. Spell slots — long rest restores all slots for all spellcasting
+  //    classes, INCLUDING pact slots (pact magic also refreshes on a long
+  //    rest, not just short rest — it just doesn't NEED to wait for one).
   if (updated.spellcasting) {
-    updated = {
-      ...updated,
-      spellcasting: rechargeSlots(updated.spellcasting),
-    };
+    let sc = rechargeSlots(updated.spellcasting);
+    if (sc.pactSlots) sc = rechargePactSlots(sc);
+    updated = { ...updated, spellcasting: sc };
   }
 
   // 5. Drop concentration
@@ -203,7 +217,7 @@ export function discardHitDie(
 
 // ── Spell slot helpers ────────────────────────────────────────────────────────
 
-/** Restores all spell slot used counts to 0 (called on short rest for Warlocks, long rest for all). */
+/** Restores all `.slots` used counts to 0 (called on short rest for a solo pact caster, long rest for all). */
 function rechargeSlots(block: SpellcastingBlock): SpellcastingBlock {
   const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
   const slots = { ...block.slots } as SpellSlots;
@@ -211,4 +225,16 @@ function rechargeSlots(block: SpellcastingBlock): SpellcastingBlock {
     slots[tier] = { ...slots[tier], used: 0 };
   }
   return { ...block, slots };
+}
+
+/** Restores all `.pactSlots` used counts to 0. No-op if pactSlots is absent
+ * (non-pact caster, or a solo pact caster whose slots live in `.slots`). */
+function rechargePactSlots(block: SpellcastingBlock): SpellcastingBlock {
+  if (!block.pactSlots) return block;
+  const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
+  const pactSlots = { ...block.pactSlots } as SpellSlots;
+  for (const tier of tiers) {
+    pactSlots[tier] = { ...pactSlots[tier], used: 0 };
+  }
+  return { ...block, pactSlots };
 }

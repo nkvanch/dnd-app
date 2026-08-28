@@ -205,6 +205,17 @@ export type CharClass  = {
    * the import pipeline — and editing such a class in the builder will drop it.
    */
   rawProgression?:        ClassProgression;
+  /**
+   * PHB "Multiclassing Proficiencies" table entry for this class when taken
+   * as a SECOND-OR-LATER class (not your starting class) — applied instead
+   * of the class's normal level-1 proficiency grant by levelUpClass(). A
+   * class with no reduced multiclass table entry (Wizard, Sorcerer) grants
+   * nothing when multiclassed into and should leave this undefined; the
+   * class-builder does not currently expose authoring this field, so
+   * homebrew classes always fall back to granting nothing on multiclass —
+   * a conservative, disclosed default rather than a guess.
+   */
+  multiclassProficiencies?: ProficiencyGrant;
 };
 export type Background = {
   id: string;
@@ -307,6 +318,13 @@ export type ContentDB = {
 
 // ── 3. Entity runtime schemas ────────────────────────────────────────────────
 
+/** One class the character has taken. `level` is the level in THIS class only — not the character's total level. */
+export type ClassLevelEntry = {
+  classId:    string;
+  subclassId: string | null;
+  level:      number;
+};
+
 export type Identity = {
   name:         string;
   level:        number;
@@ -327,6 +345,21 @@ export type Identity = {
    * current without a one-shot spawn-time bake.
    */
   companionOf?: string | null;
+  /**
+   * Multiclassing source of truth for kind:'character' entities, one entry
+   * per class taken (index 0 = "primary"/first class). Absent on entities
+   * that have never gone through a multiclass-aware code path (including
+   * every monster/companion/npc entity, which reuse classId as an unrelated
+   * template id — see CompanionSection) and on characters saved before this
+   * field existed. Always read via getClassLevels(entity) from
+   * src/engine/multiclass.ts rather than this field directly, so callers
+   * don't have to duplicate the legacy single-class fallback. classId/
+   * subclassId/level above stay in sync as a mirror of classes[0] and the
+   * level sum — see syncLegacyIdentity() — so every pre-existing reader of
+   * those three scalar fields keeps working unchanged for both single- and
+   * multi-classed characters.
+   */
+  classes?: ClassLevelEntry[];
 };
 
 export type AbilityScores = Record<Ability, number>;
@@ -468,6 +501,15 @@ export type ChoiceDefinition = {
   grants:   Grant[];
   required: boolean;
   resolved: boolean;
+  /**
+   * Which class this choice belongs to — set by levelUpClass() when a
+   * multiclassed character has more than one pending choice of the same
+   * kind (e.g. two subclass choices) so each resolves against the right
+   * class. undefined for single-class characters and non-class choices
+   * (race/background/feat) — every existing choice literal in src/content
+   * stays valid without edits.
+   */
+  forClassId?: string;
 };
 
 export type ChoiceState = {
@@ -484,6 +526,17 @@ export type SpellSlots  = Record<'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9', SlotEntry>
 export type SpellcastingBlock = {
   ability:       Ability;
   slots:         SpellSlots;
+  /**
+   * Warlock/pact-magic slots, tracked separately from `slots` because they
+   * recover on a SHORT rest (see rest.ts) and are never combined with the
+   * multiclass spellcaster slot table (PHB "Multiclassing" rules — pact
+   * slots are explicitly excluded from the combined caster table). Present
+   * only when the entity has taken levels in a pact-caster class (Warlock,
+   * or the homebrew Blood Hunter Profane Soul / Abyss Knight). undefined
+   * for every non-pact caster, so existing single-class non-Warlock
+   * entities are unaffected.
+   */
+  pactSlots?:    SpellSlots;
   cantrips:      string[];
   known:         string[];
   prepared:      string[];

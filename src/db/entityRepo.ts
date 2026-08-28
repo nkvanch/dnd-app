@@ -8,6 +8,7 @@
 import { Platform } from 'react-native';
 import { Entity } from '../engine/types';
 import { getDb } from './db';
+import { migrateEntity } from '../engine/multiclass';
 
 type EntityRow = {
   id:        string;
@@ -40,7 +41,7 @@ export async function loadEntity(id: string): Promise<Entity | null> {
     [id]
   );
   if (!row) return null;
-  return JSON.parse(row.data) as Entity;
+  return migrateEntity(JSON.parse(row.data) as Entity);
 }
 
 /** Load all stored entities, sorted by updatedAt descending (most recent first). */
@@ -50,7 +51,7 @@ export async function loadAllEntities(): Promise<Entity[]> {
   const rows = await db.getAllAsync<EntityRow>(
     'SELECT * FROM entities ORDER BY updatedAt DESC'
   );
-  return rows.map(r => JSON.parse(r.data) as Entity);
+  return rows.map(r => migrateEntity(JSON.parse(r.data) as Entity));
 }
 
 /** Load all entities of a specific kind. */
@@ -61,7 +62,7 @@ export async function loadEntitiesByKind(kind: Entity['kind']): Promise<Entity[]
     'SELECT * FROM entities WHERE kind = ? ORDER BY updatedAt DESC',
     [kind]
   );
-  return rows.map(r => JSON.parse(r.data) as Entity);
+  return rows.map(r => migrateEntity(JSON.parse(r.data) as Entity));
 }
 
 export type EntityMeta = {

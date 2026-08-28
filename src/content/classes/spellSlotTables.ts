@@ -229,3 +229,74 @@ export function getSpellSlotsForClassLevel(
   if (!row) return null;
   return row.slots as [number,number,number,number,number,number,number,number,number];
 }
+
+// ── Multiclass spellcasting ─────────────────────────────────────────────────
+
+/**
+ * PHB "Multiclass Spellcaster" combined table — identical progression to the
+ * full-caster table by RAW, but indexed by COMBINED caster level (see
+ * multiclassCasterLevel), not any one class's own level. Warlock pact magic
+ * is explicitly excluded from this table (PHB rule) — see WARLOCK_SLOTS /
+ * PROFANE_SOUL_SLOTS / ABYSS_KNIGHT_SLOTS for pact slots, tracked separately
+ * on SpellcastingBlock.pactSlots.
+ */
+export const MULTICLASS_SPELLCASTER_SLOTS: SpellSlotRow[] = FULL_CASTER_SLOTS;
+
+export type CasterType = 'full' | 'half' | 'third' | 'pact' | 'none';
+
+/**
+ * How each class counts toward the combined multiclass spellcaster level.
+ * Third casters (Eldritch Knight Fighter, Arcane Trickster Rogue) are a
+ * subclass-granted caster type, not a base-class one — this app's base
+ * fighter/rogue entries aren't casters, so they're omitted here rather than
+ * hardcoded as 'third'. See the multiclass plan's disclosed scope cut: a
+ * Fighter(EK)/other-class multiclass under-grants combined slots (treats
+ * the EK levels as 0 toward the combined pool) rather than the correct 1/3,
+ * until subclass-aware caster-type detection is added.
+ */
+export const CASTER_TYPE: Record<string, CasterType> = {
+  wizard:   'full',
+  cleric:   'full',
+  druid:    'full',
+  bard:     'full',
+  sorcerer: 'full',
+  paladin:  'half',
+  ranger:   'half',
+  artificer: 'half',
+  warlock:  'pact',
+  blood_hunter: 'none',   // Profane Soul order grants its own pact magic — see below
+  abyss_knight: 'pact',
+};
+
+/** classIds whose pact-magic table lives outside WARLOCK_SLOTS (order/patron-gated). */
+const PACT_SLOT_TABLES: Record<string, SpellSlotRow[]> = {
+  warlock:      WARLOCK_SLOTS,
+  abyss_knight: ABYSS_KNIGHT_SLOTS,
+};
+
+export function pactSlotTableFor(classId: string, subclassId: string | null): SpellSlotRow[] | null {
+  if (classId === 'blood_hunter') {
+    return subclassId === 'profane_soul' ? PROFANE_SOUL_SLOTS : null;
+  }
+  return PACT_SLOT_TABLES[classId] ?? null;
+}
+
+/**
+ * Combined multiclass caster level per PHB: full casters count their whole
+ * level, half casters floor(level/2), third casters floor(level/3) (see
+ * CASTER_TYPE's note on why third-caster subclasses aren't detected here
+ * yet), pact casters (Warlock) don't contribute at all — their slots are
+ * tracked separately as pact slots.
+ */
+export function multiclassCasterLevel(
+  classes: { classId: string; level: number }[],
+): number {
+  let total = 0;
+  for (const c of classes) {
+    const type = CASTER_TYPE[c.classId];
+    if (type === 'full')      total += c.level;
+    else if (type === 'half') total += Math.floor(c.level / 2);
+    else if (type === 'third') total += Math.floor(c.level / 3);
+  }
+  return total;
+}

@@ -2,7 +2,42 @@
 // FILE: src/content/races/index.ts
 // All PHB races expressed as Feature/Effect arrays.
 // ============================================================================
-import { Race, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature } from '../../engine/types';
+import { Race, Subrace, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature, Ability } from '../../engine/types';
+
+/**
+ * Builds one Mordenkainen's Tome of Foes Tiefling bloodline subrace — each
+ * replaces both the PHB "Bloodline of Asmodeus" ASI and Infernal Legacy
+ * (see raceTiefling.subracesOptional/subraces' doc comment) with its own
+ * +1-to-one-ability ASI and a real 1st-level cantrip. The 3rd/5th-level
+ * bonus spell is flavor-only text on the same Feature — none of these are
+ * cantrips, and this app has no mechanism for a limited-use LEVELED spell
+ * without a slot (same gap as the various Eberron dragonmarks).
+ */
+function tieflingBloodline(
+  id: string, name: string, asiAbility: Ability, cantripId: string,
+  legacyName: string, bonusSpellsNote: string,
+): Subrace {
+  return {
+    id, name, parentId: 'tiefling', srd: false,
+    replacesBaseFeatureIds: ['tiefling_asi', 'tiefling_infernal_legacy'],
+    features: [
+      {
+        id: `${id}_asi`, name: 'Ability Score Increase',
+        description: `Your ${asiAbility.toUpperCase()} score increases by 1.`,
+        source: { kind: 'race', refId: id }, level: null, actions: [], choices: [], passive: true,
+        effects: [{ type: 'stat_modifier', target: asiAbility, operation: 'add', value: 1, condition: null }],
+      },
+      {
+        id: `${id}_legacy`, name: legacyName,
+        description: `You know the ${cantripId.replace(/_/g, ' ')} cantrip. Charisma is your spellcasting ability for it. At 3rd level you can cast ${bonusSpellsNote} — this app doesn't yet support level-gated racial features, so only the 1st-level cantrip is granted for real.`,
+        source: { kind: 'race', refId: id }, level: null, actions: [], choices: [], passive: true,
+        effects: [
+          { type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: [cantripId], spellcastingAbility: 'cha' },
+        ],
+      },
+    ],
+  };
+}
 
 /** "Elf Weapon Training" — proficiency with longsword/shortsword/shortbow/
  * longbow, granted by most non-Drow elf subraces (High Elf, Wood Elf, and
@@ -1502,9 +1537,102 @@ export const raceTiefling: Race = {
     {
       id: 'tiefling_infernal_legacy',
       name: 'Infernal Legacy',
-      description: 'You know the Thaumaturgy cantrip. At 3rd level, you can cast Hellish Rebuke as a 2nd-level spell. At 5th level, you can cast Darkness.',
+      description: 'You know the Thaumaturgy cantrip. Charisma is your spellcasting ability for it. At 3rd level, you can cast Hellish Rebuke once as a 2nd-level spell, and at 5th level Darkness once, each recharging on a long rest — this app doesn\'t yet support level-gated racial features, so only the 1st-level cantrip is granted for real.',
       source: { kind: 'race', refId: 'tiefling' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['thaumaturgy'], spellcastingAbility: 'cha' },
+      ],
+    },
+  ],
+  // This is the PHB default "Bloodline of Asmodeus" — the 7 MTOF bloodlines
+  // below are optional alternatives, each replacing both the base ASI and
+  // Infernal Legacy (not selecting one of these subraces just keeps the
+  // Asmodeus baseline above, same subracesOptional pattern as Dragonborn).
+  subracesOptional: true,
+  subraces: [
+    tieflingBloodline('bloodline_of_baalzebul', 'Bloodline of Baalzebul', 'int', 'thaumaturgy', 'Legacy of Maladomini', 'Ray of Sickness (3rd level, as a 2nd-level spell), Crown of Madness (5th level)'),
+    tieflingBloodline('bloodline_of_dispater', 'Bloodline of Dispater', 'dex', 'thaumaturgy', 'Legacy of Dis', 'Disguise Self (3rd level, as a 2nd-level spell), Detect Thoughts (5th level)'),
+    tieflingBloodline('bloodline_of_fierna', 'Bloodline of Fierna', 'wis', 'friends', 'Legacy of Phlegethos', 'Charm Person (3rd level, as a 2nd-level spell), Suggestion (5th level)'),
+    tieflingBloodline('bloodline_of_glasya', 'Bloodline of Glasya', 'dex', 'minor_illusion', 'Legacy of Malbolge', 'Disguise Self (3rd level, as a 2nd-level spell), Invisibility (5th level, as a 2nd-level spell)'),
+    tieflingBloodline('bloodline_of_levistus', 'Bloodline of Levistus', 'con', 'ray_of_frost', 'Legacy of Stygia', 'Armor of Agathys (3rd level, as a 2nd-level spell), Darkness (5th level)'),
+    tieflingBloodline('bloodline_of_mammon', 'Bloodline of Mammon', 'int', 'mage_hand', 'Legacy of Minauros', "Tenser's Floating Disk (3rd level, as a 2nd-level spell), Arcane Lock (5th level)"),
+    tieflingBloodline('bloodline_of_mephistopheles', 'Bloodline of Mephistopheles', 'int', 'mage_hand', 'Legacy of Cania', 'Burning Hands (3rd level, as a 2nd-level spell), Flame Blade (5th level, as a 3rd-level spell)'),
+    tieflingBloodline('bloodline_of_zariel', 'Bloodline of Zariel', 'str', 'thaumaturgy', 'Legacy of Avernus', 'Searing Smite (3rd level, as a 2nd-level spell), Branding Smite (5th level, as a 3rd-level spell)'),
+    // Sword Coast Adventurer's Guide — Feral (fixed) + one of the three
+    // mutually-exclusive Infernal Legacy replacements, modeled as an
+    // ancestryChoice since the source presents them as alternate picks.
+    // (RAW technically lets a DM permit these as independent toggles rather
+    // than a forced pick — simplified to "pick exactly one" here, disclosed.)
+    {
+      id: 'variant_tiefling', name: 'Variant Tiefling (Feral)', parentId: 'tiefling', srd: false,
+      replacesBaseFeatureIds: ['tiefling_asi', 'tiefling_infernal_legacy'],
+      ancestryChoice: {
+        prompt: 'Choose your Infernal Legacy replacement — Devil\'s Tongue, Hellfire, or Winged.',
+        options: [
+          {
+            id: 'devils_tongue', name: "Devil's Tongue", blurb: 'Know Vicious Mockery; 3rd/5th level bonus spells are reference-only.',
+            feature: {
+              id: 'devils_tongue_feature', name: "Devil's Tongue",
+              description: 'You know the Vicious Mockery cantrip. Charisma is your spellcasting ability for it. At 3rd level you can cast Charm Person once as a 2nd-level spell, and at 5th level Enthrall once, each recharging on a long rest — this app doesn\'t yet support level-gated racial features, so only the cantrip is granted for real.',
+              source: { kind: 'race', refId: 'variant_tiefling' }, level: null, actions: [], choices: [], passive: true,
+              effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['vicious_mockery'], spellcastingAbility: 'cha' }],
+            },
+          },
+          {
+            id: 'hellfire', name: 'Hellfire', blurb: 'A 3rd-level bonus spell only — nothing to grant at 1st level.',
+            feature: {
+              id: 'hellfire_feature', name: 'Hellfire',
+              description: 'At 3rd level, you can cast Burning Hands once as a 2nd-level spell, recharging on a long rest — this app doesn\'t yet support level-gated racial features, so this has no 1st-level effect and isn\'t applied mechanically yet.',
+              source: { kind: 'race', refId: 'variant_tiefling' }, level: null, effects: [], actions: [], choices: [], passive: true,
+            },
+          },
+          {
+            id: 'winged', name: 'Winged', blurb: 'Real 30ft fly speed (while not wearing heavy armor — unconditional here, see note).',
+            feature: {
+              id: 'winged_feature', name: 'Winged',
+              description: 'You have bat-like wings and a flying speed of 30 feet. (RAW: only while not wearing heavy armor — this app has no mechanism to condition a movement speed on equipped armor weight, so it\'s granted unconditionally, disclosed not silent.)',
+              source: { kind: 'race', refId: 'variant_tiefling' }, level: null, actions: [], choices: [], passive: true,
+              effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'fly', movementRange: 30 }],
+            },
+          },
+        ],
+      },
+      features: [
+        {
+          id: 'feral_asi', name: 'Feral',
+          description: 'Your Intelligence score increases by 1, and your Dexterity score increases by 2.',
+          source: { kind: 'race', refId: 'variant_tiefling' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null },
+            { type: 'stat_modifier', target: 'dex', operation: 'add', value: 2, condition: null },
+          ],
+        },
+      ],
+    },
+    // Unearthed Arcana 11 — additive (no replacesBaseFeatureIds; keeps the
+    // Asmodeus baseline, adds CON+1 on top, matching the source's "these
+    // tieflings have the following ADDITIONAL features" framing).
+    {
+      id: 'abyssal_tiefling', name: 'Abyssal Tiefling', parentId: 'tiefling', srd: false,
+      features: [
+        {
+          id: 'abyssal_asi', name: 'Ability Score Increase',
+          description: 'Your Constitution score increases by 1.',
+          source: { kind: 'race', refId: 'abyssal_tiefling' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'abyssal_arcana', name: 'Abyssal Arcana',
+          description: 'Each long rest, you randomly gain a cantrip (and, at 3rd/5th level, a leveled spell) rerolled from a fixed table. (No mechanism for a randomly-rotating, rerolled-per-long-rest spell list — not applied mechanically.)',
+          source: { kind: 'race', refId: 'abyssal_tiefling' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'abyssal_fortitude', name: 'Abyssal Fortitude',
+          description: 'Your hit point maximum increases by half your level (minimum 1). (No mechanism for a per-level-scaling HP bonus outside the normal HP-gain formula — not applied mechanically, same gap as Dwarven Toughness.)',
+          source: { kind: 'race', refId: 'abyssal_tiefling' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
     },
   ],
 };

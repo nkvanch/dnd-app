@@ -8,7 +8,7 @@
 import { makeEmptyEntity, DEFAULT_RULES } from '../../../store/characterStore';
 import { applyGrant, queueChoice, resolveChoice } from '../../../engine/leveling';
 import { recomputeDerived } from '../../../engine/pipeline';
-import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf, raceHalfling } from '../index';
+import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf, raceHalfling, raceTiefling } from '../index';
 import { resolveResistance } from '../../../engine/resolver';
 import { collectAllEffects } from '../../../engine/pipeline';
 import { Race, Subrace, Ability, Feature, Entity } from '../../../engine/types';
@@ -276,6 +276,56 @@ describe('Dwarf subraces', () => {
       { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null }, // base dwarf_asi, inherited
       { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null }, // mark of warding's own
     ]));
+  });
+});
+
+describe('Tiefling — bloodlines, Variant, Abyssal', () => {
+  it('base Tiefling (Bloodline of Asmodeus) now grants a real Thaumaturgy cantrip', () => {
+    const e = applyRaceSelection(raceTiefling, null);
+    expect(e.spellcasting?.cantrips).toContain('thaumaturgy');
+    expect(e.spellcasting?.ability).toBe('cha');
+  });
+
+  it('every MTOF bloodline is optional and replaces both the base ASI and Infernal Legacy', () => {
+    expect(raceTiefling.subracesOptional).toBe(true);
+    const zariel = raceTiefling.subraces!.find(s => s.id === 'bloodline_of_zariel')!;
+    const e = applyRaceSelection(raceTiefling, zariel);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects.find(ef => ef.target === 'cha')).toBeUndefined(); // base tiefling_asi's cha+2 gone
+    expect(effects).toContainEqual({ type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null });
+    expect(e.spellcasting?.cantrips).toContain('thaumaturgy'); // Zariel's own cantrip happens to also be thaumaturgy
+  });
+
+  it('Bloodline of Fierna grants its distinct Friends cantrip', () => {
+    const fierna = raceTiefling.subraces!.find(s => s.id === 'bloodline_of_fierna')!;
+    const e = applyRaceSelection(raceTiefling, fierna);
+    expect(e.spellcasting?.cantrips).toContain('friends');
+  });
+
+  it('Variant Tiefling always applies Feral, plus whichever ancestryChoice option is picked (Winged grants a real fly speed)', () => {
+    const variant = raceTiefling.subraces!.find(s => s.id === 'variant_tiefling')!;
+    const e = applyRaceSelection(raceTiefling, variant, [], 'winged');
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null },
+      { type: 'stat_modifier', target: 'dex', operation: 'add', value: 2, condition: null },
+    ]));
+    expect(e.derived.movement).toEqual({ fly: 30 });
+  });
+
+  it('Variant Tiefling with Devil\'s Tongue grants Vicious Mockery instead', () => {
+    const variant = raceTiefling.subraces!.find(s => s.id === 'variant_tiefling')!;
+    const e = applyRaceSelection(raceTiefling, variant, [], 'devils_tongue');
+    expect(e.spellcasting?.cantrips).toContain('vicious_mockery');
+  });
+
+  it('Abyssal Tiefling is additive, keeping the base Asmodeus Thaumaturgy cantrip and adding CON+1', () => {
+    const abyssal = raceTiefling.subraces!.find(s => s.id === 'abyssal_tiefling')!;
+    const e = applyRaceSelection(raceTiefling, abyssal);
+    expect(e.spellcasting?.cantrips).toContain('thaumaturgy');
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toContainEqual({ type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null });
+    expect(effects).toContainEqual({ type: 'stat_modifier', target: 'cha', operation: 'add', value: 2, condition: null }); // base ASI retained
   });
 });
 

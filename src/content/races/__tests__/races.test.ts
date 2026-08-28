@@ -12,6 +12,7 @@ import {
   raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf, raceHalfling, raceTiefling, raceHalfOrc,
   raceAarakocra, raceAasimar, raceChangeling, raceFirbolg, raceGithyanki, raceGithzerai, raceGoliath, raceHarengon,
   raceKenku, raceLocathah, raceOwlin, raceSatyr, raceShadarKai, raceTabaxi, raceTortle, raceTriton, raceVerdan, raceFairy,
+  raceAirGenasi, raceEarthGenasi, raceFireGenasi, raceWaterGenasi,
 } from '../index';
 import { resolveResistance } from '../../../engine/resolver';
 import { collectAllEffects } from '../../../engine/pipeline';
@@ -419,6 +420,18 @@ describe('Dwarf subraces', () => {
       { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null }, // mark of warding's own
     ]));
   });
+
+  it('Duergar replaces the base ASI with its own CON+2/STR+1 and grants Superior Darkvision (120ft) winning over base 60ft', () => {
+    const duergar = raceDwarf.subraces!.find(s => s.id === 'duergar')!;
+    const e = applyRaceSelection(raceDwarf, duergar);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null },
+    ]));
+    expect(effects.filter(ef => ef.type === 'stat_modifier' && ef.target === 'con').length).toBe(1); // base dwarf_asi was replaced, not stacked
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 120, note: undefined }]);
+  });
 });
 
 describe('Tiefling — bloodlines, Variant, Abyssal', () => {
@@ -695,10 +708,48 @@ describe('New standalone races batch 2 — Kenku, Locathah, Owlin, Satyr, Shadar
   });
 });
 
+describe('The 4 Genasi — Air, Earth, Fire, Water', () => {
+  it('Air Genasi grants real CON+2/DEX+1 and tracks a real Mingle with the Wind resource pool', () => {
+    const e = applyRaceSelection(raceAirGenasi, null);
+    expect(e.resources.custom.find(r => r.id === 'mingle_with_the_wind_pool')).toMatchObject({ maximum: 1, recharge: 'long_rest' });
+  });
+
+  it('Earth Genasi grants real CON+2/STR+1 and tracks a real Merge with Stone resource pool', () => {
+    const e = applyRaceSelection(raceEarthGenasi, null);
+    expect(e.resources.custom.find(r => r.id === 'merge_with_stone_pool')).toMatchObject({ maximum: 1, recharge: 'long_rest' });
+  });
+
+  it('Fire Genasi grants real darkvision, fire resistance, and a real Produce Flame cantrip', () => {
+    const e = applyRaceSelection(raceFireGenasi, null);
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 60, note: undefined }]);
+    expect(resolveResistance('fire', collectAllEffects(e))).toBe('resistance');
+    expect(e.spellcasting?.cantrips).toContain('produce_flame');
+  });
+
+  it('Water Genasi grants real acid resistance, a real swim speed, and a real Shape Water cantrip', () => {
+    const e = applyRaceSelection(raceWaterGenasi, null);
+    expect(resolveResistance('acid', collectAllEffects(e))).toBe('resistance');
+    expect(e.derived.movement).toEqual({ swim: 30 });
+    expect(e.spellcasting?.cantrips).toContain('shape_water');
+  });
+});
+
 describe('Gnome subraces', () => {
   it('defines Forest Gnome, Rock Gnome, and Mark of Scribing as required subraces', () => {
     expect(raceGnome.subracesOptional).toBeUndefined();
-    expect(raceGnome.subraces?.map(s => s.id).sort()).toEqual(['forest_gnome', 'mark_of_scribing', 'rock_gnome']);
+    expect(raceGnome.subraces?.map(s => s.id).sort()).toEqual(['deep_gnome', 'forest_gnome', 'mark_of_scribing', 'rock_gnome']);
+  });
+
+  it('Deep Gnome replaces the base ASI with its own INT+2/DEX+1 and grants Superior Darkvision (120ft) winning over base 60ft', () => {
+    const deepGnome = raceGnome.subraces!.find(s => s.id === 'deep_gnome')!;
+    const e = applyRaceSelection(raceGnome, deepGnome);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'int', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+    ]));
+    expect(effects.filter(ef => ef.type === 'stat_modifier' && ef.target === 'int').length).toBe(1); // base gnome_asi was replaced, not stacked
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 120, note: undefined }]);
   });
 
   it('Mark of Scribing grants a real Message cantrip, additive on top of base Gnome INT+2', () => {

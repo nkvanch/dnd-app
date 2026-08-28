@@ -1122,6 +1122,44 @@ export const raceDwarf: Race = {
         },
       ],
     },
+    // Sword Coast Adventurer's Guide — reconciled as a Dwarf subrace rather
+    // than a standalone race, same treatment as Sea Elf/Eladrin under Elf.
+    {
+      id: 'duergar', name: 'Duergar', parentId: 'dwarf', srd: false,
+      replacesBaseFeatureIds: ['dwarf_asi'],
+      features: [
+        {
+          id: 'duergar_asi', name: 'Ability Score Increase',
+          description: 'Your Constitution score increases by 2, and your Strength score increases by 1.',
+          source: { kind: 'race', refId: 'duergar' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'duergar_superior_darkvision', name: 'Superior Darkvision',
+          description: 'You can see in dim light within 120 feet as if it were bright light, and in darkness as if it were dim light.',
+          source: { kind: 'race', refId: 'duergar' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 120 }],
+        },
+        {
+          id: 'duergar_resilience', name: 'Duergar Resilience',
+          description: 'You have advantage on saving throws against illusions and against being charmed or paralyzed. (Doesn\'t fit any of the engine\'s 3 hardcoded advantage targets — not applied mechanically.)',
+          source: { kind: 'race', refId: 'duergar' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'duergar_sunlight_sensitivity', name: 'Sunlight Sensitivity',
+          description: 'You have disadvantage on attack rolls and Wisdom (Perception) checks that rely on sight when you, the target, or whatever you are trying to perceive is in direct sunlight.',
+          source: { kind: 'race', refId: 'duergar' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'duergar_magic', name: 'Duergar Magic',
+          description: 'When you reach 3rd level, you can cast Enlarge/Reduce on yourself once per long rest, targeting only yourself and using Enlarge. When you reach 5th level, you can cast Invisibility on yourself once per long rest. Intelligence is your spellcasting ability. (This app doesn\'t yet support level-gated racial features, and neither spell is a cantrip — no mechanism for a limited-use LEVELED spell without a slot — so nothing here is applied mechanically.)',
+          source: { kind: 'race', refId: 'duergar' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
   ],
 };
 
@@ -1716,6 +1754,40 @@ export const raceGnome: Race = {
           id: 'mark_of_scribing_spells', name: 'Spells of the Mark',
           description: 'If you have the Spellcasting or Pact Magic class feature, Comprehend Languages, Illusory Script, Animal Messenger, Silence, Sending, Tongues, Arcane Eye, Divination, and Dream are added to your class\'s spell list. (No mechanism to add spells to a class spell list — not applied mechanically, tracked for reference.)',
           source: { kind: 'race', refId: 'mark_of_scribing' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Elemental Evil Player's Companion (Svirfneblin) — reconciled as a
+    // Gnome subrace rather than a standalone race, same treatment as Sea
+    // Elf/Eladrin under Elf and Duergar under Dwarf above.
+    {
+      id: 'deep_gnome', name: 'Deep Gnome', parentId: 'gnome', srd: false,
+      replacesBaseFeatureIds: ['gnome_asi'],
+      features: [
+        {
+          id: 'deep_gnome_asi', name: 'Ability Score Increase',
+          description: 'Your Intelligence score increases by 2, and your Dexterity score increases by 1.',
+          source: { kind: 'race', refId: 'deep_gnome' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'int', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'deep_gnome_superior_darkvision', name: 'Superior Darkvision',
+          description: 'You can see in dim light within 120 feet as if it were bright light, and in darkness as if it were dim light.',
+          source: { kind: 'race', refId: 'deep_gnome' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 120 }],
+        },
+        {
+          id: 'stone_camouflage', name: 'Stone Camouflage',
+          description: 'You have advantage on Dexterity (Stealth) checks to hide in rocky terrain. (Doesn\'t fit any of the engine\'s 3 hardcoded advantage targets — not applied mechanically.)',
+          source: { kind: 'race', refId: 'deep_gnome' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'svirfneblin_magic', name: 'Svirfneblin Magic',
+          description: 'You can cast Nondetection on yourself at will, requiring no material components. When you reach 3rd level, you can also cast Blindness/Deafness, Blur, or Disguise Self, once per long rest. Intelligence is your spellcasting ability. (None of these is a cantrip, and the 3rd-level options are level-gated — this app has no mechanism for an at-will or limited-use LEVELED spell without a slot, so nothing here is applied mechanically.)',
+          source: { kind: 'race', refId: 'deep_gnome' }, level: null, effects: [], actions: [], choices: [], passive: true,
         },
       ],
     },
@@ -2852,6 +2924,141 @@ export const raceFairy: Race = {
   ],
 };
 
+// Elemental Evil Player's Companion. Modeled as 4 separate standalone races
+// rather than one race with an ancestryChoice — their base traits (speed,
+// resistance type, cantrip, Earth Walk vs Unending Breath etc.) genuinely
+// differ per element, not just a swapped sub-feature.
+export const raceAirGenasi: Race = {
+  id: 'air_genasi', name: 'Air Genasi', srd: false,
+  features: [
+    {
+      id: 'air_genasi_asi', name: 'Ability Score Increase',
+      description: 'Your Constitution score increases by 2, and your Dexterity score increases by 1.',
+      source: { kind: 'race', refId: 'air_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null },
+        { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+      ],
+    },
+    {
+      id: 'unending_breath', name: 'Unending Breath',
+      description: 'You can hold your breath indefinitely while not incapacitated, and you can\'t drown involuntarily. (No breath-holding/drowning mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'air_genasi' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mingle_with_the_wind', name: 'Mingle with the Wind',
+      description: 'As an action, you can gain a flying speed equal to your walking speed for up to 10 minutes, once per long rest. (No mechanism for a duration-limited stat change — the resource is tracked, but activating it has no automated effect.)',
+      source: { kind: 'race', refId: 'air_genasi' }, level: null, actions: [], choices: [], passive: false,
+      effects: [],
+      activation: { actionType: 'action', resourceCost: { resourceId: 'mingle_with_the_wind_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+    },
+  ],
+  resources: [
+    { resourceId: 'mingle_with_the_wind_pool', name: 'Mingle with the Wind', maximum: 1, recharge: 'long_rest' },
+  ],
+};
+
+export const raceEarthGenasi: Race = {
+  id: 'earth_genasi', name: 'Earth Genasi', srd: false,
+  features: [
+    {
+      id: 'earth_genasi_asi', name: 'Ability Score Increase',
+      description: 'Your Constitution score increases by 2, and your Strength score increases by 1.',
+      source: { kind: 'race', refId: 'earth_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null },
+        { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null },
+      ],
+    },
+    {
+      id: 'earth_walk', name: 'Earth Walk',
+      description: 'You can move across difficult terrain made of earth or stone without expending extra movement. (No terrain-type-aware movement-cost mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'earth_genasi' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'merge_with_stone', name: 'Merge with Stone',
+      description: 'As an action, you can meld into a stone object or surface large enough to fully cover you, for up to 1 hour, once per long rest. (No mechanism for a duration-limited meld-into-object state — the resource is tracked, but activating it has no automated effect.)',
+      source: { kind: 'race', refId: 'earth_genasi' }, level: null, actions: [], choices: [], passive: false,
+      effects: [],
+      activation: { actionType: 'action', resourceCost: { resourceId: 'merge_with_stone_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+    },
+  ],
+  resources: [
+    { resourceId: 'merge_with_stone_pool', name: 'Merge with Stone', maximum: 1, recharge: 'long_rest' },
+  ],
+};
+
+export const raceFireGenasi: Race = {
+  id: 'fire_genasi', name: 'Fire Genasi', srd: false,
+  features: [
+    {
+      id: 'fire_genasi_asi', name: 'Ability Score Increase',
+      description: 'Your Constitution score increases by 2, and your Intelligence score increases by 1.',
+      source: { kind: 'race', refId: 'fire_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null },
+        { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null },
+      ],
+    },
+    {
+      id: 'fire_genasi_darkvision', name: 'Darkvision',
+      description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+      source: { kind: 'race', refId: 'fire_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }],
+    },
+    {
+      id: 'fire_resistance_genasi', name: 'Fire Resistance',
+      description: 'You have resistance to fire damage.',
+      source: { kind: 'race', refId: 'fire_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_resistance', target: 'fire', operation: 'resistance', value: null, condition: null }],
+    },
+    {
+      id: 'reach_to_the_blaze', name: 'Reach to the Blaze',
+      description: 'You know the Produce Flame cantrip. Constitution is your spellcasting ability for it. At 3rd level you can also cast Burning Hands once per long rest — this app doesn\'t yet support level-gated racial features, so only the cantrip is granted for real.',
+      source: { kind: 'race', refId: 'fire_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['produce_flame'], spellcastingAbility: 'con' }],
+    },
+  ],
+};
+
+export const raceWaterGenasi: Race = {
+  id: 'water_genasi', name: 'Water Genasi', srd: false,
+  features: [
+    {
+      id: 'water_genasi_asi', name: 'Ability Score Increase',
+      description: 'Your Constitution score increases by 2, and your Wisdom score increases by 1.',
+      source: { kind: 'race', refId: 'water_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null },
+        { type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null },
+      ],
+    },
+    {
+      id: 'acid_resistance', name: 'Acid Resistance',
+      description: 'You have resistance to acid damage.',
+      source: { kind: 'race', refId: 'water_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_resistance', target: 'acid', operation: 'resistance', value: null, condition: null }],
+    },
+    {
+      id: 'water_genasi_amphibious', name: 'Amphibious',
+      description: 'You can breathe air and water. (No breathing mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'water_genasi' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'water_genasi_swim_speed', name: 'Swim Speed',
+      description: 'You have a swimming speed of 30 feet.',
+      source: { kind: 'race', refId: 'water_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'swim', movementRange: 30 }],
+    },
+    {
+      id: 'call_to_the_wave', name: 'Call to the Wave',
+      description: 'You know the Shape Water cantrip. Wisdom is your spellcasting ability for it. At 3rd level you can also cast Create or Destroy Water once per long rest — this app doesn\'t yet support level-gated racial features, so only the cantrip is granted for real.',
+      source: { kind: 'race', refId: 'water_genasi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['shape_water'], spellcastingAbility: 'wis' }],
+    },
+  ],
+};
+
 /**
  * Every playable race, unfiltered. Prefer ALL_RACES below in app code.
  * (raceSkeleton is intentionally not included here — see its own comment.)
@@ -2884,6 +3091,10 @@ export const FULL_RACE_LIBRARY: Race[] = [
   raceTriton,
   raceVerdan,
   raceFairy,
+  raceAirGenasi,
+  raceEarthGenasi,
+  raceFireGenasi,
+  raceWaterGenasi,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

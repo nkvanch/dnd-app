@@ -604,7 +604,7 @@ function canAutoResolve(choice: ChoiceDefinition): boolean {
 
 // ── queueChoice ───────────────────────────────────────────────────────────────
 
-function queueChoice(entity: Entity, choice: ChoiceDefinition, atLevel: number): Entity {
+export function queueChoice(entity: Entity, choice: ChoiceDefinition, atLevel: number): Entity {
   return {
     ...entity,
     choices: [...entity.choices, {

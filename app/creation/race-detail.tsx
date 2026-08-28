@@ -6,10 +6,15 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
-import { applyGrant } from '../../src/engine/leveling';
+import { applyGrant, queueChoice } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { Entity } from '../../src/engine/types';
+import { Entity, Ability, Feature, RACE_CHOICE_PREFIX } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+
+const ABILITY_LABELS: { key: Ability; label: string }[] = [
+  { key: 'str', label: 'STR' }, { key: 'dex', label: 'DEX' }, { key: 'con', label: 'CON' },
+  { key: 'int', label: 'INT' }, { key: 'wis', label: 'WIS' }, { key: 'cha', label: 'CHA' },
+];
 
 const RACE_DETAIL: Record<string, {
   description: string; size: string; speed: number; languages: string[]; age?: string;
@@ -75,7 +80,13 @@ function clearRaceFeatures(entity: Entity): Entity {
   return {
     ...entity,
     features: entity.features.filter(f => f.source.kind !== 'race'),
-    choices:  entity.choices.filter(c => !raceChoiceIds.has(c.definition.id)),
+    // Race.pendingChoices/Subrace.pendingChoices (e.g. Variant Human's skill
+    // choice) are namespaced with the RACE_CHOICE_PREFIX below precisely so
+    // they can be swept here on race change/re-selection, same as feature-
+    // sourced choices already are via raceChoiceIds.
+    choices: entity.choices.filter(c =>
+      !raceChoiceIds.has(c.definition.id) && !c.definition.id.startsWith(RACE_CHOICE_PREFIX),
+    ),
   };
 }
 
@@ -114,14 +125,46 @@ export default function RaceDetailScreen() {
   const subraces         = race?.subraces ?? [];
   const hasSubraces      = subraces.length > 0;
   const subracesOptional = !!race?.subracesOptional;
+  const chosenSubraceForUi = subraces.find(s => s.id === subRaceId) ?? null;
   const ancestryOptions  = race?.ancestryChoice?.options ?? [];
   const hasAncestry      = ancestryOptions.length > 0;
+  // Flexible ability score choice (Half-Elf/Variant Human's "+1 to two
+  // abilities of your choice", or Tasha's/Fizban's-style "+2/+1 split OR
+  // +1 to three different"). See Race.flexibleAsi's doc comment. Subrace-
+  // scoped ones (Variant Human) only activate once that subrace is picked.
+  const flexAsi = chosenSubraceForUi?.flexibleAsi ?? race?.flexibleAsi ?? null;
+  const [flexSubMode, setFlexSubMode] = useState<'2_1' | '3x1'>('2_1');
+  const [flexPicks, setFlexPicks] = useState<Ability[]>([]);
+  const flexRequiredCount = !flexAsi ? 0
+    : flexAsi.mode.kind === 'two_distinct_plus_one' ? 2
+    : flexSubMode === '2_1' ? 2 : 3;
+  const flexComplete = !flexAsi || flexPicks.length === flexRequiredCount;
+  const flexExcluded = flexAsi?.mode.kind === 'two_distinct_plus_one' ? (flexAsi.mode.exclude ?? []) : [];
+  function toggleFlexPick(ab: Ability) {
+    setFlexPicks(prev => {
+      if (prev.includes(ab)) return prev.filter(a => a !== ab);
+      if (prev.length >= flexRequiredCount) return prev;
+      return [...prev, ab];
+    });
+  }
+  function flexAmountFor(idx: number): number {
+    if (!flexAsi) return 0;
+    if (flexAsi.mode.kind === 'two_distinct_plus_one') return 1;
+    return flexSubMode === '3x1' ? 1 : (idx === 0 ? 2 : 1);
+  }
   const canSelect        = (!hasSubraces || subRaceId !== null || subracesOptional)
-                          && (!hasAncestry || ancestryId !== null);
+                          && (!hasAncestry || ancestryId !== null)
+                          && flexComplete;
 
   useEffect(() => {
     if (!race || !draft) safeGoBack();
   }, []);
+
+  // Clear a stale flex-ASI pick if the player switches subrace (a different
+  // subrace, or none, may not carry the same flexibleAsi shape/count).
+  useEffect(() => {
+    setFlexPicks([]);
+  }, [subRaceId]);
 
   if (!race || !draft) return null;
 
@@ -129,7 +172,7 @@ export default function RaceDetailScreen() {
     // Strip old race features first so re-selection or changing race doesn't stack.
     // Subrace features also carry source.kind === 'race', so they are cleared too.
     let updated = clearRaceFeatures(draft!);
-    const chosenSubrace = hasSubraces ? subraces.find(s => s.id === subRaceId) ?? null : null;
+    const chosenSubrace = hasSubraces ? chosenSubraceForUi : null;
     updated = {
       ...updated,
       identity: {
@@ -143,7 +186,12 @@ export default function RaceDetailScreen() {
     // hardcoded 0) so an authored unlock level (e.g. a spell_grant trait's
     // leveled spell) actually survives onto the entity instead of always
     // being zeroed. See actionCards.ts's generateAllActionCards level-gate.
+    // A chosen subrace's replacesBaseFeatureIds (e.g. Variant Human
+    // replacing the flat all-abilities-+1 ASI with its own flexibleAsi
+    // choice) skips those specific base features rather than stacking.
+    const replacedIds = new Set(chosenSubrace?.replacesBaseFeatureIds ?? []);
     for (const feature of race!.features) {
+      if (replacedIds.has(feature.id)) continue;
       updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, feature.level ?? 0);
     }
     // ...and any resource pools the base race grants (e.g. a limited-use
@@ -167,6 +215,27 @@ export default function RaceDetailScreen() {
     const chosenAncestry = hasAncestry ? ancestryOptions.find(a => a.id === ancestryId) ?? null : null;
     if (chosenAncestry) {
       updated = applyGrant(updated, { kind: 'feature', value: { ...chosenAncestry.feature, isActive: true } }, chosenAncestry.feature.level ?? 0);
+    }
+    // ...and the flexible ability score choice, compiled into one generated
+    // Feature (mirrors every other racial ASI's stat_modifier-effects shape).
+    if (flexAsi && flexPicks.length > 0) {
+      const flexFeature: Feature = {
+        id: `${race!.id}_flexible_asi`,
+        name: 'Ability Score Increase',
+        description: flexAsi.prompt,
+        source: { kind: 'race', refId: race!.id },
+        level: null, actions: [], choices: [], passive: true,
+        effects: flexPicks.map((ab, idx) => ({
+          type: 'stat_modifier', target: ab, operation: 'add', value: flexAmountFor(idx), condition: null,
+        })),
+      };
+      updated = applyGrant(updated, { kind: 'feature', value: { ...flexFeature, isActive: true } }, 0);
+    }
+    // ...and any choices the base race or chosen subrace queue rather than
+    // auto-resolve (e.g. Variant Human's "one skill of your choice") — same
+    // pending-choice objects the leveling system produces, just queued here.
+    for (const choice of [...(race!.pendingChoices ?? []), ...(chosenSubrace?.pendingChoices ?? [])]) {
+      updated = queueChoice(updated, choice, 0);
     }
     updated = recomputeDerived(updated, rules);
     setDraft(updated);
@@ -280,6 +349,50 @@ export default function RaceDetailScreen() {
         </>
       )}
 
+      {/* Flexible ability score picker — e.g. Half-Elf/Variant Human's
+          "+1 to two abilities of your choice". Placed after the subrace
+          picker since a subrace-scoped flexibleAsi (Variant Human) only
+          appears once that subrace is actually selected above. */}
+      {flexAsi && (
+        <>
+          <View style={styles.divider} />
+          <Text style={styles.sectionTitle}>{flexAsi.prompt}</Text>
+          {flexAsi.mode.kind === 'two_one_or_three_one' && (
+            <View style={styles.flexSubModeRow}>
+              {(['2_1', '3x1'] as const).map(sm => (
+                <Pressable
+                  key={sm}
+                  style={[styles.flexSubModeBtn, flexSubMode === sm && styles.flexSubModeBtnActive]}
+                  onPress={() => { setFlexSubMode(sm); setFlexPicks([]); }}
+                >
+                  <Text style={[styles.flexSubModeTxt, flexSubMode === sm && styles.flexSubModeTxtActive]}>
+                    {sm === '2_1' ? '+2 one, +1 different' : '+1 to three'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <View style={styles.abilityGrid}>
+            {ABILITY_LABELS.filter(a => !flexExcluded.includes(a.key)).map(({ key, label }) => {
+              const idx = flexPicks.indexOf(key);
+              const isSelected = idx !== -1;
+              const disabled = !isSelected && flexPicks.length >= flexRequiredCount;
+              return (
+                <Pressable
+                  key={key}
+                  style={[styles.abilityBtn, isSelected && styles.abilityBtnSelected, disabled && styles.abilityBtnDisabled]}
+                  disabled={disabled}
+                  onPress={() => toggleFlexPick(key)}
+                >
+                  <Text style={styles.abilityLabel}>{label}</Text>
+                  {isSelected && <Text style={styles.abilityBonus}>+{flexAmountFor(idx)}</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      )}
+
       <View style={styles.divider} />
       <Pressable
         style={[styles.selectBtn, !canSelect && styles.selectBtnDisabled]}
@@ -287,7 +400,8 @@ export default function RaceDetailScreen() {
         disabled={!canSelect}
       >
         <Text style={styles.selectBtnText}>
-          {hasAncestry && !ancestryId ? 'Choose an ancestry to continue'
+          {!flexComplete ? 'Choose ability scores to continue'
+            : hasAncestry && !ancestryId ? 'Choose an ancestry to continue'
             : hasSubraces && !subRaceId && !subracesOptional ? 'Choose a subrace to continue'
             : 'Select Race'}
         </Text>
@@ -359,4 +473,23 @@ const styles = StyleSheet.create({
   subraceNameSelected: { color: Colors.gold },
   subraceBonus: { fontSize: FontSize.sm, color: Colors.green, marginTop: Spacing.xs, marginLeft: 28 },
   subraceFeatures: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2, marginLeft: 28 },
+
+  flexSubModeRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
+  flexSubModeBtn: {
+    flex: 1, alignItems: 'center', paddingVertical: Spacing.sm,
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface,
+  },
+  flexSubModeBtnActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  flexSubModeTxt: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  flexSubModeTxtActive: { color: Colors.gold },
+
+  abilityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  abilityBtn: {
+    width: 72, alignItems: 'center', paddingVertical: Spacing.sm,
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface,
+  },
+  abilityBtnSelected: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  abilityBtnDisabled: { opacity: 0.4 },
+  abilityLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  abilityBonus: { fontSize: FontSize.xs, color: Colors.green, fontWeight: FontWeight.bold, marginTop: 2 },
 });

@@ -6,11 +6,50 @@
 // or subrace through the real engine produces the right resistance/breath
 // weapon/stat bonuses, not just that the content data typechecks.
 import { makeEmptyEntity, DEFAULT_RULES } from '../../../store/characterStore';
-import { applyGrant } from '../../../engine/leveling';
+import { applyGrant, queueChoice, resolveChoice } from '../../../engine/leveling';
 import { recomputeDerived } from '../../../engine/pipeline';
-import { raceDragonborn, raceGnome } from '../index';
+import { raceDragonborn, raceGnome, raceHuman, raceHalfElf } from '../index';
 import { resolveResistance } from '../../../engine/resolver';
 import { collectAllEffects } from '../../../engine/pipeline';
+import { Race, Subrace, Ability, Feature, Entity } from '../../../engine/types';
+
+/**
+ * Replicates app/creation/race-detail.tsx's selectRace() apply sequence
+ * (base features minus any replacesBaseFeatureIds, subrace features,
+ * flexibleAsi picks compiled into a Feature, pendingChoices queued) —
+ * duplicated here rather than imported since selectRace() is a React
+ * component-local function, not an exported engine helper. Kept in sync by
+ * hand; if this drifts from the real screen, races.test.ts stops actually
+ * verifying what the UI does.
+ */
+function applyRaceSelection(
+  race: Race, subrace: Subrace | null, flexPicks: { ability: Ability; amount: number }[] = [],
+): Entity {
+  let e = makeEmptyEntity('e1');
+  const replacedIds = new Set(subrace?.replacesBaseFeatureIds ?? []);
+  for (const f of race.features) {
+    if (replacedIds.has(f.id)) continue;
+    e = applyGrant(e, { kind: 'feature', value: { ...f, isActive: true } }, f.level ?? 0);
+  }
+  for (const r of race.resources ?? []) e = applyGrant(e, { kind: 'resource', value: r }, 0);
+  if (subrace) {
+    for (const f of subrace.features) e = applyGrant(e, { kind: 'feature', value: { ...f, isActive: true } }, f.level ?? 0);
+    for (const r of subrace.resources ?? []) e = applyGrant(e, { kind: 'resource', value: r }, 0);
+  }
+  const flexAsi = subrace?.flexibleAsi ?? race.flexibleAsi;
+  if (flexAsi && flexPicks.length > 0) {
+    const flexFeature: Feature = {
+      id: `${race.id}_flexible_asi`, name: 'Ability Score Increase', description: flexAsi.prompt,
+      source: { kind: 'race', refId: race.id }, level: null, actions: [], choices: [], passive: true,
+      effects: flexPicks.map(p => ({ type: 'stat_modifier', target: p.ability, operation: 'add', value: p.amount, condition: null })),
+    };
+    e = applyGrant(e, { kind: 'feature', value: { ...flexFeature, isActive: true } }, 0);
+  }
+  for (const choice of [...(race.pendingChoices ?? []), ...(subrace?.pendingChoices ?? [])]) {
+    e = queueChoice(e, choice, 0);
+  }
+  return recomputeDerived(e, DEFAULT_RULES);
+}
 
 describe('Dragonborn — Draconic Ancestry', () => {
   it('defines exactly the 10 PHB dragon colors with the correct damage type per color', () => {
@@ -49,16 +88,67 @@ describe('Dragonborn — Draconic Ancestry', () => {
     expect(raceDragonborn.subraces?.map(s => s.id).sort()).toEqual(['draconblood', 'ravenite']);
   });
 
-  it('Draconblood grants Int+2/Cha+1, replacing the base Str+2/Cha+1 ASI (applied alongside, not instead — matches race-detail.tsx\'s "base then subrace" apply order)', () => {
-    let e = makeEmptyEntity('e1');
-    for (const f of raceDragonborn.features) e = applyGrant(e, { kind: 'feature', value: { ...f, isActive: true } }, 0);
+  it('Draconblood grants Int+2/Cha+1, REPLACING the base Str+2/Cha+1 ASI (not stacking — per the source "replacing the Ability Score Increase trait")', () => {
     const draconblood = raceDragonborn.subraces!.find(s => s.id === 'draconblood')!;
-    for (const f of draconblood.features) e = applyGrant(e, { kind: 'feature', value: { ...f, isActive: true } }, 0);
-    e = recomputeDerived(e, DEFAULT_RULES);
-    // int +2 from Draconblood; str +2/cha +1(base)+1(draconblood)=+2 from stacking both feature sets
-    expect(e.derived).toBeDefined();
-    const intEffect = e.features.flatMap(f => f.effects).find(ef => ef.target === 'int');
-    expect(intEffect).toMatchObject({ operation: 'add', value: 2 });
+    const e = applyRaceSelection(raceDragonborn, draconblood);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects.find(ef => ef.target === 'str')).toBeUndefined(); // base dragonborn_asi's Str+2 is gone
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'int', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null },
+    ]));
+  });
+});
+
+describe('Half-Elf — flexible ASI (real mechanism, was flavor-only before)', () => {
+  it('defines a two_distinct_plus_one choice excluding CHA (already fixed at +2)', () => {
+    expect(raceHalfElf.flexibleAsi).toMatchObject({
+      mode: { kind: 'two_distinct_plus_one', exclude: ['cha'] },
+    });
+  });
+
+  it('applying the base race + 2 chosen abilities grants CHA+2 plus +1 to each pick', () => {
+    const e = applyRaceSelection(raceHalfElf, null, [
+      { ability: 'str', amount: 1 }, { ability: 'wis', amount: 1 },
+    ]);
+    expect(e.stats.cha).toBe(10); // base stats untouched — bonus lives in effects
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'cha', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null },
+      { type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null },
+    ]));
+  });
+});
+
+describe('Variant Human', () => {
+  const variant = raceHuman.subraces!.find(s => s.id === 'variant_human')!;
+
+  it('is an optional subrace — plain Human stays fully selectable', () => {
+    expect(raceHuman.subracesOptional).toBe(true);
+  });
+
+  it('replaces the flat all-abilities-+1 ASI rather than stacking on top of it', () => {
+    const e = applyRaceSelection(raceHuman, variant, [
+      { ability: 'dex', amount: 1 }, { ability: 'con', amount: 1 },
+    ]);
+    const strEffects = e.features.flatMap(f => f.effects).filter(ef => ef.target === 'str');
+    expect(strEffects).toEqual([]); // no leftover +1 STR from the base human_asi feature
+    const dexBonus = e.features.flatMap(f => f.effects).find(ef => ef.target === 'dex');
+    expect(dexBonus).toMatchObject({ operation: 'add', value: 1 });
+  });
+
+  it('queues a real, resolvable skill choice namespaced under RACE_CHOICE_PREFIX', () => {
+    const e = applyRaceSelection(raceHuman, variant, [
+      { ability: 'dex', amount: 1 }, { ability: 'con', amount: 1 },
+    ]);
+    const pending = e.choices.find(c => c.definition.id.startsWith('race_choice_') && c.definition.kind === 'skill');
+    expect(pending).toBeDefined();
+    expect(pending!.resolved).toBe(false);
+
+    const resolved = resolveChoice(e, pending!.id, ['stealth'], DEFAULT_RULES);
+    expect(resolved.skills.skills.stealth.trained).toBe(true);
+    expect(resolved.choices.find(c => c.id === pending!.id)?.resolved).toBe(true);
   });
 });
 

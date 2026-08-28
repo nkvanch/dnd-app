@@ -84,6 +84,34 @@ export type Subrace = {
    * engine code rather than inventing new application logic for races.
    */
   resources?: ResourceGrant[];
+  /**
+   * Choices queued (not auto-resolved) at race-selection time — e.g. Variant
+   * Human's "proficiency in one skill of your choice." Queued via
+   * leveling.ts's queueChoice at grantedAt=0, alongside subrace feature
+   * application in race-detail.tsx's selectRace(), then resolved through
+   * whichever creation screen already generically handles that choice kind
+   * (skills.tsx for 'skill', etc.) — same pending-choice objects, just
+   * queued from race selection instead of leveling up a class.
+   */
+  pendingChoices?: ChoiceDefinition[];
+  /**
+   * Subrace-scoped version of Race.flexibleAsi — for a subrace that
+   * replaces the base race's flat ASI with a player-directed one (e.g.
+   * Variant Human), rather than every subrace of that race needing it (most
+   * don't; Dragonborn's ancestryChoice is race-level precisely because it
+   * DOES apply to every subrace). Only active once this specific subrace is
+   * selected — see race-detail.tsx's `flexAsi` derivation.
+   */
+  flexibleAsi?: Race['flexibleAsi'];
+  /**
+   * Base race Feature ids this subrace replaces rather than adds to — e.g.
+   * Variant Human replaces `human_asi` (its flat all-abilities-+1) with its
+   * own `flexibleAsi` choice instead of stacking on top of it. Filtered out
+   * of `race.features` before application in race-detail.tsx's
+   * selectRace(). Most subraces (Hill Dwarf, High Elf, etc.) leave this
+   * unset — they genuinely ADD to the base race per RAW.
+   */
+  replacesBaseFeatureIds?: string[];
   /** SRD 5.1 legal status — same semantics as Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4. */
   srd?:     boolean;
   /**
@@ -96,6 +124,14 @@ export type Subrace = {
    */
   homebrewDraft?: Record<string, unknown>;
 };
+
+/**
+ * Required id prefix for every entry in Race/Subrace.pendingChoices — lets
+ * race-detail.tsx's clearRaceFeatures() sweep previously-queued race choices
+ * on race change/re-selection without needing to know each race's specific
+ * choice ids in advance.
+ */
+export const RACE_CHOICE_PREFIX = 'race_choice_';
 
 /**
  * One option within a Race.ancestryChoice — e.g. one dragon color for
@@ -136,6 +172,23 @@ export type Race = {
    * subrace selection: pick one, its `feature` grants on confirm.
    */
   ancestryChoice?: { prompt: string; options: AncestryOption[] };
+  /**
+   * A player-directed ability score bonus — "two other ability scores of
+   * your choice each increase by 1" (Half-Elf, Variant Human) or the
+   * Tasha's/Fizban's-style "one score +2 and a different +1, OR three
+   * different scores +1 each" flexible split. Resolved on the same screen
+   * as subrace/ancestry (not a deferred pending choice), and compiled into
+   * a single generated Feature's stat_modifier effects on confirm — see
+   * race-detail.tsx's flexAsi state and applyGrant call.
+   */
+  flexibleAsi?: {
+    prompt: string;
+    mode:
+      | { kind: 'two_distinct_plus_one'; exclude?: Ability[] }
+      | { kind: 'two_one_or_three_one' };
+  };
+  /** Same as Subrace.pendingChoices — see that field's doc comment. */
+  pendingChoices?: ChoiceDefinition[];
   /** Same as Subrace.resources — see that field's doc comment. */
   resources?: ResourceGrant[];
   /**

@@ -2,7 +2,13 @@
 // FILE: src/content/races/index.ts
 // All PHB races expressed as Feature/Effect arrays.
 // ============================================================================
-import { Race, AncestryOption } from '../../engine/types';
+import { Race, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption } from '../../engine/types';
+
+const ALL_SKILL_OPTIONS: ChoiceOption[] = [
+  'athletics', 'acrobatics', 'sleight_of_hand', 'stealth', 'arcana', 'history',
+  'investigation', 'nature', 'religion', 'animal_handling', 'insight', 'medicine',
+  'perception', 'survival', 'deception', 'intimidation', 'performance', 'persuasion',
+].map(s => ({ id: s, label: s, value: s }));
 
 export const raceHuman: Race = {
   id: 'human',
@@ -30,6 +36,35 @@ export const raceHuman: Race = {
       description: 'You can speak, read, and write Common and one extra language of your choice.',
       source: { kind: 'race', refId: 'human' },
       level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+  // PHB optional Variant Human rule — an alternate, not mandatory, so plain
+  // Human stays fully selectable (subracesOptional).
+  subracesOptional: true,
+  subraces: [
+    {
+      id: 'variant_human', name: 'Variant Human', parentId: 'human', srd: true,
+      replacesBaseFeatureIds: ['human_asi'],
+      flexibleAsi: {
+        prompt: 'Two different ability scores of your choice each increase by 1.',
+        mode: { kind: 'two_distinct_plus_one' },
+      },
+      pendingChoices: [
+        {
+          id: `${RACE_CHOICE_PREFIX}variant_human_skill`,
+          prompt: 'Choose one skill to gain proficiency in.',
+          kind: 'skill', count: 1, pool: ALL_SKILL_OPTIONS,
+          grants: [], required: true, resolved: false,
+        },
+      ],
+      features: [
+        {
+          id: 'variant_human_feat_note', name: 'Feat',
+          description: 'You gain one feat of your choice. Take it on the Feats screen during creation (enable the "Feat at 1st level" campaign rule if it isn\'t already, so that screen is reachable).',
+          source: { kind: 'race', refId: 'variant_human' },
+          level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
     },
   ],
 };
@@ -440,7 +475,7 @@ export const raceDragonborn: Race = {
   // subrace).
   subraces: [
     {
-      id: 'draconblood', name: 'Draconblood', parentId: 'dragonborn', srd: false,
+      id: 'draconblood', name: 'Draconblood', parentId: 'dragonborn', srd: false, replacesBaseFeatureIds: ['dragonborn_asi'],
       features: [
         {
           id: 'draconblood_asi', name: 'Ability Score Increase',
@@ -464,7 +499,7 @@ export const raceDragonborn: Race = {
       ],
     },
     {
-      id: 'ravenite', name: 'Ravenite', parentId: 'dragonborn', srd: false,
+      id: 'ravenite', name: 'Ravenite', parentId: 'dragonborn', srd: false, replacesBaseFeatureIds: ['dragonborn_asi'],
       features: [
         {
           id: 'ravenite_asi', name: 'Ability Score Increase',
@@ -586,6 +621,10 @@ export const raceHalfElf: Race = {
   id: 'half_elf',
   name: 'Half-Elf',
   srd: true,
+  flexibleAsi: {
+    prompt: 'Two other ability scores of your choice each increase by 1.',
+    mode: { kind: 'two_distinct_plus_one', exclude: ['cha'] },
+  },
   features: [
     {
       id: 'half_elf_asi',

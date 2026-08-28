@@ -847,8 +847,8 @@ export function levelUpClass(
   // level-up event regardless of which class advanced), not the per-class
   // level, which two different classes could otherwise collide on.
   if (bonusFeatEveryLevel(rules)) {
-    const bonusId = `bonus_feat_lvl_${characterLevelAfter}`;
-    if (!updated.choices.some(c => c.id === bonusId)) {
+    const bonusId = 'bonus_feat_lvl';
+    if (!updated.choices.some(c => c.id === `${bonusId}_${characterLevelAfter}`)) {
       updated = queueChoice(updated, {
         id: bonusId, prompt: `Bonus feat at level ${characterLevelAfter} (house rule).`,
         kind: 'asi', count: 1, pool: 'all', grants: [], required: true, resolved: false,
@@ -930,9 +930,9 @@ export function levelUp(
     // Bonus feat every level (house rule). Injects an extra feat-only ASI choice
     // at every level beyond the class's own ASI schedule.
     if (bonusFeatEveryLevel(rules)) {
-      const bonusId = `bonus_feat_lvl_${lvl}`;
+      const bonusId = 'bonus_feat_lvl';
       // Only add if not already queued (idempotent re-leveling safety).
-      const alreadyQueued = updated.choices.some(c => c.id === bonusId);
+      const alreadyQueued = updated.choices.some(c => c.id === `${bonusId}_${lvl}`);
       if (!alreadyQueued) {
         const bonusDef: import('./types').ChoiceDefinition = {
           id:       bonusId,

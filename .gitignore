@@ -46,3 +46,6 @@ yarn-error.*
 # graphify knowledge graph (generated, rebuild with `graphify update .`)
 graphify-out/
 .claude/settings.json.graphify-bak
+
+# jest coverage reports (generated, rerun `jest --coverage` to regenerate)
+/coverage

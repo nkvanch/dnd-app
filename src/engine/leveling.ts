@@ -720,6 +720,47 @@ export function applyInfusionChoiceToEntity(
   return recomputeDerived(updated, rules);
 }
 
+// ── Spell selection on level-up ──────────────────────────────────────────────
+
+/**
+ * Resolves a 'spell' pending choice (a known-spell caster gaining new
+ * spells/cantrips known at level-up, or a Wizard adding to their
+ * spellbook) — bypasses resolveChoice for the same reason ASI/subclass/
+ * infusion do: the pool is the 'all' sentinel (the picker supplies the
+ * real, class-filtered spell list, not the engine). Routes each selected
+ * id into `cantrips` or `known` by looking up its own `level` (0 = cantrip)
+ * via the caller-supplied lookup, so one picker component serves both a
+ * pure cantrip-count choice and a pure leveled-spell-count choice without
+ * the engine needing to know which in advance.
+ */
+export function applySpellChoiceToEntity(
+  entity:       Entity,
+  choiceId:     string,
+  spellIds:     string[],
+  getSpellLevel: (id: string) => number | undefined,
+  rules:        CampaignRules,
+): Entity {
+  if (!entity.spellcasting) return entity;
+  const newCantrips: string[] = [];
+  const newKnown:     string[] = [];
+  for (const id of spellIds) {
+    if (getSpellLevel(id) === 0) newCantrips.push(id);
+    else newKnown.push(id);
+  }
+  const updated: Entity = {
+    ...entity,
+    spellcasting: {
+      ...entity.spellcasting,
+      cantrips: [...new Set([...entity.spellcasting.cantrips, ...newCantrips])],
+      known:    [...new Set([...entity.spellcasting.known,    ...newKnown])],
+    },
+    choices: entity.choices.map(c =>
+      c.id === choiceId ? { ...c, resolved: true, selections: spellIds } : c
+    ),
+  };
+  return recomputeDerived(updated, rules);
+}
+
 // ── Multiclass level-up ──────────────────────────────────────────────────────
 
 /** Copies `used` counts from `prev` into `next` per tier, so recomputing slot

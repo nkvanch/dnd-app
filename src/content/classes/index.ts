@@ -46,6 +46,19 @@ function stubEntries(
   return levels.map(level => ({ level, hpDie, choices: [], grants: [] }));
 }
 
+/**
+ * A known-spell caster gaining N new spells (or cantrips, if `id` contains
+ * 'cantrip') known at level-up — resolved by SpellChoicePicker via
+ * applySpellChoiceToEntity (not resolveChoice; pool is the 'all' sentinel,
+ * same reason ASI/subclass/infusion/feature_pool choices are).
+ */
+function spellChoice(id: string, count: number, prompt: string): ChoiceDefinition {
+  return {
+    id, prompt, kind: 'spell', count, pool: 'all',
+    grants: [], required: true, resolved: false,
+  };
+}
+
 // ── Rogue ─────────────────────────────────────────────────────────────────────
 
 const rogueSkillChoice: ChoiceDefinition = {
@@ -174,6 +187,7 @@ export const wizardProgression: ClassProgression = {
           { id: 'scholar',  label: "Scholar's Pack",  items: ['scholars_pack'] },
           { id: 'explorer', label: "Explorer's Pack", items: ['explorers_pack'] },
         ]),
+        spellChoice('wizard_spellbook_1', 6, 'Choose 6 1st-level wizard spells for your spellbook.'),
       ],
       grants: [
         { kind: 'feature', value: { id: 'wizard_spellcasting', name: 'Spellcasting', description: 'As a student of arcane magic, you have a spellbook containing spells.', source: { kind: 'class', refId: 'wizard' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
@@ -182,18 +196,21 @@ export const wizardProgression: ClassProgression = {
         { kind: 'spell_slots', value: { level: 1 } },
       ],
     },
-    { level: 2, hpDie: 6, choices: [{ id: 'wizard_tradition_choice', prompt: 'Choose an Arcane Tradition.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }], grants: [{ kind: 'feature', value: { id: 'wizard_tradition', name: 'Arcane Tradition', description: 'You choose an arcane tradition, shaping your practice of magic.', source: { kind: 'class', refId: 'wizard' }, level: 2, effects: [], actions: [], choices: [], passive: true } }] },
-    { level: 3, hpDie: 6, choices: [], grants: [] },
-    { level: 4, hpDie: 6, choices: [asiChoice('wizard_asi_4')], grants: [] },
-    ...stubEntries([5,6,7], 6),
-    { level: 8, hpDie: 6, choices: [asiChoice('wizard_asi_8')], grants: [] },
-    ...stubEntries([9,10,11], 6),
-    { level: 12, hpDie: 6, choices: [asiChoice('wizard_asi_12')], grants: [] },
-    ...stubEntries([13,14,15], 6),
-    { level: 16, hpDie: 6, choices: [asiChoice('wizard_asi_16')], grants: [] },
-    ...stubEntries([17,18], 6),
-    { level: 19, hpDie: 6, choices: [asiChoice('wizard_asi_19')], grants: [] },
-    { level: 20, hpDie: 6, choices: [], grants: [{ kind: 'feature', value: { id: 'signature_spells', name: 'Signature Spells', description: 'You gain mastery over two powerful spells and can cast them with little effort.', source: { kind: 'class', refId: 'wizard' }, level: 20, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 2, hpDie: 6, choices: [{ id: 'wizard_tradition_choice', prompt: 'Choose an Arcane Tradition.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }, spellChoice('wizard_spellbook_2', 2, 'Choose 2 spells to add to your spellbook.')], grants: [{ kind: 'feature', value: { id: 'wizard_tradition', name: 'Arcane Tradition', description: 'You choose an arcane tradition, shaping your practice of magic.', source: { kind: 'class', refId: 'wizard' }, level: 2, effects: [], actions: [], choices: [], passive: true } }] },
+    ...Array.from({ length: 17 }, (_, i) => {
+      const level = 3 + i;
+      const asiLevels: Record<number, string> = { 4: 'wizard_asi_4', 8: 'wizard_asi_8', 12: 'wizard_asi_12', 16: 'wizard_asi_16', 19: 'wizard_asi_19' };
+      const asi = asiLevels[level];
+      return {
+        level, hpDie: 6 as const,
+        choices: [
+          ...(asi ? [asiChoice(asi)] : []),
+          spellChoice(`wizard_spellbook_${level}`, 2, 'Choose 2 spells to add to your spellbook.'),
+        ] as ChoiceDefinition[],
+        grants: [],
+      };
+    }),
+    { level: 20, hpDie: 6, choices: [spellChoice('wizard_spellbook_20', 2, 'Choose 2 spells to add to your spellbook.')], grants: [{ kind: 'feature', value: { id: 'signature_spells', name: 'Signature Spells', description: 'You gain mastery over two powerful spells and can cast them with little effort.', source: { kind: 'class', refId: 'wizard' }, level: 20, effects: [], actions: [], choices: [], passive: true } }] },
   ],
 };
 
@@ -418,46 +435,46 @@ export const rangerProgression: ClassProgression = {
         { kind: 'feature', value: { id: 'natural_explorer', name: 'Natural Explorer', description: 'You are particularly familiar with one type of natural environment.', source: { kind: 'class', refId: 'ranger' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
-    { level: 2, hpDie: 10, choices: [], grants: [{ kind: 'feature', value: { id: 'fighting_style_ranger', name: 'Fighting Style', description: 'You adopt a particular style of fighting as your specialty.', source: { kind: 'class', refId: 'ranger' }, level: 2, effects: [], actions: [], choices: [], passive: true } }, { kind: 'init_spellcasting', value: { ability: 'wis' } }, { kind: 'spell_slots', value: { level: 2 } }] },
-    { level: 3, hpDie: 10, choices: [{ id: 'ranger_conclave_choice', prompt: 'Choose a Ranger Conclave.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }], grants: [{ kind: 'feature', value: { id: 'ranger_conclave', name: 'Ranger Conclave', description: 'You choose a type of ranger conclave.', source: { kind: 'class', refId: 'ranger' }, level: 3, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'primeval_awareness', name: 'Primeval Awareness', description: 'You can use your action and expend one ranger spell slot to focus your awareness.', source: { kind: 'class', refId: 'ranger' }, level: 3, effects: [], actions: [], choices: [], passive: false } }] },
+    { level: 2, hpDie: 10, choices: [spellChoice('ranger_spells_2', 2, 'Choose 2 ranger spells known.')], grants: [{ kind: 'feature', value: { id: 'fighting_style_ranger', name: 'Fighting Style', description: 'You adopt a particular style of fighting as your specialty.', source: { kind: 'class', refId: 'ranger' }, level: 2, effects: [], actions: [], choices: [], passive: true } }, { kind: 'init_spellcasting', value: { ability: 'wis' } }, { kind: 'spell_slots', value: { level: 2 } }] },
+    { level: 3, hpDie: 10, choices: [{ id: 'ranger_conclave_choice', prompt: 'Choose a Ranger Conclave.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }, spellChoice('ranger_spells_3', 1, 'Choose 1 more ranger spell known.')], grants: [{ kind: 'feature', value: { id: 'ranger_conclave', name: 'Ranger Conclave', description: 'You choose a type of ranger conclave.', source: { kind: 'class', refId: 'ranger' }, level: 3, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'primeval_awareness', name: 'Primeval Awareness', description: 'You can use your action and expend one ranger spell slot to focus your awareness.', source: { kind: 'class', refId: 'ranger' }, level: 3, effects: [], actions: [], choices: [], passive: false } }] },
     { level: 4, hpDie: 10, choices: [asiChoice('ranger_asi_4')], grants: [] },
-    { level: 5, hpDie: 10, choices: [], grants: [{ kind: 'feature', value: { id: 'extra_attack_ranger', name: 'Extra Attack', description: 'You can attack twice when you take the Attack action.', source: { kind: 'class', refId: 'ranger' }, level: 5, effects: [{ type: 'stat_modifier', target: 'extra_attack', operation: 'set', value: 1, condition: null }], actions: [], choices: [], passive: true } }] },
+    { level: 5, hpDie: 10, choices: [spellChoice('ranger_spells_5', 1, 'Choose 1 more ranger spell known.')], grants: [{ kind: 'feature', value: { id: 'extra_attack_ranger', name: 'Extra Attack', description: 'You can attack twice when you take the Attack action.', source: { kind: 'class', refId: 'ranger' }, level: 5, effects: [{ type: 'stat_modifier', target: 'extra_attack', operation: 'set', value: 1, condition: null }], actions: [], choices: [], passive: true } }] },
     {
       level: 6, hpDie: 10, choices: [], grants: [
         { kind: 'feature', value: { id: 'favored_enemy_2', name: 'Favored Enemy (2nd)', description: 'You gain a second favored enemy, and your Natural Explorer benefits extend to a second terrain type.', source: { kind: 'class', refId: 'ranger' }, level: 6, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
-    ...stubEntries([7], 10),
+    { level: 7, hpDie: 10, choices: [spellChoice('ranger_spells_7', 1, 'Choose 1 more ranger spell known.')], grants: [] },
     {
       level: 8, hpDie: 10, choices: [asiChoice('ranger_asi_8')], grants: [
         { kind: 'feature', value: { id: 'lands_stride', name: "Land's Stride", description: 'Moving through nonmagical difficult terrain costs you no extra movement, and you can pass through nonmagical plants without being slowed by them and without taking damage from them if they have thorns, spines, or a similar hazard. You also have advantage on saving throws against plants that are magically created or manipulated to impede movement.', source: { kind: 'class', refId: 'ranger' }, level: 8, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
-    ...stubEntries([9], 10),
+    { level: 9, hpDie: 10, choices: [spellChoice('ranger_spells_9', 1, 'Choose 1 more ranger spell known.')], grants: [] },
     {
       level: 10, hpDie: 10, choices: [], grants: [
         { kind: 'feature', value: { id: 'natural_explorer_3', name: 'Natural Explorer (3rd terrain)', description: 'Your Natural Explorer benefits extend to a third terrain type.', source: { kind: 'class', refId: 'ranger' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
         { kind: 'feature', value: { id: 'hide_in_plain_sight', name: 'Hide in Plain Sight', description: 'You can spend 1 minute creating camouflage from natural materials and, once camouflaged, gain a +10 bonus to Dexterity (Stealth) checks as long as you remain there without moving or attacking. No engine hook for a conditional situational Stealth bonus — apply manually.', source: { kind: 'class', refId: 'ranger' }, level: 10, effects: [], actions: [], choices: [], passive: false } },
       ],
     },
-    ...stubEntries([11], 10),
+    { level: 11, hpDie: 10, choices: [spellChoice('ranger_spells_11', 1, 'Choose 1 more ranger spell known.')], grants: [] },
     { level: 12, hpDie: 10, choices: [asiChoice('ranger_asi_12')], grants: [] },
-    ...stubEntries([13], 10),
+    { level: 13, hpDie: 10, choices: [spellChoice('ranger_spells_13', 1, 'Choose 1 more ranger spell known.')], grants: [] },
     {
       level: 14, hpDie: 10, choices: [], grants: [
         { kind: 'feature', value: { id: 'favored_enemy_3', name: 'Favored Enemy (3rd)', description: 'You gain a third favored enemy.', source: { kind: 'class', refId: 'ranger' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
         { kind: 'feature', value: { id: 'vanish', name: 'Vanish', description: "You can use the Hide action as a bonus action on your turn, and you can't be tracked by nonmagical means unless you choose to leave a trail.", source: { kind: 'class', refId: 'ranger' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
-    ...stubEntries([15], 10),
+    { level: 15, hpDie: 10, choices: [spellChoice('ranger_spells_15', 1, 'Choose 1 more ranger spell known.')], grants: [] },
     { level: 16, hpDie: 10, choices: [asiChoice('ranger_asi_16')], grants: [] },
-    ...stubEntries([17], 10),
+    { level: 17, hpDie: 10, choices: [spellChoice('ranger_spells_17', 1, 'Choose 1 more ranger spell known.')], grants: [] },
     {
       level: 18, hpDie: 10, choices: [], grants: [
         { kind: 'feature', value: { id: 'feral_senses', name: 'Feral Senses', description: "You gain preternatural senses that help you fight creatures you can't see. When you attack a creature you can't see, your inability to see it doesn't impose disadvantage on your attack rolls against it. You are also aware of the location of any invisible creature within 30 feet of you, provided the creature isn't hidden from you and you aren't blinded or deafened.", source: { kind: 'class', refId: 'ranger' }, level: 18, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
-    { level: 19, hpDie: 10, choices: [asiChoice('ranger_asi_19')], grants: [] },
+    { level: 19, hpDie: 10, choices: [asiChoice('ranger_asi_19'), spellChoice('ranger_spells_19', 1, 'Choose 1 more ranger spell known.')], grants: [] },
     { level: 20, hpDie: 10, choices: [], grants: [{ kind: 'feature', value: { id: 'foe_slayer', name: 'Foe Slayer', description: 'You become an unparalleled hunter of your enemies. Once on each of your turns, you can add your Wisdom modifier to the attack roll or the damage roll of an attack you make against one of your favored enemies.', source: { kind: 'class', refId: 'ranger' }, level: 20, effects: [], actions: [], choices: [], passive: true } }] },
   ],
 };
@@ -657,6 +674,8 @@ export const bardProgression: ClassProgression = {
           { id: 'lute',  label: 'Lute',                      items: ['lute'] },
           { id: 'other', label: 'Any musical instrument (Lute)', items: ['lute'] },
         ]),
+        spellChoice('bard_cantrips_1', 2, 'Choose 2 bard cantrips.'),
+        spellChoice('bard_spells_1', 4, 'Choose 4 bard spells known.'),
       ],
       grants: [
         { kind: 'feature', value: { id: 'bard_spellcasting', name: 'Spellcasting', description: 'You have learned to untangle and reshape the fabric of reality in harmony with your wishes and music.', source: { kind: 'class', refId: 'bard' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
@@ -666,55 +685,64 @@ export const bardProgression: ClassProgression = {
         { kind: 'spell_slots', value: { level: 1 } },
       ],
     },
-    { level: 2, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'jack_of_all_trades', name: 'Jack of All Trades', description: 'You can add half your proficiency bonus to any ability check that doesn\'t use your proficiency bonus.', source: { kind: 'class', refId: 'bard' }, level: 2, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'song_of_rest', name: 'Song of Rest', description: 'You can use soothing music or oration to help revitalize your wounded allies during a short rest.', source: { kind: 'class', refId: 'bard' }, level: 2, effects: [], actions: [], choices: [], passive: true } }] },
-    { level: 3, hpDie: 8, choices: [{ id: 'bard_college_choice', prompt: 'Choose a Bard College.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }], grants: [{ kind: 'feature', value: { id: 'bard_college', name: 'Bard College', description: 'You delve into the advanced techniques of a bard college of your choice.', source: { kind: 'class', refId: 'bard' }, level: 3, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'expertise_bard', name: 'Expertise', description: 'Choose two of your skill proficiencies to double your proficiency bonus.', source: { kind: 'class', refId: 'bard' }, level: 3, effects: [], actions: [], choices: [], passive: true } }] },
-    { level: 4, hpDie: 8, choices: [asiChoice('bard_asi_4')], grants: [] },
+    { level: 2, hpDie: 8, choices: [spellChoice('bard_spells_2', 1, 'Choose 1 more bard spell known.')], grants: [{ kind: 'feature', value: { id: 'jack_of_all_trades', name: 'Jack of All Trades', description: 'You can add half your proficiency bonus to any ability check that doesn\'t use your proficiency bonus.', source: { kind: 'class', refId: 'bard' }, level: 2, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'song_of_rest', name: 'Song of Rest', description: 'You can use soothing music or oration to help revitalize your wounded allies during a short rest.', source: { kind: 'class', refId: 'bard' }, level: 2, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 3, hpDie: 8, choices: [{ id: 'bard_college_choice', prompt: 'Choose a Bard College.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }, spellChoice('bard_spells_3', 1, 'Choose 1 more bard spell known.')], grants: [{ kind: 'feature', value: { id: 'bard_college', name: 'Bard College', description: 'You delve into the advanced techniques of a bard college of your choice.', source: { kind: 'class', refId: 'bard' }, level: 3, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'expertise_bard', name: 'Expertise', description: 'Choose two of your skill proficiencies to double your proficiency bonus.', source: { kind: 'class', refId: 'bard' }, level: 3, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 4, hpDie: 8, choices: [asiChoice('bard_asi_4'), spellChoice('bard_cantrips_4', 1, 'Choose 1 more bard cantrip.'), spellChoice('bard_spells_4', 1, 'Choose 1 more bard spell known.')], grants: [] },
     {
-      level: 5, hpDie: 8, choices: [], grants: [
+      level: 5, hpDie: 8, choices: [spellChoice('bard_spells_5', 1, 'Choose 1 more bard spell known.')], grants: [
         { kind: 'feature', value: { id: 'font_of_inspiration', name: 'Font of Inspiration', description: 'You regain all of your expended uses of Bardic Inspiration when you finish a short or long rest. Your Bardic Inspiration die also improves to a d8.', source: { kind: 'class', refId: 'bard' }, level: 5, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
-    { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'countercharm', name: 'Countercharm', description: 'You gain the ability to use musical notes or words of power to disrupt mind-influencing effects.', source: { kind: 'class', refId: 'bard' }, level: 6, effects: [], actions: [], choices: [], passive: false } }] },
-    ...stubEntries([7], 8),
-    { level: 8, hpDie: 8, choices: [asiChoice('bard_asi_8')], grants: [] },
+    { level: 6, hpDie: 8, choices: [spellChoice('bard_spells_6', 1, 'Choose 1 more bard spell known.')], grants: [{ kind: 'feature', value: { id: 'countercharm', name: 'Countercharm', description: 'You gain the ability to use musical notes or words of power to disrupt mind-influencing effects.', source: { kind: 'class', refId: 'bard' }, level: 6, effects: [], actions: [], choices: [], passive: false } }] },
+    { level: 7, hpDie: 8, choices: [spellChoice('bard_spells_7', 1, 'Choose 1 more bard spell known.')], grants: [] },
+    { level: 8, hpDie: 8, choices: [asiChoice('bard_asi_8'), spellChoice('bard_spells_8', 1, 'Choose 1 more bard spell known.')], grants: [] },
     {
-      level: 9, hpDie: 8, choices: [], grants: [
+      level: 9, hpDie: 8, choices: [spellChoice('bard_spells_9', 1, 'Choose 1 more bard spell known.')], grants: [
         { kind: 'feature', value: { id: 'song_of_rest_d8', name: 'Song of Rest (d8)', description: 'The extra healing your Song of Rest provides during a short rest increases to a d8.', source: { kind: 'class', refId: 'bard' }, level: 9, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     {
-      level: 10, hpDie: 8, choices: [], grants: [
+      level: 10, hpDie: 8,
+      choices: [
+        spellChoice('bard_cantrips_10', 1, 'Choose 1 more bard cantrip.'),
+        spellChoice('bard_spells_10', 2, 'Choose 2 more spells known — including your Magical Secrets picks, this app draws them from your own bard spell list rather than any class’s (a disclosed simplification).'),
+      ],
+      grants: [
         { kind: 'feature', value: { id: 'bardic_inspiration_d10', name: 'Bardic Inspiration (d10)', description: 'Your Bardic Inspiration die improves to a d10.', source: { kind: 'class', refId: 'bard' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
         { kind: 'feature', value: { id: 'expertise_bard_10', name: 'Expertise', description: 'Choose two more skill proficiencies to double your proficiency bonus.', source: { kind: 'class', refId: 'bard' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
-        { kind: 'feature', value: { id: 'magical_secrets_10', name: 'Magical Secrets', description: "You learn two spells of your choice from any class's spell list, each of a level you can cast. They count as bard spells for you. No engine picker for a cross-class 'any spell list' choice yet — resolve manually and add them via the sheet.", source: { kind: 'class', refId: 'bard' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'magical_secrets_10', name: 'Magical Secrets', description: "Two of the spells known you choose this level can be of any level you can cast, learned as if they were on the bard spell list — normally any class's list, simplified here to draw from the spell-choice picker at this level.", source: { kind: 'class', refId: 'bard' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
-    ...stubEntries([11], 8),
+    { level: 11, hpDie: 8, choices: [spellChoice('bard_spells_11', 1, 'Choose 1 more bard spell known.')], grants: [] },
     { level: 12, hpDie: 8, choices: [asiChoice('bard_asi_12')], grants: [] },
     {
-      level: 13, hpDie: 8, choices: [], grants: [
+      level: 13, hpDie: 8, choices: [spellChoice('bard_spells_13', 1, 'Choose 1 more bard spell known.')], grants: [
         { kind: 'feature', value: { id: 'song_of_rest_d10', name: 'Song of Rest (d10)', description: 'The extra healing your Song of Rest provides during a short rest increases to a d10.', source: { kind: 'class', refId: 'bard' }, level: 13, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     {
-      level: 14, hpDie: 8, choices: [], grants: [
-        { kind: 'feature', value: { id: 'magical_secrets_14', name: 'Magical Secrets', description: "You learn two more spells of your choice from any class's spell list, as at 10th level.", source: { kind: 'class', refId: 'bard' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
+      level: 14, hpDie: 8,
+      choices: [spellChoice('bard_spells_14', 2, 'Choose 2 more spells known, including your Magical Secrets picks (see level 10’s note).')],
+      grants: [
+        { kind: 'feature', value: { id: 'magical_secrets_14', name: 'Magical Secrets', description: 'You learn two more spells as at 10th level.', source: { kind: 'class', refId: 'bard' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     {
-      level: 15, hpDie: 8, choices: [], grants: [
+      level: 15, hpDie: 8, choices: [spellChoice('bard_spells_15', 1, 'Choose 1 more bard spell known.')], grants: [
         { kind: 'feature', value: { id: 'bardic_inspiration_d12', name: 'Bardic Inspiration (d12)', description: 'Your Bardic Inspiration die improves to a d12.', source: { kind: 'class', refId: 'bard' }, level: 15, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     { level: 16, hpDie: 8, choices: [asiChoice('bard_asi_16')], grants: [] },
     {
-      level: 17, hpDie: 8, choices: [], grants: [
+      level: 17, hpDie: 8, choices: [spellChoice('bard_spells_17', 1, 'Choose 1 more bard spell known.')], grants: [
         { kind: 'feature', value: { id: 'song_of_rest_d12', name: 'Song of Rest (d12)', description: 'The extra healing your Song of Rest provides during a short rest increases to a d12.', source: { kind: 'class', refId: 'bard' }, level: 17, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     {
-      level: 18, hpDie: 8, choices: [], grants: [
-        { kind: 'feature', value: { id: 'magical_secrets_18', name: 'Magical Secrets', description: "You learn two more spells of your choice from any class's spell list, as at 10th level.", source: { kind: 'class', refId: 'bard' }, level: 18, effects: [], actions: [], choices: [], passive: true } },
+      level: 18, hpDie: 8,
+      choices: [spellChoice('bard_spells_18', 2, 'Choose 2 more spells known, including your Magical Secrets picks (see level 10’s note).')],
+      grants: [
+        { kind: 'feature', value: { id: 'magical_secrets_18', name: 'Magical Secrets', description: 'You learn two more spells as at 10th level.', source: { kind: 'class', refId: 'bard' }, level: 18, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     { level: 19, hpDie: 8, choices: [asiChoice('bard_asi_19')], grants: [] },
@@ -865,6 +893,8 @@ export const sorcererProgression: ClassProgression = {
           { id: 'explorer',   label: "Explorer's Pack",   items: ['explorers_pack'] },
         ]),
         { id: 'sorcerous_origin_choice', prompt: 'Choose a Sorcerous Origin.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false },
+        spellChoice('sorcerer_cantrips_1', 4, 'Choose 4 sorcerer cantrips.'),
+        spellChoice('sorcerer_spells_1', 2, 'Choose 2 sorcerer spells known.'),
       ],
       grants: [
         { kind: 'feature', value: { id: 'sorcerer_spellcasting', name: 'Spellcasting', description: 'An event in your past, or in the life of a parent or ancestor, left an indelible mark on you.', source: { kind: 'class', refId: 'sorcerer' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
@@ -873,20 +903,46 @@ export const sorcererProgression: ClassProgression = {
         { kind: 'spell_slots', value: { level: 1 } },
       ],
     },
-    { level: 2, hpDie: 6, choices: [], grants: [{ kind: 'feature', value: { id: 'font_of_magic', name: 'Font of Magic', description: 'You tap into a deep wellspring of magic within yourself. You have sorcery points.', source: { kind: 'class', refId: 'sorcerer' }, level: 2, effects: [], actions: [], choices: [], passive: true } }, { kind: 'resource', value: { resourceId: 'sorcery_points', name: 'Sorcery Points', maximum: 2, recharge: 'long_rest' } }] },
-    { level: 3, hpDie: 6, choices: [], grants: [{ kind: 'feature', value: { id: 'metamagic', name: 'Metamagic', description: 'You gain the ability to twist your spells to suit your needs.', source: { kind: 'class', refId: 'sorcerer' }, level: 3, effects: [], actions: [], choices: [], passive: true } }, { kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 3 } }] },
-    { level: 4, hpDie: 6, choices: [asiChoice('sorcerer_asi_4')], grants: [{ kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 4 } }] },
-    ...Array.from({ length: 5 }, (_, i) => ({ level: 5 + i, hpDie: 6 as const, choices: (i === 3 ? [asiChoice('sorcerer_asi_8')] : []) as ChoiceDefinition[], grants: [{ kind: 'resource_upgrade' as const, value: { resourceId: 'sorcery_points', newMaximum: 5 + i } }] })),
+    { level: 2, hpDie: 6, choices: [spellChoice('sorcerer_spells_2', 1, 'Choose 1 more sorcerer spell known.')], grants: [{ kind: 'feature', value: { id: 'font_of_magic', name: 'Font of Magic', description: 'You tap into a deep wellspring of magic within yourself. You have sorcery points.', source: { kind: 'class', refId: 'sorcerer' }, level: 2, effects: [], actions: [], choices: [], passive: true } }, { kind: 'resource', value: { resourceId: 'sorcery_points', name: 'Sorcery Points', maximum: 2, recharge: 'long_rest' } }] },
+    { level: 3, hpDie: 6, choices: [spellChoice('sorcerer_spells_3', 1, 'Choose 1 more sorcerer spell known.')], grants: [{ kind: 'feature', value: { id: 'metamagic', name: 'Metamagic', description: 'You gain the ability to twist your spells to suit your needs.', source: { kind: 'class', refId: 'sorcerer' }, level: 3, effects: [], actions: [], choices: [], passive: true } }, { kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 3 } }] },
+    { level: 4, hpDie: 6, choices: [asiChoice('sorcerer_asi_4'), spellChoice('sorcerer_cantrips_4', 1, 'Choose 1 more sorcerer cantrip.'), spellChoice('sorcerer_spells_4', 1, 'Choose 1 more sorcerer spell known.')], grants: [{ kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 4 } }] },
+    ...Array.from({ length: 5 }, (_, i) => ({
+      level: 5 + i, hpDie: 6 as const,
+      choices: [
+        ...(i === 3 ? [asiChoice('sorcerer_asi_8')] : []),
+        spellChoice(`sorcerer_spells_${5 + i}`, 1, 'Choose 1 more sorcerer spell known.'),
+      ] as ChoiceDefinition[],
+      grants: [{ kind: 'resource_upgrade' as const, value: { resourceId: 'sorcery_points', newMaximum: 5 + i } }],
+    })),
     {
-      level: 10, hpDie: 6, choices: [], grants: [
+      level: 10, hpDie: 6,
+      choices: [
+        spellChoice('sorcerer_cantrips_10', 1, 'Choose 1 more sorcerer cantrip.'),
+        spellChoice('sorcerer_spells_10', 1, 'Choose 1 more sorcerer spell known.'),
+      ],
+      grants: [
         { kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 10 } },
         { kind: 'feature', value: { id: 'metamagic_10', name: 'Metamagic (3rd option)', description: 'You learn a third Metamagic option of your choice. No pool of real Metamagic options is wired up yet (Careful Spell, Twinned Spell, etc.) — this base Metamagic feature stays descriptive; picking specific options is left to the player and DM for now.', source: { kind: 'class', refId: 'sorcerer' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
-    ...Array.from({ length: 2 }, (_, i) => ({ level: 11 + i, hpDie: 6 as const, choices: (i === 1 ? [asiChoice('sorcerer_asi_12')] : []) as ChoiceDefinition[], grants: [{ kind: 'resource_upgrade' as const, value: { resourceId: 'sorcery_points', newMaximum: 11 + i } }] })),
-    ...Array.from({ length: 4 }, (_, i) => ({ level: 13 + i, hpDie: 6 as const, choices: (i === 3 ? [asiChoice('sorcerer_asi_16')] : []) as ChoiceDefinition[], grants: [{ kind: 'resource_upgrade' as const, value: { resourceId: 'sorcery_points', newMaximum: 13 + i } }] })),
     {
-      level: 17, hpDie: 6, choices: [], grants: [
+      level: 11, hpDie: 6, choices: [spellChoice('sorcerer_spells_11', 1, 'Choose 1 more sorcerer spell known.')],
+      grants: [{ kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 11 } }],
+    },
+    { level: 12, hpDie: 6, choices: [asiChoice('sorcerer_asi_12')], grants: [{ kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 12 } }] },
+    {
+      level: 13, hpDie: 6, choices: [spellChoice('sorcerer_spells_13', 1, 'Choose 1 more sorcerer spell known.')],
+      grants: [{ kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 13 } }],
+    },
+    { level: 14, hpDie: 6, choices: [], grants: [{ kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 14 } }] },
+    {
+      level: 15, hpDie: 6, choices: [spellChoice('sorcerer_spells_15', 1, 'Choose 1 more sorcerer spell known.')],
+      grants: [{ kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 15 } }],
+    },
+    { level: 16, hpDie: 6, choices: [asiChoice('sorcerer_asi_16')], grants: [{ kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 16 } }] },
+    {
+      level: 17, hpDie: 6, choices: [spellChoice('sorcerer_spells_17', 1, 'Choose 1 more sorcerer spell known.')],
+      grants: [
         { kind: 'resource_upgrade', value: { resourceId: 'sorcery_points', newMaximum: 17 } },
         { kind: 'feature', value: { id: 'metamagic_17', name: 'Metamagic (4th option)', description: 'You learn a fourth Metamagic option of your choice.', source: { kind: 'class', refId: 'sorcerer' }, level: 17, effects: [], actions: [], choices: [], passive: true } },
       ],
@@ -940,6 +996,8 @@ export const warlockProgression: ClassProgression = {
           { id: 'dungeoneer', label: "Dungeoneer's Pack", items: ['dungeoneers_pack'] },
         ]),
         { id: 'otherworldly_patron_choice', prompt: 'Choose an Otherworldly Patron.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false },
+        spellChoice('warlock_cantrips_1', 2, 'Choose 2 warlock cantrips.'),
+        spellChoice('warlock_spells_1', 2, 'Choose 2 warlock spells known.'),
       ],
       grants: [
         { kind: 'feature', value: { id: 'otherworldly_patron', name: 'Otherworldly Patron', description: 'You have struck a bargain with an otherworldly being of your choice.', source: { kind: 'class', refId: 'warlock' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
@@ -948,12 +1006,15 @@ export const warlockProgression: ClassProgression = {
         { kind: 'spell_slots', value: { level: 1 } },
       ],
     },
-    { level: 2, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'eldritch_invocations', name: 'Eldritch Invocations', description: 'In your study of occult lore, you have unearthed eldritch invocations, fragments of forbidden knowledge.', source: { kind: 'class', refId: 'warlock' }, level: 2, effects: [], actions: [], choices: [], passive: true } }] },
-    { level: 3, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'pact_boon', name: 'Pact Boon', description: 'Your otherworldly patron bestows a gift upon you for your loyal service.', source: { kind: 'class', refId: 'warlock' }, level: 3, effects: [], actions: [], choices: [], passive: true } }] },
-    { level: 4, hpDie: 8, choices: [asiChoice('warlock_asi_4')], grants: [] },
-    ...stubEntries([5,6,7], 8),
-    { level: 8, hpDie: 8, choices: [asiChoice('warlock_asi_8')], grants: [] },
-    ...stubEntries([9,10], 8),
+    { level: 2, hpDie: 8, choices: [spellChoice('warlock_spells_2', 1, 'Choose 1 more warlock spell known.')], grants: [{ kind: 'feature', value: { id: 'eldritch_invocations', name: 'Eldritch Invocations', description: 'In your study of occult lore, you have unearthed eldritch invocations, fragments of forbidden knowledge.', source: { kind: 'class', refId: 'warlock' }, level: 2, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 3, hpDie: 8, choices: [spellChoice('warlock_spells_3', 1, 'Choose 1 more warlock spell known.')], grants: [{ kind: 'feature', value: { id: 'pact_boon', name: 'Pact Boon', description: 'Your otherworldly patron bestows a gift upon you for your loyal service.', source: { kind: 'class', refId: 'warlock' }, level: 3, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 4, hpDie: 8, choices: [asiChoice('warlock_asi_4'), spellChoice('warlock_cantrips_4', 1, 'Choose 1 more warlock cantrip.'), spellChoice('warlock_spells_4', 1, 'Choose 1 more warlock spell known.')], grants: [] },
+    { level: 5, hpDie: 8, choices: [spellChoice('warlock_spells_5', 1, 'Choose 1 more warlock spell known.')], grants: [] },
+    { level: 6, hpDie: 8, choices: [spellChoice('warlock_spells_6', 1, 'Choose 1 more warlock spell known.')], grants: [] },
+    { level: 7, hpDie: 8, choices: [spellChoice('warlock_spells_7', 1, 'Choose 1 more warlock spell known.')], grants: [] },
+    { level: 8, hpDie: 8, choices: [asiChoice('warlock_asi_8'), spellChoice('warlock_spells_8', 1, 'Choose 1 more warlock spell known.')], grants: [] },
+    { level: 9, hpDie: 8, choices: [spellChoice('warlock_spells_9', 1, 'Choose 1 more warlock spell known.')], grants: [] },
+    { level: 10, hpDie: 8, choices: [spellChoice('warlock_cantrips_10', 1, 'Choose 1 more warlock cantrip.')], grants: [] },
     {
       level: 11, hpDie: 8, choices: [], grants: [
         { kind: 'feature', value: { id: 'mystic_arcanum_6', name: 'Mystic Arcanum (6th level)', description: 'You learn one 6th-level spell of your choice from the warlock spell list. You can cast it once without expending a spell slot, regaining the ability to do so after a long rest. No engine picker for this one-off choose-and-learn — resolve manually and add the spell via the sheet.', source: { kind: 'class', refId: 'warlock' }, level: 11, effects: [], actions: [], choices: [], passive: true } },
@@ -978,7 +1039,7 @@ export const warlockProgression: ClassProgression = {
       ],
     },
     ...stubEntries([18], 8),
-    { level: 19, hpDie: 8, choices: [asiChoice('warlock_asi_19')], grants: [] },
+    { level: 19, hpDie: 8, choices: [asiChoice('warlock_asi_19'), spellChoice('warlock_spells_19', 1, 'Choose 1 more warlock spell known.')], grants: [] },
     { level: 20, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'eldritch_master', name: 'Eldritch Master', description: 'You can entreat your patron to regain all your expended spell slots. You can do so again after you finish a long rest.', source: { kind: 'class', refId: 'warlock' }, level: 20, effects: [], actions: [], choices: [], passive: false } }] },
   ],
 };

@@ -158,7 +158,18 @@ export type AncestryOption = {
   id:      string;
   name:    string;
   blurb:   string;
-  feature: Feature;
+  /** Applied via applyGrant when this option is chosen. Optional so an
+   * option whose only outcome is a queued choice (see `pendingChoice`
+   * below) doesn't need a no-op placeholder Feature. */
+  feature?: Feature;
+  /**
+   * Queued (not auto-resolved) when this specific option is chosen — e.g.
+   * Half-Elf Versatility's "Skill Versatility" option grants 2 skills of
+   * the player's choice, which can't be expressed as a single fixed
+   * Feature the way every other Versatility option can. Same RACE_CHOICE_
+   * PREFIX/queueChoice mechanism as Race/Subrace.pendingChoices.
+   */
+  pendingChoice?: ChoiceDefinition;
 };
 
 export type Race = {

@@ -1416,6 +1416,69 @@ export const raceHalfElf: Race = {
     prompt: 'Two other ability scores of your choice each increase by 1.',
     mode: { kind: 'two_distinct_plus_one', exclude: ['cha'] },
   },
+  // Half-Elf Versatility was previously hardcoded as "2 skills of your
+  // choice" only — RAW is actually a choice among 7 different traits,
+  // reflecting which elf lineage (or none) the half-elf favors. Reuses the
+  // ancestryChoice mechanism (a "pick 1 of N, get a Feature or queued
+  // choice" shape, not just for literal ancestries — see Eladrin's season).
+  ancestryChoice: {
+    prompt: 'Choose your Half-Elf Versatility trait.',
+    options: [
+      {
+        id: 'skill_versatility', name: 'Skill Versatility', blurb: 'Proficiency in two skills of your choice.',
+        pendingChoice: {
+          id: `${RACE_CHOICE_PREFIX}half_elf_skills`,
+          prompt: 'Choose two skills to gain proficiency in.',
+          kind: 'skill', count: 2, pool: ALL_SKILL_OPTIONS,
+          grants: [], required: true, resolved: false,
+        },
+      },
+      { id: 'elf_weapon_training_heritage', name: 'Elf Weapon Training (High/Wood Elf Heritage)', blurb: 'Proficiency with longsword, shortsword, shortbow, longbow.', feature: elfWeaponTraining('half_elf') },
+      {
+        id: 'cantrip_heritage', name: 'Cantrip (High Elf Heritage)', blurb: 'One cantrip of your choice from the wizard spell list.',
+        feature: {
+          id: 'half_elf_cantrip_heritage', name: 'Cantrip',
+          description: 'You know one cantrip of your choice from the wizard spell list. Intelligence is your spellcasting ability for it.',
+          source: { kind: 'race', refId: 'half_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      },
+      {
+        id: 'fleet_of_foot_heritage', name: 'Fleet of Foot (Wood Elf Heritage)', blurb: 'Base walking speed increases to 35 feet.',
+        feature: {
+          id: 'half_elf_fleet_of_foot', name: 'Fleet of Foot',
+          description: 'Your base walking speed increases to 35 feet.',
+          source: { kind: 'race', refId: 'half_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'speed', operation: 'set', value: 35, condition: null }],
+        },
+      },
+      {
+        id: 'mask_of_the_wild_heritage', name: 'Mask of the Wild (Wood Elf Heritage)', blurb: 'Hide even when only lightly obscured by natural phenomena.',
+        feature: {
+          id: 'half_elf_mask_of_the_wild', name: 'Mask of the Wild',
+          description: 'You can attempt to hide even when you are only lightly obscured by foliage, heavy rain, falling snow, mist, and other natural phenomena.',
+          source: { kind: 'race', refId: 'half_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      },
+      {
+        id: 'drow_magic_heritage', name: 'Drow Magic (Dark Elf Heritage)', blurb: 'Know Dancing Lights; 3rd/5th level bonus spells are reference-only.',
+        feature: {
+          id: 'half_elf_drow_magic', name: 'Drow Magic',
+          description: 'You know the Dancing Lights cantrip. Charisma is your spellcasting ability for it. At 3rd level you can cast Faerie Fire once, and at 5th level Darkness once, each recharging on a long rest — this app doesn\'t yet support level-gated racial features, so only the cantrip is granted for real.',
+          source: { kind: 'race', refId: 'half_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['dancing_lights'], spellcastingAbility: 'cha' }],
+        },
+      },
+      {
+        id: 'swim_speed_heritage', name: 'Swim Speed (Aquatic Elf Heritage)', blurb: 'Real 30ft swimming speed.',
+        feature: {
+          id: 'half_elf_swim_speed', name: 'Swim Speed',
+          description: 'You have a swimming speed of 30 feet.',
+          source: { kind: 'race', refId: 'half_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'swim', movementRange: 30 }],
+        },
+      },
+    ],
+  },
   features: [
     {
       id: 'half_elf_asi',
@@ -1441,12 +1504,78 @@ export const raceHalfElf: Race = {
       source: { kind: 'race', refId: 'half_elf' },
       level: null, effects: [], actions: [], choices: [], passive: true,
     },
+  ],
+  // Eberron: Rising from the Last War — dragonmarks. Both replace the base
+  // ASI AND Half-Elf Versatility (the empty ancestryChoice below suppresses
+  // the base race's Versatility picker, since these have fixed traits
+  // instead — see Subrace.ancestryChoice's override semantics).
+  subracesOptional: true,
+  subraces: [
     {
-      id: 'half_elf_skill_versatility',
-      name: 'Skill Versatility',
-      description: 'You gain proficiency in two skills of your choice.',
-      source: { kind: 'race', refId: 'half_elf' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      id: 'mark_of_detection', name: 'Mark of Detection', parentId: 'half_elf', srd: false,
+      replacesBaseFeatureIds: ['half_elf_asi'],
+      ancestryChoice: { prompt: '', options: [] },
+      features: [
+        {
+          id: 'mark_of_detection_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 2, and one other ability score of your choice increases by 1. (The +1-to-one-other-ability choice has no mechanism yet for this exact "+2 fixed, +1 player choice" shape — only the fixed WIS+2 is applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_detection' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'wis', operation: 'add', value: 2, condition: null }],
+        },
+        {
+          id: 'deductive_intuition', name: 'Deductive Intuition',
+          description: 'Whenever you roll an Intelligence (Investigation) or Wisdom (Insight) check, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_detection' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'magical_detection', name: 'Magical Detection',
+          description: 'You can cast Detect Magic and Detect Poison and Disease with this trait, without material components. At 3rd level you can also cast See Invisibility. Once you cast either spell with this trait, you can\'t cast it again until you finish a long rest. Intelligence is your spellcasting ability for these spells. (Neither spell is a cantrip — this app has no mechanism to grant a limited-use LEVELED spell without a slot, so none of this is applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_detection' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'mark_of_detection_spells', name: 'Spells of the Mark',
+          description: 'If you have the Spellcasting or Pact Magic class feature, Detect Magic, Detect Poison and Disease, Detect Thoughts, Find Traps, Clairvoyance, Nondetection, Arcane Eye, Divination, and Legend Lore are added to your class\'s spell list. (No mechanism to add spells to a class spell list — not applied mechanically, tracked for reference.)',
+          source: { kind: 'race', refId: 'mark_of_detection' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'mark_of_storm', name: 'Mark of Storm', parentId: 'half_elf', srd: false,
+      replacesBaseFeatureIds: ['half_elf_asi'],
+      ancestryChoice: { prompt: '', options: [] },
+      features: [
+        {
+          id: 'mark_of_storm_asi', name: 'Ability Score Increase',
+          description: 'Your Charisma score increases by 2, and your Dexterity score increases by 1.',
+          source: { kind: 'race', refId: 'mark_of_storm' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'cha', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'windwrights_intuition', name: "Windwright's Intuition",
+          description: 'Whenever you roll a Dexterity (Acrobatics) check or an ability check with navigator\'s tools, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_storm' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'storms_boon', name: "Storm's Boon",
+          description: 'You have resistance to lightning damage.',
+          source: { kind: 'race', refId: 'mark_of_storm' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_resistance', target: 'lightning', operation: 'resistance', value: null, condition: null }],
+        },
+        {
+          id: 'headwinds', name: 'Headwinds',
+          description: 'You know the Gust cantrip. Charisma is your spellcasting ability for it. At 3rd level you can also cast Gust of Wind once, recharging on a long rest — this app doesn\'t yet support level-gated racial features, so only the cantrip is granted for real.',
+          source: { kind: 'race', refId: 'mark_of_storm' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['gust'], spellcastingAbility: 'cha' }],
+        },
+        {
+          id: 'mark_of_storm_spells', name: 'Spells of the Mark',
+          description: 'If you have the Spellcasting or Pact Magic class feature, Feather Fall, Fog Cloud, Gust of Wind, Levitate, Sleet Storm, Wind Wall, Conjure Minor Elementals, Control Water, and Conjure Elemental are added to your class\'s spell list. (No mechanism to add spells to a class spell list — not applied mechanically, tracked for reference.)',
+          source: { kind: 'race', refId: 'mark_of_storm' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
     },
   ],
 };

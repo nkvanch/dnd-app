@@ -42,8 +42,11 @@ function applyRaceSelection(
   // race-detail.tsx's `ancestryDef = chosenSubraceForUi?.ancestryChoice ?? race?.ancestryChoice`.
   const ancestryDef = subrace?.ancestryChoice ?? race.ancestryChoice;
   const chosenAncestry = ancestryOptionId ? ancestryDef?.options.find(o => o.id === ancestryOptionId) ?? null : null;
-  if (chosenAncestry) {
+  if (chosenAncestry?.feature) {
     e = applyGrant(e, { kind: 'feature', value: { ...chosenAncestry.feature, isActive: true } }, chosenAncestry.feature.level ?? 0);
+  }
+  if (chosenAncestry?.pendingChoice) {
+    e = queueChoice(e, chosenAncestry.pendingChoice, 0);
   }
   const flexAsi = subrace?.flexibleAsi ?? race.flexibleAsi;
   if (flexAsi && flexPicks.length > 0) {
@@ -66,7 +69,7 @@ describe('Dragonborn — Draconic Ancestry', () => {
     expect(Object.keys(byId).sort()).toEqual(
       ['black', 'blue', 'brass', 'bronze', 'copper', 'gold', 'green', 'red', 'silver', 'white'].sort(),
     );
-    const damageTypeOf = (id: string) => (byId[id].feature.effects.find(e => e.type === 'grant_resistance')!.target);
+    const damageTypeOf = (id: string) => (byId[id].feature!.effects.find(e => e.type === 'grant_resistance')!.target);
     expect(damageTypeOf('black')).toBe('acid');
     expect(damageTypeOf('blue')).toBe('lightning');
     expect(damageTypeOf('gold')).toBe('fire');
@@ -160,6 +163,60 @@ describe('Fizban\'s Chromatic/Metallic/Gem Dragonborn', () => {
       { ability: 'wis', amount: 1 }, { ability: 'int', amount: 1 }, { ability: 'cha', amount: 1 },
     ], 'topaz');
     expect(e.features.some(f => f.id === 'psionic_mind')).toBe(true);
+  });
+});
+
+describe('Half-Elf Versatility — real ancestryChoice, was hardcoded to "2 skills" only before', () => {
+  it('offers all 7 PHB heritage options', () => {
+    expect(raceHalfElf.ancestryChoice!.options.map(o => o.id).sort()).toEqual([
+      'cantrip_heritage', 'drow_magic_heritage', 'elf_weapon_training_heritage',
+      'fleet_of_foot_heritage', 'mask_of_the_wild_heritage', 'skill_versatility', 'swim_speed_heritage',
+    ]);
+  });
+
+  it('Skill Versatility queues a real, resolvable 2-skill choice via pendingChoice (no Feature)', () => {
+    const skillOpt = raceHalfElf.ancestryChoice!.options.find(o => o.id === 'skill_versatility')!;
+    expect(skillOpt.feature).toBeUndefined();
+    expect(skillOpt.pendingChoice).toBeDefined();
+    const e = applyRaceSelection(raceHalfElf, null, [], 'skill_versatility');
+    const pending = e.choices.find(c => c.definition.id.startsWith('race_choice_'));
+    expect(pending!.definition.count).toBe(2);
+    const resolved = resolveChoice(e, pending!.id, ['insight', 'persuasion'], DEFAULT_RULES);
+    expect(resolved.skills.skills.insight.trained).toBe(true);
+    expect(resolved.skills.skills.persuasion.trained).toBe(true);
+  });
+
+  it('Swim Speed heritage grants a real 30ft swim speed', () => {
+    const e = applyRaceSelection(raceHalfElf, null, [], 'swim_speed_heritage');
+    expect(e.derived.movement).toEqual({ swim: 30 });
+  });
+
+  it('Drow Magic heritage grants a real Dancing Lights cantrip', () => {
+    const e = applyRaceSelection(raceHalfElf, null, [], 'drow_magic_heritage');
+    expect(e.spellcasting?.cantrips).toContain('dancing_lights');
+  });
+});
+
+describe('Half-Elf dragonmarks', () => {
+  it('Mark of Detection and Mark of Storm both suppress the base Versatility choice and replace the ASI', () => {
+    const mod = raceHalfElf.subraces!.find(s => s.id === 'mark_of_detection')!;
+    const e = applyRaceSelection(raceHalfElf, mod);
+    expect(e.choices.some(c => c.definition.id.startsWith('race_choice_'))).toBe(false);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects.find(ef => ef.target === 'cha')).toBeUndefined(); // base half_elf_asi's cha+2 gone
+    expect(effects).toContainEqual({ type: 'stat_modifier', target: 'wis', operation: 'add', value: 2, condition: null });
+  });
+
+  it('Mark of Storm grants real CHA+2/DEX+1, lightning resistance, and the Gust cantrip', () => {
+    const mos = raceHalfElf.subraces!.find(s => s.id === 'mark_of_storm')!;
+    const e = applyRaceSelection(raceHalfElf, mos);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'cha', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+    ]));
+    expect(resolveResistance('lightning', collectAllEffects(e))).toBe('resistance');
+    expect(e.spellcasting?.cantrips).toContain('gust');
   });
 });
 

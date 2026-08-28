@@ -218,10 +218,15 @@ export default function RaceDetailScreen() {
       }
     }
     // ...and the chosen ancestry option's feature (e.g. Dragonborn's chosen
-    // dragon color — breath weapon + resistance bundled in one Feature).
+    // dragon color — breath weapon + resistance bundled in one Feature) —
+    // and/or a queued choice (e.g. Half-Elf Versatility's "Skill
+    // Versatility" option, which can't be a single fixed Feature).
     const chosenAncestry = hasAncestry ? ancestryOptions.find(a => a.id === ancestryId) ?? null : null;
-    if (chosenAncestry) {
+    if (chosenAncestry?.feature) {
       updated = applyGrant(updated, { kind: 'feature', value: { ...chosenAncestry.feature, isActive: true } }, chosenAncestry.feature.level ?? 0);
+    }
+    if (chosenAncestry?.pendingChoice) {
+      updated = queueChoice(updated, chosenAncestry.pendingChoice, 0);
     }
     // ...and the flexible ability score choice, compiled into one generated
     // Feature (mirrors every other racial ASI's stat_modifier-effects shape).

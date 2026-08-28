@@ -115,16 +115,19 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number): Entit
 
     case "subclass_unlock": {
       // Queue a pending subclass choice so it surfaces in the Features tab's
-      // Pending Choices section. Without authored subclass content, the player
-      // resolves this with their DM. When subclass content is authored, this
-      // choice will be replaced with a proper pool of subclass options.
+      // Pending Choices section. Uses the same 'subclass' kind as every
+      // authored class choice, so it opens the real SubclassPicker (which
+      // already merges official + homebrew subclasses via
+      // subclassEntriesForClassMerged, and shows a graceful empty state if
+      // none exist yet) instead of falling through to the generic
+      // "ask your DM" placeholder.
       const choiceId = `subclass_unlock_${atLevel}`;
       const alreadyQueued = entity.choices.some(c => c.id === choiceId);
       if (alreadyQueued) return entity;
       const subclassChoice: ChoiceDefinition = {
         id:       choiceId,
         prompt:   `Choose your ${entity.identity.classId} subclass`,
-        kind:     'custom',
+        kind:     'subclass',
         count:    1,
         pool:     [],
         grants:   [],

@@ -1,7 +1,7 @@
 // app/(tabs)/homebrew.tsx
 // Homebrew tab — Create and Library sections.
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, Alert, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
@@ -60,6 +60,8 @@ function LibraryPanel() {
   const [exportTarget, setExportTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<ContentCacheType | 'all'>('all');
 
   async function handleExportFormat(format: ExportFormat) {
     if (!exportTarget) return;
@@ -110,10 +112,62 @@ function LibraryPanel() {
     );
   }
 
+  const CATEGORIES: { id: ContentCacheType | 'all'; label: string }[] = [
+    { id: 'all',        label: 'All' },
+    { id: 'race',       label: 'Races' },
+    { id: 'subrace',    label: 'Subraces' },
+    { id: 'class',      label: 'Classes' },
+    { id: 'subclass',   label: 'Subclasses' },
+    { id: 'background', label: 'Backgrounds' },
+    { id: 'item',       label: 'Items' },
+    { id: 'spell',      label: 'Spells' },
+    { id: 'feature',    label: 'Features' },
+    { id: 'feat',       label: 'Feats' },
+    { id: 'monster',    label: 'Monsters' },
+  ];
+
+  const filtered = all.filter(({ type, item }) => {
+    if (categoryFilter !== 'all' && type !== categoryFilter) return false;
+    if (search.trim() && !item.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    return true;
+  });
+
   return (
     <View style={styles.panel}>
       <Text style={styles.panelTitle}>📚 Library ({all.length})</Text>
-      {all.map(({ type, item, ...rest }) => {
+
+      <TextInput
+        style={styles.search}
+        placeholder="Search your homebrew"
+        placeholderTextColor={Colors.textDim}
+        value={search}
+        onChangeText={setSearch}
+      />
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
+        {CATEGORIES.map(cat => {
+          const count = cat.id === 'all' ? all.length : all.filter(a => a.type === cat.id).length;
+          if (cat.id !== 'all' && count === 0) return null;
+          const active = categoryFilter === cat.id;
+          return (
+            <Pressable
+              key={cat.id}
+              style={[styles.categoryChip, active && styles.categoryChipActive]}
+              onPress={() => setCategoryFilter(cat.id)}
+            >
+              <Text style={[styles.categoryChipTxt, active && styles.categoryChipTxtActive]}>
+                {cat.label} ({count})
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {filtered.length === 0 && (
+        <Text style={styles.emptyTxt}>No homebrew matches your search or filter.</Text>
+      )}
+
+      {filtered.map(({ type, item, ...rest }) => {
         const editRoute = EDIT_ROUTES[type];
         const parentName = 'parentName' in rest ? rest.parentName : undefined;
         return (
@@ -228,6 +282,22 @@ const styles = StyleSheet.create({
     padding: Spacing.md, borderWidth: 1, borderColor: Colors.border,
   },
   createBtnTxt: { fontSize: FontSize.md, color: Colors.textPrimary },
+
+  search: {
+    backgroundColor: Colors.surfaceHigh, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    fontSize: FontSize.md, color: Colors.textPrimary,
+  },
+  categoryRow:        { flexGrow: 0 },
+  categoryRowContent: { gap: Spacing.xs, paddingVertical: 2 },
+  categoryChip: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  categoryChipActive:   { backgroundColor: Colors.gold + '22', borderColor: Colors.gold + '66' },
+  categoryChipTxt:      { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  categoryChipTxtActive:{ color: Colors.gold },
 
   libraryRow: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,

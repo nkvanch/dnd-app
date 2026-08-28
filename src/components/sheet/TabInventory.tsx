@@ -9,6 +9,7 @@ import {
   Modal, TextInput, Alert, SectionList,
 } from 'react-native';
 import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engine/types';
+import { applyStatModifiers, collectAllEffects } from '../../engine/pipeline';
 import { itemRepo } from '../../content/itemRepo';
 import { toItemIndexEntry } from '../../content/itemRepo.types';
 import type { ItemIndexEntry } from '../../content/itemRepo.types';
@@ -1010,7 +1011,10 @@ export function TabInventory({
   ];
 
   const large          = isLargeCreature(entity);
-  const carryCapacity  = entity.stats.str * (large ? 30 : 15);
+  // Effective STR (race/feat bonuses) — matches the engine's derived values,
+  // not the raw base score.
+  const effectiveStr  = applyStatModifiers(entity.stats, collectAllEffects(entity)).str;
+  const carryCapacity  = effectiveStr * (large ? 30 : 15);
   const totalWeight    = [...inventory.equipped, ...inventory.carried].reduce((sum, inst) => {
     const def = allItems.find(i => i.id === inst.itemId);
     return sum + (def?.weight ?? 0) * inst.quantity;

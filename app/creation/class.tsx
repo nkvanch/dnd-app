@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { globalContentDB } from '../../src/content/classes/library';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { subclassEntriesForClassMerged } from '../../src/content/subclasses/subclassBrowse';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const CASTER_TYPE: Record<string, string> = {
@@ -46,6 +47,7 @@ export default function ClassScreen() {
   const [search,   setSearch]   = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const homebrewClasses = useHomebrewStore(s => s.classes);
+  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
 
   const classes = globalContentDB.classes.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -76,9 +78,10 @@ export default function ClassScreen() {
           const isOpen    = expanded === item.id;
           const desc      = CLASS_DESCRIPTIONS[item.id];
           const casterType = CASTER_TYPE[item.id] ?? 'Martial';
+          const subclasses = subclassEntriesForClassMerged(item.id, homebrewSubclasses);
           return (
             <View style={styles.itemWrap}>
-              {/* Primary tap → navigate to detail. Chevron tap → expand description. */}
+              {/* Primary tap → navigate to detail. Chevron tap → expand description + subclasses. */}
               <Pressable
                 style={styles.row}
                 onPress={() => router.push(`/creation/class-detail?id=${item.id}`)}
@@ -99,6 +102,21 @@ export default function ClassScreen() {
               {isOpen && (
                 <View style={styles.dropdown}>
                   {desc && <Text style={styles.dropdownDesc}>{desc}</Text>}
+                  {subclasses.length > 0 && (
+                    <View style={styles.subclassList}>
+                      <Text style={styles.subclassListHeading}>SUBCLASSES</Text>
+                      {subclasses.map(sub => (
+                        <Pressable
+                          key={sub.id}
+                          style={styles.subclassChip}
+                          onPress={() => router.push(`/creation/subclass-detail?classId=${item.id}&subclassId=${sub.id}`)}
+                        >
+                          <Text style={styles.subclassChipTxt}>{sub.name}</Text>
+                          <Text style={styles.subclassChipArrow}>›</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -120,6 +138,8 @@ export default function ClassScreen() {
             ) : (
               filteredHomebrewClasses.map(item => {
                 const isOpen = expanded === item.id;
+                const subclasses = subclassEntriesForClassMerged(item.id, homebrewSubclasses);
+                const hasDropdown = !!item.description || subclasses.length > 0;
                 return (
                   <View key={item.id} style={styles.itemWrap}>
                     <Pressable
@@ -133,7 +153,7 @@ export default function ClassScreen() {
                       <View style={styles.homebrewTag}>
                         <Text style={styles.homebrewTagTxt}>Homebrew</Text>
                       </View>
-                      {item.description && (
+                      {hasDropdown && (
                         <Pressable
                           hitSlop={12}
                           onPress={e => { e.stopPropagation(); setExpanded(isOpen ? null : item.id); }}
@@ -143,9 +163,24 @@ export default function ClassScreen() {
                       )}
                       <Text style={styles.rowArrow}>›</Text>
                     </Pressable>
-                    {isOpen && item.description && (
+                    {isOpen && hasDropdown && (
                       <View style={styles.dropdown}>
-                        <Text style={styles.dropdownDesc}>{item.description}</Text>
+                        {item.description && <Text style={styles.dropdownDesc}>{item.description}</Text>}
+                        {subclasses.length > 0 && (
+                          <View style={styles.subclassList}>
+                            <Text style={styles.subclassListHeading}>SUBCLASSES</Text>
+                            {subclasses.map(sub => (
+                              <Pressable
+                                key={sub.id}
+                                style={styles.subclassChip}
+                                onPress={() => router.push(`/creation/subclass-detail?classId=${item.id}&subclassId=${sub.id}`)}
+                              >
+                                <Text style={styles.subclassChipTxt}>{sub.name}</Text>
+                                <Text style={styles.subclassChipArrow}>›</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        )}
                       </View>
                     )}
                   </View>
@@ -193,6 +228,18 @@ const styles = StyleSheet.create({
     padding: Spacing.md, marginBottom: Spacing.sm,
   },
   dropdownDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
+
+  subclassList: { marginTop: Spacing.sm },
+  subclassListHeading: {
+    fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim,
+    letterSpacing: 1.5, marginBottom: Spacing.xs,
+  },
+  subclassChip: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: Spacing.xs, borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  subclassChipTxt: { fontSize: FontSize.sm, color: Colors.textPrimary },
+  subclassChipArrow: { fontSize: FontSize.md, color: Colors.textDim },
 
   homebrewSection: {
     marginTop: Spacing.lg,

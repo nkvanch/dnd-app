@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { globalContentDB } from '../../src/content/classes/library';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
-import { subclassEntriesForClassMerged } from '../../src/content/subclasses/subclassBrowse';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const CASTER_TYPE: Record<string, string> = {
@@ -46,12 +45,7 @@ export default function ClassScreen() {
   const insets  = useSafeAreaInsets();
   const [search,   setSearch]   = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
-  // Separate from `expanded` — a dedicated dropdown field for a class's
-  // subclass list, distinct from the description expand-arrow above so
-  // subclasses aren't mixed into the same disclosure as flavor text.
-  const [subclassOpenFor, setSubclassOpenFor] = useState<string | null>(null);
   const homebrewClasses = useHomebrewStore(s => s.classes);
-  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
 
   const classes = globalContentDB.classes.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -82,11 +76,9 @@ export default function ClassScreen() {
           const isOpen    = expanded === item.id;
           const desc      = CLASS_DESCRIPTIONS[item.id];
           const casterType = CASTER_TYPE[item.id] ?? 'Martial';
-          const subclasses = subclassEntriesForClassMerged(item.id, homebrewSubclasses);
-          const subOpen    = subclassOpenFor === item.id;
           return (
             <View style={styles.itemWrap}>
-              {/* Primary tap → navigate to detail. Chevron tap → expand description only. */}
+              {/* Primary tap → navigate to detail. Chevron tap → expand description. */}
               <Pressable
                 style={styles.row}
                 onPress={() => router.push(`/creation/class-detail?id=${item.id}`)}
@@ -104,38 +96,10 @@ export default function ClassScreen() {
                 <Text style={styles.rowArrow}>›</Text>
               </Pressable>
 
-              {isOpen && desc && (
+              {isOpen && (
                 <View style={styles.dropdown}>
-                  <Text style={styles.dropdownDesc}>{desc}</Text>
+                  {desc && <Text style={styles.dropdownDesc}>{desc}</Text>}
                 </View>
-              )}
-
-              {/* Dedicated Subclass dropdown — separate control from the
-                  description disclosure above, opens only its own list. */}
-              {subclasses.length > 0 && (
-                <>
-                  <Pressable
-                    style={styles.subclassField}
-                    onPress={() => setSubclassOpenFor(subOpen ? null : item.id)}
-                  >
-                    <Text style={styles.subclassFieldLabel}>Subclass</Text>
-                    <Text style={styles.subclassFieldCaret}>{subOpen ? '▲' : '▼'}</Text>
-                  </Pressable>
-                  {subOpen && (
-                    <View style={styles.subclassList}>
-                      {subclasses.map(sub => (
-                        <Pressable
-                          key={sub.id}
-                          style={styles.subclassChip}
-                          onPress={() => router.push(`/creation/subclass-detail?classId=${item.id}&subclassId=${sub.id}`)}
-                        >
-                          <Text style={styles.subclassChipTxt}>{sub.name}</Text>
-                          <Text style={styles.subclassChipArrow}>›</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  )}
-                </>
               )}
             </View>
           );
@@ -156,8 +120,6 @@ export default function ClassScreen() {
             ) : (
               filteredHomebrewClasses.map(item => {
                 const isOpen = expanded === item.id;
-                const subclasses = subclassEntriesForClassMerged(item.id, homebrewSubclasses);
-                const subOpen    = subclassOpenFor === item.id;
                 return (
                   <View key={item.id} style={styles.itemWrap}>
                     <Pressable
@@ -171,7 +133,7 @@ export default function ClassScreen() {
                       <View style={styles.homebrewTag}>
                         <Text style={styles.homebrewTagTxt}>Homebrew</Text>
                       </View>
-                      {!!item.description && (
+                      {item.description && (
                         <Pressable
                           hitSlop={12}
                           onPress={e => { e.stopPropagation(); setExpanded(isOpen ? null : item.id); }}
@@ -181,37 +143,10 @@ export default function ClassScreen() {
                       )}
                       <Text style={styles.rowArrow}>›</Text>
                     </Pressable>
-
                     {isOpen && item.description && (
                       <View style={styles.dropdown}>
                         <Text style={styles.dropdownDesc}>{item.description}</Text>
                       </View>
-                    )}
-
-                    {subclasses.length > 0 && (
-                      <>
-                        <Pressable
-                          style={styles.subclassField}
-                          onPress={() => setSubclassOpenFor(subOpen ? null : item.id)}
-                        >
-                          <Text style={styles.subclassFieldLabel}>Subclass</Text>
-                          <Text style={styles.subclassFieldCaret}>{subOpen ? '▲' : '▼'}</Text>
-                        </Pressable>
-                        {subOpen && (
-                          <View style={styles.subclassList}>
-                            {subclasses.map(sub => (
-                              <Pressable
-                                key={sub.id}
-                                style={styles.subclassChip}
-                                onPress={() => router.push(`/creation/subclass-detail?classId=${item.id}&subclassId=${sub.id}`)}
-                              >
-                                <Text style={styles.subclassChipTxt}>{sub.name}</Text>
-                                <Text style={styles.subclassChipArrow}>›</Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        )}
-                      </>
                     )}
                   </View>
                 );
@@ -258,26 +193,6 @@ const styles = StyleSheet.create({
     padding: Spacing.md, marginBottom: Spacing.sm,
   },
   dropdownDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
-
-  // Dedicated Subclass dropdown field — its own row, separate from the
-  // description expand-arrow, so tapping it never mixes flavor text with
-  // the subclass list.
-  subclassField: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.border,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  subclassFieldLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary },
-  subclassFieldCaret: { fontSize: FontSize.sm, color: Colors.textDim },
-  subclassList: { marginBottom: Spacing.sm },
-  subclassChip: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: Spacing.xs, borderBottomWidth: 1, borderBottomColor: Colors.border,
-  },
-  subclassChipTxt: { fontSize: FontSize.sm, color: Colors.textPrimary },
-  subclassChipArrow: { fontSize: FontSize.md, color: Colors.textDim },
 
   homebrewSection: {
     marginTop: Spacing.lg,

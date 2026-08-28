@@ -293,6 +293,9 @@ export default function ClassDetailScreen() {
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [browseLayer, setBrowseLayer] = useState<'summary' | 'progression' | 'features'>('summary');
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
+  // Subclass list — collapsed by default, its own dropdown control (inside
+  // this class's own detail screen, not the outer class-selection list).
+  const [subclassesOpen, setSubclassesOpen] = useState(false);
 
   // Jump from a progression row to the Features tab, expanding that feature.
   function goToFeature(featureId: string) {
@@ -617,34 +620,39 @@ export default function ClassDetailScreen() {
         );
       })()}
 
-      {/* ── Subclasses ── */}
+      {/* ── Subclasses — a real dropdown, collapsed by default ── */}
       {(() => {
         const subs = subclassEntriesForClassMerged(cls.id, homebrewSubclasses);
         if (subs.length === 0) return null;
         return (
           <>
             <View style={styles.divider} />
-            <Text style={styles.subclassHeading}>SUBCLASSES</Text>
-            <View style={{ gap: Spacing.sm }}>
-              {subs.map(sub => (
-                <Pressable
-                  key={sub.id}
-                  style={styles.subclassCard}
-                  onPress={() => router.push(`/creation/subclass-detail?classId=${cls!.id}&subclassId=${sub.id}`)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.subclassNameRow}>
-                      <Text style={styles.subclassName}>{sub.name}</Text>
-                      <View style={styles.subclassLvlBadge}>
-                        <Text style={styles.subclassLvlTxt}>Lv {sub.unlockLevel}+</Text>
+            <Pressable style={styles.subclassDropdownHeader} onPress={() => setSubclassesOpen(o => !o)}>
+              <Text style={styles.subclassHeading}>SUBCLASSES ({subs.length})</Text>
+              <Text style={styles.subclassDropdownCaret}>{subclassesOpen ? '▲' : '▼'}</Text>
+            </Pressable>
+            {subclassesOpen && (
+              <View style={{ gap: Spacing.sm }}>
+                {subs.map(sub => (
+                  <Pressable
+                    key={sub.id}
+                    style={styles.subclassCard}
+                    onPress={() => router.push(`/creation/subclass-detail?classId=${cls!.id}&subclassId=${sub.id}`)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.subclassNameRow}>
+                        <Text style={styles.subclassName}>{sub.name}</Text>
+                        <View style={styles.subclassLvlBadge}>
+                          <Text style={styles.subclassLvlTxt}>Lv {sub.unlockLevel}+</Text>
+                        </View>
                       </View>
+                      <Text style={styles.subclassBlurb} numberOfLines={2}>{sub.blurb}</Text>
                     </View>
-                    <Text style={styles.subclassBlurb} numberOfLines={2}>{sub.blurb}</Text>
-                  </View>
-                  <Text style={styles.subclassArrow}>›</Text>
-                </Pressable>
-              ))}
-            </View>
+                    <Text style={styles.subclassArrow}>›</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </>
         );
       })()}
@@ -862,14 +870,19 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, flex: 1, textAlign: 'right' },
   selectBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center' },
   selectBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
-  subclassHeading: { fontSize: FontSize.xs, color: Colors.gold, letterSpacing: 2, fontWeight: FontWeight.bold, marginBottom: Spacing.sm },
+  subclassDropdownHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  subclassDropdownCaret: { fontSize: FontSize.sm, color: Colors.textDim },
+  subclassHeading: { fontSize: FontSize.xs, color: Colors.gold, letterSpacing: 2, fontWeight: FontWeight.bold },
   subclassCard: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border, padding: Spacing.md,
   },
-  subclassNameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  subclassName: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  subclassNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  subclassName: { flex: 1, flexShrink: 1, fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold },
   subclassLvlBadge: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.full,
     borderWidth: 1, borderColor: Colors.border, paddingHorizontal: Spacing.sm, paddingVertical: 1,

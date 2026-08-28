@@ -127,8 +127,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, padding: Spacing.md,
   },
   rowExpanded: { borderColor: Colors.gold, backgroundColor: Colors.gold + '11' },
-  rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowName:   { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm },
+  rowName:   { flex: 1, flexShrink: 1, fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   rowLevel:  { fontSize: FontSize.xs, color: Colors.textDim, fontWeight: FontWeight.bold },
   rowBlurb:  { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 4, lineHeight: 18 },
 

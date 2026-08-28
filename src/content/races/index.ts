@@ -1688,6 +1688,37 @@ export const raceGnome: Race = {
         },
       ],
     },
+    // Eberron: Rising from the Last War — a dragonmarked gnome has this
+    // subrace INSTEAD of Forest/Rock Gnome (not an additional pick), so it
+    // sits as a third mandatory-list option here rather than an optional
+    // add-on.
+    {
+      id: 'mark_of_scribing', name: 'Mark of Scribing', parentId: 'gnome', srd: false,
+      features: [
+        {
+          id: 'mark_of_scribing_asi', name: 'Ability Score Increase',
+          description: 'Your Charisma score increases by 1.',
+          source: { kind: 'race', refId: 'mark_of_scribing' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'gifted_scribe', name: 'Gifted Scribe',
+          description: 'Whenever you make an Intelligence (History) check or an ability check with calligrapher\'s supplies, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_scribing' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'scribes_insight', name: "Scribe's Insight",
+          description: 'You know the Message cantrip. Intelligence is your spellcasting ability for it. You can also cast Comprehend Languages with this trait, and at 3rd level Magic Mouth, each once per long rest — this app doesn\'t yet support level-gated racial features and has no mechanism for a limited-use LEVELED spell without a slot, so only the cantrip is granted for real.',
+          source: { kind: 'race', refId: 'mark_of_scribing' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['message'], spellcastingAbility: 'int' }],
+        },
+        {
+          id: 'mark_of_scribing_spells', name: 'Spells of the Mark',
+          description: 'If you have the Spellcasting or Pact Magic class feature, Comprehend Languages, Illusory Script, Animal Messenger, Silence, Sending, Tongues, Arcane Eye, Divination, and Dream are added to your class\'s spell list. (No mechanism to add spells to a class spell list — not applied mechanically, tracked for reference.)',
+          source: { kind: 'race', refId: 'mark_of_scribing' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
   ],
 };
 

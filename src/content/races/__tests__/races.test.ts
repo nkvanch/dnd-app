@@ -567,9 +567,20 @@ describe('Sourcebook Elf subraces', () => {
 });
 
 describe('Gnome subraces', () => {
-  it('defines Forest Gnome and Rock Gnome as required subraces', () => {
+  it('defines Forest Gnome, Rock Gnome, and Mark of Scribing as required subraces', () => {
     expect(raceGnome.subracesOptional).toBeUndefined();
-    expect(raceGnome.subraces?.map(s => s.id).sort()).toEqual(['forest_gnome', 'rock_gnome']);
+    expect(raceGnome.subraces?.map(s => s.id).sort()).toEqual(['forest_gnome', 'mark_of_scribing', 'rock_gnome']);
+  });
+
+  it('Mark of Scribing grants a real Message cantrip, additive on top of base Gnome INT+2', () => {
+    const mos = raceGnome.subraces!.find(s => s.id === 'mark_of_scribing')!;
+    const e = applyRaceSelection(raceGnome, mos);
+    expect(e.spellcasting?.cantrips).toContain('message');
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'int', operation: 'add', value: 2, condition: null }, // base gnome_asi
+      { type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null }, // mark of scribing's own
+    ]));
   });
 
   it('Forest Gnome grants the Minor Illusion cantrip via a real grant_spell effect', () => {

@@ -2480,6 +2480,378 @@ export const raceHarengon: Race = {
   ],
 };
 
+export const raceKenku: Race = {
+  id: 'kenku', name: 'Kenku', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  resources: [
+    { resourceId: 'kenku_recall_pool', name: 'Kenku Recall', maximum: 2, recharge: 'long_rest' },
+  ],
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}kenku_recall_skills`,
+      prompt: 'Choose two skills to gain proficiency in.',
+      kind: 'skill', count: 2, pool: ALL_SKILL_OPTIONS,
+      grants: [], required: true, resolved: false,
+    },
+  ],
+  features: [
+    {
+      id: 'expert_duplication', name: 'Expert Duplication',
+      description: 'You have advantage on checks to produce an exact duplicate of writing or craftwork. (Doesn\'t fit any of the engine\'s 3 hardcoded advantage targets — not applied mechanically.)',
+      source: { kind: 'race', refId: 'kenku' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'kenku_recall_bonus', name: 'Kenku Recall (Advantage Uses)',
+      description: 'When making a check with a skill you\'re proficient in, you can give yourself advantage before rolling. Uses = proficiency bonus (this app tracks a fixed pool of 2, the 1st-level value); all uses return on a long rest. (No mechanism to grant advantage on an arbitrary skill check on demand — the resource is tracked, but using it has no automated effect.)',
+      source: { kind: 'race', refId: 'kenku' }, level: null, actions: [], choices: [], passive: false,
+      effects: [],
+      activation: { actionType: 'free', resourceCost: { resourceId: 'kenku_recall_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+    },
+    {
+      id: 'mimicry_kenku', name: 'Mimicry',
+      description: 'You can accurately mimic sounds you\'ve heard, including voices. A DC 8 + proficiency bonus + Charisma modifier Insight check is needed to detect the ruse. (No sound-mimicry mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'kenku' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const raceLocathah: Race = {
+  id: 'locathah', name: 'Locathah', srd: false,
+  features: [
+    {
+      id: 'locathah_asi', name: 'Ability Score Increase',
+      description: 'Your Strength score increases by 2, and your Dexterity score increases by 1.',
+      source: { kind: 'race', refId: 'locathah' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'stat_modifier', target: 'str', operation: 'add', value: 2, condition: null },
+        { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+      ],
+    },
+    {
+      id: 'locathah_swim_speed', name: 'Swim Speed',
+      description: 'You have a swimming speed of 30 feet.',
+      source: { kind: 'race', refId: 'locathah' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'swim', movementRange: 30 }],
+    },
+    {
+      id: 'locathah_natural_armor', name: 'Natural Armor',
+      description: 'Unarmored, your AC is 12 + your Dexterity modifier. A shield still applies normally.',
+      source: { kind: 'race', refId: 'locathah' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'add', value: 12, formulaAbilities: ['dex'], condition: null }],
+    },
+    {
+      id: 'observant_and_athletic', name: 'Observant and Athletic',
+      description: 'You have proficiency in the Athletics and Perception skills.',
+      source: { kind: 'race', refId: 'locathah' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'grant_proficiency', target: 'skill:athletics', operation: 'add', value: null, condition: null },
+        { type: 'grant_proficiency', target: 'skill:perception', operation: 'add', value: null, condition: null },
+      ],
+    },
+    {
+      id: 'leviathan_will', name: 'Leviathan Will',
+      description: 'You have advantage on saving throws against being charmed, frightened, paralyzed, poisoned, stunned, or put to sleep. (Doesn\'t fit any of the engine\'s 3 hardcoded advantage targets — not applied mechanically.)',
+      source: { kind: 'race', refId: 'locathah' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'limited_amphibiousness', name: 'Limited Amphibiousness',
+      description: 'You can breathe air and water, but need to submerge at least once every 4 hours. (No breathing/suffocation mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'locathah' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const raceOwlin: Race = {
+  id: 'owlin', name: 'Owlin', srd: false,
+  // RAW only offers the +2/+1 split for Owlin, not the "+1 to three"
+  // alternative most other MOTM races also get — disclosed in the prompt,
+  // since flexibleAsi's two_one_or_three_one mode always offers both.
+  flexibleAsi: {
+    prompt: 'Increase one ability score by 2 and a different one by 1. (This app\'s flexible-ASI mechanism also offers a "+1 to three different scores" alternative that some other MOTM races use — Owlin\'s own RAW text only specifies the +2/+1 split, so treat the extra option as a minor, disclosed convenience rather than official.)',
+    mode: { kind: 'two_one_or_three_one' },
+  },
+  features: [
+    {
+      id: 'owlin_darkvision', name: 'Darkvision',
+      description: 'You can see in dim light within 120 feet as if it were bright light, and in darkness as if it were dim light.',
+      source: { kind: 'race', refId: 'owlin' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 120 }],
+    },
+    {
+      id: 'owlin_flight', name: 'Flight',
+      description: 'You have a flying speed equal to your walking speed (30 feet). (RAW: not while wearing medium/heavy armor — this app has no mechanism to condition a movement speed on equipped armor weight, so it\'s granted unconditionally, disclosed not silent.)',
+      source: { kind: 'race', refId: 'owlin' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'fly', movementRange: 30 }],
+    },
+    {
+      id: 'silent_feathers', name: 'Silent Feathers',
+      description: 'You have proficiency in the Stealth skill.',
+      source: { kind: 'race', refId: 'owlin' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_proficiency', target: 'skill:stealth', operation: 'add', value: null, condition: null }],
+    },
+  ],
+};
+
+export const raceSatyr: Race = {
+  id: 'satyr', name: 'Satyr', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  features: [
+    {
+      id: 'satyr_speed', name: 'Speed',
+      description: 'Your base walking speed is 35 feet.',
+      source: { kind: 'race', refId: 'satyr' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'stat_modifier', target: 'speed', operation: 'set', value: 35, condition: null }],
+    },
+    {
+      id: 'ram', name: 'Ram',
+      description: 'You can use your head and horns to make unarmed strikes, dealing 1d6 + Strength modifier bludgeoning damage. (No mechanism to override unarmed strike damage — not applied mechanically.)',
+      source: { kind: 'race', refId: 'satyr' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'magic_resistance_satyr', name: 'Magic Resistance',
+      description: 'You have advantage on saving throws against spells and other magical effects. (Doesn\'t fit any of the engine\'s 3 hardcoded advantage targets — not applied mechanically.)',
+      source: { kind: 'race', refId: 'satyr' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mirthful_leaps', name: 'Mirthful Leaps',
+      description: 'On a long or high jump, roll a d8 and add it to the distance covered. (No jump-distance mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'satyr' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'reveler', name: 'Reveler',
+      description: 'You have proficiency in the Performance and Persuasion skills, and with one musical instrument of your choice. (The two skill proficiencies are real; the instrument choice has no tool-choice-of-N resolution screen yet — not applied mechanically.)',
+      source: { kind: 'race', refId: 'satyr' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'grant_proficiency', target: 'skill:performance', operation: 'add', value: null, condition: null },
+        { type: 'grant_proficiency', target: 'skill:persuasion', operation: 'add', value: null, condition: null },
+      ],
+    },
+  ],
+};
+
+// Mordenkainen's Tome of Foes classic stat block — same convention as Sea
+// Elf/Eladrin (simpler, fixed ASI, no new mechanism needed), and a real
+// elf-adjacent race not reconciled into Elf.md since the vault files it
+// standalone under "Partially Official races," unlike Sea Elf/Eladrin
+// which Elf.md's own notes cross-referenced directly.
+export const raceShadarKai: Race = {
+  id: 'shadar_kai', name: 'Shadar-Kai', srd: false,
+  resources: [
+    { resourceId: 'blessing_of_the_raven_queen_pool', name: 'Blessing of the Raven Queen', maximum: 2, recharge: 'long_rest' },
+  ],
+  features: [
+    {
+      id: 'shadar_kai_asi', name: 'Ability Score Increase',
+      description: 'Your Dexterity score increases by 2, and your Constitution score increases by 1.',
+      source: { kind: 'race', refId: 'shadar_kai' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'stat_modifier', target: 'dex', operation: 'add', value: 2, condition: null },
+        { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+      ],
+    },
+    {
+      id: 'shadar_kai_darkvision', name: 'Darkvision',
+      description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+      source: { kind: 'race', refId: 'shadar_kai' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }],
+    },
+    {
+      id: 'shadar_kai_fey_ancestry', name: 'Fey Ancestry',
+      description: 'You have advantage on saving throws against being charmed, and magic can\'t put you to sleep. (Doesn\'t fit any of the engine\'s 3 hardcoded advantage targets — not applied mechanically.)',
+      source: { kind: 'race', refId: 'shadar_kai' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shadar_kai_keen_senses', name: 'Keen Senses',
+      description: 'You have proficiency in the Perception skill.',
+      source: { kind: 'race', refId: 'shadar_kai' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_proficiency', target: 'skill:perception', operation: 'add', value: null, condition: null }],
+    },
+    {
+      id: 'necrotic_resistance_shadar_kai', name: 'Necrotic Resistance',
+      description: 'You have resistance to necrotic damage.',
+      source: { kind: 'race', refId: 'shadar_kai' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_resistance', target: 'necrotic', operation: 'resistance', value: null, condition: null }],
+    },
+    {
+      id: 'blessing_of_the_raven_queen', name: 'Blessing of the Raven Queen',
+      description: 'As a bonus action, you can teleport up to 30 feet to an unoccupied space you can see. At 3rd level you also gain resistance to all damage until the start of your next turn when you do. Uses = proficiency bonus (this app tracks a fixed pool of 2, the 1st-level value); all uses return on a long rest. (No teleport mechanic exists, and the 3rd-level resistance bonus is level-gated — neither is applied mechanically.)',
+      source: { kind: 'race', refId: 'shadar_kai' }, level: null, actions: [], choices: [], passive: false,
+      effects: [],
+      activation: { actionType: 'bonus_action', resourceCost: { resourceId: 'blessing_of_the_raven_queen_pool', quantity: 1 }, range: '30 feet', target: 'self', requiresSave: null },
+    },
+    {
+      id: 'shadar_kai_trance', name: 'Trance',
+      description: 'You don\'t need to sleep, and magic can\'t put you to sleep. You can finish a long rest in 4 hours of trancelike meditation, gaining two weapon or tool proficiencies of your choice until your next long rest. (No mechanism for temporary/expiring proficiencies — not applied mechanically.)',
+      source: { kind: 'race', refId: 'shadar_kai' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const raceTabaxi: Race = {
+  id: 'tabaxi', name: 'Tabaxi', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  features: [
+    {
+      id: 'tabaxi_climb_speed', name: "Cat's Claws",
+      description: 'You have a climbing speed of 30 feet. Your claws are natural weapons dealing 1d6 + Strength modifier slashing damage instead of normal unarmed strike damage. (The climb speed is real; the unarmed-strike override has no mechanism.)',
+      source: { kind: 'race', refId: 'tabaxi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'climb', movementRange: 30 }],
+    },
+    {
+      id: 'cats_talent', name: "Cat's Talent",
+      description: 'You have proficiency in the Perception and Stealth skills.',
+      source: { kind: 'race', refId: 'tabaxi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'grant_proficiency', target: 'skill:perception', operation: 'add', value: null, condition: null },
+        { type: 'grant_proficiency', target: 'skill:stealth', operation: 'add', value: null, condition: null },
+      ],
+    },
+    {
+      id: 'tabaxi_darkvision', name: 'Darkvision',
+      description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+      source: { kind: 'race', refId: 'tabaxi' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }],
+    },
+    {
+      id: 'feline_agility', name: 'Feline Agility',
+      description: 'When you move on your turn, you can double your speed until the end of the turn. Once per turn you move 0 feet. (No mechanism for a conditional mid-turn speed change — not applied mechanically.)',
+      source: { kind: 'race', refId: 'tabaxi' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const raceTortle: Race = {
+  id: 'tortle', name: 'Tortle', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}tortle_natures_intuition`,
+      prompt: 'Choose one skill to gain proficiency in.',
+      kind: 'skill', count: 1,
+      pool: ['animal_handling', 'medicine', 'nature', 'perception', 'stealth', 'survival'].map(s => ({ id: s, label: s, value: s })),
+      grants: [], required: true, resolved: false,
+    },
+  ],
+  features: [
+    {
+      id: 'tortle_claws', name: 'Claws',
+      description: 'You have claws you can use to make unarmed strikes, dealing 1d6 + Strength modifier slashing damage instead of normal unarmed strike damage. (No mechanism to override unarmed strike damage — not applied mechanically.)',
+      source: { kind: 'race', refId: 'tortle' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'hold_breath_tortle', name: 'Hold Breath',
+      description: 'You can hold your breath for up to 1 hour. (No breath-holding mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'tortle' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'tortle_natural_armor', name: 'Natural Armor',
+      description: 'Your shell gives you a base AC of 17, unaffected by Dexterity. You can\'t wear armor, but a shield still applies normally.',
+      source: { kind: 'race', refId: 'tortle' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'add', value: 17, formulaAbilities: [], condition: null }],
+    },
+    {
+      id: 'shell_defense', name: 'Shell Defense',
+      description: 'As an action, withdraw into your shell: +4 AC and advantage on STR/CON saves, but prone, speed 0, disadvantage on DEX saves, no reactions, and only a bonus action to emerge. (No mechanism for a multi-effect toggled defensive stance — not applied mechanically.)',
+      source: { kind: 'race', refId: 'tortle' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const raceTriton: Race = {
+  id: 'triton', name: 'Triton', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  features: [
+    {
+      id: 'triton_amphibious', name: 'Amphibious',
+      description: 'You can breathe air and water. (No breathing mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'triton' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'triton_swim_speed', name: 'Swim Speed',
+      description: 'You have a swimming speed equal to your walking speed (30 feet).',
+      source: { kind: 'race', refId: 'triton' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'swim', movementRange: 30 }],
+    },
+    {
+      id: 'control_air_and_water', name: 'Control Air and Water',
+      description: 'You can cast Fog Cloud with this trait, once per long rest. At 3rd level you can also cast Gust of Wind, and at 5th level Water Walk. Your choice of Intelligence, Wisdom, or Charisma is your spellcasting ability. (None of these is a cantrip — no mechanism for a limited-use LEVELED spell without a slot, so not applied mechanically.)',
+      source: { kind: 'race', refId: 'triton' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'triton_darkvision', name: 'Darkvision',
+      description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+      source: { kind: 'race', refId: 'triton' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }],
+    },
+    {
+      id: 'emissary_of_the_sea', name: 'Emissary of the Sea',
+      description: 'You can communicate simple ideas with any Beast, Elemental, or Monstrosity that has a swimming speed. (No creature-communication mechanism exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'triton' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'guardian_of_the_depths', name: 'Guardian of the Depths',
+      description: 'You have resistance to cold damage.',
+      source: { kind: 'race', refId: 'triton' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_resistance', target: 'cold', operation: 'resistance', value: null, condition: null }],
+    },
+  ],
+};
+
+export const raceVerdan: Race = {
+  id: 'verdan', name: 'Verdan', srd: false,
+  features: [
+    {
+      id: 'verdan_asi', name: 'Ability Score Increase',
+      description: 'Your Charisma score increases by 2, and your Constitution score increases by 1.',
+      source: { kind: 'race', refId: 'verdan' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'stat_modifier', target: 'cha', operation: 'add', value: 2, condition: null },
+        { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+      ],
+    },
+    {
+      id: 'black_blood_healing', name: 'Black Blood Healing',
+      description: 'When you roll a 1 or 2 on a Hit Die spent at the end of a short rest, you can reroll and must use the new result. (No hit-die-spend reroll hook exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'verdan' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'limited_telepathy', name: 'Limited Telepathy',
+      description: 'You can telepathically speak simple ideas to any creature you can see within 30 feet. (No telepathy mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'verdan' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'verdan_persuasive', name: 'Persuasive',
+      description: 'You have proficiency in the Persuasion skill.',
+      source: { kind: 'race', refId: 'verdan' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_proficiency', target: 'skill:persuasion', operation: 'add', value: null, condition: null }],
+    },
+    {
+      id: 'telepathic_insight', name: 'Telepathic Insight',
+      description: 'You have advantage on all Wisdom and Charisma saving throws. (Doesn\'t fit any of the engine\'s 3 hardcoded advantage targets — not applied mechanically.)',
+      source: { kind: 'race', refId: 'verdan' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const raceFairy: Race = {
+  id: 'fairy', name: 'Fairy', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  features: [
+    {
+      id: 'fairy_magic', name: 'Fairy Magic',
+      description: 'You know the Druidcraft cantrip. Your choice of Intelligence, Wisdom, or Charisma is your spellcasting ability. At 3rd level you can also cast Faerie Fire, and at 5th level Enlarge/Reduce, each once per long rest — this app doesn\'t yet support level-gated racial features, so only the cantrip is granted for real.',
+      source: { kind: 'race', refId: 'fairy' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['druidcraft'], spellcastingAbility: 'int' }],
+    },
+    {
+      id: 'fairy_flight', name: 'Flight',
+      description: 'You have a flying speed equal to your walking speed (30 feet). (RAW: not while wearing medium/heavy armor — this app has no mechanism to condition a movement speed on equipped armor weight, so it\'s granted unconditionally, disclosed not silent.)',
+      source: { kind: 'race', refId: 'fairy' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'fly', movementRange: 30 }],
+    },
+  ],
+};
+
 /**
  * Every playable race, unfiltered. Prefer ALL_RACES below in app code.
  * (raceSkeleton is intentionally not included here — see its own comment.)
@@ -2502,6 +2874,16 @@ export const FULL_RACE_LIBRARY: Race[] = [
   raceGithzerai,
   raceGoliath,
   raceHarengon,
+  raceKenku,
+  raceLocathah,
+  raceOwlin,
+  raceSatyr,
+  raceShadarKai,
+  raceTabaxi,
+  raceTortle,
+  raceTriton,
+  raceVerdan,
+  raceFairy,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

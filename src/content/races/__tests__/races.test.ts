@@ -11,6 +11,7 @@ import { recomputeDerived, modifier } from '../../../engine/pipeline';
 import {
   raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf, raceHalfling, raceTiefling, raceHalfOrc,
   raceAarakocra, raceAasimar, raceChangeling, raceFirbolg, raceGithyanki, raceGithzerai, raceGoliath, raceHarengon,
+  raceKenku, raceLocathah, raceOwlin, raceSatyr, raceShadarKai, raceTabaxi, raceTortle, raceTriton, raceVerdan, raceFairy,
 } from '../index';
 import { resolveResistance } from '../../../engine/resolver';
 import { collectAllEffects } from '../../../engine/pipeline';
@@ -619,6 +620,78 @@ describe('New standalone races — Aarakocra, Aasimar, Changeling, Firbolg, Gith
     expect(e.skills.skills.perception.trained).toBe(true);
     // derived.initiative uses EFFECTIVE dex (base 10 + this flexAsi's +2 = 12, mod +1) plus Hare-Trigger's flat +2
     expect(e.derived.initiative).toBe(modifier(12) + 2);
+  });
+});
+
+describe('New standalone races batch 2 — Kenku, Locathah, Owlin, Satyr, Shadar-Kai, Tabaxi, Tortle, Triton, Verdan, Fairy', () => {
+  it('Kenku queues a real 2-skill choice and tracks a real Kenku Recall resource pool', () => {
+    const e = applyRaceSelection(raceKenku, null, [{ ability: 'dex', amount: 2 }, { ability: 'wis', amount: 1 }]);
+    const pending = e.choices.find(c => c.definition.id.startsWith('race_choice_'));
+    expect(pending!.definition.count).toBe(2);
+    expect(e.resources.custom.find(r => r.id === 'kenku_recall_pool')).toMatchObject({ maximum: 2, recharge: 'long_rest' });
+  });
+
+  it('Locathah grants real STR+2/DEX+1, a swim speed, natural armor, and Athletics/Perception proficiency', () => {
+    const e = applyRaceSelection(raceLocathah, null);
+    expect(e.derived.movement).toEqual({ swim: 30 });
+    expect(e.skills.skills.athletics.trained).toBe(true);
+    expect(e.skills.skills.perception.trained).toBe(true);
+    expect(e.derived.ac).toBe(12 + modifier(10));
+  });
+
+  it('Owlin grants real darkvision, a fly speed, and Stealth proficiency', () => {
+    const e = applyRaceSelection(raceOwlin, null, [{ ability: 'wis', amount: 2 }, { ability: 'dex', amount: 1 }]);
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 120, note: undefined }]);
+    expect(e.derived.movement).toEqual({ fly: 30 });
+    expect(e.skills.skills.stealth.trained).toBe(true);
+  });
+
+  it('Satyr grants a real 35ft speed', () => {
+    const e = applyRaceSelection(raceSatyr, null, [{ ability: 'cha', amount: 2 }, { ability: 'dex', amount: 1 }]);
+    expect(e.derived.speed).toBe(35);
+    expect(e.skills.skills.performance.trained).toBe(true);
+    expect(e.skills.skills.persuasion.trained).toBe(true);
+  });
+
+  it('Shadar-Kai grants real DEX+2/CON+1, darkvision, Perception proficiency, necrotic resistance, and a real Blessing of the Raven Queen resource pool', () => {
+    const e = applyRaceSelection(raceShadarKai, null);
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 60, note: undefined }]);
+    expect(e.skills.skills.perception.trained).toBe(true);
+    expect(resolveResistance('necrotic', collectAllEffects(e))).toBe('resistance');
+    expect(e.resources.custom.find(r => r.id === 'blessing_of_the_raven_queen_pool')).toMatchObject({ maximum: 2, recharge: 'long_rest' });
+  });
+
+  it('Tabaxi grants a real climb speed, Perception/Stealth proficiency, and darkvision', () => {
+    const e = applyRaceSelection(raceTabaxi, null, [{ ability: 'dex', amount: 2 }, { ability: 'cha', amount: 1 }]);
+    expect(e.derived.movement).toEqual({ climb: 30 });
+    expect(e.skills.skills.perception.trained).toBe(true);
+    expect(e.skills.skills.stealth.trained).toBe(true);
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 60, note: undefined }]);
+  });
+
+  it('Tortle grants real natural armor (base 17, no DEX) and queues a real Nature\'s Intuition skill choice', () => {
+    const e = applyRaceSelection(raceTortle, null, [{ ability: 'str', amount: 2 }, { ability: 'wis', amount: 1 }]);
+    expect(e.derived.ac).toBe(17);
+    const pending = e.choices.find(c => c.definition.id.startsWith('race_choice_'));
+    expect(pending!.definition.count).toBe(1);
+    expect((pending!.definition.pool as { id: string }[]).map(o => o.id).sort()).toEqual(['animal_handling', 'medicine', 'nature', 'perception', 'stealth', 'survival']);
+  });
+
+  it('Triton grants a real swim speed and cold resistance', () => {
+    const e = applyRaceSelection(raceTriton, null, [{ ability: 'str', amount: 2 }, { ability: 'con', amount: 1 }]);
+    expect(e.derived.movement).toEqual({ swim: 30 });
+    expect(resolveResistance('cold', collectAllEffects(e))).toBe('resistance');
+  });
+
+  it('Verdan grants real CHA+2/CON+1 and Persuasion proficiency', () => {
+    const e = applyRaceSelection(raceVerdan, null);
+    expect(e.skills.skills.persuasion.trained).toBe(true);
+  });
+
+  it('Fairy grants a real Druidcraft cantrip and a fly speed', () => {
+    const e = applyRaceSelection(raceFairy, null, [{ ability: 'cha', amount: 2 }, { ability: 'wis', amount: 1 }]);
+    expect(e.spellcasting?.cantrips).toContain('druidcraft');
+    expect(e.derived.movement).toEqual({ fly: 30 });
   });
 });
 

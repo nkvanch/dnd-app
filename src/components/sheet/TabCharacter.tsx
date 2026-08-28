@@ -991,7 +991,7 @@ export function TabCharacter({
             Reminder only, same as condition warnings above — the app has no
             attack-roll automation anywhere, so this doesn't change how any
             roll button behaves, it just makes sure these aren't forgotten. */}
-        {derived.advantageStates.length > 0 && (
+        {(derived.advantageStates?.length ?? 0) > 0 && (
           <View style={styles.advList}>
             {derived.advantageStates.map((a, i) => (
               <Text key={i} style={[styles.condWarning, a.state === 'advantage' ? styles.advTxt : styles.disadvTxt]}>
@@ -1052,6 +1052,7 @@ export function TabCharacter({
                     {Array.from({ length: slot.total }).map((_, i) => (
                       <Pressable
                         key={i}
+                        hitSlop={10}
                         style={[styles.pip2, i < slot.used && styles.pip2Used]}
                         onPress={() => i < slot.used ? onRestoreSlot(tier) : onSpendSlot(tier)}
                       />

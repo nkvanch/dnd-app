@@ -21,6 +21,7 @@ import { spellRepo } from '../content/spellRepo';
 import { spellIdsOnEntity } from '../content/spellRepo.types';
 import { itemRepo } from '../content/itemRepo';
 import { itemIdsOnEntity } from '../content/itemRepo.types';
+import { recomputeDerived } from '../engine/pipeline';
 
 export type { EntityMeta };
 
@@ -340,7 +341,17 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       for (const c of characters) for (const id of spellIdsOnEntity(c)) allSpellIds.add(id);
       await spellRepo.ensureLoaded(Array.from(allSpellIds));
 
-      set({ characters, isLoading: false });
+      // `derived` is a cache, not a persisted source of truth — recompute it
+      // fresh on every load rather than trusting whatever blob was last
+      // saved. Without this, a character saved before a new DerivedStats
+      // field existed (e.g. advantageStates) loads with that field simply
+      // missing, crashing the first screen that reads it before any mutation
+      // ever triggers a recompute. The comment above already described this
+      // as the intent; the actual call was missing.
+      const rules = get().rules;
+      const recomputed = characters.map(c => recomputeDerived(c, rules));
+
+      set({ characters: recomputed, isLoading: false });
     } catch (e) {
       console.error('[characterStore] loadCharacters failed:', e);
       set({ isLoading: false });

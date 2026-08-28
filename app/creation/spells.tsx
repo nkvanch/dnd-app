@@ -123,6 +123,13 @@ export default function SpellsScreen() {
   const [search,         setSearch]         = useState('');
   const [schoolFilter,   setSchoolFilter]   = useState<string | null>(null);
   const [spellSort,      setSpellSort]      = useState<'name' | 'school'>('name');
+  const [cantripsOpen,   setCantripsOpen]   = useState(true);
+  const [spellsOpen,     setSpellsOpen]     = useState(true);
+  // Off by default — the normal pool is restricted to this class's own spell
+  // list. Toggling this widens the pool to every class's spells, for the
+  // "pick an extra spell from another class" case (a feat, a homebrew rule,
+  // etc.) rather than silently letting every class pick from everything.
+  const [otherClasses,   setOtherClasses]   = useState(false);
 
   if (!draft) return null;
 
@@ -139,7 +146,10 @@ export default function SpellsScreen() {
 
   // Filter by class — only show spells tagged for this class.
   // If a spell has no `classes` tag at all (legacy), include it so nothing disappears.
-  const classSpells = allSpells.filter(s => !s.classes || s.classes.length === 0 || s.classes.includes(classId));
+  // The "add extra from another class" toggle bypasses this restriction entirely.
+  const classSpells = otherClasses
+    ? allSpells
+    : allSpells.filter(s => !s.classes || s.classes.length === 0 || s.classes.includes(classId));
 
   // ── 1. Non-spellcaster ──────────────────────────────────────────────────────
   if (!isSpellcaster) {
@@ -348,56 +358,70 @@ export default function SpellsScreen() {
             </Pressable>
           </View>
 
-          <Pressable
-            style={styles.createSpellBtn}
-            onPress={() => router.push('/homebrew/spell-builder')}
-          >
-            <Text style={styles.createSpellTxt}>+ Create new homebrew spell</Text>
-          </Pressable>
+          <View style={styles.spellActionRow}>
+            <Pressable
+              style={styles.createSpellBtn}
+              onPress={() => router.push('/homebrew/spell-builder')}
+            >
+              <Text style={styles.createSpellTxt}>+ Create new homebrew spell</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.createSpellBtn, otherClasses && styles.createSpellBtnActive]}
+              onPress={() => setOtherClasses(v => !v)}
+            >
+              <Text style={[styles.createSpellTxt, otherClasses && styles.createSpellTxtActive]}>
+                {otherClasses ? '✓ Showing every class’s spells' : '+ Add extra from another class'}
+              </Text>
+            </Pressable>
+          </View>
 
           {targets.cantrips > 0 && (
             <View style={styles.choiceBlock}>
-              <View style={styles.levelHeaderRow}>
+              <Pressable style={styles.levelHeaderRow} onPress={() => setCantripsOpen(o => !o)}>
                 <Text style={styles.levelHeader}>CANTRIPS</Text>
                 <View style={styles.levelHeaderLine} />
                 <Text style={[styles.levelHeaderCount, cantripsDone && styles.choiceCountDone]}>
                   {pickedCantrips.length}/{targets.cantrips}
                 </Text>
-              </View>
-              {cantripPool.map(s => (
-                <SpellRow
-                  key={s.id}
-                  spell={s}
-                  selected={pickedCantrips.includes(s.id)}
-                  disabled={!pickedCantrips.includes(s.id) && pickedCantrips.length >= targets.cantrips}
-                  isHomebrew={homebrewSpellIds.has(s.id)}
-                  onToggle={() => toggleCantrip(s.id)}
-                />
-              ))}
-              {cantripPool.length === 0 && <Text style={styles.emptyNote}>No matching cantrips.</Text>}
+                <Text style={styles.levelHeaderChevron}>{cantripsOpen ? '▲' : '▼'}</Text>
+              </Pressable>
+              {cantripsOpen && (cantripPool.length === 0
+                ? <Text style={styles.emptyNote}>No matching cantrips.</Text>
+                : cantripPool.map(s => (
+                  <SpellRow
+                    key={s.id}
+                    spell={s}
+                    selected={pickedCantrips.includes(s.id)}
+                    disabled={!pickedCantrips.includes(s.id) && pickedCantrips.length >= targets.cantrips}
+                    isHomebrew={homebrewSpellIds.has(s.id)}
+                    onToggle={() => toggleCantrip(s.id)}
+                  />
+                )))}
             </View>
           )}
 
           {targets.spells > 0 && (
             <View style={styles.choiceBlock}>
-              <View style={styles.levelHeaderRow}>
+              <Pressable style={styles.levelHeaderRow} onPress={() => setSpellsOpen(o => !o)}>
                 <Text style={styles.levelHeader}>1ST-LEVEL SPELLS</Text>
                 <View style={styles.levelHeaderLine} />
                 <Text style={[styles.levelHeaderCount, spellsDone && styles.choiceCountDone]}>
                   {pickedSpells.length}/{targets.spells}
                 </Text>
-              </View>
-              {spellPool.map(s => (
-                <SpellRow
-                  key={s.id}
-                  spell={s}
-                  selected={pickedSpells.includes(s.id)}
-                  disabled={!pickedSpells.includes(s.id) && pickedSpells.length >= targets.spells}
-                  isHomebrew={homebrewSpellIds.has(s.id)}
-                  onToggle={() => toggleSpell(s.id)}
-                />
-              ))}
-              {spellPool.length === 0 && <Text style={styles.emptyNote}>No matching spells.</Text>}
+                <Text style={styles.levelHeaderChevron}>{spellsOpen ? '▲' : '▼'}</Text>
+              </Pressable>
+              {spellsOpen && (spellPool.length === 0
+                ? <Text style={styles.emptyNote}>No matching spells.</Text>
+                : spellPool.map(s => (
+                  <SpellRow
+                    key={s.id}
+                    spell={s}
+                    selected={pickedSpells.includes(s.id)}
+                    disabled={!pickedSpells.includes(s.id) && pickedSpells.length >= targets.spells}
+                    isHomebrew={homebrewSpellIds.has(s.id)}
+                    onToggle={() => toggleSpell(s.id)}
+                  />
+                )))}
             </View>
           )}
         </>
@@ -498,12 +522,17 @@ const styles = StyleSheet.create({
   },
   nextBtnDisabled: { backgroundColor: Colors.goldDim },
   nextBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
+  spellActionRow: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end',
+    gap: Spacing.xs, marginBottom: Spacing.md,
+  },
   createSpellBtn: {
-    alignSelf: 'flex-end',
     backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
     borderWidth: 1, borderColor: Colors.gold + '66',
     paddingHorizontal: Spacing.sm, paddingVertical: 3,
-    marginBottom: Spacing.md,
   },
+  createSpellBtnActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
   createSpellTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  createSpellTxtActive: { color: Colors.bg },
+  levelHeaderChevron: { fontSize: FontSize.sm, color: Colors.textDim },
 });

@@ -440,17 +440,34 @@ export default function CharacterSheetScreen() {
         style={styles.tabBarScroll}
         contentContainerStyle={styles.tabBarContent}
       >
-        {TABS.map(t => (
-          <Pressable
-            key={t.id}
-            style={[styles.tabBtn, { minWidth: TAB_MIN_W }, activeTab === t.id && styles.tabBtnActive]}
-            onPress={() => setActiveTab(t.id)}
-          >
-            <Text style={[styles.tabTxt, activeTab === t.id && styles.tabTxtActive]}>
-              {t.label}
-            </Text>
-          </Pressable>
-        ))}
+        {TABS.map(t => {
+          // Pending Choices (skill picks, ASI/feat, subclass, etc.) only ever
+          // resolve from the Features tab — a badge here is the "notice this
+          // from any tab" signal for a choice that just unlocked (e.g. right
+          // after a level-up), since the Combat tab's Level Up button gives no
+          // other indication one is waiting.
+          const pendingCount = t.id === 'features'
+            ? (entity?.choices.filter(c => !c.resolved).length ?? 0)
+            : 0;
+          return (
+            <Pressable
+              key={t.id}
+              style={[styles.tabBtn, { minWidth: TAB_MIN_W }, activeTab === t.id && styles.tabBtnActive]}
+              onPress={() => setActiveTab(t.id)}
+            >
+              <View style={styles.tabLabelRow}>
+                <Text style={[styles.tabTxt, activeTab === t.id && styles.tabTxtActive]}>
+                  {t.label}
+                </Text>
+                {pendingCount > 0 && (
+                  <View style={styles.tabBadge}>
+                    <Text style={styles.tabBadgeTxt}>{pendingCount}</Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       {/* Tab Content */}
@@ -665,6 +682,12 @@ const styles = StyleSheet.create({
   tabBtnActive:  { borderBottomColor: Colors.gold },
   tabTxt:        { fontSize: FontSize.xs, color: Colors.textDim, fontWeight: FontWeight.bold },
   tabTxtActive:  { color: Colors.gold },
+  tabLabelRow:   { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tabBadge: {
+    minWidth: 16, height: 16, borderRadius: 8, backgroundColor: Colors.gold,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+  },
+  tabBadgeTxt: { fontSize: 10, fontWeight: FontWeight.bold, color: Colors.bg },
 
   tabContent: { flex: 1 },
 

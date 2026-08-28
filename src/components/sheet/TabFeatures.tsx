@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
   featureName:   { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, flex: 1 },
   featureDesc:   { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: Spacing.xs, lineHeight: 20 },
 
-  spellMeta2: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
+  spellMeta2: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm, marginBottom: Spacing.sm },
   spellMetaPill: {
     flex: 1, backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
     padding: Spacing.sm, alignItems: 'center',

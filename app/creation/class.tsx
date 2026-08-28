@@ -46,6 +46,10 @@ export default function ClassScreen() {
   const insets  = useSafeAreaInsets();
   const [search,   setSearch]   = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Separate from `expanded` — a dedicated dropdown field for a class's
+  // subclass list, distinct from the description expand-arrow above so
+  // subclasses aren't mixed into the same disclosure as flavor text.
+  const [subclassOpenFor, setSubclassOpenFor] = useState<string | null>(null);
   const homebrewClasses = useHomebrewStore(s => s.classes);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
 
@@ -79,9 +83,10 @@ export default function ClassScreen() {
           const desc      = CLASS_DESCRIPTIONS[item.id];
           const casterType = CASTER_TYPE[item.id] ?? 'Martial';
           const subclasses = subclassEntriesForClassMerged(item.id, homebrewSubclasses);
+          const subOpen    = subclassOpenFor === item.id;
           return (
             <View style={styles.itemWrap}>
-              {/* Primary tap → navigate to detail. Chevron tap → expand description + subclasses. */}
+              {/* Primary tap → navigate to detail. Chevron tap → expand description only. */}
               <Pressable
                 style={styles.row}
                 onPress={() => router.push(`/creation/class-detail?id=${item.id}`)}
@@ -99,12 +104,25 @@ export default function ClassScreen() {
                 <Text style={styles.rowArrow}>›</Text>
               </Pressable>
 
-              {isOpen && (
+              {isOpen && desc && (
                 <View style={styles.dropdown}>
-                  {desc && <Text style={styles.dropdownDesc}>{desc}</Text>}
-                  {subclasses.length > 0 && (
+                  <Text style={styles.dropdownDesc}>{desc}</Text>
+                </View>
+              )}
+
+              {/* Dedicated Subclass dropdown — separate control from the
+                  description disclosure above, opens only its own list. */}
+              {subclasses.length > 0 && (
+                <>
+                  <Pressable
+                    style={styles.subclassField}
+                    onPress={() => setSubclassOpenFor(subOpen ? null : item.id)}
+                  >
+                    <Text style={styles.subclassFieldLabel}>Subclass</Text>
+                    <Text style={styles.subclassFieldCaret}>{subOpen ? '▲' : '▼'}</Text>
+                  </Pressable>
+                  {subOpen && (
                     <View style={styles.subclassList}>
-                      <Text style={styles.subclassListHeading}>SUBCLASSES</Text>
                       {subclasses.map(sub => (
                         <Pressable
                           key={sub.id}
@@ -117,7 +135,7 @@ export default function ClassScreen() {
                       ))}
                     </View>
                   )}
-                </View>
+                </>
               )}
             </View>
           );
@@ -139,7 +157,7 @@ export default function ClassScreen() {
               filteredHomebrewClasses.map(item => {
                 const isOpen = expanded === item.id;
                 const subclasses = subclassEntriesForClassMerged(item.id, homebrewSubclasses);
-                const hasDropdown = !!item.description || subclasses.length > 0;
+                const subOpen    = subclassOpenFor === item.id;
                 return (
                   <View key={item.id} style={styles.itemWrap}>
                     <Pressable
@@ -153,7 +171,7 @@ export default function ClassScreen() {
                       <View style={styles.homebrewTag}>
                         <Text style={styles.homebrewTagTxt}>Homebrew</Text>
                       </View>
-                      {hasDropdown && (
+                      {!!item.description && (
                         <Pressable
                           hitSlop={12}
                           onPress={e => { e.stopPropagation(); setExpanded(isOpen ? null : item.id); }}
@@ -163,12 +181,24 @@ export default function ClassScreen() {
                       )}
                       <Text style={styles.rowArrow}>›</Text>
                     </Pressable>
-                    {isOpen && hasDropdown && (
+
+                    {isOpen && item.description && (
                       <View style={styles.dropdown}>
-                        {item.description && <Text style={styles.dropdownDesc}>{item.description}</Text>}
-                        {subclasses.length > 0 && (
+                        <Text style={styles.dropdownDesc}>{item.description}</Text>
+                      </View>
+                    )}
+
+                    {subclasses.length > 0 && (
+                      <>
+                        <Pressable
+                          style={styles.subclassField}
+                          onPress={() => setSubclassOpenFor(subOpen ? null : item.id)}
+                        >
+                          <Text style={styles.subclassFieldLabel}>Subclass</Text>
+                          <Text style={styles.subclassFieldCaret}>{subOpen ? '▲' : '▼'}</Text>
+                        </Pressable>
+                        {subOpen && (
                           <View style={styles.subclassList}>
-                            <Text style={styles.subclassListHeading}>SUBCLASSES</Text>
                             {subclasses.map(sub => (
                               <Pressable
                                 key={sub.id}
@@ -181,7 +211,7 @@ export default function ClassScreen() {
                             ))}
                           </View>
                         )}
-                      </View>
+                      </>
                     )}
                   </View>
                 );
@@ -229,11 +259,19 @@ const styles = StyleSheet.create({
   },
   dropdownDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
 
-  subclassList: { marginTop: Spacing.sm },
-  subclassListHeading: {
-    fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim,
-    letterSpacing: 1.5, marginBottom: Spacing.xs,
+  // Dedicated Subclass dropdown field — its own row, separate from the
+  // description expand-arrow, so tapping it never mixes flavor text with
+  // the subclass list.
+  subclassField: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
+  subclassFieldLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary },
+  subclassFieldCaret: { fontSize: FontSize.sm, color: Colors.textDim },
+  subclassList: { marginBottom: Spacing.sm },
   subclassChip: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: Spacing.xs, borderBottomWidth: 1, borderBottomColor: Colors.border,

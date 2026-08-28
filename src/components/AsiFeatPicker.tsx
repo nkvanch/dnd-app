@@ -547,8 +547,11 @@ export function AsiFeatPicker({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.gold, marginBottom: Spacing.xs },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  // flex:1 + flexShrink so a long heading ("Ability Score Improvement") wraps
+  // instead of overflowing the row and pushing the close button off-screen —
+  // that overflow is what made the X land "way too right" on a phone-width screen.
+  heading:   { flex: 1, flexShrink: 1, fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.gold, marginBottom: Spacing.xs },
   close:     { fontSize: FontSize.xl, color: Colors.textSecondary, paddingLeft: Spacing.md },
   sub:       { fontSize: FontSize.md, color: Colors.textSecondary, marginBottom: Spacing.xl },
 

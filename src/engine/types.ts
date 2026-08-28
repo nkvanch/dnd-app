@@ -97,11 +97,45 @@ export type Subrace = {
   homebrewDraft?: Record<string, unknown>;
 };
 
+/**
+ * One option within a Race.ancestryChoice — e.g. one dragon color for
+ * Dragonborn's Draconic Ancestry. `feature` is a complete Feature (may
+ * combine passive effects like grant_resistance with an active ability like
+ * a breath weapon, same as Rage does) applied via applyGrant when this
+ * option is picked, mirroring how a 'feature_pool' ChoiceDefinition option's
+ * `value` is a full Feature literal — but resolved immediately alongside
+ * subrace selection on the race-detail screen instead of as a deferred
+ * pending choice, since (like subrace) it's decided once at race-pick time.
+ */
+export type AncestryOption = {
+  id:      string;
+  name:    string;
+  blurb:   string;
+  feature: Feature;
+};
+
 export type Race = {
   id:        string;
   name:      string;
   features:  Feature[];    // base race features — all subraces get these
   subraces?: Subrace[];    // if present, player must pick one before confirming race
+  /**
+   * When true, `subraces` are alternates the player may opt into rather than
+   * a mandatory split — e.g. Dragonborn's PHB form is already complete on
+   * its own, and Wildemount's Draconblood/Ravenite are optional variants on
+   * top of it (unlike Elf/Dwarf/Halfling/Gnome, where every PHB subrace is
+   * itself mandatory — no plain, subrace-less version of those exists).
+   * Defaults to false/unset, preserving every existing race's required
+   * behavior.
+   */
+  subracesOptional?: boolean;
+  /**
+   * A same-screen, always-required choice within the race itself (not a
+   * subrace) — e.g. Dragonborn's Draconic Ancestry, chosen alongside (and
+   * independently of) any subrace. Applied via race-detail.tsx exactly like
+   * subrace selection: pick one, its `feature` grants on confirm.
+   */
+  ancestryChoice?: { prompt: string; options: AncestryOption[] };
   /** Same as Subrace.resources — see that field's doc comment. */
   resources?: ResourceGrant[];
   /**

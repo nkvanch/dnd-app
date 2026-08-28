@@ -106,10 +106,18 @@ export default function RaceDetailScreen() {
 
   // Subrace selection — mandatory when the race defines subraces.
   const [subRaceId, setSubRaceId] = useState<string | null>(null);
+  // Ancestry selection — a same-screen, always-required choice within the
+  // race itself (e.g. Dragonborn's Draconic Ancestry), independent of and
+  // resolved alongside subrace. See Race.ancestryChoice's doc comment.
+  const [ancestryId, setAncestryId] = useState<string | null>(null);
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
-  const subraces    = race?.subraces ?? [];
-  const hasSubraces = subraces.length > 0;
-  const canSelect   = !hasSubraces || subRaceId !== null;
+  const subraces         = race?.subraces ?? [];
+  const hasSubraces      = subraces.length > 0;
+  const subracesOptional = !!race?.subracesOptional;
+  const ancestryOptions  = race?.ancestryChoice?.options ?? [];
+  const hasAncestry      = ancestryOptions.length > 0;
+  const canSelect        = (!hasSubraces || subRaceId !== null || subracesOptional)
+                          && (!hasAncestry || ancestryId !== null);
 
   useEffect(() => {
     if (!race || !draft) safeGoBack();
@@ -153,6 +161,12 @@ export default function RaceDetailScreen() {
       for (const resource of chosenSubrace.resources ?? []) {
         updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);
       }
+    }
+    // ...and the chosen ancestry option's feature (e.g. Dragonborn's chosen
+    // dragon color — breath weapon + resistance bundled in one Feature).
+    const chosenAncestry = hasAncestry ? ancestryOptions.find(a => a.id === ancestryId) ?? null : null;
+    if (chosenAncestry) {
+      updated = applyGrant(updated, { kind: 'feature', value: { ...chosenAncestry.feature, isActive: true } }, chosenAncestry.feature.level ?? 0);
     }
     updated = recomputeDerived(updated, rules);
     setDraft(updated);
@@ -209,11 +223,37 @@ export default function RaceDetailScreen() {
         </>
       )}
 
+      {/* Ancestry picker — mandatory when the race defines one (e.g. Dragonborn) */}
+      {hasAncestry && (
+        <>
+          <View style={styles.divider} />
+          <Text style={styles.sectionTitle}>{race.ancestryChoice!.prompt}</Text>
+          {ancestryOptions.map(a => {
+            const isSel = ancestryId === a.id;
+            return (
+              <Pressable
+                key={a.id}
+                style={[styles.subraceCard, isSel && styles.subraceCardSelected]}
+                onPress={() => setAncestryId(isSel ? null : a.id)}
+              >
+                <View style={styles.subraceHeader}>
+                  <View style={[styles.radio, isSel && styles.radioSelected]} />
+                  <Text style={[styles.subraceName, isSel && styles.subraceNameSelected]}>{a.name}</Text>
+                </View>
+                <Text style={styles.subraceFeatures}>{a.blurb}</Text>
+              </Pressable>
+            );
+          })}
+        </>
+      )}
+
       {/* Subrace picker — mandatory when the race has subraces */}
       {hasSubraces && (
         <>
           <View style={styles.divider} />
-          <Text style={styles.sectionTitle}>Choose a Subrace</Text>
+          <Text style={styles.sectionTitle}>
+            Choose a Subrace{subracesOptional ? ' (optional)' : ''}
+          </Text>
           {subraces.map(sr => {
             const isSel = subRaceId === sr.id;
             const bonusText = summarizeBonuses(sr);
@@ -247,7 +287,9 @@ export default function RaceDetailScreen() {
         disabled={!canSelect}
       >
         <Text style={styles.selectBtnText}>
-          {hasSubraces && !subRaceId ? 'Choose a subrace to continue' : 'Select Race'}
+          {hasAncestry && !ancestryId ? 'Choose an ancestry to continue'
+            : hasSubraces && !subRaceId && !subracesOptional ? 'Choose a subrace to continue'
+            : 'Select Race'}
         </Text>
       </Pressable>
     </ScrollView>

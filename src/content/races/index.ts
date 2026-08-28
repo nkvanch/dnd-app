@@ -2,7 +2,7 @@
 // FILE: src/content/races/index.ts
 // All PHB races expressed as Feature/Effect arrays.
 // ============================================================================
-import { Race, Subrace } from '../../engine/types';
+import { Race, AncestryOption } from '../../engine/types';
 
 export const raceHuman: Race = {
   id: 'human',
@@ -350,10 +350,75 @@ export const raceHalfling: Race = {
   ],
 };
 
+/**
+ * Builds one PHB Draconic Ancestry option — a dragon color's Feature,
+ * combining the passive Damage Resistance effect with the active Breath
+ * Weapon ability in one Feature (same "passive + active on one Feature"
+ * shape Rage already uses). Breath weapon damage is the flat level-1 value
+ * (2d6) — this app has no mechanism yet for a single ability's dice to
+ * scale with character level (true of cantrip scaling too, not unique to
+ * this trait), so the 6th/11th/16th-level increases (3d6/4d6/5d6) are
+ * disclosed in the description as reference-only, not mechanically applied.
+ * The save DC (8 + proficiency bonus + CON modifier) has no formula slot in
+ * requiresSave for a non-spellcaster DC — same convention Blood Hunter's
+ * Hemocraft save DC already uses — so requiresSave is null and the DC is
+ * spelled out in the description instead.
+ */
+function draconicAncestryOption(
+  id: string, name: string, damageType: string,
+  shape: '5 by 30 ft. line' | '15 ft. cone', saveAbility: 'DEX' | 'CON',
+): AncestryOption {
+  return {
+    id, name, blurb: `${damageType[0].toUpperCase()}${damageType.slice(1)} damage, ${shape} breath weapon, ${saveAbility} save.`,
+    feature: {
+      id: `dragonborn_breath_${id}`,
+      name: 'Breath Weapon',
+      description: `You can use your action to exhale ${damageType} energy in a ${shape} (${saveAbility} save, DC = 8 + proficiency bonus + Constitution modifier). Each creature in the area takes 2d6 ${damageType} damage on a failed save, half as much on a success — this increases to 3d6 at 6th level, 4d6 at 11th, and 5d6 at 16th. You also have resistance to ${damageType} damage. Once used, the breath weapon can't be used again until you finish a short or long rest.`,
+      source: { kind: 'race', refId: 'dragonborn' },
+      level: null, actions: [], choices: [], passive: false,
+      effects: [
+        { type: 'grant_resistance', target: damageType, operation: 'resistance', value: null, condition: null },
+      ],
+      activation: {
+        actionType: 'action',
+        resourceCost: { resourceId: 'dragonborn_breath_pool', quantity: 1 },
+        range: shape,
+        target: 'area',
+        requiresSave: null,
+      },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6', damageType, saveOnSuccess: 'half' },
+      ],
+    },
+  };
+}
+
 export const raceDragonborn: Race = {
   id: 'dragonborn',
   name: 'Dragonborn',
   srd: true,
+  // PHB Dragonborn is already a complete race — Draconblood/Ravenite below
+  // are optional Wildemount variants, not a mandatory split (unlike Elf/
+  // Dwarf/Halfling/Gnome, where every subrace is itself required).
+  subracesOptional: true,
+  resources: [
+    { resourceId: 'dragonborn_breath_pool', name: 'Breath Weapon', maximum: 1, recharge: 'short_rest' },
+  ],
+  ancestryChoice: {
+    prompt: 'Choose a type of dragon. This determines the damage type and shape of your Breath Weapon, and the type of damage you resist.',
+    options: [
+      draconicAncestryOption('black', 'Black', 'acid', '5 by 30 ft. line', 'DEX'),
+      draconicAncestryOption('blue', 'Blue', 'lightning', '5 by 30 ft. line', 'DEX'),
+      draconicAncestryOption('brass', 'Brass', 'fire', '5 by 30 ft. line', 'DEX'),
+      draconicAncestryOption('bronze', 'Bronze', 'lightning', '5 by 30 ft. line', 'DEX'),
+      draconicAncestryOption('copper', 'Copper', 'acid', '5 by 30 ft. line', 'DEX'),
+      draconicAncestryOption('gold', 'Gold', 'fire', '15 ft. cone', 'DEX'),
+      draconicAncestryOption('green', 'Green', 'poison', '15 ft. cone', 'CON'),
+      draconicAncestryOption('red', 'Red', 'fire', '15 ft. cone', 'DEX'),
+      draconicAncestryOption('silver', 'Silver', 'cold', '15 ft. cone', 'CON'),
+      draconicAncestryOption('white', 'White', 'cold', '15 ft. cone', 'CON'),
+    ],
+  },
   features: [
     {
       id: 'dragonborn_asi',
@@ -366,39 +431,60 @@ export const raceDragonborn: Race = {
         { type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null },
       ],
     },
+  ],
+  // Explorer's Guide to Wildemount subraces — each replaces PHB Dragonborn's
+  // Ability Score Increase (and, per the book, "Damage Resistance", which in
+  // this app's model lives inside the ancestryChoice Feature rather than a
+  // separate base-race Feature; the ancestryChoice's resistance/breath
+  // weapon are unaffected and still chosen normally alongside either
+  // subrace).
+  subraces: [
     {
-      id: 'dragonborn_ancestry',
-      name: 'Draconic Ancestry',
-      description: 'You have draconic ancestry. Choose one type of dragon from the Draconic Ancestry table.',
-      source: { kind: 'race', refId: 'dragonborn' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
-    },
-    {
-      id: 'dragonborn_breath',
-      name: 'Breath Weapon',
-      description: 'You can use your action to exhale destructive energy determined by your draconic ancestry.',
-      source: { kind: 'race', refId: 'dragonborn' },
-      level: null, actions: [], choices: [], passive: false,
-      effects: [],
-      activation: {
-        actionType: 'action',
-        resourceCost: null,
-        range: '15 feet cone or 30 feet line',
-        target: 'area',
-        requiresSave: { ability: 'dex', dc: 8 },
-      },
-      abilityEffects: [
-        { type: 'damage', dice: '2d6', damageType: 'fire', saveOnSuccess: 'half' },
+      id: 'draconblood', name: 'Draconblood', parentId: 'dragonborn', srd: false,
+      features: [
+        {
+          id: 'draconblood_asi', name: 'Ability Score Increase',
+          description: 'Your Intelligence score increases by 2, and your Charisma score increases by 1.',
+          source: { kind: 'race', refId: 'draconblood' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'int', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'draconblood_darkvision', name: 'Darkvision',
+          description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+          source: { kind: 'race', refId: 'draconblood' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'draconblood_forceful_presence', name: 'Forceful Presence',
+          description: 'Once per long rest, you can make an Intimidation or Persuasion check with advantage.',
+          source: { kind: 'race', refId: 'draconblood' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
       ],
     },
     {
-      id: 'dragonborn_resistance',
-      name: 'Damage Resistance',
-      description: 'You have resistance to the damage type associated with your draconic ancestry.',
-      source: { kind: 'race', refId: 'dragonborn' },
-      level: null, actions: [], choices: [], passive: true,
-      effects: [
-        { type: 'grant_resistance', target: 'fire', operation: 'resistance', value: null, condition: null },
+      id: 'ravenite', name: 'Ravenite', parentId: 'dragonborn', srd: false,
+      features: [
+        {
+          id: 'ravenite_asi', name: 'Ability Score Increase',
+          description: 'Your Strength score increases by 2, and your Constitution score increases by 1.',
+          source: { kind: 'race', refId: 'ravenite' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'str', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'ravenite_darkvision', name: 'Darkvision',
+          description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+          source: { kind: 'race', refId: 'ravenite' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'ravenite_vengeful_assault', name: 'Vengeful Assault',
+          description: 'Once per short or long rest, when you take damage from a creature within range of a weapon you\'re wielding, you can use your reaction to attack that creature.',
+          source: { kind: 'race', refId: 'ravenite' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
       ],
     },
   ],
@@ -442,6 +528,56 @@ export const raceGnome: Race = {
       description: 'You have advantage on all Intelligence, Wisdom, and Charisma saving throws against magic.',
       source: { kind: 'race', refId: 'gnome' },
       level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+  subraces: [
+    {
+      id: 'forest_gnome', name: 'Forest Gnome', parentId: 'gnome', srd: true,
+      features: [
+        {
+          id: 'forest_gnome_asi', name: 'Ability Score Increase',
+          description: 'Your Dexterity score increases by 1.',
+          source: { kind: 'race', refId: 'forest_gnome' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'natural_illusionist', name: 'Natural Illusionist',
+          description: 'You know the Minor Illusion cantrip. Intelligence is your spellcasting ability for it.',
+          source: { kind: 'race', refId: 'forest_gnome' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['minor_illusion'], spellcastingAbility: 'int' },
+          ],
+        },
+        {
+          id: 'speak_with_small_beasts', name: 'Speak with Small Beasts',
+          description: 'Through sound and gestures, you can communicate simple ideas with Small or smaller beasts.',
+          source: { kind: 'race', refId: 'forest_gnome' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'rock_gnome', name: 'Rock Gnome', parentId: 'gnome', srd: true,
+      features: [
+        {
+          id: 'rock_gnome_asi', name: 'Ability Score Increase',
+          description: 'Your Constitution score increases by 1.',
+          source: { kind: 'race', refId: 'rock_gnome' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'artificers_lore', name: "Artificer's Lore",
+          description: 'Whenever you make an Intelligence (History) check related to magical, alchemical, or technological items, you can add twice your proficiency bonus, instead of any other proficiency bonus you normally apply.',
+          source: { kind: 'race', refId: 'rock_gnome' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'gnome_tinker', name: 'Tinker',
+          description: "You have proficiency with tinker's tools. Using them, you can spend 1 hour and 10 gp of materials to construct a Tiny clockwork device (AC 5, 1 hp) — a clockwork toy, a fire starter, or a music box — that stops functioning after 24 hours unless you spend 1 hour maintaining it, or when you dismantle it to reclaim the materials. You can have up to three devices active at once.",
+          source: { kind: 'race', refId: 'rock_gnome' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_proficiency', target: 'tool:tinkers_tools', operation: 'add', value: null, condition: null },
+          ],
+        },
+      ],
     },
   ],
 };

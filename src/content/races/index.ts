@@ -247,6 +247,385 @@ export const raceElf: Race = {
         },
       ],
     },
+    // Explorer's Guide to Wildemount
+    {
+      id: 'pallid_elf', name: 'Pallid Elf', parentId: 'elf', srd: false,
+      features: [
+        {
+          id: 'pallid_elf_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 1.',
+          source: { kind: 'race', refId: 'pallid_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'incisive_sense', name: 'Incisive Sense',
+          description: 'You have advantage on Investigation and Insight checks. (This app has no mechanism for advantage on a specific pair of skill checks — only a small hardcoded set of advantage targets, e.g. attack rolls — so this isn\'t applied mechanically.)',
+          source: { kind: 'race', refId: 'pallid_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'blessing_of_the_moonweaver', name: 'Blessing of the Moonweaver',
+          description: 'You know the Light cantrip. Wisdom is your spellcasting ability for it. At 3rd level you can cast Sleep once, and at 5th level Invisibility (self only) once, each recharging on a long rest — this app doesn\'t yet support level-gated racial features, so only the 1st-level cantrip is granted for real.',
+          source: { kind: 'race', refId: 'pallid_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['light'], spellcastingAbility: 'wis' },
+          ],
+        },
+      ],
+    },
+    // Eberron: Rising from the Last War — dragonmark. "Spells of the Mark"
+    // (adds spells to a spellcasting class's spell list) has no mechanism —
+    // same disclosed gap as Gnome's Mark of Scribing.
+    {
+      id: 'mark_of_shadow', name: 'Mark of Shadow', parentId: 'elf', srd: false,
+      features: [
+        {
+          id: 'mark_of_shadow_asi', name: 'Ability Score Increase',
+          description: 'Your Charisma score increases by 1.',
+          source: { kind: 'race', refId: 'mark_of_shadow' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'cunning_intuition', name: 'Cunning Intuition',
+          description: 'Whenever you roll a Dexterity (Stealth) or Charisma (Performance) check, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_shadow' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'shape_shadows', name: 'Shape Shadows',
+          description: 'You know the Minor Illusion cantrip. Charisma is your spellcasting ability for it. At 3rd level you can cast Invisibility once, recharging on a long rest — this app doesn\'t yet support level-gated racial features, so only the 1st-level cantrip is granted for real.',
+          source: { kind: 'race', refId: 'mark_of_shadow' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['minor_illusion'], spellcastingAbility: 'cha' },
+          ],
+        },
+        {
+          id: 'spells_of_the_mark', name: 'Spells of the Mark',
+          description: 'If you have the Spellcasting or Pact Magic class feature, Disguise Self, Silent Image, Darkness, Pass without Trace, Clairvoyance, Major Image, Greater Invisibility, Hallucinatory Terrain, and Mislead are added to your class\'s spell list. (No mechanism to add spells to a class spell list — not applied mechanically, tracked for reference.)',
+          source: { kind: 'race', refId: 'mark_of_shadow' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Spelljammer: Adventures in Space (Astral Adventurer's Guide) — official.
+    {
+      id: 'astral_elf', name: 'Astral Elf', parentId: 'elf', srd: false,
+      replacesBaseFeatureIds: ['elf_asi', 'elf_darkvision', 'elf_fey_ancestry', 'elf_keen_senses', 'elf_trance'],
+      flexibleAsi: {
+        prompt: 'Increase one ability score by 2 and a different one by 1, or increase three different ability scores by 1.',
+        mode: { kind: 'two_one_or_three_one' },
+      },
+      // Astral Fire: RAW lets you independently choose a cantrip (Dancing
+      // Lights/Light/Sacred Flame) AND which of INT/WIS/CHA governs it —
+      // simplified to 3 paired options (the ancestryChoice mechanism grants
+      // one Feature per pick, not two independent nested choices), disclosed
+      // in each option's blurb.
+      ancestryChoice: {
+        prompt: 'Choose your Astral Fire cantrip (paired with a spellcasting ability, per RAW you may pick any of the three abilities independently — simplified here to one fixed pairing per option).',
+        options: [
+          {
+            id: 'dancing_lights', name: 'Dancing Lights (Intelligence)', blurb: 'Know Dancing Lights, cast with Intelligence.',
+            feature: {
+              id: 'astral_fire_dancing_lights', name: 'Astral Fire', description: 'You know the Dancing Lights cantrip. Intelligence is your spellcasting ability for it.',
+              source: { kind: 'race', refId: 'astral_elf' }, level: null, actions: [], choices: [], passive: true,
+              effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['dancing_lights'], spellcastingAbility: 'int' }],
+            },
+          },
+          {
+            id: 'light', name: 'Light (Wisdom)', blurb: 'Know Light, cast with Wisdom.',
+            feature: {
+              id: 'astral_fire_light', name: 'Astral Fire', description: 'You know the Light cantrip. Wisdom is your spellcasting ability for it.',
+              source: { kind: 'race', refId: 'astral_elf' }, level: null, actions: [], choices: [], passive: true,
+              effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['light'], spellcastingAbility: 'wis' }],
+            },
+          },
+          {
+            id: 'sacred_flame', name: 'Sacred Flame (Charisma)', blurb: 'Know Sacred Flame, cast with Charisma.',
+            feature: {
+              id: 'astral_fire_sacred_flame', name: 'Astral Fire', description: 'You know the Sacred Flame cantrip. Charisma is your spellcasting ability for it.',
+              source: { kind: 'race', refId: 'astral_elf' }, level: null, actions: [], choices: [], passive: true,
+              effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['sacred_flame'], spellcastingAbility: 'cha' }],
+            },
+          },
+        ],
+      },
+      resources: [
+        { resourceId: 'starlight_step_pool', name: 'Starlight Step', maximum: 2, recharge: 'long_rest' },
+      ],
+      features: [
+        {
+          id: 'astral_elf_darkvision', name: 'Darkvision',
+          description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+          source: { kind: 'race', refId: 'astral_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }],
+        },
+        {
+          id: 'astral_elf_fey_ancestry', name: 'Fey Ancestry',
+          description: 'You have advantage on saving throws you make to avoid or end the charmed condition on yourself.',
+          source: { kind: 'race', refId: 'astral_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'astral_elf_keen_senses', name: 'Keen Senses',
+          description: 'You have proficiency in the Perception skill.',
+          source: { kind: 'race', refId: 'astral_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_proficiency', target: 'skill:perception', operation: 'add', value: null, condition: null }],
+        },
+        {
+          id: 'starlight_step', name: 'Starlight Step',
+          description: 'As a bonus action, you can magically teleport up to 30 feet to an unoccupied space you can see. You can use this a number of times equal to your proficiency bonus (this app tracks a fixed pool of 2, the 1st-level value); all uses return on a long rest. (This app has no teleport/repositioning mechanic — the resource is tracked, but using it has no automated effect.)',
+          source: { kind: 'race', refId: 'astral_elf' }, level: null, actions: [], choices: [], passive: false,
+          effects: [],
+          activation: { actionType: 'bonus_action', resourceCost: { resourceId: 'starlight_step_pool', quantity: 1 }, range: '30 feet', target: 'self', requiresSave: null },
+        },
+        {
+          id: 'astral_trance', name: 'Astral Trance',
+          description: 'You don\'t need to sleep, and magic can\'t put you to sleep. You can finish a long rest in 4 hours of trancelike meditation, gaining one skill proficiency and one weapon or tool proficiency of your choice until your next long rest. (No mechanism for temporary/expiring proficiencies — not applied mechanically.)',
+          source: { kind: 'race', refId: 'astral_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Plane Shift: Kaladesh (Magic: the Gathering crossover)
+    {
+      id: 'bishtahar_tirahar_elf', name: 'Bishtahar/Tirahar Elf', parentId: 'elf', srd: false,
+      features: [
+        {
+          id: 'bishtahar_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 1.',
+          source: { kind: 'race', refId: 'bishtahar_tirahar_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null }],
+        },
+        elfWeaponTraining('bishtahar_tirahar_elf'),
+        {
+          id: 'bishtahar_fleet_of_foot', name: 'Fleet of Foot',
+          description: 'Your base walking speed increases to 35 feet.',
+          source: { kind: 'race', refId: 'bishtahar_tirahar_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'speed', operation: 'set', value: 35, condition: null }],
+        },
+        {
+          id: 'bishtahar_mask_of_the_wild', name: 'Mask of the Wild',
+          description: 'You can attempt to hide even when you are only lightly obscured by foliage, heavy rain, falling snow, mist, and other natural phenomena.',
+          source: { kind: 'race', refId: 'bishtahar_tirahar_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'vahadar_elf', name: 'Vahadar Elf', parentId: 'elf', srd: false,
+      features: [
+        {
+          id: 'vahadar_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 1.',
+          source: { kind: 'race', refId: 'vahadar_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null }],
+        },
+        elfWeaponTraining('vahadar_elf'),
+        {
+          id: 'vahadar_cantrip', name: 'Cantrip',
+          description: 'You know one cantrip of your choice from the druid spell list. Wisdom is your spellcasting ability for it.',
+          source: { kind: 'race', refId: 'vahadar_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'vahadar_extra_language', name: 'Extra Language',
+          description: 'You can speak, read, and write one extra language of your choice.',
+          source: { kind: 'race', refId: 'vahadar_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Plane Shift: Zendikar (Magic: the Gathering crossover)
+    {
+      id: 'tajuru', name: 'Tajuru', parentId: 'elf', srd: false,
+      pendingChoices: [
+        {
+          id: `${RACE_CHOICE_PREFIX}tajuru_skills`,
+          prompt: 'Choose two skills to gain proficiency in. (RAW also allows tools instead of skills — this app\'s race-selection choice queue only supports skill choices, so narrowed to skills only.)',
+          kind: 'skill', count: 2, pool: ALL_SKILL_OPTIONS,
+          grants: [], required: true, resolved: false,
+        },
+      ],
+      features: [
+        {
+          id: 'tajuru_asi', name: 'Ability Score Increase',
+          description: 'Your Charisma score increases by 1.',
+          source: { kind: 'race', refId: 'tajuru' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null }],
+        },
+      ],
+    },
+    {
+      id: 'juraga', name: 'Juraga', parentId: 'elf', srd: false,
+      features: [
+        {
+          id: 'juraga_asi', name: 'Ability Score Increase',
+          description: 'Your Dexterity score increases by 1.',
+          source: { kind: 'race', refId: 'juraga' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null }],
+        },
+        elfWeaponTraining('juraga'),
+        {
+          id: 'juraga_fleet_of_foot', name: 'Fleet of Foot',
+          description: 'Your base walking speed increases to 35 feet.',
+          source: { kind: 'race', refId: 'juraga' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'speed', operation: 'set', value: 35, condition: null }],
+        },
+        {
+          id: 'juraga_mask_of_the_wild', name: 'Mask of the Wild',
+          description: 'You can attempt to hide even when you are only lightly obscured by foliage, heavy rain, falling snow, mist, and other natural phenomena.',
+          source: { kind: 'race', refId: 'juraga' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'mul_daya', name: 'Mul Daya', parentId: 'elf', srd: false,
+      features: [
+        {
+          id: 'mul_daya_asi', name: 'Ability Score Increase',
+          description: 'Your Strength score increases by 1.',
+          source: { kind: 'race', refId: 'mul_daya' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'mul_daya_superior_darkvision', name: 'Superior Darkvision',
+          description: 'Your darkvision has a radius of 120 feet.',
+          source: { kind: 'race', refId: 'mul_daya' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 120 }],
+        },
+        {
+          id: 'mul_daya_sunlight_sensitivity', name: 'Sunlight Sensitivity',
+          description: 'You have disadvantage on attack rolls and Wisdom (Perception) checks that rely on sight when you, the target, or whatever you are trying to perceive is in direct sunlight.',
+          source: { kind: 'race', refId: 'mul_daya' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'mul_daya_magic', name: 'Mul Daya Magic',
+          description: 'You know the Chill Touch cantrip. Wisdom is your spellcasting ability for it. At 3rd level you can cast Hex once, and at 5th level Darkness once, each recharging on a long rest — this app doesn\'t yet support level-gated racial features, so only the 1st-level cantrip is granted for real.',
+          source: { kind: 'race', refId: 'mul_daya' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['chill_touch'], spellcastingAbility: 'wis' },
+          ],
+        },
+        elfWeaponTraining('mul_daya'),
+      ],
+    },
+    // Unearthed Arcana 46 — Elf Subraces
+    {
+      id: 'avariel_elf', name: 'Avariel Elf', parentId: 'elf', srd: false,
+      features: [
+        {
+          id: 'avariel_flight', name: 'Flight',
+          description: 'You have a flying speed of 30 feet. (RAW: only while not wearing medium or heavy armor — this app has no mechanism to condition a movement speed on equipped armor weight, so the speed is granted unconditionally; disclosed, not silently wrong.)',
+          source: { kind: 'race', refId: 'avariel_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'fly', movementRange: 30 }],
+        },
+      ],
+    },
+    {
+      id: 'grugach_elf', name: 'Grugach Elf', parentId: 'elf', srd: false,
+      features: [
+        {
+          id: 'grugach_asi', name: 'Ability Score Increase',
+          description: 'Your Strength score increases by 1.',
+          source: { kind: 'race', refId: 'grugach_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'grugach_weapon_training', name: 'Grugach Weapon Training',
+          description: 'You have proficiency with the spear, shortbow, longbow, and net.',
+          source: { kind: 'race', refId: 'grugach_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_proficiency', target: 'weapon:spear', operation: 'add', value: null, condition: null },
+            { type: 'grant_proficiency', target: 'weapon:shortbow', operation: 'add', value: null, condition: null },
+            { type: 'grant_proficiency', target: 'weapon:longbow', operation: 'add', value: null, condition: null },
+            { type: 'grant_proficiency', target: 'weapon:net', operation: 'add', value: null, condition: null },
+          ],
+        },
+        {
+          id: 'grugach_cantrip', name: 'Cantrip',
+          description: 'You know one cantrip of your choice from the druid spell list. Wisdom is your spellcasting ability for it.',
+          source: { kind: 'race', refId: 'grugach_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'grugach_languages', name: 'Languages',
+          description: 'Unlike other elves, you don\'t speak, read, or write Common. You instead speak, read, and write Sylvan.',
+          source: { kind: 'race', refId: 'grugach_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Reconciled from the "Partially Official races" vault folder as Elf
+    // subraces (both use the classic Mordenkainen's Tome of Foes stat
+    // blocks — simpler, fixed ASI, no new mechanism needed — rather than
+    // the alternate flexible-ASI drafts also present in those notes).
+    {
+      id: 'sea_elf', name: 'Sea Elf', parentId: 'elf', srd: false, replacesBaseFeatureIds: ['elf_asi'],
+      features: [
+        {
+          id: 'sea_elf_asi', name: 'Ability Score Increase',
+          description: 'Your Dexterity score increases by 2, and your Constitution score increases by 1.',
+          source: { kind: 'race', refId: 'sea_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'dex', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'sea_elf_training', name: 'Sea Elf Training',
+          description: 'You have proficiency with the spear, trident, light crossbow, and net.',
+          source: { kind: 'race', refId: 'sea_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_proficiency', target: 'weapon:spear', operation: 'add', value: null, condition: null },
+            { type: 'grant_proficiency', target: 'weapon:trident', operation: 'add', value: null, condition: null },
+            { type: 'grant_proficiency', target: 'weapon:light_crossbow', operation: 'add', value: null, condition: null },
+            { type: 'grant_proficiency', target: 'weapon:net', operation: 'add', value: null, condition: null },
+          ],
+        },
+        {
+          id: 'child_of_the_sea', name: 'Child of the Sea',
+          description: 'You have a swimming speed of 30 feet, and you can breathe air and water. (The swim speed is real; "can breathe water" has no dedicated mechanism and is tracked for reference only.)',
+          source: { kind: 'race', refId: 'sea_elf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'swim', movementRange: 30 }],
+        },
+        {
+          id: 'friend_of_the_sea', name: 'Friend of the Sea',
+          description: 'Using gestures and sounds, you can communicate simple ideas with any beast that has an innate swimming speed.',
+          source: { kind: 'race', refId: 'sea_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'eladrin', name: 'Eladrin', parentId: 'elf', srd: false, replacesBaseFeatureIds: ['elf_asi'],
+      // Season is a same-screen "pick 1 of 4, get a Feature" choice — the
+      // same shape ancestryChoice already models, reused here even though
+      // it's flavor (not a lineage) since the resulting Fey Step bonus
+      // effect can't be mechanically modeled anyway (no teleport-trigger
+      // system, and it's gated to 3rd level — see the note on each option).
+      ancestryChoice: {
+        prompt: 'Choose your season — Autumn, Winter, Spring, or Summer. Determines a bonus effect on Fey Step at 3rd level (reference only, see below).',
+        options: (['Autumn', 'Winter', 'Spring', 'Summer'] as const).map(season => ({
+          id: season.toLowerCase(), name: season,
+          blurb: `${season} eladrin — Fey Step gains a ${season.toLowerCase()}-themed bonus at 3rd level (reference only).`,
+          feature: {
+            id: `eladrin_season_${season.toLowerCase()}`, name: `Season: ${season}`,
+            description: `At 3rd level, your Fey Step gains a ${season} effect (DC = 8 + proficiency bonus + Charisma modifier) — this app doesn't yet support level-gated racial features, so this is tracked for reference only.`,
+            source: { kind: 'race', refId: 'eladrin' }, level: null, effects: [], actions: [], choices: [], passive: true,
+          },
+        })),
+      },
+      features: [
+        {
+          id: 'eladrin_asi', name: 'Ability Score Increase',
+          description: 'Your Dexterity score increases by 2, and your Charisma score increases by 1.',
+          source: { kind: 'race', refId: 'eladrin' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'dex', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'fey_step', name: 'Fey Step',
+          description: 'As a bonus action, you can magically teleport up to 30 feet to an unoccupied space you can see. Once per short or long rest. (No teleport/repositioning mechanic — the resource is tracked, but using it has no automated effect.)',
+          source: { kind: 'race', refId: 'eladrin' }, level: null, actions: [], choices: [], passive: false,
+          effects: [],
+          activation: { actionType: 'bonus_action', resourceCost: { resourceId: 'fey_step_pool', quantity: 1 }, range: '30 feet', target: 'self', requiresSave: null },
+        },
+      ],
+      resources: [
+        { resourceId: 'fey_step_pool', name: 'Fey Step', maximum: 1, recharge: 'short_rest' },
+      ],
+    },
   ],
 };
 

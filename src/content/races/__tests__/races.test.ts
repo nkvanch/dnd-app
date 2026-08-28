@@ -248,6 +248,78 @@ describe('Elf and Drow — darkvision/weapon proficiency (previously flavor-only
   });
 });
 
+describe('Sourcebook Elf subraces', () => {
+  it('Astral Elf fully replaces base Elf traits and applies its own flexible ASI + ancestryChoice cantrip', () => {
+    const astral = raceElf.subraces!.find(s => s.id === 'astral_elf')!;
+    const e = applyRaceSelection(raceElf, astral, [
+      { ability: 'int', amount: 2 }, { ability: 'con', amount: 1 },
+    ], 'sacred_flame');
+    // base elf_asi (dex+2/int+1) must be gone — Astral Elf replaces it entirely
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects.filter(ef => ef.target === 'dex')).toEqual([]);
+    expect(e.spellcasting?.cantrips).toContain('sacred_flame');
+    expect(e.spellcasting?.ability).toBe('cha');
+  });
+
+  it('Tajuru queues a real 2-skill choice resolvable via resolveChoice', () => {
+    const tajuru = raceElf.subraces!.find(s => s.id === 'tajuru')!;
+    const e = applyRaceSelection(raceElf, tajuru);
+    const pending = e.choices.find(c => c.definition.id.startsWith('race_choice_') && c.definition.kind === 'skill');
+    expect(pending!.definition.count).toBe(2);
+    const resolved = resolveChoice(e, pending!.id, ['survival', 'nature'], DEFAULT_RULES);
+    expect(resolved.skills.skills.survival.trained).toBe(true);
+    expect(resolved.skills.skills.nature.trained).toBe(true);
+  });
+
+  it('Sea Elf and Eladrin each replace the base Elf ASI with their own, while keeping base darkvision/fey ancestry/trance', () => {
+    const seaElf  = raceElf.subraces!.find(s => s.id === 'sea_elf')!;
+    const eladrin = raceElf.subraces!.find(s => s.id === 'eladrin')!;
+    const eSea = applyRaceSelection(raceElf, seaElf);
+    const eEladrin = applyRaceSelection(raceElf, eladrin, [], 'winter');
+
+    const seaEffects = eSea.features.flatMap(f => f.effects);
+    expect(seaEffects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'dex', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+    ]));
+    expect(seaEffects.find(ef => ef.target === 'int')).toBeUndefined(); // base elf_asi's int+1 gone
+    expect(eSea.derived.senses).toEqual([{ type: 'darkvision', range: 60, note: undefined }]); // inherited from base Elf
+
+    const eladrinEffects = eEladrin.features.flatMap(f => f.effects);
+    expect(eladrinEffects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'dex', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null },
+    ]));
+    expect(eladrinEffects.find(ef => ef.target === 'int')).toBeUndefined();
+    expect(eEladrin.features.some(f => f.id === 'eladrin_season_winter')).toBe(true);
+  });
+
+  it('Sea Elf grants a real 30ft swim speed', () => {
+    const seaElf = raceElf.subraces!.find(s => s.id === 'sea_elf')!;
+    const e = applyRaceSelection(raceElf, seaElf);
+    expect(e.derived.movement).toEqual({ swim: 30 });
+  });
+
+  it('Avariel Elf grants a real 30ft fly speed', () => {
+    const avariel = raceElf.subraces!.find(s => s.id === 'avariel_elf')!;
+    const e = applyRaceSelection(raceElf, avariel);
+    expect(e.derived.movement).toEqual({ fly: 30 });
+  });
+
+  it('Mul Daya\'s Superior Darkvision (120ft) wins over the base race\'s 60ft, same as Drow', () => {
+    const mulDaya = raceElf.subraces!.find(s => s.id === 'mul_daya')!;
+    const e = applyRaceSelection(raceElf, mulDaya);
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 120, note: undefined }]);
+    expect(e.spellcasting?.cantrips).toContain('chill_touch');
+  });
+
+  it('every non-Drow, non-replacing subrace still inherits base Elf Keen Senses (Perception proficiency)', () => {
+    const pallid = raceElf.subraces!.find(s => s.id === 'pallid_elf')!;
+    const e = applyRaceSelection(raceElf, pallid);
+    expect(e.skills.skills.perception.trained).toBe(true);
+  });
+});
+
 describe('Gnome subraces', () => {
   it('defines Forest Gnome and Rock Gnome as required subraces', () => {
     expect(raceGnome.subracesOptional).toBeUndefined();

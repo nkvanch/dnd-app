@@ -8,7 +8,7 @@
 import { makeEmptyEntity, DEFAULT_RULES } from '../../../store/characterStore';
 import { applyGrant, queueChoice, resolveChoice } from '../../../engine/leveling';
 import { recomputeDerived } from '../../../engine/pipeline';
-import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf } from '../index';
+import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf, raceHalfling } from '../index';
 import { resolveResistance } from '../../../engine/resolver';
 import { collectAllEffects } from '../../../engine/pipeline';
 import { Race, Subrace, Ability, Feature, Entity } from '../../../engine/types';
@@ -275,6 +275,33 @@ describe('Dwarf subraces', () => {
     expect(effects).toEqual(expect.arrayContaining([
       { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null }, // base dwarf_asi, inherited
       { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null }, // mark of warding's own
+    ]));
+  });
+});
+
+describe('Halfling subraces', () => {
+  it('Lotusden Halfling grants a real Druidcraft cantrip', () => {
+    const lotusden = raceHalfling.subraces!.find(s => s.id === 'lotusden_halfling')!;
+    const e = applyRaceSelection(raceHalfling, lotusden);
+    expect(e.spellcasting?.cantrips).toContain('druidcraft');
+    expect(e.spellcasting?.ability).toBe('wis');
+  });
+
+  it('Mark of Hospitality grants a real Prestidigitation cantrip', () => {
+    const moh = raceHalfling.subraces!.find(s => s.id === 'mark_of_hospitality')!;
+    const e = applyRaceSelection(raceHalfling, moh);
+    expect(e.spellcasting?.cantrips).toContain('prestidigitation');
+    expect(e.spellcasting?.ability).toBe('cha');
+  });
+
+  it('every new subrace still inherits base Halfling Lucky/Brave/Nimbleness (additive, no replacesBaseFeatureIds)', () => {
+    const ghostwise = raceHalfling.subraces!.find(s => s.id === 'ghostwise_halfling')!;
+    const e = applyRaceSelection(raceHalfling, ghostwise);
+    expect(e.features.some(f => f.id === 'halfling_lucky')).toBe(true);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'dex', operation: 'add', value: 2, condition: null }, // base ASI
+      { type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null }, // ghostwise's own
     ]));
   });
 });

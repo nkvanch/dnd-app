@@ -896,6 +896,104 @@ export const raceHalfling: Race = {
         },
       ],
     },
+    // Sword Coast Adventurer's Guide
+    {
+      id: 'ghostwise_halfling', name: 'Ghostwise Halfling', parentId: 'halfling', srd: false,
+      features: [
+        {
+          id: 'ghostwise_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 1.',
+          source: { kind: 'race', refId: 'ghostwise_halfling' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'silent_speech', name: 'Silent Speech',
+          description: 'You can speak telepathically to any creature within 30 feet of you (it must share a language with you to understand). One creature at a time. (No telepathy mechanic exists — not applied mechanically.)',
+          source: { kind: 'race', refId: 'ghostwise_halfling' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Explorer's Guide to Wildemount
+    {
+      id: 'lotusden_halfling', name: 'Lotusden Halfling', parentId: 'halfling', srd: false,
+      features: [
+        {
+          id: 'lotusden_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 1.',
+          source: { kind: 'race', refId: 'lotusden_halfling' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'children_of_the_woods', name: 'Children of the Woods',
+          description: 'You know the Druidcraft cantrip. Wisdom is your spellcasting ability for it. At 3rd level you can cast Entangle once, and at 5th level Spike Growth once, each recharging on a long rest — this app doesn\'t yet support level-gated racial features, so only the 1st-level cantrip is granted for real.',
+          source: { kind: 'race', refId: 'lotusden_halfling' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['druidcraft'], spellcastingAbility: 'wis' },
+          ],
+        },
+        {
+          id: 'timberwalk', name: 'Timberwalk',
+          description: 'Ability checks made to track you have disadvantage, and you can move through non-magical difficult terrain made of plants/overgrowth without extra cost. (No mechanism for conditional disadvantage on OTHER creatures\' checks, or for terrain-specific movement cost reduction — not applied mechanically.)',
+          source: { kind: 'race', refId: 'lotusden_halfling' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Eberron: Rising from the Last War — dragonmarks
+    {
+      id: 'mark_of_hospitality', name: 'Mark of Hospitality', parentId: 'halfling', srd: false,
+      features: [
+        {
+          id: 'mark_of_hospitality_asi', name: 'Ability Score Increase',
+          description: 'Your Charisma score increases by 1.',
+          source: { kind: 'race', refId: 'mark_of_hospitality' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'ever_hospitable', name: 'Ever Hospitable',
+          description: 'Whenever you roll a Charisma (Persuasion) check or an ability check with brewer\'s tools or cook\'s utensils, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_hospitality' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'innkeepers_magic', name: "Innkeeper's Magic",
+          description: 'You know the Prestidigitation cantrip. Charisma is your spellcasting ability for it. You can also cast Purify Food and Drink and Unseen Servant with this trait, each once per long rest — this app doesn\'t yet support a limited-use LEVELED spell without a slot, so only the 1st-level cantrip is granted for real.',
+          source: { kind: 'race', refId: 'mark_of_hospitality' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['prestidigitation'], spellcastingAbility: 'cha' },
+          ],
+        },
+        {
+          id: 'mark_of_hospitality_spells', name: 'Spells of the Mark',
+          description: 'If you have the Spellcasting or Pact Magic class feature, Goodberry, Sleep, Aid, Calm Emotions, Create Food and Water, Leomund\'s Tiny Hut, Aura of Purity, Mordenkainen\'s Private Sanctum, and Hallow are added to your class\'s spell list. (No mechanism to add spells to a class spell list — not applied mechanically, tracked for reference.)',
+          source: { kind: 'race', refId: 'mark_of_hospitality' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'mark_of_healing', name: 'Mark of Healing', parentId: 'halfling', srd: false,
+      features: [
+        {
+          id: 'mark_of_healing_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 1.',
+          source: { kind: 'race', refId: 'mark_of_healing' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'medical_intuition', name: 'Medical Intuition',
+          description: 'Whenever you roll a Wisdom (Medicine) check or an ability check with an herbalism kit, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_healing' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'healing_touch', name: 'Healing Touch',
+          description: 'You can cast Cure Wounds with this trait, once per long rest. At 3rd level you can also cast Lesser Restoration. Wisdom is your spellcasting ability for these spells. (Neither is a cantrip — this app has no mechanism to grant a limited-use LEVELED spell without a slot, so none of this is applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_healing' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'mark_of_healing_spells', name: 'Spells of the Mark',
+          description: 'If you have the Spellcasting or Pact Magic class feature, Cure Wounds, Healing Word, Lesser Restoration, Prayer of Healing, Aura of Vitality, Mass Healing Word, Aura of Purity, Aura of Life, and Greater Restoration are added to your class\'s spell list. (No mechanism to add spells to a class spell list — not applied mechanically, tracked for reference.)',
+          source: { kind: 'race', refId: 'mark_of_healing' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
   ],
 };
 

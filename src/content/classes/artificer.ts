@@ -133,7 +133,12 @@ export const artificerProgression: ClassProgression = {
         { kind: 'feature', value: { id: 'magic_item_adept', name: 'Magic Item Adept', description: 'You can attune to up to 4 magic items at once, and crafting a magic item costs you half the usual gold and time. Flavor-only — the app has no attunement-count enforcement or crafting/downtime system.', source: { kind: 'class', refId: 'artificer' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
-    { level: 11, hpDie: 8, choices: [], grants: [] },
+    {
+      level: 11, hpDie: 8, choices: [],
+      grants: [
+        { kind: 'feature', value: { id: 'spell_storing_item', name: 'Spell-Storing Item', description: 'You can store a spell in an object. Any creature can then use an action to read the item and cast the spell from it. Requires 1 hour of work and a spell slot of 1st-4th level for a spell you know or have access to; the stored spell can be cast a number of times equal to twice the spell\'s level, after which the enchantment fades. Flavor-only — no crafting/downtime system to model the hour of work, and no mechanism for a non-caster item to hold and later trigger a spell cast.', source: { kind: 'class', refId: 'artificer' }, level: 11, effects: [], actions: [], choices: [], passive: false } },
+      ],
+    },
     { level: 12, hpDie: 8, choices: [asiChoice('artificer_asi_12')], grants: [] },
     { level: 13, hpDie: 8, choices: [], grants: [] },
     {

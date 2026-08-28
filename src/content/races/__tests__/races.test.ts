@@ -288,6 +288,71 @@ describe('Variant Human', () => {
   });
 });
 
+describe('Human dragonmarks and Plane Shift subraces', () => {
+  it('Mark of Finding replaces the ASI and Languages, granting real WIS+2/CON+1 and darkvision', () => {
+    const mof = raceHuman.subraces!.find(s => s.id === 'human_mark_of_finding')!;
+    const e = applyRaceSelection(raceHuman, mof);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects.find(ef => ef.target === 'str')).toBeUndefined(); // base human_asi gone
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'wis', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+    ]));
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 60, note: undefined }]);
+  });
+
+  it('Mark of Making grants a real Mending cantrip and replaces the ASI with INT+2', () => {
+    const mom = raceHuman.subraces!.find(s => s.id === 'mark_of_making')!;
+    const e = applyRaceSelection(raceHuman, mom);
+    expect(e.spellcasting?.cantrips).toContain('mending');
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects.find(ef => ef.target === 'str')).toBeUndefined();
+    expect(effects).toContainEqual({ type: 'stat_modifier', target: 'int', operation: 'add', value: 2, condition: null });
+  });
+
+  it('Mark of Passage grants a real 35ft speed', () => {
+    const mop = raceHuman.subraces!.find(s => s.id === 'mark_of_passage')!;
+    const e = applyRaceSelection(raceHuman, mop);
+    expect(e.derived.speed).toBe(35);
+  });
+
+  it('Keldon replaces both the ASI and Languages, granting real STR+2/CON+1 and Athletics', () => {
+    const keldon = raceHuman.subraces!.find(s => s.id === 'keldon')!;
+    const e = applyRaceSelection(raceHuman, keldon);
+    expect(e.skills.skills.athletics.trained).toBe(true);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'str', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+    ]));
+  });
+
+  it('Kessig grants real DEX+1/WIS+1, Survival proficiency, and 40ft speed', () => {
+    const kessig = raceHuman.subraces!.find(s => s.id === 'human_kessig')!;
+    const e = applyRaceSelection(raceHuman, kessig);
+    expect(e.skills.skills.survival.trained).toBe(true);
+    expect(e.derived.speed).toBe(40);
+  });
+
+  it('Nephalia queues a real 4-skill choice', () => {
+    const nephalia = raceHuman.subraces!.find(s => s.id === 'human_nephalia')!;
+    const e = applyRaceSelection(raceHuman, nephalia);
+    const pending = e.choices.find(c => c.definition.id.startsWith('race_choice_') && c.definition.kind === 'skill');
+    expect(pending!.definition.count).toBe(4);
+  });
+
+  it('Stensia grants real STR+1/CON+1 and Intimidation proficiency', () => {
+    const stensia = raceHuman.subraces!.find(s => s.id === 'human_stensia')!;
+    const e = applyRaceSelection(raceHuman, stensia);
+    expect(e.skills.skills.intimidation.trained).toBe(true);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null },
+      { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+    ]));
+  });
+});
+
 describe('Elf and Drow — darkvision/weapon proficiency (previously flavor-only everywhere)', () => {
   it('base Elf grants real 60ft darkvision', () => {
     const e = applyRaceSelection(raceElf, null);

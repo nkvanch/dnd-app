@@ -118,6 +118,289 @@ export const raceHuman: Race = {
         },
       ],
     },
+    // Eberron: Rising from the Last War — dragonmarks. All replace just
+    // human_asi except Mark of Finding, which replaces everything (per its
+    // own "replace all Racial Traits... except Age/Alignment/Size/Speed"
+    // text — including Languages).
+    {
+      id: 'human_mark_of_finding', name: 'Mark of Finding', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi', 'human_extra_language'],
+      features: [
+        {
+          id: 'human_mof_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 2, and your Constitution score increases by 1.',
+          source: { kind: 'race', refId: 'human_mark_of_finding' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'wis', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'human_mof_darkvision', name: 'Darkvision',
+          description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+          source: { kind: 'race', refId: 'human_mark_of_finding' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }],
+        },
+        {
+          id: 'human_mof_intuition', name: "Hunter's Intuition",
+          description: 'Whenever you roll a Wisdom (Perception) or Wisdom (Survival) check, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'human_mark_of_finding' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'human_mof_magic', name: "Finder's Magic",
+          description: 'You can cast Hunter\'s Mark with this trait, once per long rest. At 3rd level you can also cast Locate Object. Wisdom is your spellcasting ability for these spells. (Neither is a cantrip — no mechanism for a limited-use LEVELED spell without a slot, so not applied mechanically.)',
+          source: { kind: 'race', refId: 'human_mark_of_finding' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'mark_of_handling', name: 'Mark of Handling', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi'],
+      features: [
+        {
+          id: 'mark_of_handling_asi', name: 'Ability Score Increase',
+          description: 'Your Wisdom score increases by 2, and one other ability score of your choice increases by 1. (Only the fixed WIS+2 is applied mechanically — no flexibleAsi shape yet for "+2 fixed, +1 player choice.")',
+          source: { kind: 'race', refId: 'mark_of_handling' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'wis', operation: 'add', value: 2, condition: null }],
+        },
+        {
+          id: 'wild_intuition', name: 'Wild Intuition',
+          description: 'Whenever you roll a Wisdom (Animal Handling) or Intelligence (Nature) check, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_handling' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'primal_connection', name: 'Primal Connection',
+          description: 'You can cast Animal Friendship and Speak with Animals with this trait, without material components, once each per long rest. At 3rd level, these can target Beasts or Monstrosities with intelligence 3 or lower. Wisdom is your spellcasting ability. (Neither is a cantrip — no mechanism for a limited-use LEVELED spell without a slot, so not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_handling' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'mark_of_making', name: 'Mark of Making', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi'],
+      features: [
+        {
+          id: 'mark_of_making_asi', name: 'Ability Score Increase',
+          description: 'Your Intelligence score increases by 2, and one other ability score of your choice increases by 1. (Only the fixed INT+2 is applied mechanically — no flexibleAsi shape yet for "+2 fixed, +1 player choice.")',
+          source: { kind: 'race', refId: 'mark_of_making' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'int', operation: 'add', value: 2, condition: null }],
+        },
+        {
+          id: 'artisans_intuition', name: "Artisan's Intuition",
+          description: 'Whenever you roll an Intelligence (Arcana) check or an ability check with artisan\'s tools, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_making' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'artisans_gift', name: "Artisan's Gift",
+          description: 'You gain proficiency in one type of artisan\'s tools of your choice. (No tool-choice-of-N resolution screen exists yet — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_making' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'spellsmith', name: 'Spellsmith',
+          description: 'You know the Mending cantrip. Intelligence is your spellcasting ability for it. You can also cast Magic Weapon with this trait (lasting 1 hour, no concentration), once per long rest — this app doesn\'t yet support a limited-use LEVELED spell without a slot, so only the cantrip is granted for real.',
+          source: { kind: 'race', refId: 'mark_of_making' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['mending'], spellcastingAbility: 'int' }],
+        },
+      ],
+    },
+    {
+      id: 'mark_of_passage', name: 'Mark of Passage', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi'],
+      features: [
+        {
+          id: 'mark_of_passage_asi', name: 'Ability Score Increase',
+          description: 'Your Dexterity score increases by 2, and one other ability score of your choice increases by 1. (Only the fixed DEX+2 is applied mechanically — no flexibleAsi shape yet for "+2 fixed, +1 player choice.")',
+          source: { kind: 'race', refId: 'mark_of_passage' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'dex', operation: 'add', value: 2, condition: null }],
+        },
+        {
+          id: 'couriers_speed', name: "Courier's Speed",
+          description: 'Your base walking speed is 35 feet.',
+          source: { kind: 'race', refId: 'mark_of_passage' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'speed', operation: 'set', value: 35, condition: null }],
+        },
+        {
+          id: 'intuitive_motion', name: 'Intuitive Motion',
+          description: 'Whenever you roll a Dexterity (Acrobatics) check or an ability check operating/maintaining a land vehicle, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_passage' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'magical_passage', name: 'Magical Passage',
+          description: 'You can cast Misty Step with this trait, once per long rest. Dexterity is your spellcasting ability for it. (Not a cantrip — no mechanism for a limited-use LEVELED spell without a slot, so not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_passage' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'mark_of_sentinel', name: 'Mark of Sentinel', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi'],
+      features: [
+        {
+          id: 'mark_of_sentinel_asi', name: 'Ability Score Increase',
+          description: 'Your Constitution score increases by 2, and your Wisdom score increases by 1.',
+          source: { kind: 'race', refId: 'mark_of_sentinel' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'sentinels_intuition', name: "Sentinel's Intuition",
+          description: 'Whenever you roll a Wisdom (Insight) or Wisdom (Perception) check, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_sentinel' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'guardians_shield', name: "Guardian's Shield",
+          description: 'You can cast Shield with this trait, once per long rest. Wisdom is your spellcasting ability for it. (Not a cantrip — no mechanism for a limited-use LEVELED spell without a slot, so not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_sentinel' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'vigilant_guardian', name: 'Vigilant Guardian',
+          description: 'Once per long rest, when a creature within 5 feet is hit by an attack, you can use your reaction to swap places with it and be hit instead. (No mechanism for a reactive position-swap-and-redirect-attack — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_sentinel' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Plane Shift: Dominaria (MTG crossover) — replaces every standard
+    // human trait per the source text.
+    {
+      id: 'keldon', name: 'Keldon', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi', 'human_extra_language'],
+      features: [
+        {
+          id: 'keldon_asi', name: 'Ability Score Increase',
+          description: 'Your Strength score increases by 2, and your Constitution score increases by 1.',
+          source: { kind: 'race', refId: 'keldon' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'str', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'natural_athlete', name: 'Natural Athlete',
+          description: 'You have proficiency in the Athletics skill.',
+          source: { kind: 'race', refId: 'keldon' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_proficiency', target: 'skill:athletics', operation: 'add', value: null, condition: null }],
+        },
+        {
+          id: 'keldon_resilience', name: 'Keldon Resilience',
+          description: 'You have proficiency in Strength saving throws. (No mechanism to grant a saving-throw proficiency via a racial effect — this app assigns saving throw proficiencies only through class selection — so not applied mechanically.)',
+          source: { kind: 'race', refId: 'keldon' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'icehaven_born', name: 'Icehaven Born',
+          description: 'You are naturally adapted to cold climates. (No environmental-survival mechanic exists — not applied mechanically.)',
+          source: { kind: 'race', refId: 'keldon' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Plane Shift: Innistrad (MTG crossover) — each province replaces just
+    // the ASI (source explicitly says don't combine with Variant Human).
+    {
+      id: 'human_gavony', name: 'Human (Gavony)', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi'],
+      features: [
+        {
+          id: 'gavony_asi', name: 'Ability Score Increase',
+          description: 'Your ability scores each increase by 1.',
+          source: { kind: 'race', refId: 'human_gavony' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null },
+            { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+            { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null },
+            { type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null },
+            { type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'human_kessig', name: 'Human (Kessig)', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi'],
+      features: [
+        {
+          id: 'kessig_asi', name: 'Ability Score Increase',
+          description: 'Your Dexterity and Wisdom scores each increase by 1.',
+          source: { kind: 'race', refId: 'human_kessig' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+            { type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'forest_folk', name: 'Forest Folk',
+          description: 'You have proficiency in the Survival skill.',
+          source: { kind: 'race', refId: 'human_kessig' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_proficiency', target: 'skill:survival', operation: 'add', value: null, condition: null }],
+        },
+        {
+          id: 'kessig_fleet_of_foot', name: 'Fleet of Foot',
+          description: 'Your base walking speed is 40 feet.',
+          source: { kind: 'race', refId: 'human_kessig' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'speed', operation: 'set', value: 40, condition: null }],
+        },
+        {
+          id: 'sure_footed', name: 'Sure-Footed',
+          description: 'When you use the Dash action, difficult terrain doesn\'t cost extra movement that turn. (No mechanism for a conditional Dash/difficult-terrain interaction — not applied mechanically.)',
+          source: { kind: 'race', refId: 'human_kessig' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'spring_attack', name: 'Spring Attack',
+          description: 'Making a melee attack against a creature doesn\'t provoke an opportunity attack from it for the rest of your turn. (No opportunity-attack mechanic exists — not applied mechanically.)',
+          source: { kind: 'race', refId: 'human_kessig' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    {
+      id: 'human_nephalia', name: 'Human (Nephalia)', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi'],
+      pendingChoices: [
+        {
+          id: `${RACE_CHOICE_PREFIX}nephalia_skills`,
+          prompt: 'Choose four skills to gain proficiency in. (RAW also allows tools instead — this app\'s race-selection choice queue only supports skill choices, so narrowed to skills only.)',
+          kind: 'skill', count: 4, pool: ALL_SKILL_OPTIONS,
+          grants: [], required: true, resolved: false,
+        },
+      ],
+      features: [
+        {
+          id: 'nephalia_asi', name: 'Ability Score Increase',
+          description: 'Your Intelligence and Charisma scores each increase by 1.',
+          source: { kind: 'race', refId: 'human_nephalia' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null },
+            { type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'human_stensia', name: 'Human (Stensia)', parentId: 'human', srd: false,
+      replacesBaseFeatureIds: ['human_asi'],
+      features: [
+        {
+          id: 'stensia_asi', name: 'Ability Score Increase',
+          description: 'Your Strength and Constitution scores each increase by 1.',
+          source: { kind: 'race', refId: 'human_stensia' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null },
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'daunting', name: 'Daunting',
+          description: 'You have proficiency in the Intimidation skill.',
+          source: { kind: 'race', refId: 'human_stensia' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'grant_proficiency', target: 'skill:intimidation', operation: 'add', value: null, condition: null }],
+        },
+        {
+          id: 'stensia_tough', name: 'Tough',
+          description: 'Your hit point maximum increases by 2, and it increases by 2 every time you gain a level. (No mechanism for a per-level-scaling HP bonus outside the normal HP-gain formula — not applied mechanically, same gap as Dwarven Toughness.)',
+          source: { kind: 'race', refId: 'human_stensia' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
   ],
 };
 

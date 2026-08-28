@@ -2,9 +2,10 @@
 // Character sheet — 6-tab sheet with persistent rest bar.
 // All values read from entity.derived — never computed in components.
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
+import { Alert } from '../../src/utils/alert';
 import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
 import { recomputeDerived } from '../../src/engine/pipeline';

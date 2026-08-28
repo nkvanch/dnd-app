@@ -8,10 +8,11 @@
 // consumed by the already-existing subrace picker in creation/race-detail.tsx).
 import { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert, Modal,
+  View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { Alert } from '../../src/utils/alert';
 import {
   Race, Subrace, Feature, Ability, SenseType, Sense,
   MovementSpeeds, ResourceGrant, DraftTrait,

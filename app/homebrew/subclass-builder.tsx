@@ -15,12 +15,13 @@
 // item. Nothing regresses: official subclasses are equally unselectable today.
 import { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert,
+  View, Text, ScrollView, Pressable, StyleSheet, TextInput,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { DraftTrait, HomebrewSubclass, LevelEntry, Grant } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';

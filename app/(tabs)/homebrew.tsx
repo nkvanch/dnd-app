@@ -1,9 +1,10 @@
 // app/(tabs)/homebrew.tsx
 // Homebrew tab — Create and Library sections.
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, Alert, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { Alert } from '../../src/utils/alert';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
 import { exportHomebrewItem, ExportFormat, ExportAction } from '../../src/io/exportShare';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';

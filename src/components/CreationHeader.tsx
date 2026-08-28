@@ -3,11 +3,12 @@
 // Adds safe-area top padding (so the back button isn't hidden under the status
 // bar / clock) and a Cancel (✕) button on the right that discards the draft and
 // returns to the home tab.
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../store/characterStore';
 import { useSafeGoBack } from '../hooks/useSafeGoBack';
+import { Alert } from '../utils/alert';
 import { Colors, Spacing, FontSize, FontWeight } from '../theme';
 
 interface Props {

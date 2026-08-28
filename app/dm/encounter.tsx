@@ -3,14 +3,15 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  TextInput, Modal, Alert,
+  TextInput, Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Alert } from '../../src/utils/alert';
 import { useCombatStore }    from '../../src/store/combatStore';
 import { useCampaignStore }  from '../../src/store/campaignStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useSessionStore }   from '../../src/store/sessionStore';
-import { applyDamage, applyHealing } from '../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { expireOverrides } from '../../src/engine/dmOverride';
 import { COMMON_DAMAGE_TYPES } from '../../src/content/traitCompiler';
@@ -45,14 +46,21 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
   const amount = parseInt(valueStr, 10);
   const validNum = !isNaN(amount) && amount > 0;
 
+  // While Wild Shaped, damage/heal/kill must hit the BEAST's hp pool, not the
+  // player's real HP underneath — same rule and same branch app/sheet/[id].tsx's
+  // handleDamage/handleHeal already apply for the player's own controls.
+  // These DM-facing controls previously always hit real HP unconditionally.
   function submitDamage() {
     if (!validNum) return;
-    onUpdate(applyDamage(entity, amount, rules, damageType.trim() || undefined));
+    onUpdate(entity.wildShapeState?.active
+      ? applyWildShapeDamage(entity, amount, rules)
+      : applyDamage(entity, amount, rules, damageType.trim() || undefined));
     setMode(null); setValueStr(''); setDamageType('');
   }
 
   function submitHeal() {
     if (!validNum) return;
+    if (entity.wildShapeState?.active) { setMode(null); setValueStr(''); return; }
     onUpdate(applyHealing(entity, amount, rules));
     setMode(null); setValueStr('');
   }
@@ -61,6 +69,10 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
     Alert.alert('Kill', `Set ${entity.identity.name}'s HP to 0?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Kill', style: 'destructive', onPress: () => {
+        if (entity.wildShapeState?.active) {
+          onUpdate(applyWildShapeDamage(entity, entity.wildShapeState.beastHpMax, rules));
+          return;
+        }
         const updated = { ...entity, resources: { ...entity.resources, hp: { ...entity.resources.hp, current: 0 } } };
         onUpdate(recomputeDerived(updated, rules));
       }},
@@ -341,6 +353,13 @@ export default function EncounterScreen() {
             );
           })}
 
+          {/* app/dm/monsters.tsx exists and is fully wired to spawn straight
+              into combatStore + navigate back here — it just had no link
+              pointing to it anywhere in the app until now. */}
+          <Pressable style={styles.addMonsterBtn} onPress={() => router.push('/dm/monsters' as any)}>
+            <Text style={styles.addMonsterBtnTxt}>🐉 Add Monster</Text>
+          </Pressable>
+
           <Pressable style={styles.startBtn} onPress={handleStartCombat}>
             <Text style={styles.startBtnTxt}>⚔️ Start Combat ({entities.length} combatants)</Text>
           </Pressable>
@@ -524,6 +543,12 @@ const styles = StyleSheet.create({
   },
   addBtnAdded: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   addBtnTxt:   { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  addMonsterBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.md, alignItems: 'center', marginTop: Spacing.lg,
+  },
+  addMonsterBtnTxt: { color: Colors.textPrimary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   startBtn: {
     backgroundColor: Colors.red, borderRadius: Radius.lg,
     padding: Spacing.md, alignItems: 'center', marginTop: Spacing.md,

@@ -28,8 +28,14 @@ export function TabNotes({ notes, onSave }: Props) {
   const [sessionNotes,  setSessionNotes]  = useState(parsed.sessionNotes);
   const [personalNotes, setPersonalNotes] = useState(parsed.personalNotes);
 
+  // Merge onto the CURRENT `notes` prop, not the two other fields' local
+  // state — local state was only seeded once at mount, so if `notes` changed
+  // externally since then (e.g. a sync update from another device arriving
+  // while this tab is open), saving from local state would silently stomp
+  // that fresh change back to its stale pre-mount value.
   function save(field: 'backstory' | 'sessionNotes' | 'personalNotes', value: string) {
-    const updated = { backstory, sessionNotes, personalNotes, [field]: value };
+    const current = parseNotes(notes);
+    const updated = { ...current, [field]: value };
     onSave(JSON.stringify(updated));
   }
 

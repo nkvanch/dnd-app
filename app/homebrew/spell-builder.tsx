@@ -5,11 +5,12 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  TextInput, Alert, KeyboardAvoidingView, Platform,
+  TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Spell } from '../../src/engine/types';
 import { validateSpell } from '../../src/engine/homebrewValidator';
+import { Alert } from '../../src/utils/alert';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';

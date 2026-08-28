@@ -1,9 +1,10 @@
 // app/homebrew/feature-editor.tsx
 // Homebrew feature editor — name, description, effects, activation toggle.
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Feature, Effect } from '../../src/engine/types';
+import { Alert } from '../../src/utils/alert';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';

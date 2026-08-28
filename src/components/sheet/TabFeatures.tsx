@@ -1,9 +1,10 @@
 // app/sheet/TabFeatures.tsx
 // Tab 4 — Features grouped by source, plus spells if applicable.
 import { useState } from 'react';
-import { ScrollView, View, Text, Pressable, StyleSheet, Modal, Alert } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, FeatureInstance, ActionCard, CampaignRules } from '../../engine/types';
 import { resolveChoice } from '../../engine/leveling';
+import { Alert } from '../../utils/alert';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { SubclassPicker } from '../SubclassPicker';
 import { InfusionPicker } from '../InfusionPicker';
@@ -18,6 +19,31 @@ const SOURCE_LABELS: Record<string, string> = {
   background: 'Background', feat: 'Feat', item: 'Item',
   spell: 'Spell', condition: 'Condition', campaign: 'Campaign',
 };
+
+// Matches app/creation/skills.tsx's SKILL_LABELS — some subclass features
+// (e.g. Bard College of Lore's Additional Proficiencies) grant "choose N of
+// ANY skill" and mark it with the pool:'all' sentinel rather than a literal
+// option array (same convention as spellChoice() in classes/index.ts).
+const ALL_SKILL_OPTIONS: { id: string; label: string; value: string }[] = [
+  { id: 'athletics', label: 'Athletics', value: 'athletics' },
+  { id: 'acrobatics', label: 'Acrobatics', value: 'acrobatics' },
+  { id: 'sleight_of_hand', label: 'Sleight of Hand', value: 'sleight_of_hand' },
+  { id: 'stealth', label: 'Stealth', value: 'stealth' },
+  { id: 'arcana', label: 'Arcana', value: 'arcana' },
+  { id: 'history', label: 'History', value: 'history' },
+  { id: 'investigation', label: 'Investigation', value: 'investigation' },
+  { id: 'nature', label: 'Nature', value: 'nature' },
+  { id: 'religion', label: 'Religion', value: 'religion' },
+  { id: 'animal_handling', label: 'Animal Handling', value: 'animal_handling' },
+  { id: 'insight', label: 'Insight', value: 'insight' },
+  { id: 'medicine', label: 'Medicine', value: 'medicine' },
+  { id: 'perception', label: 'Perception', value: 'perception' },
+  { id: 'survival', label: 'Survival', value: 'survival' },
+  { id: 'deception', label: 'Deception', value: 'deception' },
+  { id: 'intimidation', label: 'Intimidation', value: 'intimidation' },
+  { id: 'performance', label: 'Performance', value: 'performance' },
+  { id: 'persuasion', label: 'Persuasion', value: 'persuasion' },
+];
 
 function FeatureRow({ feature }: { feature: FeatureInstance }) {
   const [expanded, setExpanded] = useState(false);
@@ -104,9 +130,17 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
 
   function confirmSkillChoice(choiceId: string) {
     if (!rules || !onEntityUpdate) return;
-    const sel = skillSelections[choiceId] ?? [];
+    const sel    = skillSelections[choiceId] ?? [];
+    const choice = entity.choices.find(c => c.id === choiceId);
+    // resolveChoice() only resolves against a literal pool array — substitute
+    // in the resolved 'all' skill list first, same as the creation-time
+    // resolver in app/creation/skills.tsx does.
+    const target = choice?.definition.pool === 'all'
+      ? { ...entity, choices: entity.choices.map(c => c.id === choiceId
+          ? { ...c, definition: { ...c.definition, pool: ALL_SKILL_OPTIONS } } : c) }
+      : entity;
     try {
-      onEntityUpdate(resolveChoice(entity, choiceId, sel, rules));
+      onEntityUpdate(resolveChoice(target, choiceId, sel, rules));
       setSkillSelections(prev => ({ ...prev, [choiceId]: [] }));
     } catch (e) {
       Alert.alert('Could not resolve choice', e instanceof Error ? e.message : String(e));
@@ -143,9 +177,12 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
       {pendingChoices.length > 0 && (
         <CollapsibleGroup title={`PENDING CHOICES (${pendingChoices.length})`}>
           {pendingChoices.map(c => {
-            const def     = c.definition;
-            const isSkill = def.kind === 'skill' && Array.isArray(def.pool);
-            const sel     = skillSelections[c.id] ?? [];
+            const def       = c.definition;
+            const isSkill   = def.kind === 'skill' && (Array.isArray(def.pool) || def.pool === 'all');
+            const skillPool = def.pool === 'all'
+              ? ALL_SKILL_OPTIONS
+              : (Array.isArray(def.pool) ? def.pool as { id: string; label: string; value: unknown }[] : []);
+            const sel       = skillSelections[c.id] ?? [];
             return (
               <View key={c.id} style={styles.pendingRow}>
                 <Text style={styles.pendingPrompt}>{def.prompt}</Text>
@@ -206,7 +243,7 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                 {isSkill && (
                   <>
                     <View style={styles.chipRow}>
-                      {(def.pool as { id: string; label: string; value: unknown }[]).map(opt => {
+                      {skillPool.map(opt => {
                         const selected  = sel.includes(opt.id);
                         const skillName = String(opt.value);
                         const alreadyTrained =

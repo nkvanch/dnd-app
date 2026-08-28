@@ -10,12 +10,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  Modal, TextInput, Alert, ActivityIndicator, Platform, KeyboardAvoidingView,
+  Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 
+import { Alert } from '../../src/utils/alert';
 import { useCampaignStore }  from '../../src/store/campaignStore';
 import { useSessionStore }   from '../../src/store/sessionStore';
 import { useCharacterStore } from '../../src/store/characterStore';

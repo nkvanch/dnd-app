@@ -114,10 +114,19 @@ export default function ScoresScreen() {
     setPbScores(prev => ({ ...prev, [ab]: next }));
   }
 
+  // Manual: parse the typed text, defaulting to 10 only when it's actually
+  // empty. `parseInt(text) || 10` (the previous version) silently turned a
+  // deliberately-typed "0" into 10 — the input still showed "0" but the
+  // value that actually got saved on Confirm was 10, with the display and
+  // the saved score disagreeing.
+  function parseManualScore(ab: Ability): number {
+    const text = manualText[ab];
+    return text === '' ? 10 : parseInt(text, 10);
+  }
+
   // Manual: stepper buttons adjust the parsed value
   function adjustManual(ab: Ability, delta: number) {
-    const current = parseInt(manualText[ab], 10) || 10;
-    const next    = Math.max(1, current + delta);
+    const next = Math.max(1, parseManualScore(ab) + delta);
     setManualText(prev => ({ ...prev, [ab]: String(next) }));
   }
 
@@ -139,13 +148,20 @@ export default function ScoresScreen() {
       const idx = rollAssignments[ab];
       return idx !== undefined ? (rolledScores[idx] ?? null) : null;
     }
-    // Manual: parse the text, default to 10 if empty/invalid
-    return parseInt(manualText[ab], 10) || 10;
+    return parseManualScore(ab);
   }
 
   function canConfirm() {
     if (method === 'standard') return ABILITIES.every(ab => assignments[ab] !== undefined);
     if (method === 'roll') return rolledScores.length === 6 && ABILITIES.every(ab => rollAssignments[ab] !== undefined);
+    if (method === 'pointbuy') {
+      // pbScores is seeded from whatever the player last confirmed via a
+      // DIFFERENT method (Manual has no cap, Roll can exceed 15) — switching
+      // to this tab without touching a stepper must not let an out-of-budget
+      // or out-of-range state slip through Confirm just because every
+      // ability happens to already have a value.
+      return pointsLeft >= 0 && ABILITIES.every(ab => pbScores[ab] >= pb.min && pbScores[ab] <= pb.max);
+    }
     return true;
   }
 
@@ -306,7 +322,7 @@ export default function ScoresScreen() {
                     />
                     {bonus !== 0 && (
                       <Text style={styles.manualBonus}>
-                        +{bonus} → {(parseInt(manualText[ab], 10) || 10) + bonus}
+                        +{bonus} → {parseManualScore(ab) + bonus}
                       </Text>
                     )}
                   </View>

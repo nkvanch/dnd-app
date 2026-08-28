@@ -1,10 +1,11 @@
 // app/(tabs)/characters.tsx
 // Character list — all saved characters. Tap to open sheet. Long press to delete.
 import { useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { Entity } from '../../src/engine/types';
+import { Alert } from '../../src/utils/alert';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { EmptyState }    from '../../src/components/EmptyState';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';

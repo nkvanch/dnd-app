@@ -4,12 +4,13 @@
 //           Spellcasting → Per-Level Features → ASI Levels → Save
 import { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert, Modal,
+  View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { CharClass, Ability, DraftTrait } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { Alert } from '../../src/utils/alert';
 import { itemRepo } from '../../src/content/itemRepo';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';

@@ -12,8 +12,8 @@ import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
-import { resolveChoice } from '../../src/engine/leveling';
-import { ChoiceOption, Entity, Spell } from '../../src/engine/types';
+import { applySpellChoiceToEntity } from '../../src/engine/leveling';
+import { Entity, Spell } from '../../src/engine/types';
 import { spellRepo } from '../../src/content/spellRepo';
 import type { SpellIndexEntry } from '../../src/content/spellRepo.types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -168,13 +168,40 @@ export default function SpellsScreen() {
   }
 
   // ── 2. ChoiceDefinition-based selection (if a class defines spell choices) ───
+  // Every real spellChoice() in class content uses the 'all' pool sentinel
+  // (see src/content/classes/index.ts) — it means "any spell from this
+  // class's list", not a literal array, so the pool is built dynamically
+  // here exactly like SpellChoicePicker.tsx does for the level-up case
+  // (same class/cantrip-vs-leveled filtering). resolveChoice() can't apply
+  // these either — it silently skips any choice whose pool isn't a literal
+  // array — so confirming uses applySpellChoiceToEntity() instead, same as
+  // SpellChoicePicker.
   if (spellChoices.length > 0) {
-    const toggleChoice = (choiceId: string, optionId: string, max: number) => {
+    const isCantripChoice = (id: string) => id.includes('cantrip');
+    const maxCastableLevel = (() => {
+      const sc = draft.spellcasting;
+      if (!sc) return 0;
+      const tiers = ['9', '8', '7', '6', '5', '4', '3', '2', '1'] as const;
+      for (const t of tiers) { if ((sc.slots[t]?.total ?? 0) > 0) return Number(t); }
+      return 0;
+    })();
+    const alreadyKnown = new Set([
+      ...(draft.spellcasting?.cantrips ?? []),
+      ...(draft.spellcasting?.known ?? []),
+    ]);
+    const poolForChoice = (choice: typeof spellChoices[number]): SpellIndexEntry[] => {
+      const cantrip = isCantripChoice(choice.id);
+      return classSpells
+        .filter(s => !alreadyKnown.has(s.id))
+        .filter(s => cantrip ? s.level === 0 : (s.level >= 1 && s.level <= maxCastableLevel))
+        .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+    };
+    const toggleChoice = (choiceId: string, spellId: string, max: number) => {
       setSelections(prev => {
         const current = prev[choiceId] ?? [];
-        if (current.includes(optionId)) return { ...prev, [choiceId]: current.filter(id => id !== optionId) };
+        if (current.includes(spellId)) return { ...prev, [choiceId]: current.filter(id => id !== spellId) };
         if (current.length >= max) return prev;
-        return { ...prev, [choiceId]: [...current, optionId] };
+        return { ...prev, [choiceId]: [...current, spellId] };
       });
     };
     const handleConfirmChoices = async () => {
@@ -184,7 +211,7 @@ export default function SpellsScreen() {
       for (const choice of spellChoices) {
         const chosen = selections[choice.id] ?? [];
         if (chosen.length === choice.definition.count) {
-          updated = resolveChoice(updated, choice.id, chosen, rules);
+          updated = applySpellChoiceToEntity(updated, choice.id, chosen, id => allSpells.find(s => s.id === id)?.level, rules);
         }
       }
       updated = markVisited(updated);
@@ -197,28 +224,28 @@ export default function SpellsScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <Text style={styles.heading}>Spells</Text>
         {spellChoices.map(choice => {
-          const pool   = Array.isArray(choice.definition.pool) ? choice.definition.pool as ChoiceOption[] : [];
+          const pool   = poolForChoice(choice);
           const chosen = selections[choice.id] ?? [];
           return (
             <View key={choice.id} style={styles.choiceBlock}>
               <Text style={styles.choicePrompt}>{choice.definition.prompt}</Text>
               <Text style={styles.choiceCount}>{chosen.length} / {choice.definition.count} selected</Text>
-              {pool.map(opt => {
-                const spell = allSpells.find(s => s.id === opt.value);
-                if (!spell) return null;
-                const selected = chosen.includes(opt.id);
-                const disabled = !selected && chosen.length >= choice.definition.count;
-                return (
-                  <SpellRow
-                    key={opt.id}
-                    spell={spell}
-                    selected={selected}
-                    disabled={disabled}
-                    isHomebrew={homebrewSpellIds.has(spell.id)}
-                    onToggle={() => toggleChoice(choice.id, opt.id, choice.definition.count)}
-                  />
-                );
-              })}
+              {pool.length === 0
+                ? <Text style={styles.emptyNote}>No available spells for this choice.</Text>
+                : pool.map(spell => {
+                  const selected = chosen.includes(spell.id);
+                  const disabled = !selected && chosen.length >= choice.definition.count;
+                  return (
+                    <SpellRow
+                      key={spell.id}
+                      spell={spell}
+                      selected={selected}
+                      disabled={disabled}
+                      isHomebrew={homebrewSpellIds.has(spell.id)}
+                      onToggle={() => toggleChoice(choice.id, spell.id, choice.definition.count)}
+                    />
+                  );
+                })}
             </View>
           );
         })}

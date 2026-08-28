@@ -3,13 +3,13 @@
 // Mirrors the 6-tab sheet but the DM can't edit notes/inventory directly —
 // instead they use the DM override system on every tappable stat.
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCharacterStore } from '../../../src/store/characterStore';
 import { useCampaignStore }  from '../../../src/store/campaignStore';
 import { useSessionStore }   from '../../../src/store/sessionStore';
 import { recomputeDerived }  from '../../../src/engine/pipeline';
-import { applyDamage, applyHealing } from '../../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage } from '../../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../../src/engine/conditions';
 import { dmFullStatVisibility } from '../../../src/engine/houseRules';
 import { Entity } from '../../../src/engine/types';
@@ -81,9 +81,11 @@ export default function DmCharacterView() {
         </View>
         <View style={styles.hpPill}>
           <Text style={styles.hpPillTxt}>
-            {entity.resources.hp.current}/{entity.resources.hp.maximum}
+            {entity.wildShapeState?.active
+              ? `${entity.wildShapeState.beastHp}/${entity.wildShapeState.beastHpMax}`
+              : `${entity.resources.hp.current}/${entity.resources.hp.maximum}`}
           </Text>
-          <Text style={styles.hpPillLabel}>HP</Text>
+          <Text style={styles.hpPillLabel}>{entity.wildShapeState?.active ? 'Beast HP' : 'HP'}</Text>
         </View>
       </View>
 
@@ -109,8 +111,13 @@ export default function DmCharacterView() {
             isDm={showFull}
             campaignId={campaignId}
             deviceId={deviceId}
-            onDamage={(amt, dt) => mutate(e => applyDamage(e, amt, rules, dt))}
-            onHeal={amt => mutate(e => applyHealing(e, amt, rules))}
+            // While Wild Shaped, damage/heal must hit the BEAST's hp pool, not
+            // the player's real HP underneath — same rule app/sheet/[id].tsx's
+            // own handleDamage/handleHeal already apply for player-side controls.
+            onDamage={(amt, dt) => mutate(e => e.wildShapeState?.active
+              ? applyWildShapeDamage(e, amt, rules)
+              : applyDamage(e, amt, rules, dt))}
+            onHeal={amt => mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amt, rules))}
             onAddCondition={cId => mutate(e => applyCondition(e, cId, 'dm', rules))}
             onRemoveCondition={cId => mutate(e => removeCondition(e, cId, rules))}
             onResourceChange={(rId, delta) => mutate(e => ({

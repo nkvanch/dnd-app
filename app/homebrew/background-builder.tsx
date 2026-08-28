@@ -8,12 +8,13 @@
 // zero extra engine wiring needed.
 import { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert, Modal,
+  View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Background, Feature, Effect, SkillName } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';

@@ -55,10 +55,22 @@ export default function SkillsScreen() {
   const ALL_SKILL_KEYS = Object.keys(SKILL_LABELS) as SkillName[];
   const overlapMode = skillOverlapMode(rules);
 
+  // Some classes/subclasses grant "choose N of ANY skill" (e.g. Bard's level-1
+  // "Choose any 3 skills") — content marks this with the pool:'all' sentinel
+  // (see spellChoice()'s identical convention in classes/index.ts) rather
+  // than a literal 18-option array. Expand it here so every pool-reading
+  // helper below sees a real array; a bare `Array.isArray` check would
+  // otherwise treat it as an empty pool.
+  function basePoolFor(choice: typeof pendingSkillChoices[number]): ChoiceOption[] {
+    if (choice.definition.pool === 'all') {
+      return ALL_SKILL_KEYS.map(sk => ({ id: sk, label: SKILL_LABELS[sk], value: sk }));
+    }
+    return Array.isArray(choice.definition.pool) ? choice.definition.pool as ChoiceOption[] : [];
+  }
+
   function poolFor(choice: typeof pendingSkillChoices[number]):
     (ChoiceOption & { isReplacement?: boolean })[] {
-    const basePool = Array.isArray(choice.definition.pool)
-      ? (choice.definition.pool as ChoiceOption[]) : [];
+    const basePool = basePoolFor(choice);
 
     if (overlapMode === 'warn') return basePool;
 
@@ -78,8 +90,7 @@ export default function SkillsScreen() {
   // How many picks are achievable for this choice given current overlap.
   function achievableCount(choice: typeof pendingSkillChoices[number]): number {
     if (overlapMode === 'replacement') return choice.definition.count;
-    const basePool = Array.isArray(choice.definition.pool)
-      ? (choice.definition.pool as ChoiceOption[]) : [];
+    const basePool = basePoolFor(choice);
     const pickable = basePool.filter(
       o => !draft!.skills.skills[o.value as SkillName]?.trained
     ).length;
@@ -87,8 +98,7 @@ export default function SkillsScreen() {
   }
 
   function overlapCount(choice: typeof pendingSkillChoices[number]): number {
-    const basePool = Array.isArray(choice.definition.pool)
-      ? (choice.definition.pool as ChoiceOption[]) : [];
+    const basePool = basePoolFor(choice);
     return basePool.filter(o => !!draft!.skills.skills[o.value as SkillName]?.trained).length;
   }
 
@@ -124,7 +134,7 @@ export default function SkillsScreen() {
     const newSelections: Record<string, string[]> = {};
 
     for (const choice of resolvedSkillChoices) {
-      const pool = Array.isArray(choice.definition.pool) ? choice.definition.pool as ChoiceOption[] : [];
+      const pool = basePoolFor(choice);
       const prevSkills = choice.selections
         .map(selId => pool.find(o => o.id === selId)?.value as SkillName | undefined)
         .filter((v): v is SkillName => !!v);
@@ -157,28 +167,32 @@ export default function SkillsScreen() {
       const chosen = selections[choice.id] ?? [];
       if (chosen.length !== achievableCount(choice)) continue;
 
+      // resolveChoice() only ever resolves against a literal pool array — a
+      // choice whose content-authored pool is the 'all' sentinel (e.g.
+      // Bard's "Choose any 3 skills") gets its resolved array substituted in
+      // here first, same trick both branches below need.
       const pool = poolFor(choice);
+      const augmented = {
+        ...updated,
+        choices: updated.choices.map(c =>
+          c.id === choice.id
+            ? { ...c, definition: { ...c.definition, pool: pool as ChoiceOption[] } }
+            : c
+        ),
+      };
       if (overlapMode === 'replacement') {
-        const augmented = {
-          ...updated,
-          choices: updated.choices.map(c =>
-            c.id === choice.id
-              ? { ...c, definition: { ...c.definition, pool: pool as ChoiceOption[] } }
-              : c
-          ),
-        };
         updated = resolveChoice(augmented, choice.id, chosen, rules);
       } else {
         // Warn mode: pad to full count with overlap ids (already-trained skills
         // are idempotent re-grants so resolveChoice's count check passes).
-        const basePool = Array.isArray(choice.definition.pool) ? choice.definition.pool as ChoiceOption[] : [];
+        const basePool = basePoolFor(choice);
         const overlapIds = basePool
           .filter(o => !!draft!.skills.skills[o.value as SkillName]?.trained)
           .map(o => o.id);
         const needPad = choice.definition.count - chosen.length;
         const padded  = [...chosen, ...overlapIds.slice(0, Math.max(0, needPad))];
         if (padded.length === choice.definition.count) {
-          updated = resolveChoice(updated, choice.id, padded, rules);
+          updated = resolveChoice(augmented, choice.id, padded, rules);
         } else {
           // Edge: not enough overlap ids to pad (shouldn't happen). Mark resolved
           // with what we have so the hub doesn't loop back here forever.
@@ -223,7 +237,7 @@ export default function SkillsScreen() {
         <View style={styles.divider} />
         <Text style={styles.ownedTitle}>Skills already chosen:</Text>
         {resolvedSkillChoices.map(c => {
-          const pool = Array.isArray(c.definition.pool) ? c.definition.pool as ChoiceOption[] : [];
+          const pool = basePoolFor(c);
           return c.selections.map(selId => {
             const opt   = pool.find(o => o.id === selId);
             const label = opt ? (SKILL_LABELS[opt.label.toLowerCase().replace(/ /g, '_')] ?? opt.label)

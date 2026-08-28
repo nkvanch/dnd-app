@@ -15,11 +15,12 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  TextInput, Alert, KeyboardAvoidingView, Platform,
+  TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ability, DraftTrait, ResourceGrant, Feature } from '../../src/engine/types';
 import { MonsterTemplate } from '../../src/content/monsters/types';
+import { Alert } from '../../src/utils/alert';
 import { validateMonster } from '../../src/engine/homebrewValidator';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';

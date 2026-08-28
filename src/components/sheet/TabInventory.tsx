@@ -6,9 +6,10 @@
 import { useState } from 'react';
 import {
   ScrollView, View, Text, Pressable, StyleSheet,
-  Modal, TextInput, Alert, SectionList,
+  Modal, TextInput, SectionList,
 } from 'react-native';
 import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engine/types';
+import { Alert } from '../../utils/alert';
 import { applyStatModifiers, collectAllEffects } from '../../engine/pipeline';
 import { itemRepo } from '../../content/itemRepo';
 import { toItemIndexEntry } from '../../content/itemRepo.types';

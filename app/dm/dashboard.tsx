@@ -1,9 +1,10 @@
 // app/dm/dashboard.tsx
 // DM party overview dashboard. Only accessible when isDm === true.
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCampaignStore } from '../../src/store/campaignStore';
+import { Alert } from '../../src/utils/alert';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useCombatStore }    from '../../src/store/combatStore';
 import { Entity } from '../../src/engine/types';

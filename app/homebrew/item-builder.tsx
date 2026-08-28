@@ -6,10 +6,11 @@
 // picker, and the mechanical-effect system (labeled "Additional Mechanical
 // Effects" per request). Edit-mode reloads via homebrewDraft.
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Item, Feature, Effect, AbilityEffect, SenseType, Ability } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -162,6 +163,10 @@ export default function ItemBuilderScreen() {
             type: 'base_ac_formula', target: 'ac', operation: 'set',
             value: base10, condition: null,
             formulaAbilities: acAddsDex ? ['dex'] : [],
+            // Medium armor caps its Dex bonus at +2 (PHB) — matches the
+            // official catalog's own medium-armor entries (e.g. Hide,
+            // src/content/items/index.ts), which all set this same cap.
+            ...(acAddsDex && armorCategory === 'medium armor' ? { formulaAbilityCap: { dex: 2 } } : {}),
           };
           extra = { effects: [effect] };
         }
@@ -393,6 +398,9 @@ export default function ItemBuilderScreen() {
                 {acAddsDex ? 'Adds DEX modifier (light/medium)' : 'Flat AC (heavy)'}
               </Text>
             </Pressable>
+            {acAddsDex && armorCategory === 'medium armor' && (
+              <Text style={styles.hint}>Dex bonus capped at +2, per medium armor's rule.</Text>
+            )}
           </View>
         )}
 

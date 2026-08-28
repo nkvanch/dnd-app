@@ -4,6 +4,23 @@
 // ============================================================================
 import { Race, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature } from '../../engine/types';
 
+/** "Elf Weapon Training" — proficiency with longsword/shortsword/shortbow/
+ * longbow, granted by most non-Drow elf subraces (High Elf, Wood Elf, and
+ * several sourcebook variants below all share this exact trait verbatim). */
+function elfWeaponTraining(refId: string): Feature {
+  return {
+    id: `${refId}_weapon_training`, name: 'Elf Weapon Training',
+    description: 'You have proficiency with the longsword, shortsword, shortbow, and longbow.',
+    source: { kind: 'race', refId }, level: null, actions: [], choices: [], passive: true,
+    effects: [
+      { type: 'grant_proficiency', target: 'weapon:longsword', operation: 'add', value: null, condition: null },
+      { type: 'grant_proficiency', target: 'weapon:shortsword', operation: 'add', value: null, condition: null },
+      { type: 'grant_proficiency', target: 'weapon:shortbow', operation: 'add', value: null, condition: null },
+      { type: 'grant_proficiency', target: 'weapon:longbow', operation: 'add', value: null, condition: null },
+    ],
+  };
+}
+
 const ALL_SKILL_OPTIONS: ChoiceOption[] = [
   'athletics', 'acrobatics', 'sleight_of_hand', 'stealth', 'arcana', 'history',
   'investigation', 'nature', 'religion', 'animal_handling', 'insight', 'medicine',
@@ -90,7 +107,7 @@ export const raceElf: Race = {
       name: 'Darkvision',
       description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
       source: { kind: 'race', refId: 'elf' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }], actions: [], choices: [], passive: true,
     },
     {
       id: 'elf_fey_ancestry',
@@ -139,6 +156,12 @@ export const raceElf: Race = {
           source: { kind: 'race', refId: 'high_elf' },
           level: null, effects: [], actions: [], choices: [], passive: true,
         },
+        elfWeaponTraining('high_elf'),
+        {
+          id: 'high_elf_extra_language', name: 'Extra Language',
+          description: 'You can read, speak, and write one additional language of your choice.',
+          source: { kind: 'race', refId: 'high_elf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
       ],
     },
     {
@@ -167,6 +190,7 @@ export const raceElf: Race = {
           source: { kind: 'race', refId: 'wood_elf' },
           level: null, effects: [], actions: [], choices: [], passive: true,
         },
+        elfWeaponTraining('wood_elf'),
       ],
     },
     {
@@ -181,11 +205,45 @@ export const raceElf: Race = {
           effects: [{ type: 'stat_modifier', target: 'cha', operation: 'add', value: 1, condition: null }],
         },
         {
+          id: 'drow_superior_darkvision',
+          name: 'Superior Darkvision',
+          description: 'Your darkvision has a range of 120 feet, instead of 60.',
+          source: { kind: 'race', refId: 'drow' },
+          level: null, actions: [], choices: [], passive: true,
+          // Aggregated with base Elf's 60-ft darkvision by keeping the
+          // longest range per sense type (see pipeline.ts's senses dedup) —
+          // this 120ft entry naturally wins without needing to remove or
+          // override the base race's grant_sense effect.
+          effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 120 }],
+        },
+        {
           id: 'sunlight_sensitivity',
           name: 'Sunlight Sensitivity',
           description: 'You have disadvantage on attack rolls and Perception checks that rely on sight when you, the target, or whatever you are trying to perceive is in direct sunlight.',
           source: { kind: 'race', refId: 'drow' },
           level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'drow_magic',
+          name: 'Drow Magic',
+          description: 'You know the Dancing Lights cantrip. Charisma is your spellcasting ability for it. At 3rd level you can cast Faerie Fire once with this trait, and at 5th level Darkness once, each recharging on a long rest — this app doesn\'t yet support level-gated racial features, so only the 1st-level cantrip is granted for real; the two spells are reference-only.',
+          source: { kind: 'race', refId: 'drow' },
+          level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['dancing_lights'], spellcastingAbility: 'cha' },
+          ],
+        },
+        {
+          id: 'drow_weapon_training',
+          name: 'Drow Weapon Training',
+          description: 'You have proficiency with rapiers, shortswords, and hand crossbows.',
+          source: { kind: 'race', refId: 'drow' },
+          level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_proficiency', target: 'weapon:rapier', operation: 'add', value: null, condition: null },
+            { type: 'grant_proficiency', target: 'weapon:shortsword', operation: 'add', value: null, condition: null },
+            { type: 'grant_proficiency', target: 'weapon:hand_crossbow', operation: 'add', value: null, condition: null },
+          ],
         },
       ],
     },
@@ -222,7 +280,7 @@ export const raceDwarf: Race = {
       name: 'Darkvision',
       description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
       source: { kind: 'race', refId: 'dwarf' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }], actions: [], choices: [], passive: true,
     },
     {
       id: 'dwarf_resilience',
@@ -246,7 +304,13 @@ export const raceDwarf: Race = {
       name: 'Dwarven Combat Training',
       description: 'You have proficiency with the battleaxe, handaxe, light hammer, and warhammer.',
       source: { kind: 'race', refId: 'dwarf' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'grant_proficiency', target: 'weapon:battleaxe', operation: 'add', value: null, condition: null },
+        { type: 'grant_proficiency', target: 'weapon:handaxe', operation: 'add', value: null, condition: null },
+        { type: 'grant_proficiency', target: 'weapon:light_hammer', operation: 'add', value: null, condition: null },
+        { type: 'grant_proficiency', target: 'weapon:warhammer', operation: 'add', value: null, condition: null },
+      ],
     },
   ],
   subraces: [
@@ -541,7 +605,7 @@ export const raceDragonborn: Race = {
         {
           id: 'draconblood_darkvision', name: 'Darkvision',
           description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
-          source: { kind: 'race', refId: 'draconblood' }, level: null, effects: [], actions: [], choices: [], passive: true,
+          source: { kind: 'race', refId: 'draconblood' }, level: null, effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }], actions: [], choices: [], passive: true,
         },
         {
           id: 'draconblood_forceful_presence', name: 'Forceful Presence',
@@ -565,7 +629,7 @@ export const raceDragonborn: Race = {
         {
           id: 'ravenite_darkvision', name: 'Darkvision',
           description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
-          source: { kind: 'race', refId: 'ravenite' }, level: null, effects: [], actions: [], choices: [], passive: true,
+          source: { kind: 'race', refId: 'ravenite' }, level: null, effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }], actions: [], choices: [], passive: true,
         },
         {
           id: 'ravenite_vengeful_assault', name: 'Vengeful Assault',
@@ -699,7 +763,7 @@ export const raceGnome: Race = {
       name: 'Darkvision',
       description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
       source: { kind: 'race', refId: 'gnome' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }], actions: [], choices: [], passive: true,
     },
     {
       id: 'gnome_cunning',
@@ -785,7 +849,7 @@ export const raceHalfElf: Race = {
       name: 'Darkvision',
       description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
       source: { kind: 'race', refId: 'half_elf' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }], actions: [], choices: [], passive: true,
     },
     {
       id: 'half_elf_fey_ancestry',
@@ -825,7 +889,7 @@ export const raceHalfOrc: Race = {
       name: 'Darkvision',
       description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
       source: { kind: 'race', refId: 'half_orc' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }], actions: [], choices: [], passive: true,
     },
     {
       id: 'half_orc_menacing',
@@ -875,7 +939,7 @@ export const raceTiefling: Race = {
       name: 'Darkvision',
       description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
       source: { kind: 'race', refId: 'tiefling' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }], actions: [], choices: [], passive: true,
     },
     {
       id: 'tiefling_hellish_resistance',
@@ -949,7 +1013,7 @@ export const raceSkeleton: Race = {
       name: 'Darkvision',
       description: "Necromancy restored your sight after death. You can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light. You can't discern color in darkness, only shades of grey.",
       source: { kind: 'race', refId: 'skeleton' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }], actions: [], choices: [], passive: true,
     },
     {
       id: 'skeleton_might_of_death',

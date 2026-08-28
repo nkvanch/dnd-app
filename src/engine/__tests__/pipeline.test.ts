@@ -239,6 +239,19 @@ describe('recomputeDerived — grant_proficiency effects', () => {
     const updated = recomputeDerived(e, DEFAULT_RULES);
     expect(updated.proficiencies.tools.filter(t => t.toLowerCase() === 'thieves tools').length).toBe(1);
   });
+
+  it('adds a weapon proficiency via an "add" grant_proficiency effect', () => {
+    const e = withFeatures([feature('weapon_grant', [{ type: 'grant_proficiency', target: 'weapon:rapier', operation: 'add', value: null }])]);
+    const updated = recomputeDerived(e, DEFAULT_RULES);
+    expect(updated.proficiencies.weapons).toContain('rapier');
+  });
+
+  it('does not add a duplicate weapon proficiency it already has (case-insensitive)', () => {
+    const e = withFeatures([feature('weapon_grant', [{ type: 'grant_proficiency', target: 'weapon:longbow', operation: 'add', value: null }])],
+      { proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['Longbow'] } });
+    const updated = recomputeDerived(e, DEFAULT_RULES);
+    expect(updated.proficiencies.weapons.filter(w => w.toLowerCase() === 'longbow').length).toBe(1);
+  });
 });
 
 describe('recomputeDerived — conditional effects', () => {

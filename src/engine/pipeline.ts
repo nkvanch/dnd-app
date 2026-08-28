@@ -101,10 +101,12 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   // These come from race/class features (Elf Keen Senses → Perception, etc.)
   const profEffects = allEffects.filter(ae => ae.effect.type === 'grant_proficiency');
   if (profEffects.length > 0) {
-    let updatedSkills = { ...entity.skills.skills };
+    let updatedSkills  = { ...entity.skills.skills };
     let updatedTools   = [...entity.proficiencies.tools];
+    let updatedWeapons = [...entity.proficiencies.weapons];
     let changed = false;
     let toolsChanged = false;
+    let weaponsChanged = false;
     for (const ae of profEffects) {
       // target format: 'skill:perception', 'skill:athletics', etc.
       if (ae.effect.target.startsWith('skill:')) {
@@ -136,12 +138,31 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
           toolsChanged = true;
         }
       }
+      // target format: 'weapon:rapier', 'weapon:battleaxe', etc. — same
+      // pattern as tool:, for racial weapon-proficiency traits (Dwarven
+      // Combat Training, Elf Weapon Training, Drow Weapon Training, etc.),
+      // which previously had no mechanism at all (every existing one was
+      // flavor-text-only).
+      if (ae.effect.target.startsWith('weapon:') && ae.effect.operation === 'add') {
+        const weaponName = ae.effect.target.slice(7).replace(/_/g, ' ');
+        if (!updatedWeapons.some(w => w.toLowerCase() === weaponName.toLowerCase())) {
+          updatedWeapons = [...updatedWeapons, weaponName];
+          weaponsChanged = true;
+        }
+      }
     }
     if (changed) {
       entity = { ...entity, skills: { skills: updatedSkills } };
     }
-    if (toolsChanged) {
-      entity = { ...entity, proficiencies: { ...entity.proficiencies, tools: updatedTools } };
+    if (toolsChanged || weaponsChanged) {
+      entity = {
+        ...entity,
+        proficiencies: {
+          ...entity.proficiencies,
+          tools:   toolsChanged   ? updatedTools   : entity.proficiencies.tools,
+          weapons: weaponsChanged ? updatedWeapons : entity.proficiencies.weapons,
+        },
+      };
     }
   }
 

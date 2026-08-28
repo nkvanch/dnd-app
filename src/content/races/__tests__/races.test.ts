@@ -8,7 +8,7 @@
 import { makeEmptyEntity, DEFAULT_RULES } from '../../../store/characterStore';
 import { applyGrant, queueChoice, resolveChoice } from '../../../engine/leveling';
 import { recomputeDerived } from '../../../engine/pipeline';
-import { raceDragonborn, raceGnome, raceHuman, raceHalfElf } from '../index';
+import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf } from '../index';
 import { resolveResistance } from '../../../engine/resolver';
 import { collectAllEffects } from '../../../engine/pipeline';
 import { Race, Subrace, Ability, Feature, Entity } from '../../../engine/types';
@@ -212,6 +212,39 @@ describe('Variant Human', () => {
     const resolved = resolveChoice(e, pending!.id, ['stealth'], DEFAULT_RULES);
     expect(resolved.skills.skills.stealth.trained).toBe(true);
     expect(resolved.choices.find(c => c.id === pending!.id)?.resolved).toBe(true);
+  });
+});
+
+describe('Elf and Drow — darkvision/weapon proficiency (previously flavor-only everywhere)', () => {
+  it('base Elf grants real 60ft darkvision', () => {
+    const e = applyRaceSelection(raceElf, null);
+    const senses = e.derived.senses;
+    expect(senses).toEqual([{ type: 'darkvision', range: 60, note: undefined }]);
+  });
+
+  it('Drow\'s Superior Darkvision (120ft) wins over the base race\'s 60ft via the longest-range dedup', () => {
+    const drow = raceElf.subraces!.find(s => s.id === 'drow')!;
+    const e = applyRaceSelection(raceElf, drow);
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 120, note: undefined }]);
+  });
+
+  it('Drow gains Dancing Lights (a real grant_spell cantrip) and weapon proficiencies', () => {
+    const drow = raceElf.subraces!.find(s => s.id === 'drow')!;
+    const e = applyRaceSelection(raceElf, drow);
+    expect(e.spellcasting?.cantrips).toContain('dancing_lights');
+    expect(e.spellcasting?.ability).toBe('cha');
+    expect(e.proficiencies.weapons).toEqual(expect.arrayContaining(['rapier', 'shortsword', 'hand crossbow']));
+  });
+
+  it('High Elf and Wood Elf both grant real Elf Weapon Training (previously missing entirely)', () => {
+    const highElf = raceElf.subraces!.find(s => s.id === 'high_elf')!;
+    const woodElf = raceElf.subraces!.find(s => s.id === 'wood_elf')!;
+    const eHigh = applyRaceSelection(raceElf, highElf);
+    const eWood = applyRaceSelection(raceElf, woodElf);
+    for (const w of ['longsword', 'shortsword', 'shortbow', 'longbow']) {
+      expect(eHigh.proficiencies.weapons).toContain(w);
+      expect(eWood.proficiencies.weapons).toContain(w);
+    }
   });
 });
 

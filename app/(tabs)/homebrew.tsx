@@ -5,7 +5,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet, Alert, ActivityIndicator
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
-import { exportHomebrewItem, ExportFormat } from '../../src/io/exportShare';
+import { exportHomebrewItem, ExportFormat, ExportAction } from '../../src/io/exportShare';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
 import { VersionHistoryModal } from '../../src/components/homebrew/VersionHistoryModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -63,13 +63,13 @@ function LibraryPanel() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ContentCacheType | 'all'>('all');
 
-  async function handleExportFormat(format: ExportFormat) {
+  async function handleExportFormat(format: ExportFormat, action: ExportAction) {
     if (!exportTarget) return;
     const { type, item } = exportTarget;
     setExportTarget(null);
     setExportingId(item.id);
     try {
-      await exportHomebrewItem(type, item, format);
+      await exportHomebrewItem(type, item, format, action);
     } catch (e: any) {
       Alert.alert('Export failed', e?.message ?? 'Something went wrong.');
     } finally {

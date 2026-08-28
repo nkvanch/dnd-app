@@ -32,6 +32,16 @@ import { exportContentPack } from './backupIO';
 export type ExportFormat = 'pdf' | 'txt' | 'md' | 'pack';
 
 /**
+ * 'save' writes straight to a location the user picks, no OS share sheet.
+ * 'share' opens the share sheet as before. Android has a real distinct
+ * mechanism for 'save' (Storage Access Framework); iOS/web have no SAF
+ * equivalent, so 'save' there falls back to the share sheet too — which
+ * already surfaces a native "Save to Files"/download target on those
+ * platforms, making the two actions converge rather than diverge.
+ */
+export type ExportAction = 'save' | 'share';
+
+/**
  * Races a promise against a timeout so a hang anywhere downstream (a native
  * module call, a stuck SQLite query) surfaces as a clear error instead of
  * leaving the caller's loading spinner stuck indefinitely — this is what
@@ -93,28 +103,55 @@ async function ensureNamesLoaded(spellIds: string[], itemIds: string[]): Promise
 /** True on any platform expo-print actually implements — not web. */
 export const PDF_EXPORT_AVAILABLE = Platform.OS !== 'web';
 
-export async function shareText(content: string, filename: string, format: 'txt' | 'md'): Promise<void> {
-  const uri = FileSystem.cacheDirectory + filename;
-  await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
-
+async function shareUri(uri: string, mimeType: string, dialogTitle: string): Promise<void> {
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {
     throw new Error('Sharing isn’t available on this device. The file was written but couldn’t be shared.');
   }
-  await Sharing.shareAsync(uri, {
-    mimeType:    format === 'md' ? 'text/markdown' : 'text/plain',
-    dialogTitle: filename,
-  });
+  await withTimeout(Sharing.shareAsync(uri, { mimeType, dialogTitle }), 60000, 'Opening the share sheet');
 }
 
-export async function sharePdfHtml(html: string, dialogTitle: string): Promise<void> {
-  const { uri } = await withTimeout(Print.printToFileAsync({ html, base64: false }), 30000, 'Generating the PDF');
-
-  const canShare = await Sharing.isAvailableAsync();
-  if (!canShare) {
-    throw new Error('Sharing isn’t available on this device. The PDF was created but couldn’t be shared.');
+/**
+ * Lets the user pick a real folder (e.g. Downloads) and writes straight into
+ * it via Storage Access Framework — Android only, no OS share sheet. The
+ * directory picker itself is a user-driven wait, hence the generous timeout.
+ */
+export async function saveTextViaSAF(content: string, filename: string, mimeType: string, encoding: FileSystem.EncodingType): Promise<void> {
+  const perm = await withTimeout(FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync(), 120000, 'Waiting for a folder to be chosen');
+  if (!perm.granted) {
+    throw new Error('No folder was selected, so nothing was saved.');
   }
-  await withTimeout(Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle }), 60000, 'Opening the share sheet');
+  const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, filename, mimeType);
+  await withTimeout(FileSystem.writeAsStringAsync(fileUri, content, { encoding }), 30000, 'Saving the file');
+}
+
+export async function shareText(content: string, filename: string, format: 'txt' | 'md', action: ExportAction = 'share'): Promise<void> {
+  const mimeType = format === 'md' ? 'text/markdown' : 'text/plain';
+  if (action === 'save' && Platform.OS === 'android') {
+    await saveTextViaSAF(content, filename, mimeType, FileSystem.EncodingType.UTF8);
+    return;
+  }
+  const uri = FileSystem.cacheDirectory + filename;
+  await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
+  await shareUri(uri, mimeType, filename);
+}
+
+export async function sharePdfHtml(html: string, dialogTitle: string, action: ExportAction = 'share'): Promise<void> {
+  const filename = `${sanitize(dialogTitle)}.pdf`;
+  const wantsSaf = action === 'save' && Platform.OS === 'android';
+  const result = await withTimeout(Print.printToFileAsync({ html, base64: wantsSaf }), 30000, 'Generating the PDF');
+
+  if (wantsSaf && result.base64) {
+    await saveTextViaSAF(result.base64, filename, 'application/pdf', FileSystem.EncodingType.Base64);
+    return;
+  }
+  // expo-print writes its output to its own temp/cache location, which isn't
+  // necessarily covered by the app's FileProvider <paths> config — copying
+  // into FileSystem.cacheDirectory first (same place shareText already
+  // writes to) is what makes Sharing.shareAsync able to actually read it.
+  const shareableUri = FileSystem.cacheDirectory + filename;
+  await FileSystem.copyAsync({ from: result.uri, to: shareableUri });
+  await shareUri(shareableUri, 'application/pdf', dialogTitle);
 }
 
 async function shareByFormat(
@@ -122,19 +159,20 @@ async function shareByFormat(
   buildMarkdown: () => string,
   buildHtml: () => string,
   baseName: string,
+  action: ExportAction,
 ): Promise<void> {
   if (format === 'pdf') {
-    await sharePdfHtml(buildHtml(), baseName);
+    await sharePdfHtml(buildHtml(), baseName, action);
     return;
   }
   const md = buildMarkdown();
   const content = format === 'txt' ? stripMarkdown(md) : md;
-  await shareText(content, `${baseName}.${format}`, format);
+  await shareText(content, `${baseName}.${format}`, format, action);
 }
 
 // ── Character ─────────────────────────────────────────────────────────────────
 
-export async function exportCharacter(entity: Entity, format: ExportFormat): Promise<void> {
+export async function exportCharacter(entity: Entity, format: ExportFormat, action: ExportAction = 'share'): Promise<void> {
   if (format === 'pack') return; // character sheet never offers this format — see ExportFormatSheet's showPackOption
   const db = useHomebrewStore.getState().getMergedContentDB();
 
@@ -152,6 +190,7 @@ export async function exportCharacter(entity: Entity, format: ExportFormat): Pro
     () => buildCharacterMarkdown(entity, resolveName),
     () => buildCharacterSheetHtml(entity, resolveName),
     sanitize(`${entity.identity.name || 'character'}-character`),
+    action,
   );
 }
 
@@ -173,9 +212,9 @@ function wrapAsHomebrewPack(type: ContentCacheType, item: HomebrewContent): Grim
   }
 }
 
-export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewContent, format: ExportFormat): Promise<void> {
+export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewContent, format: ExportFormat, action: ExportAction = 'share'): Promise<void> {
   if (format === 'pack') {
-    await exportContentPack(wrapAsHomebrewPack(type, item), null, sanitize(`${item.name}-${type}`));
+    await exportContentPack(wrapAsHomebrewPack(type, item), null, sanitize(`${item.name}-${type}`), action);
     return;
   }
   switch (type) {
@@ -191,6 +230,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildFeatureListMarkdown(race.name, subtitle, race.features),
         () => buildFeatureListHtml(race.name, subtitle ?? '', race.features),
         sanitize(`${race.name}-race`),
+        action,
       );
       return;
     }
@@ -201,6 +241,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildFeatureListMarkdown(sr.name, null, sr.features),
         () => buildFeatureListHtml(sr.name, '', sr.features),
         sanitize(`${sr.name}-subrace`),
+        action,
       );
       return;
     }
@@ -211,6 +252,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildClassMarkdown(cls),
         () => buildClassHtml(cls),
         sanitize(`${cls.name}-class`),
+        action,
       );
       return;
     }
@@ -221,6 +263,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildHomebrewSubclassMarkdown(sub),
         () => buildHomebrewSubclassHtml(sub),
         sanitize(`${sub.name}-subclass`),
+        action,
       );
       return;
     }
@@ -231,6 +274,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildSpellMarkdown(spell),
         () => buildSpellHtml(spell),
         sanitize(`${spell.name}-spell`),
+        action,
       );
       return;
     }
@@ -241,6 +285,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildFeatureListMarkdown(bg.name, null, bg.features),
         () => buildFeatureListHtml(bg.name, '', bg.features),
         sanitize(`${bg.name}-background`),
+        action,
       );
       return;
     }
@@ -251,6 +296,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildStandaloneFeatureMarkdown(feat),
         () => buildStandaloneFeatureHtml(feat),
         sanitize(`${feat.name}-feature`),
+        action,
       );
       return;
     }
@@ -262,6 +308,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildFeatureListMarkdown(it.name, subtitle, it.features),
         () => buildFeatureListHtml(it.name, subtitle, it.features),
         sanitize(`${it.name}-item`),
+        action,
       );
       return;
     }
@@ -274,6 +321,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildStandaloneFeatureMarkdown(feature),
         () => buildStandaloneFeatureHtml(feature),
         sanitize(`${feat.name}-feat`),
+        action,
       );
       return;
     }
@@ -285,6 +333,7 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildFeatureListMarkdown(m.name, subtitle, m.features),
         () => buildFeatureListHtml(m.name, subtitle, m.features),
         sanitize(`${m.name}-monster`),
+        action,
       );
       return;
     }

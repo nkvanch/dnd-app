@@ -55,6 +55,13 @@ const ORDERED_SECTIONS: Section[] = [
 
 const PRIMARY_KEYS = ['race', 'class', 'scores'];
 
+const SUBCLASS_SECTION: Section = {
+  key:   'subclass',
+  label: 'Subclass',
+  route: '/creation/subclass',
+  done:  d => d.choices.filter(c => c.definition.kind === 'subclass' && !c.resolved).length === 0,
+};
+
 const ASI_SECTION: Section = {
   key:   'asi',
   label: 'Ability Improvements',
@@ -86,11 +93,23 @@ export default function HubScreen() {
     ? ORDERED_SECTIONS
     : ORDERED_SECTIONS.filter(s => s.key !== 'feats');
 
+  // Conditionally include Subclass section, spliced right after Class — a
+  // class whose subclass unlocks at level 1 (Cleric, Sorcerer, Warlock) or
+  // below whatever target level the character is being created at should
+  // have that choice made as part of creation itself, immediately after
+  // picking the class, not deferred to the Features tab.
+  const subclassChoices = draft.choices.filter(c => c.definition.kind === 'subclass');
+  let sections = baseSections;
+  if (subclassChoices.length > 0) {
+    const classIdx = sections.findIndex(s => s.key === 'class');
+    sections = [...sections.slice(0, classIdx + 1), SUBCLASS_SECTION, ...sections.slice(classIdx + 1)];
+  }
+
   // Conditionally include ASI section only when there are pending ASI choices
   const asiChoices = draft.choices.filter(c => c.definition.kind === 'asi');
-  let sections = asiChoices.length > 0
-    ? [...baseSections, ASI_SECTION]
-    : baseSections;
+  if (asiChoices.length > 0) {
+    sections = [...sections, ASI_SECTION];
+  }
 
   // Same pattern for the rare-case spellcasting-ability choice (homebrew
   // classes with 2+ spellcastingAbilityOptions) — was previously never

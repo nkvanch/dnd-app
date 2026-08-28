@@ -8,12 +8,14 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
+import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { Entity } from '../engine/types';
 import {
   GrimoirePack, GrimoirePackHomebrew, createBackupPack, createContentPack,
   validateGrimoirePack, countHomebrew,
 } from '../engine/backup';
+import { ExportAction, saveTextViaSAF } from './exportShare';
 
 /**
  * Exports the given characters plus whichever homebrew content they actually
@@ -61,6 +63,7 @@ export async function exportContentPack(
   homebrew:     GrimoirePackHomebrew,
   deviceId:     string | null,
   filenameHint: string,
+  action:       ExportAction = 'share',
 ): Promise<void> {
   const pack = createContentPack(
     homebrew,
@@ -69,8 +72,14 @@ export async function exportContentPack(
   );
 
   const json     = JSON.stringify(pack, null, 2);
-  const uri      = FileSystem.cacheDirectory + `${filenameHint}.grimoire-pack`;
+  const filename = `${filenameHint}.grimoire-pack`;
 
+  if (action === 'save' && Platform.OS === 'android') {
+    await saveTextViaSAF(json, filename, 'application/json', FileSystem.EncodingType.UTF8);
+    return;
+  }
+
+  const uri = FileSystem.cacheDirectory + filename;
   await FileSystem.writeAsStringAsync(uri, json, { encoding: FileSystem.EncodingType.UTF8 });
 
   const canShare = await Sharing.isAvailableAsync();

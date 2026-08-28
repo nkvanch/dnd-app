@@ -27,7 +27,7 @@ import { TabNotes }     from '../../src/components/sheet/TabNotes';
 import { TabSpells }    from '../../src/components/sheet/TabSpells';
 import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
-import { exportCharacter, ExportFormat } from '../../src/io/exportShare';
+import { exportCharacter, ExportFormat, ExportAction } from '../../src/io/exportShare';
 import { GlobalDiceRoller } from '../../src/components/GlobalDiceRoller';
 import { SyncStatusDot }   from '../../src/components/SyncStatusDot';
 import { SafeBottomView }  from '../../src/components/SafeBottomView';
@@ -67,12 +67,12 @@ export default function CharacterSheetScreen() {
   const [exporting, setExporting] = useState(false);
   const goBack = useSafeGoBack('/(tabs)');
 
-  const handleExportFormat = useCallback(async (format: ExportFormat) => {
+  const handleExportFormat = useCallback(async (format: ExportFormat, action: ExportAction) => {
     setExportSheetOpen(false);
     if (!entity) return;
     setExporting(true);
     try {
-      await exportCharacter(entity, format);
+      await exportCharacter(entity, format, action);
     } catch (e: any) {
       Alert.alert('Export failed', e?.message ?? 'Something went wrong.');
     } finally {

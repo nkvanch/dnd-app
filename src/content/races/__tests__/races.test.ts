@@ -7,8 +7,11 @@
 // weapon/stat bonuses, not just that the content data typechecks.
 import { makeEmptyEntity, DEFAULT_RULES } from '../../../store/characterStore';
 import { applyGrant, queueChoice, resolveChoice } from '../../../engine/leveling';
-import { recomputeDerived } from '../../../engine/pipeline';
-import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf, raceHalfling, raceTiefling, raceHalfOrc } from '../index';
+import { recomputeDerived, modifier } from '../../../engine/pipeline';
+import {
+  raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf, raceHalfling, raceTiefling, raceHalfOrc,
+  raceAarakocra, raceAasimar, raceChangeling, raceFirbolg, raceGithyanki, raceGithzerai, raceGoliath, raceHarengon,
+} from '../index';
 import { resolveResistance } from '../../../engine/resolver';
 import { collectAllEffects } from '../../../engine/pipeline';
 import { Race, Subrace, Ability, Feature, Entity } from '../../../engine/types';
@@ -563,6 +566,59 @@ describe('Sourcebook Elf subraces', () => {
     const pallid = raceElf.subraces!.find(s => s.id === 'pallid_elf')!;
     const e = applyRaceSelection(raceElf, pallid);
     expect(e.skills.skills.perception.trained).toBe(true);
+  });
+});
+
+describe('New standalone races — Aarakocra, Aasimar, Changeling, Firbolg, Githyanki, Githzerai, Goliath, Harengon', () => {
+  it('Aarakocra grants a real 30ft fly speed', () => {
+    const e = applyRaceSelection(raceAarakocra, null, [{ ability: 'dex', amount: 2 }, { ability: 'wis', amount: 1 }]);
+    expect(e.derived.movement).toEqual({ fly: 30 });
+  });
+
+  it('Aasimar grants real darkvision, necrotic+radiant resistance, a Light cantrip, and offers a Celestial Revelation ancestryChoice', () => {
+    expect(raceAasimar.ancestryChoice!.options.map(o => o.id).sort()).toEqual(['necrotic_shroud', 'radiant_consumption', 'radiant_soul']);
+    const e = applyRaceSelection(raceAasimar, null, [{ ability: 'cha', amount: 2 }, { ability: 'wis', amount: 1 }], 'radiant_soul');
+    expect(e.derived.senses).toEqual([{ type: 'darkvision', range: 60, note: undefined }]);
+    expect(resolveResistance('necrotic', collectAllEffects(e))).toBe('resistance');
+    expect(resolveResistance('radiant', collectAllEffects(e))).toBe('resistance');
+    expect(e.spellcasting?.cantrips).toContain('light');
+    expect(e.features.some(f => f.id === 'radiant_soul_feature')).toBe(true);
+  });
+
+  it('Changeling queues a real 2-of-5 restricted skill choice', () => {
+    const e = applyRaceSelection(raceChangeling, null, [{ ability: 'cha', amount: 2 }, { ability: 'dex', amount: 1 }]);
+    const pending = e.choices.find(c => c.definition.id.startsWith('race_choice_'));
+    expect(pending!.definition.count).toBe(2);
+    expect((pending!.definition.pool as { id: string }[]).map(o => o.id).sort()).toEqual(['deception', 'insight', 'intimidation', 'performance', 'persuasion']);
+  });
+
+  it('Githyanki and Githzerai both grant a real Mage Hand cantrip and psychic resistance', () => {
+    const eYanki = applyRaceSelection(raceGithyanki, null, [{ ability: 'str', amount: 2 }, { ability: 'con', amount: 1 }]);
+    const eZerai = applyRaceSelection(raceGithzerai, null, [{ ability: 'wis', amount: 2 }, { ability: 'int', amount: 1 }]);
+    for (const e of [eYanki, eZerai]) {
+      expect(e.spellcasting?.cantrips).toContain('mage_hand');
+      expect(resolveResistance('psychic', collectAllEffects(e))).toBe('resistance');
+    }
+  });
+
+  it('Firbolg\'s Hidden Step is a resource-gated bonus action (no automated invisibility, but the pool is real)', () => {
+    const e = applyRaceSelection(raceFirbolg, null, [{ ability: 'wis', amount: 2 }, { ability: 'str', amount: 1 }]);
+    expect(e.resources.custom.find(r => r.id === 'hidden_step_pool')).toMatchObject({ maximum: 2, recharge: 'long_rest' });
+    const hiddenStep = e.features.find(f => f.id === 'hidden_step')!;
+    expect(hiddenStep.activation?.resourceCost).toEqual({ resourceId: 'hidden_step_pool', quantity: 1 });
+  });
+
+  it('Goliath grants real Athletics proficiency and cold resistance', () => {
+    const e = applyRaceSelection(raceGoliath, null, [{ ability: 'str', amount: 2 }, { ability: 'con', amount: 1 }]);
+    expect(e.skills.skills.athletics.trained).toBe(true);
+    expect(resolveResistance('cold', collectAllEffects(e))).toBe('resistance');
+  });
+
+  it('Harengon grants real Perception proficiency and a flat +2 initiative bonus', () => {
+    const e = applyRaceSelection(raceHarengon, null, [{ ability: 'dex', amount: 2 }, { ability: 'wis', amount: 1 }]);
+    expect(e.skills.skills.perception.trained).toBe(true);
+    // derived.initiative uses EFFECTIVE dex (base 10 + this flexAsi's +2 = 12, mod +1) plus Hare-Trigger's flat +2
+    expect(e.derived.initiative).toBe(modifier(12) + 2);
   });
 });
 

@@ -2221,6 +2221,265 @@ export const raceSkeleton: Race = {
   ],
 };
 
+// ============================================================================
+// "Partially Official races" — entirely new races from the vault's Volo's
+// Guide/Mordenkainen's/Tasha's/Van Richten's-era content, not variants of
+// any race above. Modern (Mordenkainen Presents: Monsters of the
+// Multiverse) writeups preferred where the vault has both an MOTM and a
+// classic version, for the same reason Astral Elf used MOTM over an older
+// draft: flexibleAsi models the modern "+2/+1 split or three +1s" ASI
+// directly, and MOTM is the current, most-official version.
+const TWO_ONE_OR_THREE_ONE_PROMPT = 'Increase one ability score by 2 and a different one by 1, or increase three different ability scores by 1.';
+
+export const raceAarakocra: Race = {
+  id: 'aarakocra', name: 'Aarakocra', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  features: [
+    {
+      id: 'aarakocra_flight', name: 'Flight',
+      description: 'You have a flying speed equal to your walking speed (30 feet). (RAW: not while wearing medium/heavy armor — this app has no mechanism to condition a movement speed on equipped armor weight, so it\'s granted unconditionally, disclosed not silent.)',
+      source: { kind: 'race', refId: 'aarakocra' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'fly', movementRange: 30 }],
+    },
+    {
+      id: 'aarakocra_talons', name: 'Talons',
+      description: 'You have talons you can use to make unarmed strikes, dealing 1d6 + Strength modifier slashing damage instead of the normal bludgeoning. (No mechanism to override unarmed strike damage — not applied mechanically.)',
+      source: { kind: 'race', refId: 'aarakocra' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'wind_caller', name: 'Wind Caller',
+      description: 'Starting at 3rd level, you can cast Gust of Wind with this trait, once per long rest. Your choice of Intelligence, Wisdom, or Charisma is your spellcasting ability. (Not a cantrip and gated to 3rd level — no mechanism for either, so this has no 1st-level effect and isn\'t applied mechanically.)',
+      source: { kind: 'race', refId: 'aarakocra' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const raceAasimar: Race = {
+  id: 'aasimar', name: 'Aasimar', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  ancestryChoice: {
+    prompt: 'Choose your Celestial Revelation (unlocks at 3rd level — reference only, see below).',
+    options: [
+      {
+        id: 'necrotic_shroud', name: 'Necrotic Shroud', blurb: 'Frighten nearby foes, deal extra necrotic damage. 3rd level, reference only.',
+        feature: {
+          id: 'necrotic_shroud_feature', name: 'Necrotic Shroud',
+          description: 'At 3rd level, as a bonus action, you can transform for 1 minute: nearby non-allies must save vs fright (DC 8 + prof bonus + CHA mod), and once per turn you deal extra necrotic damage equal to your proficiency bonus. Once per long rest. (Gated to 3rd level — this app doesn\'t yet support level-gated racial features, so this is tracked for reference only.)',
+          source: { kind: 'race', refId: 'aasimar' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      },
+      {
+        id: 'radiant_consumption', name: 'Radiant Consumption', blurb: 'Shed light, deal extra radiant damage to nearby foes. 3rd level, reference only.',
+        feature: {
+          id: 'radiant_consumption_feature', name: 'Radiant Consumption',
+          description: 'At 3rd level, as a bonus action, you can transform for 1 minute: you shed light and, at the end of each of your turns, nearby creatures take radiant damage equal to your proficiency bonus; once per turn you also deal extra radiant damage on a hit. Once per long rest. (Gated to 3rd level — this app doesn\'t yet support level-gated racial features, so this is tracked for reference only.)',
+          source: { kind: 'race', refId: 'aasimar' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      },
+      {
+        id: 'radiant_soul', name: 'Radiant Soul', blurb: 'Gain a flying speed, deal extra radiant damage. 3rd level, reference only.',
+        feature: {
+          id: 'radiant_soul_feature', name: 'Radiant Soul',
+          description: 'At 3rd level, as a bonus action, you can transform for 1 minute: you gain a flying speed equal to your walking speed, and once per turn you deal extra radiant damage on a hit equal to your proficiency bonus. Once per long rest. (Gated to 3rd level — this app doesn\'t yet support level-gated racial features, so this is tracked for reference only.)',
+          source: { kind: 'race', refId: 'aasimar' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      },
+    ],
+  },
+  features: [
+    {
+      id: 'aasimar_darkvision', name: 'Darkvision',
+      description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.',
+      source: { kind: 'race', refId: 'aasimar' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: 60 }],
+    },
+    {
+      id: 'celestial_resistance', name: 'Celestial Resistance',
+      description: 'You have resistance to necrotic and radiant damage.',
+      source: { kind: 'race', refId: 'aasimar' }, level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'grant_resistance', target: 'necrotic', operation: 'resistance', value: null, condition: null },
+        { type: 'grant_resistance', target: 'radiant', operation: 'resistance', value: null, condition: null },
+      ],
+    },
+    {
+      id: 'healing_hands', name: 'Healing Hands',
+      description: 'As an action, you can touch a creature and roll a number of d4s equal to your proficiency bonus, healing that many hit points. Once per long rest. (No touch-heal action mechanism exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'aasimar' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'light_bearer', name: 'Light Bearer',
+      description: 'You know the Light cantrip. Charisma is your spellcasting ability for it.',
+      source: { kind: 'race', refId: 'aasimar' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['light'], spellcastingAbility: 'cha' }],
+    },
+  ],
+};
+
+export const raceChangeling: Race = {
+  id: 'changeling', name: 'Changeling', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}changeling_skills`,
+      prompt: 'Choose two skills to gain proficiency in, from Deception, Insight, Intimidation, Performance, or Persuasion.',
+      kind: 'skill', count: 2,
+      pool: ['deception', 'insight', 'intimidation', 'performance', 'persuasion'].map(s => ({ id: s, label: s, value: s })),
+      grants: [], required: true, resolved: false,
+    },
+  ],
+  features: [
+    {
+      id: 'shapechanger', name: 'Shapechanger',
+      description: 'As an action, you can change your appearance and voice, staying in the new form until you revert or die. (No appearance/disguise mechanic exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'changeling' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const raceFirbolg: Race = {
+  id: 'firbolg', name: 'Firbolg', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  resources: [
+    { resourceId: 'hidden_step_pool', name: 'Hidden Step', maximum: 2, recharge: 'long_rest' },
+  ],
+  features: [
+    {
+      id: 'firbolg_magic', name: 'Firbolg Magic',
+      description: 'You can cast Detect Magic and Disguise Self with this trait, once each per long rest — your choice of Intelligence, Wisdom, or Charisma as spellcasting ability. (Neither is a cantrip — no mechanism for a limited-use LEVELED spell without a slot, so not applied mechanically.)',
+      source: { kind: 'race', refId: 'firbolg' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'hidden_step', name: 'Hidden Step',
+      description: 'As a bonus action, you can turn invisible until the start of your next turn or until you attack, damage, or force a save. Uses = proficiency bonus (this app tracks a fixed pool of 2, the 1st-level value); all uses return on a long rest. (No invisibility mechanic exists — the resource is tracked, but using it has no automated effect.)',
+      source: { kind: 'race', refId: 'firbolg' }, level: null, actions: [], choices: [], passive: false,
+      effects: [],
+      activation: { actionType: 'bonus_action', resourceCost: { resourceId: 'hidden_step_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+    },
+    {
+      id: 'firbolg_powerful_build', name: 'Powerful Build',
+      description: 'You count as one size larger when determining carrying capacity and the weight you can push, drag, or lift. (No carrying-capacity-by-size mechanism exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'firbolg' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'speech_of_beast_and_leaf', name: 'Speech of Beast and Leaf',
+      description: 'You can communicate in a limited manner with beasts and plants, and have advantage on Charisma checks to influence them. (No beast/plant-communication mechanism, and advantage here doesn\'t fit any of the engine\'s 3 hardcoded advantage targets — not applied mechanically.)',
+      source: { kind: 'race', refId: 'firbolg' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const raceGithyanki: Race = {
+  id: 'githyanki', name: 'Githyanki', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  features: [
+    {
+      id: 'astral_knowledge', name: 'Astral Knowledge',
+      description: 'Each long rest, you gain one skill proficiency and one weapon or tool proficiency of your choice, lasting until your next long rest. (No mechanism for temporary/expiring proficiencies — not applied mechanically.)',
+      source: { kind: 'race', refId: 'githyanki' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'githyanki_psionics', name: 'Githyanki Psionics',
+      description: 'You know the Mage Hand cantrip (the hand is invisible). Your choice of Intelligence, Wisdom, or Charisma is your spellcasting ability. At 3rd level you can also cast Jump, and at 5th level Misty Step, each once per long rest — this app doesn\'t yet support level-gated racial features, so only the cantrip is granted for real.',
+      source: { kind: 'race', refId: 'githyanki' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['mage_hand'], spellcastingAbility: 'int' }],
+    },
+    {
+      id: 'psychic_resilience_githyanki', name: 'Psychic Resilience',
+      description: 'You have resistance to psychic damage.',
+      source: { kind: 'race', refId: 'githyanki' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_resistance', target: 'psychic', operation: 'resistance', value: null, condition: null }],
+    },
+  ],
+};
+
+export const raceGithzerai: Race = {
+  id: 'githzerai', name: 'Githzerai', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  features: [
+    {
+      id: 'githzerai_psionics', name: 'Githzerai Psionics',
+      description: 'You know the Mage Hand cantrip (the hand is invisible). Your choice of Intelligence, Wisdom, or Charisma is your spellcasting ability. At 3rd level you can also cast Shield, and at 5th level Detect Thoughts, each once per long rest — this app doesn\'t yet support level-gated racial features, so only the cantrip is granted for real.',
+      source: { kind: 'race', refId: 'githzerai' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['mage_hand'], spellcastingAbility: 'int' }],
+    },
+    {
+      id: 'mental_discipline', name: 'Mental Discipline',
+      description: 'You have advantage on saving throws to avoid or end the charmed or frightened conditions on yourself. (Doesn\'t fit any of the engine\'s 3 hardcoded advantage targets — not applied mechanically.)',
+      source: { kind: 'race', refId: 'githzerai' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'psychic_resilience_githzerai', name: 'Psychic Resilience',
+      description: 'You have resistance to psychic damage.',
+      source: { kind: 'race', refId: 'githzerai' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_resistance', target: 'psychic', operation: 'resistance', value: null, condition: null }],
+    },
+  ],
+};
+
+export const raceGoliath: Race = {
+  id: 'goliath', name: 'Goliath', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  resources: [
+    { resourceId: 'stones_endurance_pool', name: "Stone's Endurance", maximum: 2, recharge: 'long_rest' },
+  ],
+  features: [
+    {
+      id: 'little_giant', name: 'Little Giant',
+      description: 'You have proficiency in the Athletics skill, and count as one size larger for carrying capacity and push/drag/lift weight. (Athletics proficiency is real; the size-for-carrying-capacity part has no mechanism — not applied mechanically.)',
+      source: { kind: 'race', refId: 'goliath' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_proficiency', target: 'skill:athletics', operation: 'add', value: null, condition: null }],
+    },
+    {
+      id: 'mountain_born', name: 'Mountain Born',
+      description: 'You have resistance to cold damage, and you naturally acclimate to high altitudes.',
+      source: { kind: 'race', refId: 'goliath' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_resistance', target: 'cold', operation: 'resistance', value: null, condition: null }],
+    },
+    {
+      id: 'stones_endurance', name: "Stone's Endurance",
+      description: 'When you take damage, you can use your reaction to roll a d12, add your Constitution modifier, and reduce the damage by that total. Uses = proficiency bonus (this app tracks a fixed pool of 2, the 1st-level value); all uses return on a long rest. (No damage-reduction mechanism exists — the resource is tracked, but using it has no automated effect.)',
+      source: { kind: 'race', refId: 'goliath' }, level: null, actions: [], choices: [], passive: false,
+      effects: [],
+      activation: { actionType: 'reaction', resourceCost: { resourceId: 'stones_endurance_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+    },
+  ],
+};
+
+export const raceHarengon: Race = {
+  id: 'harengon', name: 'Harengon', srd: false,
+  flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  resources: [
+    { resourceId: 'rabbit_hop_pool', name: 'Rabbit Hop', maximum: 2, recharge: 'long_rest' },
+  ],
+  features: [
+    {
+      id: 'hare_trigger', name: 'Hare-Trigger',
+      description: 'You add your proficiency bonus to initiative rolls. (Flat +2, the level-1 proficiency bonus value — this app has no mechanism for a bonus that scales dynamically with level, so it doesn\'t grow on level-up; disclosed, not silent.)',
+      source: { kind: 'race', refId: 'harengon' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'stat_modifier', target: 'initiative', operation: 'add', value: 2, condition: null }],
+    },
+    {
+      id: 'leporine_senses', name: 'Leporine Senses',
+      description: 'You have proficiency in the Perception skill.',
+      source: { kind: 'race', refId: 'harengon' }, level: null, actions: [], choices: [], passive: true,
+      effects: [{ type: 'grant_proficiency', target: 'skill:perception', operation: 'add', value: null, condition: null }],
+    },
+    {
+      id: 'lucky_footwork', name: 'Lucky Footwork',
+      description: 'When you fail a Dexterity saving throw, you can use your reaction to roll a d4 and add it, possibly turning failure into success. (No reroll-on-save mechanism exists — not applied mechanically.)',
+      source: { kind: 'race', refId: 'harengon' }, level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rabbit_hop', name: 'Rabbit Hop',
+      description: 'As a bonus action, you can jump 5× your proficiency bonus in feet without provoking opportunity attacks. Uses = proficiency bonus (this app tracks a fixed pool of 2, the 1st-level value); all uses return on a long rest. (No jump-distance mechanic exists — the resource is tracked, but using it has no automated effect.)',
+      source: { kind: 'race', refId: 'harengon' }, level: null, actions: [], choices: [], passive: false,
+      effects: [],
+      activation: { actionType: 'bonus_action', resourceCost: { resourceId: 'rabbit_hop_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
+    },
+  ],
+};
+
 /**
  * Every playable race, unfiltered. Prefer ALL_RACES below in app code.
  * (raceSkeleton is intentionally not included here — see its own comment.)
@@ -2235,6 +2494,14 @@ export const FULL_RACE_LIBRARY: Race[] = [
   raceHalfElf,
   raceHalfOrc,
   raceTiefling,
+  raceAarakocra,
+  raceAasimar,
+  raceChangeling,
+  raceFirbolg,
+  raceGithyanki,
+  raceGithzerai,
+  raceGoliath,
+  raceHarengon,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

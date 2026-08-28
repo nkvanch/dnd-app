@@ -104,9 +104,11 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     let updatedSkills  = { ...entity.skills.skills };
     let updatedTools   = [...entity.proficiencies.tools];
     let updatedWeapons = [...entity.proficiencies.weapons];
+    let updatedArmor   = [...entity.proficiencies.armor];
     let changed = false;
     let toolsChanged = false;
     let weaponsChanged = false;
+    let armorChanged = false;
     for (const ae of profEffects) {
       // target format: 'skill:perception', 'skill:athletics', etc.
       if (ae.effect.target.startsWith('skill:')) {
@@ -150,17 +152,28 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
           weaponsChanged = true;
         }
       }
+      // target format: 'armor:light', 'armor:medium', 'armor:heavy',
+      // 'armor:shields' — same pattern as weapon:/tool:, for racial armor-
+      // proficiency traits (Dwarven Armor Training, etc.).
+      if (ae.effect.target.startsWith('armor:') && ae.effect.operation === 'add') {
+        const armorName = ae.effect.target.slice(6).replace(/_/g, ' ');
+        if (!updatedArmor.some(a => a.toLowerCase() === armorName.toLowerCase())) {
+          updatedArmor = [...updatedArmor, armorName];
+          armorChanged = true;
+        }
+      }
     }
     if (changed) {
       entity = { ...entity, skills: { skills: updatedSkills } };
     }
-    if (toolsChanged || weaponsChanged) {
+    if (toolsChanged || weaponsChanged || armorChanged) {
       entity = {
         ...entity,
         proficiencies: {
           ...entity.proficiencies,
           tools:   toolsChanged   ? updatedTools   : entity.proficiencies.tools,
           weapons: weaponsChanged ? updatedWeapons : entity.proficiencies.weapons,
+          armor:   armorChanged   ? updatedArmor   : entity.proficiencies.armor,
         },
       };
     }

@@ -252,6 +252,19 @@ describe('recomputeDerived — grant_proficiency effects', () => {
     const updated = recomputeDerived(e, DEFAULT_RULES);
     expect(updated.proficiencies.weapons.filter(w => w.toLowerCase() === 'longbow').length).toBe(1);
   });
+
+  it('adds an armor proficiency via an "add" grant_proficiency effect', () => {
+    const e = withFeatures([feature('armor_grant', [{ type: 'grant_proficiency', target: 'armor:medium', operation: 'add', value: null }])]);
+    const updated = recomputeDerived(e, DEFAULT_RULES);
+    expect(updated.proficiencies.armor).toContain('medium');
+  });
+
+  it('does not add a duplicate armor proficiency it already has (case-insensitive)', () => {
+    const e = withFeatures([feature('armor_grant', [{ type: 'grant_proficiency', target: 'armor:light', operation: 'add', value: null }])],
+      { proficiencies: { ...makeEmptyEntity('e1').proficiencies, armor: ['Light'] } });
+    const updated = recomputeDerived(e, DEFAULT_RULES);
+    expect(updated.proficiencies.armor.filter(a => a.toLowerCase() === 'light').length).toBe(1);
+  });
 });
 
 describe('recomputeDerived — conditional effects', () => {

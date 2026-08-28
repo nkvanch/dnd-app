@@ -679,6 +679,13 @@ export const raceDwarf: Race = {
       level: null, effects: [], actions: [], choices: [], passive: true,
     },
     {
+      id: 'dwarf_tool_proficiency',
+      name: 'Tool Proficiency',
+      description: 'You gain proficiency with the artisan\'s tools of your choice: smith\'s tools, brewer\'s supplies, or mason\'s tools. (No tool-choice-of-N resolution screen exists yet — same gap as feat choices — so this isn\'t applied mechanically.)',
+      source: { kind: 'race', refId: 'dwarf' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
       id: 'dwarf_combat_training',
       name: 'Dwarven Combat Training',
       description: 'You have proficiency with the battleaxe, handaxe, light hammer, and warhammer.',
@@ -729,7 +736,71 @@ export const raceDwarf: Race = {
           name: 'Dwarven Armor Training',
           description: 'You have proficiency with light and medium armor.',
           source: { kind: 'race', refId: 'mountain_dwarf' },
-          level: null, effects: [], actions: [], choices: [], passive: true,
+          level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'grant_proficiency', target: 'armor:light', operation: 'add', value: null, condition: null },
+            { type: 'grant_proficiency', target: 'armor:medium', operation: 'add', value: null, condition: null },
+          ],
+        },
+      ],
+    },
+    // Eberron: Rising from the Last War — dragonmark. Neither of Wards and
+    // Seals' innate spells (Alarm, Mage Armor) is a cantrip — this app's
+    // only working "cast a spell without a slot" mechanism is grant_spell's
+    // cantripIds, so there's nothing here to grant for real (unlike Mark of
+    // Shadow's Minor Illusion or Mark of Scribing's Message elsewhere) —
+    // fully flavor-only, disclosed.
+    {
+      id: 'mark_of_warding', name: 'Mark of Warding', parentId: 'dwarf', srd: false,
+      features: [
+        {
+          id: 'mark_of_warding_asi', name: 'Ability Score Increase',
+          description: 'Your Intelligence score increases by 1.',
+          source: { kind: 'race', refId: 'mark_of_warding' }, level: null, actions: [], choices: [], passive: true,
+          effects: [{ type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null }],
+        },
+        {
+          id: 'warders_intuition', name: "Warder's Intuition",
+          description: 'Whenever you roll an Intelligence (Investigation) check or an ability check with thieves\' tools, roll a d4 and add it to the total. (No mechanism for a random per-check bonus — not applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_warding' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'wards_and_seals', name: 'Wards and Seals',
+          description: 'You can cast Alarm and Mage Armor with this trait, without material components. At 3rd level you can also cast Arcane Lock. Once you cast either spell with this trait, you can\'t cast it again until you finish a long rest. Intelligence is your spellcasting ability for these spells. (Neither spell is a cantrip — this app has no mechanism to grant a limited-use LEVELED spell without a slot, so none of this is applied mechanically.)',
+          source: { kind: 'race', refId: 'mark_of_warding' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'mark_of_warding_spells', name: 'Spells of the Mark',
+          description: 'If you have the Spellcasting or Pact Magic class feature, Alarm, Armor of Agathys, Arcane Lock, Knock, Glyph of Warding, Magic Circle, Leomund\'s Secret Chest, Mordenkainen\'s Faithful Hound, and Antilife Shell are added to your class\'s spell list. (No mechanism to add spells to a class spell list — not applied mechanically, tracked for reference.)',
+          source: { kind: 'race', refId: 'mark_of_warding' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+      ],
+    },
+    // Plane Shift: Kaladesh (MTG crossover) — presented as a complete
+    // alternate Dwarf writeup (its own 2-stat ASI, all of Hill Dwarf's
+    // traits plus expanded tool proficiency), not a small additive split.
+    {
+      id: 'kaladesh_dwarf', name: 'Kaladesh Dwarf', parentId: 'dwarf', srd: false,
+      replacesBaseFeatureIds: ['dwarf_asi'],
+      features: [
+        {
+          id: 'kaladesh_dwarf_asi', name: 'Ability Score Increase',
+          description: 'Your Constitution score increases by 2, and your Wisdom score increases by 1.',
+          source: { kind: 'race', refId: 'kaladesh_dwarf' }, level: null, actions: [], choices: [], passive: true,
+          effects: [
+            { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null },
+            { type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null },
+          ],
+        },
+        {
+          id: 'kaladesh_dwarven_toughness', name: 'Dwarven Toughness',
+          description: 'Your hit point maximum increases by 1, and it increases by 1 every time you gain a level. (No mechanism for a per-level-scaling HP bonus outside the normal HP-gain formula — not applied mechanically, same gap as Hill Dwarf\'s identical trait.)',
+          source: { kind: 'race', refId: 'kaladesh_dwarf' }, level: null, effects: [], actions: [], choices: [], passive: true,
+        },
+        {
+          id: 'artisans_expertise', name: "Artisan's Expertise",
+          description: 'You gain proficiency with two kinds of artisan\'s tools of your choice, and your proficiency bonus is doubled for checks using either. Whenever you make an Intelligence (History) check about an architectural construction, you\'re considered proficient and add double your proficiency bonus. (Tool CHOICE and the expertise doubling have no mechanism yet — same gap as Dwarf\'s base Tool Proficiency and Stonecunning — not applied mechanically.)',
+          source: { kind: 'race', refId: 'kaladesh_dwarf' }, level: null, effects: [], actions: [], choices: [], passive: true,
         },
       ],
     },

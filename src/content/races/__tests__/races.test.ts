@@ -8,7 +8,7 @@
 import { makeEmptyEntity, DEFAULT_RULES } from '../../../store/characterStore';
 import { applyGrant, queueChoice, resolveChoice } from '../../../engine/leveling';
 import { recomputeDerived } from '../../../engine/pipeline';
-import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf } from '../index';
+import { raceDragonborn, raceGnome, raceHuman, raceHalfElf, raceElf, raceDwarf } from '../index';
 import { resolveResistance } from '../../../engine/resolver';
 import { collectAllEffects } from '../../../engine/pipeline';
 import { Race, Subrace, Ability, Feature, Entity } from '../../../engine/types';
@@ -245,6 +245,37 @@ describe('Elf and Drow — darkvision/weapon proficiency (previously flavor-only
       expect(eHigh.proficiencies.weapons).toContain(w);
       expect(eWood.proficiencies.weapons).toContain(w);
     }
+  });
+});
+
+describe('Dwarf subraces', () => {
+  it('Mountain Dwarf grants real light and medium armor proficiency (previously flavor-only)', () => {
+    const mountain = raceDwarf.subraces!.find(s => s.id === 'mountain_dwarf')!;
+    const e = applyRaceSelection(raceDwarf, mountain);
+    expect(e.proficiencies.armor).toEqual(expect.arrayContaining(['light', 'medium']));
+  });
+
+  it('Kaladesh Dwarf replaces the base ASI with its own CON+2/WIS+1', () => {
+    const kaladesh = raceDwarf.subraces!.find(s => s.id === 'kaladesh_dwarf')!;
+    const e = applyRaceSelection(raceDwarf, kaladesh);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'wis', operation: 'add', value: 1, condition: null },
+    ]));
+    // base dwarf_asi's flat con+2 (no wis) is gone, replaced — not stacked
+    const conEffects = effects.filter(ef => ef.target === 'con');
+    expect(conEffects).toHaveLength(1);
+  });
+
+  it('Mark of Warding grants real INT+1, inheriting the rest of base Dwarf unchanged', () => {
+    const mow = raceDwarf.subraces!.find(s => s.id === 'mark_of_warding')!;
+    const e = applyRaceSelection(raceDwarf, mow);
+    const effects = e.features.flatMap(f => f.effects);
+    expect(effects).toEqual(expect.arrayContaining([
+      { type: 'stat_modifier', target: 'con', operation: 'add', value: 2, condition: null }, // base dwarf_asi, inherited
+      { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null }, // mark of warding's own
+    ]));
   });
 });
 

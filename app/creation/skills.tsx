@@ -281,6 +281,14 @@ export default function SkillsScreen() {
         const need    = achievableCount(choice);
         const overlap = overlapCount(choice);
         const losing  = choice.definition.count - need;
+        // How many extra (non-list) skills poolFor actually appended below —
+        // NOT the same as `overlap`. A choice can have background overlap
+        // without ever needing a replacement (e.g. only 1 of 8 skills
+        // overlaps and you're only picking 1) — the old condition
+        // (`overlap > 0`) showed "N replacement picks opened" in that case
+        // even though the pool below was still just the plain restricted
+        // list, which was misleading.
+        const replacementsAdded = pool.filter(o => o.isReplacement).length;
 
         return (
           <View key={choice.id} style={styles.choiceBlock}>
@@ -291,15 +299,15 @@ export default function SkillsScreen() {
               Selected: {chosen.length} / {need}
             </Text>
 
-            {overlap > 0 && overlapMode === 'replacement' && (
+            {replacementsAdded > 0 && overlapMode === 'replacement' && (
               <Text style={styles.replacementNote}>
-                Your background already covers {overlap} of this class's skill{overlap === 1 ? '' : 's'}.
-                {' '}{overlap} replacement pick{overlap === 1 ? '' : 's'} opened below — you don't lose any.
+                Your background already covers {overlap} of this choice's skill{overlap === 1 ? '' : 's'}.
+                {' '}{replacementsAdded} replacement pick{replacementsAdded === 1 ? '' : 's'} opened below — you don't lose any.
               </Text>
             )}
             {losing > 0 && overlapMode === 'warn' && (
               <Text style={styles.lossNote}>
-                Your background covers {overlap} of this class's skills, so you can pick {need} instead of {choice.definition.count} (losing {losing} pick{losing === 1 ? '' : 's'}).
+                Your background covers {overlap} of this choice's skills, so you can pick {need} instead of {choice.definition.count} (losing {losing} pick{losing === 1 ? '' : 's'}).
               </Text>
             )}
 

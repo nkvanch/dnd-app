@@ -108,12 +108,30 @@ export default function RaceDetailScreen() {
   const mergedRaces = getMergedContentDB().races;
 
   const race   = mergedRaces.find(r => r.id === id);
-  // Homebrew races self-describe via race.age/size/languages (see the Race
-  // type's doc comment); official races fall back to the hardcoded table,
-  // which predates those fields and still covers all 9 of them.
-  const detail = race?.age || race?.size || race?.languages
-    ? { description: '', size: race.size ?? '', speed: 30, languages: race.languages ?? [], age: race.age }
-    : (id ? RACE_DETAIL[id] : null);
+  // Races self-describe via race.description/age/size/languages (see the
+  // Race type's doc comment) — merged per-field with the legacy hardcoded
+  // table (which predates those fields and only ever covered the original
+  // 9 PHB races) rather than all-or-nothing, so a race missing just one
+  // field still shows everything else instead of blanking the whole
+  // section. Speed isn't a stored field at all — it's read directly off
+  // the race's own base Speed feature (the same stat_modifier effect the
+  // engine itself applies), so this display can never drift from what the
+  // character actually gets; falls back to 30 for races with no explicit
+  // Speed feature (i.e. the SRD default).
+  const fallback = id ? RACE_DETAIL[id] : null;
+  const speedFromFeatures = race?.features
+    .flatMap(f => f.effects)
+    .find(e => e.type === 'stat_modifier' && e.target === 'speed' && e.operation === 'set')
+    ?.value as number | undefined;
+  const detail = race
+    ? {
+        description: race.description ?? fallback?.description ?? '',
+        size:        race.size ?? fallback?.size ?? '',
+        speed:       speedFromFeatures ?? fallback?.speed ?? 30,
+        languages:   race.languages ?? fallback?.languages ?? [],
+        age:         race.age ?? fallback?.age,
+      }
+    : null;
 
   // Subrace selection — mandatory when the race defines subraces.
   const [subRaceId, setSubRaceId] = useState<string | null>(null);

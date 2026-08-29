@@ -221,9 +221,11 @@ export type Race = {
    * self-describe directly. race-detail.tsx prefers these when present,
    * falling back to RACE_DETAIL for the 9 official races that don't set them.
    */
-  age?:       string;
-  size?:      'Tiny' | 'Small' | 'Medium' | 'Large';
-  languages?: string[];
+  age?:         string;
+  size?:        'Tiny' | 'Small' | 'Medium' | 'Large';
+  languages?:   string[];
+  /** Short flavor blurb shown at the top of the race detail screen. */
+  description?: string;
   /**
    * Raw builder state (traits, subrace drafts, etc.) preserved alongside the
    * compiled `features`/`subraces` above, so editing an existing homebrew

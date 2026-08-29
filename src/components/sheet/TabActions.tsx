@@ -131,6 +131,42 @@ function Section({ title, cards, onUse }: {
   );
 }
 
+// ── Universal actions (always available, no class/resource involved) ──────────
+// Every creature can take these on its turn regardless of class or level — the
+// app has no Feature/resource driving them (there's nothing to "spend"), so
+// they never show up as actionCards the way spells/class features do. Purely
+// a reference list, collapsed by default since it's rarely-needed reminder
+// text rather than something reached for every turn.
+
+const UNIVERSAL_ACTIONS: { name: string; blurb: string }[] = [
+  { name: 'Dash', blurb: "Gain extra movement for the turn, equal to your speed." },
+  { name: 'Disengage', blurb: "Your movement doesn't provoke opportunity attacks for the rest of the turn." },
+  { name: 'Dodge', blurb: 'Until your next turn, attacks against you have disadvantage if you can see the attacker, and you have advantage on Dexterity saves.' },
+  { name: 'Help', blurb: 'Aid an ally on a task, granting advantage on their next check for it, or on their next attack against a creature within 5 feet of you.' },
+  { name: 'Hide', blurb: 'Make a Stealth check to try to become unseen and unheard.' },
+  { name: 'Ready', blurb: 'Prepare to act later this round — choose a trigger, then use your reaction to take the readied action when it happens.' },
+  { name: 'Search', blurb: "Devote your full attention to finding something, usually with a Perception or Investigation check." },
+  { name: 'Use an Object', blurb: 'Interact with a second object or feature of the environment this turn, beyond the one free interaction you already get.' },
+];
+
+function UniversalActionsSection() {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={styles.section}>
+      <Pressable style={styles.universalHeader} onPress={() => setOpen(o => !o)}>
+        <Text style={styles.sectionTitle}>OTHER ACTIONS (ALWAYS AVAILABLE)</Text>
+        <Text style={styles.universalChevron}>{open ? '▲' : '▼'}</Text>
+      </Pressable>
+      {open && UNIVERSAL_ACTIONS.map(a => (
+        <View key={a.name} style={styles.universalRow}>
+          <Text style={styles.universalName}>{a.name}</Text>
+          <Text style={styles.universalBlurb}>{a.blurb}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // ── Tab Actions ───────────────────────────────────────────────────────────────
 
 interface Props {
@@ -259,6 +295,7 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
       <Section title="BONUS ACTIONS" cards={bonusActions} onUse={handleUse} />
       <Section title="REACTIONS"     cards={reactions}    onUse={handleUse} />
       <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} onUse={handleUse} />
+      <UniversalActionsSection />
 
       <UseModal
         card={activeCard}
@@ -275,6 +312,16 @@ const styles = StyleSheet.create({
 
   section:      { gap: Spacing.sm },
   sectionTitle: { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2, fontWeight: FontWeight.bold },
+
+  universalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2 },
+  universalChevron: { fontSize: FontSize.xs, color: Colors.textDim },
+  universalRow: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, marginTop: Spacing.xs, gap: 2,
+  },
+  universalName:   { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  universalBlurb:  { fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 17 },
 
   card: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,

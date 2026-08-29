@@ -2305,6 +2305,8 @@ const TWO_ONE_OR_THREE_ONE_PROMPT = 'Increase one ability score by 2 and a diffe
 
 export const raceAarakocra: Race = {
   id: 'aarakocra', name: 'Aarakocra', srd: false,
+  description: 'Native to the wind-swept peaks of the Elemental Plane of Air, aarakocra are birdlike humanoids who value freedom and the open sky above nearly everything else.',
+  size: 'Medium', languages: ['Common', 'Auran'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   features: [
     {
@@ -2328,6 +2330,8 @@ export const raceAarakocra: Race = {
 
 export const raceAasimar: Race = {
   id: 'aasimar', name: 'Aasimar', srd: false,
+  description: 'Aasimar carry a spark of celestial power in their blood, marking them as touched by a divine purpose whether they seek it out or not.',
+  size: 'Medium', languages: ['Common', 'Celestial'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   ancestryChoice: {
     prompt: 'Choose your Celestial Revelation (unlocks at 3rd level — reference only, see below).',
@@ -2390,6 +2394,8 @@ export const raceAasimar: Race = {
 
 export const raceChangeling: Race = {
   id: 'changeling', name: 'Changeling', srd: false,
+  description: 'Descended from doppelgangers, changelings can reshape their face and form at will, letting them move through the world as almost anyone they choose to be.',
+  size: 'Medium', languages: ['Common', 'One extra language of your choice'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   pendingChoices: [
     {
@@ -2411,6 +2417,8 @@ export const raceChangeling: Race = {
 
 export const raceFirbolg: Race = {
   id: 'firbolg', name: 'Firbolg', srd: false,
+  description: 'Firbolgs are gentle giant-kin who tend the deep forests, preferring quiet stewardship of the wild places over conflict with the world beyond.',
+  size: 'Medium', languages: ['Common', 'Elvish', 'Giant'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   resources: [
     { resourceId: 'hidden_step_pool', name: 'Hidden Step', maximum: 2, recharge: 'long_rest' },
@@ -2443,6 +2451,8 @@ export const raceFirbolg: Race = {
 
 export const raceGithyanki: Race = {
   id: 'githyanki', name: 'Githyanki', srd: false,
+  description: 'Githyanki are lean, disciplined warriors of the Astral Plane, raised from birth to serve the Lich-Queen and raid the planes for glory and plunder.',
+  size: 'Medium', languages: ['Gith'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   features: [
     {
@@ -2467,6 +2477,8 @@ export const raceGithyanki: Race = {
 
 export const raceGithzerai: Race = {
   id: 'githzerai', name: 'Githzerai', srd: false,
+  description: 'Githzerai are the ascetic kin of the githyanki, dwelling in fortress-monasteries amid the churning chaos of Limbo and prizing discipline of mind above all.',
+  size: 'Medium', languages: ['Gith'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   features: [
     {
@@ -2491,6 +2503,8 @@ export const raceGithzerai: Race = {
 
 export const raceGoliath: Race = {
   id: 'goliath', name: 'Goliath', srd: false,
+  description: 'Goliaths are towering mountain-dwellers who measure their worth through feats of strength and competition, valuing self-reliance and fair contest above comfort.',
+  size: 'Medium', languages: ['Common', 'Giant'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   resources: [
     { resourceId: 'stones_endurance_pool', name: "Stone's Endurance", maximum: 2, recharge: 'long_rest' },
@@ -2520,6 +2534,8 @@ export const raceGoliath: Race = {
 
 export const raceHarengon: Race = {
   id: 'harengon', name: 'Harengon', srd: false,
+  description: 'Harengon are rabbitfolk hailing from the Feywild, quick of foot and quicker of luck, carrying an easy optimism wherever they wander.',
+  size: 'Small', languages: ['Common', 'One extra language of your choice'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   resources: [
     { resourceId: 'rabbit_hop_pool', name: 'Rabbit Hop', maximum: 2, recharge: 'long_rest' },
@@ -2554,6 +2570,8 @@ export const raceHarengon: Race = {
 
 export const raceKenku: Race = {
   id: 'kenku', name: 'Kenku', srd: false,
+  description: 'Cursed to be unable to speak in their own voice, kenku communicate by perfectly mimicking sounds they\'ve heard — a gift that makes them uncannily skilled forgers, spies, and thieves.',
+  size: 'Medium', languages: ['Common', 'Auran'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   resources: [
     { resourceId: 'kenku_recall_pool', name: 'Kenku Recall', maximum: 2, recharge: 'long_rest' },
@@ -2589,6 +2607,8 @@ export const raceKenku: Race = {
 
 export const raceLocathah: Race = {
   id: 'locathah', name: 'Locathah', srd: false,
+  description: 'Locathah are fish-like humanoids of shallow coastal waters, practical and hardworking, whose scaled bodies let them move as easily through the sea as on land.',
+  size: 'Medium', languages: ['Common', 'Aquan'],
   features: [
     {
       id: 'locathah_asi', name: 'Ability Score Increase',
@@ -2635,6 +2655,8 @@ export const raceLocathah: Race = {
 
 export const raceOwlin: Race = {
   id: 'owlin', name: 'Owlin', srd: false,
+  description: 'Owlin are silent-winged folk touched by owl blood, given to keen night vision and a watchful, contemplative nature. You are Small or Medium, your choice.',
+  size: 'Medium', languages: ['Common', 'One extra language of your choice'],
   // RAW only offers the +2/+1 split for Owlin, not the "+1 to three"
   // alternative most other MOTM races also get — disclosed in the prompt,
   // since flexibleAsi's two_one_or_three_one mode always offers both.
@@ -2666,6 +2688,8 @@ export const raceOwlin: Race = {
 
 export const raceSatyr: Race = {
   id: 'satyr', name: 'Satyr', srd: false,
+  description: 'Satyrs are boisterous fey with the horns and legs of a goat, drawn to music, revelry, and any excuse for a good time.',
+  size: 'Medium', languages: ['Common', 'Sylvan'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   features: [
     {
@@ -2708,6 +2732,8 @@ export const raceSatyr: Race = {
 // which Elf.md's own notes cross-referenced directly.
 export const raceShadarKai: Race = {
   id: 'shadar_kai', name: 'Shadar-Kai', srd: false,
+  description: 'Shadar-kai are elves of the Shadowfell, bound in service to the Raven Queen and hardened by a bleak, twilight existence few outsiders understand.',
+  size: 'Medium', languages: ['Common', 'Elvish'],
   resources: [
     { resourceId: 'blessing_of_the_raven_queen_pool', name: 'Blessing of the Raven Queen', maximum: 2, recharge: 'long_rest' },
   ],
@@ -2761,6 +2787,8 @@ export const raceShadarKai: Race = {
 
 export const raceTabaxi: Race = {
   id: 'tabaxi', name: 'Tabaxi', srd: false,
+  description: 'Tabaxi are catlike wanderers driven by insatiable curiosity, forever chasing rumors, treasures, and tales from one corner of the world to the next.',
+  size: 'Medium', languages: ['Common', 'One extra language of your choice'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   features: [
     {
@@ -2794,6 +2822,8 @@ export const raceTabaxi: Race = {
 
 export const raceTortle: Race = {
   id: 'tortle', name: 'Tortle', srd: false,
+  description: 'Tortles are a nomadic, shelled folk of patient wisdom, carrying their homes on their backs and their honor as their most prized possession.',
+  size: 'Medium', languages: ['Common', 'Aquan'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   pendingChoices: [
     {
@@ -2831,6 +2861,8 @@ export const raceTortle: Race = {
 
 export const raceTriton: Race = {
   id: 'triton', name: 'Triton', srd: false,
+  description: 'Tritons guard hidden cities on the ocean floor, standing as a bulwark against the horrors of the deep that most surface dwellers never know exist.',
+  size: 'Medium', languages: ['Common', 'Primordial'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   features: [
     {
@@ -2871,6 +2903,8 @@ export const raceTriton: Race = {
 
 export const raceVerdan: Race = {
   id: 'verdan', name: 'Verdan', srd: false,
+  description: 'Verdan are a goblinoid people reshaped generations ago by a strange curse, left with black blood, an empathic mind, and a resilience their goblin ancestors never had. You are Small or Medium, your choice.',
+  size: 'Medium', languages: ['Common', 'Goblin', 'One extra language of your choice'],
   features: [
     {
       id: 'verdan_asi', name: 'Ability Score Increase',
@@ -2907,6 +2941,8 @@ export const raceVerdan: Race = {
 
 export const raceFairy: Race = {
   id: 'fairy', name: 'Fairy', srd: false,
+  description: 'Fairies are diminutive fey folk with insect-like wings, native to the Feywild and drawn to the wonder and mischief of the world around them.',
+  size: 'Small', languages: ['Common', 'Sylvan'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
   features: [
     {
@@ -2930,6 +2966,8 @@ export const raceFairy: Race = {
 // differ per element, not just a swapped sub-feature.
 export const raceAirGenasi: Race = {
   id: 'air_genasi', name: 'Air Genasi', srd: false,
+  description: 'Air genasi carry the restless spirit of the Elemental Plane of Air in their blood, descended from unions with djinn — quick-witted, quick-tempered, and rarely still for long.',
+  size: 'Medium', languages: ['Common', 'Primordial'],
   features: [
     {
       id: 'air_genasi_asi', name: 'Ability Score Increase',
@@ -2960,6 +2998,8 @@ export const raceAirGenasi: Race = {
 
 export const raceEarthGenasi: Race = {
   id: 'earth_genasi', name: 'Earth Genasi', srd: false,
+  description: 'Earth genasi descend from bound unions with earth elementals, their steady, stone-like nature and quiet patience marking them as immovable as the mountains they favor.',
+  size: 'Medium', languages: ['Common', 'Primordial'],
   features: [
     {
       id: 'earth_genasi_asi', name: 'Ability Score Increase',
@@ -2990,6 +3030,8 @@ export const raceEarthGenasi: Race = {
 
 export const raceFireGenasi: Race = {
   id: 'fire_genasi', name: 'Fire Genasi', srd: false,
+  description: 'Fire genasi trace their lineage to the efreet of the Elemental Plane of Fire, their passions burning as fiercely as the inner flame that marks their skin and eyes.',
+  size: 'Medium', languages: ['Common', 'Primordial'],
   features: [
     {
       id: 'fire_genasi_asi', name: 'Ability Score Increase',
@@ -3023,6 +3065,8 @@ export const raceFireGenasi: Race = {
 
 export const raceWaterGenasi: Race = {
   id: 'water_genasi', name: 'Water Genasi', srd: false,
+  description: 'Water genasi carry the blood of marids and the endless currents of the Elemental Plane of Water, at home beneath the waves and restless when kept too long from them.',
+  size: 'Medium', languages: ['Common', 'Primordial'],
   features: [
     {
       id: 'water_genasi_asi', name: 'Ability Score Increase',

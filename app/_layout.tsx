@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useKeepAwake } from 'expo-keep-awake';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../src/theme';
@@ -32,6 +33,13 @@ function BootScreen() {
 }
 
 export default function RootLayout() {
+  // Keeps the screen from auto-locking while Grimoire is open — same
+  // "stays on at the table" behavior as a video/game app, requested since
+  // a character sheet needs to stay visible during a session without
+  // constantly re-waking the device. Released automatically when the app
+  // backgrounds/unmounts; no manual deactivate call needed.
+  useKeepAwake();
+
   const [dbReady, setDbReady] = useState(false);
   const router = useRouter();
 
@@ -51,13 +59,20 @@ export default function RootLayout() {
         //     and equipped/carried items.
         await initContentDb();
         await Promise.all([spellRepo.init(), itemRepo.init()]);
-        // 2. Hydrate stores from SQLite — run in parallel
+        // 2. Hydrate stores from SQLite. loadHomebrew must resolve BEFORE
+        //    loadCharacters — loadCharacters synchronously re-hydrates every
+        //    equipped/carried item's features (hydrateItemFeatures in
+        //    characterStore.ts), which falls back to homebrewStore for any
+        //    item itemRepo (official-only) doesn't have. Running them in
+        //    parallel would race: on a slow homebrew load, a homebrew
+        //    weapon/armor's features would silently come back empty (no
+        //    attack card, no AC effect) until the next full reload.
         //    loadHomebrew merges built-in homebrew (Abyss Knight, Skeleton)
         //    directly from BUILTIN_HOMEBREW — no separate seeding step needed.
+        await loadHomebrew();
         await Promise.all([
           loadCharacters(),
           initSession(),
-          loadHomebrew(),
         ]);
         // 3. Restore combat state if a combat was active before the app was killed
         loadCombatState().then(state => {
@@ -146,6 +161,7 @@ export default function RootLayout() {
         <Stack.Screen name="homebrew/background-builder" options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/feature-editor"     options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/item-builder"       options={{ headerShown: false }} />
+        <Stack.Screen name="homebrew/rare-items"         options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/subrace-builder"    options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/subclass-builder"   options={{ headerShown: false }} />
         <Stack.Screen name="settings"                      options={{ headerShown: false }} />

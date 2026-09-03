@@ -28,7 +28,8 @@ const createTestEntity = (): Entity => ({
     proficiencyBonus: 2, ac: 16, initiative: 2, speed: 30, passivePerception: 11,
     passiveInvestigation: 10, passiveInsight: 11, senses: [], movement: {},
     savingThrows: { str: 4, dex: 2, con: 3, int: 0, wis: 1, cha: -1 },
-    attackBonuses: [], advantageStates: [], spellSaveDC: null, spellAttackBonus: null
+    attackBonuses: [], advantageStates: [], spellSaveDC: null, spellAttackBonus: null, kiSaveDC: null,
+    abilityBasedDC: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
   },
   skills: { skills: {} } as any,
   proficiencies: { armor: ['heavy'], weapons: ['martial'], tools: [], languages: ['common'], savingThrows: ['str', 'con'] },

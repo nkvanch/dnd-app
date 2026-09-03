@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useCampaignStore }  from '../../src/store/campaignStore';
 import { useSyncStore }      from '../../src/store/syncStore';
+import { getMeta } from '../../src/db/appMetaRepo';
 import { rollExpression } from '../../src/engine/dice';
 import { DiceRoll, Entity } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -242,11 +243,16 @@ export default function HomeScreen() {
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
   const loadCampaigns  = useCampaignStore(s => s.loadCampaigns);
   const [diceOpen, setDiceOpen] = useState(false);
+  const [lastOpenedId, setLastOpenedId] = useState<string | null>(null);
 
   useEffect(() => { loadCampaigns(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { getMeta('last_opened_character_id').then(setLastOpenedId).catch(() => {}); }, [characters.length]);
 
-  // Last modified = last in array (store appends)
-  const lastChar = characters.length > 0 ? characters[characters.length - 1] : null;
+  // Prefer the character the player actually last opened a sheet for; fall
+  // back to the most recently updated one (characters[0] — loadAllEntities
+  // orders by updatedAt DESC) if nothing's been opened yet this install, or
+  // if the tracked id got deleted.
+  const lastChar = characters.find(c => c.id === lastOpenedId) ?? characters[0] ?? null;
 
   const openSheet = useCallback((id: string) => {
     router.push(`/sheet/${id}` as any);

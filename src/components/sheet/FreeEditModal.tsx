@@ -50,6 +50,15 @@ function NumRow({
             const n = parseInt(e.nativeEvent.text, 10);
             if (!isNaN(n)) onChange(n);
           }}
+          onBlur={e => {
+            // react-native-web doesn't fire onEndEditing on blur (only native
+            // does) — onBlur is the one that actually reaches us there, so
+            // both are wired to commit. onBlur's nativeEvent carries no text,
+            // so read the live DOM value directly.
+            const raw = (e.target as unknown as { value?: string })?.value;
+            const n = raw !== undefined ? parseInt(raw, 10) : NaN;
+            if (!isNaN(n)) onChange(n);
+          }}
         />
         <Pressable style={styles.stepBtn} onPress={() => onChange(value + 1)}>
           <Text style={styles.stepTxt}>+</Text>
@@ -148,7 +157,29 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
     onApply(e);
   }
 
+  // AC Bonus: a separate, ADDITIVE override on the same 'ac' stat as
+  // "AC (final)" below — DmOverride explicitly supports stacking 'set' and
+  // 'add' operations on one stat (applied in order), so this is a genuine
+  // stacking bonus (a Shield spell, a temporary buff) rather than replacing
+  // whatever "AC (final)" set. Re-entering a new value replaces the old
+  // Free-Edit 'add' override rather than stacking with itself.
+  function setAcBonus(delta: number) {
+    const existingAdds = getActiveOverrides(entity).filter(o => o.stat === 'ac' && o.label === 'Free edit' && o.operation === 'add');
+    let e = entity;
+    for (const o of existingAdds) e = cancelDmOverride(e, o.id, rules);
+    if (delta !== 0) {
+      e = applyDmOverride(e, {
+        campaignId: '', entityId: entity.id, dmDeviceId: 'free-edit',
+        stat: 'ac', operation: 'add', value: delta, label: 'Free edit', expiry: 'manual',
+      }, rules);
+    }
+    onApply(e);
+  }
+
   const freeEditOverrides = getActiveOverrides(entity).filter(o => o.label === 'Free edit');
+  const currentAcBonus = freeEditOverrides
+    .filter(o => o.stat === 'ac' && o.operation === 'add')
+    .reduce((sum, o) => sum + o.value, 0);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -234,6 +265,12 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
               onClear={clearDerived}
               overridden={freeEditOverrides.some(o => o.stat === 'ac')}
             />
+            <NumRow
+              label="AC Bonus (add)"
+              value={currentAcBonus}
+              onChange={setAcBonus}
+              hint="stacks on top of AC (final) above -- for a Shield spell, temporary buff, etc."
+            />
 
             {/* Spell Slots */}
             {entity.spellcasting && (
@@ -303,6 +340,12 @@ function DerivedRow({
           multiline={false}
           onEndEditing={e => {
             const n = parseInt(e.nativeEvent.text, 10);
+            if (!isNaN(n)) onSet(stat, n);
+          }}
+          onBlur={e => {
+            // See NumRow above — onEndEditing doesn't fire on react-native-web.
+            const raw = (e.target as unknown as { value?: string })?.value;
+            const n = raw !== undefined ? parseInt(raw, 10) : NaN;
             if (!isNaN(n)) onSet(stat, n);
           }}
         />

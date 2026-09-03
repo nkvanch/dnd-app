@@ -3,7 +3,17 @@
 // TCP client — runs on player devices.
 //
 // Connects to the DM's server, sends 'hello', receives 'welcome'.
-// Auto-reconnects every 5 seconds on disconnect.
+// Auto-reconnects with capped exponential backoff on disconnect (see
+// MAX_RETRIES) — NOT forever. campaignStore's resumeSync() calls connect()
+// on every app boot whenever a campaign is still marked active locally,
+// which is normal between sessions (the DM's device usually isn't hosting
+// between play sessions) — retrying every 5s with no cap kept the socket
+// stack + radio busy indefinitely in the background any time the DM wasn't
+// currently reachable, which is most of the time. Giving up after a bounded
+// number of attempts and surfacing that via onError (the Campaigns screen's
+// "Reconnect" flow already exists for the player to retry manually) fixes
+// that battery drain without losing the auto-reconnect behavior while a
+// session is actually live.
 // ============================================================================
 import TcpSocket from 'react-native-tcp-socket';
 import { NativeModules } from 'react-native';
@@ -27,11 +37,18 @@ export type ClientCallbacks = {
 
 // ── SyncClient ────────────────────────────────────────────────────────────────
 
+// Capped exponential backoff: 5s, 10s, 20s, 40s, 60s, 60s, then give up.
+// ~3.5 minutes of trying before the socket/radio goes quiet.
+const MAX_RETRIES = 6;
+const RETRY_BASE_MS = 5000;
+const RETRY_MAX_MS  = 60000;
+
 export class SyncClient {
   private socket:      Socket | null = null;
   private buffer:      string = '';
   private connected:   boolean = false;
   private retryTimer:  ReturnType<typeof setTimeout> | null = null;
+  private retryCount:  number = 0;
   private cb:          ClientCallbacks;
   private deviceId:    string;
   private nickname:    string;
@@ -56,6 +73,7 @@ export class SyncClient {
   connect(host: string, port: number): void {
     this.host = host;
     this.port = port;
+    this.retryCount = 0;   // a fresh/manual connect() always gets the full retry budget
     this.attemptConnect();
   }
 
@@ -65,9 +83,10 @@ export class SyncClient {
       this.retryTimer = null;
     }
     try { this.socket?.destroy(); } catch { /* ignore */ }
-    this.socket    = null;
-    this.connected = false;
-    this.buffer    = '';
+    this.socket     = null;
+    this.connected  = false;
+    this.buffer     = '';
+    this.retryCount = 0;
   }
 
   get isConnected(): boolean {
@@ -111,8 +130,9 @@ export class SyncClient {
     const socket = TcpSocket.createConnection(
       { host: this.host, port: this.port },
       () => {
-        this.connected = true;
-        this.buffer    = '';
+        this.connected  = true;
+        this.buffer     = '';
+        this.retryCount = 0;   // reset the backoff — this was a real, working connection
         console.log(`[sync-client] Connected to ${this.host}:${this.port}`);
         // Introduce ourselves to the server
         this.send({ type: 'hello', deviceId: this.deviceId, nickname: this.nickname, characterId: this.characterId });
@@ -187,12 +207,21 @@ export class SyncClient {
 
   private scheduleRetry(): void {
     if (this.retryTimer) return;
+    if (this.retryCount >= MAX_RETRIES) {
+      const reason = `Couldn't reach the DM after ${MAX_RETRIES} attempts. Reconnect manually once they're hosting again.`;
+      this.lastError = reason;
+      console.warn(`[sync-client] ${reason}`);
+      this.cb.onError?.(reason);
+      return;
+    }
+    const delay = Math.min(RETRY_BASE_MS * 2 ** this.retryCount, RETRY_MAX_MS);
+    this.retryCount += 1;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       if (!this.connected) {
         this.attemptConnect();
       }
-    }, 5000);
+    }, delay);
   }
 }
 

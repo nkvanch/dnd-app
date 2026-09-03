@@ -22,6 +22,7 @@ function CreatePanel() {
     { label: '🎭  New Subclass',     route: '/homebrew/subclass-builder' },
     { label: '📜  New Background',   route: '/homebrew/background-builder' },
     { label: '🧰  New Item',         route: '/homebrew/item-builder'  },
+    { label: '💎  Rare Items',       route: '/homebrew/rare-items'    },
     { label: '✨  New Spell',        route: '/homebrew/spell-builder' },
     { label: '📖  New Feature',      route: '/homebrew/feature-editor' },
     { label: '🌟  New Feat',         route: '/homebrew/feat-builder' },

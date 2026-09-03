@@ -47,7 +47,7 @@ export const shadowProgression: SubclassProgression = {
         activation: { actionType: 'action', resourceCost: { resourceId: 'ki_pool', quantity: 2 }, range: 'self', target: 'self', requiresSave: null },
         abilityEffects: [{ type: 'cast_spell', spellId: 'silence' }],
       } },
-      { kind: 'feature', value: { id: 'shadow_arts_darkvision', name: 'Shadow Arts: Darkvision', description: 'Spend 2 ki to cast Darkvision on yourself without providing material components. Darkvision isn\'t in the spell content pack — stays description-only, track the ki spend manually.', source: { kind: 'subclass', refId: 'shadow' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'shadow_arts_darkvision', name: 'Shadow Arts: Darkvision', description: 'Spend 2 ki to cast Darkvision on yourself without providing material components. Darkvision isn\'t in the spell content pack — stays description-only, track the ki spend manually.', source: { kind: 'subclass', refId: 'shadow' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'action', resourceCost: { resourceId: 'ki_pool', quantity: 2 }, range: 'self', target: 'self', requiresSave: null } } },
     ] },
     { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'shadow_step', name: 'Shadow Step', description: 'While in dim light or darkness, teleport to an unoccupied space within 60 feet that is also dim light or darkness as a bonus action. Advantage on first melee attack after teleport — the advantage isn\'t auto-applied, note it for your next attack roll.', source: { kind: 'subclass', refId: 'shadow' }, level: 6, effects: [], actions: [], choices: [], passive: false,
       activation: { actionType: 'bonus_action', resourceCost: null, range: '60 feet', target: 'self', requiresSave: null },
@@ -57,7 +57,7 @@ export const shadowProgression: SubclassProgression = {
       activation: { actionType: 'action', resourceCost: null, range: 'self', target: 'self', requiresSave: null },
       abilityEffects: [{ type: 'apply_condition', conditionId: 'invisible', duration: { unit: 'until_rest', remaining: 1 } }],
     } }] },
-    { level: 17, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'opportunist', name: 'Opportunist', description: 'When a creature within 5 feet is hit by an attack made by someone other than you, use your reaction to make a melee attack against that creature.', source: { kind: 'subclass', refId: 'shadow' }, level: 17, effects: [], actions: [], choices: [], passive: false } }] },
+    { level: 17, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'opportunist', name: 'Opportunist', description: 'When a creature within 5 feet is hit by an attack made by someone other than you, use your reaction to make a melee attack against that creature.', source: { kind: 'subclass', refId: 'shadow' }, level: 17, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'reaction', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null } } }] },
   ],
 };
 

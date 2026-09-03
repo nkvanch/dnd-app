@@ -71,14 +71,14 @@ export const fighterProgression: ClassProgression = {
       level: 1, hpDie: 10, choices: [fighterSkillChoice, ...fighterEquipChoices],
       grants: [
         { kind: "feature", value: { id: "fighting_style", name: "Fighting Style", description: "You adopt a particular style of fighting as your specialty.", source: { kind: "class", refId: "fighter" }, level: 1, effects: [], actions: [], choices: [], passive: true } },
-        { kind: "feature", value: { id: "second_wind", name: "Second Wind", description: "Regain HP equal to 1d10 + Fighter Level as a bonus action (1 use per short rest).", source: { kind: "class", refId: "fighter" }, level: 1, effects: [], actions: [{ id: "use_second_wind", name: "Second Wind", description: "Heal 1d10 + lvl" }], choices: [], passive: false } },
+        { kind: "feature", value: { id: "second_wind", name: "Second Wind", description: "Regain HP equal to 1d10 + Fighter Level as a bonus action (1 use per short rest).", source: { kind: "class", refId: "fighter" }, level: 1, effects: [], actions: [{ id: "use_second_wind", name: "Second Wind", description: "Heal 1d10 + lvl" }], choices: [], passive: false, activation: { actionType: 'bonus_action', resourceCost: { resourceId: 'second_wind_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
         { kind: "resource", value: { resourceId: "second_wind_pool", name: "Second Wind", maximum: 1, recharge: "short_rest" } },
       ]
     },
     {
       level: 2, hpDie: 10, choices: [],
       grants: [
-        { kind: "feature", value: { id: "action_surge", name: "Action Surge", description: "Once per short rest, take one additional action on your turn.", source: { kind: "class", refId: "fighter" }, level: 2, effects: [], actions: [], choices: [], passive: false } },
+        { kind: "feature", value: { id: "action_surge", name: "Action Surge", description: "Once per short rest, take one additional action on your turn.", source: { kind: "class", refId: "fighter" }, level: 2, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: { resourceId: 'action_surge_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
         { kind: "resource", value: { resourceId: "action_surge_pool", name: "Action Surge", maximum: 1, recharge: "short_rest" } },
       ]
     },
@@ -101,7 +101,7 @@ export const fighterProgression: ClassProgression = {
     {
       level: 9, hpDie: 10, choices: [],
       grants: [
-        { kind: "feature", value: { id: "indomitable_1", name: "Indomitable", description: "You can reroll a saving throw that you fail (1 use per long rest).", source: { kind: "class", refId: "fighter" }, level: 9, effects: [], actions: [], choices: [], passive: false } },
+        { kind: "feature", value: { id: "indomitable_1", name: "Indomitable", description: "You can reroll a saving throw that you fail (1 use per long rest).", source: { kind: "class", refId: "fighter" }, level: 9, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: { resourceId: 'indomitable_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
         { kind: "resource", value: { resourceId: "indomitable_pool", name: "Indomitable", maximum: 1, recharge: "long_rest" } },
       ]
     },

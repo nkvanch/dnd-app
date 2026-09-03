@@ -83,6 +83,7 @@ export function newDraftTrait(name: string): DraftTrait {
     name, description: '', effectKind: 'none',
     abilityTarget: 'str', abilityAmount: '1',
     unarmoredBase: '10', unarmoredAbilities: ['dex'], unarmoredCaps: {},
+    acBonusAmount: '1',
     skillTarget: 'history', skillExpertise: false,
     toolName: '',
     advDirection: 'advantage', advTarget: '',
@@ -93,6 +94,7 @@ export function newDraftTrait(name: string): DraftTrait {
     spellGrantCantripId: '', spellGrantAbility: 'cha', spellGrants: [],
     actionType: 'bonus_action', actionTypeOther: '',
     recharge: 'short_rest', rechargeOther: '', uses: '1', healDice: '1d8',
+    limitedUse: false,
   };
 }
 
@@ -113,7 +115,7 @@ export function newDraftTrait(name: string): DraftTrait {
  * a spell_grant trait must also splice these in (see buildSubrace below,
  * progressions.ts, race-builder.tsx, subclass-builder.tsx).
  */
-export function buildTraitFeature(
+function buildTraitFeatureCore(
   t: DraftTrait,
   opts: { idPrefix: string; sourceKind: FeatureSource['kind']; sourceRefId: string; level: number | null },
 ): { feature: Feature; resource: ResourceGrant | null; extraFeatures?: Feature[]; extraResources?: ResourceGrant[] } {
@@ -152,6 +154,21 @@ export function buildTraitFeature(
         formulaAbilities: t.unarmoredAbilities,
         formulaAbilityCap: Object.keys(caps).length > 0 ? caps : undefined,
       }] },
+      resource: null,
+    };
+  }
+  if (t.effectKind === 'ac_bonus') {
+    const amount = parseInt(t.acBonusAmount, 10);
+    // 'add', not 'set' — stacks on top of whatever already sets the base AC
+    // (armor, Unarmored Defense, or the 10+DEX fallback), matching how
+    // magic-armor +1/+2/+3 bonuses already stack in pipeline.ts's acBonus
+    // resolution. A trait like "unarmored_defense" REPLACES the base
+    // instead — see that branch above — so use this one for a standalone
+    // "+1 AC" grant regardless of what's providing the base.
+    return {
+      feature: { ...base, effects: !isNaN(amount) && amount !== 0
+        ? [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: amount, condition: null }]
+        : [] },
       resource: null,
     };
   }
@@ -307,6 +324,44 @@ export function buildTraitFeature(
   // nothing to mechanically enforce (e.g. "immune to speed-altering spells"
   // isn't something the app currently models as an enforceable rule).
   return { feature: { ...base, effects: [] }, resource: null };
+}
+
+/**
+ * Compiles one DraftTrait into a Feature (+ resource), same as
+ * buildTraitFeatureCore, then layers a limited-use counter on top when
+ * `t.limitedUse` is set — turning the trait into a tracked, tappable
+ * ability (passive:false, real activation+resourceCost) regardless of which
+ * effectKind produced its base effects. Skipped for 'resource_ability' and
+ * 'spell_grant', which already build and own their own resource/activation
+ * wiring internally (double-wrapping would create a redundant, orphaned
+ * second resource pool).
+ */
+export function buildTraitFeature(
+  t: DraftTrait,
+  opts: { idPrefix: string; sourceKind: FeatureSource['kind']; sourceRefId: string; level: number | null },
+): { feature: Feature; resource: ResourceGrant | null; extraFeatures?: Feature[]; extraResources?: ResourceGrant[] } {
+  const result = buildTraitFeatureCore(t, opts);
+  if (!t.limitedUse || t.effectKind === 'resource_ability' || t.effectKind === 'spell_grant') {
+    return result;
+  }
+  const resourceId = `${opts.idPrefix}_${toId(t.name)}_pool`;
+  const maxUses     = Math.max(1, parseInt(t.uses, 10) || 1);
+  const recharge    = t.recharge === 'other' ? (t.rechargeOther.trim() || 'other') : t.recharge;
+  const resource: ResourceGrant = { resourceId, name: `${t.name} (Uses)`, maximum: maxUses, recharge };
+  const actionType = t.actionType === 'other' ? 'free' : t.actionType;
+  return {
+    ...result,
+    feature: {
+      ...result.feature,
+      passive: false,
+      activation: {
+        actionType,
+        resourceCost: { resourceId, quantity: 1 },
+        range: 'self', target: 'self', requiresSave: null,
+      },
+    },
+    resource,
+  };
 }
 
 // ── Draft subrace model ───────────────────────────────────────────────────────

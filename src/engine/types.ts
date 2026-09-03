@@ -365,6 +365,13 @@ export type Item = {
    * semantics as Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
    */
   srd?:       boolean;
+  /**
+   * A user-picked reference photo (data: URI — base64-inlined, so it
+   * round-trips through the same JSON blob SQLite already stores the whole
+   * Item in, no separate file/blob storage needed). Homebrew items only;
+   * official catalog entries never set this.
+   */
+  imageUri?:  string;
 };
 
 /**
@@ -506,6 +513,19 @@ export type DerivedStats = {
   attackBonuses:     AttackBonus[];
   spellSaveDC:       number | null;
   spellAttackBonus:  number | null;
+  /** 8 + proficiency + WIS mod — Monk's ki-ability save DC (Stunning Strike,
+   * etc.). Separate from spellSaveDC because Monk isn't a spellcaster. Null
+   * for anyone without Martial Arts. */
+  kiSaveDC:          number | null;
+  /**
+   * 8 + proficiency + [ability] mod, precomputed for all six abilities —
+   * generic version of kiSaveDC for every OTHER non-caster class feature
+   * with its own save DC (Barbarian's Intimidating Presence is STR-based,
+   * etc.). Always populated (no gating check needed, unlike kiSaveDC/
+   * spellSaveDC) — a Feature's requiresSave.dc references the one it needs
+   * via `{ ability: 'str' }` etc.
+   */
+  abilityBasedDC:    Record<Ability, number>;
   /**
    * Active advantage/disadvantage grants, aggregated from any Effect with
    * operation 'advantage'/'disadvantage' (see resolver.ts's resolveBinary
@@ -529,7 +549,7 @@ export type DerivedStats = {
 export const DERIVED_NUMERIC_KEYS = new Set<string>([
   'proficiencyBonus', 'ac', 'initiative', 'speed',
   'passivePerception', 'passiveInvestigation', 'passiveInsight',
-  'spellSaveDC', 'spellAttackBonus',
+  'spellSaveDC', 'spellAttackBonus', 'kiSaveDC',
 ]);
 
 export type SkillEntry = {
@@ -868,6 +888,8 @@ export type Feature = {
   abilityEffects?: AbilityEffect[];
   /** Player-set: marks this feature as exploration-relevant for the Exploration view filter. */
   explorationTag?: boolean;
+  /** Player-set: starred on the Actions tab, surfaces in the Combat tab's FAVORITES section. */
+  favoriteTag?: boolean;
 };
 
 /** Feature with a runtime isActive flag for toggled abilities (Rage, Wild Shape, etc.). */
@@ -885,7 +907,7 @@ export type FeatureInstance = Feature & {
 // components → engine dependency.
 
 export type TraitEffectKind =
-  | 'none' | 'ability_score' | 'unarmored_defense' | 'skill_proficiency' | 'tool_proficiency'
+  | 'none' | 'ability_score' | 'unarmored_defense' | 'ac_bonus' | 'skill_proficiency' | 'tool_proficiency'
   | 'advantage_disadvantage' | 'sense' | 'movement' | 'movement_condition'
   | 'damage_resistance' | 'damage_immunity' | 'damage_vulnerability'
   | 'spell_grant' | 'resource_ability';
@@ -902,6 +924,15 @@ export type DraftTrait = {
   unarmoredBase:      string;
   unarmoredAbilities: Ability[];
   unarmoredCaps:      Partial<Record<Ability, string>>;
+  /**
+   * ac_bonus — a flat +N (or -N) AC modifier, stacking additively on top of
+   * whatever sets the base (armor, Unarmored Defense, the 10+DEX fallback —
+   * see pipeline.ts's acBonus/calculatedBaseAc split). Separate from
+   * unarmored_defense because that kind REPLACES the base formula; this one
+   * only ever adds to it, so it works for a feat/ring/racial trait granting
+   * "+1 AC" regardless of what's providing the base.
+   */
+  acBonusAmount: string;
   // skill_proficiency
   skillTarget:    SkillName;
   skillExpertise: boolean;
@@ -951,6 +982,17 @@ export type DraftTrait = {
   rechargeOther:   string;
   uses:            string;
   healDice:        string;
+  /**
+   * Layers a limited-use counter (max uses + recharge, same shape as
+   * resource_ability's) on top of ANY effectKind — e.g. a "3/short rest"
+   * damage-resistance trait, or Monk's Opportunist (a plain reaction with
+   * no coded effect of its own, kind 'none', but still a tracked once-able
+   * reaction). Reuses actionType/actionTypeOther/recharge/rechargeOther/uses
+   * above rather than duplicating fields — no conflict, since resource_ability
+   * and spell_grant already fully own their own resource wiring and ignore
+   * this flag (see buildTraitFeature in traitCompiler.ts).
+   */
+  limitedUse: boolean;
 };
 
 // ── 6. Entity master type ────────────────────────────────────────────────────
@@ -1216,7 +1258,18 @@ export type FeatureActivation = {
   resourceCost: ResourceCost | null;
   range:        string | null;   // "self", "30 feet", "touch", etc.
   target:       'self' | 'single' | 'area' | 'multiple';
-  requiresSave: { ability: Ability; dc: 'spell_save_dc' | number } | null;
+  /**
+   * 'ki_save_dc' parallels 'spell_save_dc' for Monk's ki-fueled abilities
+   * (Stunning Strike, etc.) — Monk has no entity.spellcasting block, so
+   * spellSaveDC stays null for it; kiSaveDC (DerivedStats) is the separate,
+   * always-WIS-based formula those features need instead.
+   * `{ ability }` is the generic version of the same idea for every OTHER
+   * non-caster class-feature DC (Barbarian's Intimidating Presence is STR,
+   * etc.) — DerivedStats.abilityBasedDC precomputes 8 + prof + mod for all
+   * six abilities so any such feature can reference the right one without
+   * needing its own bespoke DerivedStats field like kiSaveDC got first.
+   */
+  requiresSave: { ability: Ability; dc: 'spell_save_dc' | 'ki_save_dc' | { ability: Ability } | number } | null;
 };
 
 /** Describes what resource(s) an ability consumes when used. */

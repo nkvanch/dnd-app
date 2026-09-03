@@ -22,6 +22,7 @@ import { spellIdsOnEntity } from '../content/spellRepo.types';
 import { itemRepo } from '../content/itemRepo';
 import { itemIdsOnEntity } from '../content/itemRepo.types';
 import { recomputeDerived } from '../engine/pipeline';
+import { useHomebrewStore } from './homebrewStore';
 
 export type { EntityMeta };
 
@@ -40,7 +41,13 @@ export type { EntityMeta };
 function hydrateItemFeatures(entity: Entity): Entity {
   function hydrateInstance(inst: ItemInstance): ItemInstance {
     if (inst.features.length > 0) return inst;   // already hydrated (e.g. from equip path)
-    const def = itemRepo.getItemSync(inst.itemId);
+    // itemRepo only ever holds the OFFICIAL catalog — a homebrew item's
+    // definition lives in homebrewStore instead. Callers of this function
+    // must ensure loadHomebrew() has resolved first (see boot() in
+    // app/_layout.tsx) or this silently misses homebrew items, same as the
+    // itemRepo-only bug this fallback fixes.
+    const def = itemRepo.getItemSync(inst.itemId)
+      ?? useHomebrewStore.getState().items.find(i => i.id === inst.itemId);
     return def ? { ...inst, features: def.features } : inst;
   }
   const equippedHydrated = entity.inventory.equipped.map(hydrateInstance);
@@ -53,6 +60,47 @@ function hydrateItemFeatures(entity: Entity): Entity {
     ...entity,
     inventory: { ...entity.inventory, equipped: equippedHydrated, carried: carriedHydrated },
   };
+}
+
+/**
+ * Self-heals a Feature whose activation.resourceCost points at a resource
+ * id that's gone missing from entity.resources.custom — shows up as e.g.
+ * a Bonus Action card reading `Resource "foo_pool" not found`. Happens when
+ * a homebrew race/subrace's resource_ability trait (Chi Pulse, etc.) gets
+ * edited in the builder after a character already selected it: the
+ * character's own resources.custom snapshot is frozen at selection time
+ * (see race-detail.tsx's selectRace), so it can drift from whatever the
+ * race/subrace's CURRENT compiled `resources` list says. Re-grants the
+ * missing resource from that current definition — same
+ * fall-back-to-current-definition shape hydrateItemFeatures uses for items,
+ * just for races/subraces instead. Class/subclass resource drift isn't
+ * covered here (not the reported case, and class resources rarely get
+ * renamed after being taken) but could use the same fix if it ever surfaces.
+ */
+function hydrateMissingResources(entity: Entity): Entity {
+  const missingIds = new Set<string>();
+  for (const f of entity.features) {
+    const rid = f.activation?.resourceCost?.resourceId;
+    if (rid && rid !== 'spell_slots' && !entity.resources.custom.some(r => r.id === rid)) {
+      missingIds.add(rid);
+    }
+  }
+  if (missingIds.size === 0) return entity;
+
+  const db      = useHomebrewStore.getState().getMergedContentDB();
+  const race    = db.races.find(r => r.id === entity.identity.raceId);
+  const subrace = race?.subraces?.find(s => s.id === entity.identity.subRaceId);
+  const pool    = [...(race?.resources ?? []), ...(subrace?.resources ?? [])];
+
+  const healed = [...entity.resources.custom];
+  for (const rid of missingIds) {
+    const found = pool.find(r => r.resourceId === rid);
+    if (found) {
+      healed.push({ id: found.resourceId, name: found.name, current: found.maximum, maximum: found.maximum, recharge: found.recharge });
+    }
+  }
+  if (healed.length === entity.resources.custom.length) return entity;
+  return { ...entity, resources: { ...entity.resources, custom: healed } };
 }
 
 // ── Debounced SQLite writes ───────────────────────────────────────────────────
@@ -168,6 +216,8 @@ export function makeEmptyEntity(id: string, kind: Entity['kind'] = 'character'):
     advantageStates:   [],
     spellSaveDC:       null,
     spellAttackBonus:  null,
+    kiSaveDC:          null,
+    abilityBasedDC:    { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
   };
 
   return {
@@ -332,7 +382,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       // can find them by id, same as any normal character; they're
       // deliberately excluded from characterMeta/the character list below,
       // since they're not independently-playable characters.
-      const characters = preHydration.map(hydrateItemFeatures);
+      const characters = preHydration.map(hydrateItemFeatures).map(hydrateMissingResources);
 
       // Warm the Tier-2 spell cache for every known/prepared/cantrip spell
       // across every loaded character, once, before the engine pipeline

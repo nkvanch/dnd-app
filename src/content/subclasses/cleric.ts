@@ -90,7 +90,8 @@ export const lightDomainProgression: SubclassProgression = {
     {
       level: 1, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'warding_flare', name: 'Warding Flare', description: 'When a creature attacks you, use your reaction to impose disadvantage on the attack roll (WIS modifier times per long rest — no ability-mod-scaled resource pool exists in the engine; also no cross-entity roll-modification hook, so the disadvantage itself isn\'t applied — resolve manually).', source: { kind: 'subclass', refId: 'light_domain' }, level: 1, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'warding_flare', name: 'Warding Flare', description: 'When a creature attacks you, use your reaction to impose disadvantage on the attack roll (WIS modifier times per long rest, simplified to a flat 1 here — no ability-mod-scaled resource pool exists in the engine; also no cross-entity roll-modification hook, so the disadvantage itself isn\'t applied — resolve manually).', source: { kind: 'subclass', refId: 'light_domain' }, level: 1, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'reaction', resourceCost: { resourceId: 'warding_flare_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
+        { kind: 'resource', value: { resourceId: 'warding_flare_pool', name: 'Warding Flare (scales with Wisdom modifier)', maximum: 1, recharge: 'long_rest' } },
         domainSpells(['burning_hands', 'faerie_fire']),
       ],
     },
@@ -130,7 +131,7 @@ export const lightDomainProgression: SubclassProgression = {
     {
       level: 17, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'corona_of_light', name: 'Corona of Light', description: 'Activate as an action: shed bright light in a 60-foot radius and dim light for an additional 30 feet. Enemies in bright light have disadvantage on saves against fire or radiant spells. Lasts 1 minute (concentration).', source: { kind: 'subclass', refId: 'light_domain' }, level: 17, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'corona_of_light', name: 'Corona of Light', description: 'Activate as an action: shed bright light in a 60-foot radius and dim light for an additional 30 feet. Enemies in bright light have disadvantage on saves against fire or radiant spells. Lasts 1 minute (concentration).', source: { kind: 'subclass', refId: 'light_domain' }, level: 17, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'action', resourceCost: null, range: '60 feet', target: 'area', requiresSave: null } } },
       ],
     },
   ],
@@ -170,7 +171,7 @@ export const arcanaDomainProgression: SubclassProgression = {
     {
       level: 6, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'spell_breaker', name: 'Spell Breaker', description: 'When a healing spell of yours restores HP to an ally, you can also end one spell affecting that ally, of a level no higher than the healing spell\'s slot.', source: { kind: 'subclass', refId: 'arcana_domain' }, level: 6, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'spell_breaker', name: 'Spell Breaker', description: 'When a healing spell of yours restores HP to an ally, you can also end one spell affecting that ally, of a level no higher than the healing spell\'s slot.', source: { kind: 'subclass', refId: 'arcana_domain' }, level: 6, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'touch', target: 'single', requiresSave: null } } },
       ],
     },
     {
@@ -378,7 +379,8 @@ export const graveDomainProgression: SubclassProgression = {
     {
       level: 17, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'keeper_of_souls', name: 'Keeper of Souls', description: 'When an enemy you can see dies within 30 feet of you, you or an ally within 30 feet regains HP equal to that enemy\'s Hit Dice. Usable once, recharging at the start of your next turn; requires that you aren\'t incapacitated.', source: { kind: 'subclass', refId: 'grave_domain' }, level: 17, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'keeper_of_souls', name: 'Keeper of Souls', description: 'When an enemy you can see dies within 30 feet of you, you or an ally within 30 feet regains HP equal to that enemy\'s Hit Dice. Usable once, recharging at the start of your next turn (simplified to "other" recharge below — the engine only tracks short/long rest recharge, not per-turn); requires that you aren\'t incapacitated.', source: { kind: 'subclass', refId: 'grave_domain' }, level: 17, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: { resourceId: 'keeper_of_souls_pool', quantity: 1 }, range: '30 feet', target: 'single', requiresSave: null } } },
+        { kind: 'resource', value: { resourceId: 'keeper_of_souls_pool', name: 'Keeper of Souls (recharges at the start of your next turn)', maximum: 1, recharge: 'other' } },
       ],
     },
   ],
@@ -437,7 +439,8 @@ export const knowledgeDomainProgression: SubclassProgression = {
     {
       level: 17, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'visions_of_the_past', name: 'Visions of the Past', description: 'Meditate for a number of minutes up to your WIS score (requiring concentration) to glimpse recent events tied to an object you hold or your surroundings. Usable once per short or long rest.', source: { kind: 'subclass', refId: 'knowledge_domain' }, level: 17, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'visions_of_the_past', name: 'Visions of the Past', description: 'Meditate for a number of minutes up to your WIS score (requiring concentration) to glimpse recent events tied to an object you hold or your surroundings. Usable once per short or long rest.', source: { kind: 'subclass', refId: 'knowledge_domain' }, level: 17, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'other', resourceCost: { resourceId: 'visions_of_the_past_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
+        { kind: 'resource', value: { resourceId: 'visions_of_the_past_pool', name: 'Visions of the Past', maximum: 1, recharge: 'short_rest' } },
       ],
     },
   ],
@@ -519,7 +522,7 @@ export const orderDomainProgression: SubclassProgression = {
         { kind: 'proficiency', value: { armor: ['heavy'] } },
         { kind: 'feature', value: { id: 'voice_of_authority', name: 'Voice of Authority', description: 'You gain proficiency in Intimidation or Persuasion (your choice). When you target an ally with a spell of 1st level or higher, that ally can use its reaction immediately after to make one weapon attack against a creature of your choice that you can see.', source: { kind: 'subclass', refId: 'order_domain' }, level: 1, effects: [
           { type: 'grant_proficiency', target: 'skill:intimidation', operation: 'add', value: null, condition: null },
-        ], actions: [], choices: [], passive: false } },
+        ], actions: [], choices: [], passive: false, activation: { actionType: 'other', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
         domainSpells(['command', 'heroism']),
       ],
     },

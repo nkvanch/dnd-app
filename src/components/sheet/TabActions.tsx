@@ -4,9 +4,86 @@ import { useState, useCallback, useEffect } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules } from '../../engine/types';
 import { applyAbilityEffects, endWildShape } from '../../engine/combat';
+import { recomputeDerived } from '../../engine/pipeline';
 import { rollExpression } from '../../engine/dice';
 import { DiceRoll } from '../../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+
+/**
+ * Spends a card's resource cost and applies its abilityEffects (set_flag,
+ * transform, restore_resource, etc.) — the mutation half of "Use", pulled
+ * out of TabActions' own handleUse so the Combat tab's FAVORITES section
+ * can reuse the exact same logic instead of re-implementing resource
+ * spending. Returns the entity unchanged if the cost can't be paid (caller
+ * should check card.available before calling this, same as the Use button
+ * already does via its disabled state).
+ */
+export function applyActionCardUse(entity: Entity, card: ActionCard, rules: CampaignRules): Entity {
+  let updated = entity;
+  const cost = card.resourceCost;
+
+  if (cost) {
+    if (cost.resourceId === 'spell_slots') {
+      if (!updated.spellcasting) return entity;
+      const tier = String(cost.spellSlotTier ?? 1) as keyof typeof updated.spellcasting.slots;
+      const slot = updated.spellcasting.slots[tier];
+      if (!slot || slot.used >= slot.total) return entity;
+      updated = {
+        ...updated,
+        spellcasting: {
+          ...updated.spellcasting,
+          slots: { ...updated.spellcasting.slots, [tier]: { ...slot, used: slot.used + 1 } },
+        },
+      };
+    } else {
+      const res = updated.resources.custom.find(r => r.id === cost.resourceId);
+      if (!res || res.current < cost.quantity) return entity;
+      updated = {
+        ...updated,
+        resources: {
+          ...updated.resources,
+          custom: updated.resources.custom.map(r =>
+            r.id === cost.resourceId ? { ...r, current: Math.max(0, r.current - cost.quantity) } : r
+          ),
+        },
+      };
+    }
+  }
+
+  // Look in both entity.features and equipped-item features since either
+  // can produce an action card.
+  const sourceFeature =
+    updated.features.find(f => f.id === card.featureId) ??
+    updated.inventory.equipped.flatMap(inst => inst.features).find(f => f.id === card.featureId);
+  if (sourceFeature?.abilityEffects && sourceFeature.abilityEffects.length > 0) {
+    updated = applyAbilityEffects(updated, sourceFeature.abilityEffects, rules);
+  }
+
+  return recomputeDerived(updated, rules);
+}
+
+/** Toggles a feature's Actions-tab favorite star (surfaces on Combat tab's
+ * FAVORITES section when on). Looks in equipped-item features too, same
+ * dual-source lookup applyActionCardUse uses, since a weapon/item's attack
+ * card can be favorited just like a class feature's. */
+export function toggleFavoriteTag(entity: Entity, featureId: string): Entity {
+  if (entity.features.some(f => f.id === featureId)) {
+    return {
+      ...entity,
+      features: entity.features.map(f => f.id === featureId ? { ...f, favoriteTag: !f.favoriteTag } : f),
+    };
+  }
+  return {
+    ...entity,
+    inventory: {
+      ...entity.inventory,
+      equipped: entity.inventory.equipped.map(inst => ({
+        ...inst,
+        features: inst.features.map(f => f.id === featureId ? { ...f, favoriteTag: !f.favoriteTag } : f),
+      })),
+    },
+  };
+}
 
 const CARD_COLORS: Record<ActionCard['color'], string> = {
   red:    Colors.red,
@@ -89,12 +166,20 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
 interface CardRowProps {
   card:    ActionCard;
   onUse:   (card: ActionCard) => void;
+  /** Omit to hide the star entirely (not offered everywhere a card might render). */
+  isFavorite?:       boolean;
+  onToggleFavorite?: (card: ActionCard) => void;
 }
 
-function ActionCardRow({ card, onUse }: CardRowProps) {
+export function ActionCardRow({ card, onUse, isFavorite, onToggleFavorite }: CardRowProps) {
   const borderColor = CARD_COLORS[card.color];
   return (
     <View style={[styles.card, { borderLeftColor: borderColor }]}>
+      {onToggleFavorite && (
+        <Pressable hitSlop={8} onPress={() => onToggleFavorite(card)}>
+          <Text style={[styles.star, isFavorite && styles.starActive]}>{isFavorite ? '★' : '☆'}</Text>
+        </Pressable>
+      )}
       <View style={styles.cardBody}>
         <Text style={styles.cardName}>{card.name}</Text>
         <Text style={styles.cardL1}>{card.layer1}</Text>
@@ -119,14 +204,23 @@ function ActionCardRow({ card, onUse }: CardRowProps) {
 
 // ── Section ───────────────────────────────────────────────────────────────────
 
-function Section({ title, cards, onUse }: {
-  title: string; cards: ActionCard[]; onUse: (c: ActionCard) => void
+function Section({ title, cards, onUse, favoriteIds, onToggleFavorite }: {
+  title: string; cards: ActionCard[]; onUse: (c: ActionCard) => void;
+  favoriteIds?: Set<string>; onToggleFavorite?: (c: ActionCard) => void;
 }) {
   if (cards.length === 0) return null;
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      {cards.map(c => <ActionCardRow key={c.featureId} card={c} onUse={onUse} />)}
+      {cards.map(c => (
+        <ActionCardRow
+          key={c.featureId}
+          card={c}
+          onUse={onUse}
+          isFavorite={favoriteIds?.has(c.featureId)}
+          onToggleFavorite={onToggleFavorite}
+        />
+      ))}
     </View>
   );
 }
@@ -187,72 +281,22 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
   const freeActions  = all.filter(c => c.activation.actionType === 'free');
 
   const handleUse = useCallback((card: ActionCard) => {
-    if (!onEntityUpdate || !rules) {
-      // No update handler — just show the roll modal
+    if (!onEntityUpdate || !rules || !card.resourceCost) {
+      // No update handler, or nothing to spend — just show the roll modal.
       setActiveCard(card);
       return;
     }
-
-    const cost = card.resourceCost;
-    if (!cost) {
-      setActiveCard(card);
-      return;
-    }
-
-    // Consume the resource, then open the result modal
-    let updated = entity;
-
-    if (cost.resourceId === 'spell_slots') {
-      if (!updated.spellcasting) return;
-      const tier = String(cost.spellSlotTier ?? 1) as keyof typeof updated.spellcasting.slots;
-      const slot = updated.spellcasting.slots[tier];
-      if (!slot || slot.used >= slot.total) return;
-      updated = {
-        ...updated,
-        spellcasting: {
-          ...updated.spellcasting,
-          slots: {
-            ...updated.spellcasting.slots,
-            [tier]: { ...slot, used: slot.used + 1 },
-          },
-        },
-      };
-    } else {
-      const res = updated.resources.custom.find(r => r.id === cost.resourceId);
-      if (!res || res.current < cost.quantity) return;
-      updated = {
-        ...updated,
-        resources: {
-          ...updated.resources,
-          custom: updated.resources.custom.map(r =>
-            r.id === cost.resourceId
-              ? { ...r, current: Math.max(0, r.current - cost.quantity) }
-              : r
-          ),
-        },
-      };
-    }
-
-    onEntityUpdate(updated);
-
-    // Apply the feature's actual ability effects (set_flag, transform, etc.) —
-    // previously only the resource cost was spent here; the effects themselves
-    // never fired (e.g. Rage's set_flag: rage_active). See combat.ts's
-    // applyAbilityEffects doc comment for the full history. Find the source
-    // feature to get its abilityEffects array; look in both entity.features
-    // and equipped-item features since either can produce an action card.
-    const sourceFeature =
-      updated.features.find(f => f.id === card.featureId) ??
-      updated.inventory.equipped
-        .flatMap(inst => inst.features)
-        .find(f => f.id === card.featureId);
-    if (sourceFeature?.abilityEffects && sourceFeature.abilityEffects.length > 0 && rules) {
-      updated = applyAbilityEffects(updated, sourceFeature.abilityEffects, rules);
-      onEntityUpdate(updated);
-    }
-
+    onEntityUpdate(applyActionCardUse(entity, card, rules));
     setActiveCard(card);
   }, [entity, rules, onEntityUpdate]);
+
+  const favoriteIds = new Set([
+    ...entity.features.filter(f => f.favoriteTag).map(f => f.id),
+    ...entity.inventory.equipped.flatMap(inst => inst.features).filter(f => f.favoriteTag).map(f => f.id),
+  ]);
+  const handleToggleFavorite = useCallback((card: ActionCard) => {
+    if (onEntityUpdate) onEntityUpdate(toggleFavoriteTag(entity, card.featureId));
+  }, [entity, onEntityUpdate]);
 
   function rollForCard(): DiceRoll | null {
     if (!activeCard) return null;
@@ -291,10 +335,10 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
           <Text style={styles.emptySubTxt}>Level up or learn spells to unlock abilities.</Text>
         </View>
       )}
-      <Section title="ACTIONS"       cards={actions}      onUse={handleUse} />
-      <Section title="BONUS ACTIONS" cards={bonusActions} onUse={handleUse} />
-      <Section title="REACTIONS"     cards={reactions}    onUse={handleUse} />
-      <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} onUse={handleUse} />
+      <Section title="ACTIONS"       cards={actions}      onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
+      <Section title="BONUS ACTIONS" cards={bonusActions} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
+      <Section title="REACTIONS"     cards={reactions}    onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
+      <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
       <UniversalActionsSection />
 
       <UseModal
@@ -328,6 +372,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 4,
     padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
   },
+  star:       { fontSize: FontSize.lg, color: Colors.textDim },
+  starActive: { color: Colors.gold },
   cardBody:    { flex: 1, gap: 3 },
   cardName:    { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   cardL1:      { fontSize: FontSize.xs, color: Colors.textDim },

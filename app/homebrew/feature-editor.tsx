@@ -17,6 +17,15 @@ const EFFECT_TYPES = [
 
 type EffectType = typeof EFFECT_TYPES[number];
 
+const EFFECT_TYPE_LABELS: Record<EffectType, string> = {
+  stat_modifier:     'Stat modifier',
+  grant_proficiency: 'Grant proficiency',
+  grant_resistance:  'Grant resistance',
+  grant_immunity:    'Grant immunity',
+  apply_condition:   'Apply condition',
+  base_ac_formula:   'Base AC formula',
+};
+
 function toId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
@@ -24,7 +33,7 @@ function toId(name: string): string {
 function EffectRow({ effect, onRemove }: { effect: Effect; onRemove: () => void }) {
   return (
     <View style={styles.effectRow}>
-      <Text style={styles.effectTxt}>{effect.type}: {effect.target} {effect.operation} {String(effect.value)}</Text>
+      <Text style={styles.effectTxt}>{EFFECT_TYPE_LABELS[effect.type as EffectType] ?? effect.type}: {effect.target} {effect.operation} {String(effect.value)}</Text>
       <Pressable onPress={onRemove} hitSlop={8}>
         <Text style={styles.removeBtn}>✕</Text>
       </Pressable>
@@ -56,7 +65,7 @@ function AddEffectPanel({ onAdd }: { onAdd: (e: Effect) => void }) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.xs }}>
         {EFFECT_TYPES.map(t => (
           <Pressable key={t} style={[styles.chip, type === t && styles.chipActive]} onPress={() => setType(t)}>
-            <Text style={[styles.chipTxt, type === t && styles.chipTxtActive]}>{t}</Text>
+            <Text style={[styles.chipTxt, type === t && styles.chipTxtActive]}>{EFFECT_TYPE_LABELS[t]}</Text>
           </Pressable>
         ))}
       </ScrollView>

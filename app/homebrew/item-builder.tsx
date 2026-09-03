@@ -6,13 +6,15 @@
 // picker, and the mechanical-effect system (labeled "Additional Mechanical
 // Effects" per request). Edit-mode reloads via homebrewDraft.
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Item, Feature, Effect, AbilityEffect, SenseType, Ability } from '../../src/engine/types';
+import * as ImagePicker from 'expo-image-picker';
+import { Item, Feature, Effect, AbilityEffect, DraftTrait } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
+import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 function toId(name: string): string {
@@ -32,20 +34,16 @@ const WEAPON_PROPERTY_TAGS = ['finesse', 'light', 'heavy', 'two-handed', 'versat
 const ARMOR_CATEGORIES = ['light armor', 'medium armor', 'heavy armor', 'shield'];
 const DAMAGE_TYPES = ['slashing','piercing','bludgeoning','fire','cold','lightning','acid','poison','necrotic','radiant','psychic','thunder','force'];
 
-type ItemEffectKind = 'none' | 'armor_ac' | 'stat_bonus' | 'grant_sense' | 'grant_movement';
-type MoveType = 'fly' | 'swim' | 'climb' | 'burrow';
-const MOVE_TYPES: { key: MoveType; label: string }[] = [
-  { key: 'fly', label: 'Fly' }, { key: 'swim', label: 'Swim' },
-  { key: 'climb', label: 'Climb' }, { key: 'burrow', label: 'Burrow' },
-];
-const ABILITIES: { key: Ability; label: string }[] = [
-  { key: 'str', label: 'STR' }, { key: 'dex', label: 'DEX' }, { key: 'con', label: 'CON' },
-  { key: 'int', label: 'INT' }, { key: 'wis', label: 'WIS' }, { key: 'cha', label: 'CHA' },
-];
-const SENSE_TYPES: { key: SenseType; label: string }[] = [
-  { key: 'darkvision', label: 'Darkvision' }, { key: 'blindsight', label: 'Blindsight' },
-  { key: 'tremorsense', label: 'Tremorsense' }, { key: 'truesight', label: 'Truesight' },
-];
+// Same map feat-builder.tsx uses for its "Edit Effect" card preview — kept
+// as a local copy rather than a shared export since it's just UI-label
+// sugar, not part of the compiler.
+const EFFECT_KIND_LABELS: Record<string, string> = {
+  none: 'Flavor only', ability_score: 'Ability score bonus', unarmored_defense: 'Unarmored Defense',
+  ac_bonus: 'AC bonus', skill_proficiency: 'Skill proficiency', tool_proficiency: 'Tool proficiency',
+  advantage_disadvantage: 'Advantage/Disadvantage', sense: 'Grants a sense', movement: 'Grants movement',
+  movement_condition: 'Movement conditions', damage_resistance: 'Resistance', damage_immunity: 'Immunity',
+  damage_vulnerability: 'Vulnerability',
+};
 
 type DamageEntry = { dice: string; damageType: string };
 
@@ -64,6 +62,7 @@ export default function ItemBuilderScreen() {
 
   const [category, setCategory] = useState<ItemCategory>('gear');
   const [rarity, setRarity]     = useState<string | null>(null);
+  const [imageUri, setImageUri] = useState<string | undefined>(undefined);
   const [armorCategory, setArmorCategory] = useState('light armor');
   const [weaponProps, setWeaponProps] = useState<string[]>([]);
   const [extraProps, setExtraProps] = useState('');
@@ -75,22 +74,24 @@ export default function ItemBuilderScreen() {
   // this — the old UI just never exposed more than one.
   const [weaponDamage, setWeaponDamage] = useState<DamageEntry[]>([{ dice: '1d8', damageType: 'slashing' }]);
 
-  const [effectKind, setEffectKind] = useState<ItemEffectKind>('none');
   const [acValue, setAcValue]   = useState('');
   const [acAddsDex, setAcAddsDex] = useState(false);
-  const [statAbility, setStatAbility] = useState<Ability>('str');
-  const [statAmount, setStatAmount]   = useState('1');
-  const [senseType, setSenseType] = useState<SenseType>('darkvision');
-  const [senseRange, setSenseRange] = useState('60');
-  const [senseNote, setSenseNote]   = useState('');
-  const [moveType, setMoveType] = useState<MoveType>('fly');
-  const [moveRange, setMoveRange] = useState('30');
+
+  // Any additional mechanical effect (stat bonus, sense, resistance, etc.) —
+  // the same DraftTrait/TraitEditorModal system feat-builder.tsx uses, giving
+  // homebrew items the same effect-kind range as feats instead of the old
+  // 3-kind bespoke picker. Armor's AC formula stays a separate, always-on
+  // field on the armor category itself (below), since it isn't one of
+  // TraitEditor's kinds and every armor item needs it, not just some.
+  const [trait, setTrait]     = useState<DraftTrait>(() => newDraftTrait('Effect'));
+  const [traitOpen, setTraitOpen] = useState(false);
 
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
     setCost(editing.cost === '-' ? '' : editing.cost);
     setWeight(editing.weight ? String(editing.weight) : '');
+    setImageUri(editing.imageUri);
     const draft = editing.homebrewDraft as Record<string, unknown> | undefined;
     if (draft) {
       setDescription(String(draft.description ?? ''));
@@ -103,16 +104,15 @@ export default function ItemBuilderScreen() {
         (draft.weaponDamage as DamageEntry[])
         ?? (draft.dmgDice ? [{ dice: String(draft.dmgDice), damageType: String(draft.dmgType ?? 'slashing') }] : [{ dice: '1d8', damageType: 'slashing' }])
       );
-      setEffectKind((draft.effectKind as ItemEffectKind) ?? 'none');
       setAcValue(String(draft.acValue ?? ''));
       setAcAddsDex(!!draft.acAddsDex);
-      setStatAbility((draft.statAbility as Ability) ?? 'str');
-      setStatAmount(String(draft.statAmount ?? '1'));
-      setSenseType((draft.senseType as SenseType) ?? 'darkvision');
-      setSenseRange(String(draft.senseRange ?? '60'));
-      setSenseNote(String(draft.senseNote ?? ''));
-      setMoveType((draft.moveType as MoveType) ?? 'fly');
-      setMoveRange(String(draft.moveRange ?? '30'));
+      // The compiled Feature can't be losslessly reversed back into a
+      // DraftTrait (effects are already-compiled Effect objects) — edit mode
+      // falls back to "Flavor only" with a generic description, same
+      // accepted limitation feat-builder.tsx's edit-mode recovery has,
+      // unless a DraftTrait was itself persisted (any item saved after this
+      // migration).
+      setTrait((draft.trait as DraftTrait) ?? newDraftTrait('Effect'));
     } else {
       setDescription(editing.features[0]?.description ?? '');
     }
@@ -131,6 +131,29 @@ export default function ItemBuilderScreen() {
     setWeaponDamage(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev);
   }
 
+  // Stored as a base64 data: URI (see Item.imageUri) so it round-trips
+  // through the same JSON blob SQLite already stores the whole Item in —
+  // no separate file/asset storage to manage or that a backup/restore
+  // could leave dangling.
+  async function pickImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Grimoire needs photo library access to attach a reference image.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.6,
+      base64: true,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (result.canceled || !result.assets[0]?.base64) return;
+    const asset = result.assets[0];
+    const mime = asset.mimeType ?? 'image/jpeg';
+    setImageUri(`data:${mime};base64,${asset.base64}`);
+  }
+
   function buildFeature(id: string): Feature | null {
     const base: Feature = {
       id: id + '_feat',
@@ -144,71 +167,44 @@ export default function ItemBuilderScreen() {
       passive: true,
     };
 
-    // Weapon damage is handled separately from the effectKind switch below,
-    // since a weapon can ALSO have another effect layered on (e.g. a magic
-    // sword with both damage dice and a stat bonus) — matches how the
-    // hand-authored core items already combine multiple abilityEffects.
+    // Weapon damage and armor AC are handled separately from the trait
+    // system below, since an item can ALSO have another effect layered on
+    // top (e.g. a magic sword with both damage dice and a stat bonus, or
+    // armor that also grants a sense) — matches how the hand-authored core
+    // items already combine multiple effects/abilityEffects.
     const weaponEffects: AbilityEffect[] = category === 'weapon'
       ? weaponDamage
           .filter(d => d.dice.trim())
           .map(d => ({ type: 'damage' as const, dice: d.dice.trim(), damageType: d.damageType }))
       : [];
 
-    let extra: Partial<Feature> = {};
-    switch (effectKind) {
-      case 'armor_ac': {
-        const base10 = parseInt(acValue, 10);
-        if (!isNaN(base10)) {
-          const effect: Effect = {
-            type: 'base_ac_formula', target: 'ac', operation: 'set',
-            value: base10, condition: null,
-            formulaAbilities: acAddsDex ? ['dex'] : [],
-            // Medium armor caps its Dex bonus at +2 (PHB) — matches the
-            // official catalog's own medium-armor entries (e.g. Hide,
-            // src/content/items/index.ts), which all set this same cap.
-            ...(acAddsDex && armorCategory === 'medium armor' ? { formulaAbilityCap: { dex: 2 } } : {}),
-          };
-          extra = { effects: [effect] };
-        }
-        break;
-      }
-      case 'stat_bonus': {
-        const amt = parseInt(statAmount, 10);
-        if (!isNaN(amt)) {
-          extra = { effects: [{ type: 'stat_modifier', target: statAbility, operation: 'add', value: amt, condition: null }] };
-        }
-        break;
-      }
-      case 'grant_sense': {
-        const r = parseInt(senseRange, 10);
-        if (!isNaN(r) && r > 0) {
-          extra = { effects: [{
-            type: 'grant_sense', target: 'senses', operation: 'add', value: null, condition: null,
-            senseType, senseRange: r, senseNote: senseNote.trim() || undefined,
-          }] };
-        }
-        break;
-      }
-      case 'grant_movement': {
-        const r = parseInt(moveRange, 10);
-        if (!isNaN(r) && r > 0) {
-          extra = { effects: [{
-            type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null,
-            movementType: moveType, movementRange: r,
-          }] };
-        }
-        break;
+    const effects: Effect[] = [];
+    if (category === 'armor') {
+      const base10 = parseInt(acValue, 10);
+      if (!isNaN(base10)) {
+        effects.push({
+          type: 'base_ac_formula', target: 'ac', operation: 'set',
+          value: base10, condition: null,
+          formulaAbilities: acAddsDex ? ['dex'] : [],
+          // Medium armor caps its Dex bonus at +2 (PHB) — matches the
+          // official catalog's own medium-armor entries (e.g. Hide,
+          // src/content/items/index.ts), which all set this same cap.
+          ...(acAddsDex && armorCategory === 'medium armor' ? { formulaAbilityCap: { dex: 2 } } : {}),
+        });
       }
     }
 
+    const { feature: traitFeature } = buildTraitFeature(trait, { idPrefix: id, sourceKind: 'item', sourceRefId: id, level: null });
+    effects.push(...traitFeature.effects);
+
     if (weaponEffects.length > 0) {
       return {
-        ...base, ...extra,
+        ...base, effects,
         abilityEffects: weaponEffects,
         activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
       };
     }
-    return { ...base, ...extra };
+    return { ...base, effects };
   }
 
   function buildProperties(): string[] {
@@ -243,10 +239,10 @@ export default function ItemBuilderScreen() {
       cost: cost.trim() || '-',
       properties: buildProperties(),
       features: feature ? [feature] : [],
+      imageUri,
       homebrewDraft: {
         description, category, rarity, armorCategory, weaponProps, extraProps, weaponDamage,
-        effectKind, acValue, acAddsDex, statAbility, statAmount,
-        senseType, senseRange, senseNote, moveType, moveRange,
+        acValue, acAddsDex, trait,
       },
     };
 
@@ -292,6 +288,20 @@ export default function ItemBuilderScreen() {
         <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription}
           placeholder="What does this item do?" placeholderTextColor={Colors.textDim}
           multiline textAlignVertical="top" />
+
+        <Text style={styles.fieldLabel}>Photo (optional)</Text>
+        {imageUri ? (
+          <View style={styles.photoRow}>
+            <Image source={{ uri: imageUri }} style={styles.photoPreview} />
+            <Pressable style={styles.photoRemoveBtn} onPress={() => setImageUri(undefined)}>
+              <Text style={styles.photoRemoveTxt}>Remove Photo</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable style={styles.photoAddBtn} onPress={() => { pickImage().catch(() => {}); }}>
+            <Text style={styles.photoAddTxt}>📷 Add Photo</Text>
+          </Pressable>
+        )}
 
         <Text style={styles.fieldLabel}>Category</Text>
         <View style={styles.chipWrap}>
@@ -351,7 +361,18 @@ export default function ItemBuilderScreen() {
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.hint}>Set base AC below in Additional Mechanical Effects, Armor option.</Text>
+            <Text style={[styles.fieldLabel, { marginTop: Spacing.sm }]}>Base AC</Text>
+            <TextInput style={styles.input} value={acValue} onChangeText={setAcValue}
+              placeholder="e.g. 14" placeholderTextColor={Colors.textDim} keyboardType="numeric" />
+            <Pressable style={[styles.toggle, acAddsDex && styles.toggleActive]} onPress={() => setAcAddsDex(v => !v)}>
+              <Text style={[styles.toggleTxt, acAddsDex && styles.toggleTxtActive]}>
+                {acAddsDex ? 'Adds DEX modifier (light/medium)' : 'Flat AC (heavy)'}
+              </Text>
+            </Pressable>
+            {acAddsDex && armorCategory === 'medium armor' && (
+              <Text style={styles.hint}>Dex bonus capped at +2, per medium armor's rule.</Text>
+            )}
+            <Text style={styles.hint}>Changes AC on the combat sheet while equipped.</Text>
           </View>
         )}
 
@@ -376,93 +397,12 @@ export default function ItemBuilderScreen() {
         <TextInput style={styles.input} value={extraProps} onChangeText={setExtraProps}
           placeholder="Anything not covered above" placeholderTextColor={Colors.textDim} />
 
-        <Text style={styles.fieldLabel}>Additional Mechanical Effects (optional)</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.xs }}>
-          {([
-            ['none', 'None'], ['armor_ac', 'Armor (AC)'],
-            ['stat_bonus', 'Stat Bonus'], ['grant_sense', 'Sense'], ['grant_movement', 'Movement'],
-          ] as [ItemEffectKind, string][]).map(([k, label]) => (
-            <Pressable key={k} style={[styles.chip, effectKind === k && styles.chipActive]} onPress={() => setEffectKind(k)}>
-              <Text style={[styles.chipTxt, effectKind === k && styles.chipTxtActive]}>{label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {effectKind === 'armor_ac' && (
-          <View style={styles.effectPanel}>
-            <Text style={styles.fieldLabel}>Base AC</Text>
-            <TextInput style={styles.input} value={acValue} onChangeText={setAcValue}
-              placeholder="e.g. 14" placeholderTextColor={Colors.textDim} keyboardType="numeric" />
-            <Pressable style={[styles.toggle, acAddsDex && styles.toggleActive]} onPress={() => setAcAddsDex(v => !v)}>
-              <Text style={[styles.toggleTxt, acAddsDex && styles.toggleTxtActive]}>
-                {acAddsDex ? 'Adds DEX modifier (light/medium)' : 'Flat AC (heavy)'}
-              </Text>
-            </Pressable>
-            {acAddsDex && armorCategory === 'medium armor' && (
-              <Text style={styles.hint}>Dex bonus capped at +2, per medium armor's rule.</Text>
-            )}
-          </View>
-        )}
-
-        {effectKind === 'stat_bonus' && (
-          <View style={styles.effectPanel}>
-            <Text style={styles.fieldLabel}>Ability</Text>
-            <View style={styles.chipWrap}>
-              {ABILITIES.map(a => (
-                <Pressable key={a.key} style={[styles.chip, statAbility === a.key && styles.chipActive]} onPress={() => setStatAbility(a.key)}>
-                  <Text style={[styles.chipTxt, statAbility === a.key && styles.chipTxtActive]}>{a.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={styles.fieldLabel}>Amount</Text>
-            <TextInput style={styles.input} value={statAmount} onChangeText={setStatAmount}
-              placeholder="e.g. 1 or 2" placeholderTextColor={Colors.textDim} keyboardType="numbers-and-punctuation" />
-            <Text style={styles.hint}>Adds to the ability score while the item is equipped.</Text>
-          </View>
-        )}
-
-        {effectKind === 'grant_sense' && (
-          <View style={styles.effectPanel}>
-            <Text style={styles.fieldLabel}>Sense</Text>
-            <View style={styles.chipWrap}>
-              {SENSE_TYPES.map(s => (
-                <Pressable key={s.key} style={[styles.chip, senseType === s.key && styles.chipActive]} onPress={() => setSenseType(s.key)}>
-                  <Text style={[styles.chipTxt, senseType === s.key && styles.chipTxtActive]}>{s.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldLabel}>Range (ft)</Text>
-                <TextInput style={styles.input} value={senseRange} onChangeText={setSenseRange}
-                  placeholder="60" placeholderTextColor={Colors.textDim} keyboardType="numeric" />
-              </View>
-              <View style={{ flex: 2 }}>
-                <Text style={styles.fieldLabel}>Note</Text>
-                <TextInput style={styles.input} value={senseNote} onChangeText={setSenseNote}
-                  placeholder="e.g. in color, heat" placeholderTextColor={Colors.textDim} />
-              </View>
-            </View>
-            <Text style={styles.hint}>Granted while the item is equipped.</Text>
-          </View>
-        )}
-
-        {effectKind === 'grant_movement' && (
-          <View style={styles.effectPanel}>
-            <Text style={styles.fieldLabel}>Movement Type</Text>
-            <View style={styles.chipWrap}>
-              {MOVE_TYPES.map(m => (
-                <Pressable key={m.key} style={[styles.chip, moveType === m.key && styles.chipActive]} onPress={() => setMoveType(m.key)}>
-                  <Text style={[styles.chipTxt, moveType === m.key && styles.chipTxtActive]}>{m.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={styles.fieldLabel}>Speed (ft)</Text>
-            <TextInput style={styles.input} value={moveRange} onChangeText={setMoveRange}
-              placeholder="30" placeholderTextColor={Colors.textDim} keyboardType="numeric" />
-            <Text style={styles.hint}>Granted while the item is equipped. Shows in the Travel section.</Text>
-          </View>
-        )}
+        <Text style={styles.fieldLabel}>Additional Mechanical Effect (optional)</Text>
+        <Text style={styles.hint}>Layers on top of weapon damage / armor AC above — same effect system feats use (stat bonus, sense, resistance, proficiency, etc.). Granted while the item is equipped.</Text>
+        <Pressable style={styles.effectCard} onPress={() => setTraitOpen(true)}>
+          <Text style={styles.effectCardName}>Edit Effect</Text>
+          <Text style={styles.effectCardDesc}>{EFFECT_KIND_LABELS[trait.effectKind]}</Text>
+        </Pressable>
       </ScrollView>
 
       <SafeBottomView>
@@ -472,6 +412,15 @@ export default function ItemBuilderScreen() {
           </Pressable>
         </View>
       </SafeBottomView>
+
+      <TraitEditorModal
+        trait={traitOpen ? trait : null}
+        visible={traitOpen}
+        onChange={setTrait}
+        onDone={() => setTraitOpen(false)}
+        onDelete={() => { setTrait(newDraftTrait('Effect')); setTraitOpen(false); }}
+        excludeKinds={['resource_ability', 'spell_grant']}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -487,6 +436,15 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 1, fontWeight: FontWeight.bold, marginTop: Spacing.xs },
   input:   { backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.sm, color: Colors.textPrimary, fontSize: FontSize.md },
   textArea:{ minHeight: 90 },
+  photoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  photoPreview: { width: 72, height: 72, borderRadius: Radius.md, backgroundColor: Colors.surfaceHigh },
+  photoRemoveBtn: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs },
+  photoRemoveTxt: { color: Colors.red, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+  photoAddBtn: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    borderStyle: 'dashed', padding: Spacing.md, alignItems: 'center',
+  },
+  photoAddTxt: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
   hint:    { fontSize: FontSize.xs, color: Colors.textDim, lineHeight: 16, fontStyle: 'italic' },
   row:     { flexDirection: 'row', gap: Spacing.sm },
   effectPanel: { backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, gap: Spacing.xs, marginTop: Spacing.xs },
@@ -499,6 +457,11 @@ const styles = StyleSheet.create({
   toggleActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
   toggleTxt:    { color: Colors.textSecondary, fontSize: FontSize.sm },
   toggleTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
+  effectCard: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md,
+  },
+  effectCardName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  effectCardDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
   btnDisabled: { opacity: 0.4 },
   footer:    { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
   saveBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },

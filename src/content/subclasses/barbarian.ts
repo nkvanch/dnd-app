@@ -22,7 +22,7 @@ export const berserkerProgression: SubclassProgression = {
     {
       level: 3, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'frenzy', name: 'Frenzy', description: 'When you rage, you can go into a frenzy. For the duration, take one additional melee weapon attack as a bonus action each turn. When the rage ends, suffer one level of exhaustion.', source: { kind: 'subclass', refId: 'berserker' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'frenzy', name: 'Frenzy', description: 'When you rage, you can go into a frenzy. For the duration, take one additional melee weapon attack as a bonus action each turn. When the rage ends, suffer one level of exhaustion.', source: { kind: 'subclass', refId: 'berserker' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
       ],
     },
     {
@@ -34,13 +34,13 @@ export const berserkerProgression: SubclassProgression = {
     {
       level: 10, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'intimidating_presence', name: 'Intimidating Presence', description: 'Use an action to frighten a creature within 30 feet (WIS save, DC 8 + STR mod + prof). If the creature fails, it is frightened until the end of your next turn.', source: { kind: 'subclass', refId: 'berserker' }, level: 10, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'intimidating_presence', name: 'Intimidating Presence', description: 'Use an action to frighten a creature within 30 feet (WIS save, DC 8 + STR mod + prof). If the creature fails, it is frightened until the end of your next turn.', source: { kind: 'subclass', refId: 'berserker' }, level: 10, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: { ability: 'wis', dc: { ability: 'str' } } } } },
       ],
     },
     {
       level: 14, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'retaliation', name: 'Retaliation', description: 'When you take damage from a creature within 5 feet, use your reaction to make one melee weapon attack against it.', source: { kind: 'subclass', refId: 'berserker' }, level: 14, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'retaliation', name: 'Retaliation', description: 'When you take damage from a creature within 5 feet, use your reaction to make one melee weapon attack against it.', source: { kind: 'subclass', refId: 'berserker' }, level: 14, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'reaction', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null } } },
       ],
     },
   ],
@@ -76,7 +76,7 @@ export const totemWarriorProgression: SubclassProgression = {
     {
       level: 10, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'spirit_walker', name: 'Spirit Walker', description: 'Cast Commune with Nature as a ritual, calling on your totem spirit for guidance.', source: { kind: 'subclass', refId: 'totem_warrior' }, level: 10, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'spirit_walker', name: 'Spirit Walker', description: 'Cast Commune with Nature as a ritual, calling on your totem spirit for guidance.', source: { kind: 'subclass', refId: 'totem_warrior' }, level: 10, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'other', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
       ],
     },
     {
@@ -98,7 +98,7 @@ export const pathOfTheBeastProgression: SubclassProgression = {
     {
       level: 3, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'form_of_the_beast', name: 'Form of the Beast', description: 'When you rage, you can manifest a natural weapon — a bite (1d8 piercing, and once per turn heals you for your proficiency bonus if you\'re below half HP when it hits), claws (1d6 slashing, once per turn make an extra claw attack as part of the Attack action), or a reach tail (1d8 piercing, and as a reaction against an attacker within 10 feet, roll a d8 and add it to your AC against that attack). You choose the form each time you rage; it counts as a simple melee weapon using STR.', source: { kind: 'subclass', refId: 'path_of_the_beast' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'form_of_the_beast', name: 'Form of the Beast', description: 'When you rage, you can manifest a natural weapon — a bite (1d8 piercing, and once per turn heals you for your proficiency bonus if you\'re below half HP when it hits), claws (1d6 slashing, once per turn make an extra claw attack as part of the Attack action), or a reach tail (1d8 piercing, and as a reaction against an attacker within 10 feet, roll a d8 and add it to your AC against that attack). You choose the form each time you rage; it counts as a simple melee weapon using STR.', source: { kind: 'subclass', refId: 'path_of_the_beast' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
       ],
     },
     {
@@ -119,7 +119,8 @@ export const pathOfTheBeastProgression: SubclassProgression = {
     {
       level: 14, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'call_the_hunt', name: 'Call the Hunt', description: 'When you enter your rage, choose willing creatures within 30 feet equal to your CON modifier (min 1) to join your hunt; you gain 5 temporary HP per creature that accepts. Until your rage ends, each of them can once per turn add a rolled d6 to damage dealt on a hit. Usable a number of times equal to your proficiency bonus per long rest.', source: { kind: 'subclass', refId: 'path_of_the_beast' }, level: 14, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'call_the_hunt', name: 'Call the Hunt', description: 'When you enter your rage, choose willing creatures within 30 feet equal to your CON modifier (min 1) to join your hunt; you gain 5 temporary HP per creature that accepts. Until your rage ends, each of them can once per turn add a rolled d6 to damage dealt on a hit. Usable a number of times equal to your proficiency bonus per long rest (simplified to a flat 1 here — no ability/prof-scaled resource pool exists in the engine).', source: { kind: 'subclass', refId: 'path_of_the_beast' }, level: 14, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: { resourceId: 'call_the_hunt_beast_pool', quantity: 1 }, range: '30 feet', target: 'multiple', requiresSave: null } } },
+        { kind: 'resource', value: { resourceId: 'call_the_hunt_beast_pool', name: 'Call the Hunt (scales with proficiency bonus)', maximum: 1, recharge: 'long_rest' } },
       ],
     },
   ],
@@ -139,7 +140,7 @@ export const pathOfWildMagicProgression: SubclassProgression = {
           activation: { actionType: 'action', resourceCost: null, range: '60 feet', target: 'self', requiresSave: null },
           abilityEffects: [],
         } },
-        { kind: 'feature', value: { id: 'wild_surge', name: 'Wild Surge', description: 'Whenever you enter your rage, roll on the Wild Magic table (d8) to produce a random magical effect — damage, teleportation, a summoned exploding spirit, an elemental weapon infusion, retributive damage against attackers, a protective AC bonus, difficult terrain, or a blinding bolt of light. Saves against these effects use DC 8 + proficiency bonus + CON modifier. Resolve the rolled effect manually — the table\'s 8 distinct outcomes aren\'t individually wired into the engine.', source: { kind: 'subclass', refId: 'path_of_wild_magic' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'wild_surge', name: 'Wild Surge', description: 'Whenever you enter your rage, roll on the Wild Magic table (d8) to produce a random magical effect — damage, teleportation, a summoned exploding spirit, an elemental weapon infusion, retributive damage against attackers, a protective AC bonus, difficult terrain, or a blinding bolt of light. Saves against these effects use DC 8 + proficiency bonus + CON modifier (not shown as a fixed save on this card since the save ability varies by roll). Resolve the rolled effect manually — the table\'s 8 distinct outcomes aren\'t individually wired into the engine.', source: { kind: 'subclass', refId: 'path_of_wild_magic' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
       ],
     },
     {
@@ -179,7 +180,7 @@ export const pathOfTheAncestralGuardianProgression: SubclassProgression = {
     {
       level: 3, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'ancestral_protectors', name: 'Ancestral Protectors', description: 'While raging, the first creature you hit each turn is marked by spectral warriors until the start of your next turn: it has disadvantage on attacks against anyone but you, and creatures it hits (other than you) gain resistance to that damage. Ends early if your rage ends.', source: { kind: 'subclass', refId: 'ancestral_guardian' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'ancestral_protectors', name: 'Ancestral Protectors', description: 'While raging, the first creature you hit each turn is marked by spectral warriors until the start of your next turn: it has disadvantage on attacks against anyone but you, and creatures it hits (other than you) gain resistance to that damage. Ends early if your rage ends.', source: { kind: 'subclass', refId: 'ancestral_guardian' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'single', requiresSave: null } } },
       ],
     },
     {
@@ -194,7 +195,8 @@ export const pathOfTheAncestralGuardianProgression: SubclassProgression = {
     {
       level: 10, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'consult_the_spirits', name: 'Consult the Spirits', description: 'Cast Augury or Clairvoyance (WIS-based, no slot or components needed — Clairvoyance instead summons an ancestral spirit to the chosen location) once per short or long rest.', source: { kind: 'subclass', refId: 'ancestral_guardian' }, level: 10, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'consult_the_spirits', name: 'Consult the Spirits', description: 'Cast Augury or Clairvoyance (WIS-based, no slot or components needed — Clairvoyance instead summons an ancestral spirit to the chosen location) once per short or long rest.', source: { kind: 'subclass', refId: 'ancestral_guardian' }, level: 10, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'action', resourceCost: { resourceId: 'consult_the_spirits_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
+        { kind: 'resource', value: { resourceId: 'consult_the_spirits_pool', name: 'Consult the Spirits', maximum: 1, recharge: 'short_rest' } },
       ],
     },
     {
@@ -254,13 +256,13 @@ export const pathOfTheGiantProgression: SubclassProgression = {
       level: 3, hpDie: 12, choices: [],
       grants: [
         { kind: 'feature', value: { id: 'giant_ancestry', name: 'Giant Ancestry', description: 'Learn Giant (or another language, if you already know Giant) and one cantrip of your choice from druidcraft or thaumaturgy, using WIS as your spellcasting ability for it.', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
-        { kind: 'feature', value: { id: 'giants_havoc', name: "Giant's Havoc", description: 'While raging: a thrown Strength weapon attack adds your rage damage bonus, and your reach increases by 5 feet as you grow to Large size (if you were smaller than Large and there\'s room).', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'giants_havoc', name: "Giant's Havoc", description: 'While raging: a thrown Strength weapon attack adds your rage damage bonus, and your reach increases by 5 feet as you grow to Large size (if you were smaller than Large and there\'s room).', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
       ],
     },
     {
       level: 6, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'elemental_cleaver', name: 'Elemental Cleaver', description: 'When you rage, infuse one held weapon with acid, cold, fire, thunder, or lightning damage — while raging and wielding it, it deals a bonus 1d6 of that type, changes its damage type to match, and gains the thrown property (range 20/60, returning to your hand after a throw). Suppressed if wielded by someone else. As a bonus action while raging, you can change the infused type.', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 6, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'elemental_cleaver', name: 'Elemental Cleaver', description: 'When you rage, infuse one held weapon with acid, cold, fire, thunder, or lightning damage — while raging and wielding it, it deals a bonus 1d6 of that type, changes its damage type to match, and gains the thrown property (range 20/60, returning to your hand after a throw). Suppressed if wielded by someone else. As a bonus action while raging, you can change the infused type.', source: { kind: 'subclass', refId: 'path_of_the_giant' }, level: 6, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'bonus_action', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
       ],
     },
     {
@@ -291,7 +293,7 @@ export const pathOfTheStormHeraldProgression: SubclassProgression = {
     {
       level: 3, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'storm_aura', name: 'Storm Aura', description: 'While raging, you radiate a 10-foot magical aura (blocked by total cover) themed to desert, sea, or tundra (re-chosen freely on level-up in this class). It triggers when you enter your rage and again as a bonus action each turn: Desert deals scaling fire damage (2 at level 3, up to 6 at 20) to all other creatures in the aura; Sea forces a DEX save on one target for scaling lightning damage (half on success); Tundra grants scaling temporary HP to chosen creatures in the aura. Save DC is 8 + proficiency bonus + CON modifier.', source: { kind: 'subclass', refId: 'storm_herald' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'storm_aura', name: 'Storm Aura', description: 'While raging, you radiate a 10-foot magical aura (blocked by total cover) themed to desert, sea, or tundra (re-chosen freely on level-up in this class). It triggers when you enter your rage and again as a bonus action each turn: Desert deals scaling fire damage (2 at level 3, up to 6 at 20) to all other creatures in the aura; Sea forces a DEX save on one target for scaling lightning damage (half on success); Tundra grants scaling temporary HP to chosen creatures in the aura.', source: { kind: 'subclass', refId: 'storm_herald' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'bonus_action', resourceCost: null, range: '10 feet', target: 'area', requiresSave: { ability: 'dex', dc: { ability: 'con' } } } } },
       ],
     },
     {
@@ -309,7 +311,7 @@ export const pathOfTheStormHeraldProgression: SubclassProgression = {
     {
       level: 14, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'raging_storm', name: 'Raging Storm', description: 'Your aura lashes out based on its environment: Desert lets you force a DEX save on an attacker for fire damage equal to half your barbarian level (reaction); Sea lets you force a STR save on a creature you hit to knock it prone (reaction); Tundra lets you reduce a chosen creature\'s speed to 0 until your next turn (STR save) whenever your aura effect activates.', source: { kind: 'subclass', refId: 'storm_herald' }, level: 14, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'raging_storm', name: 'Raging Storm', description: 'Your aura lashes out based on its environment: Desert lets you force a DEX save on an attacker for fire damage equal to half your barbarian level (reaction); Sea lets you force a STR save on a creature you hit to knock it prone (reaction); Tundra lets you reduce a chosen creature\'s speed to 0 until your next turn (STR save) whenever your aura effect activates.', source: { kind: 'subclass', refId: 'storm_herald' }, level: 14, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'reaction', resourceCost: null, range: '10 feet', target: 'single', requiresSave: { ability: 'dex', dc: { ability: 'con' } } } } },
       ],
     },
   ],
@@ -335,7 +337,8 @@ export const pathOfTheZealotProgression: SubclassProgression = {
     {
       level: 6, hpDie: 12, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'fanatical_focus', name: 'Fanatical Focus', description: 'If you fail a saving throw while raging, you can reroll it and must use the new result. Usable once per rage.', source: { kind: 'subclass', refId: 'zealot' }, level: 6, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'fanatical_focus', name: 'Fanatical Focus', description: 'If you fail a saving throw while raging, you can reroll it and must use the new result. Usable once per rage (the engine only tracks short/long rest recharge, not per-rage — recharge below is set to "other" as a reminder to reset it yourself when you next rage).', source: { kind: 'subclass', refId: 'zealot' }, level: 6, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: { resourceId: 'fanatical_focus_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
+        { kind: 'resource', value: { resourceId: 'fanatical_focus_pool', name: 'Fanatical Focus (resets each rage)', maximum: 1, recharge: 'other' } },
       ],
     },
     {
@@ -445,7 +448,7 @@ export const pathOfTheWildSoulUaProgression: SubclassProgression = {
         { kind: 'feature', value: { id: 'wild_soul_detect_magic_ua', name: 'Wild Soul', description: 'Cast Detect Magic without a slot or components (Constitution-based); you glow with a color matching the school you detect. Usable a number of times equal to your Constitution modifier (minimum once) per long rest — tracked here as a single-use pool; increase its maximum to match.', source: { kind: 'subclass', refId: 'path_of_the_wild_soul_ua' }, level: 3, effects: [], actions: [], choices: [], passive: false,
           activation: { actionType: 'action', resourceCost: { resourceId: 'detect_magic_wild_soul_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
           abilityEffects: [{ type: 'cast_spell', spellId: 'detect_magic' }] } },
-        { kind: 'feature', value: { id: 'wild_surge_ua', name: 'Wild Surge', description: 'Whenever you enter your rage, roll on this Wild Surge table (d8) for a random magical effect — necrotic burst with temp HP, self-teleport, exploding spirits, an AC bonus with retributive force damage, difficult terrain, a mind-reading disadvantage rider, a psychic-damage weapon infusion, or a blinding radiant line. Saves against these effects use DC 8 + proficiency bonus + Constitution modifier (no formula slot exists for this non-spellcaster DC). Resolve the rolled effect manually — the table\'s 8 distinct outcomes aren\'t individually wired into the engine.', source: { kind: 'subclass', refId: 'path_of_the_wild_soul_ua' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'wild_surge_ua', name: 'Wild Surge', description: 'Whenever you enter your rage, roll on this Wild Surge table (d8) for a random magical effect — necrotic burst with temp HP, self-teleport, exploding spirits, an AC bonus with retributive force damage, difficult terrain, a mind-reading disadvantage rider, a psychic-damage weapon infusion, or a blinding radiant line. Saves against these effects use DC 8 + proficiency bonus + Constitution modifier (not shown as a fixed save on this card since the save ability varies by roll). Resolve the rolled effect manually — the table\'s 8 distinct outcomes aren\'t individually wired into the engine.', source: { kind: 'subclass', refId: 'path_of_the_wild_soul_ua' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
       ] },
     { level: 6, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'magic_reserves_ua', name: 'Magic Reserves', description: 'As an action, touch a creature and roll a d4 (d6 at level 14): it recovers an expended spell slot of that level or lower, or (if it can\'t) gains temporary hit points equal to 5 times the roll. You take force damage equal to 5 times the roll.', source: { kind: 'subclass', refId: 'path_of_the_wild_soul_ua' }, level: 6, effects: [], actions: [], choices: [], passive: false,
       activation: { actionType: 'action', resourceCost: null, range: 'touch', target: 'single', requiresSave: null },

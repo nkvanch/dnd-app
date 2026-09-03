@@ -103,6 +103,7 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
     { group: 'Stats & Combat', kinds: [
       { key: 'ability_score', label: 'Ability score bonus' },
       { key: 'unarmored_defense', label: 'Unarmored Defense (AC formula)' },
+      { key: 'ac_bonus', label: 'AC bonus (+N, stacks)' },
     ] },
     { group: 'Proficiencies', kinds: [
       { key: 'skill_proficiency', label: 'Skill proficiency' },
@@ -224,6 +225,22 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
                 <Text style={styles.effectNote}>
                   AC = base + the selected modifiers, each capped if you set one (blank means
                   uncapped) -- e.g. Barbarian's Unarmored Defense is 10 + DEX + CON, both uncapped.
+                </Text>
+              </View>
+            )}
+
+            {trait.effectKind === 'ac_bonus' && (
+              <View style={styles.effectPanel}>
+                <View style={styles.rowInline}>
+                  <Text style={styles.inlineLabel}>AC bonus:</Text>
+                  <TextInput style={[styles.input, styles.smallInput]} value={trait.acBonusAmount}
+                    onChangeText={v => set({ acBonusAmount: v })} keyboardType="numbers-and-punctuation" />
+                </View>
+                <Text style={styles.effectNote}>
+                  Adds straight to AC on top of whatever's already providing the base -- armor,
+                  Unarmored Defense, or the default 10 + DEX. Use a negative number for a
+                  penalty. For a trait that REPLACES the whole AC formula instead (like Monk's
+                  Unarmored Defense itself), use "Unarmored Defense (AC formula)" above.
                 </Text>
               </View>
             )}
@@ -585,6 +602,57 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
               </View>
             )}
 
+            {trait.effectKind !== 'resource_ability' && trait.effectKind !== 'spell_grant' && (
+              <View style={styles.effectPanel}>
+                <Pressable style={styles.toggleRow} onPress={() => set({ limitedUse: !trait.limitedUse })}>
+                  <View style={[styles.checkbox, trait.limitedUse && styles.checkboxChecked]} />
+                  <Text style={styles.toggleTxt}>Limited use -- tracked with a counter, not always-on</Text>
+                </Pressable>
+                {trait.limitedUse && (
+                  <>
+                    <Text style={styles.inlineLabel}>Action type</Text>
+                    <View style={styles.chipWrap}>
+                      {ACTION_TYPES.map(a => (
+                        <Pressable key={a.key} style={[styles.chip, trait.actionType === a.key && styles.chipActive]}
+                          onPress={() => set({ actionType: a.key })}>
+                          <Text style={[styles.chipTxt, trait.actionType === a.key && styles.chipTxtActive]}>{a.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    {trait.actionType === 'other' && (
+                      <TextInput style={styles.input} value={trait.actionTypeOther}
+                        onChangeText={v => set({ actionTypeOther: v })}
+                        placeholder="e.g. Reflexive, Special" placeholderTextColor={Colors.textDim} />
+                    )}
+                    <Text style={styles.inlineLabel}>Recharges on</Text>
+                    <View style={styles.chipWrap}>
+                      {RECHARGE_TYPES.map(r => (
+                        <Pressable key={r.key} style={[styles.chip, trait.recharge === r.key && styles.chipActive]}
+                          onPress={() => set({ recharge: r.key })}>
+                          <Text style={[styles.chipTxt, trait.recharge === r.key && styles.chipTxtActive]}>{r.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    {trait.recharge === 'other' && (
+                      <TextInput style={styles.input} value={trait.rechargeOther}
+                        onChangeText={v => set({ rechargeOther: v })}
+                        placeholder="e.g. Dawn, 1/day" placeholderTextColor={Colors.textDim} />
+                    )}
+                    <View style={styles.rowInline}>
+                      <Text style={styles.inlineLabel}>Uses per recharge:</Text>
+                      <TextInput style={[styles.input, styles.smallInput]} value={trait.uses}
+                        onChangeText={v => set({ uses: v })} keyboardType="number-pad" />
+                    </View>
+                    <Text style={styles.effectNote}>
+                      Adds a dedicated limited-use pool on top of whichever effect is picked
+                      above -- e.g. Resistance + 3/short rest makes it a triggered "use it up
+                      to 3 times" ability instead of always-on.
+                    </Text>
+                  </>
+                )}
+              </View>
+            )}
+
             <SafeBottomView>
               <View style={styles.traitModalBtnRow}>
                 <Pressable style={styles.traitDeleteBtn} onPress={onDelete}>
@@ -638,9 +706,10 @@ export function TraitListEditor({ traits, onChange }: {
           <View style={{ flex: 1 }}>
             <Text style={styles.traitCardName}>{t.name}</Text>
             <Text style={styles.traitCardMeta}>
-              {t.effectKind === 'none' ? 'Flavor only' :
+              {(t.effectKind === 'none' ? 'Flavor only' :
                t.effectKind === 'ability_score' ? `+${t.abilityAmount || 0} ${t.abilityTarget.toUpperCase()}` :
                t.effectKind === 'unarmored_defense' ? `AC = ${t.unarmoredBase} + ${t.unarmoredAbilities.map(a => a.toUpperCase()).join('+') || '—'}` :
+               t.effectKind === 'ac_bonus' ? `AC ${parseInt(t.acBonusAmount, 10) >= 0 ? '+' : ''}${t.acBonusAmount || 0}` :
                t.effectKind === 'skill_proficiency' ? `${t.skillExpertise ? 'Expertise' : 'Proficiency'}: ${t.skillTarget}` :
                t.effectKind === 'tool_proficiency' ? `Proficiency: ${t.toolName || '(unnamed tool)'}` :
                t.effectKind === 'advantage_disadvantage' ? `${t.advDirection === 'advantage' ? 'Advantage' : 'Disadvantage'}: ${t.advTarget || '(unspecified)'}` :
@@ -651,7 +720,10 @@ export function TraitListEditor({ traits, onChange }: {
                t.effectKind === 'damage_immunity' ? `Immune to ${t.damageType || '(unspecified)'}` :
                t.effectKind === 'damage_vulnerability' ? `Vulnerable to ${t.damageType || '(unspecified)'}` :
                t.effectKind === 'spell_grant' ? `${t.spellGrantCantripId ? '1 cantrip' : '0 cantrips'} + ${t.spellGrants.length} leveled spell${t.spellGrants.length !== 1 ? 's' : ''}` :
-               `${t.uses}/${t.recharge === 'other' ? (t.rechargeOther || 'other') : t.recharge === 'short_rest' ? 'short rest' : 'long rest'}`}
+               `${t.uses}/${t.recharge === 'other' ? (t.rechargeOther || 'other') : t.recharge === 'short_rest' ? 'short rest' : 'long rest'}`)
+               + (t.limitedUse && t.effectKind !== 'resource_ability' && t.effectKind !== 'spell_grant'
+                   ? ` · ${t.uses}/${t.recharge === 'other' ? (t.rechargeOther || 'other') : t.recharge === 'short_rest' ? 'short rest' : 'long rest'}`
+                   : '')}
             </Text>
           </View>
           <Text style={styles.traitCardCaret}>{'>'}</Text>

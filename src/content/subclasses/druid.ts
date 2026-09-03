@@ -16,7 +16,7 @@ function circleSpells(spellIds: string[]): Grant {
 export const circleOfTheLandProgression: SubclassProgression = {
   classId: 'druid', name: 'Circle of the Land', srd: true,
   entries: [
-    { level: 2, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'bonus_cantrip', name: 'Bonus Cantrip', description: 'Learn one additional druid cantrip of your choice.', source: { kind: 'subclass', refId: 'circle_land' }, level: 2, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'natural_recovery', name: 'Natural Recovery', description: 'Once between long rests, regain expended spell slots during a short rest. Total levels ≤ half druid level (rounded up). No slots above 5th.', source: { kind: 'subclass', refId: 'circle_land' }, level: 2, effects: [], actions: [], choices: [], passive: false } }] },
+    { level: 2, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'bonus_cantrip', name: 'Bonus Cantrip', description: 'Learn one additional druid cantrip of your choice.', source: { kind: 'subclass', refId: 'circle_land' }, level: 2, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'natural_recovery', name: 'Natural Recovery', description: 'Once between long rests, regain expended spell slots during a short rest. Total levels ≤ half druid level (rounded up). No slots above 5th.', source: { kind: 'subclass', refId: 'circle_land' }, level: 2, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: { resourceId: 'natural_recovery_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } }, { kind: 'resource', value: { resourceId: 'natural_recovery_pool', name: 'Natural Recovery', maximum: 1, recharge: 'long_rest' } }] },
     { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'lands_stride', name: "Land's Stride", description: 'Moving through nonmagical difficult terrain costs no extra movement. Pass through nonmagical plants without being slowed or damaged. Advantage on saves against plants created by magic.', source: { kind: 'subclass', refId: 'circle_land' }, level: 6, effects: [], actions: [], choices: [], passive: true } }] },
     { level: 10, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'natures_ward', name: "Nature's Ward", description: 'Immune to poison and disease. Immune to charm and fear from elementals and fey.', source: { kind: 'subclass', refId: 'circle_land' }, level: 10, effects: [{ type: 'condition_immunity', target: 'poison', operation: 'immunity', value: null, condition: null }, { type: 'condition_immunity', target: 'disease', operation: 'immunity', value: null, condition: null }], actions: [], choices: [], passive: true } }] },
     { level: 14, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'natures_sanctuary', name: "Nature's Sanctuary", description: 'Beasts and plants must make a WIS save when attacking you or be compelled to choose a different target.', source: { kind: 'subclass', refId: 'circle_land' }, level: 14, effects: [], actions: [], choices: [], passive: true } }] },
@@ -46,7 +46,7 @@ export const circleOfTheMoonProgression: SubclassProgression = {
         abilityEffects: [{ type: 'transform', formId: 'water_elemental' }],
       } },
     ] },
-    { level: 14, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'thousand_forms', name: 'Thousand Forms', description: 'Cast Alter Self at will without expending a spell slot.', source: { kind: 'subclass', refId: 'circle_moon' }, level: 14, effects: [], actions: [], choices: [], passive: false } }] },
+    { level: 14, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'thousand_forms', name: 'Thousand Forms', description: 'Cast Alter Self at will without expending a spell slot.', source: { kind: 'subclass', refId: 'circle_moon' }, level: 14, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'action', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } }] },
   ],
 };
 
@@ -65,7 +65,7 @@ export const circleOfDreamsProgression: SubclassProgression = {
       ] },
     { level: 6, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'hearth_of_moonlight_and_shadow', name: 'Hearth of Moonlight and Shadow', description: 'At the start of a short or long rest, conjure an invisible 30-foot sphere (blocked by total cover) that lasts until the rest ends or you leave it. You and allies inside gain +5 to Stealth and Perception checks, and open-flame light inside isn\'t visible from outside.', source: { kind: 'subclass', refId: 'circle_dreams' }, level: 6, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'hearth_of_moonlight_and_shadow', name: 'Hearth of Moonlight and Shadow', description: 'At the start of a short or long rest, conjure an invisible 30-foot sphere (blocked by total cover) that lasts until the rest ends or you leave it. You and allies inside gain +5 to Stealth and Perception checks, and open-flame light inside isn\'t visible from outside.', source: { kind: 'subclass', refId: 'circle_dreams' }, level: 6, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'other', resourceCost: null, range: '30 feet', target: 'area', requiresSave: null } } },
       ] },
     { level: 10, hpDie: 8, choices: [],
       grants: [
@@ -76,7 +76,8 @@ export const circleOfDreamsProgression: SubclassProgression = {
       ] },
     { level: 14, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'walker_in_dreams', name: 'Walker in Dreams', description: 'Once per short rest, cast Dream (as the messenger), Scrying, or a special Teleportation Circle that opens a portal to the last place you finished a long rest on your current plane — without a slot or material components.', source: { kind: 'subclass', refId: 'circle_dreams' }, level: 14, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'walker_in_dreams', name: 'Walker in Dreams', description: 'Once per short rest, cast Dream (as the messenger), Scrying, or a special Teleportation Circle that opens a portal to the last place you finished a long rest on your current plane — without a slot or material components.', source: { kind: 'subclass', refId: 'circle_dreams' }, level: 14, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'action', resourceCost: { resourceId: 'walker_in_dreams_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
+        { kind: 'resource', value: { resourceId: 'walker_in_dreams_pool', name: 'Walker in Dreams', maximum: 1, recharge: 'short_rest' } },
       ] },
   ],
 };
@@ -174,7 +175,8 @@ export const circleOfWildfireProgression: SubclassProgression = {
         } },
       ] },
     { level: 14, hpDie: 8, choices: [], grants: [circleSpells(['aura_of_life', 'fire_shield']),
-        { kind: 'feature', value: { id: 'blazing_revival', name: 'Blazing Revival', description: 'If your wildfire spirit is within 120 feet when you drop to 0 HP, you can sacrifice it (dropping it to 0 HP) to instantly regain half your HP and stand up. Usable once per long rest.', source: { kind: 'subclass', refId: 'circle_wildfire' }, level: 14, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'blazing_revival', name: 'Blazing Revival', description: 'If your wildfire spirit is within 120 feet when you drop to 0 HP, you can sacrifice it (dropping it to 0 HP) to instantly regain half your HP and stand up. Usable once per long rest.', source: { kind: 'subclass', refId: 'circle_wildfire' }, level: 14, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: { resourceId: 'blazing_revival_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
+        { kind: 'resource', value: { resourceId: 'blazing_revival_pool', name: 'Blazing Revival', maximum: 1, recharge: 'long_rest' } },
       ] },
   ],
 };
@@ -202,7 +204,8 @@ export const circleOfTheShepherdProgression: SubclassProgression = {
       ] },
     { level: 14, hpDie: 8, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'faithful_summons', name: 'Faithful Summons', description: 'If you drop to 0 HP or are incapacitated against your will, immediately gain the effect of Conjure Animals cast at 9th level (four CR-2-or-lower beasts appear within 20 feet, protecting you for 1 hour with no concentration required). Usable once per long rest.', source: { kind: 'subclass', refId: 'circle_shepherd' }, level: 14, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'faithful_summons', name: 'Faithful Summons', description: 'If you drop to 0 HP or are incapacitated against your will, immediately gain the effect of Conjure Animals cast at 9th level (four CR-2-or-lower beasts appear within 20 feet, protecting you for 1 hour with no concentration required). Usable once per long rest.', source: { kind: 'subclass', refId: 'circle_shepherd' }, level: 14, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'other', resourceCost: { resourceId: 'faithful_summons_pool', quantity: 1 }, range: '20 feet', target: 'area', requiresSave: null } } },
+        { kind: 'resource', value: { resourceId: 'faithful_summons_pool', name: 'Faithful Summons', maximum: 1, recharge: 'long_rest' } },
       ] },
   ],
 };

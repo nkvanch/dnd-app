@@ -1,10 +1,12 @@
 // app/sheet/[id].tsx
 // Character sheet — 6-tab sheet with persistent rest bar.
 // All values read from entity.derived — never computed in components.
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { setMeta } from '../../src/db/appMetaRepo';
 import { Alert } from '../../src/utils/alert';
 import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
@@ -59,6 +61,7 @@ export default function CharacterSheetScreen() {
   const isDm        = useCampaignStore(s => s.isDm);
   const campaignId  = useCampaignStore(s => s.activeCampaign?.id ?? '');
   const deviceId    = useSessionStore(s => s.session?.deviceId ?? '');
+  const homebrewItems = useHomebrewStore(s => s.items);
 
   const entity = characters.find(c => c.id === id);
   const [activeTab, setActiveTab] = useState<TabId>('character');
@@ -67,6 +70,14 @@ export default function CharacterSheetScreen() {
   const [exportSheetOpen, setExportSheetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const goBack = useSafeGoBack('/(tabs)');
+
+  // Track "last opened" explicitly — the Home screen's old heuristic
+  // (last entry in the in-memory characters array) reflected creation
+  // order, not viewing order, and drifted from reality within a session
+  // since local edits don't reorder that array. No-ops on web.
+  useEffect(() => {
+    if (id) setMeta('last_opened_character_id', id).catch(() => { /* non-critical */ });
+  }, [id]);
 
   const handleExportFormat = useCallback(async (format: ExportFormat, action: ExportAction) => {
     setExportSheetOpen(false);
@@ -195,7 +206,8 @@ export default function CharacterSheetScreen() {
   const handleEquip = useCallback(async (itemId: string) => {
     // Warm Tier 2 before reading getItemSync below — covers items that
     // reached `carried` without ever going through handleAddItem in this
-    // session (starting equipment, sync receive).
+    // session (starting equipment, sync receive). No-ops harmlessly for a
+    // homebrew id, which itemRepo never has.
     await itemRepo.ensureLoaded([itemId]);
     mutate(e => {
       const inst = e.inventory.carried.find(i => i.itemId === itemId);
@@ -204,7 +216,12 @@ export default function CharacterSheetScreen() {
       // Inventory instances are created with `features: []` (resolveChoice and
       // the equipment screen only store the itemId) — without this, equipping
       // armor adds an item with zero effects and AC never changes.
-      const def      = itemRepo.getItemSync(itemId);
+      // itemRepo only ever holds the OFFICIAL catalog — a homebrew item's
+      // definition (with its real weapon/armor/effect data) lives in
+      // homebrewStore instead, so it needs its own fallback lookup here or
+      // every homebrew item equips with permanently empty features (no
+      // attack card, no AC change, nothing).
+      const def      = itemRepo.getItemSync(itemId) ?? homebrewItems.find(i => i.id === itemId);
       const hydrated = def ? { ...inst, features: def.features } : inst;
       return {
         ...e,
@@ -215,7 +232,7 @@ export default function CharacterSheetScreen() {
         },
       };
     });
-  }, [mutate]);
+  }, [mutate, homebrewItems]);
 
   const handleUnequip = useCallback((itemId: string) => {
     mutate(e => {
@@ -234,13 +251,17 @@ export default function CharacterSheetScreen() {
 
   const handleAddItem = useCallback(async (itemId: string) => {
     await itemRepo.ensureLoaded([itemId]);
-    mutate(e => ({
-      ...e,
-      inventory: {
-        ...e.inventory,
-        carried: [...e.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }],
-      },
-    }));
+    mutate(e => {
+      // Stack onto an existing carried instance of the same item (arrows,
+      // potions, torches, etc.) instead of adding a second duplicate row —
+      // "+ Add Item" on something already in the bag should read as "add
+      // one more", matching the ×N badge ItemRow already renders.
+      const existing = e.inventory.carried.find(i => i.itemId === itemId);
+      const carried = existing
+        ? e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity: i.quantity + 1 } : i)
+        : [...e.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }];
+      return { ...e, inventory: { ...e.inventory, carried } };
+    });
   }, [mutate]);
 
   const handleRemoveItem = useCallback((itemId: string) => {
@@ -252,6 +273,34 @@ export default function CharacterSheetScreen() {
         carried:  e.inventory.carried.filter(i => i.itemId !== itemId),
       },
     }));
+  }, [mutate]);
+
+  // +/- stepper on a carried stack's quantity. Dropping to 0 removes it
+  // outright — same "gone" result as tapping the ✕ button, just reachable
+  // from the stepper too so the player doesn't need both controls.
+  const handleUpdateQuantity = useCallback((itemId: string, delta: number) => {
+    mutate(e => {
+      const inst = e.inventory.carried.find(i => i.itemId === itemId);
+      if (!inst) return e;
+      const nextQty = inst.quantity + delta;
+      const carried = nextQty <= 0
+        ? e.inventory.carried.filter(i => i.itemId !== itemId)
+        : e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity: nextQty } : i);
+      return { ...e, inventory: { ...e.inventory, carried } };
+    });
+  }, [mutate]);
+
+  // Typed exact quantity (e.g. "you just picked up 20 arrows") — same
+  // 0-removes-the-stack behavior as the +/- stepper above.
+  const handleSetQuantity = useCallback((itemId: string, quantity: number) => {
+    mutate(e => {
+      const inst = e.inventory.carried.find(i => i.itemId === itemId);
+      if (!inst) return e;
+      const carried = quantity <= 0
+        ? e.inventory.carried.filter(i => i.itemId !== itemId)
+        : e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity } : i);
+      return { ...e, inventory: { ...e.inventory, carried } };
+    });
   }, [mutate]);
 
   const handleApplyInfusion = useCallback((itemId: string, infusionId: string, damageType?: string) => {
@@ -559,6 +608,8 @@ export default function CharacterSheetScreen() {
             onUnequip={handleUnequip}
             onAddItem={handleAddItem}
             onRemoveItem={handleRemoveItem}
+            onUpdateQuantity={handleUpdateQuantity}
+            onSetQuantity={handleSetQuantity}
             onUpdateCurrency={handleUpdateCurrency}
             onApplyInfusion={handleApplyInfusion}
             onRemoveInfusion={handleRemoveInfusion}

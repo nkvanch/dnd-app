@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import {
   ScrollView, View, Text, Pressable, StyleSheet,
-  Modal, TextInput, SectionList,
+  Modal, TextInput, SectionList, Image,
 } from 'react-native';
 import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engine/types';
 import { Alert } from '../../utils/alert';
@@ -543,6 +543,11 @@ function AddItemModal({
                 </Pressable>
               )}
               renderItem={({ item }) => {
+                // Owning one already doesn't block adding more — carrying
+                // multiple of the same item (arrows, potions, torches) is
+                // normal, so "+ Add" always stays tappable; it stacks onto
+                // the existing carried entry (see handleAddItem) rather
+                // than blocking or duplicating a row.
                 const owned = equippedIds.has(item.id) || carriedIds.has(item.id);
                 return (
                   <View style={[addStyles.itemRow, owned && addStyles.itemRowOwned]}>
@@ -559,16 +564,19 @@ function AddItemModal({
                         <Text style={addStyles.itemCost}>{item.cost}</Text>
                       )}
                     </View>
-                    {owned ? (
-                      <Text style={addStyles.ownedBadge}>In bag</Text>
-                    ) : (
+                    <View style={addStyles.itemActions}>
+                      {owned && (
+                        <Text style={addStyles.ownedBadge}>
+                          {equippedIds.has(item.id) ? 'Equipped' : 'In bag'}
+                        </Text>
+                      )}
                       <Pressable
                         style={addStyles.addBtn}
                         onPress={() => { onAdd(item.id); }}
                       >
-                        <Text style={addStyles.addBtnTxt}>+ Add</Text>
+                        <Text style={addStyles.addBtnTxt}>{owned ? '+1' : '+ Add'}</Text>
                       </Pressable>
-                    )}
+                    </View>
                   </View>
                 );
               }}
@@ -670,12 +678,15 @@ const addStyles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: Colors.border,
     gap: Spacing.sm,
   },
-  itemRowOwned: { opacity: 0.5 },
+  // Owned rows used to dim to 0.5 opacity — dropped that now that "+ Add"
+  // stays live on them (they're still addable, not a disabled state).
+  itemRowOwned: {},
   itemInfo:     { flex: 1 },
   itemName:     { fontSize: FontSize.sm, color: Colors.textPrimary, fontWeight: FontWeight.bold },
-  itemNameOwned:{ color: Colors.textDim },
+  itemNameOwned:{ color: Colors.textPrimary },
   itemProps:    { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 1 },
   itemCost:     { fontSize: FontSize.xs, color: Colors.gold, marginTop: 1 },
+  itemActions:  { alignItems: 'flex-end', gap: 4 },
   addBtn: {
     backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
     borderWidth: 1, borderColor: Colors.gold + '66',
@@ -907,7 +918,7 @@ const infuseStyles = StyleSheet.create({
 // ── Item Row ───────────────────────────────────────────────────────────────────
 
 function ItemRow({
-  instance, equipped, allItems, onToggle, onRemove, onRemoveInfusion,
+  instance, equipped, allItems, onToggle, onRemove, onRemoveInfusion, onQuantityChange, onSetQuantity,
 }: {
   instance: ItemInstance;
   equipped: boolean;
@@ -915,6 +926,12 @@ function ItemRow({
   onToggle: () => void;
   onRemove: () => void;
   onRemoveInfusion?: () => void;
+  /** Carried-only — equipped rows don't get a stepper (see Props.onUpdateQuantity). */
+  onQuantityChange?: (delta: number) => void;
+  /** Carried-only — jump straight to an exact count (a stack of 20 arrows
+   * doesn't want 20 taps of the +1 stepper). Committed on blur/submit, same
+   * pattern as the Abilities tab's manual-bonus inputs. */
+  onSetQuantity?: (quantity: number) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const item  = allItems.find(i => i.id === instance.itemId);
@@ -927,6 +944,7 @@ function ItemRow({
     <View style={styles.itemWrap}>
       <View style={styles.itemRow}>
         <Pressable style={styles.itemMain} onPress={() => setExpanded(e => !e)}>
+          {item?.imageUri && <Image source={{ uri: item.imageUri }} style={styles.itemThumb} />}
           <View style={styles.itemInfo}>
             <Text style={styles.itemName}>{name}</Text>
             {props.length > 0 && (
@@ -960,6 +978,40 @@ function ItemRow({
           <Text style={styles.itemDescTxt}>{desc}</Text>
         </View>
       )}
+      {expanded && onQuantityChange && (
+        <View style={styles.qtyStepperRow}>
+          <Text style={styles.qtyStepperLabel}>Quantity</Text>
+          <View style={styles.qtyStepper}>
+            <Pressable style={styles.qtyBtn} onPress={() => onQuantityChange(-1)} hitSlop={8}>
+              <Text style={styles.qtyBtnTxt}>−</Text>
+            </Pressable>
+            {onSetQuantity ? (
+              <TextInput
+                key={instance.quantity}
+                style={styles.qtyInput}
+                defaultValue={String(instance.quantity)}
+                keyboardType="number-pad"
+                onEndEditing={e => {
+                  const n = parseInt(e.nativeEvent.text, 10);
+                  if (!isNaN(n) && n >= 0) onSetQuantity(n);
+                }}
+                onBlur={e => {
+                  // react-native-web doesn't fire onEndEditing on blur (only
+                  // native does) — read the live DOM value instead.
+                  const raw = (e.target as unknown as { value?: string })?.value;
+                  const n = raw !== undefined ? parseInt(raw, 10) : NaN;
+                  if (!isNaN(n) && n >= 0) onSetQuantity(n);
+                }}
+              />
+            ) : (
+              <Text style={styles.qtyValue}>{instance.quantity}</Text>
+            )}
+            <Pressable style={styles.qtyBtn} onPress={() => onQuantityChange(1)} hitSlop={8}>
+              <Text style={styles.qtyBtnTxt}>+</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
       {expanded && infusion && onRemoveInfusion && (
         <Pressable style={styles.removeInfusionBtn} onPress={onRemoveInfusion}>
           <Text style={styles.removeInfusionTxt}>Remove Infusion</Text>
@@ -977,6 +1029,12 @@ interface Props {
   onUnequip:         (itemId: string) => void;
   onAddItem:         (itemId: string) => void;
   onRemoveItem:      (itemId: string) => void;
+  /** +/- stepper on a carried stack — delta is +1 or -1. Not offered for
+   * equipped items (stacking multiple of a worn/wielded item doesn't mean
+   * anything the sheet tracks). */
+  onUpdateQuantity:  (itemId: string, delta: number) => void;
+  /** Jump straight to an exact carried-stack count (typed, not tapped). */
+  onSetQuantity:     (itemId: string, quantity: number) => void;
   onUpdateCurrency:  (currency: Currency) => void;
   /** Active campaign rules — used to honour homebrew toggles (e.g. large-creature dice). */
   rules?:            CampaignRules;
@@ -986,7 +1044,7 @@ interface Props {
 }
 
 export function TabInventory({
-  entity, onEquip, onUnequip, onAddItem, onRemoveItem, onUpdateCurrency, rules,
+  entity, onEquip, onUnequip, onAddItem, onRemoveItem, onUpdateQuantity, onSetQuantity, onUpdateCurrency, rules,
   onApplyInfusion, onRemoveInfusion,
 }: Props) {
   const { inventory } = entity;
@@ -1144,6 +1202,8 @@ export function TabInventory({
               onToggle={() => onEquip(inst.itemId)}
               onRemove={() => confirmRemove(inst.itemId)}
               onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId) : undefined}
+              onQuantityChange={delta => onUpdateQuantity(inst.itemId, delta)}
+              onSetQuantity={qty => onSetQuantity(inst.itemId, qty)}
             />
           ))
         )}
@@ -1241,11 +1301,30 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm, gap: Spacing.xs,
   },
   itemMain:  { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  itemThumb: { width: 36, height: 36, borderRadius: Radius.sm, backgroundColor: Colors.surfaceHigh },
   itemInfo:  { flex: 1 },
   itemName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   itemProps: { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 1, lineHeight: 14 },
   itemQty:   { fontSize: FontSize.sm, color: Colors.textSecondary },
   itemInfused: { fontSize: FontSize.xs, color: Colors.purple, marginTop: 2, fontWeight: FontWeight.bold },
+  qtyStepperRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.xs, paddingBottom: Spacing.xs,
+  },
+  qtyStepperLabel: { fontSize: FontSize.xs, color: Colors.textDim, fontWeight: FontWeight.bold },
+  qtyStepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  qtyBtn: {
+    width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: Colors.surfaceHigh,
+    borderWidth: 1, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center',
+  },
+  qtyBtnTxt: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.gold },
+  qtyValue:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, minWidth: 24, textAlign: 'center' },
+  qtyInput: {
+    fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary,
+    minWidth: 40, textAlign: 'center', backgroundColor: Colors.surfaceHigh,
+    borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border,
+    paddingVertical: 2, paddingHorizontal: 4,
+  },
   removeInfusionBtn: {
     alignItems: 'center', paddingVertical: Spacing.xs, marginBottom: Spacing.xs,
     backgroundColor: Colors.red + '11', borderRadius: Radius.sm,

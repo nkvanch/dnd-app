@@ -38,7 +38,7 @@ export const evocationProgression: SubclassProgression = {
     {
       level: 14, hpDie: 6, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'overchannel', name: 'Overchannel', description: 'When you cast a wizard spell of 1st through 5th level that deals damage, maximize the damage. You can do so without ill effect once. A 2nd use before a long rest causes 2d12 necrotic per spell level, increasing by 1d12 for each subsequent use.', source: { kind: 'subclass', refId: 'evocation' }, level: 14, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'overchannel', name: 'Overchannel', description: 'When you cast a wizard spell of 1st through 5th level that deals damage, maximize the damage. You can do so without ill effect once. A 2nd use before a long rest causes 2d12 necrotic per spell level, increasing by 1d12 for each subsequent use.', source: { kind: 'subclass', refId: 'evocation' }, level: 14, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
       ],
     },
   ],
@@ -61,7 +61,7 @@ export const abjurationProgression: SubclassProgression = {
     {
       level: 6, hpDie: 6, choices: [],
       grants: [
-        { kind: 'feature', value: { id: 'projected_ward', name: 'Projected Ward', description: 'When a creature you can see within 30 feet takes damage, use your reaction to cause your Arcane Ward to absorb that damage.', source: { kind: 'subclass', refId: 'abjuration' }, level: 6, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'projected_ward', name: 'Projected Ward', description: 'When a creature you can see within 30 feet takes damage, use your reaction to cause your Arcane Ward to absorb that damage.', source: { kind: 'subclass', refId: 'abjuration' }, level: 6, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'reaction', resourceCost: null, range: '30 feet', target: 'single', requiresSave: null } } },
       ],
     },
     {

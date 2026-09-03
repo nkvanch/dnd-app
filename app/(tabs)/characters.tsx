@@ -1,19 +1,22 @@
 // app/(tabs)/characters.tsx
 // Character list — all saved characters. Tap to open sheet. Long press to delete.
-import { useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useCampaignStore } from '../../src/store/campaignStore';
 import { Entity } from '../../src/engine/types';
 import { Alert } from '../../src/utils/alert';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { EmptyState }    from '../../src/components/EmptyState';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
+type SortMode = 'name' | 'date' | 'campaign';
+
 function CharacterCard({
-  character, onPress, onLongPress,
+  character, campaignName, onPress, onLongPress,
 }: {
-  character: Entity; onPress: () => void; onLongPress: () => void;
+  character: Entity; campaignName: string | null; onPress: () => void; onLongPress: () => void;
 }) {
   const { identity, resources, derived } = character;
   const hpPercent = resources.hp.maximum > 0
@@ -28,6 +31,11 @@ function CharacterCard({
         <Text style={styles.cardSub}>
           Level {identity.level}  ·  {identity.classId || '—'}  ·  {identity.raceId || '—'}
         </Text>
+        {campaignName && (
+          <View style={styles.campaignBadge}>
+            <Text style={styles.campaignBadgeTxt}>🗺️ {campaignName}</Text>
+          </View>
+        )}
 
         <View style={styles.hpRow}>
           <View style={styles.hpBarOuter}>
@@ -55,10 +63,66 @@ function CharacterCard({
 }
 
 export default function CharactersScreen() {
-  const router          = useRouter();
-  const characters      = useCharacterStore(s => s.characters);
-  const deleteCharacter = useCharacterStore(s => s.deleteCharacter);
-  const isLoading       = useCharacterStore(s => s.isLoading);
+  const router           = useRouter();
+  const characters       = useCharacterStore(s => s.characters);
+  const characterMeta    = useCharacterStore(s => s.characterMeta);
+  const loadCharactersMeta = useCharacterStore(s => s.loadCharactersMeta);
+  const deleteCharacter   = useCharacterStore(s => s.deleteCharacter);
+  const isLoading         = useCharacterStore(s => s.isLoading);
+  const campaigns         = useCampaignStore(s => s.campaigns);
+
+  const [sortMode, setSortMode]         = useState<SortMode>('name');
+  const [raceFilter, setRaceFilter]     = useState<string | null>(null);
+  const [classFilter, setClassFilter]   = useState<string | null>(null);
+  const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+
+  // updatedAt for "sort by date" — characters (full Entity[]) doesn't carry
+  // it, only the lightweight meta table does (native only; empty on web,
+  // see loadAllEntityMeta's Platform guard — date sort silently no-ops
+  // there rather than crashing).
+  useEffect(() => { loadCharactersMeta(); }, [loadCharactersMeta]);
+  const updatedAtById = useMemo(
+    () => new Map(characterMeta.map(m => [m.id, m.updatedAt])),
+    [characterMeta],
+  );
+
+  // One character can only be in one campaign's roster at a time in
+  // practice (Campaign.characterIds) — first match wins if that ever isn't true.
+  const campaignByCharId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of campaigns) for (const cid of c.characterIds) if (!map.has(cid)) map.set(cid, c.name);
+    return map;
+  }, [campaigns]);
+
+  const raceOptions = useMemo(
+    () => Array.from(new Set(characters.map(c => c.identity.raceId).filter(Boolean))).sort(),
+    [characters],
+  );
+  const classOptions = useMemo(
+    () => Array.from(new Set(characters.map(c => c.identity.classId).filter(Boolean))).sort(),
+    [characters],
+  );
+  const campaignOptions = useMemo(
+    () => Array.from(new Set(campaignByCharId.values())).sort(),
+    [campaignByCharId],
+  );
+
+  const visibleCharacters = useMemo(() => {
+    let list = characters;
+    if (raceFilter)     list = list.filter(c => c.identity.raceId === raceFilter);
+    if (classFilter)    list = list.filter(c => c.identity.classId === classFilter);
+    if (campaignFilter) list = list.filter(c => campaignByCharId.get(c.id) === campaignFilter);
+
+    const sorted = [...list];
+    if (sortMode === 'name') {
+      sorted.sort((a, b) => (a.identity.name || 'Unnamed').localeCompare(b.identity.name || 'Unnamed'));
+    } else if (sortMode === 'date') {
+      sorted.sort((a, b) => (updatedAtById.get(b.id) ?? 0) - (updatedAtById.get(a.id) ?? 0));
+    } else if (sortMode === 'campaign') {
+      sorted.sort((a, b) => (campaignByCharId.get(a.id) ?? '￿').localeCompare(campaignByCharId.get(b.id) ?? '￿'));
+    }
+    return sorted;
+  }, [characters, raceFilter, classFilter, campaignFilter, sortMode, updatedAtById, campaignByCharId]);
 
   const openSheet = useCallback((id: string) => {
     router.push(`/sheet/${id}` as any);
@@ -108,18 +172,58 @@ export default function CharactersScreen() {
           onAction={startCreation}
         />
       ) : (
-        <FlatList
-          data={characters}
-          keyExtractor={c => c.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <CharacterCard
-              character={item}
-              onPress={() => openSheet(item.id)}
-              onLongPress={() => handleLongPress(item)}
-            />
-          )}
-        />
+        <>
+          <View style={styles.sortFilterBar}>
+            <Text style={styles.sortFilterLabel}>Sort</Text>
+            <View style={styles.chipRow}>
+              {([['name', 'Name'], ['date', 'Date'], ['campaign', 'Campaign']] as [SortMode, string][]).map(([m, label]) => (
+                <Pressable key={m} style={[styles.chip, sortMode === m && styles.chipActive]} onPress={() => setSortMode(m)}>
+                  <Text style={[styles.chipTxt, sortMode === m && styles.chipTxtActive]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {(raceOptions.length > 0 || classOptions.length > 0 || campaignOptions.length > 0) && (
+              <>
+                <Text style={[styles.sortFilterLabel, { marginTop: Spacing.xs }]}>Filter</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                  {raceOptions.map(r => (
+                    <Pressable key={`race_${r}`} style={[styles.chip, raceFilter === r && styles.chipActive]}
+                      onPress={() => setRaceFilter(f => f === r ? null : r)}>
+                      <Text style={[styles.chipTxt, raceFilter === r && styles.chipTxtActive]}>{r}</Text>
+                    </Pressable>
+                  ))}
+                  {classOptions.map(c => (
+                    <Pressable key={`class_${c}`} style={[styles.chip, classFilter === c && styles.chipActive]}
+                      onPress={() => setClassFilter(f => f === c ? null : c)}>
+                      <Text style={[styles.chipTxt, classFilter === c && styles.chipTxtActive]}>{c}</Text>
+                    </Pressable>
+                  ))}
+                  {campaignOptions.map(camp => (
+                    <Pressable key={`camp_${camp}`} style={[styles.chip, campaignFilter === camp && styles.chipActive]}
+                      onPress={() => setCampaignFilter(f => f === camp ? null : camp)}>
+                      <Text style={[styles.chipTxt, campaignFilter === camp && styles.chipTxtActive]}>🗺️ {camp}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+          </View>
+
+          <FlatList
+            data={visibleCharacters}
+            keyExtractor={c => c.id}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => (
+              <CharacterCard
+                character={item}
+                campaignName={campaignByCharId.get(item.id) ?? null}
+                onPress={() => openSheet(item.id)}
+                onLongPress={() => handleLongPress(item)}
+              />
+            )}
+          />
+        </>
       )}
     </View>
   );
@@ -148,6 +252,30 @@ const styles = StyleSheet.create({
     paddingVertical:   Spacing.sm,
     borderRadius:      Radius.md,
   },
+
+  sortFilterBar: {
+    paddingHorizontal: Spacing.md,
+    paddingTop:      Spacing.sm,
+    paddingBottom:   Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 4,
+  },
+  sortFilterLabel: {
+    fontSize: FontSize.xs, color: Colors.textDim, fontWeight: FontWeight.bold,
+    letterSpacing: 1, textTransform: 'uppercase',
+  },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  chip: {
+    backgroundColor: Colors.surface, borderRadius: Radius.full, borderWidth: 1,
+    borderColor: Colors.border, paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  chipActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  chipTxt:    { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  chipTxtActive: { color: Colors.gold },
+
+  campaignBadge: { alignSelf: 'flex-start', marginTop: 2 },
+  campaignBadgeTxt: { fontSize: FontSize.xs, color: Colors.gold },
   newBtnText: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 
   list: { padding: Spacing.md, gap: Spacing.sm },

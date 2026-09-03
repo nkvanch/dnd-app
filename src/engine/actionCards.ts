@@ -15,6 +15,7 @@ import {
 } from './types';
 import { spellRepo } from '../content/spellRepo';
 import { itemRepo } from '../content/itemRepo';
+import { useHomebrewStore } from '../store/homebrewStore';
 import { usesLargeCreatureWeaponDice } from './houseRules';
 import { CampaignRules } from './types';
 
@@ -278,7 +279,7 @@ export function buildLayer2ForSpell(spell: Spell): string {
  * Layer 3: save / concentration / duration notes.
  * Examples: "Dex Save (half)", "Concentration • 1 min", null
  */
-export function buildLayer3(feature: Feature): string | null {
+export function buildLayer3(feature: Feature, entity?: Entity): string | null {
   const grantedSpell = findGrantedSpell(feature);
   if (grantedSpell) return buildLayer3ForSpell(grantedSpell);
 
@@ -287,7 +288,11 @@ export function buildLayer3(feature: Feature): string | null {
 
   if (action?.requiresSave) {
     const ab  = action.requiresSave.ability.toUpperCase();
-    const dc  = action.requiresSave.dc === 'spell_save_dc' ? 'Spell DC' : `DC ${action.requiresSave.dc}`;
+    const dcSpec = action.requiresSave.dc;
+    const dc  = dcSpec === 'spell_save_dc' ? 'Spell DC'
+      : dcSpec === 'ki_save_dc' ? (entity?.derived.kiSaveDC != null ? `DC ${entity.derived.kiSaveDC}` : 'Ki DC')
+      : typeof dcSpec === 'object' ? (entity ? `DC ${entity.derived.abilityBasedDC[dcSpec.ability]}` : `${dcSpec.ability.toUpperCase()} DC`)
+      : `DC ${dcSpec}`;
     const saveOnSuccess = (feature.abilityEffects ?? []).find(
       (e): e is Extract<AbilityEffect, { type: 'damage' }> => e.type === 'damage'
     )?.saveOnSuccess;
@@ -400,7 +405,7 @@ export function generateActionCard(
     color:             cardColor(cardType),
     layer1:            buildLayer1(feature, cardType),
     layer2:            buildLayer2(feature, entity, opts),
-    layer3:            buildLayer3(feature),
+    layer3:            buildLayer3(feature, entity),
     activation:        feature.activation,
     resourceCost:      feature.activation.resourceCost,
     tabs,
@@ -499,11 +504,15 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
   //     These live on inventory.equipped[].features, NOT entity.features, so
   //     they must be iterated separately or weapon attack cards never appear.
   //     If an equipped instance has no hydrated features (older saves stored
-  //     only the itemId), fall back to the item definition in the content DB.
+  //     only the itemId), fall back to the item definition — itemRepo for
+  //     the official catalog, homebrewStore for anything itemRepo doesn't
+  //     have (a homebrew weapon/item otherwise silently never gets a card).
   for (const inst of entity.inventory.equipped) {
     const feats = (inst.features && inst.features.length > 0)
       ? inst.features
-      : (itemRepo.getItemSync(inst.itemId)?.features ?? []);
+      : (itemRepo.getItemSync(inst.itemId)?.features
+          ?? useHomebrewStore.getState().items.find(i => i.id === inst.itemId)?.features
+          ?? []);
     for (const fi of feats) {
       // Only features with an activation produce cards (attacks, usable items);
       // passive AC features (armor) are handled by collectAllEffects, not here.
@@ -511,6 +520,29 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
       const card = generateActionCard(fi, entity, opts);
       if (card) cards.push(card);
     }
+  }
+
+  // 1c. Unarmed Strike — synthetic, always available (see the
+  //     computeWeaponAttackBonuses 'unarmed_strike' entry in pipeline.ts),
+  //     not tied to any equipped item or granted Feature, so it's built
+  //     directly here rather than through generateActionCard.
+  const unarmed = entity.derived.attackBonuses.find(ab => ab.id === 'unarmed_strike');
+  if (unarmed) {
+    const dmgStr = `${unarmed.damageDice}${unarmed.damageBonus !== 0 ? fmtBonus(unarmed.damageBonus) : ''} ${capitalize(unarmed.damageType)}`;
+    cards.push({
+      featureId: 'unarmed_strike',
+      name:      'Unarmed Strike',
+      cardType:  'damage',
+      color:     'red',
+      layer1:    'Action • Damage',
+      layer2:    `${fmtBonus(unarmed.bonus)} to hit • ${dmgStr}`,
+      layer3:    null,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      resourceCost: null,
+      tabs: ['actions', 'features'],
+      available: true,
+      unavailableReason: null,
+    });
   }
 
   // 2. Spell-based cards (cantrips + known/prepared)

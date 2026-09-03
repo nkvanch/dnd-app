@@ -7,7 +7,7 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Modal, TextInput,
 } from 'react-native';
-import { Entity, CampaignRules, CharClass } from '../../engine/types';
+import { Entity, CampaignRules, CharClass, ActionCard } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
 import { dropConcentration } from '../../engine/combat';
@@ -27,6 +27,7 @@ import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
 import { CompanionSection } from './CompanionSection';
+import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag } from './TabActions';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // Class progressions are looked up from the content library — no hardcoded names.
@@ -95,6 +96,11 @@ const SENSE_LABELS: Record<string, string> = {
   tremorsense: 'Tremorsense',
   truesight:   'Truesight',
 };
+
+type MoveType = 'fly' | 'swim' | 'climb' | 'burrow';
+const MOVE_TYPE_LABELS: Record<MoveType, string> = { fly: 'Fly', swim: 'Swim', climb: 'Climb', burrow: 'Burrow' };
+const MOVE_TYPE_OPTIONS: MoveType[] = ['climb', 'swim', 'fly', 'burrow'];
+const MANUAL_MOVEMENT_FEATURE_ID = 'manual_movement';
 
 // ── Concentration Check Modal ─────────────────────────────────────────────────
 
@@ -541,6 +547,33 @@ function writeManualSenses(
   return recomputeDerived({ ...entity, features: updatedFeatures }, rules);
 }
 
+// ── Movement editor modal ─────────────────────────────────────────────────────
+// Same pattern as manual senses above — a mid-session grant (gained a
+// climbing speed from an in-game event) that isn't coming from a
+// race/feat/item the content pipeline already knows about.
+type ManualMove = { type: MoveType; range: number };
+function readManualMovement(entity: Entity): ManualMove[] {
+  const f = entity.features.find(ft => ft.id === MANUAL_MOVEMENT_FEATURE_ID);
+  if (!f) return [];
+  return (f.effects ?? [])
+    .filter(e => e.type === 'grant_movement' && e.movementType)
+    .map(e => ({ type: e.movementType as MoveType, range: e.movementRange ?? 0 }));
+}
+function writeManualMovement(entity: Entity, moves: ManualMove[], rules: CampaignRules): Entity {
+  const effects = moves.map(m => ({
+    type: 'grant_movement' as const, target: 'movement', operation: 'add' as const,
+    value: null, condition: null,
+    movementType: m.type, movementRange: m.range,
+  }));
+  const others = entity.features.filter(ft => ft.id !== MANUAL_MOVEMENT_FEATURE_ID);
+  const updatedFeatures = effects.length === 0 ? others : [...others, {
+    id: MANUAL_MOVEMENT_FEATURE_ID, name: 'Movement', description: 'Player-set movement speeds.',
+    source: { kind: 'campaign' as const, refId: MANUAL_MOVEMENT_FEATURE_ID },
+    level: null, effects, actions: [], choices: [], passive: true, isActive: true,
+  }];
+  return recomputeDerived({ ...entity, features: updatedFeatures }, rules);
+}
+
 function SensesModal({
   visible, entity, rules, onUpdate, onClose,
 }: {
@@ -639,6 +672,88 @@ function SensesModal({
   );
 }
 
+function MovementModal({
+  visible, entity, rules, onUpdate, onClose,
+}: {
+  visible: boolean;
+  entity: Entity;
+  rules: CampaignRules;
+  onUpdate: (u: Entity) => void;
+  onClose: () => void;
+}) {
+  const manual = readManualMovement(entity);
+  const [type, setType] = useState<MoveType>('climb');
+  const [range, setRange] = useState('30');
+
+  function addMove() {
+    const r = parseInt(range, 10);
+    if (isNaN(r) || r <= 0) return;
+    onUpdate(writeManualMovement(entity, [...manual.filter(m => m.type !== type), { type, range: r }], rules));
+  }
+  function removeMove(t: MoveType) {
+    onUpdate(writeManualMovement(entity, manual.filter(m => m.type !== t), rules));
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.condPickerSheet} onPress={e => e.stopPropagation()}>
+          <Text style={styles.condPickerTitle}>Movement</Text>
+          <Text style={styles.emptyNote}>
+            Walking speed comes from your race/class — this is for extra movement
+            types (climbing, swimming, flying, burrowing) gained mid-campaign.
+          </Text>
+
+          {manual.length > 0 && (
+            <View style={styles.senseChips}>
+              {manual.map(m => (
+                <View key={m.type} style={styles.senseChip}>
+                  <Text style={styles.senseChipTxt}>{MOVE_TYPE_LABELS[m.type]} {m.range}ft</Text>
+                  <Pressable onPress={() => removeMove(m.type)} hitSlop={8}>
+                    <Text style={styles.condX}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.senseTypeRow}>
+            {MOVE_TYPE_OPTIONS.map(t => (
+              <Pressable
+                key={t}
+                style={[styles.senseTypeChip, type === t && styles.senseTypeChipActive]}
+                onPress={() => setType(t)}
+              >
+                <Text style={[styles.senseTypeTxt, type === t && styles.senseTypeTxtActive]}>
+                  {MOVE_TYPE_LABELS[t]}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.senseInputRow}>
+            <TextInput
+              style={[styles.condSearch, { flex: 1 }]}
+              value={range}
+              onChangeText={setRange}
+              keyboardType="number-pad"
+              placeholder="Speed (ft)"
+              placeholderTextColor={Colors.textDim}
+            />
+          </View>
+
+          <Pressable style={styles.rollBtn} onPress={addMove}>
+            <Text style={styles.rollBtnTxt}>Add / Update Speed</Text>
+          </Pressable>
+          <Pressable style={styles.cancelBtn} onPress={onClose}>
+            <Text style={styles.cancelTxt}>Done</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function TabCharacter({
@@ -656,8 +771,10 @@ export function TabCharacter({
   const [manualHpOpen, setManualHpOpen] = useState(false);
   const [maxHpOpen,    setMaxHpOpen]    = useState(false);
   const [tempHpOpen,   setTempHpOpen]   = useState(false);
+  const [activeFavCard, setActiveFavCard] = useState<ActionCard | null>(null);
   const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
   const [sensesOpen, setSensesOpen] = useState(false);
+  const [movementOpen, setMovementOpen] = useState(false);
   const [addFeatOpen, setAddFeatOpen] = useState(false);
   // Inline hit-die result — shown for 3s then cleared, no Alert needed
   const [hitDieResult, setHitDieResult] = useState<string | null>(null);
@@ -670,6 +787,25 @@ export function TabCharacter({
   }
 
   const { identity, resources, derived, conditions, spellcasting } = entity;
+
+  // Favorited Actions-tab cards, surfaced here too — starred via the same
+  // ☆/★ toggle on the Actions tab (favoriteTag on the underlying Feature).
+  const favoriteCards = (entity.actionCards ?? []).filter(c => {
+    const f = entity.features.find(x => x.id === c.featureId)
+      ?? entity.inventory.equipped.flatMap(inst => inst.features).find(x => x.id === c.featureId);
+    return f?.favoriteTag === true;
+  });
+  function handleUseFavorite(card: ActionCard) {
+    if (card.resourceCost) onEntityUpdate(applyActionCardUse(entity, card, rules));
+    setActiveFavCard(card);
+  }
+  function rollForFavorite(): import('../../engine/types').DiceRoll | null {
+    if (!activeFavCard) return null;
+    const expr = activeFavCard.layer2.match(/(\d+d\d+(?:[+-]\d+)?)/)?.[1];
+    if (!expr) return null;
+    try { return rollExpression(expr, activeFavCard.name); }
+    catch { return null; }
+  }
 
   // Equipped weapon attack/damage cards
   const weapons = derived.attackBonuses.map(ab => {
@@ -861,6 +997,23 @@ export function TabCharacter({
         })}
       </View>
 
+      {/* Favorites — starred on the Actions tab, quick-access here so a
+          go-to ability doesn't need a tab switch mid-combat. */}
+      {favoriteCards.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>FAVORITES</Text>
+          {favoriteCards.map(c => (
+            <ActionCardRow
+              key={c.featureId}
+              card={c}
+              onUse={handleUseFavorite}
+              isFavorite
+              onToggleFavorite={c => onEntityUpdate(toggleFavoriteTag(entity, c.featureId))}
+            />
+          ))}
+        </View>
+      )}
+
       {/* Level Up + Add Feat */}
       <View style={styles.levelUpRow}>
         <View style={{ flex: 1 }}>
@@ -906,6 +1059,62 @@ export function TabCharacter({
               </View>
             </View>
           ))
+        )}
+      </View>
+
+      {/* Movement types — fly/swim/climb/burrow, visible in combat too since
+          "can I climb this wall to escape" is a combat-turn decision. Walking
+          speed alone stays in the AC/Speed/Init/Perc stat row above. */}
+      {(() => {
+        const mv = derived.movement;
+        const extraMoves = (['fly', 'swim', 'climb', 'burrow'] as const)
+          .filter(t => (mv[t] ?? 0) > 0)
+          .map(t => ({ type: t, value: mv[t]! }));
+        return (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>MOVEMENT</Text>
+              <Pressable style={styles.sectionActionBtn} onPress={() => setMovementOpen(true)}>
+                <Text style={styles.sectionActionTxt}>✎ Edit</Text>
+              </Pressable>
+            </View>
+            {extraMoves.length === 0 ? (
+              <Text style={styles.emptyNote}>Walking speed only</Text>
+            ) : (
+              <View style={styles.senseChips}>
+                {extraMoves.map(m => (
+                  <View key={m.type} style={styles.senseChip}>
+                    <Text style={styles.senseChipTxt}>{MOVE_TYPE_LABELS[m.type]} {m.value}ft</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        );
+      })()}
+
+      {/* Senses — visible in combat too (not just Exploration), since knowing
+          your darkvision/blindsight range matters mid-fight (fighting in
+          darkness, tracking an invisible enemy, etc.). */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>SENSES</Text>
+          <Pressable style={styles.sectionActionBtn} onPress={() => setSensesOpen(true)}>
+            <Text style={styles.sectionActionTxt}>✎ Edit</Text>
+          </Pressable>
+        </View>
+        {derived.senses.length === 0 ? (
+          <Text style={styles.emptyNote}>Normal vision only</Text>
+        ) : (
+          <View style={styles.senseChips}>
+            {derived.senses.map(s => (
+              <View key={s.type} style={styles.senseChip}>
+                <Text style={styles.senseChipTxt}>
+                  {SENSE_LABELS[s.type]} {s.range}ft{s.note ? ` · ${s.note}` : ''}
+                </Text>
+              </View>
+            ))}
+          </View>
         )}
       </View>
 
@@ -1199,6 +1408,21 @@ export function TabCharacter({
         onUpdate={(u) => { onEntityUpdate(u); }}
       />
 
+      {/* Movement editor */}
+      <MovementModal
+        visible={movementOpen}
+        entity={entity}
+        rules={rules}
+        onClose={() => setMovementOpen(false)}
+        onUpdate={(u) => { onEntityUpdate(u); }}
+      />
+
+      <UseModal
+        card={activeFavCard}
+        onRoll={rollForFavorite}
+        onClose={() => setActiveFavCard(null)}
+      />
+
       {/* Add a feat ad-hoc from the sheet */}
       <Modal visible={addFeatOpen} animationType="slide" onRequestClose={() => setAddFeatOpen(false)}>
         <View style={styles.lvModalRoot}>
@@ -1432,6 +1656,12 @@ const styles = StyleSheet.create({
     padding: Spacing.md, gap: Spacing.sm,
   },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionActionBtn: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  sectionActionTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
   sectionTitle:  { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2, fontWeight: FontWeight.bold },
   addBtn: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,

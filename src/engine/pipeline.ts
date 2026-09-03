@@ -18,6 +18,8 @@ import { resolveEffectsForTarget, resolveBinary } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
 import { generateAllActionCards } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
+import { useHomebrewStore } from '../store/homebrewStore';
+import { getClassEntry } from './multiclass';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -295,6 +297,26 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
           + (resolveEffectsForTarget('spell_attack_bonus', allEffects, rules) as number)
           + (resolveEffectsForTarget('spellAttackBonus', allEffects, rules) as number)
       : null,
+    // Monk's ki-ability save DC (Stunning Strike, etc.) — always WIS-based,
+    // separate from spellSaveDC since Monk has no entity.spellcasting block.
+    kiSaveDC: entity.features.some(f => f.id === 'martial_arts')
+      ? 8 + profBonus + modifier(effectiveStats.wis)
+          + (resolveEffectsForTarget('ki_save_dc', allEffects, rules) as number)
+      : null,
+    // Generic 8 + prof + ability mod, precomputed for every ability — any
+    // non-caster class feature with its own save DC (Barbarian's
+    // Intimidating Presence is STR-based, etc.) references the one it
+    // needs via requiresSave.dc = { ability: 'str' } etc. Always populated,
+    // unlike kiSaveDC/spellSaveDC — no per-class gating check needed since
+    // a feature only ever points at this if it actually has one.
+    abilityBasedDC: {
+      str: 8 + profBonus + modifier(effectiveStats.str),
+      dex: 8 + profBonus + modifier(effectiveStats.dex),
+      con: 8 + profBonus + modifier(effectiveStats.con),
+      int: 8 + profBonus + modifier(effectiveStats.int),
+      wis: 8 + profBonus + modifier(effectiveStats.wis),
+      cha: 8 + profBonus + modifier(effectiveStats.cha),
+    },
   };
 
   // ── Apply DM overrides LAST ───────────────────────────────────────────────
@@ -438,7 +460,12 @@ function computeWeaponAttackBonuses(
   const result: AttackBonus[] = [];
 
   for (const inst of entity.inventory.equipped) {
-    const def = itemRepo.getItemSync(inst.itemId);
+    // itemRepo only ever holds the OFFICIAL catalog — a homebrew weapon's
+    // definition lives in homebrewStore instead, so it needs the same
+    // fallback lookup as characterStore.ts's hydrateItemFeatures, or every
+    // homebrew weapon silently gets no to-hit bonus computed for it here.
+    const def = itemRepo.getItemSync(inst.itemId)
+      ?? useHomebrewStore.getState().items.find(i => i.id === inst.itemId);
     if (!def) continue;
 
     // Prefer the instance's own (possibly infusion-augmented) features,
@@ -487,6 +514,29 @@ function computeWeaponAttackBonuses(
       damageType:  dmgType,
     });
   }
+
+  // Unarmed Strike — always available (PHB pg 195: 1 + STR mod bludgeoning),
+  // regardless of what's equipped. Martial Arts (Monk) upgrades the die
+  // (scaling with MONK level specifically, not total character level, so a
+  // multiclassed monk/fighter still gets the right die) and unlocks DEX as
+  // an option for the attack/damage roll, same finesse-style
+  // max(str,dex) rule as a finesse weapon above.
+  const hasMartialArts = entity.features.some(f => f.id === 'martial_arts');
+  let unarmedDice = '1';
+  let unarmedAbility: 'str' | 'dex' = 'str';
+  let unarmedMod = strMod;
+  if (hasMartialArts) {
+    const monkLevel = getClassEntry(entity, 'monk')?.level ?? entity.identity.level;
+    unarmedDice = monkLevel >= 17 ? '1d10' : monkLevel >= 11 ? '1d8' : monkLevel >= 5 ? '1d6' : '1d4';
+    unarmedAbility = dexMod >= strMod ? 'dex' : 'str';
+    unarmedMod = Math.max(strMod, dexMod);
+  }
+  result.push({
+    id: 'unarmed_strike', name: 'Unarmed Strike',
+    bonus: profBonus + unarmedMod, type: 'melee', ability: unarmedAbility,
+    damageBonus: unarmedMod, damageDice: unarmedDice, damageType: 'bludgeoning',
+  });
+
   return result;
 }
 

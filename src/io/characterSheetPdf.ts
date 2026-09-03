@@ -14,10 +14,19 @@
 // the Entity type shape. Data-lookup helpers (spell/item names from ids) are
 // left as clearly-marked TODOs to wire once the actual content-DB imports are
 // confirmed — see resolveName's doc comment.
+//
+// One exception since: applyStatModifiers/collectAllEffects (pipeline.ts).
+// entity.stats is always the character's BASE ability scores — racial/item/
+// feat bonuses exist only as stat_modifier effects, computed on the fly by
+// the pipeline and never written back into .stats (same reason TabInventory
+// computes its own effectiveStr rather than reading entity.stats.str
+// directly). Ability scores, saves, and skills below all need the EFFECTIVE
+// values or the PDF prints pre-racial-bonus numbers.
 
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Entity } from '../engine/types';
+import { applyStatModifiers, collectAllEffects } from '../engine/pipeline';
 
 // ── Small formatting helpers ────────────────────────────────────────────────
 
@@ -71,7 +80,8 @@ export function buildCharacterSheetHtml(
   entity: Entity,
   resolveName: (kind: 'spell' | 'item' | 'race' | 'class' | 'background', id: string) => string,
 ): string {
-  const { identity, stats, derived, resources, skills, proficiencies, inventory, spellcasting, features } = entity;
+  const { identity, derived, resources, skills, proficiencies, inventory, spellcasting, features } = entity;
+  const stats = applyStatModifiers(entity.stats, collectAllEffects(entity));
 
   const raceName       = resolveName('race', identity.raceId ?? '');
   const className      = resolveName('class', identity.classId ?? '');

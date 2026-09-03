@@ -107,12 +107,13 @@ export default function MonsterBuilderScreen() {
     // entries seeded from the saved name/description.
     setTraits(editing.features.map(f => ({
       localId: `t_${f.id}`, name: f.name, description: f.description, effectKind: 'none' as const,
-      abilityTarget: 'str', abilityAmount: '1', unarmoredBase: '10', unarmoredAbilities: ['dex'], unarmoredCaps: {},
+      abilityTarget: 'str', abilityAmount: '1', unarmoredBase: '10', unarmoredAbilities: ['dex'], unarmoredCaps: {}, acBonusAmount: '1',
       skillTarget: 'history', skillExpertise: false, toolName: '', advDirection: 'advantage', advTarget: '',
       senseType: 'darkvision', senseRange: '60', moveType: 'fly', moveRange: '30',
       moveCondTargets: [], moveCondFlavor: '', damageType: 'fire',
       spellGrantCantripId: '', spellGrantAbility: 'cha', spellGrants: [],
       actionType: 'bonus_action', actionTypeOther: '', recharge: 'short_rest', rechargeOther: '', uses: '1', healDice: '1d8',
+      limitedUse: false,
     })));
   }, [editing?.id]);
 

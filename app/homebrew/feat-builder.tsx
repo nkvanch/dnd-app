@@ -28,7 +28,7 @@ const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 
 const EFFECT_KIND_LABELS: Record<string, string> = {
   none: 'Flavor only', ability_score: 'Ability score bonus', unarmored_defense: 'Unarmored Defense',
-  skill_proficiency: 'Skill proficiency', tool_proficiency: 'Tool proficiency',
+  ac_bonus: 'AC bonus', skill_proficiency: 'Skill proficiency', tool_proficiency: 'Tool proficiency',
   advantage_disadvantage: 'Advantage/Disadvantage', sense: 'Grants a sense', movement: 'Grants movement',
   movement_condition: 'Movement conditions', damage_resistance: 'Resistance', damage_immunity: 'Immunity',
   damage_vulnerability: 'Vulnerability',

@@ -380,8 +380,8 @@ export function recordDeathSave(
  * that has no combat-resolution ambiguity, so it applies immediately.
  *
  * Effect types not yet handled here (apply_condition, remove_condition,
- * grant_speed, restore_resource, spend_resource beyond the base cost) are
- * intentionally left for a future pass — not silently claimed as done.
+ * grant_speed, spend_resource beyond the base cost) are intentionally left
+ * for a future pass — not silently claimed as done.
  */
 export function applyAbilityEffects(
   entity:  Entity,
@@ -401,13 +401,54 @@ export function applyAbilityEffects(
       };
     } else if (effect.type === 'transform') {
       updated = startWildShape(updated, effect.formId, rules);
+    } else if (effect.type === 'restore_resource') {
+      updated = restoreResource(updated, effect.resourceId, effect.amount);
     }
     // 'damage' / 'heal': intentionally left to the manual roll+HP-modal flow.
-    // 'apply_condition' / 'remove_condition' / 'grant_speed' / 'restore_resource'
-    // / 'spend_resource': not yet wired — see the doc comment above.
+    // 'apply_condition' / 'remove_condition' / 'grant_speed' / 'spend_resource':
+    // not yet wired — see the doc comment above.
   }
 
   return recomputeDerived(updated, rules);
+}
+
+/**
+ * Restores a resource an ability's abilityEffects declares regained (e.g.
+ * Eldritch Master's "regain all spell slots", Vermillion mutagen's "+1
+ * Blood Maledict use"). 'spell_slots' resets BOTH .slots and .pactSlots
+ * (only 'full' is meaningful there — which tier a partial number would
+ * apply to is ambiguous, so a numeric amount against 'spell_slots' is a
+ * no-op, left for a future pass same as the other unhandled effect types
+ * above). Any other resourceId is looked up in entity.resources.custom.
+ */
+function restoreResource(entity: Entity, resourceId: string, amount: number | 'full'): Entity {
+  if (resourceId === 'spell_slots') {
+    if (amount !== 'full' || !entity.spellcasting) return entity;
+    const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
+    const resetSlots = (slots: typeof entity.spellcasting.slots) => {
+      const next = { ...slots };
+      for (const t of tiers) if (next[t]) next[t] = { ...next[t]!, used: 0 };
+      return next;
+    };
+    return {
+      ...entity,
+      spellcasting: {
+        ...entity.spellcasting,
+        slots: resetSlots(entity.spellcasting.slots),
+        pactSlots: entity.spellcasting.pactSlots ? resetSlots(entity.spellcasting.pactSlots) : undefined,
+      },
+    };
+  }
+  const resource = entity.resources.custom.find(r => r.id === resourceId);
+  if (!resource) return entity;
+  const newCurrent = amount === 'full' ? resource.maximum : Math.min(resource.maximum, resource.current + amount);
+  return {
+    ...entity,
+    resources: {
+      ...entity.resources,
+      custom: entity.resources.custom.map(r => r.id === resourceId ? { ...r, current: newCurrent } : r),
+    },
+  };
 }
 
 /**

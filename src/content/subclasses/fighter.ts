@@ -264,7 +264,7 @@ export const arcaneArcherProgression: SubclassProgression = {
       choices: [{ id: 'arcane_shot_options_7', prompt: 'Choose 1 more Arcane Shot option.', kind: 'feature_pool', count: 1, pool: ARCANE_SHOT_POOL, grants: [], required: true, resolved: false }],
       grants: [
         { kind: 'feature', value: { id: 'magic_arrow', name: 'Magic Arrow', description: 'Any nonmagical arrow you fire from a shortbow or longbow counts as magical for overcoming resistance and immunity to nonmagical attacks, until it hits or misses.', source: { kind: 'subclass', refId: 'arcane_archer' }, level: 7, effects: [], actions: [], choices: [], passive: true } },
-        { kind: 'feature', value: { id: 'curving_shot', name: 'Curving Shot', description: 'When a magic arrow attack misses, use a bonus action to reroll the attack against a different target within 60 feet of the original.', source: { kind: 'subclass', refId: 'arcane_archer' }, level: 7, effects: [], actions: [], choices: [], passive: false } },
+        { kind: 'feature', value: { id: 'curving_shot', name: 'Curving Shot', description: 'When a magic arrow attack misses, use a bonus action to reroll the attack against a different target within 60 feet of the original.', source: { kind: 'subclass', refId: 'arcane_archer' }, level: 7, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'bonus_action', resourceCost: null, range: '60 feet', target: 'single', requiresSave: null } } },
       ],
     },
     {
@@ -296,7 +296,7 @@ export const bannaretProgression: SubclassProgression = {
   classId: 'fighter', name: 'Banneret', srd: false,
   entries: [
     { level: 3, hpDie: 10, choices: [], grants: [
-      { kind: 'feature', value: { id: 'rallying_cry', name: 'Rallying Cry', description: 'When you use Second Wind, up to three allies within 60 feet who can see or hear you each regain HP equal to your fighter level.', source: { kind: 'subclass', refId: 'banneret' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'rallying_cry', name: 'Rallying Cry', description: 'When you use Second Wind, up to three allies within 60 feet who can see or hear you each regain HP equal to your fighter level.', source: { kind: 'subclass', refId: 'banneret' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: '60 feet', target: 'multiple', requiresSave: null } } },
     ] },
     { level: 7, hpDie: 10, choices: [], grants: [
       { kind: 'feature', value: { id: 'royal_envoy', name: 'Royal Envoy', description: 'Gain Persuasion proficiency (or, if already proficient, one of Animal Handling/Insight/Intimidation/Performance). Your proficiency bonus is doubled on Persuasion checks.', source: { kind: 'subclass', refId: 'banneret' }, level: 7, effects: [
@@ -304,10 +304,10 @@ export const bannaretProgression: SubclassProgression = {
       ], actions: [], choices: [], passive: true } },
     ] },
     { level: 10, hpDie: 10, choices: [], grants: [
-      { kind: 'feature', value: { id: 'inspiring_surge', name: 'Inspiring Surge', description: 'When you use Action Surge, one ally within 60 feet who can see or hear you can immediately make one weapon attack with its reaction (two allies from level 18).', source: { kind: 'subclass', refId: 'banneret' }, level: 10, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'inspiring_surge', name: 'Inspiring Surge', description: 'When you use Action Surge, one ally within 60 feet who can see or hear you can immediately make one weapon attack with its reaction (two allies from level 18).', source: { kind: 'subclass', refId: 'banneret' }, level: 10, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: '60 feet', target: 'multiple', requiresSave: null } } },
     ] },
     { level: 15, hpDie: 10, choices: [], grants: [
-      { kind: 'feature', value: { id: 'bulwark', name: 'Bulwark', description: 'When you use Indomitable to reroll an INT, WIS, or CHA save, an ally within 60 feet who failed the same save and can see or hear you can also reroll it and must use the new result.', source: { kind: 'subclass', refId: 'banneret' }, level: 15, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'bulwark', name: 'Bulwark', description: 'When you use Indomitable to reroll an INT, WIS, or CHA save, an ally within 60 feet who failed the same save and can see or hear you can also reroll it and must use the new result.', source: { kind: 'subclass', refId: 'banneret' }, level: 15, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: '60 feet', target: 'single', requiresSave: null } } },
     ] },
   ],
 };
@@ -335,7 +335,7 @@ export const cavalierProgression: SubclassProgression = {
       { kind: 'feature', value: { id: 'hold_the_line', name: 'Hold the Line', description: 'Creatures provoke an opportunity attack from you when they move 5+ feet while within your reach; hitting with such an attack reduces the target\'s speed to 0 until the end of the current turn.', source: { kind: 'subclass', refId: 'cavalier' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
     ] },
     { level: 15, hpDie: 10, choices: [], grants: [
-      { kind: 'feature', value: { id: 'ferocious_charger', name: 'Ferocious Charger', description: 'If you move at least 10 feet in a straight line before hitting a creature, it makes a STR save (DC 8 + proficiency bonus + STR modifier) or is knocked prone. Once per turn.', source: { kind: 'subclass', refId: 'cavalier' }, level: 15, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'ferocious_charger', name: 'Ferocious Charger', description: 'If you move at least 10 feet in a straight line before hitting a creature, it makes a STR save or is knocked prone. Once per turn.', source: { kind: 'subclass', refId: 'cavalier' }, level: 15, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'single', requiresSave: { ability: 'str', dc: { ability: 'str' } } } } },
     ] },
     { level: 18, hpDie: 10, choices: [], grants: [
       { kind: 'feature', value: { id: 'vigilant_defender', name: 'Vigilant Defender', description: 'You gain a special reaction usable once on every other creature\'s turn (not your own), only to make an opportunity attack — separate from your normal reaction.', source: { kind: 'subclass', refId: 'cavalier' }, level: 18, effects: [], actions: [], choices: [], passive: true } },
@@ -350,14 +350,14 @@ export const echoKnightProgression: SubclassProgression = {
   entries: [
     { level: 3, hpDie: 10, choices: [], grants: [
       { kind: 'resource', value: { resourceId: 'unleash_incarnation_pool', name: 'Unleash Incarnation', maximum: 1, recharge: 'long_rest' } },
-      { kind: 'feature', value: { id: 'manifest_echo', name: 'Manifest Echo', description: 'As a bonus action, manifest a translucent echo of yourself in an unoccupied space within 15 feet (AC 14 + proficiency bonus, 1 HP, immune to all conditions, uses your save bonuses). It moves up to 30 feet on your turn at no action cost and is destroyed if ever more than 30 feet from you at turn\'s end. You can swap places with it (bonus action, costs 15 feet of movement), attack from its space instead of yours, and make an opportunity attack from its space as a reaction when a creature moves away from it.', source: { kind: 'subclass', refId: 'echo_knight' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'manifest_echo', name: 'Manifest Echo', description: 'As a bonus action, manifest a translucent echo of yourself in an unoccupied space within 15 feet (AC 14 + proficiency bonus, 1 HP, immune to all conditions, uses your save bonuses). It moves up to 30 feet on your turn at no action cost and is destroyed if ever more than 30 feet from you at turn\'s end. You can swap places with it (bonus action, costs 15 feet of movement), attack from its space instead of yours, and make an opportunity attack from its space as a reaction when a creature moves away from it.', source: { kind: 'subclass', refId: 'echo_knight' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'bonus_action', resourceCost: null, range: '15 feet', target: 'self', requiresSave: null } } },
       { kind: 'feature', value: { id: 'unleash_incarnation', name: 'Unleash Incarnation', description: 'When you take the Attack action, make one additional melee attack from your echo\'s position. Usable a number of times equal to your CON modifier (min 1) per long rest.', source: { kind: 'subclass', refId: 'echo_knight' }, level: 3, effects: [], actions: [], choices: [], passive: false,
         activation: { actionType: 'free', resourceCost: { resourceId: 'unleash_incarnation_pool', quantity: 1 }, range: '15 feet', target: 'single', requiresSave: null },
         abilityEffects: [],
       } },
     ] },
     { level: 7, hpDie: 10, choices: [], grants: [
-      { kind: 'feature', value: { id: 'echo_avatar', name: 'Echo Avatar', description: 'As an action, transfer your senses into your echo (you\'re deafened and blinded meanwhile) for up to 10 minutes; while used this way, the echo can range up to 1,000 feet from you without being destroyed.', source: { kind: 'subclass', refId: 'echo_knight' }, level: 7, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'echo_avatar', name: 'Echo Avatar', description: 'As an action, transfer your senses into your echo (you\'re deafened and blinded meanwhile) for up to 10 minutes; while used this way, the echo can range up to 1,000 feet from you without being destroyed.', source: { kind: 'subclass', refId: 'echo_knight' }, level: 7, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'action', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } },
     ] },
     { level: 10, hpDie: 10, choices: [], grants: [
       { kind: 'feature', value: { id: 'shadow_martyr', name: 'Shadow Martyr', description: 'As a reaction before an attack roll against another creature you can see resolves, teleport your echo into the attack\'s path so the roll targets the echo instead. Usable once per short or long rest.', source: { kind: 'subclass', refId: 'echo_knight' }, level: 10, effects: [], actions: [], choices: [], passive: false,
@@ -366,7 +366,8 @@ export const echoKnightProgression: SubclassProgression = {
       } },
     ] },
     { level: 15, hpDie: 10, choices: [], grants: [
-      { kind: 'feature', value: { id: 'reclaim_potential', name: 'Reclaim Potential', description: 'When your echo is destroyed by damage, gain 2d6 + CON modifier temporary HP (if you have none already). Usable a number of times equal to your CON modifier (min 1) per long rest.', source: { kind: 'subclass', refId: 'echo_knight' }, level: 15, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'reclaim_potential', name: 'Reclaim Potential', description: 'When your echo is destroyed by damage, gain 2d6 + CON modifier temporary HP (if you have none already). Usable a number of times equal to your CON modifier (min 1) per long rest (simplified to a flat 1 here — no ability-mod-scaled resource pool exists in the engine).', source: { kind: 'subclass', refId: 'echo_knight' }, level: 15, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: { resourceId: 'reclaim_potential_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
+      { kind: 'resource', value: { resourceId: 'reclaim_potential_pool', name: 'Reclaim Potential (scales with Constitution modifier)', maximum: 1, recharge: 'long_rest' } },
     ] },
     { level: 18, hpDie: 10, choices: [], grants: [
       { kind: 'feature', value: { id: 'legion_of_one', name: 'Legion of One', description: 'Manifest Echo can now create two coexisting echoes (creating a third destroys the first two); either can be used for any of your echo abilities. When you roll initiative with no Unleash Incarnation uses left, you regain one.', source: { kind: 'subclass', refId: 'echo_knight' }, level: 18, effects: [], actions: [], choices: [], passive: true } },
@@ -383,7 +384,7 @@ export const eldritchKnightProgression: SubclassProgression = {
       { kind: 'init_spellcasting', value: { ability: 'int' } } as Grant,
       { kind: 'spell_slots', value: { level: 3, slotsTable: THIRD_CASTER_SLOTS } } as Grant,
       { kind: 'feature', value: { id: 'ek_spellcasting', name: 'Spellcasting', description: 'You learn two wizard cantrips (a third at level 10) and a small number of wizard spells, mostly from abjuration and evocation, using INT as your spellcasting ability.', source: { kind: 'subclass', refId: 'eldritch_knight' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
-      { kind: 'feature', value: { id: 'weapon_bond', name: 'Weapon Bond', description: 'After an hour-long ritual (usable during a short rest), bond up to two weapons to yourself. You can\'t be disarmed of a bonded weapon unless incapacitated, and can summon one bonded weapon to your hand as a bonus action if it\'s on the same plane.', source: { kind: 'subclass', refId: 'eldritch_knight' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'weapon_bond', name: 'Weapon Bond', description: 'After an hour-long ritual (usable during a short rest), bond up to two weapons to yourself. You can\'t be disarmed of a bonded weapon unless incapacitated, and can summon one bonded weapon to your hand as a bonus action if it\'s on the same plane.', source: { kind: 'subclass', refId: 'eldritch_knight' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'other', resourceCost: null, range: 'touch', target: 'single', requiresSave: null } } },
     ] },
     { level: 7, hpDie: 10, choices: [], grants: [
       { kind: 'spell_slots', value: { level: 7, slotsTable: THIRD_CASTER_SLOTS } } as Grant,
@@ -396,7 +397,7 @@ export const eldritchKnightProgression: SubclassProgression = {
     { level: 13, hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 13, slotsTable: THIRD_CASTER_SLOTS } } as Grant] },
     { level: 15, hpDie: 10, choices: [], grants: [
       { kind: 'spell_slots', value: { level: 15, slotsTable: THIRD_CASTER_SLOTS } } as Grant,
-      { kind: 'feature', value: { id: 'arcane_charge', name: 'Arcane Charge', description: 'When you use Action Surge, you can teleport up to 30 feet to an unoccupied space you can see, before or after the extra action.', source: { kind: 'subclass', refId: 'eldritch_knight' }, level: 15, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'arcane_charge', name: 'Arcane Charge', description: 'When you use Action Surge, you can teleport up to 30 feet to an unoccupied space you can see, before or after the extra action.', source: { kind: 'subclass', refId: 'eldritch_knight' }, level: 15, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: '30 feet', target: 'self', requiresSave: null } } },
     ] },
     { level: 16, hpDie: 10, choices: [], grants: [{ kind: 'spell_slots', value: { level: 16, slotsTable: THIRD_CASTER_SLOTS } } as Grant] },
     { level: 18, hpDie: 10, choices: [], grants: [
@@ -423,14 +424,14 @@ export const psiWarriorProgression: SubclassProgression = {
         activation: { actionType: 'free', resourceCost: { resourceId: 'psionic_energy_pool', quantity: 1 }, range: '30 feet', target: 'single', requiresSave: null },
         abilityEffects: [{ type: 'damage', dice: '1d6', damageType: 'force' }],
       } },
-      { kind: 'feature', value: { id: 'telekinetic_movement', name: 'Telekinetic Movement', description: 'As an action, move a Large or smaller loose object or a willing creature (other than yourself) within 30 feet up to 30 feet to an unoccupied space you can see. Usable once per short or long rest, or again by expending a Psionic Energy die.', source: { kind: 'subclass', refId: 'psi_warrior' }, level: 3, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'telekinetic_movement', name: 'Telekinetic Movement', description: 'As an action, move a Large or smaller loose object or a willing creature (other than yourself) within 30 feet up to 30 feet to an unoccupied space you can see. Usable once per short or long rest for free — modeled here as always costing a Psionic Energy die instead, since the engine can only track one resource per activation and the die is the renewable option.', source: { kind: 'subclass', refId: 'psi_warrior' }, level: 3, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'action', resourceCost: { resourceId: 'psionic_energy_pool', quantity: 1 }, range: '30 feet', target: 'single', requiresSave: null } } },
     ] },
     { level: 7, hpDie: 10, choices: [], grants: [
       { kind: 'feature', value: { id: 'psi_powered_leap', name: 'Psi-Powered Leap', description: 'As a bonus action, gain a flying speed equal to twice your walking speed until the end of the turn. Usable once per short or long rest, or again by expending a Psionic Energy die.', source: { kind: 'subclass', refId: 'psi_warrior' }, level: 7, effects: [], actions: [], choices: [], passive: false,
         activation: { actionType: 'bonus_action', resourceCost: null, range: 'self', target: 'self', requiresSave: null },
         abilityEffects: [{ type: 'grant_speed', speedType: 'fly', amount: 60, duration: { unit: 'rounds', remaining: 1 } }],
       } },
-      { kind: 'feature', value: { id: 'telekinetic_thrust', name: 'Telekinetic Thrust', description: 'When you deal Psionic Strike damage, force a STR save (DC 8 + proficiency bonus + INT modifier); on a failure, knock the target prone or push it up to 10 feet.', source: { kind: 'subclass', refId: 'psi_warrior' }, level: 7, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'telekinetic_thrust', name: 'Telekinetic Thrust', description: 'When you deal Psionic Strike damage, force a STR save; on a failure, knock the target prone or push it up to 10 feet.', source: { kind: 'subclass', refId: 'psi_warrior' }, level: 7, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: '30 feet', target: 'single', requiresSave: { ability: 'str', dc: { ability: 'int' } } } } },
     ] },
     { level: 10, hpDie: 10, choices: [], grants: [
       { kind: 'feature', value: { id: 'guarded_mind', name: 'Guarded Mind', description: 'You have resistance to psychic damage. If you start your turn charmed or frightened, you can expend a Psionic Energy die to end those conditions on yourself.', source: { kind: 'subclass', refId: 'psi_warrior' }, level: 10, effects: [
@@ -444,7 +445,7 @@ export const psiWarriorProgression: SubclassProgression = {
       } },
     ] },
     { level: 18, hpDie: 10, choices: [], grants: [
-      { kind: 'feature', value: { id: 'telekinetic_master', name: 'Telekinetic Master', description: 'Cast Telekinesis at will, no components, INT-based, once per long rest (or again by expending a Psionic Energy die); while concentrating you can make one weapon attack as a bonus action each turn.', source: { kind: 'subclass', refId: 'psi_warrior' }, level: 18, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'telekinetic_master', name: 'Telekinetic Master', description: 'Cast Telekinesis at no cost once per long rest — modeled here as always costing a Psionic Energy die instead, since the engine can only track one resource per activation and the die is the renewable option; while concentrating you can make one weapon attack as a bonus action each turn.', source: { kind: 'subclass', refId: 'psi_warrior' }, level: 18, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'action', resourceCost: { resourceId: 'psionic_energy_pool', quantity: 1 }, range: '60 feet', target: 'single', requiresSave: null } } },
     ] },
   ],
 };
@@ -524,10 +525,11 @@ export const samuraiProgression: SubclassProgression = {
       { kind: 'feature', value: { id: 'tireless_spirit', name: 'Tireless Spirit', description: 'When you roll initiative and have no Fighting Spirit uses left, you regain one use.', source: { kind: 'subclass', refId: 'samurai' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
     ] },
     { level: 15, hpDie: 10, choices: [], grants: [
-      { kind: 'feature', value: { id: 'rapid_strike', name: 'Rapid Strike', description: 'If you have advantage on an attack roll during your Attack action, you can forgo the advantage to make one additional weapon attack against the same target as part of the action. Once per turn.', source: { kind: 'subclass', refId: 'samurai' }, level: 15, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'rapid_strike', name: 'Rapid Strike', description: 'If you have advantage on an attack roll during your Attack action, you can forgo the advantage to make one additional weapon attack against the same target as part of the action. Once per turn.', source: { kind: 'subclass', refId: 'samurai' }, level: 15, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'free', resourceCost: null, range: 'self', target: 'single', requiresSave: null } } },
     ] },
     { level: 18, hpDie: 10, choices: [], grants: [
-      { kind: 'feature', value: { id: 'strength_before_death', name: 'Strength Before Death', description: 'When damage would drop you to 0 HP, use your reaction to instead delay falling unconscious and immediately take an extra turn (still subject to death saves and the normal 3-failure limit at 0 HP). You fall unconscious when the extra turn ends if still at 0 HP. Usable once per long rest.', source: { kind: 'subclass', refId: 'samurai' }, level: 18, effects: [], actions: [], choices: [], passive: false } },
+      { kind: 'feature', value: { id: 'strength_before_death', name: 'Strength Before Death', description: 'When damage would drop you to 0 HP, use your reaction to instead delay falling unconscious and immediately take an extra turn (still subject to death saves and the normal 3-failure limit at 0 HP). You fall unconscious when the extra turn ends if still at 0 HP. Usable once per long rest.', source: { kind: 'subclass', refId: 'samurai' }, level: 18, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'reaction', resourceCost: { resourceId: 'strength_before_death_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null } } },
+      { kind: 'resource', value: { resourceId: 'strength_before_death_pool', name: 'Strength Before Death', maximum: 1, recharge: 'long_rest' } },
     ] },
   ],
 };

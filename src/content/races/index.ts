@@ -1970,6 +1970,9 @@ export const raceHalfOrc: Race = {
   id: 'half_orc',
   name: 'Half-Orc',
   srd: true,
+  resources: [
+    { resourceId: 'relentless_endurance_pool', name: 'Relentless Endurance', maximum: 1, recharge: 'long_rest' },
+  ],
   features: [
     {
       id: 'half_orc_asi',
@@ -2005,6 +2008,7 @@ export const raceHalfOrc: Race = {
       description: 'When you are reduced to 0 hit points but not killed outright, you can drop to 1 hit point instead. Once you use this trait, you can\'t use it again until you finish a long rest.',
       source: { kind: 'race', refId: 'half_orc' },
       level: null, effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: { resourceId: 'relentless_endurance_pool', quantity: 1 }, range: 'self', target: 'self', requiresSave: null },
     },
     {
       id: 'half_orc_savage_attacks',

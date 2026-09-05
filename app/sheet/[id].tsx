@@ -11,10 +11,8 @@ import { Alert } from '../../src/utils/alert';
 import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { applyDamage, applyHealing, applyWildShapeDamage, endWildShape } from '../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
-import { takeRest } from '../../src/engine/rest';
-import { expireOverrides } from '../../src/engine/dmOverride';
 import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { Entity, ItemInstance } from '../../src/engine/types';
 import { itemRepo } from '../../src/content/itemRepo';
@@ -29,6 +27,7 @@ import { TabInventory } from '../../src/components/sheet/TabInventory';
 import { TabNotes }     from '../../src/components/sheet/TabNotes';
 import { TabSpells }    from '../../src/components/sheet/TabSpells';
 import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
+import { RestPreviewModal, buildRestMutation } from '../../src/components/sheet/RestPreviewModal';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
 import { exportCharacter, ExportFormat, ExportAction } from '../../src/io/exportShare';
 import { GlobalDiceRoller } from '../../src/components/GlobalDiceRoller';
@@ -372,23 +371,20 @@ export default function CharacterSheetScreen() {
     mutate(e => ({ ...e, notes }));
   }, [mutate]);
 
+  // Wild Shape duration is tracked in hours (wildShapeState.expiresAt), but
+  // the app has no granular hour-by-hour game clock anywhere else to tick it
+  // down against. A rest (short or long) always represents at least the
+  // beast form's remaining duration passing in practice, so reverting on any
+  // rest is a reasonable practical proxy for real duration expiry rather
+  // than building a full time-tracking system that doesn't exist elsewhere
+  // in the app. See docs/ROADMAP_1.0.md Phase 3.4 for the honest gap this
+  // simplifies. (This composition lives in buildRestMutation, shared with
+  // RestPreviewModal, so the preview and the real action can never drift.)
   const handleRest = useCallback((kind: 'short' | 'long') => {
-    mutate(e => {
-      let updated = takeRest(e, kind, rules);
-      // Long rest also expires 'end_of_session' DM overrides
-      if (kind === 'long') updated = expireOverrides(updated, 'end_of_session', rules);
-      // Wild Shape duration is tracked in hours (wildShapeState.expiresAt),
-      // but the app has no granular hour-by-hour game clock anywhere else to
-      // tick it down against. A rest (short or long) always represents at
-      // least the beast form's remaining duration passing in practice, so
-      // reverting on any rest is a reasonable practical proxy for real
-      // duration expiry rather than building a full time-tracking system
-      // that doesn't exist elsewhere in the app. See docs/ROADMAP_1.0.md
-      // Phase 3.4 for the honest gap this simplifies.
-      if (updated.wildShapeState?.active) updated = endWildShape(updated, rules);
-      return updated;
-    });
+    mutate(buildRestMutation(kind, rules));
   }, [mutate, rules]);
+
+  const [restPreview, setRestPreview] = useState<'short' | 'long' | null>(null);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -623,11 +619,11 @@ export default function CharacterSheetScreen() {
       {/* Persistent Rest Bar — wrapped so it stays above the Android nav bar */}
       <SafeBottomView>
         <View style={styles.restBar}>
-          <Pressable style={styles.restBtn} onPress={() => handleRest('short')}>
+          <Pressable style={styles.restBtn} onPress={() => setRestPreview('short')}>
             <Text style={styles.restBtnTxt}>☕  Short Rest</Text>
             <Text style={styles.restBtnSub}>{formatShortRest(shortRestMinutes(rules))}</Text>
           </Pressable>
-          <Pressable style={[styles.restBtn, styles.restBtnLong]} onPress={() => handleRest('long')}>
+          <Pressable style={[styles.restBtn, styles.restBtnLong]} onPress={() => setRestPreview('long')}>
             <Text style={styles.restBtnTxt}>🌙  Long Rest</Text>
             <Text style={styles.restBtnSub}>{longRestHours(rules)} hours</Text>
           </Pressable>
@@ -644,6 +640,15 @@ export default function CharacterSheetScreen() {
         rules={rules}
         onApply={updated => mutate(() => updated)}
         onClose={() => setFreeEditOpen(false)}
+      />
+
+      <RestPreviewModal
+        visible={restPreview !== null}
+        kind={restPreview ?? 'short'}
+        entity={entity}
+        rules={rules}
+        onConfirm={() => { handleRest(restPreview!); setRestPreview(null); }}
+        onCancel={() => setRestPreview(null)}
       />
 
       <ExportFormatSheet

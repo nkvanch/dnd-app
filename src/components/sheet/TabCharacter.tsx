@@ -13,6 +13,7 @@ import { hasActiveOverride } from '../../engine/dmOverride';
 import { dropConcentration } from '../../engine/combat';
 import { recomputeDerived, modifier } from '../../engine/pipeline';
 import { levelUp, levelUpClass } from '../../engine/leveling';
+import { simulate } from '../../engine/simulate';
 import { getClassLevels } from '../../engine/multiclass';
 import { spendHitDie, discardHitDie } from '../../engine/rest';
 import { rollD20, rollExpression } from '../../engine/dice';
@@ -28,6 +29,7 @@ import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
 import { CompanionSection } from './CompanionSection';
 import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard } from './TabActions';
+import { LevelUpPreviewModal } from './LevelUpPreviewModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // Class progressions are looked up from the content library — no hardcoded names.
@@ -303,6 +305,22 @@ function LevelUpSection({
   const homebrewClasses    = useHomebrewStore(s => s.classes);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
   const [addClassOpen, setAddClassOpen] = useState(false);
+  // Set once levelUp()/levelUpClass() has been simulated but not yet
+  // resolved — drives LevelUpPreviewModal. confirmPendingLevelUp() below
+  // applies `after` verbatim; it must NEVER re-invoke levelUp()/
+  // levelUpClass(), since CampaignRules.hpMode can be 'rolled'
+  // (Math.random() inside applyHP) — a second call would apply a
+  // DIFFERENT roll than the one just previewed.
+  const [pendingLevelUp, setPendingLevelUp] = useState<{
+    title: string; before: Entity; after: Entity;
+  } | null>(null);
+
+  function confirmPendingLevelUp() {
+    if (!pendingLevelUp) return;
+    onEntityUpdate(pendingLevelUp.after);
+    onLeveled(pendingLevelUp.after);
+    setPendingLevelUp(null);
+  }
 
   const allClasses = [...globalContentDB.classes, ...homebrewClasses] as CharClass[];
   const maxLevel    = rules.maxLevel ?? 20;
@@ -333,18 +351,27 @@ function LevelUpSection({
     const nextLevel = entity.identity.level + 1;
 
     async function doLevelUp() {
-      const updated = levelUp(entity, nextLevel, progression!, rules);
+      const { before, after } = simulate(entity, e => levelUp(e, nextLevel, progression!, rules), rules);
       // levelUp() can grant fixed cantrips/spells for this level — warm Tier 2
       // for anything new before the entity reaches the engine pipeline.
-      await spellRepo.ensureLoaded(spellIdsOnEntity(updated));
-      onEntityUpdate(updated);
-      onLeveled(updated);
+      await spellRepo.ensureLoaded(spellIdsOnEntity(after));
+      setPendingLevelUp({ title: `Level Up (→ ${nextLevel})`, before, after });
     }
 
     return (
-      <Pressable style={styles.levelUpBtn} onPress={doLevelUp}>
-        <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
-      </Pressable>
+      <>
+        <Pressable style={styles.levelUpBtn} onPress={doLevelUp}>
+          <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
+        </Pressable>
+        <LevelUpPreviewModal
+          visible={pendingLevelUp !== null}
+          title={pendingLevelUp?.title ?? ''}
+          before={pendingLevelUp?.before ?? null}
+          after={pendingLevelUp?.after ?? null}
+          onConfirm={confirmPendingLevelUp}
+          onCancel={() => setPendingLevelUp(null)}
+        />
+      </>
     );
   }
 
@@ -358,11 +385,13 @@ function LevelUpSection({
     const existing = classes.find(c => c.classId === targetClassId);
     const progression = resolveProgression(targetClassId, existing?.subclassId ?? null);
     if (!progression) return;
-    const updated = levelUpClass(entity, targetClassId, progression, rules, targetClass);
-    await spellRepo.ensureLoaded(spellIdsOnEntity(updated));
-    onEntityUpdate(updated);
-    onLeveled(updated);
-    setAddClassOpen(false);
+    const { before, after } = simulate(entity, e => levelUpClass(e, targetClassId, progression!, rules, targetClass), rules);
+    await spellRepo.ensureLoaded(spellIdsOnEntity(after));
+    const title = existing
+      ? `Level Up ${classLabel(targetClassId)} (→ ${existing.level + 1})`
+      : `Add ${targetClass?.name ?? classLabel(targetClassId)} (level 1)`;
+    setPendingLevelUp({ title, before, after });
+    setAddClassOpen(false); // close the "Add a Class" list modal now — preview takes over
   }
 
   return (
@@ -411,6 +440,15 @@ function LevelUpSection({
           </ScrollView>
         </View>
       </Modal>
+
+      <LevelUpPreviewModal
+        visible={pendingLevelUp !== null}
+        title={pendingLevelUp?.title ?? ''}
+        before={pendingLevelUp?.before ?? null}
+        after={pendingLevelUp?.after ?? null}
+        onConfirm={confirmPendingLevelUp}
+        onCancel={() => setPendingLevelUp(null)}
+      />
     </View>
   );
 }

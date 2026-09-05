@@ -16,6 +16,7 @@ import { applySpellChoiceToEntity } from '../../src/engine/leveling';
 import { Entity, Spell } from '../../src/engine/types';
 import { spellRepo } from '../../src/content/spellRepo';
 import type { SpellIndexEntry } from '../../src/content/spellRepo.types';
+import { Alert } from '../../src/utils/alert';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Starting spells known at level 1, by class. Prepared casters (Cleric/Druid)
@@ -36,6 +37,37 @@ function markVisited(entity: Entity): Entity {
   let n: Record<string, unknown> = {};
   try { n = JSON.parse(entity.notes || '{}'); } catch { /* ignore */ }
   return { ...entity, notes: JSON.stringify({ ...n, spellsVisited: true }) };
+}
+
+type CreationSpellPicks = { cantrips: string[]; spells: string[] };
+
+/**
+ * What the player themselves picked ON THIS SCREEN, tracked separately from
+ * entity.spellcasting.cantrips/known — those can already be non-empty before
+ * the player ever gets here (e.g. every Cleric Divine Domain grants 2
+ * "always prepared" domain spells via a known_spells Grant the moment a
+ * domain is picked — see src/content/subclasses/cleric.ts), and can equally
+ * hold spells/cantrips picked on THIS screen on a previous visit. Both end
+ * up in the same array with no marker distinguishing them, so this is
+ * persisted separately (alongside spellsVisited, same notes JSON blob) —
+ * the only way to correctly compute "what's externally granted" (exclude
+ * from the pool, don't seed the picker, but keep on confirm) vs. "what did
+ * the player pick here before" (pre-fill the picker on revisit) regardless
+ * of how many times this screen has been visited.
+ */
+function readCreationPicks(entity: Entity | null | undefined): CreationSpellPicks {
+  try {
+    const n = JSON.parse(entity?.notes || '{}') as { creationSpellPicks?: Partial<CreationSpellPicks> };
+    return { cantrips: n.creationSpellPicks?.cantrips ?? [], spells: n.creationSpellPicks?.spells ?? [] };
+  } catch {
+    return { cantrips: [], spells: [] };
+  }
+}
+
+function writeCreationPicks(entity: Entity, picks: CreationSpellPicks): Entity {
+  let n: Record<string, unknown> = {};
+  try { n = JSON.parse(entity.notes || '{}'); } catch { /* ignore */ }
+  return { ...entity, notes: JSON.stringify({ ...n, creationSpellPicks: picks }) };
 }
 
 // ── Spell row (select + expandable description) ───────────────────────────────
@@ -117,9 +149,34 @@ export default function SpellsScreen() {
     Object.fromEntries(spellChoices.map(c => [c.id, []]))
   );
 
-  // Content-based selections
-  const [pickedCantrips, setPickedCantrips] = useState<string[]>(draft?.spellcasting?.cantrips ?? []);
-  const [pickedSpells,   setPickedSpells]   = useState<string[]>(draft?.spellcasting?.known ?? []);
+  // Content-based selections. pickedCantrips/pickedSpells track ONLY what's
+  // picked on THIS screen, seeded from the persisted creationSpellPicks (see
+  // readCreationPicks) rather than draft.spellcasting directly — that can
+  // already be non-empty before the player ever gets here (e.g. every
+  // Cleric Divine Domain grants 2 "always prepared" domain spells via a
+  // known_spells Grant — see src/content/subclasses/cleric.ts — the moment
+  // a domain is picked) or hold picks from a PREVIOUS visit to this exact
+  // screen, and there's no marker distinguishing the two once merged into
+  // one array. Seeding picked state straight from spellcasting.known used
+  // to permanently break confirmation for prepared casters (Cleric/Druid,
+  // targets.spells === 0): pickedSpells.length would never again equal 0
+  // since there's no UI here that can ever clear it, so Confirm stayed
+  // disabled forever regardless of cantrips. alreadyGrantedCantrips/Spells
+  // is everything currently in spellcasting that ISN'T one of the player's
+  // own tracked picks — i.e. purely external grants — computed once via a
+  // lazy initializer so a re-render mid-screen doesn't re-read a
+  // since-changed draft.
+  const [initialPicks] = useState<CreationSpellPicks>(() => readCreationPicks(draft));
+  const [alreadyGrantedCantrips] = useState<string[]>(() => {
+    const own = new Set(initialPicks.cantrips);
+    return (draft?.spellcasting?.cantrips ?? []).filter(id => !own.has(id));
+  });
+  const [alreadyGrantedSpells] = useState<string[]>(() => {
+    const own = new Set(initialPicks.spells);
+    return (draft?.spellcasting?.known ?? []).filter(id => !own.has(id));
+  });
+  const [pickedCantrips, setPickedCantrips] = useState<string[]>(initialPicks.cantrips);
+  const [pickedSpells,   setPickedSpells]   = useState<string[]>(initialPicks.spells);
   const [search,         setSearch]         = useState('');
   const [schoolFilter,   setSchoolFilter]   = useState<string | null>(null);
   const [spellSort,      setSpellSort]      = useState<'name' | 'school'>('name');
@@ -205,18 +262,23 @@ export default function SpellsScreen() {
       });
     };
     const handleConfirmChoices = async () => {
-      const allChosen = Object.values(selections).flat();
-      await spellRepo.ensureLoaded(allChosen);
-      let updated = draft!;
-      for (const choice of spellChoices) {
-        const chosen = selections[choice.id] ?? [];
-        if (chosen.length === choice.definition.count) {
-          updated = applySpellChoiceToEntity(updated, choice.id, chosen, id => allSpells.find(s => s.id === id)?.level, rules);
+      try {
+        const allChosen = Object.values(selections).flat();
+        await spellRepo.ensureLoaded(allChosen);
+        let updated = draft!;
+        for (const choice of spellChoices) {
+          const chosen = selections[choice.id] ?? [];
+          if (chosen.length === choice.definition.count) {
+            updated = applySpellChoiceToEntity(updated, choice.id, chosen, id => allSpells.find(s => s.id === id)?.level, rules);
+          }
         }
+        updated = markVisited(updated);
+        setDraft(updated);
+        router.push('/creation/hub');
+      } catch (e) {
+        console.error('[spells] confirm failed:', e);
+        Alert.alert('Couldn\'t confirm spells', e instanceof Error ? e.message : 'Something went wrong loading spell data. Check the console for details.');
       }
-      updated = markVisited(updated);
-      setDraft(updated);
-      router.push('/creation/hub');
     };
     const canConfirm = spellChoices.every(c => (selections[c.id]?.length ?? 0) === c.definition.count);
 
@@ -270,8 +332,14 @@ export default function SpellsScreen() {
       ? (a.school.localeCompare(b.school) || a.name.localeCompare(b.name))
       : a.name.localeCompare(b.name)
   );
-  const cantripPool    = sortSpells(classSpells.filter(s => s.level === 0 && matchesSearch(s) && matchesSchool(s)));
-  const spellPool      = sortSpells(classSpells.filter(s => s.level === 1 && matchesSearch(s) && matchesSchool(s)));
+  // Excludes anything already granted before this screen (e.g. a Divine
+  // Domain's "always prepared" spells) — nothing to pick here, it's already
+  // on the sheet, and letting it show as pickable would let a player select
+  // it a second time for no effect while still eating into their pick count.
+  const alreadyGrantedCantripSet = new Set(alreadyGrantedCantrips);
+  const alreadyGrantedSpellSet   = new Set(alreadyGrantedSpells);
+  const cantripPool    = sortSpells(classSpells.filter(s => s.level === 0 && !alreadyGrantedCantripSet.has(s.id) && matchesSearch(s) && matchesSchool(s)));
+  const spellPool      = sortSpells(classSpells.filter(s => s.level === 1 && !alreadyGrantedSpellSet.has(s.id) && matchesSearch(s) && matchesSchool(s)));
 
   // Distinct schools present in this class's cantrip+level-1 pool, for the chips.
   const availableSchools = Array.from(new Set(
@@ -298,24 +366,39 @@ export default function SpellsScreen() {
   const canConfirm   = cantripsDone && spellsDone;
 
   const handleConfirm = async () => {
-    await spellRepo.ensureLoaded([...pickedCantrips, ...pickedSpells]);
-    let updated: Entity = draft!;
-    if (updated.spellcasting) {
-      updated = {
-        ...updated,
-        spellcasting: {
-          ...updated.spellcasting,
-          cantrips: pickedCantrips,
-          known:    pickedSpells,
-          // Known casters cast straight from `known`; mirror into prepared so the
-          // sheet shows them as castable for prepared-style classes too.
-          prepared: pickedSpells,
-        },
-      };
+    try {
+      await spellRepo.ensureLoaded([...pickedCantrips, ...pickedSpells]);
+      let updated: Entity = draft!;
+      if (updated.spellcasting) {
+        // Merge back in whatever was already granted before this screen
+        // (e.g. domain spells) — pickedCantrips/pickedSpells only ever held
+        // what's newly chosen here, so overwriting instead of merging would
+        // silently drop them.
+        const finalCantrips = [...new Set([...alreadyGrantedCantrips, ...pickedCantrips])];
+        const finalSpells   = [...new Set([...alreadyGrantedSpells,   ...pickedSpells])];
+        updated = {
+          ...updated,
+          spellcasting: {
+            ...updated.spellcasting,
+            cantrips: finalCantrips,
+            known:    finalSpells,
+            // Known casters cast straight from `known`; mirror into prepared so the
+            // sheet shows them as castable for prepared-style classes too.
+            prepared: finalSpells,
+          },
+        };
+      }
+      // Persist what THIS screen picked, separate from spellcasting.known/
+      // cantrips, so a later revisit can tell it apart from externally-
+      // granted spells (domain grants, etc.) again — see readCreationPicks.
+      updated = writeCreationPicks(updated, { cantrips: pickedCantrips, spells: pickedSpells });
+      updated = markVisited(updated);
+      setDraft(updated);
+      router.push('/creation/hub');
+    } catch (e) {
+      console.error('[spells] confirm failed:', e);
+      Alert.alert('Couldn\'t confirm spells', e instanceof Error ? e.message : 'Something went wrong loading spell data. Check the console for details.');
     }
-    updated = markVisited(updated);
-    setDraft(updated);
-    router.push('/creation/hub');
   };
 
   const nothingToPick = targets.cantrips === 0 && targets.spells === 0;

@@ -224,7 +224,11 @@ export default function RaceDetailScreen() {
     // their own resource grants, just called directly at race-selection
     // time instead of through the leveling system.
     for (const resource of race!.resources ?? []) {
-      updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);
+      // Explicit source (not inferred from classId) — at race-selection time
+      // entity.identity.classId may already be set if the player picked
+      // class before race, which would otherwise mistag this as class-owned
+      // and cause it to be wiped on a later class change.
+      updated = applyGrant(updated, { kind: 'resource', value: resource }, 0, undefined, { kind: 'race', id: race!.id });
     }
     // ...then the chosen subrace's features (e.g. Hill Dwarf WIS +1, Mountain Dwarf STR +2).
     if (chosenSubrace) {
@@ -232,7 +236,7 @@ export default function RaceDetailScreen() {
         updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, feature.level ?? 0);
       }
       for (const resource of chosenSubrace.resources ?? []) {
-        updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);
+        updated = applyGrant(updated, { kind: 'resource', value: resource }, 0, undefined, { kind: 'subrace', id: chosenSubrace.id });
       }
     }
     // ...and the chosen ancestry option's feature (e.g. Dragonborn's chosen

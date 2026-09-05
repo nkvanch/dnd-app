@@ -19,7 +19,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { DraftTrait, HomebrewSubclass, LevelEntry, Grant } from '../../src/engine/types';
+import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, asSubclassId } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
@@ -136,7 +136,7 @@ export default function SubclassBuilderScreen() {
       }
       entries.push({ level, hpDie, choices: [], grants });
     }
-    const subclass: HomebrewSubclass = { id: subclassId, name: name.trim(), classId, entries };
+    const subclass: HomebrewSubclass = { id: asSubclassId(subclassId), name: name.trim(), classId, entries };
     try {
       await saveItem('subclass', subclass);
       goBack();

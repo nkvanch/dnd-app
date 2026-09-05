@@ -16,6 +16,7 @@ import {
 } from '../leveling';
 import {
   Entity, Grant, ClassProgression, LevelEntry, ChoiceDefinition, CharClass,
+  asClassId,
 } from '../types';
 
 function entity(overrides: Partial<Entity> = {}): Entity {
@@ -52,6 +53,37 @@ describe('applyGrant', () => {
     expect(once.resources.custom).toEqual([{ id: 'ki', name: 'Ki Points', current: 2, maximum: 2, recharge: 'short_rest' }]);
     const twice = applyGrant(once, grant, 2);
     expect(twice.resources.custom).toHaveLength(1); // no duplicate
+  });
+
+  it('"resource" infers sourceKind: "class" from the classId param, same fallback the "feature" case uses', () => {
+    const e = entity();
+    const grant: Grant = { kind: 'resource', value: { resourceId: 'second_wind_pool', name: 'Second Wind', maximum: 1, recharge: 'short_rest' } };
+    const updated = applyGrant(e, grant, 1, 'fighter');
+    expect(updated.resources.custom[0]).toMatchObject({ sourceKind: 'class', sourceId: 'fighter' });
+  });
+
+  it('"resource" tags with an explicit source when given one, ignoring any inferred classId', () => {
+    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classId: 'fighter' } });
+    const grant: Grant = { kind: 'resource', value: { resourceId: 'relentless_endurance_pool', name: 'Relentless Endurance', maximum: 1, recharge: 'long_rest' } };
+    // entity.identity.classId is 'fighter' here (simulating class picked before race),
+    // but an explicit race source must win — this is the exact bug class this phase fixes.
+    const updated = applyGrant(e, grant, 0, undefined, { kind: 'race', id: 'half_orc' });
+    expect(updated.resources.custom[0]).toMatchObject({ sourceKind: 'race', sourceId: 'half_orc' });
+  });
+
+  it('"resource" leaves sourceKind undefined with no classId and no explicit source', () => {
+    const e = entity();
+    const grant: Grant = { kind: 'resource', value: { resourceId: 'mystery_pool', name: 'Mystery', maximum: 1, recharge: 'long_rest' } };
+    const updated = applyGrant(e, grant, 0);
+    expect(updated.resources.custom[0].sourceKind).toBeUndefined();
+  });
+
+  it('filtering resources.custom by sourceKind !== "class" (what clearClassData does) preserves racial resources and drops class ones', () => {
+    let e = entity();
+    e = applyGrant(e, { kind: 'resource', value: { resourceId: 'second_wind_pool', name: 'Second Wind', maximum: 1, recharge: 'short_rest' } }, 1, 'fighter');
+    e = applyGrant(e, { kind: 'resource', value: { resourceId: 'relentless_endurance_pool', name: 'Relentless Endurance', maximum: 1, recharge: 'long_rest' } }, 0, undefined, { kind: 'race', id: 'half_orc' });
+    const afterClassSwitch = e.resources.custom.filter(r => r.sourceKind !== 'class');
+    expect(afterClassSwitch.map(r => r.id)).toEqual(['relentless_endurance_pool']);
   });
 
   it('"resource_upgrade" raises an existing resource\'s maximum and current', () => {
@@ -366,7 +398,7 @@ describe('applySubclassToEntity', () => {
     const e = entity({
       identity: {
         ...makeEmptyEntity('e1').identity,
-        classes: [{ classId: 'fighter', subclassId: null, level: 3 }, { classId: 'wizard', subclassId: null, level: 10 }],
+        classes: [{ classId: asClassId('fighter'), subclassId: null, level: 3 }, { classId: asClassId('wizard'), subclassId: null, level: 10 }],
       },
       choices: [{ id: 'c1', definition: choiceDef, grantedAt: 3, resolved: false, selections: [] }],
     });
@@ -429,7 +461,7 @@ describe('levelUpClass — multiclass', () => {
   const fighterClass = { multiclassProficiencies: { armor: ['light', 'medium'], weapons: ['simple'] } } as unknown as CharClass;
 
   it('taking a brand-new class after character level 1 grants the REDUCED multiclass proficiency table, not the class\'s own level-1 grant', () => {
-    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: 'wizard', subclassId: null, level: 3 }], level: 3 } });
+    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('wizard'), subclassId: null, level: 3 }], level: 3 } });
     const updated = levelUpClass(e, 'fighter', fighterProgression(), DEFAULT_RULES, fighterClass);
     expect(updated.proficiencies.armor).toEqual(['light', 'medium']); // reduced table
     expect(updated.proficiencies.armor).not.toContain('heavy');       // NOT the full level-1 grant
@@ -437,7 +469,7 @@ describe('levelUpClass — multiclass', () => {
 
   it('a second class\'s own level 1 does not re-max HP (isVeryFirstLevel only true for the character\'s true first level)', () => {
     const e = entity({
-      identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: 'wizard', subclassId: null, level: 3 }], level: 3 },
+      identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('wizard'), subclassId: null, level: 3 }], level: 3 },
       resources: { ...makeEmptyEntity('e1').resources, hp: { current: 20, maximum: 20, temp: 0 }, hitDice: { die: 6, total: 3, remaining: 3 } },
     });
     const updated = levelUpClass(e, 'fighter', fighterProgression(), DEFAULT_RULES, fighterClass);
@@ -446,14 +478,14 @@ describe('levelUpClass — multiclass', () => {
   });
 
   it('adds a brand-new class at level 1 to identity.classes and syncs the legacy scalar mirror', () => {
-    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: 'wizard', subclassId: null, level: 3 }], level: 3 } });
+    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('wizard'), subclassId: null, level: 3 }], level: 3 } });
     const updated = levelUpClass(e, 'fighter', fighterProgression(), DEFAULT_RULES, fighterClass);
     expect(updated.identity.classes).toEqual(expect.arrayContaining([{ classId: 'fighter', subclassId: null, level: 1 }]));
     expect(updated.identity.level).toBe(4); // 3 (wizard) + 1 (new fighter level) — summed by syncLegacyIdentity
   });
 
   it('bumping an existing class advances only that class\'s level', () => {
-    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: 'fighter', subclassId: null, level: 1 }, { classId: 'wizard', subclassId: null, level: 1 }], level: 2 } });
+    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('fighter'), subclassId: null, level: 1 }, { classId: asClassId('wizard'), subclassId: null, level: 1 }], level: 2 } });
     const updated = levelUpClass(e, 'fighter', fighterProgression(), DEFAULT_RULES);
     expect(updated.identity.classes).toEqual([
       { classId: 'fighter', subclassId: null, level: 2 },
@@ -462,13 +494,13 @@ describe('levelUpClass — multiclass', () => {
   });
 
   it('is a no-op if the progression has no entry for the class\'s next level', () => {
-    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: 'fighter', subclassId: null, level: 2 }], level: 2 } });
+    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('fighter'), subclassId: null, level: 2 }], level: 2 } });
     const updated = levelUpClass(e, 'fighter', fighterProgression(), DEFAULT_RULES); // no level-3 entry
     expect(updated).toEqual(e);
   });
 
   it('does not let a second caster class\'s init_spellcasting steal the spell-save-DC ability from the first', () => {
-    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: 'wizard', subclassId: null, level: 1 }], level: 1 }, spellcasting: { ability: 'int', slots: {} as any, cantrips: [], known: [], prepared: [], concentrating: null } });
+    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('wizard'), subclassId: null, level: 1 }], level: 1 }, spellcasting: { ability: 'int', slots: {} as any, cantrips: [], known: [], prepared: [], concentrating: null } });
     // A second caster class also grants init_spellcasting with a different ability (e.g. Cleric/WIS)
     const clericProgression: ClassProgression = { classId: 'cleric', entries: [{ level: 1, hpDie: 8, grants: [{ kind: 'init_spellcasting', value: { ability: 'wis' } }], choices: [] }] };
     const updated = levelUpClass(e, 'cleric', clericProgression, DEFAULT_RULES);
@@ -484,7 +516,7 @@ describe('levelUpClass — multiclass', () => {
       classId: 'rogue',
       entries: [{ level: 3, hpDie: 8, grants: [{ kind: 'subclass_unlock', value: null }], choices: [] }],
     };
-    let e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: 'fighter', subclassId: null, level: 2 }, { classId: 'rogue', subclassId: null, level: 2 }], level: 4 } });
+    let e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('fighter'), subclassId: null, level: 2 }, { classId: asClassId('rogue'), subclassId: null, level: 2 }], level: 4 } });
     e = levelUpClass(e, 'fighter', progressionWithSubclass, DEFAULT_RULES);
     e = levelUpClass(e, 'rogue', rogueProgressionWithSubclass, DEFAULT_RULES);
     const subclassChoiceIds = e.choices.filter(c => c.definition.kind === 'subclass').map(c => c.id);
@@ -493,7 +525,7 @@ describe('levelUpClass — multiclass', () => {
 
   it('recomputes combined multiclass spell slots (non-pact) once a second class exists', () => {
     const e = entity({
-      identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: 'wizard', subclassId: null, level: 1 }], level: 1 },
+      identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('wizard'), subclassId: null, level: 1 }], level: 1 },
       spellcasting: { ability: 'int', slots: {} as any, cantrips: [], known: [], prepared: [], concentrating: null },
     });
     const clericProgression: ClassProgression = { classId: 'cleric', entries: [{ level: 1, hpDie: 8, grants: [], choices: [] }] };
@@ -508,7 +540,7 @@ describe('levelUpClass — multiclass', () => {
       entries: [{ level: 2, hpDie: 8, grants: [], choices: [] }],
     };
     const e = entity({
-      identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: 'warlock', subclassId: null, level: 1 }, { classId: 'wizard', subclassId: null, level: 1 }], level: 2 },
+      identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('warlock'), subclassId: null, level: 1 }, { classId: asClassId('wizard'), subclassId: null, level: 1 }], level: 2 },
       spellcasting: { ability: 'cha', slots: {} as any, pactSlots: {} as any, cantrips: [], known: [], prepared: [], concentrating: null },
     });
     const updated = levelUpClass(e, 'warlock', warlockProgression, DEFAULT_RULES);

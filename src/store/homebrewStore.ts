@@ -12,6 +12,7 @@
 import { create } from 'zustand';
 import {
   Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, Feat, ContentDB,
+  RulesetId, matchesRuleset,
 } from '../engine/types';
 import { MonsterTemplate } from '../content/monsters/types';
 import {
@@ -61,7 +62,7 @@ type HomebrewStore = {
   loadHomebrew: () => Promise<void>;
 
   /** Merge official + homebrew into a single ContentDB. */
-  getMergedContentDB: () => ContentDB;
+  getMergedContentDB: (activeRuleset?: RulesetId) => ContentDB;
 
   /** Save a new or updated homebrew item. */
   saveItem: (type: ContentCacheType, item: HomebrewContent) => Promise<void>;
@@ -133,7 +134,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     }
   },
 
-  getMergedContentDB: (): ContentDB => {
+  getMergedContentDB: (activeRuleset?: RulesetId): ContentDB => {
     const { races, subraces, classes, spells, backgrounds, features, items, feats } = get();
     const allRaces = [...globalContentDB.races, ...races];
     // Attach standalone subraces (parentId may point at an official OR a
@@ -151,9 +152,15 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         subraces: [...(race.subraces ?? []), ...attached.filter(s => !existingIds.has(s.id))],
       };
     });
+    // activeRuleset undefined (every call site today) means no filter is
+    // active — matchesRuleset(_, undefined) is always true, so this is a
+    // guaranteed no-op until Phase 6 actually passes a real ruleset here.
+    // Deliberately NOT applied to .spells/.items — those are repo-backed
+    // (spellRepo/itemRepo), not sourced from globalContentDB, and get their
+    // own ruleset filtering whenever Phase 6 needs it.
     return {
-      races:       racesWithStandaloneSubraces,
-      classes:     [...globalContentDB.classes,     ...classes],
+      races:       racesWithStandaloneSubraces.filter(r => matchesRuleset(r.rulesetId, activeRuleset)),
+      classes:     [...globalContentDB.classes,     ...classes].filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
       // Official spell content moved out of globalContentDB and into
       // spellRepo (SQLite-backed on native, still eager on web) — see
       // src/content/spellRepo.ts. Nothing currently reads ContentDB.spells
@@ -162,13 +169,13 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       // that need the full official+homebrew spell list use
       // spellRepo.getIndex() directly instead.
       spells:      spells,
-      backgrounds: [...globalContentDB.backgrounds, ...backgrounds],
-      conditions:  globalContentDB.conditions,
+      backgrounds: [...globalContentDB.backgrounds, ...backgrounds].filter(b => matchesRuleset(b.rulesetId, activeRuleset)),
+      conditions:  globalContentDB.conditions.filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
       // Same rationale as .spells above — official item content lives in
       // itemRepo now, not globalContentDB.
       items:       items,
       features:    [...globalContentDB.features,    ...features],
-      feats:       [...(globalContentDB.feats ?? []), ...feats],
+      feats:       [...(globalContentDB.feats ?? []), ...feats].filter(f => matchesRuleset(f.rulesetId, activeRuleset)),
     };
   },
 

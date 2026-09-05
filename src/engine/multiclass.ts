@@ -4,7 +4,7 @@
 // identity.classes directly, so the legacy single-class fallback logic (for
 // characters saved before this field existed, and for monster/companion/npc
 // entities that never populate it) lives in exactly one place.
-import { Entity, ClassLevelEntry, CharClass } from './types';
+import { Entity, ClassLevelEntry, CharClass, asClassId, asSubclassId } from './types';
 
 /**
  * Returns this entity's classes, oldest-first (index 0 = "primary"/first
@@ -19,9 +19,14 @@ export function getClassLevels(entity: Entity): ClassLevelEntry[] {
     return entity.identity.classes;
   }
   if (!entity.identity.classId) return [];
+  // identity.classId/subclassId are deliberately unbranded (see their doc
+  // comment in types.ts — reused as a companion-template id for
+  // monster/companion entities), so a cast is needed here to bridge into
+  // the branded ClassLevelEntry shape. No behavior change: this mirrors
+  // exactly what was already stored, cast, not converted.
   return [{
-    classId:    entity.identity.classId,
-    subclassId: entity.identity.subclassId,
+    classId:    asClassId(entity.identity.classId),
+    subclassId: entity.identity.subclassId ? asSubclassId(entity.identity.subclassId) : null,
     level:      entity.identity.level,
   }];
 }
@@ -113,8 +118,8 @@ export function migrateEntity(raw: Entity): Entity {
     identity: {
       ...raw.identity,
       classes: [{
-        classId:    raw.identity.classId,
-        subclassId: raw.identity.subclassId,
+        classId:    asClassId(raw.identity.classId),
+        subclassId: raw.identity.subclassId ? asSubclassId(raw.identity.subclassId) : null,
         level:      raw.identity.level,
       }],
     },

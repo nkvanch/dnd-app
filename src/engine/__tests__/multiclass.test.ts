@@ -9,13 +9,13 @@ import {
   getClassLevels, isMulticlassed, getClassEntry, hasClassId, totalLevelOf,
   syncLegacyIdentity, formatClassLabel, multiclassProficienciesFor, migrateEntity,
 } from '../multiclass';
-import { Entity, ClassLevelEntry, CharClass } from '../types';
+import { Entity, ClassLevelEntry, CharClass, asClassId, asSubclassId } from '../types';
 
 describe('getClassLevels', () => {
   it('returns identity.classes verbatim when present', () => {
     const classes: ClassLevelEntry[] = [
-      { classId: 'fighter', subclassId: 'champion', level: 3 },
-      { classId: 'wizard', subclassId: null, level: 2 },
+      { classId: asClassId('fighter'), subclassId: asSubclassId('champion'), level: 3 },
+      { classId: asClassId('wizard'), subclassId: null, level: 2 },
     ];
     const e: Entity = { ...makeEmptyEntity('e1'), identity: { ...makeEmptyEntity('e1').identity, classes } };
     expect(getClassLevels(e)).toBe(classes);
@@ -54,8 +54,8 @@ describe('isMulticlassed', () => {
   it('is true once a second class exists', () => {
     const e = makeEmptyEntity('e1');
     e.identity.classes = [
-      { classId: 'fighter', subclassId: null, level: 3 },
-      { classId: 'wizard', subclassId: null, level: 1 },
+      { classId: asClassId('fighter'), subclassId: null, level: 3 },
+      { classId: asClassId('wizard'), subclassId: null, level: 1 },
     ];
     expect(isMulticlassed(e)).toBe(true);
   });
@@ -68,8 +68,8 @@ describe('isMulticlassed', () => {
 describe('getClassEntry / hasClassId', () => {
   const e = makeEmptyEntity('e1');
   e.identity.classes = [
-    { classId: 'fighter', subclassId: 'champion', level: 3 },
-    { classId: 'wizard', subclassId: null, level: 2 },
+    { classId: asClassId('fighter'), subclassId: asSubclassId('champion'), level: 3 },
+    { classId: asClassId('wizard'), subclassId: null, level: 2 },
   ];
 
   it('finds an existing class entry by id', () => {
@@ -89,8 +89,8 @@ describe('getClassEntry / hasClassId', () => {
 describe('totalLevelOf', () => {
   it('sums levels across all classes', () => {
     expect(totalLevelOf([
-      { classId: 'fighter', subclassId: null, level: 3 },
-      { classId: 'wizard', subclassId: null, level: 2 },
+      { classId: asClassId('fighter'), subclassId: null, level: 3 },
+      { classId: asClassId('wizard'), subclassId: null, level: 2 },
     ])).toBe(5);
   });
 
@@ -103,8 +103,8 @@ describe('syncLegacyIdentity', () => {
   it('mirrors classes[0] into classId/subclassId and sums level into identity.level', () => {
     const e = makeEmptyEntity('e1');
     e.identity.classes = [
-      { classId: 'fighter', subclassId: 'champion', level: 3 },
-      { classId: 'wizard', subclassId: 'evocation', level: 2 },
+      { classId: asClassId('fighter'), subclassId: asSubclassId('champion'), level: 3 },
+      { classId: asClassId('wizard'), subclassId: asSubclassId('evocation'), level: 2 },
     ];
     const synced = syncLegacyIdentity(e);
     expect(synced.identity.classId).toBe('fighter');
@@ -139,8 +139,8 @@ describe('formatClassLabel', () => {
   it('formats a multiclassed character joined with " / "', () => {
     const e = makeEmptyEntity('e1');
     e.identity.classes = [
-      { classId: 'fighter', subclassId: null, level: 3 },
-      { classId: 'wizard', subclassId: null, level: 2 },
+      { classId: asClassId('fighter'), subclassId: null, level: 3 },
+      { classId: asClassId('wizard'), subclassId: null, level: 2 },
     ];
     expect(formatClassLabel(e, resolveName)).toBe('Fighter 3 / Wizard 2');
   });
@@ -175,7 +175,7 @@ describe('migrateEntity', () => {
 
   it('is idempotent — a no-op on an already-migrated entity', () => {
     const e = makeEmptyEntity('e1', 'character');
-    e.identity.classes = [{ classId: 'druid', subclassId: 'moon', level: 6 }];
+    e.identity.classes = [{ classId: asClassId('druid'), subclassId: asSubclassId('moon'), level: 6 }];
     expect(migrateEntity(e)).toBe(e);
   });
 

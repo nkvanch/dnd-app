@@ -6,7 +6,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { globalContentDB } from '../../src/content/classes/library';
-import { levelUp, stripResolvedAsiStats, applyGrant } from '../../src/engine/leveling';
+import { levelUp, stripResolvedAsiStats } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { getProgressionForClass } from '../../src/content/classes/progressions';
 import {
@@ -274,7 +274,11 @@ function clearClassData(entity: Entity, hitDie: number): Entity {
     choices:   stripped.choices.filter(c => c.grantedAt === 0),
     resources: {
       ...stripped.resources,
-      custom:  [],
+      // Only drop resources the PREVIOUS class granted — a racial resource
+      // (Dragonborn's Breath Weapon, Half-Orc's Relentless Endurance, etc.)
+      // has sourceKind !== 'class' (or undefined, for characters saved
+      // before this field existed) and survives a class change untouched.
+      custom:  stripped.resources.custom.filter(r => r.sourceKind !== 'class'),
       hp:      { current: 0, maximum: 0, temp: 0 },
       hitDice: { die: hitDie, total: 0, remaining: 0 },
     },
@@ -308,7 +312,6 @@ export default function ClassDetailScreen() {
   } | null>(null);
   const homebrewClasses = useHomebrewStore(s => s.classes);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
-  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
   const cls    = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === id);
   const detail = id ? CLASS_DETAIL[id] : null;
@@ -332,23 +335,6 @@ export default function ClassDetailScreen() {
     function doSelect() {
       // Strip old class data before applying new class (also resets HP & spellcasting)
       let updated = clearClassData(draft!, cls!.hitDie);
-
-      // clearClassData's resources.custom wipe has no way to tell a racial
-      // resource pool (Dragonborn's Breath Weapon, Half-Orc's Relentless
-      // Endurance, etc.) apart from a class one — CustomResource carries no
-      // source tag — so it drops both. Re-grant whatever the character's
-      // already-chosen race/subrace declares, exactly as race-detail.tsx did
-      // when the race was first selected, so picking a class afterward
-      // doesn't silently erase a racial limited-use ability.
-      const mergedRaces = getMergedContentDB().races;
-      const race = mergedRaces.find(r => r.id === updated.identity.raceId);
-      for (const resource of race?.resources ?? []) {
-        updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);
-      }
-      const subrace = race?.subraces?.find(s => s.id === updated.identity.subRaceId);
-      for (const resource of subrace?.resources ?? []) {
-        updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);
-      }
 
       // Clear visited flags so the equipment/spells screens re-show for the new class
       const notes = (() => {

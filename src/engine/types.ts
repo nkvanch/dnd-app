@@ -19,6 +19,81 @@
 
 // ── 1. Primitive aliases & shared enums ─────────────────────────────────────
 
+/**
+ * Compile-time-only nominal typing for content ids — `Brand<string,'X'>` is
+ * still a plain string at runtime (JSON/SQLite round-trips need no changes),
+ * it just stops TypeScript from accepting a SpellId where a RaceId is
+ * expected. Deliberately applied only at a few verified-unambiguous sites
+ * (see the branded types below) — most content ids stay plain `string`
+ * because they're either polymorphic (e.g. FeatureSource.refId holds a
+ * different content type's id depending on `kind`) or hand-authored as
+ * string literals across src/content/** in volumes that would make a full
+ * branding rollout a large mechanical change for no near-term payoff. See
+ * docs/NEW architecture/ (or the fundamental-changes migration plan) for
+ * the full reasoning.
+ */
+type Brand<K, T extends string> = K & { readonly __brand: T };
+
+export type RaceId       = Brand<string, 'RaceId'>;
+export type SubraceId    = Brand<string, 'SubraceId'>;
+export type ClassId      = Brand<string, 'ClassId'>;
+export type SubclassId   = Brand<string, 'SubclassId'>;
+export type BackgroundId = Brand<string, 'BackgroundId'>;
+export type FeatId       = Brand<string, 'FeatId'>;
+export type SpellId      = Brand<string, 'SpellId'>;
+export type ItemId       = Brand<string, 'ItemId'>;
+export type ConditionId  = Brand<string, 'ConditionId'>;
+export type MonsterId    = Brand<string, 'MonsterId'>;
+/** Not yet used — added now so the Phase 4 ContentHeader/rulesetId work doesn't need to reintroduce the Brand<> pattern. */
+export type RulesetId    = Brand<string, 'RulesetId'>;
+
+export const asRaceId       = (id: string): RaceId       => id as RaceId;
+export const asSubraceId    = (id: string): SubraceId    => id as SubraceId;
+export const asClassId      = (id: string): ClassId      => id as ClassId;
+export const asSubclassId   = (id: string): SubclassId   => id as SubclassId;
+export const asBackgroundId = (id: string): BackgroundId => id as BackgroundId;
+export const asFeatId       = (id: string): FeatId       => id as FeatId;
+export const asSpellId      = (id: string): SpellId      => id as SpellId;
+export const asItemId       = (id: string): ItemId       => id as ItemId;
+export const asConditionId  = (id: string): ConditionId  => id as ConditionId;
+export const asMonsterId    = (id: string): MonsterId    => id as MonsterId;
+export const asRulesetId    = (id: string): RulesetId    => id as RulesetId;
+
+/**
+ * Documented reference shape, NOT a structural base type — no content type
+ * `extends`/intersects this. Every content type (Race, CharClass, Spell,
+ * Item, Feat, Background, ClassProgression, MonsterTemplate) informally
+ * carries an `id`/`name`/`rulesetId?`/`srd?` shape close to this one, but
+ * `Condition` doesn't carry `srd`, and nothing in the app today needs to
+ * treat "any content type" polymorphically — restructuring every type to
+ * literally extend a shared base would touch every content file for no
+ * current consumer, the same mistake Phase 3 avoided for full id branding.
+ * Exists here purely so the intended common shape has one documented name.
+ */
+export type ContentHeader = {
+  id:         string;
+  name:       string;
+  /** Undefined = available under every ruleset (every piece of content authored before 5.5e, i.e. everything today). */
+  rulesetId?: RulesetId;
+  srd?:       boolean;
+};
+
+/**
+ * True if a piece of content (via its own optional `rulesetId`) should be
+ * visible under `activeRuleset`. Untagged content (`contentRulesetId`
+ * undefined) is shared across every ruleset — most content stays untagged
+ * indefinitely (5.5e reuses most 5e content unchanged, so only the pieces
+ * 5.5e actually revises need to be tagged). An untagged `activeRuleset`
+ * means no filter is active (matches everything) — the state of every
+ * character/screen until Phase 6 ships an actual ruleset picker.
+ */
+export function matchesRuleset(
+  contentRulesetId: RulesetId | undefined,
+  activeRuleset:    RulesetId | undefined,
+): boolean {
+  return contentRulesetId === undefined || activeRuleset === undefined || contentRulesetId === activeRuleset;
+}
+
 export type Ability = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 
 export type SkillName =
@@ -75,6 +150,12 @@ export type CampaignRules = {
 export type Subrace = {
   id:       string;
   name:     string;
+  // Not branded RaceId, despite being unambiguous in meaning — reverted
+  // after discovering it has the same volume problem as Race.id itself:
+  // every hand-authored subrace literal (~44 in src/content/races/index.ts
+  // alone) sets this inline, so branding would force an `as RaceId` cast
+  // onto each one for the same "no near-term payoff" reason Race.id etc.
+  // are excluded. See the Brand<> comment near the top of this file.
   parentId: string;    // id of the parent Race
   features: Feature[];
   /**
@@ -125,6 +206,8 @@ export type Subrace = {
   replacesBaseFeatureIds?: string[];
   /** SRD 5.1 legal status — same semantics as Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4. */
   srd?:     boolean;
+  /** Which ruleset this subrace belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
+  rulesetId?: RulesetId;
   /**
    * Raw builder state, same purpose as Race.homebrewDraft (see that field's
    * doc comment) — lets app/homebrew/subrace-builder.tsx reload a standalone
@@ -207,7 +290,14 @@ export type Race = {
     prompt: string;
     mode:
       | { kind: 'two_distinct_plus_one'; exclude?: Ability[] }
-      | { kind: 'two_one_or_three_one' };
+      /**
+       * restrictTo, added for Background.flexibleAsi (2024 backgrounds
+       * restrict the split to 3 background-relevant abilities, e.g.
+       * Acolyte's Wisdom/Intelligence/Charisma — unlike Variant Human/
+       * Half-Elf's unrestricted any-ability picker). Undefined = any
+       * ability, preserving every existing race's unrestricted behavior.
+       */
+      | { kind: 'two_one_or_three_one'; restrictTo?: Ability[] };
   };
   /** Same as Subrace.pendingChoices — see that field's doc comment. */
   pendingChoices?: ChoiceDefinition[];
@@ -249,6 +339,8 @@ export type Race = {
    * Step 1.4 for the full verification writeup.
    */
   srd?:      boolean;
+  /** Which ruleset this race belongs to. Undefined = available under every ruleset (every race authored before this field existed, including all official 5e content). See the ContentHeader comment near the top of this file. */
+  rulesetId?: RulesetId;
 };
 export type CharClass  = {
   id:          string;
@@ -327,6 +419,8 @@ export type CharClass  = {
    * a conservative, disclosed default rather than a guess.
    */
   multiclassProficiencies?: ProficiencyGrant;
+  /** Which ruleset this class belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
+  rulesetId?: RulesetId;
 };
 export type Background = {
   id: string;
@@ -345,8 +439,20 @@ export type Background = {
    * See docs/ROADMAP_1.0.md Phase 1 Step 1.4 for the full verification.
    */
   srd?: boolean;
+  /** Which ruleset this background belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
+  rulesetId?: RulesetId;
+  /**
+   * A player-directed ability score bonus, same shape as Race.flexibleAsi —
+   * the 2024 background-grants-ASI mechanic (species lost their flat ASI in
+   * that revision). Resolved the same way race-detail.tsx resolves
+   * Race.flexibleAsi: on the background-selection screen, compiled into one
+   * generated Feature's stat_modifier effects on confirm. See
+   * app/creation/background.tsx's flexAsi state and applyGrant call.
+   */
+  flexibleAsi?: Race['flexibleAsi'];
 };
-export type Condition  = { id: string; name: string; description: string; features: Feature[] };
+/** rulesetId undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
+export type Condition  = { id: string; name: string; description: string; features: Feature[]; rulesetId?: RulesetId };
 
 export type Item = {
   id:         string;
@@ -372,6 +478,8 @@ export type Item = {
    * official catalog entries never set this.
    */
   imageUri?:  string;
+  /** Which ruleset this item belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
+  rulesetId?: RulesetId;
 };
 
 /**
@@ -421,6 +529,8 @@ export type Feat = {
    * full verification writeup.
    */
   srd?: boolean;
+  /** Which ruleset this feat belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
+  rulesetId?: RulesetId;
 };
 
 export type ContentDB = {
@@ -438,14 +548,20 @@ export type ContentDB = {
 
 /** One class the character has taken. `level` is the level in THIS class only — not the character's total level. */
 export type ClassLevelEntry = {
-  classId:    string;
-  subclassId: string | null;
+  classId:    ClassId;
+  subclassId: SubclassId | null;
   level:      number;
 };
 
 export type Identity = {
   name:         string;
   level:        number;
+  // raceId/classId (and subRaceId/subclassId/backgroundId) stay plain `string`,
+  // not RaceId/ClassId — deliberately NOT branded (see Brand<> comment near the
+  // top of this file). companion.ts's createCompanion sets both raceId and
+  // classId to a CompanionTemplate id for kind:'monster' companions (see the
+  // `classes` field's doc comment just below), so these fields are polymorphic
+  // per Entity.kind, not safe to brand as a single content type.
   raceId:       string;
   subRaceId:    string | null;   // e.g. 'hill_dwarf', 'wood_elf' — null until player picks
   classId:      string;
@@ -590,6 +706,15 @@ export type CustomResource = {
   current:  number;
   maximum:  number;
   recharge: 'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
+  /** What granted this resource — lets clearClassData (app/creation/class-
+   * detail.tsx) tell a class-owned resource pool apart from a racial one and
+   * wipe only the former on class (re)selection. Optional so resources on
+   * already-serialized characters predating this field stay valid; treated
+   * as "not class-owned" (never auto-wiped) when absent. Reuses
+   * FeatureSource['kind'], plus 'subrace' since a resource can be granted by
+   * a subrace specifically (not just its parent race). */
+  sourceKind?: 'race' | 'subrace' | 'subclass' | 'class' | 'background' | 'feat';
+  sourceId?:   string;
 };
 
 /**
@@ -648,6 +773,10 @@ export type ChoiceState = {
   definition: ChoiceDefinition;
   grantedAt:  number;
   resolved:   boolean;
+  // selections stays plain string[], not branded — a selection's referent
+  // (a feat id, spell id, skill name, subclass id, ...) depends on
+  // `definition.kind`, so it's polymorphic the same way FeatureSource.refId
+  // is. See the Brand<> comment near the top of this file.
   selections: string[];
 };
 
@@ -715,6 +844,8 @@ export type Spell = {
    * Undefined = not yet audited; treated as NOT safe for public builds.
    */
   srd?:                     boolean;
+  /** Which ruleset this spell belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
+  rulesetId?:               RulesetId;
 };
 
 export type Currency     = { pp: number; gp: number; ep: number; sp: number; cp: number };
@@ -812,6 +943,12 @@ export type ConditionMonitor = {
 export type FeatureSource = {
   kind:  'race' | 'class' | 'subclass' | 'background' | 'feat'
        | 'item' | 'spell' | 'condition' | 'campaign';
+  // refId stays plain `string`, not branded — the concrete content type it
+  // references (RaceId/ClassId/SpellId/...) depends on the sibling `kind`
+  // field, so a single branded type here would be wrong for most `kind`
+  // values, and a union would force a `kind`-narrowing cast at every read
+  // site for no near-term payoff. See the Brand<> comment near the top of
+  // this file.
   refId: string;
 };
 
@@ -888,7 +1025,13 @@ export type Feature = {
   abilityEffects?: AbilityEffect[];
   /** Player-set: marks this feature as exploration-relevant for the Exploration view filter. */
   explorationTag?: boolean;
-  /** Player-set: starred on the Actions tab, surfaces in the Combat tab's FAVORITES section. */
+  /**
+   * LEGACY — superseded by Entity.favoriteActionIds (see its doc comment),
+   * which correctly covers spell-based and synthetic action cards this
+   * field never could. Kept read-only for backward compat with characters
+   * saved before that field existed; new favorite toggles no longer write
+   * here (see TabActions.tsx's toggleFavoriteTag()).
+   */
   favoriteTag?: boolean;
 };
 
@@ -1059,6 +1202,30 @@ export type Entity = {
    * See src/engine/actionCards.ts's generateAllActionCards().
    */
   actionCards?: ActionCard[];
+  /**
+   * Action-card ids (Feature.id, a spell id, or a synthetic card id like
+   * 'unarmed_strike') the player has starred on the Actions tab, surfaced
+   * in the Combat tab's FAVORITES section. Deliberately entity-level and
+   * keyed by ActionCard.featureId, NOT stored on the Feature that (maybe)
+   * backs the card — Feature.favoriteTag (below, now legacy/read-only for
+   * pre-existing saves) only works for cards backed by a real Feature
+   * object, which spell-based cards and synthetic cards like Unarmed
+   * Strike never have, so favoriting them silently no-op'd. Optional/
+   * defaults to [] so existing saved entities parse unchanged; a legacy
+   * true Feature.favoriteTag is still honored for backward compat (see
+   * TabActions.tsx's isFavoriteCard()) but new toggles only write here.
+   */
+  favoriteActionIds?: string[];
+  /**
+   * Which ruleset this character was created under. Undefined = the app's
+   * original/default ruleset (5e — every character created before this
+   * field existed, and every character created today, since 5.5e content
+   * doesn't exist yet). Top-level on Entity rather than nested in Identity
+   * because it governs which content pool the character draws from, more
+   * fundamental than identity fields like race/class. See the ContentHeader
+   * comment near the top of this file.
+   */
+  rulesetId?: RulesetId;
 };
 
 // ── 7. Leveling schemas ──────────────────────────────────────────────────────
@@ -1071,6 +1238,12 @@ export type LevelEntry = {
 };
 
 export type ClassProgression = {
+  // Not branded ClassId, despite being unambiguous in meaning — reverted
+  // after discovering the same volume problem as CharClass.id: every
+  // hand-authored class/subclass progression literal across
+  // src/content/classes/** and src/content/subclasses/** sets this inline
+  // (dozens of sites), so branding would force an `as ClassId` cast onto
+  // each one. See the Brand<> comment near the top of this file.
   classId: string;
   entries: LevelEntry[];
   /**
@@ -1089,6 +1262,8 @@ export type ClassProgression = {
    * See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
    */
   srd?: boolean;
+  /** Which ruleset this progression (class or subclass) belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
+  rulesetId?: RulesetId;
 };
 
 /**
@@ -1102,7 +1277,7 @@ export type ClassProgression = {
  * browsable at parity with official ones.
  */
 export type HomebrewSubclass = ClassProgression & {
-  id:   string;
+  id:   SubclassId;
   name: string;
 };
 
@@ -1288,6 +1463,12 @@ export type ResourceCost = {
  * Active effects fire when a player uses an ability (taps the action card).
  * These do NOT fire in recomputeDerived — that is the passive Effect system.
  * Phase 2 (option A): app shows dice expression, player announces it. No target selection.
+ *
+ * This variant's id fields (conditionId/resourceId/formId) are left plain
+ * `string`, not branded, for now — out of scope for the initial branded-id
+ * pass (see the Brand<> comment near the top of this file); resourceId in
+ * particular is often a runtime/grant-authored id rather than a global
+ * content-registry id, so it doesn't map cleanly onto one branded type.
  */
 export type AbilityEffect =
   | { type: 'damage';           dice: string; damageType: string; saveOnSuccess?: 'half' | 'none' }

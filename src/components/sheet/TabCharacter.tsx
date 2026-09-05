@@ -7,7 +7,7 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Modal, TextInput,
 } from 'react-native';
-import { Entity, CampaignRules, CharClass, ActionCard } from '../../engine/types';
+import { Entity, CampaignRules, CharClass, ActionCard, asClassId } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
 import { dropConcentration } from '../../engine/combat';
@@ -352,7 +352,7 @@ function LevelUpSection({
   //    "+ Add a Class" to take a brand-new one. ──
   const classes = getClassLevels(entity);
   const takenIds = new Set(classes.map(c => c.classId));
-  const availableToAdd = allClasses.filter(c => !takenIds.has(c.id));
+  const availableToAdd = allClasses.filter(c => !takenIds.has(asClassId(c.id)));
 
   async function doLevelUpClass(targetClassId: string, targetClass?: CharClass) {
     const existing = classes.find(c => c.classId === targetClassId);

@@ -1,6 +1,6 @@
 import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
-         KnownSpellsGrant } from './types';
+         KnownSpellsGrant, CustomResource, asSubclassId, asClassId } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { getSpellSlotsForClassLevel, multiclassCasterLevel, MULTICLASS_SPELLCASTER_SLOTS,
          pactSlotTableFor, slotsForLevel } from '../content/classes/spellSlotTables';
@@ -15,7 +15,14 @@ export function rollDie(sides: number): number {
 
 // ── applyGrant ────────────────────────────────────────────────────────────────
 
-export function applyGrant(entity: Entity, grant: Grant, atLevel: number, classId?: string): Entity {
+export function applyGrant(
+  entity: Entity, grant: Grant, atLevel: number, classId?: string,
+  /** Explicit resource source — only needed by callers granting a resource
+   * OUTSIDE class-progression leveling (race/subrace resource grants), where
+   * entity.identity.classId can't be trusted to reflect the class actually
+   * being applied. See the "resource" case below. */
+  source?: { kind: NonNullable<CustomResource['sourceKind']>; id?: string },
+): Entity {
   switch (grant.kind) {
 
     case "feature": {
@@ -70,6 +77,14 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number, classI
       const r = grant.value as ResourceGrant;
       // Don't add duplicates
       if (entity.resources.custom.some(c => c.id === r.resourceId)) return entity;
+      // No explicit source: infer 'class' from classId/entity.identity.classId,
+      // same fallback the "feature" case above already uses. Safe for every
+      // in-file call site (all run within class-progression leveling), but
+      // NOT safe for a caller granting a race/subrace resource — those must
+      // pass an explicit `source` (see class-detail.tsx's race/subrace
+      // re-grant calls), since entity.identity.classId can be stale there.
+      const inferredClassId = classId ?? entity.identity.classId ?? undefined;
+      const resolvedSource = source ?? (inferredClassId ? { kind: 'class' as const, id: inferredClassId } : undefined);
       return {
         ...entity,
         resources: {
@@ -77,7 +92,9 @@ export function applyGrant(entity: Entity, grant: Grant, atLevel: number, classI
           custom: [...entity.resources.custom, {
             id: r.resourceId, name: r.name,
             current: r.maximum, maximum: r.maximum,
-            recharge: r.recharge
+            recharge: r.recharge,
+            sourceKind: resolvedSource?.kind,
+            sourceId:   resolvedSource?.id,
           }]
         }
       };
@@ -657,7 +674,7 @@ export function applySubclassToEntity(
         ...entity,
         identity: {
           ...entity.identity,
-          classes: classes.map(c => c.classId === classId ? { ...c, subclassId } : c),
+          classes: classes.map(c => c.classId === classId ? { ...c, subclassId: asSubclassId(subclassId) } : c),
         },
       }
     : {
@@ -861,7 +878,7 @@ export function levelUpClass(
   }
 
   const nextClasses = isNewClass
-    ? [...classes, { classId: targetClassId, subclassId: null, level: 1 }]
+    ? [...classes, { classId: asClassId(targetClassId), subclassId: null, level: 1 }]
     : classes.map(c => c.classId === targetClassId ? { ...c, level: newClassLevel } : c);
   updated = { ...updated, identity: { ...updated.identity, classes: nextClasses } };
   updated = syncLegacyIdentity(updated);

@@ -5,7 +5,7 @@
 // dedicated coverage rather than relying on manual device testing.
 import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import { takeRest, spendHitDie, discardHitDie } from '../rest';
-import { Entity, SpellSlots, CampaignRules } from '../types';
+import { Entity, SpellSlots, CampaignRules, asClassId } from '../types';
 
 function emptySlots(overrides: Partial<Record<keyof SpellSlots, { total: number; used: number }>> = {}): SpellSlots {
   const tiers = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
@@ -92,8 +92,8 @@ describe('short rest — spell slots', () => {
       identity: {
         ...makeEmptyEntity('e1').identity,
         classes: [
-          { classId: 'warlock', subclassId: null, level: 2 },
-          { classId: 'wizard', subclassId: null, level: 2 },
+          { classId: asClassId('warlock'), subclassId: null, level: 2 },
+          { classId: asClassId('wizard'), subclassId: null, level: 2 },
         ],
       },
       spellcasting: {

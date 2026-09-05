@@ -14,7 +14,7 @@ import {
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ability, DraftTrait, Feat } from '../../src/engine/types';
+import { Ability, DraftTrait, Entity, Feat } from '../../src/engine/types';
 import { validateFeat } from '../../src/engine/homebrewValidator';
 import { Alert } from '../../src/utils/alert';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
@@ -22,6 +22,11 @@ import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
 import { toId } from '../../src/content/traitCompiler';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -71,6 +76,8 @@ export default function FeatBuilderScreen() {
   >([]);
 
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: hydrate once when the existing feat first resolves.
   useEffect(() => {
@@ -125,6 +132,28 @@ export default function FeatBuilderScreen() {
         : undefined,
       skillChoice: skillPicks.length > 0 ? { picks: skillPicks } : undefined,
     };
+  }
+
+  // Read-only test on a disposable level-1 scratch entity — no save, no
+  // real character touched anywhere. Uses applyGrant() directly (not
+  // applyFeatToEntity(), whose choice-resolution half has no meaning for a
+  // scratch entity with no pending choices) — a bare feature grant is the
+  // correct, simpler primitive for "what does this do".
+  function runTest() {
+    const feat = buildFeat();
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => applyGrant(e, { kind: 'feature', value: feat.feature }, 0), DEFAULT_RULES);
+    const rows = buildFeatSummaryRows(before, after);
+    // abilityChoice/skillChoice effects are synthesized by AsiFeatPicker's
+    // own local featureToApply() only once a player picks a specific
+    // ability/skill — there's no single answer to preview generically for
+    // an unresolved choice, so disclose the gap rather than guess.
+    if (feat.abilityChoice || feat.skillChoice) {
+      rows.push({ label: "This feat also lets the player choose an ability/skill — the test above doesn't include that choice's effects." });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
   }
 
   async function handleSave() {
@@ -278,6 +307,9 @@ export default function FeatBuilderScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, (!name.trim() || !description.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || !description.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Feat'}</Text>
           </Pressable>
@@ -291,6 +323,13 @@ export default function FeatBuilderScreen() {
         onDone={() => setTraitOpen(false)}
         onDelete={() => { setTrait(newDraftTrait('Effect')); setTraitOpen(false); }}
         excludeKinds={['resource_ability', 'spell_grant']}
+      />
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Feat'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
       />
     </KeyboardAvoidingView>
   );
@@ -336,8 +375,10 @@ const styles = StyleSheet.create({
   removeBtnTxt: { color: Colors.red, fontSize: FontSize.sm },
   inlineAddBtn: { alignSelf: 'flex-start', paddingVertical: Spacing.xs },
   inlineAddTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
-  footer:    { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:    { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:   { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt:  { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:   { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

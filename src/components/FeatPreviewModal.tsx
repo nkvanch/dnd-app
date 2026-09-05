@@ -10,21 +10,10 @@
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, Feat, Ability, SkillName, DerivedStats, DERIVED_NUMERIC_KEYS } from '../engine/types';
 import { applyStatModifiers, collectAllEffects } from '../engine/pipeline';
+import { DERIVED_LABELS } from './sheet/derivedStatLabels';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
-
-const DERIVED_LABELS: Partial<Record<keyof DerivedStats, string>> = {
-  ac: 'AC',
-  initiative: 'Initiative',
-  speed: 'Speed',
-  passivePerception: 'Passive Perception',
-  passiveInvestigation: 'Passive Investigation',
-  passiveInsight: 'Passive Insight',
-  spellSaveDC: 'Spell Save DC',
-  spellAttackBonus: 'Spell Attack Bonus',
-  kiSaveDC: 'Ki Save DC',
-};
 
 const SKILL_LABELS: Record<SkillName, string> = {
   athletics: 'Athletics', acrobatics: 'Acrobatics', sleight_of_hand: 'Sleight of Hand',

@@ -8,6 +8,7 @@
 // the actual shape a feat commit produces.
 import { buildFeatSummaryRows } from '../FeatPreviewModal';
 import { applyFeatToEntity } from '../../engine/leveling';
+import { recomputeDerived } from '../../engine/pipeline';
 import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import { Entity, Feature } from '../../engine/types';
 
@@ -20,7 +21,18 @@ function feature(id: string, effects: Feature['effects'] = []): Feature {
 
 function baseEntity(): Entity {
   const e = makeEmptyEntity('feat-preview-test');
-  return { ...e, choices: [{ id: 'c1', definition: { kind: 'asi_or_feat', prompt: '' } as any, grantedAt: 4, resolved: false, selections: [] }] };
+  // recomputeDerived first — makeEmptyEntity's `derived` is a placeholder
+  // stub (e.g. proficiencyBonus: 2 regardless of level), not a real
+  // computed value; diffing against it directly produces spurious rows
+  // for any DERIVED_NUMERIC_KEYS field the stub happens to guess wrong,
+  // independent of anything the feat itself does. identity.level: 1 is
+  // also set explicitly — a fresh empty entity defaults to level 0
+  // (a "draft" sentinel), not a real level a feat gets taken at.
+  const withLevel: Entity = { ...e, identity: { ...e.identity, level: 1 } };
+  return {
+    ...recomputeDerived(withLevel, DEFAULT_RULES),
+    choices: [{ id: 'c1', definition: { kind: 'asi_or_feat', prompt: '' } as any, grantedAt: 4, resolved: false, selections: [] }],
+  };
 }
 
 describe('buildFeatSummaryRows', () => {

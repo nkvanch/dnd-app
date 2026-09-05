@@ -6,19 +6,8 @@
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, DerivedStats, DERIVED_NUMERIC_KEYS } from '../../engine/types';
 import { collectAllEffects } from '../../engine/pipeline';
+import { DERIVED_LABELS } from './derivedStatLabels';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
-
-const DERIVED_LABELS: Partial<Record<keyof DerivedStats, string>> = {
-  ac: 'AC',
-  initiative: 'Initiative',
-  speed: 'Speed',
-  passivePerception: 'Passive Perception',
-  passiveInvestigation: 'Passive Investigation',
-  passiveInsight: 'Passive Insight',
-  spellSaveDC: 'Spell Save DC',
-  spellAttackBonus: 'Spell Attack Bonus',
-  kiSaveDC: 'Ki Save DC',
-};
 
 export type Row = { label: string; note?: string };
 

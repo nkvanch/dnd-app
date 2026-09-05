@@ -62,27 +62,49 @@ export function applyActionCardUse(entity: Entity, card: ActionCard, rules: Camp
   return recomputeDerived(updated, rules);
 }
 
-/** Toggles a feature's Actions-tab favorite star (surfaces on Combat tab's
- * FAVORITES section when on). Looks in equipped-item features too, same
- * dual-source lookup applyActionCardUse uses, since a weapon/item's attack
- * card can be favorited just like a class feature's. */
+/**
+ * True if an action card is favorited — checks Entity.favoriteActionIds
+ * first (the primary mechanism, works for ANY card: feature-backed,
+ * weapon-attack, spell-based, or synthetic like Unarmed Strike), falling
+ * back to a legacy true Feature.favoriteTag for characters saved before
+ * favoriteActionIds existed (that field only ever got set on Feature-backed
+ * cards, since spell/synthetic cards had no way to be favorited before this
+ * fix — see favoriteActionIds' doc comment in types.ts).
+ */
+export function isFavoriteCard(entity: Entity, featureId: string): boolean {
+  if ((entity.favoriteActionIds ?? []).includes(featureId)) return true;
+  const f = entity.features.find(x => x.id === featureId)
+    ?? entity.inventory.equipped.flatMap(inst => inst.features).find(x => x.id === featureId);
+  return f?.favoriteTag === true;
+}
+
+/**
+ * Toggles an Actions-tab favorite star (surfaces on Combat tab's FAVORITES
+ * section when on). Writes to Entity.favoriteActionIds, NOT the underlying
+ * Feature — that only worked for feature-backed cards, silently no-op'ing
+ * for spell-based cards (ActionCard.featureId is a spell id, no Feature
+ * with that id exists) and synthetic cards like Unarmed Strike (no backing
+ * Feature at all). Toggling off also clears a legacy Feature.favoriteTag if
+ * present, so switching off a pre-migration favorite actually turns it off
+ * rather than isFavoriteCard's fallback keeping it lit.
+ */
 export function toggleFavoriteTag(entity: Entity, featureId: string): Entity {
-  if (entity.features.some(f => f.id === featureId)) {
+  const current = entity.favoriteActionIds ?? [];
+  if (isFavoriteCard(entity, featureId)) {
     return {
       ...entity,
-      features: entity.features.map(f => f.id === featureId ? { ...f, favoriteTag: !f.favoriteTag } : f),
+      favoriteActionIds: current.filter(id => id !== featureId),
+      features: entity.features.map(f => f.id === featureId ? { ...f, favoriteTag: false } : f),
+      inventory: {
+        ...entity.inventory,
+        equipped: entity.inventory.equipped.map(inst => ({
+          ...inst,
+          features: inst.features.map(f => f.id === featureId ? { ...f, favoriteTag: false } : f),
+        })),
+      },
     };
   }
-  return {
-    ...entity,
-    inventory: {
-      ...entity.inventory,
-      equipped: entity.inventory.equipped.map(inst => ({
-        ...inst,
-        features: inst.features.map(f => f.id === featureId ? { ...f, favoriteTag: !f.favoriteTag } : f),
-      })),
-    },
-  };
+  return { ...entity, favoriteActionIds: [...current, featureId] };
 }
 
 const CARD_COLORS: Record<ActionCard['color'], string> = {
@@ -291,6 +313,9 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
   }, [entity, rules, onEntityUpdate]);
 
   const favoriteIds = new Set([
+    ...(entity.favoriteActionIds ?? []),
+    // Legacy fallback for characters saved before favoriteActionIds existed
+    // — see isFavoriteCard's doc comment.
     ...entity.features.filter(f => f.favoriteTag).map(f => f.id),
     ...entity.inventory.equipped.flatMap(inst => inst.features).filter(f => f.favoriteTag).map(f => f.id),
   ]);

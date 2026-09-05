@@ -27,7 +27,7 @@ import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
 import { CompanionSection } from './CompanionSection';
-import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag } from './TabActions';
+import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard } from './TabActions';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // Class progressions are looked up from the content library — no hardcoded names.
@@ -789,12 +789,11 @@ export function TabCharacter({
   const { identity, resources, derived, conditions, spellcasting } = entity;
 
   // Favorited Actions-tab cards, surfaced here too — starred via the same
-  // ☆/★ toggle on the Actions tab (favoriteTag on the underlying Feature).
-  const favoriteCards = (entity.actionCards ?? []).filter(c => {
-    const f = entity.features.find(x => x.id === c.featureId)
-      ?? entity.inventory.equipped.flatMap(inst => inst.features).find(x => x.id === c.featureId);
-    return f?.favoriteTag === true;
-  });
+  // ☆/★ toggle on the Actions tab (Entity.favoriteActionIds — see
+  // isFavoriteCard's doc comment in TabActions.tsx for why this isn't just
+  // a Feature.favoriteTag lookup: spell-based and synthetic cards like
+  // Unarmed Strike have no backing Feature to store a flag on).
+  const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c.featureId));
   function handleUseFavorite(card: ActionCard) {
     if (card.resourceCost) onEntityUpdate(applyActionCardUse(entity, card, rules));
     setActiveFavCard(card);

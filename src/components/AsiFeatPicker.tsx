@@ -12,6 +12,7 @@ import { asiMode as getAsiMode } from '../engine/houseRules';
 import { ALL_FEATS } from '../content/feats/index';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { Entity, ChoiceState, CampaignRules, Ability, SkillName, Feat } from '../engine/types';
+import { FeatPreviewModal } from './FeatPreviewModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 const ABILITIES: { key: Ability; label: string }[] = [
@@ -79,6 +80,9 @@ export function AsiFeatPicker({
   // 'both' mode: after the ASI is applied we stash the updated entity here and
   // switch to the feat step; the feat is then applied on top of it.
   const [bothEntity, setBothEntity] = useState<Entity | null>(null);
+  // Set by commitFeat() once a feat's effects have been computed but not
+  // yet resolved — drives the FeatPreviewModal. See confirmPendingFeat().
+  const [pendingFeat, setPendingFeat] = useState<{ before: Entity; after: Entity; feat: Feat } | null>(null);
 
   const maxScore = rules.maxAbilityScore ?? Infinity;
   // When the table rule is feat-only (but not the creation featOnly prop),
@@ -184,11 +188,15 @@ export function AsiFeatPicker({
       setFeatId(id);
       return;
     }
+    // originalEntity is the true "before" for the preview — captured ahead of
+    // the Resilient-style save-proficiency mutation below, so that mutation
+    // shows up as a changed row instead of being silently baked into "before".
+    const originalEntity = bothEntity ?? entity;
     // Resilient-style feats: the chosen ability also grants proficiency in that
     // ability's saving throws. Saving-throw proficiency is read directly from
     // entity.proficiencies.savingThrows (no effect path), so add it here before
     // the feat's feature and ability bonus are applied.
-    let baseEntity = bothEntity ?? entity;
+    let baseEntity = originalEntity;
     if (feat.abilityChoice?.grantsSaveProficiency && featAbility &&
         !baseEntity.proficiencies.savingThrows.includes(featAbility)) {
       baseEntity = {
@@ -200,12 +208,22 @@ export function AsiFeatPicker({
       };
     }
     const updated = applyFeatToEntity(baseEntity, choice.id, choice.grantedAt, featureToApply(feat), feat.id, rules);
+    setOverridePrompt(null);
+    setPendingFeat({ before: originalEntity, after: updated, feat });
+  }
+
+  // Confirming the preview is the only path that actually resolves the
+  // choice — commitFeat() above only computes and previews it. Cancelling
+  // the preview just clears pendingFeat, leaving the picker exactly as it
+  // was (feat still selected, choices still visible) rather than resetting.
+  function confirmPendingFeat() {
+    if (!pendingFeat) return;
     setMode('+2'); setFirst(null); setSecond(null); setFeatId(null); setSearch('');
     setFeatAbility(null);
     setFeatSkills({});
-    setOverridePrompt(null);
     setBothEntity(null);
-    onResolved(updated);
+    onResolved(pendingFeat.after);
+    setPendingFeat(null);
   }
 
   // Tapping a feat row: if its prerequisite is unmet, raise the "get anyway"
@@ -540,6 +558,15 @@ export function AsiFeatPicker({
           </View>
         </View>
       </Modal>
+
+      <FeatPreviewModal
+        visible={pendingFeat !== null}
+        before={pendingFeat?.before ?? null}
+        after={pendingFeat?.after ?? null}
+        feat={pendingFeat?.feat ?? null}
+        onConfirm={confirmPendingFeat}
+        onCancel={() => setPendingFeat(null)}
+      />
     </ScrollView>
   );
 }

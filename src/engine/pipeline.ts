@@ -12,7 +12,7 @@
 
 import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
-  Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus,
+  Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus, AuditSourceKind,
 } from './types';
 import { resolveEffectsForTarget, resolveBinary } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
@@ -25,6 +25,52 @@ import { getClassEntry } from './multiclass';
 
 /** Standard 5e ability score → modifier formula. */
 export const modifier = (score: number): number => Math.floor((score - 10) / 2);
+
+/** Standard 5e proficiency bonus formula. Shared with audit.ts so the two can't drift. */
+export const proficiencyBonus = (level: number): number => Math.ceil(1 + level / 4);
+
+/** The "8" every 5e save DC starts from (spell save, ki save, ability-based DC). */
+export const AC_DC_BASE = 8;
+
+/** Standard 5e DC formula: 8 + proficiency + ability modifier. */
+export const abilityDC = (prof: number, mod: number): number => AC_DC_BASE + prof + mod;
+
+/** One base_ac_formula effect's resolved value, with enough source identity
+ * for audit.ts to label it (recomputeDerived only needs .total). */
+export type AcFormulaCandidate = {
+  label: string; kind: AuditSourceKind; id: string;
+  base: number; abilities: Ability[]; total: number;
+};
+
+/**
+ * Picks the winning base_ac_formula effect (Unarmored Defense, Mage Armor,
+ * etc.) — 5e rule: you use whichever formula gives the higher AC, formulas
+ * never stack with each other. Shared by recomputeDerived (armor fallback
+ * chain) and audit.ts's AC breakdown so they can never compute a different
+ * winner. Returns null when no base_ac_formula effect is active.
+ */
+export function selectBestAcFormula(
+  allEffects:     ActiveEffect[],
+  effectiveStats: Entity['stats'],
+): AcFormulaCandidate | null {
+  const formulaEffects = allEffects.filter(ae => ae.effect.type === 'base_ac_formula');
+  if (formulaEffects.length === 0) return null;
+  const candidates = formulaEffects.map((ae): AcFormulaCandidate => {
+    const baseValue = ae.effect.value as number;
+    const abilities = (ae.effect.formulaAbilities ?? []) as Ability[];
+    const abilityBonus = abilities.reduce((sum, ab) => {
+      const rawMod = modifier(effectiveStats[ab]);
+      // formulaAbilityCap: e.g. { dex: 2 } for medium armor (PHB p.144)
+      const cap = ae.effect.formulaAbilityCap?.[ab];
+      return sum + (cap !== undefined ? Math.min(rawMod, cap) : rawMod);
+    }, 0);
+    return {
+      label: ae.sourceName, kind: ae.sourceKind ?? 'base', id: ae.sourceId,
+      base: baseValue, abilities, total: baseValue + abilityBonus,
+    };
+  });
+  return candidates.reduce((a, b) => (b.total > a.total ? b : a));
+}
 
 /**
  * Applies all stat_modifier passive effects that target an ability score
@@ -79,7 +125,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
 
   const allEffects    = collectAllEffects(entity);
   let effectiveStats = applyStatModifiers(entity.stats, allEffects);
-  const profBonus     = Math.ceil(1 + entity.identity.level / 4);
+  const profBonus     = proficiencyBonus(entity.identity.level);
 
   // ── Wild Shape: physical stats (STR/DEX/CON) come from the beast form;
   //    mental scores (INT/WIS/CHA) stay the player's own, per the book rule
@@ -186,21 +232,11 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   //    formulaAbilities adds modifier(stat) for each listed ability.
   // 2. entity.resources.ac  (set when armor is equipped — 0 = no armor)
   // 3. Fallback: 10 + DEX modifier
-  const formulaEffects   = allEffects.filter(ae => ae.effect.type === 'base_ac_formula');
+  const acFormula        = beastForm ? null : selectBestAcFormula(allEffects, effectiveStats);
   const calculatedBaseAc = beastForm
     ? beastForm.ac
-    : formulaEffects.length > 0
-      ? Math.max(...formulaEffects.map(ae => {
-          const baseValue    = ae.effect.value as number;
-          const abilityBonus = (ae.effect.formulaAbilities ?? [])
-            .reduce((sum, ab) => {
-              const rawMod = modifier(effectiveStats[ab]);
-              // formulaAbilityCap: e.g. { dex: 2 } for medium armor (PHB p.144)
-              const cap    = ae.effect.formulaAbilityCap?.[ab];
-              return sum + (cap !== undefined ? Math.min(rawMod, cap) : rawMod);
-            }, 0);
-          return baseValue + abilityBonus;
-        }))
+    : acFormula
+      ? acFormula.total
       : entity.resources.ac > 0
         ? entity.resources.ac
         : 10 + modifier(effectiveStats.dex);
@@ -286,7 +322,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     attackBonuses:    computeWeaponAttackBonuses(entity, effectiveStats, profBonus),
     advantageStates,
     spellSaveDC:  entity.spellcasting
-      ? 8 + profBonus + modifier(effectiveStats[entity.spellcasting.ability])
+      ? abilityDC(profBonus, modifier(effectiveStats[entity.spellcasting.ability]))
           // Accept either target spelling so feature authors aren't tripped by
           // the snake_case/camelCase split (DM overrides use 'spellSaveDC').
           + (resolveEffectsForTarget('spell_save_dc', allEffects, rules) as number)
@@ -300,7 +336,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     // Monk's ki-ability save DC (Stunning Strike, etc.) — always WIS-based,
     // separate from spellSaveDC since Monk has no entity.spellcasting block.
     kiSaveDC: entity.features.some(f => f.id === 'martial_arts')
-      ? 8 + profBonus + modifier(effectiveStats.wis)
+      ? abilityDC(profBonus, modifier(effectiveStats.wis))
           + (resolveEffectsForTarget('ki_save_dc', allEffects, rules) as number)
       : null,
     // Generic 8 + prof + ability mod, precomputed for every ability — any
@@ -310,12 +346,12 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     // unlike kiSaveDC/spellSaveDC — no per-class gating check needed since
     // a feature only ever points at this if it actually has one.
     abilityBasedDC: {
-      str: 8 + profBonus + modifier(effectiveStats.str),
-      dex: 8 + profBonus + modifier(effectiveStats.dex),
-      con: 8 + profBonus + modifier(effectiveStats.con),
-      int: 8 + profBonus + modifier(effectiveStats.int),
-      wis: 8 + profBonus + modifier(effectiveStats.wis),
-      cha: 8 + profBonus + modifier(effectiveStats.cha),
+      str: abilityDC(profBonus, modifier(effectiveStats.str)),
+      dex: abilityDC(profBonus, modifier(effectiveStats.dex)),
+      con: abilityDC(profBonus, modifier(effectiveStats.con)),
+      int: abilityDC(profBonus, modifier(effectiveStats.int)),
+      wis: abilityDC(profBonus, modifier(effectiveStats.wis)),
+      cha: abilityDC(profBonus, modifier(effectiveStats.cha)),
     },
   };
 
@@ -397,6 +433,7 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
         sourceName: fi.name,
         sourceId:   fi.id,
         appliedAt:  fi.level ?? 0,
+        sourceKind: fi.source.kind,
       });
     }
   }
@@ -415,6 +452,7 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
           sourceName: fi.name,
           sourceId:   item.itemId,
           appliedAt:  0,
+          sourceKind: 'item',
         });
       }
     }

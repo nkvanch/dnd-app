@@ -1162,6 +1162,9 @@ export type ActiveEffect = {
   sourceName: string;
   sourceId:   string;
   appliedAt:  number;
+  /** Optional — lets audit.ts label a contribution without re-walking
+   * entity.features/inventory itself. See AuditSourceKind. */
+  sourceKind?: AuditSourceKind;
 };
 
 // ── 8. DM Override system ────────────────────────────────────────────────────

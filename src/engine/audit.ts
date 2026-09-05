@@ -27,7 +27,10 @@
 import {
   Entity, Ability, SkillName, AuditEntry, AuditTrail, AuditSourceKind,
 } from './types';
-import { modifier, collectAllEffects, applyStatModifiers } from './pipeline';
+import {
+  modifier, collectAllEffects, applyStatModifiers,
+  proficiencyBonus, AC_DC_BASE, selectBestAcFormula,
+} from './pipeline';
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -87,24 +90,19 @@ function buildAcEntries(entity: Entity): AuditEntry[] {
   const effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const dexMod = modifier(effectiveStats.dex);
 
-  // Gather every AC base formula (armor on equipped items, Unarmored Defense on
-  // features) and every flat AC bonus (shields, magic items, feature bonuses).
-  type FormulaCandidate = {
-    label: string; kind: AuditSourceKind; id: string | null;
-    base: number; abilities: Ability[];
-  };
-  const formulas: FormulaCandidate[] = [];
-  const flats:    AuditEntry[]       = [];
+  // Gather every flat AC bonus (shields, magic items, feature bonuses).
+  // The base formula (armor on equipped items, Unarmored Defense on features)
+  // is resolved separately below via the same selectBestAcFormula()
+  // recomputeDerived() uses, so this breakdown can never pick a different
+  // winner than the actual entity.derived.ac calculation — including item-
+  // granted formulas, which this used to miss entirely (it only walked
+  // entity.features, not equipped-item effects).
+  const flats: AuditEntry[] = [];
 
   for (const item of entity.inventory.equipped) {
     for (const f of item.features) {
       for (const e of f.effects) {
-        if (e.type === 'base_ac_formula' && typeof e.value === 'number') {
-          formulas.push({
-            label: f.name, kind: 'item', id: item.itemId,
-            base: e.value, abilities: (e.formulaAbilities ?? []) as Ability[],
-          });
-        } else if (e.type === 'stat_modifier' && e.target === 'ac' && typeof e.value === 'number') {
+        if (e.type === 'stat_modifier' && e.target === 'ac' && typeof e.value === 'number') {
           flats.push(entry(f.name, e.value, 'item', item.itemId));
         }
       }
@@ -114,32 +112,29 @@ function buildAcEntries(entity: Entity): AuditEntry[] {
   for (const f of entity.features) {
     if (!f.isActive) continue;
     for (const e of f.effects) {
-      if (e.type === 'base_ac_formula' && typeof e.value === 'number') {
-        formulas.push({
-          label: f.name, kind: f.source.kind as AuditSourceKind, id: f.id,
-          base: e.value, abilities: (e.formulaAbilities ?? []) as Ability[],
-        });
-      } else if (e.type === 'stat_modifier' && e.target === 'ac' && typeof e.value === 'number') {
+      if (e.type === 'stat_modifier' && e.target === 'ac' && typeof e.value === 'number') {
         flats.push(entry(f.name, e.value, f.source.kind as AuditSourceKind, f.id));
       }
     }
   }
 
-  if (formulas.length === 0) {
-    // No armor, no formula — standard fallback: 10 + DEX
-    entries.push(entry('Base', 10, 'base', null));
-    entries.push(entry('DEX modifier', dexMod, 'base', null));
-  } else {
-    // The pipeline takes the HIGHEST formula (Math.max). Mirror that here:
-    // show only the winning formula's base + its ability contributions,
-    // otherwise the audit total inflates past the real AC.
-    const computeTotal = (c: FormulaCandidate) =>
-      c.base + c.abilities.reduce((s, ab) => s + modifier(effectiveStats[ab]), 0);
-    const best = formulas.reduce((a, b) => (computeTotal(b) > computeTotal(a) ? b : a));
+  // Same 3-tier priority as recomputeDerived's calculatedBaseAc: a
+  // base_ac_formula effect wins over armor, which wins over the flat
+  // 10 + DEX fallback. Previously this only checked for a formula and fell
+  // straight to "10 + DEX" otherwise — silently wrong whenever armor was
+  // equipped via entity.resources.ac without going through the formula
+  // system (found by the regression test this unification added).
+  const best = selectBestAcFormula(allEffects, effectiveStats);
+  if (best) {
     entries.push(entry(`${best.label} (base)`, best.base, best.kind, best.id));
     for (const ab of best.abilities) {
       entries.push(entry(`${ab.toUpperCase()} modifier`, modifier(effectiveStats[ab]), best.kind, best.id));
     }
+  } else if (entity.resources.ac > 0) {
+    entries.push(entry('Armor', entity.resources.ac, 'base', null));
+  } else {
+    entries.push(entry('Base', 10, 'base', null));
+    entries.push(entry('DEX modifier', dexMod, 'base', null));
   }
 
   entries.push(...flats);
@@ -228,7 +223,7 @@ function buildPassivePerceptionEntries(entity: Entity): AuditEntry[] {
 // ── Proficiency bonus ─────────────────────────────────────────────────────────
 
 function buildProficiencyEntries(entity: Entity): AuditEntry[] {
-  const prof = Math.ceil(1 + entity.identity.level / 4);
+  const prof = proficiencyBonus(entity.identity.level);
   return [entry(`Level ${entity.identity.level} (formula: ⌈1 + level/4⌉)`, prof, 'base', null)];
 }
 
@@ -236,12 +231,12 @@ function buildProficiencyEntries(entity: Entity): AuditEntry[] {
 
 function buildSpellSaveDcEntries(entity: Entity): AuditEntry[] {
   if (!entity.spellcasting) return [];
-  const prof    = Math.ceil(1 + entity.identity.level / 4);
+  const prof    = proficiencyBonus(entity.identity.level);
   const ability = entity.spellcasting.ability;
   const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
   const mod     = modifier(effectiveStats[ability]);
   return [
-    entry('Base', 8, 'base', null),
+    entry('Base', AC_DC_BASE, 'base', null),
     entry('Proficiency bonus', prof, 'class', null),
     entry(`${ability.toUpperCase()} modifier`, mod, 'base', null),
   ];
@@ -251,7 +246,7 @@ function buildSpellSaveDcEntries(entity: Entity): AuditEntry[] {
 
 function buildSpellAttackEntries(entity: Entity): AuditEntry[] {
   if (!entity.spellcasting) return [];
-  const prof    = Math.ceil(1 + entity.identity.level / 4);
+  const prof    = proficiencyBonus(entity.identity.level);
   const ability = entity.spellcasting.ability;
   const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
   const mod     = modifier(effectiveStats[ability]);
@@ -289,7 +284,7 @@ function buildSaveEntries(entity: Entity, ability: Ability): AuditEntry[] {
   const entries: AuditEntry[] = [];
   const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
   const mod  = modifier(effectiveStats[ability]);
-  const prof = Math.ceil(1 + entity.identity.level / 4);
+  const prof = proficiencyBonus(entity.identity.level);
   const isProficient = entity.proficiencies.savingThrows.includes(ability);
 
   entries.push(entry(`${ability.toUpperCase()} modifier`, mod, 'base', null));
@@ -323,7 +318,7 @@ function buildSkillEntries(entity: Entity, skill: SkillName): AuditEntry[] {
 
   const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
   const abilityMod = modifier(effectiveStats[skillEntry.ability]);
-  const prof       = Math.ceil(1 + entity.identity.level / 4);
+  const prof       = proficiencyBonus(entity.identity.level);
 
   entries.push(entry(`${skillEntry.ability.toUpperCase()} modifier`, abilityMod, 'base', null));
 

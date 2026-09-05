@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import {
-  Entity, Ability, SkillName, CampaignRules, SenseType, Sense, ItemInstance, Spell,
+  Entity, Ability, SkillName, CampaignRules, SenseType, Sense, ItemInstance, Spell, DurationTracker,
 } from '../../engine/types';
 import { modifier, collectAllEffects, applyStatModifiers, recomputeDerived } from '../../engine/pipeline';
 import { AsiFeatPicker } from '../AsiFeatPicker';
@@ -97,7 +97,7 @@ interface Props {
   onEntityUpdate: (updated: Entity) => void;
   onDamage: (amount: number, damageType?: string) => void;
   onHeal: (amount: number) => void;
-  onAddCondition: (condId: string) => void;
+  onAddCondition: (condId: string, duration: DurationTracker | null) => void;
   onRemoveCondition: (condId: string) => void;
   onSaveNotes: (notes: string) => void;
 }
@@ -411,7 +411,7 @@ export function TabExploration({
             <Text style={styles.sheetTitle}>Add Condition</Text>
             <View style={styles.chipWrap}>
               {COMMON_CONDITIONS.map(c => (
-                <Pressable key={c} style={styles.typeChip} onPress={() => { onAddCondition(c); setCondOpen(false); }}>
+                <Pressable key={c} style={styles.typeChip} onPress={() => { onAddCondition(c, null); setCondOpen(false); }}>
                   <Text style={styles.typeChipTxt}>{c}</Text>
                 </Pressable>
               ))}
@@ -429,7 +429,7 @@ export function TabExploration({
                 onPress={() => {
                   const name = customCond.trim();
                   if (!name) return;
-                  onAddCondition(name);
+                  onAddCondition(name, null);
                   setCustomCond('');
                   setCondOpen(false);
                 }}

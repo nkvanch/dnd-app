@@ -2,7 +2,7 @@
 // FILE: src/engine/conditions.ts
 // PROJECT: Condition Application, Suppression & Immunity Engine
 // ============================================================================
-import { Entity, ActiveCondition, CampaignRules, Feature, FeatureInstance } from './types';
+import { Entity, ActiveCondition, CampaignRules, Feature, FeatureInstance, DurationTracker } from './types';
 import { recomputeDerived } from './pipeline';
 import { DEFAULT_RULES } from '../store/characterStore';
 
@@ -92,7 +92,15 @@ export function applyCondition(
   conditionId:        string,
   sourceId:           string,
   rules:              CampaignRules = DEFAULT_RULES,
-  conditionFeatures?: Feature[]
+  conditionFeatures?: Feature[],
+  /** Optional — defaults to null (permanent, today's existing behavior).
+   * Only 'rounds' (tickDurations, called from a player's own "End Turn" or
+   * a DM's endTurn()) and 'until_rest' (already removed wholesale by
+   * longRest() in rest.ts) durations are ever actually acted on anywhere in
+   * the app — 'minutes'/'hours' are set but never ticked (see
+   * wildShapeState.expiresAt's own doc comment for why), so callers should
+   * not offer those as real options. */
+  duration?:          DurationTracker | null,
 ): Entity {
   if (isImmuneToCondition(entity, conditionId)) return entity;
 
@@ -114,7 +122,7 @@ export function applyCondition(
   const newCondition: ActiveCondition = {
     id:           conditionId,
     sourceId,
-    duration:     null,
+    duration:     duration ?? null,
     suppressedBy: collectSuppressors(entity, conditionId),
   };
 

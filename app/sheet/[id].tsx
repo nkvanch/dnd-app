@@ -16,7 +16,7 @@ import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { equipItem, unequipItem } from '../../src/engine/inventory';
 import { simulate } from '../../src/engine/simulate';
-import { Entity, ItemInstance } from '../../src/engine/types';
+import { Entity, ItemInstance, DurationTracker } from '../../src/engine/types';
 import { itemRepo } from '../../src/content/itemRepo';
 import { getInfusion, maxInfusedItems } from '../../src/content/infusions';
 import { CONDITIONS_BY_ID } from '../../src/content/conditions/index';
@@ -144,11 +144,11 @@ export default function CharacterSheetScreen() {
     mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amount, rules));
   }, [mutate, rules]);
 
-  const handleAddCondition = useCallback((condId: string) => {
+  const handleAddCondition = useCallback((condId: string, duration: DurationTracker | null) => {
     // Look up the condition's mechanical features from content so the engine
     // can enforce them (e.g. Grappled sets speed to 0 in the pipeline).
     const condContent = CONDITIONS_BY_ID[condId];
-    mutate(e => applyCondition(e, condId, 'manual', rules, condContent?.features));
+    mutate(e => applyCondition(e, condId, 'manual', rules, condContent?.features, duration));
   }, [mutate, rules]);
 
   const handleRemoveCondition = useCallback((condId: string) => {

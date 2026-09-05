@@ -7,10 +7,11 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Modal, TextInput,
 } from 'react-native';
-import { Entity, CampaignRules, CharClass, ActionCard, asClassId } from '../../engine/types';
+import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
 import { dropConcentration } from '../../engine/combat';
+import { tickDurations } from '../../engine/conditions';
 import { recomputeDerived, modifier } from '../../engine/pipeline';
 import { levelUp, levelUpClass } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
@@ -77,7 +78,7 @@ interface Props {
   deviceId:     string;
   onDamage:     (amount: number, damageType?: string) => void;
   onHeal:       (amount: number) => void;
-  onAddCondition:    (id: string) => void;
+  onAddCondition:    (id: string, duration: DurationTracker | null) => void;
   onRemoveCondition: (id: string) => void;
   onResourceChange:  (resourceId: string, delta: number) => void;
   onSpendSlot:       (tier: string) => void;
@@ -804,6 +805,18 @@ export function TabCharacter({
   const [auditLabel, setAuditLabel] = useState('');
   const [condModal,  setCondModal]  = useState(false);
   const [condSearch, setCondSearch] = useState('');
+  // Set once a condition name is tapped, before its duration is chosen —
+  // drives the "how long?" sub-step shown in the same modal (or the
+  // separate NumberPromptModal for the "N Rounds" case).
+  const [pendingConditionId, setPendingConditionId] = useState<string | null>(null);
+  const [roundsPromptOpen,   setRoundsPromptOpen]   = useState(false);
+
+  function closeConditionFlow() {
+    setCondModal(false);
+    setCondSearch('');
+    setPendingConditionId(null);
+    setRoundsPromptOpen(false);
+  }
   const [concOpen,   setConcOpen]   = useState(false);
   const [concDc,     setConcDc]     = useState(10);
   const [manualHpOpen, setManualHpOpen] = useState(false);
@@ -1217,13 +1230,30 @@ export function TabCharacter({
           <View style={styles.condRow}>
             {conditions.map(c => (
               <View key={c.id} style={styles.condChip}>
-                <Text style={styles.condChipTxt}>{c.id}</Text>
+                <Text style={styles.condChipTxt}>
+                  {c.id}
+                  {c.duration?.unit === 'rounds' && ` · ${c.duration.remaining}r`}
+                  {c.duration?.unit === 'until_rest' && ' · until rest'}
+                </Text>
                 <Pressable onPress={() => onRemoveCondition(c.id)} hitSlop={8}>
                   <Text style={styles.condX}>✕</Text>
                 </Pressable>
               </View>
             ))}
           </View>
+        )}
+
+        {/* Player-facing turn tick — ticks 'rounds' durations down without
+            needing a DM's initiative tracker (app/dm/encounter.tsx), which
+            a solo player never has. No preview gate: advancing a turn is
+            expected/mundane, not a surprising commit. */}
+        {conditions.some(c => c.duration?.unit === 'rounds') && (
+          <Pressable
+            style={styles.endTurnBtn}
+            onPress={() => onEntityUpdate(tickDurations(entity, rules))}
+          >
+            <Text style={styles.endTurnBtnTxt}>⏭ End Turn</Text>
+          </Pressable>
         )}
 
         {/* Mechanical effect reminders for active conditions */}
@@ -1372,37 +1402,71 @@ export function TabCharacter({
       />
 
       {/* Condition Picker Modal */}
-      <Modal visible={condModal} transparent animationType="slide" onRequestClose={() => setCondModal(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setCondModal(false)}>
+      <Modal visible={condModal} transparent animationType="slide" onRequestClose={closeConditionFlow}>
+        <Pressable style={styles.backdrop} onPress={closeConditionFlow}>
           <Pressable style={styles.condPickerSheet} onPress={e => e.stopPropagation()}>
-            <Text style={styles.condPickerTitle}>Add Condition</Text>
-            <TextInput
-              style={styles.condSearch}
-              value={condSearch}
-              onChangeText={setCondSearch}
-              placeholder="Search conditions…"
-              placeholderTextColor={Colors.textDim}
-            />
-            <ScrollView>
-              {filteredConds.map(c => (
-                <Pressable key={c} style={styles.condPickerItem} onPress={() => {
-                  onAddCondition(c);
-                  setCondModal(false);
-                  setCondSearch('');
-                }}>
-                  <Text style={styles.condPickerItemTxt}>{c}</Text>
+            {pendingConditionId === null ? (
+              <>
+                <Text style={styles.condPickerTitle}>Add Condition</Text>
+                <TextInput
+                  style={styles.condSearch}
+                  value={condSearch}
+                  onChangeText={setCondSearch}
+                  placeholder="Search conditions…"
+                  placeholderTextColor={Colors.textDim}
+                />
+                <ScrollView>
+                  {filteredConds.map(c => (
+                    <Pressable key={c} style={styles.condPickerItem} onPress={() => setPendingConditionId(c)}>
+                      <Text style={styles.condPickerItemTxt}>{c}</Text>
+                    </Pressable>
+                  ))}
+                  {filteredConds.length === 0 && (
+                    <Text style={styles.emptyNote}>No conditions found</Text>
+                  )}
+                </ScrollView>
+                <Pressable style={styles.cancelBtn} onPress={closeConditionFlow}>
+                  <Text style={styles.cancelTxt}>Cancel</Text>
                 </Pressable>
-              ))}
-              {filteredConds.length === 0 && (
-                <Text style={styles.emptyNote}>No conditions found</Text>
-              )}
-            </ScrollView>
-            <Pressable style={styles.cancelBtn} onPress={() => setCondModal(false)}>
-              <Text style={styles.cancelTxt}>Cancel</Text>
-            </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={styles.condPickerTitle}>How long — {pendingConditionId}?</Text>
+                <Pressable
+                  style={styles.condPickerItem}
+                  onPress={() => { onAddCondition(pendingConditionId, null); closeConditionFlow(); }}
+                >
+                  <Text style={styles.condPickerItemTxt}>Permanent</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.condPickerItem}
+                  onPress={() => { onAddCondition(pendingConditionId, { unit: 'until_rest', remaining: 0 }); closeConditionFlow(); }}
+                >
+                  <Text style={styles.condPickerItemTxt}>Until Next Rest</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.condPickerItem}
+                  onPress={() => { setCondModal(false); setRoundsPromptOpen(true); }}
+                >
+                  <Text style={styles.condPickerItemTxt}>N Rounds…</Text>
+                </Pressable>
+                <Pressable style={styles.cancelBtn} onPress={() => setPendingConditionId(null)}>
+                  <Text style={styles.cancelTxt}>Back</Text>
+                </Pressable>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
+
+      <NumberPromptModal
+        visible={roundsPromptOpen}
+        title={`${pendingConditionId} — Rounds`}
+        label="How many rounds until it expires?"
+        confirmLabel="Add Condition"
+        onConfirm={n => { onAddCondition(pendingConditionId!, { unit: 'rounds', remaining: Math.max(1, n) }); closeConditionFlow(); }}
+        onClose={closeConditionFlow}
+      />
 
       {/* Level-up ASI / Feat picker */}
       <Modal visible={levelUpAsiOpen} animationType="slide" onRequestClose={() => setLevelUpAsiOpen(false)}>
@@ -1720,6 +1784,14 @@ const styles = StyleSheet.create({
   condChipTxt: { color: Colors.textPrimary, fontSize: FontSize.sm, textTransform: 'capitalize' },
   condX:       { color: Colors.textDim, fontSize: FontSize.sm },
   emptyNote:   { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
+
+  endTurnBtn: {
+    alignSelf: 'flex-start', marginTop: Spacing.xs,
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+  },
+  endTurnBtnTxt: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
 
   concIndicator: {
     backgroundColor: Colors.blue + '22', borderRadius: Radius.md,

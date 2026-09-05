@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { globalContentDB } from '../../src/content/classes/library';
-import { Background, SkillName } from '../../src/engine/types';
+import { Background, SkillName, Ability, Feature } from '../../src/engine/types';
 import { applyGrant } from '../../src/engine/leveling';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -245,6 +245,33 @@ function BackgroundDetail({ id }: { id: string }) {
   const [bond,  setBond]  = useState('');
   const [flaw,  setFlaw]  = useState('');
 
+  // Flexible ability score choice — the 2024 background-grants-ASI mechanic
+  // (species lost the flat ASI in that revision). Same pattern as
+  // race-detail.tsx's flexAsi, minus subrace/ancestry (backgrounds have
+  // neither) — see Background.flexibleAsi's doc comment.
+  const flexAsi = bg?.flexibleAsi ?? null;
+  const [flexSubMode, setFlexSubMode] = useState<'2_1' | '3x1'>('2_1');
+  const [flexPicks, setFlexPicks] = useState<Ability[]>([]);
+  const flexRequiredCount = !flexAsi ? 0
+    : flexAsi.mode.kind === 'two_distinct_plus_one' ? 2
+    : flexSubMode === '2_1' ? 2 : 3;
+  const flexComplete = !flexAsi || flexPicks.length === flexRequiredCount;
+  const flexAbilityOptions: Ability[] = flexAsi?.mode.kind === 'two_one_or_three_one' && flexAsi.mode.restrictTo
+    ? flexAsi.mode.restrictTo
+    : ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+  function toggleFlexPick(ab: Ability) {
+    setFlexPicks(prev => {
+      if (prev.includes(ab)) return prev.filter(a => a !== ab);
+      if (prev.length >= flexRequiredCount) return prev;
+      return [...prev, ab];
+    });
+  }
+  function flexAmountFor(idx: number): number {
+    if (!flexAsi) return 0;
+    if (flexAsi.mode.kind === 'two_distinct_plus_one') return 1;
+    return flexSubMode === '3x1' ? 1 : (idx === 0 ? 2 : 1);
+  }
+
   // Fix: navigate in useEffect, never during render
   useEffect(() => {
     if (!bg || !draft) safeGoBack();
@@ -294,6 +321,22 @@ function BackgroundDetail({ id }: { id: string }) {
     // Apply background features via the grant pipeline
     for (const feature of bg!.features) {
       updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
+    }
+
+    // ...and the flexible ability score choice, compiled into one generated
+    // Feature — mirrors race-detail.tsx's identical flexAsi compilation.
+    if (flexAsi && flexPicks.length > 0) {
+      const flexFeature: Feature = {
+        id: `${bg!.id}_flexible_asi`,
+        name: 'Ability Score Increase',
+        description: flexAsi.prompt,
+        source: { kind: 'background', refId: bg!.id },
+        level: null, actions: [], choices: [], passive: true,
+        effects: flexPicks.map((ab, idx) => ({
+          type: 'stat_modifier', target: ab, operation: 'add', value: flexAmountFor(idx), condition: null,
+        })),
+      };
+      updated = applyGrant(updated, { kind: 'feature', value: { ...flexFeature, isActive: true } }, 0);
     }
 
     // Fix 10: directly mark background skill proficiencies as trained so they
@@ -406,8 +449,52 @@ function BackgroundDetail({ id }: { id: string }) {
         </>
       )}
 
+      {flexAsi && (
+        <>
+          <View style={styles.divider} />
+          <Text style={styles.sectionTitle}>{flexAsi.prompt}</Text>
+          {flexAsi.mode.kind === 'two_one_or_three_one' && (
+            <View style={flexStyles.subModeRow}>
+              <Pressable
+                style={[flexStyles.subModeBtn, flexSubMode === '2_1' && flexStyles.subModeBtnActive]}
+                onPress={() => { setFlexSubMode('2_1'); setFlexPicks([]); }}
+              >
+                <Text style={[flexStyles.subModeTxt, flexSubMode === '2_1' && flexStyles.subModeTxtActive]}>+2 / +1</Text>
+              </Pressable>
+              <Pressable
+                style={[flexStyles.subModeBtn, flexSubMode === '3x1' && flexStyles.subModeBtnActive]}
+                onPress={() => { setFlexSubMode('3x1'); setFlexPicks([]); }}
+              >
+                <Text style={[flexStyles.subModeTxt, flexSubMode === '3x1' && flexStyles.subModeTxtActive]}>+1 / +1 / +1</Text>
+              </Pressable>
+            </View>
+          )}
+          <View style={flexStyles.abilityRow}>
+            {flexAbilityOptions.map(ab => {
+              const idx = flexPicks.indexOf(ab);
+              const picked = idx !== -1;
+              return (
+                <Pressable
+                  key={ab}
+                  style={[flexStyles.abilityBtn, picked && flexStyles.abilityBtnActive]}
+                  onPress={() => toggleFlexPick(ab)}
+                >
+                  <Text style={[flexStyles.abilityTxt, picked && flexStyles.abilityTxtActive]}>
+                    {ab.toUpperCase()}{picked ? ` +${flexAmountFor(idx)}` : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      )}
+
       <View style={styles.divider} />
-      <Pressable style={styles.selectBtn} onPress={selectBackground}>
+      <Pressable
+        style={[styles.selectBtn, !flexComplete && styles.selectBtnDisabled]}
+        onPress={selectBackground}
+        disabled={!flexComplete}
+      >
         <Text style={styles.selectBtnText}>Select Background</Text>
       </Pressable>
     </ScrollView>
@@ -516,5 +603,25 @@ const styles = StyleSheet.create({
   bullet:      { fontSize: FontSize.md, color: Colors.textPrimary, marginBottom: Spacing.xs },
   featureText: { fontSize: FontSize.md, color: Colors.textPrimary },
   selectBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center' },
+  selectBtnDisabled: { opacity: 0.4 },
   selectBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
+});
+
+const flexStyles = StyleSheet.create({
+  subModeRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
+  subModeBtn: {
+    flex: 1, alignItems: 'center', paddingVertical: Spacing.sm, borderRadius: Radius.md,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+  },
+  subModeBtnActive: { backgroundColor: Colors.gold + '33', borderColor: Colors.gold },
+  subModeTxt:       { fontSize: FontSize.sm, color: Colors.textSecondary },
+  subModeTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
+  abilityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  abilityBtn: {
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: Radius.md,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+  },
+  abilityBtnActive: { backgroundColor: Colors.gold + '33', borderColor: Colors.gold },
+  abilityTxt:       { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  abilityTxtActive: { color: Colors.gold },
 });

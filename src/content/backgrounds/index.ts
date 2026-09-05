@@ -2,7 +2,7 @@
 // FILE: src/content/backgrounds/index.ts
 // All 13 PHB backgrounds.
 // ============================================================================
-import { Background } from '../../engine/types';
+import { Background, asRulesetId } from '../../engine/types';
 
 export const bgAcolyte: Background = {
   id: 'acolyte',
@@ -25,6 +25,58 @@ export const bgAcolyte: Background = {
       name: 'Shelter of the Faithful',
       description: 'As an acolyte, you command the respect of those who share your faith, and you can perform the religious ceremonies of your deity.',
       source: { kind: 'background', refId: 'acolyte' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+/**
+ * 2024 PHB ("5.5e") revised Acolyte — Phase 5 second proof-of-concept,
+ * exercising Background.flexibleAsi (the other half of 2024's defining
+ * change: species lost the flat ASI, backgrounds gained a directed one).
+ * Distinct id from classic `acolyte`, same reasoning as raceHuman2024 in
+ * src/content/races/index.ts — sidesteps same-id content-resolution rather
+ * than inventing an answer for one proof background.
+ *
+ * Skill proficiencies stay the same as classic Acolyte (Insight/Religion —
+ * 2024 didn't change this pairing). The tool proficiency and Origin feat
+ * a real 2024 Acolyte also grants are disclosed-only here, same pattern
+ * raceHuman2024's "Versatile" trait uses — no engine mechanism exists yet
+ * for tool proficiencies or feat grants tied to background selection.
+ */
+export const bgAcolyte2024: Background = {
+  id: 'acolyte_2024',
+  name: 'Acolyte',
+  rulesetId: asRulesetId('5.5e'),
+  srd: false,
+  flexibleAsi: {
+    prompt: 'Choose Wisdom, Intelligence, or Charisma: increase one by 2 and a different one by 1, or increase all three by 1 each.',
+    mode: { kind: 'two_one_or_three_one', restrictTo: ['wis', 'int', 'cha'] },
+  },
+  features: [
+    {
+      id: 'acolyte_2024_proficiencies',
+      name: 'Skill Proficiencies',
+      description: 'You are proficient in Insight and Religion.',
+      source: { kind: 'background', refId: 'acolyte_2024' },
+      level: null, actions: [], choices: [], passive: true,
+      effects: [
+        { type: 'grant_proficiency', target: 'skill:insight',  operation: 'add', value: null, condition: null },
+        { type: 'grant_proficiency', target: 'skill:religion', operation: 'add', value: null, condition: null },
+      ],
+    },
+    {
+      id: 'acolyte_2024_feat_note',
+      name: 'Origin Feat',
+      description: 'You gain one Origin feat of your choice. Take it on the Feats screen during creation (enable the "Feat at 1st level" campaign rule if it isn\'t already, so that screen is reachable) — same disclosed pattern used elsewhere for background/race-granted feats.',
+      source: { kind: 'background', refId: 'acolyte_2024' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shelter_of_faithful_2024',
+      name: 'Shelter of the Faithful',
+      description: 'As an acolyte, you command the respect of those who share your faith, and you can perform the religious ceremonies of your deity.',
+      source: { kind: 'background', refId: 'acolyte_2024' },
       level: null, effects: [], actions: [], choices: [], passive: true,
     },
   ],
@@ -345,6 +397,7 @@ export const bgUrchin: Background = {
 /** Every background, unfiltered. Prefer ALL_BACKGROUNDS below in app code. */
 export const FULL_BACKGROUND_LIBRARY: Background[] = [
   bgAcolyte,
+  bgAcolyte2024,
   bgCharlatan,
   bgCriminal,
   bgEntertainer,

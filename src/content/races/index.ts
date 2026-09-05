@@ -2,7 +2,7 @@
 // FILE: src/content/races/index.ts
 // All PHB races expressed as Feature/Effect arrays.
 // ============================================================================
-import { Race, Subrace, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature, Ability } from '../../engine/types';
+import { Race, Subrace, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature, Ability, asRulesetId } from '../../engine/types';
 
 /**
  * Builds one Mordenkainen's Tome of Foes Tiefling bloodline subrace — each
@@ -400,6 +400,68 @@ export const raceHuman: Race = {
           source: { kind: 'race', refId: 'human_stensia' }, level: null, effects: [], actions: [], choices: [], passive: true,
         },
       ],
+    },
+  ],
+};
+
+/**
+ * 2024 PHB ("5.5e") revised Human — Phase 5 end-to-end proof-of-concept for
+ * the ruleset-tagging pipeline built in Phases 3/4 (branded RulesetId,
+ * Race.rulesetId, matchesRuleset(), getMergedContentDB()'s ruleset filter).
+ * Given a DISTINCT id from the classic `human` race (rather than reusing
+ * 'human' with a rulesetId tag) so this doesn't have to solve "same-id
+ * content resolution" (which ruleset-tagged variant wins when both a
+ * ruleset-specific and an untagged entry share an id) — that's a real open
+ * question, deliberately deferred until full-volume 5.5e content authoring
+ * needs an answer, not invented speculatively for one proof race. See
+ * src/content/races/__tests__/rulesetTagging.test.ts for the actual proof.
+ *
+ * Mechanically: the defining 2024 change is that ability score increases
+ * moved from race to background, so this race grants no stat_modifier
+ * effects at all (unlike classic Human's flat +1 to all six). Two of its
+ * three traits reuse patterns already established elsewhere in this file —
+ * a skill-proficiency pendingChoice (same mechanism as Variant Human) and a
+ * disclosed "take a feat on the Feats screen" note (same mechanism Variant
+ * Human already uses for its own bonus feat, see `variant_human_feat_note`
+ * above). The Heroic Inspiration trait has no engine equivalent (no tracked
+ * resource for it exists) so it's disclosed-only, following this file's
+ * established pattern for mechanics the engine doesn't model (see e.g.
+ * Dwarven Toughness/Tough above).
+ */
+export const raceHuman2024: Race = {
+  id: 'human_2024',
+  name: 'Human',
+  rulesetId: asRulesetId('5.5e'),
+  srd: false,
+  features: [
+    {
+      id: 'human_2024_resourceful',
+      name: 'Resourceful',
+      description: 'You gain heroic inspiration whenever you finish a long rest. Spend heroic inspiration to give yourself advantage on one D20 Test. This app has no tracked resource for heroic inspiration yet — track its use manually.',
+      source: { kind: 'race', refId: 'human_2024' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'human_2024_skillful',
+      name: 'Skillful',
+      description: 'You gain proficiency in one skill of your choice.',
+      source: { kind: 'race', refId: 'human_2024' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'human_2024_versatile',
+      name: 'Versatile',
+      description: 'You gain one feat of your choice, chosen from feats available to a 1st-level character. Take it on the Feats screen during creation (enable the "Feat at 1st level" campaign rule if it isn\'t already, so that screen is reachable) — same disclosed pattern Variant Human already uses for its bonus feat.',
+      source: { kind: 'race', refId: 'human_2024' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}human_2024_skill`,
+      prompt: 'Choose one skill to gain proficiency in.',
+      kind: 'skill', count: 1, pool: ALL_SKILL_OPTIONS,
+      grants: [], required: true, resolved: false,
     },
   ],
 };
@@ -3113,6 +3175,7 @@ export const raceWaterGenasi: Race = {
  */
 export const FULL_RACE_LIBRARY: Race[] = [
   raceHuman,
+  raceHuman2024,
   raceElf,
   raceDwarf,
   raceHalfling,

@@ -14,6 +14,8 @@ import { recomputeDerived } from '../../src/engine/pipeline';
 import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
+import { equipItem, unequipItem } from '../../src/engine/inventory';
+import { simulate } from '../../src/engine/simulate';
 import { Entity, ItemInstance } from '../../src/engine/types';
 import { itemRepo } from '../../src/content/itemRepo';
 import { getInfusion, maxInfusedItems } from '../../src/content/infusions';
@@ -28,6 +30,7 @@ import { TabNotes }     from '../../src/components/sheet/TabNotes';
 import { TabSpells }    from '../../src/components/sheet/TabSpells';
 import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
 import { RestPreviewModal, buildRestMutation } from '../../src/components/sheet/RestPreviewModal';
+import { EquipmentPreviewModal } from '../../src/components/sheet/EquipmentPreviewModal';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
 import { exportCharacter, ExportFormat, ExportAction } from '../../src/io/exportShare';
 import { GlobalDiceRoller } from '../../src/components/GlobalDiceRoller';
@@ -202,51 +205,41 @@ export default function CharacterSheetScreen() {
     });
   }, [mutate]);
 
-  const handleEquip = useCallback(async (itemId: string) => {
-    // Warm Tier 2 before reading getItemSync below — covers items that
-    // reached `carried` without ever going through handleAddItem in this
-    // session (starting equipment, sync receive). No-ops harmlessly for a
-    // homebrew id, which itemRepo never has.
-    await itemRepo.ensureLoaded([itemId]);
-    mutate(e => {
-      const inst = e.inventory.carried.find(i => i.itemId === itemId);
-      if (!inst) return e;
-      // Hydrate features from the content definition at equip time.
-      // Inventory instances are created with `features: []` (resolveChoice and
-      // the equipment screen only store the itemId) — without this, equipping
-      // armor adds an item with zero effects and AC never changes.
-      // itemRepo only ever holds the OFFICIAL catalog — a homebrew item's
-      // definition (with its real weapon/armor/effect data) lives in
-      // homebrewStore instead, so it needs its own fallback lookup here or
-      // every homebrew item equips with permanently empty features (no
-      // attack card, no AC change, nothing).
-      const def      = itemRepo.getItemSync(itemId) ?? homebrewItems.find(i => i.id === itemId);
-      const hydrated = def ? { ...inst, features: def.features } : inst;
-      return {
-        ...e,
-        inventory: {
-          ...e.inventory,
-          carried:  e.inventory.carried.filter(i => i.itemId !== itemId),
-          equipped: [...e.inventory.equipped, hydrated],
-        },
-      };
-    });
-  }, [mutate, homebrewItems]);
+  // Set by handleEquip/handleUnequip once the change has been simulated but
+  // not yet resolved — drives EquipmentPreviewModal. Both resolve the
+  // item's definition first (itemRepo only ever holds the OFFICIAL catalog —
+  // a homebrew item's definition lives in homebrewStore instead, so it
+  // needs its own fallback lookup here or every homebrew item previews/
+  // equips with permanently empty features: no attack card, no AC change,
+  // nothing), purely so the preview can show the item's name and (for
+  // equip) hydrate its features — the actual mutation is the pure
+  // equipItem()/unequipItem() (src/engine/inventory.ts), so it's usable
+  // directly as a simulate() mutator.
+  const [equipPreview, setEquipPreview] = useState<{
+    kind: 'equip' | 'unequip'; itemName: string; before: Entity; after: Entity;
+  } | null>(null);
 
-  const handleUnequip = useCallback((itemId: string) => {
-    mutate(e => {
-      const inst = e.inventory.equipped.find(i => i.itemId === itemId);
-      if (!inst) return e;
-      return {
-        ...e,
-        inventory: {
-          ...e.inventory,
-          equipped: e.inventory.equipped.filter(i => i.itemId !== itemId),
-          carried:  [...e.inventory.carried, inst],
-        },
-      };
-    });
-  }, [mutate]);
+  const handleEquip = useCallback(async (itemId: string) => {
+    if (!entity) return;
+    await itemRepo.ensureLoaded([itemId]);
+    const def = itemRepo.getItemSync(itemId) ?? homebrewItems.find(i => i.id === itemId);
+    const { before, after } = simulate(entity, e => equipItem(e, itemId, def, rules), rules);
+    setEquipPreview({ kind: 'equip', itemName: def?.name ?? itemId, before, after });
+  }, [entity, homebrewItems, rules]);
+
+  const handleUnequip = useCallback(async (itemId: string) => {
+    if (!entity) return;
+    await itemRepo.ensureLoaded([itemId]); // symmetry — resolves the name for display
+    const def = itemRepo.getItemSync(itemId) ?? homebrewItems.find(i => i.id === itemId);
+    const { before, after } = simulate(entity, e => unequipItem(e, itemId, rules), rules);
+    setEquipPreview({ kind: 'unequip', itemName: def?.name ?? itemId, before, after });
+  }, [entity, homebrewItems, rules]);
+
+  const confirmEquipPreview = useCallback(() => {
+    if (!equipPreview) return;
+    mutate(() => equipPreview.after);
+    setEquipPreview(null);
+  }, [mutate, equipPreview]);
 
   const handleAddItem = useCallback(async (itemId: string) => {
     await itemRepo.ensureLoaded([itemId]);
@@ -649,6 +642,16 @@ export default function CharacterSheetScreen() {
         rules={rules}
         onConfirm={() => { handleRest(restPreview!); setRestPreview(null); }}
         onCancel={() => setRestPreview(null)}
+      />
+
+      <EquipmentPreviewModal
+        visible={equipPreview !== null}
+        kind={equipPreview?.kind ?? 'equip'}
+        itemName={equipPreview?.itemName ?? ''}
+        before={equipPreview?.before ?? null}
+        after={equipPreview?.after ?? null}
+        onConfirm={confirmEquipPreview}
+        onCancel={() => setEquipPreview(null)}
       />
 
       <ExportFormatSheet

@@ -9,12 +9,17 @@ import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Item, Feature, Effect, AbilityEffect, DraftTrait } from '../../src/engine/types';
+import { Item, Feature, Effect, AbilityEffect, DraftTrait, Entity } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
+import { simulate } from '../../src/engine/simulate';
+import { equipItem } from '../../src/engine/inventory';
+import { buildEquipmentSummaryRows } from '../../src/components/sheet/EquipmentPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 function toId(name: string): string {
@@ -59,6 +64,8 @@ export default function ItemBuilderScreen() {
   const [weight, setWeight]     = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   const [category, setCategory] = useState<ItemCategory>('gear');
   const [rarity, setRarity]     = useState<string | null>(null);
@@ -226,13 +233,9 @@ export default function ItemBuilderScreen() {
     return Array.from(new Set(props));
   }
 
-  async function handleSave() {
-    if (!name.trim() || saving) return;
-    setSaving(true);
-    const id = editing?.id ?? ('hb_' + (toId(name) || 'item') + '_' + Date.now().toString(36));
-
+  function buildItem(id: string): Item {
     const feature = buildFeature(id);
-    const item: Item = {
+    return {
       id,
       name: name.trim(),
       weight: parseFloat(weight) || 0,
@@ -245,6 +248,51 @@ export default function ItemBuilderScreen() {
         acValue, acAddsDex, trait,
       },
     };
+  }
+
+  // Read-only test: equip the draft item onto a disposable level-1 scratch
+  // entity and show the same before/after summary the real in-play equip
+  // preview shows (EquipmentPreviewModal.tsx) — AC, other derived-stat
+  // changes, new/removed weapon attacks, resistance/immunity gained. No
+  // save, no real character touched anywhere. The scratch entity needs the
+  // draft item pre-loaded into `inventory.carried` since equipItem() (like
+  // the real equip flow) only moves an item that's already there.
+  function runTest() {
+    const id = editing?.id ?? (toId(name) || 'test_item');
+    const item = buildItem(id);
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = {
+      ...empty,
+      identity: { ...empty.identity, level: 1 },
+      inventory: {
+        ...empty.inventory,
+        carried: [{ itemId: item.id, quantity: 1, attuned: false, features: [] }],
+      },
+    };
+    const { before, after } = simulate(scratch, e => equipItem(e, item.id, item, DEFAULT_RULES), DEFAULT_RULES);
+    const rows = buildEquipmentSummaryRows(before, after);
+    // Weapon to-hit/damage bonuses are computed by computeWeaponAttackBonuses()
+    // (src/engine/pipeline.ts), which resolves the item's definition from
+    // itemRepo/homebrewStore by id to read its damage-die feature and
+    // properties (finesse/ranged/magic-bonus text) — an unsaved draft item
+    // isn't in either catalog, so that lookup finds nothing and the "New
+    // attack" row this weapon would otherwise get never appears. AC/
+    // resistance/other trait-effect rows are unaffected (they read the
+    // already-hydrated feature directly, no catalog lookup needed). Same
+    // disclosed-gap pattern feat-builder.tsx uses for ability/skill choices
+    // — surface it rather than silently under-report.
+    if (category === 'weapon' && weaponDamage.some(d => d.dice.trim())) {
+      rows.push({ label: "This weapon's to-hit/damage bonus isn't shown here — save the item first, then check its Attacks entry on a character sheet." });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
+  }
+
+  async function handleSave() {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    const id = editing?.id ?? ('hb_' + (toId(name) || 'item') + '_' + Date.now().toString(36));
+    const item = buildItem(id);
 
     try {
       await saveItem('item', item);
@@ -407,6 +455,9 @@ export default function ItemBuilderScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Item'}</Text>
           </Pressable>
@@ -420,6 +471,13 @@ export default function ItemBuilderScreen() {
         onDone={() => setTraitOpen(false)}
         onDelete={() => { setTrait(newDraftTrait('Effect')); setTraitOpen(false); }}
         excludeKinds={['resource_ability', 'spell_grant']}
+      />
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Item'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
       />
     </KeyboardAvoidingView>
   );
@@ -463,8 +521,10 @@ const styles = StyleSheet.create({
   effectCardName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   effectCardDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
   btnDisabled: { opacity: 0.4 },
-  footer:    { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:    { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:   { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt:{ color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:   { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   saveBtnTxt:{ color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   damageRow: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center', marginBottom: Spacing.xs },
   removeDamageBtn: { padding: Spacing.xs },

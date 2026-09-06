@@ -11,17 +11,10 @@ import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, Feat, Ability, SkillName, DerivedStats, DERIVED_NUMERIC_KEYS } from '../engine/types';
 import { applyStatModifiers, collectAllEffects } from '../engine/pipeline';
 import { DERIVED_LABELS } from './sheet/derivedStatLabels';
+import { SKILL_LABELS } from './sheet/skillLabels';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
-
-const SKILL_LABELS: Record<SkillName, string> = {
-  athletics: 'Athletics', acrobatics: 'Acrobatics', sleight_of_hand: 'Sleight of Hand',
-  stealth: 'Stealth', arcana: 'Arcana', history: 'History', investigation: 'Investigation',
-  nature: 'Nature', religion: 'Religion', animal_handling: 'Animal Handling',
-  insight: 'Insight', medicine: 'Medicine', perception: 'Perception', survival: 'Survival',
-  deception: 'Deception', intimidation: 'Intimidation', performance: 'Performance', persuasion: 'Persuasion',
-};
 
 export type Row = { label: string; note?: string };
 

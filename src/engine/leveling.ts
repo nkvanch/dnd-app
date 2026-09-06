@@ -1,6 +1,6 @@
 import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
-         KnownSpellsGrant, CustomResource, asSubclassId, asClassId } from './types';
+         KnownSpellsGrant, CustomResource, asSubclassId, asClassId, Background, SkillName } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { getSpellSlotsForClassLevel, multiclassCasterLevel, MULTICLASS_SPELLCASTER_SLOTS,
          pactSlotTableFor, slotsForLevel } from '../content/classes/spellSlotTables';
@@ -597,6 +597,138 @@ export function removeFeature(entity: Entity, featureId: string): Entity {
       custom: entity.resources.custom.filter(r => r.sourceId !== featureId),
     },
   };
+}
+
+/** Computes one flexAsi pick's bonus amount — mirrors app/creation/
+ *  background.tsx's own flexAmountFor exactly. 'two_distinct_plus_one' is
+ *  always +1 each. 'two_one_or_three_one' depends only on how many picks
+ *  were actually made (2 => +2/+1 split, first pick gets +2; 3 => +1/+1/+1)
+ *  — background.tsx's own UI never lets flexPicks.length end up
+ *  inconsistent with the chosen sub-mode, so the pick count alone is a
+ *  reliable, sufficient signal; no separate sub-mode parameter needed. */
+function flexAsiAmountFor(mode: NonNullable<Background['flexibleAsi']>['mode'], picks: Ability[], idx: number): number {
+  if (mode.kind === 'two_distinct_plus_one') return 1;
+  return picks.length === 3 ? 1 : (idx === 0 ? 2 : 1);
+}
+
+/**
+ * Swaps a character's background live, mid-session — a straight-line port
+ * of app/creation/background.tsx's own selectBackground(), so a change
+ * made in play behaves identically to picking a background at creation.
+ *
+ * Skill retrain differs from BOTH existing implementations on purpose:
+ * background.tsx's own BG_SKILL_MAP-based untrain has a real, confirmed bug
+ * (untrains by a hardcoded 13-official-background table with no check for
+ * whether some OTHER active feature also grants the same skill) — fixed
+ * here by computing the untrain candidate set from the OLD background's own
+ * feature effects, minus any skill still granted by a currently-active
+ * NON-background feature's own grant_proficiency effect.
+ *
+ * That computed set has one structural blind spot no amount of feature-
+ * scanning can close: a class-driven skill CHOICE sets
+ * entity.skills.skills[X].trained = true directly via resolveChoice, with
+ * NO backing Effect at all (see class-detail.tsx's own comment on this) —
+ * so if a class choice happens to have trained the same skill the old
+ * background's features also grant, this scan has no way to see that and
+ * will (correctly by its own logic, wrongly in outcome) suggest untraining
+ * it. Deliberately NOT applied silently: `skillRetrainOverrides` lets the
+ * caller (a UI-level editable checklist) correct the one case this can't
+ * see, defaulting to the computed suggestion for everything else.
+ */
+export function swapBackground(
+  entity: Entity,
+  newBackground: Background,
+  rules: CampaignRules,
+  flexAsiPicks?: Ability[],
+  skillRetrainOverrides?: Partial<Record<SkillName, boolean>>,
+): Entity {
+  const oldBgFeatures = entity.features.filter(f => f.source.kind === 'background');
+  const otherFeatures = entity.features.filter(f => f.source.kind !== 'background');
+
+  const oldBgSkills = new Set<SkillName>();
+  for (const f of oldBgFeatures) {
+    for (const e of f.effects) {
+      if (e.type === 'grant_proficiency' && e.operation === 'add' && e.target.startsWith('skill:')) {
+        oldBgSkills.add(e.target.slice(6) as SkillName);
+      }
+    }
+  }
+
+  const candidateUntrain = new Set<SkillName>();
+  for (const skill of oldBgSkills) {
+    const grantedElsewhere = otherFeatures.some(f =>
+      f.effects.some(e => e.type === 'grant_proficiency' && e.operation === 'add' && e.target === `skill:${skill}`)
+    );
+    if (!grantedElsewhere) candidateUntrain.add(skill);
+  }
+
+  let updatedSkills = { ...entity.skills.skills };
+  const untrain = (skill: SkillName) => {
+    if (updatedSkills[skill]) {
+      updatedSkills = { ...updatedSkills, [skill]: { ...updatedSkills[skill], trained: false, expertise: false } };
+    }
+  };
+  for (const skill of candidateUntrain) {
+    if (skillRetrainOverrides?.[skill] === true) continue; // human overrode: keep trained
+    untrain(skill);
+  }
+  // A checklist row can also force-untrain a skill the scan didn't flag
+  // (skillRetrainOverrides[skill] === false for a skill outside
+  // candidateUntrain) — the UI offers every old-background skill as a row
+  // regardless of the computed default, so honor an explicit false too.
+  for (const [skill, keep] of Object.entries(skillRetrainOverrides ?? {}) as [SkillName, boolean][]) {
+    if (keep === false && !candidateUntrain.has(skill)) untrain(skill);
+  }
+
+  let updated: Entity = {
+    ...entity,
+    identity: { ...entity.identity, backgroundId: newBackground.id },
+    features: otherFeatures,
+    skills: { skills: updatedSkills },
+  };
+
+  for (const feature of newBackground.features) {
+    updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
+  }
+
+  if (newBackground.flexibleAsi && flexAsiPicks && flexAsiPicks.length > 0) {
+    const flexFeature: Feature = {
+      id: `${newBackground.id}_flexible_asi`,
+      name: 'Ability Score Increase',
+      description: newBackground.flexibleAsi.prompt,
+      source: { kind: 'background', refId: newBackground.id },
+      level: null, actions: [], choices: [], passive: true,
+      effects: flexAsiPicks.map((ab, idx) => ({
+        type: 'stat_modifier', target: ab, operation: 'add',
+        value: flexAsiAmountFor(newBackground.flexibleAsi!.mode, flexAsiPicks, idx), condition: null,
+      })),
+    };
+    updated = applyGrant(updated, { kind: 'feature', value: { ...flexFeature, isActive: true } }, 0);
+  }
+
+  // Generalized skill-training pass, same as background.tsx's own creation-
+  // time logic — walks the NEW background's own features for
+  // grant_proficiency skill effects and marks them trained. Works for
+  // homebrew backgrounds with no BG_DETAIL-equivalent table (this primitive
+  // has no such table dependency at all, unlike background.tsx's creation
+  // screen, which also has a hardcoded-table fast path this port omits as
+  // redundant — the generalized pass alone already covers every background,
+  // official or homebrew, per background.tsx's own comment on it).
+  for (const feature of newBackground.features) {
+    for (const effect of feature.effects) {
+      if (effect.type === 'grant_proficiency' && effect.operation === 'add' && effect.target.startsWith('skill:')) {
+        const key = effect.target.slice(6) as SkillName;
+        if (updated.skills.skills[key]) {
+          updated = {
+            ...updated,
+            skills: { skills: { ...updated.skills.skills, [key]: { ...updated.skills.skills[key], trained: true } } },
+          };
+        }
+      }
+    }
+  }
+
+  return updated;
 }
 
 /**

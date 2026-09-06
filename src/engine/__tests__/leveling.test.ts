@@ -13,11 +13,11 @@ import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import {
   applyGrant, applyHP, levelUp, resolveChoice, applySubclassToEntity,
   applyInfusionChoiceToEntity, applySpellChoiceToEntity, levelUpClass, queueChoice,
-  removeFeature,
+  removeFeature, swapBackground,
 } from '../leveling';
 import {
   Entity, Grant, ClassProgression, LevelEntry, ChoiceDefinition, CharClass,
-  asClassId,
+  asClassId, Background, FeatureInstance, SkillName,
 } from '../types';
 
 function entity(overrides: Partial<Entity> = {}): Entity {
@@ -618,5 +618,150 @@ describe('removeFeature', () => {
   it('is a no-op (same reference) when the id does not match any feature', () => {
     const e = entityWithFeatures();
     expect(removeFeature(e, 'nonexistent')).toBe(e);
+  });
+});
+
+// ── swapBackground ───────────────────────────────────────────────────────────
+// Phase 4 of the live feature/background editing track — the most complex
+// primitive: a straight-line port of app/creation/background.tsx's own
+// selectBackground(), plus a corrected skill-retrain algorithm (the
+// creation-time BG_SKILL_MAP approach has a real, confirmed bug: it
+// untrains by a hardcoded table with no check for whether some OTHER
+// active feature also grants the same skill).
+
+describe('swapBackground', () => {
+  function backgroundWithSkills(id: string, skills: SkillName[], overrides: Partial<Background> = {}): Background {
+    return {
+      id, name: id,
+      features: [{
+        id: `${id}_skills`, name: `${id} Skills`, description: '', level: null,
+        effects: skills.map(s => ({ type: 'grant_proficiency' as const, target: `skill:${s}`, operation: 'add' as const, value: null, condition: null })),
+        actions: [], choices: [], passive: true,
+        source: { kind: 'background', refId: id },
+      }],
+      ...overrides,
+    };
+  }
+
+  function entityWithBackground(bg: Background, trainedSkills: SkillName[]): Entity {
+    const e = entity();
+    let skills = { ...e.skills.skills };
+    for (const s of trainedSkills) {
+      skills = { ...skills, [s]: { ...skills[s], trained: true } };
+    }
+    return {
+      ...e,
+      identity: { ...e.identity, backgroundId: bg.id },
+      features: [...e.features, ...bg.features.map(f => ({ ...f, isActive: true }))],
+      skills: { skills },
+    };
+  }
+
+  it("strips old background features and applies the new background's features", () => {
+    const acolyte = backgroundWithSkills('acolyte', ['insight', 'religion']);
+    const soldier = backgroundWithSkills('soldier', ['athletics', 'intimidation']);
+    const before = entityWithBackground(acolyte, ['insight', 'religion']);
+    const after = swapBackground(before, soldier, DEFAULT_RULES);
+    expect(after.identity.backgroundId).toBe('soldier');
+    expect(after.features.some(f => f.source.refId === 'acolyte')).toBe(false);
+    expect(after.features.some(f => f.source.refId === 'soldier')).toBe(true);
+  });
+
+  it('untrains an old-background skill nothing else grants', () => {
+    const acolyte = backgroundWithSkills('acolyte', ['insight', 'religion']);
+    const soldier = backgroundWithSkills('soldier', ['athletics', 'intimidation']);
+    const before = entityWithBackground(acolyte, ['insight', 'religion']);
+    const after = swapBackground(before, soldier, DEFAULT_RULES);
+    expect(after.skills.skills.insight.trained).toBe(false);
+    expect(after.skills.skills.religion.trained).toBe(false);
+  });
+
+  it('keeps an old-background skill trained when another active feature also grants it (no-overlap vs overlap)', () => {
+    const acolyte = backgroundWithSkills('acolyte', ['insight', 'religion']);
+    const soldier = backgroundWithSkills('soldier', ['athletics', 'intimidation']);
+    let before = entityWithBackground(acolyte, ['insight', 'religion']);
+    const racialInsight: FeatureInstance = {
+      id: 'keen_senses', name: 'Keen Senses', description: '', level: null,
+      effects: [{ type: 'grant_proficiency', target: 'skill:insight', operation: 'add', value: null, condition: null }],
+      actions: [], choices: [], passive: true, isActive: true,
+      source: { kind: 'race', refId: 'test_race' },
+    };
+    before = { ...before, features: [...before.features, racialInsight] };
+    const after = swapBackground(before, soldier, DEFAULT_RULES);
+    expect(after.skills.skills.insight.trained).toBe(true);   // overlap — kept
+    expect(after.skills.skills.religion.trained).toBe(false); // no overlap — untrained
+  });
+
+  it("trains the new background's own skills (generalized effect-driven pass)", () => {
+    const acolyte = backgroundWithSkills('acolyte', ['insight', 'religion']);
+    const soldier = backgroundWithSkills('soldier', ['athletics', 'intimidation']);
+    const before = entityWithBackground(acolyte, ['insight', 'religion']);
+    const after = swapBackground(before, soldier, DEFAULT_RULES);
+    expect(after.skills.skills.athletics.trained).toBe(true);
+    expect(after.skills.skills.intimidation.trained).toBe(true);
+  });
+
+  it('compiles flexibleAsi (two_distinct_plus_one) into a generated stat_modifier feature, +1 each', () => {
+    const flexBg = backgroundWithSkills('flex_bg_1', [], {
+      flexibleAsi: { prompt: 'Choose two.', mode: { kind: 'two_distinct_plus_one' } },
+    });
+    const after = swapBackground(entity(), flexBg, DEFAULT_RULES, ['str', 'dex']);
+    const flexFeature = after.features.find(f => f.id === 'flex_bg_1_flexible_asi');
+    expect(flexFeature?.effects).toEqual([
+      { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null },
+      { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+    ]);
+  });
+
+  it('compiles flexibleAsi (two_one_or_three_one, 2 picks) as a +2/+1 split', () => {
+    const flexBg = backgroundWithSkills('flex_bg_2', [], {
+      flexibleAsi: { prompt: 'Choose.', mode: { kind: 'two_one_or_three_one', restrictTo: ['wis', 'int', 'cha'] } },
+    });
+    const after = swapBackground(entity(), flexBg, DEFAULT_RULES, ['wis', 'int']);
+    const flexFeature = after.features.find(f => f.id === 'flex_bg_2_flexible_asi');
+    expect(flexFeature?.effects).toEqual([
+      { type: 'stat_modifier', target: 'wis', operation: 'add', value: 2, condition: null },
+      { type: 'stat_modifier', target: 'int', operation: 'add', value: 1, condition: null },
+    ]);
+  });
+
+  it('compiles flexibleAsi (two_one_or_three_one, 3 picks) as +1 each', () => {
+    const flexBg = backgroundWithSkills('flex_bg_3', [], {
+      flexibleAsi: { prompt: 'Choose.', mode: { kind: 'two_one_or_three_one' } },
+    });
+    const after = swapBackground(entity(), flexBg, DEFAULT_RULES, ['wis', 'int', 'cha']);
+    const flexFeature = after.features.find(f => f.id === 'flex_bg_3_flexible_asi');
+    expect(flexFeature?.effects.every(e => (e as { value: number }).value === 1)).toBe(true);
+  });
+
+  it('documents (not silently regresses) the class-choice blind spot — and proves skillRetrainOverrides fixes it', () => {
+    const acolyte = backgroundWithSkills('acolyte', ['insight', 'religion']);
+    const soldier = backgroundWithSkills('soldier', ['athletics', 'intimidation']);
+    // A class-granted skill choice trained Insight directly (resolveChoice
+    // sets entity.skills.skills[x].trained = true with NO backing Effect —
+    // see class-detail.tsx's own comment) — indistinguishable, to a feature
+    // scan, from "nothing else grants this."
+    const before = entityWithBackground(acolyte, ['insight', 'religion']);
+
+    const withoutOverride = swapBackground(before, soldier, DEFAULT_RULES);
+    expect(withoutOverride.skills.skills.insight.trained).toBe(false); // the blind spot, documented not fixed
+
+    const withOverride = swapBackground(before, soldier, DEFAULT_RULES, undefined, { insight: true });
+    expect(withOverride.skills.skills.insight.trained).toBe(true); // human-corrected via the checklist
+  });
+
+  it('skillRetrainOverrides can also force-untrain a skill the scan did not flag', () => {
+    const acolyte = backgroundWithSkills('acolyte', ['insight', 'religion']);
+    const soldier = backgroundWithSkills('soldier', ['athletics', 'intimidation']);
+    let before = entityWithBackground(acolyte, ['insight', 'religion']);
+    const racialInsight: FeatureInstance = {
+      id: 'keen_senses', name: 'Keen Senses', description: '', level: null,
+      effects: [{ type: 'grant_proficiency', target: 'skill:insight', operation: 'add', value: null, condition: null }],
+      actions: [], choices: [], passive: true, isActive: true,
+      source: { kind: 'race', refId: 'test_race' },
+    };
+    before = { ...before, features: [...before.features, racialInsight] };
+    const after = swapBackground(before, soldier, DEFAULT_RULES, undefined, { insight: false });
+    expect(after.skills.skills.insight.trained).toBe(false); // forced untrain despite the race grant
   });
 });

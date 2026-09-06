@@ -12,6 +12,7 @@ import { FeaturePoolPicker } from '../FeaturePoolPicker';
 import { SpellChoicePicker } from '../SpellChoicePicker';
 import { RemoveFeatureModal } from './RemoveFeatureModal';
 import { AddCustomFeatureModal } from './AddCustomFeatureModal';
+import { ChangeBackgroundModal } from './ChangeBackgroundModal';
 import { spellRepo } from '../../content/spellRepo';
 import { DEFAULT_RULES } from '../../store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -145,6 +146,7 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
   const [removingFeatureId, setRemovingFeatureId] = useState<string | null>(null);
   const [addFeatOpen, setAddFeatOpen] = useState(false);
   const [addCustomFeatureOpen, setAddCustomFeatureOpen] = useState(false);
+  const [changeBackgroundOpen, setChangeBackgroundOpen] = useState(false);
 
   const pendingChoices = entity.choices.filter(c => !c.resolved);
   const canResolve     = !!rules && !!onEntityUpdate;
@@ -202,6 +204,15 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      {/* Header-level identity action — changes the whole background, not
+          one feature, so it's kept visually separate from the feature-list
+          actions below (Phase 4 of live editing). */}
+      {canResolve && (
+        <Pressable style={styles.changeBgBtn} onPress={() => setChangeBackgroundOpen(true)}>
+          <Text style={styles.changeBgBtnTxt}>⇄ Change Background</Text>
+        </Pressable>
+      )}
 
       {/* Add an existing feat, or author a one-off feature, live mid-session
           (Phases 2/3 of live editing) */}
@@ -581,6 +592,14 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
         onConfirm={(updated) => { onEntityUpdate?.(updated); setAddCustomFeatureOpen(false); }}
         onCancel={() => setAddCustomFeatureOpen(false)}
       />
+
+      <ChangeBackgroundModal
+        visible={changeBackgroundOpen}
+        entity={entity}
+        rules={rules ?? DEFAULT_RULES}
+        onConfirm={(updated) => { onEntityUpdate?.(updated); setChangeBackgroundOpen(false); }}
+        onCancel={() => setChangeBackgroundOpen(false)}
+      />
     </ScrollView>
   );
 }
@@ -601,6 +620,13 @@ const styles = StyleSheet.create({
   groupBody:     { paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   featureChevron:{ fontSize: FontSize.xs, color: Colors.textDim },
   featureRemoveBtn: { fontSize: FontSize.md, color: Colors.red, paddingHorizontal: Spacing.sm },
+
+  changeBgBtn: {
+    backgroundColor: Colors.blue + '22', borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.blue + '66',
+    padding: Spacing.sm, alignItems: 'center', marginBottom: Spacing.sm,
+  },
+  changeBgBtnTxt: { color: Colors.blue, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   addFeatRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
   addFeatBtn: {

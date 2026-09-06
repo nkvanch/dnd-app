@@ -12,11 +12,16 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Background, Feature, Effect, SkillName } from '../../src/engine/types';
+import { Background, Feature, Effect, SkillName, Entity } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Same 18-skill list used in race-builder.tsx and the PDF export.
@@ -152,6 +157,8 @@ export default function BackgroundBuilderScreen() {
   const [languages, setLanguages] = useState('');
   const [equipmentNote, setEquipmentNote] = useState('');
   const [features, setFeatures] = useState<DraftFeature[]>([]);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: restore from homebrewDraft (same rationale as race/item —
   // skills/features compile into Effect/Feature data that's lossy to
@@ -248,6 +255,41 @@ export default function BackgroundBuilderScreen() {
       id, name: name.trim(), features: bgFeatures,
       homebrewDraft: { skills, toolProfs, languages, equipmentNote, features },
     };
+  }
+
+  // Read-only test: apply the draft background's features to a disposable
+  // level-1 scratch entity, same mechanism app/creation/background.tsx's
+  // real selectBackground() uses (loop applyGrant over bg.features at
+  // level 0) — no real character touched. Reuses FeatPreviewModal's
+  // buildFeatSummaryRows (diffs effective ability scores/derived stats/
+  // skill+save proficiencies/HP) plus an inline "new feature" pass for
+  // anything that grants no numeric effect (this screen's tool/language/
+  // equipment/special-feature entries are description-only — see
+  // buildBackground() above — so they'd otherwise be invisible in the
+  // test). This screen has no flexibleAsi picker (unlike the real
+  // in-play background-selection screen, which does support one per the
+  // 5.5e background-ASI work — see Background.flexibleAsi) so there's no
+  // player-directed-choice gap to disclose: buildBackground() never sets
+  // that field, nothing is left out of what this builder can actually
+  // produce.
+  function runTest() {
+    const bg = buildBackground();
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => {
+      let updated = e;
+      for (const feature of bg.features) {
+        updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
+      }
+      return updated;
+    }, DEFAULT_RULES);
+    const rows = buildFeatSummaryRows(before, after);
+    const beforeFeatureIds = new Set(before.features.map(f => f.id));
+    for (const f of after.features) {
+      if (!beforeFeatureIds.has(f.id)) rows.push({ label: `New feature: ${f.name}` });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
   }
 
   async function handleSave() {
@@ -363,11 +405,21 @@ export default function BackgroundBuilderScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Background'}</Text>
           </Pressable>
         </View>
       </SafeBottomView>
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Background'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -415,8 +467,10 @@ const styles = StyleSheet.create({
   doneBtn: { flex: 2, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center' },
   doneBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
-  footer:   { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:  { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:   { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:  { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:  { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

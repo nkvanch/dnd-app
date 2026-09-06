@@ -52,6 +52,20 @@ const ALL_SKILL_OPTIONS: { id: string; label: string; value: string }[] = [
   { id: 'persuasion', label: 'Persuasion', value: 'persuasion' },
 ];
 
+// Copied from TabExploration.tsx's own "+Feat" flow (Phase 2 of the live
+// feature/background editing track) — a throwaway ChoiceState fabricated
+// fresh each time, never inserted into entity.choices, so it can't pollute
+// state (applyFeatToEntity's scan over updated.choices simply finds no
+// match). AsiFeatPicker already has its own internal FeatPreviewModal
+// preview step, so no new preview code is needed here.
+function makeAdHocFeatChoice(): import('../../engine/types').ChoiceState {
+  const id = `adhoc_feat_${Date.now().toString(36)}`;
+  return {
+    id, grantedAt: 0, resolved: false, selections: [],
+    definition: { id, prompt: 'Take a feat', kind: 'asi', count: 1, pool: 'all', grants: [], required: false, resolved: false },
+  };
+}
+
 function FeatureRow({ feature, onRemove }: { feature: FeatureInstance; onRemove?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -128,6 +142,7 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
   const [poolChoiceOpen, setPoolChoiceOpen] = useState<string | null>(null);
   const [spellChoiceOpen, setSpellChoiceOpen] = useState<string | null>(null);
   const [removingFeatureId, setRemovingFeatureId] = useState<string | null>(null);
+  const [addFeatOpen, setAddFeatOpen] = useState(false);
 
   const pendingChoices = entity.choices.filter(c => !c.resolved);
   const canResolve     = !!rules && !!onEntityUpdate;
@@ -185,6 +200,13 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      {/* Add an existing feat live, mid-session (Phase 2 of live editing) */}
+      {canResolve && (
+        <Pressable style={styles.addFeatBtn} onPress={() => setAddFeatOpen(true)}>
+          <Text style={styles.addFeatBtnTxt}>+ Add Feat</Text>
+        </Pressable>
+      )}
 
       {/* Pending level-up / creation choices */}
       {pendingChoices.length > 0 && (
@@ -517,6 +539,24 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
         </View>
       </Modal>
 
+      {/* Add an existing feat live (Phase 2) */}
+      <Modal visible={addFeatOpen} animationType="slide" onRequestClose={() => setAddFeatOpen(false)}>
+        <View style={styles.asiModalRoot}>
+          {rules && onEntityUpdate ? (
+            <AsiFeatPicker entity={entity} choice={makeAdHocFeatChoice()} rules={rules} featOnly
+              onClose={() => setAddFeatOpen(false)}
+              onResolved={(updated) => { onEntityUpdate(updated); setAddFeatOpen(false); }} />
+          ) : (
+            <View style={styles.asiDone}>
+              <Text style={styles.asiDoneTxt}>Nothing to resolve.</Text>
+              <Pressable style={styles.resolveBtn} onPress={() => setAddFeatOpen(false)}>
+                <Text style={styles.resolveBtnTxt}>Close</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      </Modal>
+
       <RemoveFeatureModal
         visible={removingFeatureId !== null}
         entity={entity}
@@ -545,6 +585,13 @@ const styles = StyleSheet.create({
   groupBody:     { paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   featureChevron:{ fontSize: FontSize.xs, color: Colors.textDim },
   featureRemoveBtn: { fontSize: FontSize.md, color: Colors.red, paddingHorizontal: Spacing.sm },
+
+  addFeatBtn: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.gold + '66', borderStyle: 'dashed',
+    padding: Spacing.sm, alignItems: 'center', marginBottom: Spacing.sm,
+  },
+  addFeatBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   featureRow: {
     paddingVertical: Spacing.sm,

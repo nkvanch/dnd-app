@@ -18,7 +18,7 @@ import {
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ability, DraftTrait, ResourceGrant, Feature } from '../../src/engine/types';
+import { Ability, DraftTrait, ResourceGrant, Feature, Entity } from '../../src/engine/types';
 import { MonsterTemplate } from '../../src/content/monsters/types';
 import { Alert } from '../../src/utils/alert';
 import { validateMonster } from '../../src/engine/homebrewValidator';
@@ -28,7 +28,54 @@ import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { AbilityScoreGrid, TraitListEditor, buildTraitFeature } from '../../src/components/homebrew/TraitEditor';
 import { toId } from '../../src/content/traitCompiler';
 import { PickOrCustom } from '../../src/components/homebrew/PickOrCustom';
+import { spawnMonster } from '../../src/engine/monsterFactory';
+import { collectAllEffects } from '../../src/engine/pipeline';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+
+// Read-only test: unlike every other homebrew builder, a monster isn't
+// GRANTED onto a scratch character — it IS its own entity. So there's no
+// "before" to diff against; instead this spawns the draft via spawnMonster()
+// (src/engine/monsterFactory.ts — the SAME function DM tooling already uses
+// to put a real monster into an encounter, which calls recomputeDerived()
+// internally) and reads the resulting entity's own final computed stats
+// directly. This is genuinely useful, not just a formality: a trait like
+// "AC bonus (+N, stacks)" adds ON TOP of the authored AC value, so the
+// final derived.ac can differ from what the author typed in the AC field
+// above — same for a "Grants a sense" trait vs. the free-text Senses field
+// (which is flavor-only and never reaches derived.senses at all). Only
+// COMPUTED outcomes are shown here, not fields already visible as raw form
+// values (CR, alignment, type, senses/languages text) — those need no test.
+function buildMonsterSummaryRows(entity: Entity): Row[] {
+  const rows: Row[] = [];
+  rows.push({ label: `AC: ${entity.derived.ac}` });
+  rows.push({ label: `HP: ${entity.resources.hp.maximum}` });
+  rows.push({ label: `Speed: ${entity.derived.speed} ft` });
+  rows.push({ label: `Passive Perception: ${entity.derived.passivePerception}` });
+  rows.push({ label: `Passive Investigation: ${entity.derived.passiveInvestigation}` });
+  rows.push({ label: `Passive Insight: ${entity.derived.passiveInsight}` });
+
+  for (const ab of entity.proficiencies.savingThrows) {
+    const bonus = entity.derived.savingThrows[ab];
+    rows.push({ label: `${ab.toUpperCase()} save: ${bonus >= 0 ? '+' : ''}${bonus}` });
+  }
+
+  // Resistance/immunity — same collectAllEffects walk EquipmentPreviewModal
+  // already uses (not part of DerivedStats).
+  const resistances = new Set(
+    collectAllEffects(entity)
+      .filter(ae => ae.effect.type === 'grant_resistance' || ae.effect.type === 'grant_immunity')
+      .map(ae => `${ae.effect.type === 'grant_immunity' ? 'Immunity' : 'Resistance'}: ${ae.effect.target}`)
+  );
+  for (const r of resistances) rows.push({ label: r });
+
+  for (const r of entity.resources.custom) {
+    rows.push({ label: `Resource: ${r.name} (${r.maximum})` });
+  }
+
+  return rows;
+}
 
 const SIZES: MonsterTemplate['size'][] = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'];
 const CRS = [0, 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -79,6 +126,8 @@ export default function MonsterBuilderScreen() {
   const [legendaryActions, setLegendaryActions] = useState('');
   const [traits, setTraits] = useState<DraftTrait[]>([]);
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: hydrate once when the existing monster first resolves.
   useEffect(() => {
@@ -159,6 +208,13 @@ export default function MonsterBuilderScreen() {
       legendaryActions: legendaryActions.trim() ? parseInt(legendaryActions, 10) : undefined,
       resources: resources.length > 0 ? resources : undefined,
     };
+  }
+
+  function runTest() {
+    const monster = buildMonster();
+    const entity = spawnMonster(monster, DEFAULT_RULES);
+    setTestRows(buildMonsterSummaryRows(entity));
+    setTestOpen(true);
   }
 
   async function handleSave() {
@@ -311,11 +367,21 @@ export default function MonsterBuilderScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Monster'}</Text>
           </Pressable>
         </View>
       </SafeBottomView>
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Monster'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -346,8 +412,10 @@ const styles = StyleSheet.create({
   chipActive:{ borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
   chipTxt:   { fontSize: FontSize.xs, color: Colors.textSecondary },
   chipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
-  footer:    { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:    { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:   { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt:{ color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:   { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

@@ -7,6 +7,7 @@ import {
   Entity, CharClass, HomebrewSubclass, Spell,
   Feature, ClassProgression, Grant, Ability,
 } from '../engine/types';
+import { applyStatModifiers, collectAllEffects } from '../engine/pipeline';
 
 /** Caller-supplied name resolver — same shape as characterSheetPdf.ts's resolveName. */
 export type ResolveName = (kind: 'spell' | 'item' | 'race' | 'class' | 'background', id: string) => string;
@@ -138,7 +139,15 @@ export function buildSpellMarkdown(spell: Spell): string {
 // ── Character rendering ───────────────────────────────────────────────────────
 
 export function buildCharacterMarkdown(entity: Entity, resolveName: ResolveName): string {
-  const { identity, stats, derived, resources, skills, proficiencies, inventory, spellcasting, features } = entity;
+  const { identity, derived, resources, skills, proficiencies, inventory, spellcasting, features } = entity;
+  // entity.stats is always the character's BASE ability scores — racial/
+  // item/feat bonuses exist only as stat_modifier effects, computed on the
+  // fly by the pipeline and never written back into .stats. Mirrors the
+  // fix already established in the sibling characterSheetPdf.ts (see its
+  // own header comment) — without this, ability scores/saves/skills below
+  // would silently print pre-bonus numbers for any character with an
+  // effective stat bonus.
+  const stats = applyStatModifiers(entity.stats, collectAllEffects(entity));
 
   const raceName       = resolveName('race', identity.raceId ?? '');
   const className      = resolveName('class', identity.classId ?? '');

@@ -30,14 +30,9 @@ export type CombatState = {
   encounterId: string;
 };
 
-/** Builds a DEX modifier from a raw score. */
-function dexMod(entity: Entity): number {
-  return Math.floor((entity.stats.dex - 10) / 2);
-}
-
 /**
  * Starts a combat encounter. Rolls initiative for all entities,
- * sorts descending by roll then by DEX modifier as tiebreaker.
+ * sorts descending by roll then by initiative bonus as tiebreaker.
  */
 export function startEncounter(
   entities:    Entity[],
@@ -47,8 +42,14 @@ export function startEncounter(
     .map(e => ({
       entityId:     e.id,
       name:         e.identity.name,
-      initiative:   rollD20Dice(dexMod(e)).total,
-      tiebreak:     dexMod(e),
+      // entity.derived.initiative already accounts for effective (not raw)
+      // DEX plus any flat initiative-bonus effects (e.g. Alert) — a local
+      // reimplementation here (previously Math.floor((entity.stats.dex -
+      // 10) / 2), the RAW score) silently missed both, giving the wrong
+      // initiative roll for any entity with an effective DEX bonus from
+      // race/items or an initiative-boosting feature.
+      initiative:   rollD20Dice(e.derived.initiative).total,
+      tiebreak:     e.derived.initiative,
       isPlayer:     e.kind === 'character',
       hasTakenTurn: false,
     }))

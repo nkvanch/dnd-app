@@ -9,7 +9,7 @@ import {
   applyDamage, applyHealing, recordDeathSave,
   startWildShape, endWildShape, applyWildShapeDamage,
   concentrationCheck, castConcentrationSpell, dropConcentration,
-  parseConcentrationDuration, tickConcentrationDuration,
+  parseConcentrationDuration, tickConcentrationDuration, startEncounter,
 } from '../combat';
 import { setRandomSource } from '../dice';
 import { Entity, SpellSlots, FeatureInstance, Spell } from '../types';
@@ -27,6 +27,46 @@ function testEntity(hp = 20): Entity {
     },
   };
 }
+
+// ── startEncounter ────────────────────────────────────────────────────────────
+// Regression test for a real bug found during an R-29 hygiene audit
+// (engine-hardening Phase 6): initiative used to be rolled against a local
+// Math.floor((entity.stats.dex - 10) / 2) reimplementation of modifier() —
+// the RAW ability score, silently missing both effective (race/item-bonused)
+// DEX and any flat initiative-bonus effects (e.g. Alert) that
+// entity.derived.initiative already correctly folds in.
+
+describe('startEncounter', () => {
+  afterEach(() => {
+    setRandomSource(Math.random);
+  });
+
+  it("rolls initiative against entity.derived.initiative, not raw entity.stats.dex", () => {
+    const e = {
+      ...testEntity(20),
+      // Raw DEX is low, but derived.initiative reflects an effective bonus
+      // (e.g. from a racial/item DEX increase or an Alert-style feat) — if
+      // the roll used the raw stat instead, this test would see a total 10
+      // lower than expected.
+      stats:   { ...testEntity(20).stats, dex: 8 }, // raw modifier would be -1
+      derived: { ...testEntity(20).derived, initiative: 7 },
+    };
+    setRandomSource(() => 0); // d20 roll of 1
+    const result = startEncounter([e], 'enc1');
+    expect(result.order[0].initiative).toBe(8); // 1 (roll) + 7 (derived bonus), not 1 + (-1)
+    expect(result.order[0].tiebreak).toBe(7);
+  });
+
+  it('sorts descending by initiative roll, then by derived.initiative as tiebreaker', () => {
+    const low  = { ...testEntity(20), id: 'low',  identity: { ...testEntity(20).identity, name: 'Low' }, derived: { ...testEntity(20).derived, initiative: 1 } };
+    const high = { ...testEntity(20), id: 'high', identity: { ...testEntity(20).identity, name: 'High' }, derived: { ...testEntity(20).derived, initiative: 5 } };
+    let calls = 0;
+    const sequence = [0, 0]; // both roll a 1 on the die — ties on total, tiebreak decides
+    setRandomSource(() => sequence[calls++]);
+    const result = startEncounter([low, high], 'enc1');
+    expect(result.order.map(e => e.entityId)).toEqual(['high', 'low']);
+  });
+});
 
 describe('applyDamage', () => {
   it('reduces current HP by the damage amount', () => {

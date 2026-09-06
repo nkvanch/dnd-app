@@ -94,6 +94,23 @@ export const CREATE_CONTENT_CACHE_HISTORY_TABLE = `
   );
 `;
 
+// Persistent mechanical timeline — one row per updateCharacter() call,
+// written alongside (not instead of) the session-local undo/redo stacks in
+// characterStore.ts. Append-only, same pattern as content_cache_history:
+// never deleted, never overwritten, newest-first query. Survives app
+// restart, unlike undo/redo (session-local, cleared on reload) — that's
+// the deliberate distinction between the two (see the undo/redo +
+// mechanical timeline plan section's own verification note).
+export const CREATE_CHARACTER_TIMELINE_TABLE = `
+  CREATE TABLE IF NOT EXISTS character_timeline (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    entityId  TEXT NOT NULL,
+    label     TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    category  TEXT
+  );
+`;
+
 // Singleton row for active combat state (id always = 1)
 export const CREATE_COMBAT_STATE_TABLE = `
   CREATE TABLE IF NOT EXISTS combat_state (
@@ -117,6 +134,7 @@ export const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_sync_events_applied ON sync_events (applied, sessionId);
   CREATE INDEX IF NOT EXISTS idx_content_type      ON content_cache (type);
   CREATE INDEX IF NOT EXISTS idx_content_history_contentId ON content_cache_history (contentId);
+  CREATE INDEX IF NOT EXISTS idx_timeline_entityId ON character_timeline (entityId);
 `;
 
 export const ALL_TABLES = [
@@ -126,6 +144,7 @@ export const ALL_TABLES = [
   CREATE_DEVICE_SESSION_TABLE,
   CREATE_CONTENT_CACHE_TABLE,
   CREATE_CONTENT_CACHE_HISTORY_TABLE,
+  CREATE_CHARACTER_TIMELINE_TABLE,
   CREATE_COMBAT_STATE_TABLE,
   CREATE_APP_META_TABLE,
   CREATE_INDEXES,

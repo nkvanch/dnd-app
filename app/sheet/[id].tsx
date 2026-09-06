@@ -29,6 +29,7 @@ import { TabInventory } from '../../src/components/sheet/TabInventory';
 import { TabNotes }     from '../../src/components/sheet/TabNotes';
 import { TabSpells }    from '../../src/components/sheet/TabSpells';
 import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
+import { CharacterHistoryModal } from '../../src/components/sheet/CharacterHistoryModal';
 import { RestPreviewModal, buildRestMutation } from '../../src/components/sheet/RestPreviewModal';
 import { EquipmentPreviewModal } from '../../src/components/sheet/EquipmentPreviewModal';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
@@ -73,6 +74,7 @@ export default function CharacterSheetScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('character');
   const [sheetMode, setSheetMode] = useState<'combat' | 'exploration'>('combat');
   const [freeEditOpen, setFreeEditOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [exportSheetOpen, setExportSheetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const goBack = useSafeGoBack('/(tabs)');
@@ -445,6 +447,9 @@ export default function CharacterSheetScreen() {
           >
             <Text style={[styles.freeEditTxt, redoStack[0]?.entityId !== id && styles.undoRedoTxtDisabled]}>↪</Text>
           </Pressable>
+          <Pressable style={styles.freeEditBtn} onPress={() => setHistoryOpen(true)}>
+            <Text style={styles.freeEditTxt}>🕘</Text>
+          </Pressable>
           {/* Free-edit is offered outside a campaign, unless the DM has locked it. */}
           {freeEditAllowed && (
             <Pressable style={styles.freeEditBtn} onPress={() => setFreeEditOpen(true)}>
@@ -659,6 +664,12 @@ export default function CharacterSheetScreen() {
         rules={rules}
         onApply={updated => mutate(() => updated)}
         onClose={() => setFreeEditOpen(false)}
+      />
+
+      <CharacterHistoryModal
+        visible={historyOpen}
+        entityId={id}
+        onClose={() => setHistoryOpen(false)}
       />
 
       <RestPreviewModal

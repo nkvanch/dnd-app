@@ -1,10 +1,12 @@
 // src/store/__tests__/characterStore.test.ts
-// First test coverage for this store. Focuses on Phase A of the undo/redo +
-// mechanical timeline track: updateCharacter's new undo-stack push, and the
-// undo()/redo() actions themselves (pop/push symmetry, the stack cap, and
-// redo being cleared by a genuinely new mutation).
+// First test coverage for this store. Covers Phase A (undo-stack push,
+// undo()/redo() pop/push symmetry, the stack cap, redo cleared by a new
+// mutation) and Phase B (the persistent timeline write is fire-and-forget
+// and never blocks the synchronous state update) of the undo/redo +
+// mechanical timeline track.
 import { useCharacterStore, makeEmptyEntity } from '../characterStore';
 import { Entity } from '../../engine/types';
+import * as timelineRepo from '../../db/timelineRepo';
 
 // updateCharacter/undo/redo all call scheduleSave(), which debounces a real
 // SQLite write behind a 600ms setTimeout — with no initDb() call in this
@@ -121,5 +123,20 @@ describe('undo/redo — pop/push symmetry', () => {
     expect(() => useCharacterStore.getState().undo()).not.toThrow();
     expect(useCharacterStore.getState().undoStack).toHaveLength(0); // stale entry still popped
     expect(useCharacterStore.getState().redoStack).toHaveLength(0); // nothing to push — character was gone
+  });
+});
+
+describe('updateCharacter — persistent timeline write (Phase B)', () => {
+  it('records a timeline entry without blocking the synchronous state update', () => {
+    const recordSpy = jest.spyOn(timelineRepo, 'recordTimelineEntry').mockResolvedValue(undefined);
+    reset([testCharacter('c1')]);
+
+    useCharacterStore.getState().updateCharacter('c1', e => ({ ...e, notes: 'hi' }), 'Took 8 damage');
+
+    // The state update already happened synchronously — updateCharacter
+    // never awaits recordTimelineEntry's returned promise.
+    expect(useCharacterStore.getState().characters[0].notes).toBe('hi');
+    expect(recordSpy).toHaveBeenCalledWith('c1', 'Took 8 damage', expect.any(Number));
+    recordSpy.mockRestore();
   });
 });

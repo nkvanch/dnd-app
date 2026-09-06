@@ -15,6 +15,7 @@ import { Entity, CampaignRules, SkillName, SkillEntry, AbilityScores, ItemInstan
 import {
   saveEntity, loadAllEntities, deleteEntity, loadAllEntityMeta, EntityMeta,
 } from '../db/entityRepo';
+import { recordTimelineEntry } from '../db/timelineRepo';
 import { syncManager } from '../sync/syncManager';
 import { deepMerge } from '../sync/diff';
 import { spellRepo } from '../content/spellRepo';
@@ -467,6 +468,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   updateCharacter: (id, updater, label = 'Edit') => {
     let updated: Entity | null = null;
     let previous: Entity | null = null;
+    const timestamp = Date.now();
 
     set(state => {
       const next = state.characters.map(c => {
@@ -478,7 +480,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       if (!previous) return { characters: next };
       // A real, new mutation invalidates any prior redo path — standard
       // undo/redo branching-history rule.
-      const undoEntry: UndoEntry = { entityId: id, before: [previous], label, timestamp: Date.now() };
+      const undoEntry: UndoEntry = { entityId: id, before: [previous], label, timestamp };
       return {
         characters: next,
         undoStack: [undoEntry, ...state.undoStack].slice(0, UNDO_STACK_LIMIT),
@@ -491,6 +493,11 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       // Zustand state (read by every screen) is already updated synchronously
       // above; this only delays the disk write, not the UI.
       scheduleSave(updated);
+      // Persistent mechanical timeline — same label/timestamp as the
+      // session-local undo entry above, fire-and-forget (never awaited),
+      // same non-blocking style scheduleSave already uses. Survives app
+      // restart, unlike undoStack — that's the deliberate distinction.
+      void recordTimelineEntry(id, label, timestamp);
       // Sync only what changed since `previous` — role-aware: broadcasts
       // directly if we're the DM, or pushes up to the DM (who relays onward)
       // if we're a player. No-op if offline. Sending a diff instead of the

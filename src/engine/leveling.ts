@@ -571,6 +571,35 @@ export function applyFeatToEntity(
 }
 
 /**
+ * Removes a single feature by id — the engine half of live feature
+ * add/remove (both players and DMs, mid-session). Deliberately unopinionated
+ * about WHICH features can be removed (no special-casing race/class/
+ * subclass-sourced ones) — the UI layer decides whether to warn before
+ * removing a structural feature, not this primitive.
+ *
+ * Best-effort only for the linked resource: strips a CustomResource whose
+ * sourceId === featureId (the exact feature being removed owns it — true for
+ * a manually-added limited-use feature, see traitCompiler.ts's
+ * buildTraitFeature). Content-granted resources (race/class/feat/...) have
+ * no clean 1:1 Feature→Resource mapping and are deliberately left untouched.
+ *
+ * No recomputeDerived call — matches applyGrant and every other pure
+ * add/remove primitive here; the caller's simulate()/mutate() recomputes.
+ */
+export function removeFeature(entity: Entity, featureId: string): Entity {
+  const removed = entity.features.find(f => f.id === featureId);
+  if (!removed) return entity;
+  return {
+    ...entity,
+    features: entity.features.filter(f => f.id !== featureId),
+    resources: {
+      ...entity.resources,
+      custom: entity.resources.custom.filter(r => r.sourceId !== featureId),
+    },
+  };
+}
+
+/**
  * Resolves a 'feature_pool' choice — "pick N options, each granting a
  * DIFFERENT Feature" (Battle Master's maneuvers, Ranger Hunter's four
  * sub-choices). resolveChoice() can't handle this: it applies the choice's

@@ -672,5 +672,6 @@ function sourceKindLabel(kind: Feature['source']['kind']): string {
     case 'spell':      return 'Spell';
     case 'condition':  return 'Condition';
     case 'campaign':   return 'Campaign';
+    case 'manual':     return 'Manual';
   }
 }

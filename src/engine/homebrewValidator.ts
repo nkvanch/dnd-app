@@ -26,7 +26,7 @@ function validateFeature(f: unknown, path: string): ValidationResult {
   if (!feat.name  || typeof feat.name  !== 'string') errors.push(`${path}.name: required string`);
   if (!feat.source || typeof feat.source !== 'object') errors.push(`${path}.source: required`);
 
-  const VALID_SOURCE_KINDS = new Set(['race','class','subclass','background','feat','item','spell','condition','campaign']);
+  const VALID_SOURCE_KINDS = new Set(['race','class','subclass','background','feat','item','spell','condition','campaign','manual']);
   if (feat.source && !VALID_SOURCE_KINDS.has((feat.source as any).kind)) {
     warnings.push(`${path}.source.kind: "${(feat.source as any).kind}" is not a known kind`);
   }

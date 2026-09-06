@@ -713,7 +713,7 @@ export type CustomResource = {
    * as "not class-owned" (never auto-wiped) when absent. Reuses
    * FeatureSource['kind'], plus 'subrace' since a resource can be granted by
    * a subrace specifically (not just its parent race). */
-  sourceKind?: 'race' | 'subrace' | 'subclass' | 'class' | 'background' | 'feat';
+  sourceKind?: 'race' | 'subrace' | 'subclass' | 'class' | 'background' | 'feat' | 'manual';
   sourceId?:   string;
 };
 
@@ -955,7 +955,7 @@ export type ConditionMonitor = {
  */
 export type FeatureSource = {
   kind:  'race' | 'class' | 'subclass' | 'background' | 'feat'
-       | 'item' | 'spell' | 'condition' | 'campaign';
+       | 'item' | 'spell' | 'condition' | 'campaign' | 'manual';
   // refId stays plain `string`, not branded — the concrete content type it
   // references (RaceId/ClassId/SpellId/...) depends on the sibling `kind`
   // field, so a single branded type here would be wrong for most `kind`
@@ -1440,6 +1440,7 @@ export type AuditSourceKind =
   | 'spell'
   | 'condition'
   | 'campaign'
+  | 'manual'
   | 'dm_override';
 
 /** One contribution to a derived value. */

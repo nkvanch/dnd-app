@@ -13,6 +13,7 @@ import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import {
   applyGrant, applyHP, levelUp, resolveChoice, applySubclassToEntity,
   applyInfusionChoiceToEntity, applySpellChoiceToEntity, levelUpClass, queueChoice,
+  removeFeature,
 } from '../leveling';
 import {
   Entity, Grant, ClassProgression, LevelEntry, ChoiceDefinition, CharClass,
@@ -571,5 +572,51 @@ describe('levelUpClass — multiclass', () => {
     const updated = levelUpClass(e, 'warlock', warlockProgression, DEFAULT_RULES);
     // warlock level 2 pact table: 2 slots of tier 1
     expect(updated.spellcasting?.pactSlots?.['1'].total).toBe(2);
+  });
+});
+
+// ── removeFeature ─────────────────────────────────────────────────────────────
+// Engine primitive for the live feature add/remove track — both players and
+// DMs can remove a feature mid-session. Deliberately unopinionated about
+// WHICH features can be removed (no special-casing race/class/subclass) —
+// that judgment call belongs to the UI layer, not this primitive.
+
+describe('removeFeature', () => {
+  function entityWithFeatures(): Entity {
+    return entity({
+      features: [
+        { id: 'f1', name: 'Feature One', description: '', level: null, effects: [], actions: [], choices: [], passive: true, isActive: true, source: { kind: 'manual', refId: 'f1' } },
+        { id: 'f2', name: 'Feature Two', description: '', level: null, effects: [], actions: [], choices: [], passive: true, isActive: true, source: { kind: 'race', refId: 'test_race' } },
+      ],
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        custom: [
+          { id: 'f1_pool', name: 'Feature One (Uses)', current: 1, maximum: 1, recharge: 'long_rest', sourceKind: 'manual', sourceId: 'f1' },
+          { id: 'racial_pool', name: 'Racial Pool', current: 2, maximum: 2, recharge: 'long_rest', sourceKind: 'race', sourceId: 'test_race' },
+        ],
+      },
+    });
+  }
+
+  it('removes the feature by id, leaving others untouched', () => {
+    const updated = removeFeature(entityWithFeatures(), 'f1');
+    expect(updated.features.map(f => f.id)).toEqual(['f2']);
+  });
+
+  it("strips a resource only when its sourceId matches the removed feature's id", () => {
+    const updated = removeFeature(entityWithFeatures(), 'f1');
+    expect(updated.resources.custom.map(r => r.id)).toEqual(['racial_pool']);
+  });
+
+  it('leaves content-granted resources untouched (no clean 1:1 Feature→Resource mapping to assume)', () => {
+    const updated = removeFeature(entityWithFeatures(), 'f2');
+    // f2 (race-sourced) has no resource whose sourceId === 'f2' — both
+    // resources survive unchanged.
+    expect(updated.resources.custom.map(r => r.id)).toEqual(['f1_pool', 'racial_pool']);
+  });
+
+  it('is a no-op (same reference) when the id does not match any feature', () => {
+    const e = entityWithFeatures();
+    expect(removeFeature(e, 'nonexistent')).toBe(e);
   });
 });

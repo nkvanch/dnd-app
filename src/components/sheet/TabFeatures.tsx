@@ -10,14 +10,21 @@ import { SubclassPicker } from '../SubclassPicker';
 import { InfusionPicker } from '../InfusionPicker';
 import { FeaturePoolPicker } from '../FeaturePoolPicker';
 import { SpellChoicePicker } from '../SpellChoicePicker';
+import { RemoveFeatureModal } from './RemoveFeatureModal';
 import { spellRepo } from '../../content/spellRepo';
+import { DEFAULT_RULES } from '../../store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
-const SOURCE_ORDER = ['race','class','subclass','background','feat','item','spell','condition','campaign'] as const;
+const SOURCE_ORDER = ['race','class','subclass','background','feat','item','spell','condition','campaign','manual'] as const;
 const SOURCE_LABELS: Record<string, string> = {
   race: 'Race', class: 'Class', subclass: 'Subclass',
   background: 'Background', feat: 'Feat', item: 'Item',
   spell: 'Spell', condition: 'Condition', campaign: 'Campaign',
+  // Deliberately its own group, distinct from 'campaign' — 'campaign' stays
+  // reserved for the two existing single-slot manual-senses/manual-movement
+  // features (TabCharacter.tsx), which are always-overwritten single slots,
+  // not many independently-removable entries like 'manual' features are.
+  manual: 'Manual',
 };
 
 // Matches app/creation/skills.tsx's SKILL_LABELS — some subclass features
@@ -45,12 +52,17 @@ const ALL_SKILL_OPTIONS: { id: string; label: string; value: string }[] = [
   { id: 'persuasion', label: 'Persuasion', value: 'persuasion' },
 ];
 
-function FeatureRow({ feature }: { feature: FeatureInstance }) {
+function FeatureRow({ feature, onRemove }: { feature: FeatureInstance; onRemove?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <Pressable style={styles.featureRow} onPress={() => setExpanded(e => !e)}>
       <View style={styles.featureHeader}>
         <Text style={styles.featureName}>{feature.name}</Text>
+        {onRemove && (
+          <Pressable hitSlop={8} onPress={() => onRemove(feature.id)}>
+            <Text style={styles.featureRemoveBtn}>✕</Text>
+          </Pressable>
+        )}
         <Text style={styles.featureChevron}>{expanded ? '▲' : '▼'}</Text>
       </View>
       {expanded && (
@@ -115,6 +127,7 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
   const [infusionChoiceOpen, setInfusionChoiceOpen] = useState<string | null>(null);
   const [poolChoiceOpen, setPoolChoiceOpen] = useState<string | null>(null);
   const [spellChoiceOpen, setSpellChoiceOpen] = useState<string | null>(null);
+  const [removingFeatureId, setRemovingFeatureId] = useState<string | null>(null);
 
   const pendingChoices = entity.choices.filter(c => !c.resolved);
   const canResolve     = !!rules && !!onEntityUpdate;
@@ -286,7 +299,13 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
       {/* Feature groups */}
       {SOURCE_ORDER.filter(k => groups.has(k)).map(kind => (
         <CollapsibleGroup key={kind} title={SOURCE_LABELS[kind] ?? kind}>
-          {groups.get(kind)!.map(f => <FeatureRow key={f.id} feature={f} />)}
+          {groups.get(kind)!.map(f => (
+            <FeatureRow
+              key={f.id}
+              feature={f}
+              onRemove={canResolve ? setRemovingFeatureId : undefined}
+            />
+          ))}
         </CollapsibleGroup>
       ))}
 
@@ -498,6 +517,14 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
         </View>
       </Modal>
 
+      <RemoveFeatureModal
+        visible={removingFeatureId !== null}
+        entity={entity}
+        rules={rules ?? DEFAULT_RULES}
+        featureId={removingFeatureId}
+        onConfirm={(updated) => { onEntityUpdate?.(updated); setRemovingFeatureId(null); }}
+        onCancel={() => setRemovingFeatureId(null)}
+      />
     </ScrollView>
   );
 }
@@ -517,6 +544,7 @@ const styles = StyleSheet.create({
   groupTitle:    { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.gold, letterSpacing: 1 },
   groupBody:     { paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   featureChevron:{ fontSize: FontSize.xs, color: Colors.textDim },
+  featureRemoveBtn: { fontSize: FontSize.md, color: Colors.red, paddingHorizontal: Spacing.sm },
 
   featureRow: {
     paddingVertical: Spacing.sm,

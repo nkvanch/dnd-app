@@ -8,10 +8,11 @@ import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import {
   applyDamage, applyHealing, recordDeathSave,
   startWildShape, endWildShape, applyWildShapeDamage,
-  concentrationCheck,
+  concentrationCheck, castConcentrationSpell, dropConcentration,
+  parseConcentrationDuration, tickConcentrationDuration,
 } from '../combat';
 import { setRandomSource } from '../dice';
-import { Entity, SpellSlots, FeatureInstance } from '../types';
+import { Entity, SpellSlots, FeatureInstance, Spell } from '../types';
 
 /** A fresh level-1 test entity with known HP/stats, independent of any
  *  particular class/race content so these tests don't break if content
@@ -301,5 +302,140 @@ describe('concentrationCheck', () => {
     const result = concentrationCheck(e, 10, DEFAULT_RULES); // DC 10
     expect(result.spellcasting!.concentrating).toBeNull(); // fails on the one roll it takes
     expect(calls).toBe(1); // proves only one roll happened
+  });
+});
+
+// ── parseConcentrationDuration / castConcentrationSpell / tickConcentrationDuration ──
+// Phase 3 of the engine-hardening track: concentration was previously just a
+// bare spell-id pointer with no tracked duration anywhere. These tests lock
+// in the parser's real-content range (sampled every `concentration: true`
+// spell in src/content/spells/*.ts) plus the fail-open behavior for anything
+// outside it, and the tick/auto-drop boundary.
+
+/** testEntity() has spellcasting: null by default (makeEmptyEntity's own
+ *  default) — beginConcentration is a no-op on a null spellcasting block,
+ *  so any test that casts a spell needs a real (if otherwise empty) one. */
+function casterEntity(): Entity {
+  return {
+    ...testEntity(20),
+    spellcasting: {
+      ability: 'wis', slots: emptySlots(), cantrips: [], known: [], prepared: [],
+      concentrating: null,
+    },
+  };
+}
+
+function makeSpell(overrides: Partial<Spell> = {}): Spell {
+  return {
+    id: 'test_spell', name: 'Test Spell', level: 1, school: 'evocation',
+    castingTime: '1 action', range: '30 feet', components: ['V', 'S'],
+    duration: 'Concentration, up to 1 minute', description: '',
+    upcast: null, ritual: false, concentration: true,
+    ...overrides,
+  };
+}
+
+describe('parseConcentrationDuration', () => {
+  it.each([
+    ['Concentration, up to 1 round',    1],
+    ['Concentration, up to 1 minute',   10],
+    ['Concentration, up to 10 minutes', 100],
+    ['Concentration, up to 1 hour',     600],
+    ['Concentration, up to 8 hours',    4800],
+    ['1 minute',                        10],   // homebrew bare form, no prefix
+  ])('parses %s to %i rounds', (text, expectedRounds) => {
+    expect(parseConcentrationDuration(text)).toEqual({ unit: 'rounds', remaining: expectedRounds });
+  });
+
+  it.each([
+    'Instantaneous',
+    'Until dispelled',
+    '',
+  ])('fails open (returns null, never throws) for %s', (text) => {
+    expect(() => parseConcentrationDuration(text)).not.toThrow();
+    expect(parseConcentrationDuration(text)).toBeNull();
+  });
+});
+
+describe('castConcentrationSpell — duration wiring', () => {
+  it('sets concentratingDuration alongside concentrating for a parseable duration', () => {
+    const e = casterEntity();
+    const spell = makeSpell({ id: 'bless', duration: 'Concentration, up to 1 minute' });
+    const result = castConcentrationSpell(e, spell, DEFAULT_RULES);
+    expect(result.spellcasting!.concentrating).toBe('bless');
+    expect(result.spellcasting!.concentratingDuration).toEqual({ unit: 'rounds', remaining: 10 });
+  });
+
+  it('leaves concentratingDuration undefined for an unparseable duration, while still concentrating', () => {
+    const e = casterEntity();
+    // Real content never pairs concentration:true with 'Instantaneous', but the
+    // engine layer must fail open rather than assume every concentration spell
+    // has a parseable duration (documents the fail-open contract at the layer
+    // that actually calls the parser, not just the parser in isolation).
+    const spell = makeSpell({ id: 'weird_spell', duration: 'Instantaneous' });
+    const result = castConcentrationSpell(e, spell, DEFAULT_RULES);
+    expect(result.spellcasting!.concentrating).toBe('weird_spell');
+    expect(result.spellcasting!.concentratingDuration).toBeUndefined();
+  });
+
+  it('the Hex → Fly scenario replaces both concentrating and concentratingDuration, not just the id', () => {
+    const e = casterEntity();
+    const hex = makeSpell({ id: 'hex', duration: 'Concentration, up to 1 hour' });
+    const fly = makeSpell({ id: 'fly', duration: 'Concentration, up to 10 minutes' });
+    let updated = castConcentrationSpell(e, hex, DEFAULT_RULES);
+    expect(updated.spellcasting!.concentratingDuration).toEqual({ unit: 'rounds', remaining: 600 });
+    updated = castConcentrationSpell(updated, fly, DEFAULT_RULES);
+    expect(updated.spellcasting!.concentrating).toBe('fly');
+    expect(updated.spellcasting!.concentratingDuration).toEqual({ unit: 'rounds', remaining: 100 });
+  });
+});
+
+describe('dropConcentration — clears the tracked duration', () => {
+  it('clears concentratingDuration alongside concentrating', () => {
+    const e = concentratingEntity(0, {
+      spellcasting: {
+        ability: 'wis', slots: emptySlots(), cantrips: [], known: [], prepared: [],
+        concentrating: 'bless', concentratingDuration: { unit: 'rounds', remaining: 5 },
+      },
+    });
+    const result = dropConcentration(e);
+    expect(result.spellcasting!.concentrating).toBeNull();
+    expect(result.spellcasting!.concentratingDuration).toBeUndefined();
+  });
+});
+
+describe('tickConcentrationDuration', () => {
+  function withDuration(remaining: number): Entity {
+    return concentratingEntity(0, {
+      spellcasting: {
+        ability: 'wis', slots: emptySlots(), cantrips: [], known: [], prepared: [],
+        concentrating: 'bless', concentratingDuration: { unit: 'rounds', remaining },
+      },
+    });
+  }
+
+  it('decrements remaining by 1 and stays concentrating', () => {
+    const result = tickConcentrationDuration(withDuration(5), DEFAULT_RULES);
+    expect(result.spellcasting!.concentrating).toBe('bless');
+    expect(result.spellcasting!.concentratingDuration).toEqual({ unit: 'rounds', remaining: 4 });
+  });
+
+  it('auto-drops concentration when the countdown reaches 0 — features removed, flag cleared', () => {
+    const result = tickConcentrationDuration(withDuration(1), DEFAULT_RULES);
+    expect(result.spellcasting!.concentrating).toBeNull();
+    expect(result.spellcasting!.concentratingDuration).toBeUndefined();
+    expect(result.features.some(f => f.id === 'spell_effect_1')).toBe(false);
+    expect(result.conditionMonitor.flags.concentrating).toBe(false);
+  });
+
+  it('is a no-op when not concentrating at all', () => {
+    const e = testEntity(20);
+    expect(tickConcentrationDuration(e, DEFAULT_RULES)).toBe(e);
+  });
+
+  it('is a no-op when concentrating but the duration never parsed (concentratingDuration undefined)', () => {
+    const e = concentratingEntity(0); // default fixture has no concentratingDuration set
+    const result = tickConcentrationDuration(e, DEFAULT_RULES);
+    expect(result.spellcasting!.concentrating).toBe('bless'); // untouched, still concentrating
   });
 });

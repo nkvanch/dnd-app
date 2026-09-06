@@ -11,6 +11,7 @@ import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracke
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
 import { tickDurations } from '../../engine/conditions';
+import { tickConcentrationDuration } from '../../engine/combat';
 import { recomputeDerived } from '../../engine/pipeline';
 import { levelUp, levelUpClass } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
@@ -1184,10 +1185,11 @@ export function TabCharacter({
             needing a DM's initiative tracker (app/dm/encounter.tsx), which
             a solo player never has. No preview gate: advancing a turn is
             expected/mundane, not a surprising commit. */}
-        {conditions.some(c => c.duration?.unit === 'rounds') && (
+        {(conditions.some(c => c.duration?.unit === 'rounds') ||
+          spellcasting?.concentratingDuration?.unit === 'rounds') && (
           <Pressable
             style={styles.endTurnBtn}
-            onPress={() => onEntityUpdate(tickDurations(entity, rules))}
+            onPress={() => onEntityUpdate(tickConcentrationDuration(tickDurations(entity, rules), rules))}
           >
             <Text style={styles.endTurnBtnTxt}>⏭ End Turn</Text>
           </Pressable>
@@ -1219,7 +1221,8 @@ export function TabCharacter({
       {spellcasting?.concentrating && (
         <View style={styles.concIndicator}>
           <Text style={styles.concIndicatorTxt}>
-            🧠 Concentrating on: {spellcasting.concentrating}
+            🧠 Concentrating on: {spellRepo.getSpellSync(spellcasting.concentrating)?.name ?? spellcasting.concentrating}
+            {spellcasting.concentratingDuration?.unit === 'rounds' && ` · ${spellcasting.concentratingDuration.remaining}r`}
           </Text>
         </View>
       )}

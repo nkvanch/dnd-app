@@ -17,6 +17,7 @@ import { Entity, CampaignRules, ActionCard, Spell } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { getClassLevels } from '../../engine/multiclass';
+import { castConcentrationSpell } from '../../engine/combat';
 import { rollExpression } from '../../engine/dice';
 import { UseModal } from './TabActions';
 import { AddSpellModal } from './AddSpellModal';
@@ -134,9 +135,16 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
   // ── Cast handler (mirrors TabActions.handleUse exactly) ──────────────────
 
   const handleCast = useCallback((card: ActionCard) => {
-    const cost = card.resourceCost;
+    const cost  = card.resourceCost;
+    const spell = spellMap.get(card.featureId);
+
     if (!cost) {
-      // Cantrip or free cast — open result modal directly
+      // Cantrip or free cast — no resource to spend, but it may still start
+      // concentration (True Strike, Resistance, Dancing Lights, Abyssal
+      // Claim are real cost-less concentration cantrips in this content).
+      if (spell?.concentration) {
+        onEntityUpdate(castConcentrationSpell(entity, spell, rules));
+      }
       setActiveCard(card);
       return;
     }
@@ -174,9 +182,13 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
       };
     }
 
+    if (spell?.concentration) {
+      updated = castConcentrationSpell(updated, spell, rules);
+    }
+
     onEntityUpdate(updated);
     setActiveCard(card);
-  }, [entity, onEntityUpdate]);
+  }, [entity, onEntityUpdate, spellMap, rules]);
 
   // ── Prepared toggle (prepared casters only) ──────────────────────────────
 
@@ -214,7 +226,8 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
       {spellcasting.concentrating && (
         <View style={styles.concBanner}>
           <Text style={styles.concBannerTxt}>
-            🧠 Concentrating: {spellcasting.concentrating}
+            🧠 Concentrating: {spellMap.get(spellcasting.concentrating)?.name ?? spellcasting.concentrating}
+            {spellcasting.concentratingDuration?.unit === 'rounds' && ` · ${spellcasting.concentratingDuration.remaining}r`}
           </Text>
         </View>
       )}

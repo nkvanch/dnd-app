@@ -2,7 +2,7 @@
 // FILE: src/engine/combat.ts
 // PROJECT: Initiative Tracker, Concentration Gate & Combat Clock
 // ============================================================================
-import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect } from './types';
+import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect, DurationTracker } from './types';
 import { recomputeDerived, collectAllEffects } from './pipeline';
 import { resolveResistance } from './resolver';
 import { tickDurations } from './conditions';
@@ -81,7 +81,7 @@ export function endTurn(
 
   // Tick durations on the entity whose turn just ended
   const updatedEntities = entities.map(e =>
-    e.id === current.entityId ? tickDurations(e, rules) : e
+    e.id === current.entityId ? tickConcentrationDuration(tickDurations(e, rules), rules) : e
   );
 
   // Advance turn pointer; wrap around at the end of the order
@@ -116,6 +116,38 @@ export function endEncounter(combat: CombatState): CombatState {
 // ── Concentration ─────────────────────────────────────────────────────────────
 
 /**
+ * Parses a spell's free-text `duration` field into a DurationTracker for
+ * concentration tracking. Matches both the SRD content format
+ * ("Concentration, up to 1 minute") and the homebrew spell-builder's bare
+ * format ("1 minute" — app/homebrew/spell-builder.tsx tracks concentration
+ * as a separate checkbox, with no "Concentration, up to " prefix at all in
+ * its duration text). Real 5e concentration spells only ever use round/
+ * minute/hour scales — sampled every `concentration: true` entry in
+ * src/content/spells/*.ts and found exactly this range: "1 round",
+ * "1 minute", "10 minutes", "1 hour", "8 hours".
+ *
+ * Fail-open: returns null for anything that doesn't contain a bare
+ * "<N> round(s)/minute(s)/hour(s)" pattern — e.g. "Instantaneous", "Until
+ * dispelled", or other freeform homebrew text. Concentration still starts
+ * via beginConcentration either way; this only gates the ticking countdown.
+ * Never throws.
+ */
+export function parseConcentrationDuration(durationText: string): DurationTracker | null {
+  const match = durationText.match(/(\d+)\s*(round|rounds|minute|minutes|hour|hours)\b/i);
+  if (!match) return null;
+
+  const amount = parseInt(match[1], 10);
+  const unit   = match[2].toLowerCase();
+
+  const rounds =
+    unit.startsWith('round')  ? amount :
+    unit.startsWith('minute') ? amount * 10 :
+    /* hour(s) */                amount * 600;
+
+  return { unit: 'rounds', remaining: rounds };
+}
+
+/**
  * Drops the currently concentrated spell.
  * Removes all features tagged source.kind = 'spell' and source.refId = spellId.
  * Sets concentrating to null.
@@ -134,7 +166,7 @@ export function dropConcentration(entity: Entity): Entity {
     ...entity,
     features: cleanedFeatures,
     spellcasting: entity.spellcasting
-      ? { ...entity.spellcasting, concentrating: null }
+      ? { ...entity.spellcasting, concentrating: null, concentratingDuration: undefined }
       : null,
     conditionMonitor: {
       ...entity.conditionMonitor,
@@ -165,7 +197,11 @@ function beginConcentration(
     ...entity,
     features: [...entity.features, ...spellFeatures],
     spellcasting: entity.spellcasting
-      ? { ...entity.spellcasting, concentrating: spell.id }
+      ? {
+          ...entity.spellcasting,
+          concentrating:         spell.id,
+          concentratingDuration: parseConcentrationDuration(spell.duration) ?? undefined,
+        }
       : null,
     conditionMonitor: {
       ...entity.conditionMonitor,
@@ -189,6 +225,40 @@ export function castConcentrationSpell(
   let updated = dropConcentration(entity);
   updated     = beginConcentration(updated, spell, rules);
   return updated;
+}
+
+/**
+ * Decrements the concentrating spell's tracked round countdown by 1 —
+ * called from the same End Turn action that ticks entity.conditions'
+ * 'rounds' durations (conditions.ts's tickDurations). Deliberately NOT
+ * folded into tickDurations itself: conditions.ts is a lower-level module
+ * combat.ts already imports from, so a function needing dropConcentration
+ * has to live here to avoid a circular import — callers just chain both.
+ * Auto-drops concentration via dropConcentration() when the countdown hits
+ * 0, and explicitly recomputes afterward since dropConcentration() itself
+ * does not.
+ * No-op if not concentrating, or concentrating on a spell whose duration
+ * didn't parse to a tracked countdown (parseConcentrationDuration returned
+ * null at cast time).
+ */
+export function tickConcentrationDuration(
+  entity: Entity,
+  rules:  CampaignRules = DEFAULT_RULES
+): Entity {
+  const tracker = entity.spellcasting?.concentratingDuration;
+  if (!tracker || tracker.unit !== 'rounds') return entity;
+
+  const remaining = tracker.remaining - 1;
+  if (remaining <= 0) {
+    return recomputeDerived(dropConcentration(entity), rules);
+  }
+
+  return {
+    ...entity,
+    spellcasting: entity.spellcasting
+      ? { ...entity.spellcasting, concentratingDuration: { ...tracker, remaining } }
+      : null,
+  };
 }
 
 // ── Concentration check (on damage) ──────────────────────────────────────────

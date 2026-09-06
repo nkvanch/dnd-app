@@ -3,11 +3,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules } from '../../engine/types';
-import { applyAbilityEffects, endWildShape } from '../../engine/combat';
+import { applyAbilityEffects, endWildShape, castConcentrationSpell } from '../../engine/combat';
 import { getTriggeredFeatures } from '../../engine/actionCards';
 import { recomputeDerived } from '../../engine/pipeline';
 import { rollExpression } from '../../engine/dice';
 import { DiceRoll } from '../../engine/types';
+import { spellRepo } from '../../content/spellRepo';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 /**
@@ -58,6 +59,15 @@ export function applyActionCardUse(entity: Entity, card: ActionCard, rules: Camp
     updated.inventory.equipped.flatMap(inst => inst.features).find(f => f.id === card.featureId);
   if (sourceFeature?.abilityEffects && sourceFeature.abilityEffects.length > 0) {
     updated = applyAbilityEffects(updated, sourceFeature.abilityEffects, rules);
+  }
+
+  // A spell-granted card's featureId is the spell's own id (see
+  // generateSpellCard) — this keeps Actions-tab/Favorites casts of a
+  // concentration spell consistent with TabSpells' own handleCast, rather
+  // than spending the slot but silently never tracking concentration.
+  const spell = spellRepo.getSpellSync(card.featureId);
+  if (spell?.concentration) {
+    updated = castConcentrationSpell(updated, spell, rules);
   }
 
   return recomputeDerived(updated, rules);

@@ -801,6 +801,19 @@ export type SpellcastingBlock = {
   known:         string[];
   prepared:      string[];
   concentrating: string | null;
+  /**
+   * Rounds-remaining countdown for the spell currently being concentrated
+   * on, parsed from that spell's Spell.duration at cast time by
+   * parseConcentrationDuration() (combat.ts). undefined when not
+   * concentrating, or when concentrating on a spell whose duration string
+   * didn't match a known round/minute/hour pattern (fail-open —
+   * concentration itself still works, it just has no ticking countdown or
+   * "Xr" display). Ticked down by tickConcentrationDuration() (combat.ts),
+   * called alongside tickDurations() from the same End Turn action.
+   * Optional + additive: existing saved characters simply lack this field
+   * until their next concentration cast.
+   */
+  concentratingDuration?: DurationTracker;
 };
 
 export type Spell = {

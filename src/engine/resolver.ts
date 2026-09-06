@@ -55,26 +55,44 @@ export function resolveEffectsForTarget(target: string, effects: ActiveEffect[],
 
 /**
  * Strategy 1: Combine Modifications
- * Handles 'set', 'add', and 'multiply' operations.
- * 'set' operations are applied first (last-writer-wins as base).
- * 'add' and 'multiply' stack on top of the set base (or 0 if no set).
+ * Handles 'set', 'add', and 'multiply' operations in three fixed phases —
+ * base, then additive, then multiplicative — so the result never depends on
+ * collectAllEffects's iteration order. Shuffling the input must never change
+ * the result. Two separate order-dependencies were found and fixed here:
+ *   1. Competing 'set' operations now resolve by highest value, not
+ *      whichever happened to be last in the array (mirrors pipeline.ts's
+ *      selectBestAcFormula's own "highest wins" tie-break for competing
+ *      base-AC formulas — generalized here to every 'set'-strategy target).
+ *   2. 'add' and 'multiply' are no longer folded together in a single
+ *      left-to-right reduce (which is order-sensitive whenever a multiply
+ *      and an add are interleaved in different array positions) — every
+ *      'add' is summed first, then every 'multiply' is applied as one
+ *      product to (base + addSum). Both phases are individually
+ *      order-independent (sum/product are commutative), and running them
+ *      in a fixed base→add→multiply sequence keeps the whole function that
+ *      way too.
  */
 function resolveCombine(effects: ActiveEffect[]): number {
-  // Collect 'set' operations first — last one becomes the base value
   let base = 0;
+  let hasSet = false;
+  let addSum = 0;
+  let multiplyProduct = 1;
+  let hasMultiply = false;
   for (const ae of effects) {
-    if (ae.effect.operation === 'set' && typeof ae.effect.value === 'number') {
-      base = ae.effect.value;
+    const { operation, value } = ae.effect;
+    if (typeof value !== 'number') continue;
+    if (operation === 'set') {
+      if (!hasSet || value > base) base = value;
+      hasSet = true;
+    } else if (operation === 'add') {
+      addSum += value;
+    } else if (operation === 'multiply') {
+      multiplyProduct *= value;
+      hasMultiply = true;
     }
   }
-  // 'add' and 'multiply' stack on top of the base
-  return effects.reduce((sum, ae) => {
-    if (ae.effect.operation === 'add'      && typeof ae.effect.value === 'number')
-      return sum + ae.effect.value;
-    if (ae.effect.operation === 'multiply' && typeof ae.effect.value === 'number')
-      return sum * ae.effect.value;
-    return sum;
-  }, base);
+  const withAdditive = base + addSum;
+  return hasMultiply ? withAdditive * multiplyProduct : withAdditive;
 }
 
 /**

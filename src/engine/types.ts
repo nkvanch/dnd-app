@@ -1023,6 +1023,13 @@ export type Feature = {
   tags?:          ActionCardTag[];
   /** Active effects that fire when the player uses this ability (NOT in recomputeDerived). */
   abilityEffects?: AbilityEffect[];
+  /**
+   * Purely descriptive outcome-branch text ("on hit, you also...") — never
+   * auto-applied. See OutcomeMap's doc comment. Sibling to abilityEffects
+   * (same category: consequences), not nested inside activation (which
+   * stays about cost/target/range/save-DC).
+   */
+  outcomes?: OutcomeMap;
   /** Player-set: marks this feature as exploration-relevant for the Exploration view filter. */
   explorationTag?: boolean;
   /**
@@ -1486,6 +1493,22 @@ export type AbilityEffect =
    * See traitCompiler.ts's spell_grant effect kind. */
   | { type: 'cast_spell';       spellId: string };
 
+/**
+ * Purely descriptive outcome-branch data for an activated ability — "what
+ * happens on a hit/miss/success/failure," for the player to read and
+ * self-resolve. NEVER auto-applied: this app shows the dice expression and
+ * lets the player announce/apply the result themselves (see AbilityEffect's
+ * own doc comment), and outcomes follow the exact same philosophy. `effects`
+ * reuses AbilityEffect only for the shape the action-card renderer already
+ * knows how to summarize (set_flag, restore_resource, transform); anything
+ * else — a compound or free-form consequence — goes in `description`
+ * instead of forcing a new AbilityEffect variant to exist just to be
+ * describable.
+ */
+export type OutcomeKey = 'hit' | 'miss' | 'success' | 'failure';
+export type ActivationOutcome = { description?: string; effects?: AbilityEffect[] };
+export type OutcomeMap = Partial<Record<OutcomeKey, ActivationOutcome>>;
+
 /** Tags used to classify a feature and choose its card type. */
 export type ActionCardTag =
   | 'damage' | 'healing' | 'buff' | 'control' | 'utility'
@@ -1514,6 +1537,10 @@ export type ActionCard = {
   layer2: string;
   /** Layer 3: save/attack/note e.g. "Dex Save (half)" — null if not needed */
   layer3: string | null;
+  /** One rendered line per populated OutcomeMap entry, e.g. "On hit: ...".
+   *  Empty when the source Feature has no `outcomes`. Purely descriptive —
+   *  see OutcomeMap's own doc comment. */
+  outcomes: string[];
 
   activation:   FeatureActivation;
   resourceCost: ResourceCost | null;

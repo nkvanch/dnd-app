@@ -1,0 +1,179 @@
+// src/engine/__tests__/actionCards.test.ts
+// First test coverage for this 600+ line file. Focuses on buildOutcomeLines
+// (this phase's new addition — descriptive outcome-branch text, never
+// auto-applied) plus baseline regression coverage for buildLayer1/2/3, which
+// had zero tests before despite every action card in the app going through
+// them.
+import { Feature } from '../types';
+import {
+  buildLayer1, buildLayer2, buildLayer3, buildOutcomeLines, generateActionCard,
+} from '../actionCards';
+import { makeEmptyEntity } from '../../store/characterStore';
+
+function makeFeature(overrides: Partial<Feature> = {}): Feature {
+  return {
+    id: 'test_feature',
+    name: 'Test Feature',
+    description: '',
+    source: { kind: 'class', refId: 'fighter' },
+    level: 1,
+    effects: [],
+    actions: [],
+    choices: [],
+    passive: false,
+    activation: {
+      actionType: 'action',
+      resourceCost: null,
+      range: null,
+      target: 'single',
+      requiresSave: null,
+    },
+    abilityEffects: [],
+    ...overrides,
+  };
+}
+
+describe('buildLayer1', () => {
+  it('combines source label, action type, and card type', () => {
+    const f = makeFeature();
+    expect(buildLayer1(f, 'damage')).toBe('Class • Action • Damage');
+  });
+
+  it('falls back to a generic label when there is no activation', () => {
+    const f = makeFeature({ activation: undefined });
+    expect(buildLayer1(f, 'utility')).toBe('Feature • Utility');
+  });
+});
+
+describe('buildLayer2', () => {
+  it('renders a damage effect as dice + damage type', () => {
+    const f = makeFeature({
+      abilityEffects: [{ type: 'damage', dice: '2d6', damageType: 'fire' }],
+    });
+    expect(buildLayer2(f)).toBe('2d6 Fire');
+  });
+
+  it('appends range when set and not "self"', () => {
+    const f = makeFeature({
+      abilityEffects: [{ type: 'heal', dice: '1d8' }],
+      activation: {
+        actionType: 'action', resourceCost: null, range: '30 feet',
+        target: 'single', requiresSave: null,
+      },
+    });
+    expect(buildLayer2(f)).toBe('Heal 1d8 • Range 30 feet');
+  });
+
+  it('falls back to a slice of the description when there are no effects', () => {
+    const f = makeFeature({ description: 'A purely narrative feature with no mechanical effect.' });
+    expect(buildLayer2(f)).toBe('A purely narrative feature with no mechanical effect.'.slice(0, 60));
+  });
+});
+
+describe('buildLayer3', () => {
+  it('renders an ability save with a numeric DC and half-damage note', () => {
+    const f = makeFeature({
+      abilityEffects: [{ type: 'damage', dice: '2d6', damageType: 'fire', saveOnSuccess: 'half' }],
+      activation: {
+        actionType: 'action', resourceCost: null, range: null, target: 'area',
+        requiresSave: { ability: 'dex', dc: 15 },
+      },
+    });
+    expect(buildLayer3(f)).toBe('DEX Save vs DC 15 (half)');
+  });
+
+  it('returns null when there is nothing to show', () => {
+    expect(buildLayer3(makeFeature())).toBeNull();
+  });
+});
+
+describe('buildOutcomeLines', () => {
+  it('returns an empty array when the feature has no outcomes', () => {
+    expect(buildOutcomeLines(makeFeature())).toEqual([]);
+  });
+
+  it('renders a description-only outcome', () => {
+    const f = makeFeature({
+      outcomes: { hit: { description: 'The target is knocked prone.' } },
+    });
+    expect(buildOutcomeLines(f)).toEqual(['On hit: The target is knocked prone.']);
+  });
+
+  it('renders effects using the same wording buildLayer2 uses for set_flag/restore_resource', () => {
+    const f = makeFeature({
+      outcomes: {
+        hit:  { effects: [{ type: 'set_flag', flag: 'stunned_until_next_turn', value: true }] },
+        miss: { effects: [{ type: 'restore_resource', resourceId: 'ki_points', amount: 1 }] },
+      },
+    });
+    expect(buildOutcomeLines(f)).toEqual([
+      'On hit: Stunned until next turn',
+      'On miss: +1 ki points',
+    ]);
+  });
+
+  it('renders a transform effect (buildLayer2 has no line-formatting for this one)', () => {
+    const f = makeFeature({
+      outcomes: { success: { effects: [{ type: 'transform', formId: 'wolf_form' }] } },
+    });
+    expect(buildOutcomeLines(f)).toEqual(['On success: Transform into wolf form']);
+  });
+
+  it('combines description and effects when both are present', () => {
+    const f = makeFeature({
+      outcomes: {
+        failure: {
+          description: 'You stumble.',
+          effects: [{ type: 'restore_resource', resourceId: 'action_surge', amount: 'full' }],
+        },
+      },
+    });
+    expect(buildOutcomeLines(f)).toEqual(['On failure: You stumble. (Full action surge)']);
+  });
+
+  it('orders lines hit, miss, success, failure regardless of insertion order', () => {
+    const f = makeFeature({
+      outcomes: {
+        failure: { description: 'd' },
+        hit:     { description: 'a' },
+        success: { description: 'c' },
+        miss:    { description: 'b' },
+      },
+    });
+    expect(buildOutcomeLines(f)).toEqual([
+      'On hit: a', 'On miss: b', 'On success: c', 'On failure: d',
+    ]);
+  });
+
+  it('skips an outcome entry that has neither description nor a renderable effect', () => {
+    const f = makeFeature({
+      outcomes: {
+        hit: {}, // present but empty — nothing to show
+        miss: { effects: [{ type: 'damage', dice: '1d4', damageType: 'force' }] }, // buildOutcomeLines doesn't render damage
+      },
+    });
+    expect(buildOutcomeLines(f)).toEqual([]);
+  });
+});
+
+describe('generateActionCard — outcomes wiring', () => {
+  const entity = makeEmptyEntity('e1');
+
+  it('returns null for a passive feature with no activation', () => {
+    const f = makeFeature({ activation: undefined });
+    expect(generateActionCard(f, entity)).toBeNull();
+  });
+
+  it('populates card.outcomes from the feature\'s outcomes map', () => {
+    const f = makeFeature({
+      outcomes: { hit: { description: 'Extra effect on a hit.' } },
+    });
+    const card = generateActionCard(f, entity);
+    expect(card?.outcomes).toEqual(['On hit: Extra effect on a hit.']);
+  });
+
+  it('defaults to an empty outcomes array when the feature has none', () => {
+    const card = generateActionCard(makeFeature(), entity);
+    expect(card?.outcomes).toEqual([]);
+  });
+});

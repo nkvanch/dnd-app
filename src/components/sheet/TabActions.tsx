@@ -154,6 +154,9 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
           <Text style={styles.modalL1}>{card.layer1}</Text>
           <Text style={styles.modalL2}>{card.layer2}</Text>
           {card.layer3 ? <Text style={styles.modalL3}>{card.layer3}</Text> : null}
+          {card.outcomes.map((line, i) => (
+            <Text key={i} style={styles.modalOutcome}>{line}</Text>
+          ))}
 
           {diceExpr && !result && (
             <View style={styles.rollPrompt}>
@@ -207,6 +210,9 @@ export function ActionCardRow({ card, onUse, isFavorite, onToggleFavorite }: Car
         <Text style={styles.cardL1}>{card.layer1}</Text>
         <Text style={styles.cardL2}>{card.layer2}</Text>
         {card.layer3 ? <Text style={styles.cardL3}>{card.layer3}</Text> : null}
+        {card.outcomes.map((line, i) => (
+          <Text key={i} style={styles.cardOutcome}>{line}</Text>
+        ))}
         {!card.available && card.unavailableReason && (
           <Text style={styles.cardUnavail}>{card.unavailableReason}</Text>
         )}
@@ -404,6 +410,7 @@ const styles = StyleSheet.create({
   cardL1:      { fontSize: FontSize.xs, color: Colors.textDim },
   cardL2:      { fontSize: FontSize.sm, color: Colors.textSecondary },
   cardL3:      { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
+  cardOutcome: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 1 },
   cardUnavail: { fontSize: FontSize.xs, color: Colors.red, marginTop: 2 },
 
   useBtn:            { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
@@ -439,6 +446,7 @@ const styles = StyleSheet.create({
   modalL1:   { fontSize: FontSize.xs, color: Colors.textDim },
   modalL2:   { fontSize: FontSize.sm, color: Colors.textSecondary },
   modalL3:   { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
+  modalOutcome: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 1 },
 
   rollPrompt:  { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center', gap: Spacing.sm },
   rollExpr:    { fontSize: FontSize.lg, color: Colors.textPrimary, fontWeight: FontWeight.bold },

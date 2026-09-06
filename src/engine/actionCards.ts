@@ -11,7 +11,7 @@
 
 import {
   Feature, Entity, ActionCard, ActionCardType, ActionCardColor,
-  ActionCardTag, AbilityEffect, FeatureActivation, Spell,
+  ActionCardTag, AbilityEffect, FeatureActivation, Spell, OutcomeKey,
 } from './types';
 import { spellRepo } from '../content/spellRepo';
 import { itemRepo } from '../content/itemRepo';
@@ -331,6 +331,68 @@ export function buildLayer3ForSpell(spell: Spell): string | null {
   return parts.length > 0 ? parts.join(' • ') : null;
 }
 
+// ── Descriptive outcome lines ────────────────────────────────────────────────
+
+const OUTCOME_KEY_LABELS: Record<OutcomeKey, string> = {
+  hit:     'On hit',
+  miss:    'On miss',
+  success: 'On success',
+  failure: 'On failure',
+};
+
+const OUTCOME_KEY_ORDER: OutcomeKey[] = ['hit', 'miss', 'success', 'failure'];
+
+/**
+ * Formats one ActivationOutcome's `effects` using the same wording buildLayer2
+ * uses for the overlapping AbilityEffect variants (set_flag, restore_resource),
+ * plus a line for `transform` (which buildLayer2 has no line-formatting for —
+ * it only uses `transform` to pick the card's cardType). Effects this app
+ * doesn't have a short summary for are silently skipped here — content
+ * authors should put anything not covered by these in `description` instead,
+ * per OutcomeMap's own doc comment.
+ */
+function formatOutcomeEffects(effects: AbilityEffect[]): string[] {
+  const parts: string[] = [];
+  for (const e of effects) {
+    if (e.type === 'set_flag') {
+      parts.push(capitalize(e.flag.replace(/_/g, ' ')));
+    } else if (e.type === 'restore_resource') {
+      const amt = e.amount === 'full' ? 'Full' : `+${e.amount}`;
+      parts.push(`${amt} ${e.resourceId.replace(/_/g, ' ')}`);
+    } else if (e.type === 'transform') {
+      parts.push(`Transform into ${e.formId.replace(/_/g, ' ')}`);
+    }
+  }
+  return parts;
+}
+
+/**
+ * Builds one rendered line per populated OutcomeMap entry — e.g.
+ * "On hit: Target is knocked prone". Purely descriptive, never auto-applied
+ * (see OutcomeMap's doc comment) — this is display text only, the player
+ * still resolves everything themselves. Returns [] when the feature has no
+ * `outcomes`.
+ */
+export function buildOutcomeLines(feature: Feature): string[] {
+  const outcomes = feature.outcomes;
+  if (!outcomes) return [];
+
+  const lines: string[] = [];
+  for (const key of OUTCOME_KEY_ORDER) {
+    const outcome = outcomes[key];
+    if (!outcome) continue;
+
+    const effectsText = formatOutcomeEffects(outcome.effects ?? []).join(' • ');
+    const text = outcome.description
+      ? (effectsText ? `${outcome.description} (${effectsText})` : outcome.description)
+      : effectsText;
+    if (!text) continue;
+
+    lines.push(`${OUTCOME_KEY_LABELS[key]}: ${text}`);
+  }
+  return lines;
+}
+
 // ── Availability ──────────────────────────────────────────────────────────────
 
 /**
@@ -406,6 +468,7 @@ export function generateActionCard(
     layer1:            buildLayer1(feature, cardType),
     layer2:            buildLayer2(feature, entity, opts),
     layer3:            buildLayer3(feature, entity),
+    outcomes:          buildOutcomeLines(feature),
     activation:        feature.activation,
     resourceCost:      feature.activation.resourceCost,
     tabs,
@@ -462,6 +525,7 @@ export function generateSpellCard(
     layer1:            buildLayer1ForSpell(spell, cardType),
     layer2:            buildLayer2ForSpell(spell),
     layer3:            buildLayer3ForSpell(spell),
+    outcomes:          [],
     activation,
     resourceCost:      cost,
     tabs,
@@ -537,6 +601,7 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
       layer1:    'Action • Damage',
       layer2:    `${fmtBonus(unarmed.bonus)} to hit • ${dmgStr}`,
       layer3:    null,
+      outcomes:  [],
       activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
       resourceCost: null,
       tabs: ['actions', 'features'],

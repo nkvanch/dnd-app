@@ -8,13 +8,19 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { CharClass, Ability, DraftTrait } from '../../src/engine/types';
+import { CharClass, Ability, DraftTrait, Entity } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Alert } from '../../src/utils/alert';
 import { itemRepo } from '../../src/content/itemRepo';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, TraitEditorModal, COMMON_TOOLS } from '../../src/components/homebrew/TraitEditor';
+import { getProgressionForClass } from '../../src/content/classes/progressions';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -104,6 +110,8 @@ export default function ClassBuilderScreen() {
   const [equipmentNotes, setEquipmentNotes] = useState('');
 
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // ── Spellcasting
   const [isCaster,        setIsCaster]        = useState(false);
@@ -226,13 +234,11 @@ export default function ClassBuilderScreen() {
     setOpenFeatureId(null);
   }
 
-  // ── Save ───────────────────────────────────────────────────────────────────
+  // ── Build / Save ───────────────────────────────────────────────────────────
 
-  async function handleSave() {
-    if (!name.trim() || saving) return;
-    setSaving(true);
+  function buildHomebrewClass(): CharClass {
     const startLvl = parseInt(spellStartLevel, 10);
-    const cls: CharClass = {
+    return {
       id:          editing?.id ?? (toId(name) || 'homebrew_class'),
       name:        name.trim(),
       hitDie,
@@ -253,6 +259,89 @@ export default function ClassBuilderScreen() {
                                  ? asiLevels : undefined,
       levelFeatures:           levelFeatures.length > 0 ? levelFeatures : undefined,
     };
+  }
+
+  // Read-only test: reuses getProgressionForClass() — the SAME compile
+  // function real class selection calls (progressions.ts:227) — to turn
+  // the draft's simplified fields (savingThrows/armorProfs/levelFeatures/
+  // spellcasting config/etc.) into real LevelEntry grants, so this test
+  // can never drift from what picking the class for real would actually
+  // produce. Same "combine every authored level at once, ignore the real
+  // level-gate" approach as subclass-builder.tsx's runTest (verified safe
+  // there: collectAllEffects only gates on Feature.isActive, never on
+  // level) — a caster class's spell_slots grants specifically OVERWRITE
+  // (not add to) the slot table each level (leveling.ts's "always zero
+  // ALL tiers before applying the new row" comment), so applying every
+  // level in order and keeping the LAST one is exactly right: it shows
+  // the class's max slot table, not a broken accumulation. Only `entry
+  // .grants` are applied — `entry.choices` (ASI/subclass-unlock/spellcasting-
+  // ability picks) are skipped entirely, same as subclass-builder, since
+  // none of them are specific to what THIS class's authored content does.
+  function runTest() {
+    const cls = buildHomebrewClass();
+    const progression = getProgressionForClass(cls);
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => {
+      let updated = e;
+      for (const entry of progression.entries) {
+        for (const grant of entry.grants) {
+          updated = applyGrant(updated, grant, entry.level, cls.id);
+        }
+      }
+      return updated;
+    }, DEFAULT_RULES);
+    const rows = buildFeatSummaryRows(before, after);
+    const beforeFeatureIds = new Set(before.features.map(f => f.id));
+    for (const f of after.features) {
+      if (!beforeFeatureIds.has(f.id)) rows.push({ label: `New feature: ${f.name}` });
+    }
+    const beforeResourceIds = new Set(before.resources.custom.map(r => r.id));
+    for (const r of after.resources.custom) {
+      if (!beforeResourceIds.has(r.id)) rows.push({ label: `New resource: ${r.name} (${r.maximum})` });
+    }
+    // Armor/weapon/tool proficiencies and starting equipment aren't part of
+    // buildFeatSummaryRows either (it only diffs skill/save proficiencies) —
+    // the 'proficiency' grant writes straight to entity.proficiencies.*,
+    // never through a Feature, so it would otherwise be invisible here.
+    const armorGained   = after.proficiencies.armor.filter(a => !before.proficiencies.armor.includes(a));
+    const weaponsGained = after.proficiencies.weapons.filter(w => !before.proficiencies.weapons.includes(w));
+    const toolsGained   = after.proficiencies.tools.filter(t => !before.proficiencies.tools.includes(t));
+    if (armorGained.length > 0)   rows.push({ label: `Armor proficiency: ${armorGained.join(', ')}` });
+    if (weaponsGained.length > 0) rows.push({ label: `Weapon proficiency: ${weaponsGained.join(', ')}` });
+    if (toolsGained.length > 0)   rows.push({ label: `Tool proficiency: ${toolsGained.join(', ')}` });
+    if (startingEquipment.length > 0) {
+      rows.push({ label: `Starting equipment: ${startingEquipment.map(i => i.name).join(', ')}` });
+    }
+    // Spell slots aren't part of buildFeatSummaryRows/DERIVED_NUMERIC_KEYS —
+    // show the class's eventual max slot table (the last level's grant,
+    // per the "always overwrites" note above) same per-tier shape
+    // LevelUpPreviewModal/RestPreviewModal already use.
+    if (after.spellcasting) {
+      for (const tier of ['1','2','3','4','5','6','7','8','9'] as const) {
+        const total = after.spellcasting.slots[tier]?.total ?? 0;
+        if (total > 0) rows.push({ label: `Level ${tier} slots (max): ${total}` });
+      }
+    } else if (isCaster && spellAbilities.length >= 2) {
+      // Multi-ability casting defers the actual ability to a player choice
+      // at creation (a non-auto-resolvable ChoiceDefinition, deliberately
+      // not resolved by this test — see the comment above) — without an
+      // init_spellcasting grant, the spell_slots grants that follow it all
+      // no-op (leveling.ts's spell_slots case: "if (!entity.spellcasting)
+      // return entity"), so slots can't be shown for this specific case.
+      rows.push({ label: "This class lets the player choose a spellcasting ability at creation — spell slots aren't shown here since that choice isn't resolved in this test." });
+    }
+    if (rows.length > 0) {
+      rows.push({ label: 'Shown combined across all authored levels (1-20) at once — not what a level 1 character of this class would actually have yet.' });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
+  }
+
+  async function handleSave() {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    const cls = buildHomebrewClass();
     // Saves and navigates immediately rather than waiting on Alert's OK
     // button dismissal — React Native Web's Alert.alert has unreliable
     // callback-firing in some versions, so the actual save+navigate
@@ -636,9 +725,16 @@ export default function ClassBuilderScreen() {
 
       </ScrollView>
 
-      {/* Footer: Save */}
+      {/* Footer: Test + Save */}
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable
+            style={[styles.testBtn, !name.trim() && styles.btnDisabled]}
+            onPress={runTest}
+            disabled={!name.trim()}
+          >
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable
             style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]}
             onPress={handleSave}
@@ -656,6 +752,13 @@ export default function ClassBuilderScreen() {
         onChange={t => updateFeature(t as LevelFeature)}
         onDone={() => setOpenFeatureId(null)}
         onDelete={() => openFeature && deleteFeature(openFeature.localId)}
+      />
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Class'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
       />
 
     </KeyboardAvoidingView>
@@ -817,10 +920,13 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: {
+    flexDirection: 'row', gap: Spacing.sm,
     padding: Spacing.sm, backgroundColor: Colors.surfaceHigh,
     borderTopWidth: 1, borderTopColor: Colors.border,
   },
-  saveBtn:     { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  testBtn:     { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt:  { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:     { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 

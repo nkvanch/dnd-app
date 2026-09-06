@@ -122,12 +122,12 @@ export default function CharacterSheetScreen() {
   // Tab min-width: fills screen for 6 tabs, scrollable for 7.
   const TAB_MIN_W = Math.floor(Dimensions.get('window').width / 6);
 
-  const mutate = useCallback((updater: (e: Entity) => Entity) => {
+  const mutate = useCallback((updater: (e: Entity) => Entity, label?: string) => {
     if (!id) return;
     updateCharacter(id, e => {
       const updated = updater(e);
       return recomputeDerived(updated, rules);
-    });
+    }, label);
   }, [id, updateCharacter, rules]);
 
   // ── Handlers (all pure engine calls → mutate) ─────────────────────────────
@@ -140,28 +140,29 @@ export default function CharacterSheetScreen() {
     // applies to the real-HP path.
     mutate(e => e.wildShapeState?.active
       ? applyWildShapeDamage(e, amount, rules)
-      : applyDamage(e, amount, rules, damageType));
+      : applyDamage(e, amount, rules, damageType), `Took ${amount}${damageType ? ` ${damageType}` : ''} damage`);
   }, [mutate, rules]);
 
   const handleHeal = useCallback((amount: number) => {
     // Per the book rule, healing has no effect on a Wild Shape beast form's
     // hit points — no-op while transformed, rather than incorrectly healing
     // the player's real HP underneath (which isn't the pool being damaged).
-    mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amount, rules));
+    mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amount, rules), `Healed ${amount}`);
   }, [mutate, rules]);
 
   const handleAddCondition = useCallback((condId: string, duration: DurationTracker | null) => {
     // Look up the condition's mechanical features from content so the engine
     // can enforce them (e.g. Grappled sets speed to 0 in the pipeline).
     const condContent = CONDITIONS_BY_ID[condId];
-    mutate(e => applyCondition(e, condId, 'manual', rules, condContent?.features, duration));
+    mutate(e => applyCondition(e, condId, 'manual', rules, condContent?.features, duration), `Added condition: ${condContent?.name ?? condId}`);
   }, [mutate, rules]);
 
   const handleRemoveCondition = useCallback((condId: string) => {
-    mutate(e => removeCondition(e, condId, rules));
+    mutate(e => removeCondition(e, condId, rules), `Removed condition: ${CONDITIONS_BY_ID[condId]?.name ?? condId}`);
   }, [mutate, rules]);
 
   const handleResourceChange = useCallback((resourceId: string, delta: number) => {
+    const resourceName = entity?.resources.custom.find(r => r.id === resourceId)?.name ?? resourceId;
     mutate(e => ({
       ...e,
       resources: {
@@ -172,8 +173,8 @@ export default function CharacterSheetScreen() {
             : r
         ),
       },
-    }));
-  }, [mutate]);
+    }), `${delta > 0 ? 'Restored' : 'Spent'} ${resourceName}`);
+  }, [mutate, entity]);
 
   const handleSpendSlot = useCallback((tier: string) => {
     mutate(e => {
@@ -190,7 +191,7 @@ export default function CharacterSheetScreen() {
           },
         },
       };
-    });
+    }, `Spent level ${tier} spell slot`);
   }, [mutate]);
 
   const handleRestoreSlot = useCallback((tier: string) => {
@@ -208,7 +209,7 @@ export default function CharacterSheetScreen() {
           },
         },
       };
-    });
+    }, `Restored level ${tier} spell slot`);
   }, [mutate]);
 
   // Set by handleEquip/handleUnequip once the change has been simulated but
@@ -243,9 +244,16 @@ export default function CharacterSheetScreen() {
 
   const confirmEquipPreview = useCallback(() => {
     if (!equipPreview) return;
-    mutate(() => equipPreview.after);
+    mutate(() => equipPreview.after, `${equipPreview.kind === 'equip' ? 'Equipped' : 'Unequipped'} ${equipPreview.itemName}`);
     setEquipPreview(null);
   }, [mutate, equipPreview]);
+
+  // Looks up an item's display name for a mutate() label — falls back to the
+  // raw id when the definition isn't loaded/found, same fallback every other
+  // item-name lookup in this file already uses (handleEquip/handleUnequip).
+  const itemName = useCallback((itemId: string) =>
+    itemRepo.getItemSync(itemId)?.name ?? homebrewItems.find(i => i.id === itemId)?.name ?? itemId,
+  [homebrewItems]);
 
   const handleAddItem = useCallback(async (itemId: string) => {
     await itemRepo.ensureLoaded([itemId]);
@@ -259,8 +267,8 @@ export default function CharacterSheetScreen() {
         ? e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity: i.quantity + 1 } : i)
         : [...e.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }];
       return { ...e, inventory: { ...e.inventory, carried } };
-    });
-  }, [mutate]);
+    }, `Added item: ${itemName(itemId)}`);
+  }, [mutate, itemName]);
 
   const handleRemoveItem = useCallback((itemId: string) => {
     mutate(e => ({
@@ -270,8 +278,8 @@ export default function CharacterSheetScreen() {
         equipped: e.inventory.equipped.filter(i => i.itemId !== itemId),
         carried:  e.inventory.carried.filter(i => i.itemId !== itemId),
       },
-    }));
-  }, [mutate]);
+    }), `Removed item: ${itemName(itemId)}`);
+  }, [mutate, itemName]);
 
   // +/- stepper on a carried stack's quantity. Dropping to 0 removes it
   // outright — same "gone" result as tapping the ✕ button, just reachable
@@ -285,8 +293,8 @@ export default function CharacterSheetScreen() {
         ? e.inventory.carried.filter(i => i.itemId !== itemId)
         : e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity: nextQty } : i);
       return { ...e, inventory: { ...e.inventory, carried } };
-    });
-  }, [mutate]);
+    }, `${delta > 0 ? '+' : ''}${delta} ${itemName(itemId)}`);
+  }, [mutate, itemName]);
 
   // Typed exact quantity (e.g. "you just picked up 20 arrows") — same
   // 0-removes-the-stack behavior as the +/- stepper above.
@@ -298,8 +306,8 @@ export default function CharacterSheetScreen() {
         ? e.inventory.carried.filter(i => i.itemId !== itemId)
         : e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity } : i);
       return { ...e, inventory: { ...e.inventory, carried } };
-    });
-  }, [mutate]);
+    }, `Set ${itemName(itemId)} quantity to ${quantity}`);
+  }, [mutate, itemName]);
 
   const handleApplyInfusion = useCallback((itemId: string, infusionId: string, damageType?: string) => {
     mutate(e => {
@@ -341,8 +349,8 @@ export default function CharacterSheetScreen() {
           carried:  e.inventory.carried.map(applyTo),
         },
       };
-    });
-  }, [mutate]);
+    }, `Infused ${itemName(itemId)}: ${getInfusion(infusionId)?.name ?? infusionId}`);
+  }, [mutate, itemName]);
 
   const handleRemoveInfusion = useCallback((itemId: string) => {
     mutate(e => {
@@ -359,15 +367,15 @@ export default function CharacterSheetScreen() {
           carried:  e.inventory.carried.map(removeFrom),
         },
       };
-    });
-  }, [mutate]);
+    }, `Removed infusion from ${itemName(itemId)}`);
+  }, [mutate, itemName]);
 
   const handleUpdateCurrency = useCallback((currency: import('../../src/engine/types').Currency) => {
-    mutate(e => ({ ...e, inventory: { ...e.inventory, currency } }));
+    mutate(e => ({ ...e, inventory: { ...e.inventory, currency } }), 'Updated currency');
   }, [mutate]);
 
   const handleSaveNotes = useCallback((notes: string) => {
-    mutate(e => ({ ...e, notes }));
+    mutate(e => ({ ...e, notes }), 'Edited notes');
   }, [mutate]);
 
   // Wild Shape duration is tracked in hours (wildShapeState.expiresAt), but
@@ -380,7 +388,7 @@ export default function CharacterSheetScreen() {
   // simplifies. (This composition lives in buildRestMutation, shared with
   // RestPreviewModal, so the preview and the real action can never drift.)
   const handleRest = useCallback((kind: 'short' | 'long') => {
-    mutate(buildRestMutation(kind, rules));
+    mutate(buildRestMutation(kind, rules), kind === 'short' ? 'Short Rest' : 'Long Rest');
   }, [mutate, rules]);
 
   const [restPreview, setRestPreview] = useState<'short' | 'long' | null>(null);
@@ -573,13 +581,13 @@ export default function CharacterSheetScreen() {
                 onResourceChange={handleResourceChange}
                 onSpendSlot={handleSpendSlot}
                 onRestoreSlot={handleRestoreSlot}
-                onEntityUpdate={updated => mutate(() => updated)}
+                onEntityUpdate={updated => mutate(() => updated, 'Character progression')}
               />
             ) : (
               <TabExploration
                 entity={entity}
                 rules={rules}
-                onEntityUpdate={updated => mutate(() => updated)}
+                onEntityUpdate={updated => mutate(() => updated, 'Exploration action')}
                 onDamage={handleDamage}
                 onHeal={handleHeal}
                 onAddCondition={handleAddCondition}
@@ -593,14 +601,14 @@ export default function CharacterSheetScreen() {
           <TabActions
             entity={entity}
             rules={rules}
-            onEntityUpdate={updated => mutate(() => updated)}
+            onEntityUpdate={updated => mutate(() => updated, 'Used action card')}
           />
         )}
         {activeTab === 'spells' && (
           <TabSpells
             entity={entity}
             rules={rules}
-            onEntityUpdate={updated => mutate(() => updated)}
+            onEntityUpdate={updated => mutate(() => updated, 'Cast spell')}
           />
         )}
         {activeTab === 'abilities' && (
@@ -610,14 +618,14 @@ export default function CharacterSheetScreen() {
             isDm={isDm}
             campaignId={campaignId}
             deviceId={deviceId}
-            onEntityUpdate={updated => mutate(() => updated)}
+            onEntityUpdate={updated => mutate(() => updated, 'Ability override')}
           />
         )}
         {activeTab === 'features' && (
           <TabFeatures
             entity={entity}
             rules={rules}
-            onEntityUpdate={updated => mutate(() => updated)}
+            onEntityUpdate={updated => mutate(() => updated, 'Edited features')}
           />
         )}
         {activeTab === 'inventory' && (
@@ -662,7 +670,7 @@ export default function CharacterSheetScreen() {
         visible={freeEditOpen}
         entity={entity}
         rules={rules}
-        onApply={updated => mutate(() => updated)}
+        onApply={updated => mutate(() => updated, 'Free edit')}
         onClose={() => setFreeEditOpen(false)}
       />
 

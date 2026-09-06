@@ -34,7 +34,7 @@ const KNOWN_CONDITIONS = [
 interface QuickPanelProps {
   entity:    Entity;
   rules:     CampaignRules;
-  onUpdate:  (updated: Entity) => void;
+  onUpdate:  (updated: Entity, label?: string) => void;
   onClose:   () => void;
 }
 
@@ -58,11 +58,13 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
   // below — neither concentrates.
   function submitDamage() {
     if (!validNum) return;
+    const dt = damageType.trim() || undefined;
+    const label = `${entity.identity.name}: took ${amount}${dt ? ` ${dt}` : ''} damage`;
     if (entity.wildShapeState?.active) {
-      onUpdate(applyWildShapeDamage(entity, amount, rules));
+      onUpdate(applyWildShapeDamage(entity, amount, rules), label);
     } else {
-      const updated = applyDamage(entity, amount, rules, damageType.trim() || undefined);
-      onUpdate(updated);
+      const updated = applyDamage(entity, amount, rules, dt);
+      onUpdate(updated, label);
       if (updated.spellcasting?.concentrating) {
         setConcEntity(updated);
         setConcDamage(amount);
@@ -75,7 +77,7 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
   function submitHeal() {
     if (!validNum) return;
     if (entity.wildShapeState?.active) { setMode(null); setValueStr(''); return; }
-    onUpdate(applyHealing(entity, amount, rules));
+    onUpdate(applyHealing(entity, amount, rules), `${entity.identity.name}: healed ${amount}`);
     setMode(null); setValueStr('');
   }
 
@@ -83,12 +85,13 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
     Alert.alert('Kill', `Set ${entity.identity.name}'s HP to 0?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Kill', style: 'destructive', onPress: () => {
+        const label = `${entity.identity.name}: set HP to 0 (Kill)`;
         if (entity.wildShapeState?.active) {
-          onUpdate(applyWildShapeDamage(entity, entity.wildShapeState.beastHpMax, rules));
+          onUpdate(applyWildShapeDamage(entity, entity.wildShapeState.beastHpMax, rules), label);
           return;
         }
         const updated = { ...entity, resources: { ...entity.resources, hp: { ...entity.resources.hp, current: 0 } } };
-        onUpdate(recomputeDerived(updated, rules));
+        onUpdate(recomputeDerived(updated, rules), label);
       }},
     ]);
   }
@@ -169,7 +172,7 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
           {/* Active conditions with remove */}
           {entity.conditions.map(c => (
             <Pressable key={c.id} style={styles.condRowItem} onPress={() => {
-              onUpdate(removeCondition(entity, c.id, rules));
+              onUpdate(removeCondition(entity, c.id, rules), `${entity.identity.name}: removed condition: ${c.id}`);
             }}>
               <Text style={styles.condItemTxt}>{c.id} (tap to remove)</Text>
             </Pressable>
@@ -177,7 +180,7 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
           {/* Add new condition */}
           {filteredConds.map(c => (
             <Pressable key={c} style={[styles.condRowItem, styles.condRowAdd]} onPress={() => {
-              onUpdate(applyCondition(entity, c, 'dm', rules));
+              onUpdate(applyCondition(entity, c, 'dm', rules), `${entity.identity.name}: added condition: ${c}`);
               setCondSearch('');
             }}>
               <Text style={styles.condItemTxt}>+ {c}</Text>
@@ -192,7 +195,7 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
           damageTaken={concDamage}
           entity={concEntity}
           rules={rules}
-          onResolve={updated => { onUpdate(updated); setConcOpen(false); }}
+          onResolve={updated => { onUpdate(updated, `${entity.identity.name}: concentration check`); setConcOpen(false); }}
           onClose={() => setConcOpen(false)}
         />
       )}
@@ -286,11 +289,11 @@ export default function EncounterScreen() {
   // Selected entity for the quick panel
   const selectedEntity = entities.find(e => e.id === selectedId);
 
-  function handleEntityUpdate(updated: Entity) {
+  function handleEntityUpdate(updated: Entity, label?: string) {
     updateEntity(updated.id, () => updated);
     // If it's a player character, persist to store too
     if (updated.kind === 'character') {
-      updateCharacter(updated.id, () => updated);
+      updateCharacter(updated.id, () => updated, label);
     }
   }
 
@@ -329,7 +332,7 @@ export default function EncounterScreen() {
           entities.forEach(e => {
             if (e.kind === 'character') {
               const updated = expireOverrides(e, 'end_of_encounter', rules);
-              updateCharacter(e.id, () => updated);
+              updateCharacter(e.id, () => updated, 'End of encounter (override expiry)');
             }
           });
           endCombat();

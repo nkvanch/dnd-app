@@ -19,13 +19,18 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, asSubclassId } from '../../src/engine/types';
+import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, Entity, asSubclassId } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
 import { toId } from '../../src/content/traitCompiler';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 type LevelFeature = DraftTrait & { level: number };
@@ -69,6 +74,8 @@ export default function SubclassBuilderScreen() {
   const [addName,  setAddName]  = useState('');
   const [openFeatureId, setOpenFeatureId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: a saved HomebrewSubclass is compiled ClassProgression.entries,
   // not a raw draft (subclasses have no homebrewDraft field — their features
@@ -113,9 +120,8 @@ export default function SubclassBuilderScreen() {
   const sortedLevels = Array.from(featuresByLevel.keys()).sort((a, b) => a - b);
   const openFeature = levelFeatures.find(f => f.localId === openFeatureId) ?? null;
 
-  async function handleSave() {
-    if (!name.trim() || !classId || !parentClass || saving) return;
-    setSaving(true);
+  function buildHomebrewSubclass(): HomebrewSubclass | null {
+    if (!classId || !parentClass) return null;
     const subclassId = editing?.id ?? (toId(name) || 'homebrew_subclass');
     // Every official subclass file mirrors its parent class's hit die on
     // each entry — LevelEntry.hpDie is mandatory, so derive it rather than
@@ -136,7 +142,58 @@ export default function SubclassBuilderScreen() {
       }
       entries.push({ level, hpDie, choices: [], grants });
     }
-    const subclass: HomebrewSubclass = { id: asSubclassId(subclassId), name: name.trim(), classId, entries };
+    return { id: asSubclassId(subclassId), name: name.trim(), classId, entries };
+  }
+
+  // Read-only test: apply EVERY authored level's grants to a disposable
+  // level-1 scratch entity in one shot — deliberately NOT level-gated the
+  // way the real applySubclassToEntity() is (leveling.ts:686-687, `if
+  // (entry.level > ownClassLevel) continue`), since the goal here is "what
+  // does this whole subclass do across its full progression," not "what
+  // would a level-1 character have." collectAllEffects() (pipeline.ts)
+  // only gates on Feature.isActive, never on level vs. the entity's own
+  // identity.level, so combining every level's grants onto one level-1
+  // scratch entity is safe and produces a correct combined diff — a
+  // disclosure row makes the "combined, not level-gated" framing explicit
+  // rather than letting a reader assume this is what a level-1 character
+  // of this subclass actually has. Reuses buildFeatSummaryRows (ability/
+  // derived/skill/save/HP) plus the same inline "new feature"/"new
+  // resource" rows subrace/background-builder already use, since a
+  // subclass can grant many of both across its levels.
+  function runTest() {
+    const subclass = buildHomebrewSubclass();
+    if (!subclass) return;
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => {
+      let updated = e;
+      for (const entry of subclass.entries) {
+        for (const grant of entry.grants) {
+          updated = applyGrant(updated, grant, entry.level, subclass.classId);
+        }
+      }
+      return updated;
+    }, DEFAULT_RULES);
+    const rows = buildFeatSummaryRows(before, after);
+    const beforeFeatureIds = new Set(before.features.map(f => f.id));
+    for (const f of after.features) {
+      if (!beforeFeatureIds.has(f.id)) rows.push({ label: `New feature: ${f.name}` });
+    }
+    const beforeResourceIds = new Set(before.resources.custom.map(r => r.id));
+    for (const r of after.resources.custom) {
+      if (!beforeResourceIds.has(r.id)) rows.push({ label: `New resource: ${r.name} (${r.maximum})` });
+    }
+    if (rows.length > 0) {
+      rows.push({ label: 'Shown combined across all authored levels (1-20) at once — not what a level 1 character of this subclass would actually have yet.' });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
+  }
+
+  async function handleSave() {
+    const subclass = buildHomebrewSubclass();
+    if (!name.trim() || !subclass || saving) return;
+    setSaving(true);
     try {
       await saveItem('subclass', subclass);
       goBack();
@@ -149,6 +206,7 @@ export default function SubclassBuilderScreen() {
   }
 
   const canSave = !!name.trim() && !!classId && !saving;
+  const canTest = !!name.trim() && !!classId;
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -250,6 +308,9 @@ export default function SubclassBuilderScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !canTest && styles.btnDisabled]} onPress={runTest} disabled={!canTest}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, !canSave && styles.btnDisabled]} onPress={handleSave} disabled={!canSave}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Subclass'}</Text>
           </Pressable>
@@ -262,6 +323,13 @@ export default function SubclassBuilderScreen() {
         onChange={t => updateFeature(t as LevelFeature)}
         onDone={() => setOpenFeatureId(null)}
         onDelete={() => openFeature && deleteFeature(openFeature.localId)}
+      />
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Subclass'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
       />
     </KeyboardAvoidingView>
   );
@@ -321,8 +389,10 @@ const styles = StyleSheet.create({
   inlineAddBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.md, justifyContent: 'center' },
   inlineAddTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
-  footer:   { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:  { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:   { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:  { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:  { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

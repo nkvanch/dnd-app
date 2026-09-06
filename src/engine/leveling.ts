@@ -621,11 +621,26 @@ function canAutoResolve(choice: ChoiceDefinition): boolean {
 
 // ── queueChoice ───────────────────────────────────────────────────────────────
 
-export function queueChoice(entity: Entity, choice: ChoiceDefinition, atLevel: number): Entity {
+/**
+ * Queues a pending choice. `originId` (typically the granting class's id)
+ * namespaces the stored id so two different sources that happen to author
+ * the same ChoiceDefinition.id at the same level can never collide and
+ * silently overwrite each other's selection in entity.choices — every
+ * official class's own skill-choice id is already manually prefixed
+ * (e.g. 'rogue_skills_lvl_1'), which is why this hasn't been hit in
+ * practice yet, but nothing enforced it, and homebrew content has no such
+ * discipline. Omitting originId keeps the exact pre-existing id format
+ * ('${choice.id}_${atLevel}') — used deliberately by the bonus-feat house
+ * rule (see its own call sites), which is keyed by total character level
+ * specifically so it's already shared/global across classes, not
+ * per-source.
+ */
+export function queueChoice(entity: Entity, choice: ChoiceDefinition, atLevel: number, originId?: string): Entity {
+  const id = originId ? `${originId}:${choice.id}_${atLevel}` : `${choice.id}_${atLevel}`;
   return {
     ...entity,
     choices: [...entity.choices, {
-      id:          `${choice.id}_${atLevel}`,
+      id,
       definition:  choice,
       grantedAt:   atLevel,
       resolved:    false,
@@ -696,7 +711,7 @@ export function applySubclassToEntity(
           }
         }
       } else {
-        updated = queueChoice(updated, choice, entry.level);
+        updated = queueChoice(updated, choice, entry.level, classId);
       }
     }
   }
@@ -856,7 +871,7 @@ export function levelUpClass(
         for (const grant of choice.grants) updated = applyGrant(updated, grant, newClassLevel, targetClassId);
       }
     } else {
-      updated = queueChoice(updated, { ...choice, forClassId: targetClassId }, newClassLevel);
+      updated = queueChoice(updated, { ...choice, forClassId: targetClassId }, newClassLevel, targetClassId);
     }
   }
 
@@ -940,7 +955,7 @@ export function levelUp(
           }
         }
       } else {
-        updated = queueChoice(updated, choice, lvl);
+        updated = queueChoice(updated, choice, lvl, progression.classId);
       }
     }
 

@@ -12,7 +12,7 @@
 import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import {
   applyGrant, applyHP, levelUp, resolveChoice, applySubclassToEntity,
-  applyInfusionChoiceToEntity, applySpellChoiceToEntity, levelUpClass,
+  applyInfusionChoiceToEntity, applySpellChoiceToEntity, levelUpClass, queueChoice,
 } from '../leveling';
 import {
   Entity, Grant, ClassProgression, LevelEntry, ChoiceDefinition, CharClass,
@@ -256,8 +256,33 @@ describe('levelUp', () => {
     expect(updated.identity.level).toBe(2);
     expect(updated.features.map(f => f.id)).toContain('lvl2_feat');
     expect(updated.proficiencies.armor).toEqual(['light']);
-    // the level-1 skill choice has exactly 2 pool options ≠ count(1) → not auto-resolvable → queued
-    expect(updated.choices.some(c => c.id === 'skill_choice_1' && !c.resolved)).toBe(true);
+    // the level-1 skill choice has exactly 2 pool options ≠ count(1) → not auto-resolvable → queued.
+    // Stored id is namespaced by the granting class (progression.classId, 'wizard') so a second
+    // class authoring the same raw choice id at the same level can never collide with this one.
+    expect(updated.choices.some(c => c.id === 'wizard:skill_choice_1' && !c.resolved)).toBe(true);
+  });
+
+  it('namespaces queued choices by origin so two classes authoring the identical raw choice id at the same level never collide (C19 regression)', () => {
+    // Two DIFFERENT classes (or a homebrew author copy-pasting an id) both
+    // queue a choice with the exact same raw ChoiceDefinition.id ('skill_choice')
+    // at the exact same level — before this fix, the second queueChoice call
+    // would silently overwrite the first's stored id and the player would
+    // lose one of the two choices with no error.
+    const sharedChoice: ChoiceDefinition = {
+      id: 'skill_choice', prompt: 'Choose a skill', kind: 'skill', count: 1,
+      pool: [{ id: 'arcana', label: 'Arcana', value: 'arcana' }, { id: 'history', label: 'History', value: 'history' }],
+      grants: [], required: true, resolved: false,
+    };
+    let e = entity();
+    e = queueChoice(e, sharedChoice, 1, 'wizard');
+    e = queueChoice(e, sharedChoice, 1, 'rogue');
+    expect(e.choices).toHaveLength(2);
+    expect(e.choices.map(c => c.id)).toEqual(['wizard:skill_choice_1', 'rogue:skill_choice_1']);
+    // Omitting originId keeps the exact pre-existing format — the bonus-feat
+    // house rule relies on this being stable across app versions for its own
+    // idempotency check (see leveling.ts's bonusFeatEveryLevel call sites).
+    const noOrigin = queueChoice(entity(), sharedChoice, 1);
+    expect(noOrigin.choices[0].id).toBe('skill_choice_1');
   });
 
   it('is idempotent when targetLevel is not above the current level', () => {

@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ability, DraftTrait } from '../../src/engine/types';
+import { Ability, DraftTrait, Entity } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
@@ -20,6 +20,11 @@ import { SafeBottomView } from '../../src/components/SafeBottomView';
 import {
   newDraftSubrace, buildSubrace, AbilityScoreGrid, TraitListEditor,
 } from '../../src/components/homebrew/TraitEditor';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 export default function SubraceBuilderScreen() {
@@ -45,6 +50,8 @@ export default function SubraceBuilderScreen() {
   });
   const [traits, setTraits] = useState<DraftTrait[]>([]);
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: restore the exact authoring state from homebrewDraft, same
   // lossless-reload approach as race-builder.tsx (see Subrace.homebrewDraft's
@@ -86,6 +93,52 @@ export default function SubraceBuilderScreen() {
   }
 
   const canSave = !!name.trim() && !!parentId && !saving;
+  const canTest = !!name.trim() && !!parentId;
+
+  // Read-only test: apply the draft subrace's features/resources to a
+  // disposable level-1 scratch entity, same shape race-detail.tsx's own
+  // selectRace() uses for a REAL subrace pick (loop applyGrant over
+  // .features, then .resources) — no real character touched. Reuses
+  // FeatPreviewModal's buildFeatSummaryRows as the base — it already diffs
+  // EFFECTIVE ability scores (a flat ASI, which nearly every subrace has,
+  // is a stat_modifier effect exactly like a feat's), every
+  // DERIVED_NUMERIC_KEYS stat, new skill/save proficiencies, and max HP.
+  // Layered on top: a subrace, unlike a single feat, can grant MULTIPLE
+  // features and resource pools, so "new feature"/"new resource" rows are
+  // appended the same way LevelUpPreviewModal's own builder computes them
+  // (small enough not to warrant extracting into a shared helper for a
+  // two-use case). No disclosed-choice gap here: unlike Feat's
+  // abilityChoice/skillChoice, buildSubrace() never sets
+  // Subrace.pendingChoices or .flexibleAsi, so every effect a drafted
+  // subrace can carry is already fully resolved and included in the test.
+  function runTest() {
+    if (!parentId) return;
+    const draft = { ...newDraftSubrace(name.trim()), abiBonuses, traits };
+    const subrace = buildSubrace(draft, parentId);
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => {
+      let updated = e;
+      for (const feature of subrace.features) {
+        updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, feature.level ?? 0);
+      }
+      for (const resource of subrace.resources ?? []) {
+        updated = applyGrant(updated, { kind: 'resource', value: resource }, 0, undefined, { kind: 'subrace', id: subrace.id });
+      }
+      return updated;
+    }, DEFAULT_RULES);
+    const rows = buildFeatSummaryRows(before, after);
+    const beforeFeatureIds = new Set(before.features.map(f => f.id));
+    for (const f of after.features) {
+      if (!beforeFeatureIds.has(f.id)) rows.push({ label: `New feature: ${f.name}` });
+    }
+    const beforeResourceIds = new Set(before.resources.custom.map(r => r.id));
+    for (const r of after.resources.custom) {
+      if (!beforeResourceIds.has(r.id)) rows.push({ label: `New resource: ${r.name} (${r.maximum})` });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
+  }
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -148,11 +201,21 @@ export default function SubraceBuilderScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !canTest && styles.btnDisabled]} onPress={runTest} disabled={!canTest}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, !canSave && styles.btnDisabled]} onPress={handleSave} disabled={!canSave}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Subrace'}</Text>
           </Pressable>
         </View>
       </SafeBottomView>
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Subrace'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -188,8 +251,10 @@ const styles = StyleSheet.create({
   parentResultTxt: { color: Colors.textPrimary, fontSize: FontSize.sm, flex: 1 },
   parentResultAdd: { color: Colors.gold, fontSize: FontSize.xs, fontWeight: FontWeight.bold },
 
-  footer:   { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:  { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:   { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:  { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:  { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

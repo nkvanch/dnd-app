@@ -8,8 +8,10 @@ import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import {
   applyDamage, applyHealing, recordDeathSave,
   startWildShape, endWildShape, applyWildShapeDamage,
+  concentrationCheck,
 } from '../combat';
-import { Entity } from '../types';
+import { setRandomSource } from '../dice';
+import { Entity, SpellSlots, FeatureInstance } from '../types';
 
 /** A fresh level-1 test entity with known HP/stats, independent of any
  *  particular class/race content so these tests don't break if content
@@ -191,5 +193,113 @@ describe('Wild Shape', () => {
     const e = testEntity(20);
     const still = endWildShape(e, DEFAULT_RULES);
     expect(still).toEqual(e);
+  });
+});
+
+// ── concentrationCheck ───────────────────────────────────────────────────────
+// concentrationCheck() had zero callers anywhere in the app before this
+// phase wired it into TabCharacter.tsx/ConcentrationModal.tsx and
+// app/dm/encounter.tsx — the hand-rolled UI code it replaced had two real
+// bugs (raw ability modifier instead of the derived, proficiency-aware save
+// bonus; no War Caster logic) that these tests lock the real function
+// against regressing into.
+
+function emptySlots(): SpellSlots {
+  const tiers = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+  const slots = {} as SpellSlots;
+  for (const t of tiers) slots[t] = { total: 0, used: 0 };
+  return slots;
+}
+
+/** A concentrating entity with a known, directly-set CON save bonus —
+ *  bypasses recomputeDerived entirely so tests aren't coupled to any
+ *  particular race/class/feat's real bonus math. */
+function concentratingEntity(conSaveBonus: number, overrides: Partial<Entity> = {}): Entity {
+  const e = testEntity(20);
+  const spellFeature: FeatureInstance = {
+    id: 'spell_effect_1', name: 'Bless Effect', description: '', level: null,
+    effects: [], actions: [], choices: [], passive: true, isActive: true,
+    source: { kind: 'spell', refId: 'bless' },
+  };
+  return {
+    ...e,
+    features: [...e.features, spellFeature],
+    spellcasting: {
+      ability: 'wis', slots: emptySlots(), cantrips: [], known: [], prepared: [],
+      concentrating: 'bless',
+    },
+    conditionMonitor: {
+      ...e.conditionMonitor,
+      flags: { ...e.conditionMonitor.flags, concentrating: true },
+    },
+    derived: { ...e.derived, savingThrows: { ...e.derived.savingThrows, con: conSaveBonus } },
+    ...overrides,
+  };
+}
+
+describe('concentrationCheck', () => {
+  afterEach(() => {
+    setRandomSource(Math.random);
+  });
+
+  it('is a no-op when the entity is not concentrating', () => {
+    const e = testEntity(20);
+    const result = concentrationCheck(e, 10, DEFAULT_RULES);
+    expect(result).toBe(e); // same reference — no work done at all
+  });
+
+  it('DC is max(10, floor(damage/2)) — floor, not round/ceil, at the .5 boundary', () => {
+    // 21 damage / 2 = 10.5 → DC must floor to 10, not ceil to 11.
+    const e = concentratingEntity(0);
+    setRandomSource(() => 9 / 20); // d20 roll of exactly 10 (floor(0.45*20)+1=10)
+    const result = concentrationCheck(e, 21, DEFAULT_RULES);
+    // If DC were (incorrectly) 11, a roll of 10 would fail and drop concentration.
+    expect(result.spellcasting!.concentrating).toBe('bless');
+  });
+
+  it('passing the save keeps concentration untouched', () => {
+    const e = concentratingEntity(5);
+    setRandomSource(() => 0.9); // d20 roll of 19, +5 = 24, comfortably beats any DC
+    const result = concentrationCheck(e, 10, DEFAULT_RULES); // DC 10
+    expect(result.spellcasting!.concentrating).toBe('bless');
+    expect(result.features.some(f => f.id === 'spell_effect_1')).toBe(true);
+  });
+
+  it('failing the save drops concentration — spell features removed, flag cleared', () => {
+    const e = concentratingEntity(0);
+    setRandomSource(() => 0); // d20 roll of 1, +0 = 1, fails any DC >= 10
+    const result = concentrationCheck(e, 10, DEFAULT_RULES); // DC 10
+    expect(result.spellcasting!.concentrating).toBeNull();
+    expect(result.features.some(f => f.id === 'spell_effect_1')).toBe(false);
+    expect(result.conditionMonitor.flags.concentrating).toBe(false);
+  });
+
+  it('grants War Caster advantage — rolls twice, keeps the higher', () => {
+    const e = concentratingEntity(0, {
+      features: [
+        {
+          id: 'feat_war_caster', name: 'War Caster', description: '', level: null,
+          effects: [], actions: [], choices: [], passive: true, isActive: true,
+          source: { kind: 'feat', refId: 'war_caster' },
+        },
+      ],
+    });
+    // First roll fails (1), second roll comfortably passes (20) — War Caster
+    // must keep the second, higher roll rather than stopping at the first.
+    let calls = 0;
+    const sequence = [0, 0.95]; // d20: 1, then 20
+    setRandomSource(() => sequence[calls++]);
+    const result = concentrationCheck(e, 10, DEFAULT_RULES); // DC 10
+    expect(result.spellcasting!.concentrating).toBe('bless');
+  });
+
+  it('without War Caster, only rolls once — a first-roll failure is final', () => {
+    const e = concentratingEntity(0);
+    let calls = 0;
+    const sequence = [0, 0.95]; // if a second roll were (incorrectly) taken, it would pass
+    setRandomSource(() => sequence[calls++]);
+    const result = concentrationCheck(e, 10, DEFAULT_RULES); // DC 10
+    expect(result.spellcasting!.concentrating).toBeNull(); // fails on the one roll it takes
+    expect(calls).toBe(1); // proves only one roll happened
   });
 });

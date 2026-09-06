@@ -10,14 +10,13 @@ import {
 import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
-import { dropConcentration } from '../../engine/combat';
 import { tickDurations } from '../../engine/conditions';
-import { recomputeDerived, modifier } from '../../engine/pipeline';
+import { recomputeDerived } from '../../engine/pipeline';
 import { levelUp, levelUpClass } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
 import { getClassLevels } from '../../engine/multiclass';
 import { spendHitDie, discardHitDie } from '../../engine/rest';
-import { rollD20, rollExpression } from '../../engine/dice';
+import { rollExpression } from '../../engine/dice';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
 import { getProgressionForClass, mergeSubclassIntoProgression } from '../../content/classes/progressions';
 import { getSubclassEntryMerged } from '../../content/subclasses/subclassBrowse';
@@ -28,6 +27,7 @@ import { useHomebrewStore } from '../../store/homebrewStore';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
+import { ConcentrationModal } from './ConcentrationModal';
 import { CompanionSection } from './CompanionSection';
 import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard } from './TabActions';
 import { LevelUpPreviewModal } from './LevelUpPreviewModal';
@@ -104,67 +104,6 @@ type MoveType = 'fly' | 'swim' | 'climb' | 'burrow';
 const MOVE_TYPE_LABELS: Record<MoveType, string> = { fly: 'Fly', swim: 'Swim', climb: 'Climb', burrow: 'Burrow' };
 const MOVE_TYPE_OPTIONS: MoveType[] = ['climb', 'swim', 'fly', 'burrow'];
 const MANUAL_MOVEMENT_FEATURE_ID = 'manual_movement';
-
-// ── Concentration Check Modal ─────────────────────────────────────────────────
-
-function ConcentrationModal({
-  visible, dc, conMod, entity, rules,
-  onResolve, onClose,
-}: {
-  visible: boolean;
-  dc: number;
-  conMod: number;
-  entity: Entity;
-  rules: CampaignRules;
-  onResolve: (updated: Entity) => void;
-  onClose: () => void;
-}) {
-  const [roll, setRoll] = useState<number | null>(null);
-  const spellName = entity.spellcasting?.concentrating ?? 'spell';
-
-  function handleRoll() {
-    const result = rollD20(conMod).total;
-    setRoll(result);
-    if (result < dc) {
-      // Fail — drop concentration
-      const updated = recomputeDerived(dropConcentration(entity), rules);
-      onResolve(updated);
-    } else {
-      onResolve(entity);
-    }
-  }
-
-  const passed = roll !== null ? roll >= dc : null;
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.concSheet} onPress={e => e.stopPropagation()}>
-          <Text style={styles.concTitle}>🧠 Concentration Check</Text>
-          <Text style={styles.concSpell}>Concentrating on: {spellName}</Text>
-          <Text style={styles.concDc}>DC {dc} Constitution save</Text>
-
-          {roll === null ? (
-            <Pressable style={styles.rollBtn} onPress={handleRoll}>
-              <Text style={styles.rollBtnTxt}>🎲 Roll CON Save (+{conMod})</Text>
-            </Pressable>
-          ) : (
-            <View style={[styles.concResult, passed ? styles.concPass : styles.concFail]}>
-              <Text style={styles.concResultNum}>{roll}</Text>
-              <Text style={styles.concResultLabel}>
-                {passed ? '✅ Pass — Concentration kept' : '❌ Fail — Concentration dropped'}
-              </Text>
-            </View>
-          )}
-
-          <Pressable style={styles.closeBtnSm} onPress={onClose}>
-            <Text style={styles.closeBtnSmTxt}>Done</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
 
 // ── Death Saves Section ───────────────────────────────────────────────────────
 
@@ -818,7 +757,7 @@ export function TabCharacter({
     setRoundsPromptOpen(false);
   }
   const [concOpen,   setConcOpen]   = useState(false);
-  const [concDc,     setConcDc]     = useState(10);
+  const [concDamage, setConcDamage] = useState(0);
   const [manualHpOpen, setManualHpOpen] = useState(false);
   const [maxHpOpen,    setMaxHpOpen]    = useState(false);
   const [tempHpOpen,   setTempHpOpen]   = useState(false);
@@ -945,8 +884,7 @@ export function TabCharacter({
     const { characters } = useCharacterStore.getState();
     const fresh = characters.find(c => c.id === entity.id);
     if (fresh?.spellcasting?.concentrating) {
-      const dc = Math.max(10, Math.floor(amount / 2));
-      setConcDc(dc);
+      setConcDamage(amount);
       setConcOpen(true);
     }
   }, [onDamage, entity.id]);
@@ -958,7 +896,6 @@ export function TabCharacter({
   const isDying = resources.hp.current === 0 && resources.hp.maximum > 0;
 
   const exhaustion = entity.conditionMonitor.exhaustion;
-  const conMod     = modifier(entity.stats.con);
 
   const filteredConds = KNOWN_CONDITIONS.filter(c =>
     c.includes(condSearch.toLowerCase()) &&
@@ -1393,8 +1330,7 @@ export function TabCharacter({
 
       <ConcentrationModal
         visible={concOpen}
-        dc={concDc}
-        conMod={conMod}
+        damageTaken={concDamage}
         entity={useCharacterStore.getState().characters.find(c => c.id === entity.id) ?? entity}
         rules={rules}
         onResolve={updated => { onEntityUpdate(updated); setConcOpen(false); }}
@@ -1835,14 +1771,8 @@ const styles = StyleSheet.create({
   },
   concTitle:        { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.blue, textAlign: 'center' },
   concSpell:        { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
-  concDc:           { fontSize: FontSize.md, color: Colors.textPrimary, textAlign: 'center', fontWeight: FontWeight.bold },
   rollBtn:          { backgroundColor: Colors.blue, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   rollBtnTxt:       { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.md },
-  concResult:       { borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center', gap: Spacing.xs },
-  concPass:         { backgroundColor: Colors.green + '22', borderWidth: 1, borderColor: Colors.green + '66' },
-  concFail:         { backgroundColor: Colors.red   + '22', borderWidth: 1, borderColor: Colors.red   + '66' },
-  concResultNum:    { fontSize: 40, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  concResultLabel:  { fontSize: FontSize.md, color: Colors.textPrimary, textAlign: 'center' },
   closeBtnSm:       { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center' },
   closeBtnSmTxt:    { color: Colors.textSecondary, fontSize: FontSize.md },
 

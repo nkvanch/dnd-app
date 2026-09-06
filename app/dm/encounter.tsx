@@ -20,6 +20,7 @@ import { recomputeDerived } from '../../src/engine/pipeline';
 import { Entity, CampaignRules } from '../../src/engine/types';
 import { InitiativeEntry } from '../../src/engine/combat';
 import { DEFAULT_RULES } from '../../src/store/characterStore';
+import { ConcentrationModal } from '../../src/components/sheet/ConcentrationModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const KNOWN_CONDITIONS = [
@@ -42,6 +43,9 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
   const [valueStr, setValueStr] = useState('');
   const [damageType, setDamageType] = useState('');
   const [condSearch, setCondSearch] = useState('');
+  const [concOpen,   setConcOpen]   = useState(false);
+  const [concEntity, setConcEntity] = useState<Entity | null>(null);
+  const [concDamage, setConcDamage] = useState(0);
 
   const amount = parseInt(valueStr, 10);
   const validNum = !isNaN(amount) && amount > 0;
@@ -50,11 +54,21 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
   // player's real HP underneath — same rule and same branch app/sheet/[id].tsx's
   // handleDamage/handleHeal already apply for the player's own controls.
   // These DM-facing controls previously always hit real HP unconditionally.
+  // Wild Shape/companion damage deliberately skips the concentration check
+  // below — neither concentrates.
   function submitDamage() {
     if (!validNum) return;
-    onUpdate(entity.wildShapeState?.active
-      ? applyWildShapeDamage(entity, amount, rules)
-      : applyDamage(entity, amount, rules, damageType.trim() || undefined));
+    if (entity.wildShapeState?.active) {
+      onUpdate(applyWildShapeDamage(entity, amount, rules));
+    } else {
+      const updated = applyDamage(entity, amount, rules, damageType.trim() || undefined);
+      onUpdate(updated);
+      if (updated.spellcasting?.concentrating) {
+        setConcEntity(updated);
+        setConcDamage(amount);
+        setConcOpen(true);
+      }
+    }
     setMode(null); setValueStr(''); setDamageType('');
   }
 
@@ -170,6 +184,17 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
             </Pressable>
           ))}
         </View>
+      )}
+
+      {concEntity && (
+        <ConcentrationModal
+          visible={concOpen}
+          damageTaken={concDamage}
+          entity={concEntity}
+          rules={rules}
+          onResolve={updated => { onUpdate(updated); setConcOpen(false); }}
+          onClose={() => setConcOpen(false)}
+        />
       )}
     </View>
   );

@@ -270,6 +270,20 @@ export function makeEmptyEntity(id: string, kind: Entity['kind'] = 'character'):
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
+/**
+ * One undoable step. `before` is an array (not a bare Entity) even though
+ * every current mutation is single-entity — avoids a reshape later if a
+ * future bulk action needs to undo several entities as one step.
+ * Session-local only — NOT persisted (see character_timeline, Phase B, for
+ * the persistent equivalent). Cleared on app restart.
+ */
+export type UndoEntry = { entityId: string; before: Entity[]; label: string; timestamp: number };
+
+/** Fixed entry count, not a memory-size heuristic — Entity objects here are
+ *  small (~5-30KB, see schema.ts's own reasoning for the same data) and JS
+ *  memory estimation is unreliable, so a simple cap is the right tool. */
+const UNDO_STACK_LIMIT = 50;
+
 type CharacterStore = {
   /** All saved characters (hydrated from SQLite on startup). */
   characters:  Entity[];
@@ -281,6 +295,9 @@ type CharacterStore = {
   isLoading:   boolean;
   /** Lightweight metadata for the character list screen. */
   characterMeta: EntityMeta[];
+  /** Session-local undo/redo history — see UndoEntry's own doc comment. */
+  undoStack: UndoEntry[];
+  redoStack: UndoEntry[];
 
   // ── Startup ──────────────────────────────────────────────────────────────
 
@@ -311,9 +328,21 @@ type CharacterStore = {
   /**
    * Replace an existing character using a pure updater function.
    * Zustand state updates synchronously; SQLite write fires async.
+   * `label` (default 'Edit') is what the undo/redo UI and the persistent
+   * mechanical timeline show for this step — every existing call site
+   * omitting it keeps compiling and just shows the generic default.
    */
-  updateCharacter: (id: string, updater: (e: Entity) => Entity) => void;
+  updateCharacter: (id: string, updater: (e: Entity) => Entity, label?: string) => void;
   deleteCharacter: (id: string) => void;
+
+  /** Steps back one entry in undoStack, pushing the replaced state onto
+   *  redoStack (a true inverse of redo()). No-op if undoStack is empty. */
+  undo: () => void;
+  /** Steps forward one entry in redoStack, pushing the replaced state onto
+   *  undoStack. No-op if redoStack is empty. Cleared by any NEW
+   *  updateCharacter call — the standard "branching history invalidates
+   *  the old redo path" rule. */
+  redo: () => void;
 
   /**
    * Apply an entity snapshot received from a sync peer.
@@ -344,6 +373,8 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   draft:         null,
   rules:         DEFAULT_RULES,
   isLoading:     false,
+  undoStack:     [],
+  redoStack:     [],
 
   // ── Startup ───────────────────────────────────────────────────────────────
 
@@ -433,7 +464,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
 
   // ── Character management ───────────────────────────────────────────────────
 
-  updateCharacter: (id, updater) => {
+  updateCharacter: (id, updater, label = 'Edit') => {
     let updated: Entity | null = null;
     let previous: Entity | null = null;
 
@@ -444,7 +475,15 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
         updated = updater(c);
         return updated;
       });
-      return { characters: next };
+      if (!previous) return { characters: next };
+      // A real, new mutation invalidates any prior redo path — standard
+      // undo/redo branching-history rule.
+      const undoEntry: UndoEntry = { entityId: id, before: [previous], label, timestamp: Date.now() };
+      return {
+        characters: next,
+        undoStack: [undoEntry, ...state.undoStack].slice(0, UNDO_STACK_LIMIT),
+        redoStack: [],
+      };
     });
 
     if (updated) {
@@ -459,6 +498,75 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       // "every minor change overwrites unrelated fields on other devices" —
       // see syncEntityPatch's doc comment in syncManager.ts.
       syncManager.syncEntityPatch(id, previous, updated);
+    }
+  },
+
+  /**
+   * Steps back one undo entry: replaces the current entity with the stored
+   * "before" snapshot, and pushes what it replaced onto redoStack (the true
+   * inverse of redo()). Bypasses updateCharacter entirely — going through
+   * it would push ANOTHER undo entry for the undo itself. Still goes through
+   * the same scheduleSave/syncEntityPatch persist+sync path every other
+   * mutation does, so an undo is indistinguishable from a normal edit to
+   * SQLite or sync peers. Self-healing if the target character no longer
+   * exists (e.g. deleted since the entry was pushed): the stale entry is
+   * still popped so it can't block future undos, it just skips the
+   * persist/sync/redo-push.
+   */
+  undo: () => {
+    const entry = get().undoStack[0];
+    if (!entry) return;
+    const { entityId: id, before: [restored], label } = entry;
+    let replaced: Entity | null = null;
+
+    set(state => {
+      const characters = state.characters.map(c => {
+        if (c.id !== id) return c;
+        replaced = c;
+        return restored;
+      });
+      const redoEntry: UndoEntry | null = replaced
+        ? { entityId: id, before: [replaced], label, timestamp: Date.now() }
+        : null;
+      return {
+        characters,
+        undoStack: state.undoStack.slice(1),
+        redoStack: redoEntry ? [redoEntry, ...state.redoStack].slice(0, UNDO_STACK_LIMIT) : state.redoStack,
+      };
+    });
+
+    if (replaced) {
+      scheduleSave(restored);
+      syncManager.syncEntityPatch(id, replaced, restored);
+    }
+  },
+
+  /** Steps forward one redo entry — the exact mirror of undo() above. */
+  redo: () => {
+    const entry = get().redoStack[0];
+    if (!entry) return;
+    const { entityId: id, before: [restored], label } = entry;
+    let replaced: Entity | null = null;
+
+    set(state => {
+      const characters = state.characters.map(c => {
+        if (c.id !== id) return c;
+        replaced = c;
+        return restored;
+      });
+      const undoEntry: UndoEntry | null = replaced
+        ? { entityId: id, before: [replaced], label, timestamp: Date.now() }
+        : null;
+      return {
+        characters,
+        redoStack: state.redoStack.slice(1),
+        undoStack: undoEntry ? [undoEntry, ...state.undoStack].slice(0, UNDO_STACK_LIMIT) : state.undoStack,
+      };
+    });
+
+    if (replaced) {
+      scheduleSave(restored);
+      syncManager.syncEntityPatch(id, replaced, restored);
     }
   },
 

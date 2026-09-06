@@ -60,6 +60,10 @@ export default function CharacterSheetScreen() {
   const characters      = useCharacterStore(s => s.characters);
   const updateCharacter = useCharacterStore(s => s.updateCharacter);
   const rules           = useCharacterStore(s => s.rules);
+  const undoStack       = useCharacterStore(s => s.undoStack);
+  const redoStack       = useCharacterStore(s => s.redoStack);
+  const undo            = useCharacterStore(s => s.undo);
+  const redo            = useCharacterStore(s => s.redo);
   const isDm        = useCampaignStore(s => s.isDm);
   const campaignId  = useCampaignStore(s => s.activeCampaign?.id ?? '');
   const deviceId    = useSessionStore(s => s.session?.deviceId ?? '');
@@ -419,6 +423,28 @@ export default function CharacterSheetScreen() {
           <Text style={styles.charName} numberOfLines={1}>
             {identity.name || 'Unnamed'}
           </Text>
+          {/* Session-local undo/redo — see characterStore.ts's UndoEntry doc
+              comment. Scoped to THIS character: the underlying stacks are
+              global across every updateCharacter call site (this screen,
+              app/dm/encounter.tsx, app/dm/character/[id].tsx), so a button
+              here only enables when the top entry actually belongs to the
+              character being viewed — otherwise a DM undoing on this
+              screen could silently undo an unrelated character's last
+              action from the encounter panel. */}
+          <Pressable
+            style={styles.freeEditBtn}
+            disabled={undoStack[0]?.entityId !== id}
+            onPress={undo}
+          >
+            <Text style={[styles.freeEditTxt, undoStack[0]?.entityId !== id && styles.undoRedoTxtDisabled]}>↩</Text>
+          </Pressable>
+          <Pressable
+            style={styles.freeEditBtn}
+            disabled={redoStack[0]?.entityId !== id}
+            onPress={redo}
+          >
+            <Text style={[styles.freeEditTxt, redoStack[0]?.entityId !== id && styles.undoRedoTxtDisabled]}>↪</Text>
+          </Pressable>
           {/* Free-edit is offered outside a campaign, unless the DM has locked it. */}
           {freeEditAllowed && (
             <Pressable style={styles.freeEditBtn} onPress={() => setFreeEditOpen(true)}>
@@ -702,6 +728,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 3, marginRight: Spacing.xs,
   },
   freeEditTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  undoRedoTxtDisabled: { color: Colors.textDim },
   charSub:  { fontSize: FontSize.xs, color: Colors.textSecondary },
 
   statPills: { flexDirection: 'row', gap: Spacing.xs },

@@ -12,6 +12,7 @@
 import {
   Feature, Entity, ActionCard, ActionCardType, ActionCardColor,
   ActionCardTag, AbilityEffect, FeatureActivation, Spell, OutcomeKey,
+  FeatureInstance,
 } from './types';
 import { spellRepo } from '../content/spellRepo';
 import { itemRepo } from '../content/itemRepo';
@@ -393,6 +394,21 @@ export function buildOutcomeLines(feature: Feature): string[] {
   return lines;
 }
 
+/**
+ * Active features with a `trigger` but no `activation` — Sneak Attack is
+ * the headline example (passive:true, no activation at all, so
+ * generateActionCard's own gate never produces a card for it). These are
+ * surfaced instead by TabActions.tsx's TriggeredFeaturesSection, a plain
+ * reference list alongside the existing UniversalActionsSection — never a
+ * synthesized fake activation, which would misrepresent something the app
+ * doesn't actually dispatch.
+ */
+export function getTriggeredFeatures(entity: Entity): FeatureInstance[] {
+  return entity.features.filter(f =>
+    f.isActive && f.trigger && (f.level === null || f.level <= entity.identity.level)
+  );
+}
+
 // ── Availability ──────────────────────────────────────────────────────────────
 
 /**
@@ -469,6 +485,7 @@ export function generateActionCard(
     layer2:            buildLayer2(feature, entity, opts),
     layer3:            buildLayer3(feature, entity),
     outcomes:          buildOutcomeLines(feature),
+    triggerNote:       feature.trigger ?? null,
     activation:        feature.activation,
     resourceCost:      feature.activation.resourceCost,
     tabs,
@@ -526,6 +543,7 @@ export function generateSpellCard(
     layer2:            buildLayer2ForSpell(spell),
     layer3:            buildLayer3ForSpell(spell),
     outcomes:          [],
+    triggerNote:       null,
     activation,
     resourceCost:      cost,
     tabs,
@@ -602,6 +620,7 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
       layer2:    `${fmtBonus(unarmed.bonus)} to hit • ${dmgStr}`,
       layer3:    null,
       outcomes:  [],
+      triggerNote: null,
       activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
       resourceCost: null,
       tabs: ['actions', 'features'],

@@ -1030,6 +1030,18 @@ export type Feature = {
    * stays about cost/target/range/save-DC).
    */
   outcomes?: OutcomeMap;
+  /**
+   * Short, human-readable description of the triggering moment — "Once per
+   * turn, when you hit with a weapon attack and have advantage..." for
+   * Sneak Attack. Purely descriptive, independent of `activation` (works
+   * with or without one): a feature with both gets one extra note line on
+   * its action card; a feature with `trigger` but no `activation` (Sneak
+   * Attack itself — passive:true, no activation at all) is never given a
+   * synthesized fake activation just to be describable — it surfaces
+   * instead in TabActions.tsx's TriggeredFeaturesSection, a reference list
+   * alongside the existing UniversalActionsSection.
+   */
+  trigger?: string;
   /** Player-set: marks this feature as exploration-relevant for the Exploration view filter. */
   explorationTag?: boolean;
   /**
@@ -1541,6 +1553,10 @@ export type ActionCard = {
    *  Empty when the source Feature has no `outcomes`. Purely descriptive —
    *  see OutcomeMap's own doc comment. */
   outcomes: string[];
+  /** The source Feature's `trigger` text, verbatim — null when it has none
+   *  (or has one but no `activation`, in which case it never gets a card
+   *  at all; see TriggeredFeaturesSection instead). Purely descriptive. */
+  triggerNote: string | null;
 
   activation:   FeatureActivation;
   resourceCost: ResourceCost | null;

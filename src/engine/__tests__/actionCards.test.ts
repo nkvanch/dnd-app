@@ -4,9 +4,10 @@
 // auto-applied) plus baseline regression coverage for buildLayer1/2/3, which
 // had zero tests before despite every action card in the app going through
 // them.
-import { Feature } from '../types';
+import { Feature, FeatureInstance, Entity } from '../types';
 import {
   buildLayer1, buildLayer2, buildLayer3, buildOutcomeLines, generateActionCard,
+  getTriggeredFeatures,
 } from '../actionCards';
 import { makeEmptyEntity } from '../../store/characterStore';
 
@@ -175,5 +176,67 @@ describe('generateActionCard — outcomes wiring', () => {
   it('defaults to an empty outcomes array when the feature has none', () => {
     const card = generateActionCard(makeFeature(), entity);
     expect(card?.outcomes).toEqual([]);
+  });
+});
+
+describe('generateActionCard — triggerNote wiring', () => {
+  const entity = makeEmptyEntity('e1');
+
+  it('populates card.triggerNote when the feature has both trigger and activation', () => {
+    const f = makeFeature({ trigger: 'When you are hit by an attack.' });
+    const card = generateActionCard(f, entity);
+    expect(card?.triggerNote).toBe('When you are hit by an attack.');
+  });
+
+  it('defaults triggerNote to null when the feature has no trigger', () => {
+    const card = generateActionCard(makeFeature(), entity);
+    expect(card?.triggerNote).toBeNull();
+  });
+
+  it('still returns null for a trigger-only feature with no activation — never synthesizes a fake one', () => {
+    const f = makeFeature({ activation: undefined, trigger: 'Once per turn, on a hit with advantage.' });
+    expect(generateActionCard(f, entity)).toBeNull();
+  });
+});
+
+function makeFeatureInstance(overrides: Partial<FeatureInstance> = {}): FeatureInstance {
+  return { ...makeFeature(), isActive: true, ...overrides };
+}
+
+function entityWithFeatures(features: FeatureInstance[], level = 1): Entity {
+  const e = makeEmptyEntity('e1');
+  return { ...e, identity: { ...e.identity, level }, features };
+}
+
+describe('getTriggeredFeatures', () => {
+  it('includes an active feature with a trigger and no level restriction', () => {
+    const sneakAttack = makeFeatureInstance({
+      id: 'sneak_attack', activation: undefined, level: null,
+      trigger: 'Once per turn, on a hit with advantage or an ally within 5 ft.',
+    });
+    const entity = entityWithFeatures([sneakAttack]);
+    expect(getTriggeredFeatures(entity).map(f => f.id)).toEqual(['sneak_attack']);
+  });
+
+  it('excludes an inactive feature', () => {
+    const f = makeFeatureInstance({ isActive: false, trigger: 'Something.' });
+    expect(getTriggeredFeatures(entityWithFeatures([f]))).toEqual([]);
+  });
+
+  it('excludes a feature with no trigger', () => {
+    const f = makeFeatureInstance({ trigger: undefined });
+    expect(getTriggeredFeatures(entityWithFeatures([f]))).toEqual([]);
+  });
+
+  it('excludes a feature gated to a level higher than the entity\'s current level', () => {
+    const f = makeFeatureInstance({ level: 5, trigger: 'Something.' });
+    const entity = entityWithFeatures([f], 3);
+    expect(getTriggeredFeatures(entity)).toEqual([]);
+  });
+
+  it('includes a feature gated to a level at or below the entity\'s current level', () => {
+    const f = makeFeatureInstance({ id: 'uncanny_dodge', level: 5, trigger: 'When hit by an attack you can see.' });
+    const entity = entityWithFeatures([f], 5);
+    expect(getTriggeredFeatures(entity).map(x => x.id)).toEqual(['uncanny_dodge']);
   });
 });

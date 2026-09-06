@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules } from '../../engine/types';
 import { applyAbilityEffects, endWildShape } from '../../engine/combat';
+import { getTriggeredFeatures } from '../../engine/actionCards';
 import { recomputeDerived } from '../../engine/pipeline';
 import { rollExpression } from '../../engine/dice';
 import { DiceRoll } from '../../engine/types';
@@ -154,6 +155,7 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
           <Text style={styles.modalL1}>{card.layer1}</Text>
           <Text style={styles.modalL2}>{card.layer2}</Text>
           {card.layer3 ? <Text style={styles.modalL3}>{card.layer3}</Text> : null}
+          {card.triggerNote ? <Text style={styles.modalOutcome}>{card.triggerNote}</Text> : null}
           {card.outcomes.map((line, i) => (
             <Text key={i} style={styles.modalOutcome}>{line}</Text>
           ))}
@@ -210,6 +212,7 @@ export function ActionCardRow({ card, onUse, isFavorite, onToggleFavorite }: Car
         <Text style={styles.cardL1}>{card.layer1}</Text>
         <Text style={styles.cardL2}>{card.layer2}</Text>
         {card.layer3 ? <Text style={styles.cardL3}>{card.layer3}</Text> : null}
+        {card.triggerNote ? <Text style={styles.cardOutcome}>{card.triggerNote}</Text> : null}
         {card.outcomes.map((line, i) => (
           <Text key={i} style={styles.cardOutcome}>{line}</Text>
         ))}
@@ -283,6 +286,32 @@ function UniversalActionsSection() {
         <View key={a.name} style={styles.universalRow}>
           <Text style={styles.universalName}>{a.name}</Text>
           <Text style={styles.universalBlurb}>{a.blurb}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ── Triggered features (trigger text, but no activation — no card to show) ────
+// Sneak Attack is the headline example: passive:true, no activation at all, so
+// generateActionCard's own gate never produces a card for it. Same collapsed
+// reference-list shape as UniversalActionsSection, but DYNAMIC — driven by the
+// entity's own active features instead of a hardcoded list.
+
+function TriggeredFeaturesSection({ entity }: { entity: Entity }) {
+  const [open, setOpen] = useState(false);
+  const triggered = getTriggeredFeatures(entity);
+  if (triggered.length === 0) return null;
+  return (
+    <View style={styles.section}>
+      <Pressable style={styles.universalHeader} onPress={() => setOpen(o => !o)}>
+        <Text style={styles.sectionTitle}>TRIGGERED FEATURES</Text>
+        <Text style={styles.universalChevron}>{open ? '▲' : '▼'}</Text>
+      </Pressable>
+      {open && triggered.map(f => (
+        <View key={f.id} style={styles.universalRow}>
+          <Text style={styles.universalName}>{f.name}</Text>
+          <Text style={styles.universalBlurb}>{f.trigger}</Text>
         </View>
       ))}
     </View>
@@ -371,6 +400,7 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
       <Section title="REACTIONS"     cards={reactions}    onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
       <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
       <UniversalActionsSection />
+      <TriggeredFeaturesSection entity={entity} />
 
       <UseModal
         card={activeCard}

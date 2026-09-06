@@ -48,70 +48,112 @@ export default function RootLayout() {
   const loadHomebrew   = useHomebrewStore(s => s.loadHomebrew);
 
   useEffect(() => {
+    // Each step below is isolated in its own try/catch and degrades
+    // gracefully on failure instead of aborting every step after it — the
+    // same pattern homebrewStore.loadHomebrew() already uses internally.
+    // A hiccup in, say, the content DB must not cost the player their whole
+    // character list: a character should still open (possibly with missing
+    // spell/item data) rather than the app showing "no characters" because
+    // an unrelated step upstream threw.
     async function boot() {
       try {
-        // 1. Open / migrate the database (idempotent)
-        await initDb();
-        // 1b. Open the static-content DB (spells + items, seeded from a
-        //     bundled asset on first launch — see src/db/contentDb.ts) and
-        //     build the Tier-1 indexes. Must finish before loadCharacters(),
-        //     which warms Tier-2 for every loaded character's known spells
-        //     and equipped/carried items.
-        await initContentDb();
-        await Promise.all([spellRepo.init(), itemRepo.init()]);
-        // 2. Hydrate stores from SQLite. loadHomebrew must resolve BEFORE
-        //    loadCharacters — loadCharacters synchronously re-hydrates every
-        //    equipped/carried item's features (hydrateItemFeatures in
-        //    characterStore.ts), which falls back to homebrewStore for any
-        //    item itemRepo (official-only) doesn't have. Running them in
-        //    parallel would race: on a slow homebrew load, a homebrew
-        //    weapon/armor's features would silently come back empty (no
-        //    attack card, no AC effect) until the next full reload.
-        //    loadHomebrew merges built-in homebrew (Abyss Knight, Skeleton)
-        //    directly from BUILTIN_HOMEBREW — no separate seeding step needed.
+        // 1. Open / migrate the character database (idempotent). Nothing
+        //    downstream can do much without this, but a throw here still
+        //    shouldn't prevent the content DB / homebrew / sync steps from
+        //    at least attempting to run.
+        try {
+          await initDb();
+        } catch (e) {
+          console.error('[_layout] initDb failed — character storage unavailable this session:', e);
+        }
+
+        // 2. Open the static-content DB (spells + items, seeded from a
+        //    bundled asset on first launch — see src/db/contentDb.ts) and
+        //    build the Tier-1 indexes. Normally finishes before
+        //    loadCharacters(), which warms Tier-2 for every loaded
+        //    character's known spells and equipped/carried items — but a
+        //    failure here degrades to an empty spell/item index (spellRepo/
+        //    itemRepo.native.ts already catch their own SQLite/JSON errors)
+        //    rather than blocking characters from loading at all.
+        try {
+          await initContentDb();
+          await Promise.all([spellRepo.init(), itemRepo.init()]);
+        } catch (e) {
+          console.error('[_layout] Content DB (spells/items) init failed — spells/items unavailable this session:', e);
+        }
+
+        // 3. Hydrate homebrew. loadHomebrew() already catches its own
+        //    errors internally and never rethrows (see homebrewStore.ts),
+        //    so no try/catch is needed here — it's called directly so
+        //    loadCharacters() below still waits for it to resolve (or
+        //    degrade) first, same ordering rationale as before: it
+        //    synchronously re-hydrates every equipped/carried item's
+        //    features, which falls back to homebrewStore for any item
+        //    itemRepo (official-only) doesn't have.
         await loadHomebrew();
-        await Promise.all([
-          loadCharacters(),
-          initSession(),
-        ]);
-        // 3. Restore combat state if a combat was active before the app was killed
+
+        // 4. Load characters + session. Runs regardless of whether steps
+        //    1-3 fully succeeded — a character can still open in a
+        //    degraded state (missing spell/item data) per the app's own
+        //    "a character always opens" invariant; it must not be starved
+        //    entirely by an unrelated upstream failure.
+        try {
+          await Promise.all([
+            loadCharacters(),
+            initSession(),
+          ]);
+        } catch (e) {
+          console.error('[_layout] loadCharacters/initSession failed:', e);
+        }
+
+        // 5. Restore combat state if a combat was active before the app was killed
         loadCombatState().then(state => {
           if (state?.active) {
             useCombatStore.setState({ combat: state });
           }
         }).catch(() => { /* non-critical */ });
 
-        // 4. Wire up the sync manager — must run after stores are hydrated
-        const { applyIncomingEntity, applyIncomingPatch } = useCharacterStore.getState();
-        const { setStatus }           = useSyncStore.getState();
+        // 6. Wire up the sync manager — must run after stores are hydrated
+        try {
+          const { applyIncomingEntity, applyIncomingPatch } = useCharacterStore.getState();
+          const { setStatus }           = useSyncStore.getState();
 
-        syncManager.initialise({
-          onStatusChange: (status) => {
-            setStatus(status);
-          },
-          onEntityReceived: (entity) => {
-            applyIncomingEntity(entity);
-          },
-          onEntityPatchReceived: (entityId, patch) => {
-            applyIncomingPatch(entityId, patch);
-          },
-          onSyncEvent: (event) => {
-            // DM responds to entity_full_sync requests from players
-            if (event.changeType === 'entity_full_sync' && event.payload === null) {
-              const entity = useCharacterStore.getState().characters
-                .find(c => c.id === event.entityId);
-              if (entity) syncManager.broadcastEntity(entity);
-            }
-          },
-        });
+          syncManager.initialise({
+            onStatusChange: (status) => {
+              setStatus(status);
+            },
+            onEntityReceived: (entity) => {
+              applyIncomingEntity(entity);
+            },
+            onEntityPatchReceived: (entityId, patch) => {
+              applyIncomingPatch(entityId, patch);
+            },
+            onSyncEvent: (event) => {
+              // DM responds to entity_full_sync requests from players
+              if (event.changeType === 'entity_full_sync' && event.payload === null) {
+                const entity = useCharacterStore.getState().characters
+                  .find(c => c.id === event.entityId);
+                if (entity) syncManager.broadcastEntity(entity);
+              }
+            },
+          });
+        } catch (e) {
+          console.error('[_layout] Sync manager init failed:', e);
+        }
 
-        // 5. Restore campaign state and re-establish sync if a campaign was
+        // 7. Restore campaign state and re-establish sync if a campaign was
         //    active before the app was last closed. loadCampaigns sets isDm and
         //    activeCampaign from the persisted session; resumeSync then re-hosts
         //    (DM) or reconnects (player). Both are safe no-ops when offline.
-        await useCampaignStore.getState().loadCampaigns();
-        await useCampaignStore.getState().resumeSync();
+        try {
+          await useCampaignStore.getState().loadCampaigns();
+          await useCampaignStore.getState().resumeSync();
+        } catch (e) {
+          console.error('[_layout] Campaign restore failed:', e);
+        }
       } catch (e) {
+        // Defense in depth — every step above already catches its own
+        // errors, so this only fires on something genuinely unforeseen.
         console.error('[_layout] Boot sequence failed:', e);
       } finally {
         setDbReady(true);

@@ -25,22 +25,38 @@ const fullCache = new Map<string, Item>();
 
 async function init(): Promise<void> {
   if (index.length > 0) return;
-  const db = getContentDb();
-  const rows = await db.getAllAsync<ItemIndexRow>(
-    'SELECT id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd FROM items'
-  );
-  index = rows
-    .filter(r => !SRD_ONLY || r.srd === 1)
-    .map(r => ({
-      id:              r.id,
-      name:            r.name,
-      weight:          r.weight,
-      cost:            r.cost,
-      properties:      JSON.parse(r.properties) as string[],
-      hasDamageEffect: r.hasDamageEffect === 1,
-      weaponRange:     r.weaponRange,
-      srd:             r.srd === null ? undefined : r.srd === 1,
-    }));
+  try {
+    const db = getContentDb();
+    const rows = await db.getAllAsync<ItemIndexRow>(
+      'SELECT id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd FROM items'
+    );
+    const built: ItemIndexEntry[] = [];
+    for (const r of rows) {
+      if (SRD_ONLY && r.srd !== 1) continue;
+      try {
+        built.push({
+          id:              r.id,
+          name:            r.name,
+          weight:          r.weight,
+          cost:            r.cost,
+          properties:      JSON.parse(r.properties) as string[],
+          hasDamageEffect: r.hasDamageEffect === 1,
+          weaponRange:     r.weaponRange,
+          srd:             r.srd === null ? undefined : r.srd === 1,
+        });
+      } catch (e) {
+        // One malformed row (e.g. bad `properties` JSON) shouldn't cost
+        // every other item in the index.
+        console.error(`[itemRepo] Skipping malformed item index row "${r.id}":`, e);
+      }
+    }
+    index = built;
+  } catch (e) {
+    // Degrade gracefully — an empty item index means item pickers show
+    // nothing rather than the whole boot sequence aborting downstream
+    // (see app/_layout.tsx boot()).
+    console.error('[itemRepo] init failed — item index unavailable this session:', e);
+  }
 }
 
 function getIndex(): ItemIndexEntry[] {
@@ -50,14 +66,28 @@ function getIndex(): ItemIndexEntry[] {
 async function ensureLoaded(ids: string[]): Promise<void> {
   const missing = Array.from(new Set(ids)).filter(id => !fullCache.has(id));
   if (missing.length === 0) return;
-  const db = getContentDb();
-  const placeholders = missing.map(() => '?').join(',');
-  const rows = await db.getAllAsync<{ id: string; data: string }>(
-    `SELECT id, data FROM items WHERE id IN (${placeholders})`,
-    missing
-  );
-  for (const row of rows) {
-    fullCache.set(row.id, JSON.parse(row.data) as Item);
+  try {
+    const db = getContentDb();
+    const placeholders = missing.map(() => '?').join(',');
+    const rows = await db.getAllAsync<{ id: string; data: string }>(
+      `SELECT id, data FROM items WHERE id IN (${placeholders})`,
+      missing
+    );
+    for (const row of rows) {
+      try {
+        fullCache.set(row.id, JSON.parse(row.data) as Item);
+      } catch (e) {
+        // A malformed record just stays missing from the cache — callers
+        // already handle an unresolved item id as "not found," and the id
+        // stays eligible for a retry on the next ensureLoaded() call.
+        console.error(`[itemRepo] Skipping malformed item record "${row.id}":`, e);
+      }
+    }
+  } catch (e) {
+    // Query-level failure (e.g. a SQLite hiccup) — leave `missing` uncached
+    // rather than throwing, so one bad ensureLoaded() call doesn't take
+    // down the caller (e.g. character hydration in characterStore.ts).
+    console.error('[itemRepo] ensureLoaded failed:', e);
   }
 }
 

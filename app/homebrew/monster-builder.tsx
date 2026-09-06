@@ -179,8 +179,9 @@ export default function MonsterBuilderScreen() {
     const id = editing?.id ?? (toId(name) || 'homebrew_monster');
     const features: Feature[] = [];
     const resources: ResourceGrant[] = [];
+    const usedIds = new Set<string>();
     for (const t of traits) {
-      const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'campaign', sourceRefId: id, level: null });
+      const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'campaign', sourceRefId: id, level: null, usedIds });
       features.push(feature, ...(extraFeatures ?? []));
       if (resource) resources.push(resource);
       resources.push(...(extraResources ?? []));

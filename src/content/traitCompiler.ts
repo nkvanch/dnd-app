@@ -99,12 +99,39 @@ export function newDraftTrait(name: string): DraftTrait {
 }
 
 /**
+ * Disambiguates `base` against ids already seen in `usedIds` by appending
+ * `_2`, `_3`, etc. — used so two DraftTraits with the same (or same-once-
+ * slugified) name authored under one idPrefix don't silently produce the
+ * same Feature.id (see buildTraitFeatureCore's own doc comment). Mutates
+ * `usedIds`, adding whichever id it returns, so a caller building several
+ * traits in a loop can pass the same Set through and have each call see
+ * every id chosen so far. No-op (returns `base` unchanged) when `usedIds`
+ * is omitted — every existing caller that doesn't pass one keeps its exact
+ * prior behavior.
+ */
+function disambiguateId(base: string, usedIds?: Set<string>): string {
+  if (!usedIds) return base;
+  let candidate = base;
+  let n = 2;
+  while (usedIds.has(candidate)) {
+    candidate = `${base}_${n}`;
+    n++;
+  }
+  usedIds.add(candidate);
+  return candidate;
+}
+
+/**
  * Compiles one DraftTrait into a Feature (+ a ResourceGrant if it's a
  * resource_ability). `idPrefix` keeps each caller's existing id-uniqueness
  * scheme (race-builder uses the owning race/subrace id; class/subclass
  * builders use `${classOrSubclassId}_l${level}`). `sourceKind`/`sourceRefId`
  * populate Feature.source so Features-tab grouping-by-source stays correct
- * regardless of which builder produced the feature.
+ * regardless of which builder produced the feature. `usedIds`, when passed,
+ * disambiguates against every id already produced under this idPrefix (see
+ * disambiguateId) — e.g. two traits both named "Resilience" on the same
+ * homebrew monster would otherwise silently collide into one Feature.id,
+ * and a lookup/removal by id would then target whichever came first.
  *
  * `extraFeatures`/`extraResources` exist because spell_grant is the one
  * effect kind that doesn't fit "one Feature (+one optional Resource)" — a
@@ -117,9 +144,9 @@ export function newDraftTrait(name: string): DraftTrait {
  */
 function buildTraitFeatureCore(
   t: DraftTrait,
-  opts: { idPrefix: string; sourceKind: FeatureSource['kind']; sourceRefId: string; level: number | null },
+  opts: { idPrefix: string; sourceKind: FeatureSource['kind']; sourceRefId: string; level: number | null; usedIds?: Set<string> },
 ): { feature: Feature; resource: ResourceGrant | null; extraFeatures?: Feature[]; extraResources?: ResourceGrant[] } {
-  const fid = `${opts.idPrefix}_${toId(t.name)}`;
+  const fid = disambiguateId(`${opts.idPrefix}_${toId(t.name)}`, opts.usedIds);
   const base: Omit<Feature, 'effects' | 'activation' | 'abilityEffects'> = {
     id: fid, name: t.name,
     description: t.description.trim() || t.name,
@@ -338,13 +365,16 @@ function buildTraitFeatureCore(
  */
 export function buildTraitFeature(
   t: DraftTrait,
-  opts: { idPrefix: string; sourceKind: FeatureSource['kind']; sourceRefId: string; level: number | null },
+  opts: { idPrefix: string; sourceKind: FeatureSource['kind']; sourceRefId: string; level: number | null; usedIds?: Set<string> },
 ): { feature: Feature; resource: ResourceGrant | null; extraFeatures?: Feature[]; extraResources?: ResourceGrant[] } {
   const result = buildTraitFeatureCore(t, opts);
   if (!t.limitedUse || t.effectKind === 'resource_ability' || t.effectKind === 'spell_grant') {
     return result;
   }
-  const resourceId = `${opts.idPrefix}_${toId(t.name)}_pool`;
+  // Derived from the (possibly disambiguated) feature id itself, not
+  // recomputed from idPrefix/name, so the resource pool stays tied to the
+  // exact same disambiguation buildTraitFeatureCore already resolved.
+  const resourceId = `${result.feature.id}_pool`;
   const maxUses     = Math.max(1, parseInt(t.uses, 10) || 1);
   const recharge    = t.recharge === 'other' ? (t.rechargeOther.trim() || 'other') : t.recharge;
   const resource: ResourceGrant = { resourceId, name: `${t.name} (Uses)`, maximum: maxUses, recharge };
@@ -401,8 +431,11 @@ export function buildSubrace(draft: DraftSubrace, parentRaceId: string): Subrace
       level: null, actions: [], choices: [], passive: true, effects: asi,
     });
   }
+  // Seeded with the ASI feature's id (if any) so a trait named "Ability
+  // Score Increase" can't silently collide with it.
+  const usedIds = new Set(features.map(f => f.id));
   for (const t of draft.traits) {
-    const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: srId, sourceKind: 'race', sourceRefId: srId, level: null });
+    const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: srId, sourceKind: 'race', sourceRefId: srId, level: null, usedIds });
     features.push(feature, ...(extraFeatures ?? []));
     if (resource) resources.push(resource);
     resources.push(...(extraResources ?? []));

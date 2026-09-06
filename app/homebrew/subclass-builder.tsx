@@ -131,9 +131,13 @@ export default function SubclassBuilderScreen() {
     const entries: LevelEntry[] = [];
     for (let level = 1; level <= 20; level++) {
       const grants: Grant[] = [];
+      // Scoped per level, matching idPrefix's own per-level scope below —
+      // two traits at DIFFERENT levels already can't collide (their ids are
+      // prefixed by level), this only guards same-level duplicate names.
+      const usedIds = new Set<string>();
       for (const f of (featuresByLevel.get(level) ?? [])) {
         const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(f, {
-          idPrefix: `${subclassId}_l${level}`, sourceKind: 'subclass', sourceRefId: subclassId, level,
+          idPrefix: `${subclassId}_l${level}`, sourceKind: 'subclass', sourceRefId: subclassId, level, usedIds,
         });
         grants.push({ kind: 'feature', value: feature });
         if (resource) grants.push({ kind: 'resource', value: resource });

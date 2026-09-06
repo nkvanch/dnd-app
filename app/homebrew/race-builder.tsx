@@ -264,8 +264,11 @@ export default function RaceBuilderScreen() {
       });
     }
 
+    // Seeded with the hand-authored ASI/Speed/Senses/Movement feature ids
+    // above so a trait named e.g. "Speed" can't silently collide with one.
+    const usedIds = new Set(features.map(f => f.id));
     for (const t of traits) {
-      const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'race', sourceRefId: id, level: null });
+      const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'race', sourceRefId: id, level: null, usedIds });
       features.push(feature, ...(extraFeatures ?? []));
       if (resource) resources.push(resource);
       resources.push(...(extraResources ?? []));

@@ -5,6 +5,27 @@
 // Design principle: store full JSON blobs for complex types (Entity, Campaign).
 // This avoids painful schema migrations when the domain model evolves.
 // Only index columns that are actually queried in WHERE clauses.
+//
+// Revisited deliberately (not by default) against an external architecture
+// review's recommendation to fully normalize instead — see docs/NEW
+// architecture/09-conformance-answers.md §1.1 and the plan file's B6 note.
+// Kept as-is, for reasons specific to this app rather than a general
+// argument against normalization:
+//   - Sync already diffs at the JS-object layer (src/sync/diff.ts's
+//     deepDiff/deepMerge) before anything reaches SQLite — the "row-level
+//     sync is difficult with blobs" concern doesn't apply here; that
+//     problem is solved one layer above the database already.
+//   - A character record is ~5-30KB. Rewriting the whole blob per change
+//     is not a real cost at that size, on any device this app targets.
+//   - Undo doesn't need field-level granularity — whole-entity before/after
+//     snapshots are the actual design (see the undo/redo track), and blob
+//     storage supports that fine.
+//   - Nothing in this app's real requirements needs to SQL-query INTO a
+//     character's internals (no cross-character stat search, no reporting).
+// The one place this reasoning does NOT apply — data with a genuinely
+// different lifecycle from the character record itself, like a persistent
+// mechanical timeline — gets its OWN normalized table, not a spot inside
+// the entity blob. See CREATE_CHARACTER_TIMELINE_TABLE (planned) for that.
 // ============================================================================
 
 export const CREATE_ENTITIES_TABLE = `

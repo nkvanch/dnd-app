@@ -12,6 +12,7 @@ import { useSyncStore }      from '../../src/store/syncStore';
 import { getMeta } from '../../src/db/appMetaRepo';
 import { rollExpression } from '../../src/engine/dice';
 import { DiceRoll, Entity } from '../../src/engine/types';
+import { ManualRollInput } from '../../src/components/ManualRollInput';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Dice Roller Modal ─────────────────────────────────────────────────────────
@@ -76,6 +77,12 @@ function DiceRollerModal({ visible, onClose }: { visible: boolean; onClose: () =
           <Pressable style={styles.rollBtn} onPress={roll}>
             <Text style={styles.rollBtnText}>Roll</Text>
           </Pressable>
+
+          <ManualRollInput
+            expression={expr.trim() || '1d20'}
+            label={label.trim() || undefined}
+            onSubmit={setResult}
+          />
 
           {result && (
             <View style={styles.resultBox}>

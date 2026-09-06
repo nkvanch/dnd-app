@@ -6,6 +6,7 @@ import {
   TextInput, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useDiceLogStore } from '../store/diceLogStore';
+import { ManualRollInput } from './ManualRollInput';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 const QUICK_DICE = ['1d4','1d6','1d8','1d10','1d12','1d20','d100','2d6','4d6kh3'];
@@ -23,6 +24,7 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
   const [error,   setError]   = useState('');
   const history   = useDiceLogStore(s => s.history);
   const rollAndLog = useDiceLogStore(s => s.rollAndLog);
+  const pushRoll   = useDiceLogStore(s => s.pushRoll);
 
   // Auto-open the roller whenever a new roll appears (e.g. a skill tap from the
   // exploration tab) so the result is actually visible. We track the latest
@@ -99,6 +101,12 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
             <Pressable style={styles.rollBtn} onPress={roll}>
               <Text style={styles.rollBtnTxt}>Roll</Text>
             </Pressable>
+
+            <ManualRollInput
+              expression={expr.trim() || '1d20'}
+              label={label.trim() || undefined}
+              onSubmit={pushRoll}
+            />
 
             {/* Latest result */}
             {latest && (

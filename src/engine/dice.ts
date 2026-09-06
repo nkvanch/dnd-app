@@ -92,6 +92,24 @@ export function rollExpression(expression: string, label?: string): DiceRoll {
   throw new Error(`Cannot parse dice expression: "${expression}"`);
 }
 
+/**
+ * Builds a DiceRoll from a hand-entered total instead of rolling — for a
+ * player rolling physical dice at a real table. Recovers the flat modifier
+ * from the expression's trailing signed integer (the same shape every
+ * notation branch above already parses via `([+-]\d+)?$`), so a manual
+ * result's rolls/modifier breakdown renders identically to a digital one's.
+ */
+export function manualRoll(expression: string, enteredTotal: number, label?: string): DiceRoll {
+  const clean = expression.toLowerCase().replace(/\s/g, '');
+  const modMatch = clean.match(/([+-]\d+)$/);
+  const modifier = modMatch ? parseInt(modMatch[1], 10) : 0;
+  return {
+    id: uid(), expression,
+    rolls: [enteredTotal - modifier], modifier, total: enteredTotal,
+    label: label ?? null, timestamp: Date.now(),
+  };
+}
+
 // ── Batch helpers ─────────────────────────────────────────────────────────────
 
 /** Rolls 4d6 and keeps the highest 3 — standard ability score method. */

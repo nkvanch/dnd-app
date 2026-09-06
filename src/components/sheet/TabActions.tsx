@@ -9,6 +9,7 @@ import { recomputeDerived } from '../../engine/pipeline';
 import { rollExpression } from '../../engine/dice';
 import { DiceRoll } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
+import { ManualRollInput } from '../ManualRollInput';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 /**
@@ -176,6 +177,7 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
               <Pressable style={styles.rollBtn} onPress={handleRoll}>
                 <Text style={styles.rollBtnTxt}>🎲 Roll</Text>
               </Pressable>
+              <ManualRollInput expression={diceExpr} label={card.name} onSubmit={setResult} />
             </View>
           )}
 

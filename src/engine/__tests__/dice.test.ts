@@ -5,7 +5,7 @@
 // would otherwise only ever show up as an occasionally-wrong character sheet.
 import {
   rollDie, rollExpression, setRandomSource, rollAbilityScore, rollAbilityScoreSet,
-  rollD20, rollWithAdvantage, rollWithDisadvantage, averageRoll,
+  rollD20, rollWithAdvantage, rollWithDisadvantage, averageRoll, manualRoll,
 } from '../dice';
 
 afterEach(() => {
@@ -170,6 +170,50 @@ describe('rollWithAdvantage / rollWithDisadvantage', () => {
     setRandomSource(() => sequence[calls++]);
     const r = rollWithAdvantage(4);
     expect(r.total).toBe(Math.floor(0.9 * 20) + 1 + 4);
+  });
+});
+
+describe('manualRoll', () => {
+  it('splits out a positive trailing modifier from the expression', () => {
+    const r = manualRoll('2d6+3', 13);
+    expect(r.modifier).toBe(3);
+    expect(r.rolls).toEqual([10]);
+    expect(r.total).toBe(13);
+  });
+
+  it('splits out a negative trailing modifier from the expression', () => {
+    const r = manualRoll('1d20-2', 5);
+    expect(r.modifier).toBe(-2);
+    expect(r.rolls).toEqual([7]);
+    expect(r.total).toBe(5);
+  });
+
+  it('treats an expression with no trailing modifier as modifier 0', () => {
+    const r = manualRoll('1d20', 15);
+    expect(r.modifier).toBe(0);
+    expect(r.rolls).toEqual([15]);
+    expect(r.total).toBe(15);
+  });
+
+  it('recovers the modifier from a keep-highest expression the same way', () => {
+    const r = manualRoll('4d6kh3+1', 14);
+    expect(r.modifier).toBe(1);
+    expect(r.rolls).toEqual([13]);
+    expect(r.total).toBe(14);
+  });
+
+  it('carries the label through and stamps a timestamp/id, expression preserved verbatim', () => {
+    const r = manualRoll('2d6+3', 13, 'Attack roll');
+    expect(r.label).toBe('Attack roll');
+    expect(r.expression).toBe('2d6+3');
+    expect(typeof r.id).toBe('string');
+    expect(r.id.length).toBeGreaterThan(0);
+    expect(typeof r.timestamp).toBe('number');
+  });
+
+  it('defaults label to null when omitted', () => {
+    const r = manualRoll('1d20', 10);
+    expect(r.label).toBeNull();
   });
 });
 

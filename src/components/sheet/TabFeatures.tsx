@@ -11,6 +11,7 @@ import { InfusionPicker } from '../InfusionPicker';
 import { FeaturePoolPicker } from '../FeaturePoolPicker';
 import { SpellChoicePicker } from '../SpellChoicePicker';
 import { RemoveFeatureModal } from './RemoveFeatureModal';
+import { AddCustomFeatureModal } from './AddCustomFeatureModal';
 import { spellRepo } from '../../content/spellRepo';
 import { DEFAULT_RULES } from '../../store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -143,6 +144,7 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
   const [spellChoiceOpen, setSpellChoiceOpen] = useState<string | null>(null);
   const [removingFeatureId, setRemovingFeatureId] = useState<string | null>(null);
   const [addFeatOpen, setAddFeatOpen] = useState(false);
+  const [addCustomFeatureOpen, setAddCustomFeatureOpen] = useState(false);
 
   const pendingChoices = entity.choices.filter(c => !c.resolved);
   const canResolve     = !!rules && !!onEntityUpdate;
@@ -201,11 +203,17 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-      {/* Add an existing feat live, mid-session (Phase 2 of live editing) */}
+      {/* Add an existing feat, or author a one-off feature, live mid-session
+          (Phases 2/3 of live editing) */}
       {canResolve && (
-        <Pressable style={styles.addFeatBtn} onPress={() => setAddFeatOpen(true)}>
-          <Text style={styles.addFeatBtnTxt}>+ Add Feat</Text>
-        </Pressable>
+        <View style={styles.addFeatRow}>
+          <Pressable style={[styles.addFeatBtn, styles.addFeatBtnHalf]} onPress={() => setAddFeatOpen(true)}>
+            <Text style={styles.addFeatBtnTxt}>+ Add Feat</Text>
+          </Pressable>
+          <Pressable style={[styles.addFeatBtn, styles.addFeatBtnHalf]} onPress={() => setAddCustomFeatureOpen(true)}>
+            <Text style={styles.addFeatBtnTxt}>+ Custom Feature</Text>
+          </Pressable>
+        </View>
       )}
 
       {/* Pending level-up / creation choices */}
@@ -565,6 +573,14 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
         onConfirm={(updated) => { onEntityUpdate?.(updated); setRemovingFeatureId(null); }}
         onCancel={() => setRemovingFeatureId(null)}
       />
+
+      <AddCustomFeatureModal
+        visible={addCustomFeatureOpen}
+        entity={entity}
+        rules={rules ?? DEFAULT_RULES}
+        onConfirm={(updated) => { onEntityUpdate?.(updated); setAddCustomFeatureOpen(false); }}
+        onCancel={() => setAddCustomFeatureOpen(false)}
+      />
     </ScrollView>
   );
 }
@@ -586,11 +602,13 @@ const styles = StyleSheet.create({
   featureChevron:{ fontSize: FontSize.xs, color: Colors.textDim },
   featureRemoveBtn: { fontSize: FontSize.md, color: Colors.red, paddingHorizontal: Spacing.sm },
 
+  addFeatRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
   addFeatBtn: {
     backgroundColor: Colors.gold + '22', borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.gold + '66', borderStyle: 'dashed',
-    padding: Spacing.sm, alignItems: 'center', marginBottom: Spacing.sm,
+    padding: Spacing.sm, alignItems: 'center',
   },
+  addFeatBtnHalf: { flex: 1 },
   addFeatBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   featureRow: {

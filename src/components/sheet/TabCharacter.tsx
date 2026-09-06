@@ -32,6 +32,7 @@ import { ConcentrationModal } from './ConcentrationModal';
 import { CompanionSection } from './CompanionSection';
 import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard } from './TabActions';
 import { LevelUpPreviewModal } from './LevelUpPreviewModal';
+import { ProgressionPlannerModal } from './ProgressionPlannerModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // Class progressions are looked up from the content library — no hardcoded names.
@@ -255,6 +256,7 @@ function LevelUpSection({
   const [pendingLevelUp, setPendingLevelUp] = useState<{
     title: string; before: Entity; after: Entity;
   } | null>(null);
+  const [plannerOpen, setPlannerOpen] = useState(false);
 
   function confirmPendingLevelUp() {
     if (!pendingLevelUp) return;
@@ -304,6 +306,11 @@ function LevelUpSection({
         <Pressable style={styles.levelUpBtn} onPress={doLevelUp}>
           <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
         </Pressable>
+        {entity.identity.level < maxLevel && (
+          <Pressable style={styles.plannerBtn} onPress={() => setPlannerOpen(true)}>
+            <Text style={styles.plannerBtnTxt}>🔭 Progression Planner</Text>
+          </Pressable>
+        )}
         <LevelUpPreviewModal
           visible={pendingLevelUp !== null}
           title={pendingLevelUp?.title ?? ''}
@@ -311,6 +318,13 @@ function LevelUpSection({
           after={pendingLevelUp?.after ?? null}
           onConfirm={confirmPendingLevelUp}
           onCancel={() => setPendingLevelUp(null)}
+        />
+        <ProgressionPlannerModal
+          visible={plannerOpen}
+          entity={entity}
+          rules={rules}
+          progression={progression}
+          onClose={() => setPlannerOpen(false)}
         />
       </>
     );
@@ -1670,6 +1684,12 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, alignItems: 'center',
   },
   levelUpBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  plannerBtn: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.xs,
+  },
+  plannerBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
   levelUpMcWrap: { gap: Spacing.xs },
   addClassBtn: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,

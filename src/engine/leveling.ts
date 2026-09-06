@@ -1165,6 +1165,32 @@ export function levelUp(
   return recomputeDerived(updated, rules);
 }
 
+// ── projectToLevel ────────────────────────────────────────────────────────────
+// Read-only "what would my character look like at level N" projection for the
+// Progression Planner. A thin wrapper over levelUp() — that function already
+// loops from the entity's current level up to targetLevel and already leaves
+// any choice queueChoice() can't auto-resolve (ASI/feat, subclass, ...) as a
+// pending entry in entity.choices rather than resolving it, which is exactly
+// the "disclosed, not resolved" behavior a projection needs. The only real
+// addition here is forcing hpMode:'max' for this call specifically —
+// overriding whatever the real campaign's rules say — because a projection
+// showing one possible dice-rolled HP outcome would be actively misleading
+// for "what will I typically have"; the deterministic max is the same
+// never-show-a-roll-that-won't-reproduce principle the real level-up preview
+// already relies on (see LevelUpPreviewModal.tsx's own doc comment), just
+// applied to a multi-level jump instead of a single real level-up. Single-
+// class only — levelUp() reads entity.identity.level as the class's own
+// level, which only holds for a non-multiclassed character; multiclass
+// projection is a distinct follow-up, not built here.
+export function projectToLevel(
+  entity: Entity,
+  targetLevel: number,
+  progression: ClassProgression,
+  rules: CampaignRules,
+): Entity {
+  return levelUp(entity, targetLevel, progression, { ...rules, hpMode: 'max' });
+}
+
 // ── resolveChoice ─────────────────────────────────────────────────────────────
 
 export function resolveChoice(

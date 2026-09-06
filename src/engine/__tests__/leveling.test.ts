@@ -13,7 +13,7 @@ import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import {
   applyGrant, applyHP, levelUp, resolveChoice, applySubclassToEntity,
   applyInfusionChoiceToEntity, applySpellChoiceToEntity, levelUpClass, queueChoice,
-  removeFeature, swapBackground,
+  removeFeature, swapBackground, projectToLevel,
 } from '../leveling';
 import {
   Entity, Grant, ClassProgression, LevelEntry, ChoiceDefinition, CharClass,
@@ -313,6 +313,73 @@ describe('levelUp', () => {
     const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard' } });
     const updated = levelUp(e, 1, progression(), rules);
     expect(updated.choices.some(c => c.id === 'bonus_feat_lvl_1' && c.definition.kind === 'asi')).toBe(true);
+  });
+});
+
+describe('projectToLevel', () => {
+  function fighterLikeProgression(): ClassProgression {
+    const entries: LevelEntry[] = [
+      { level: 1, hpDie: 10, grants: [], choices: [] },
+      {
+        level: 2, hpDie: 10, choices: [],
+        grants: [{ kind: 'feature', value: {
+          id: 'action_surge', name: 'Action Surge', description: '', source: { kind: 'class', refId: 'fighter' },
+          level: 2, effects: [], actions: [], choices: [], passive: true,
+        } }],
+      },
+      {
+        level: 3, hpDie: 10, grants: [],
+        choices: [{
+          id: 'subclass_pick', prompt: 'Choose a Martial Archetype', kind: 'custom', count: 1,
+          pool: 'all', grants: [], required: true, resolved: false,
+        }],
+      },
+      { level: 4, hpDie: 10, grants: [], choices: [] },
+      {
+        level: 5, hpDie: 10, choices: [],
+        grants: [{ kind: 'feature', value: {
+          id: 'extra_attack', name: 'Extra Attack', description: '', source: { kind: 'class', refId: 'fighter' },
+          level: 5, effects: [], actions: [], choices: [], passive: true,
+        } }],
+      },
+    ];
+    return { classId: 'fighter', entries };
+  }
+
+  function fighterEntity(): Entity {
+    const e = makeEmptyEntity('e1');
+    return { ...e, identity: { ...e.identity, classId: 'fighter', level: 1 } };
+  }
+
+  it('projects a multi-level jump, granting every feature crossed along the way', () => {
+    const e = fighterEntity();
+    const projected = projectToLevel(e, 5, fighterLikeProgression(), DEFAULT_RULES);
+    expect(projected.identity.level).toBe(5);
+    expect(projected.features.map(f => f.id)).toEqual(expect.arrayContaining(['action_surge', 'extra_attack']));
+  });
+
+  it('forces max HP regardless of the real campaign rules\' hpMode', () => {
+    const e = fighterEntity();
+    const rolled = projectToLevel(e, 5, fighterLikeProgression(), { ...DEFAULT_RULES, hpMode: 'rolled' });
+    const maxed  = projectToLevel(e, 5, fighterLikeProgression(), { ...DEFAULT_RULES, hpMode: 'max' });
+    // Same deterministic result regardless of which hpMode the real campaign uses —
+    // proves the projection never shows a roll that a real level-up wouldn't reproduce.
+    expect(rolled.resources.hp.maximum).toBe(maxed.resources.hp.maximum);
+  });
+
+  it('queues a projected level\'s pending choice without resolving it (disclosed, not resolved)', () => {
+    const e = fighterEntity();
+    const projected = projectToLevel(e, 5, fighterLikeProgression(), DEFAULT_RULES);
+    const subclassChoice = projected.choices.find(c => c.id === 'fighter:subclass_pick_3');
+    expect(subclassChoice).toBeDefined();
+    expect(subclassChoice!.resolved).toBe(false);
+  });
+
+  it('never mutates the input entity', () => {
+    const e = fighterEntity();
+    const before = JSON.stringify(e);
+    projectToLevel(e, 5, fighterLikeProgression(), DEFAULT_RULES);
+    expect(JSON.stringify(e)).toBe(before);
   });
 });
 

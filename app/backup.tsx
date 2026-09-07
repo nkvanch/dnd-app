@@ -46,6 +46,7 @@ export default function BackupScreen() {
           features:    homebrew.features,
           feats:       homebrew.feats,
           monsters:    homebrew.monsters,
+          conditions:  homebrew.conditions,
         },
         deviceId,
       );
@@ -91,6 +92,7 @@ export default function BackupScreen() {
         for (const it of hb.items ?? [])      await saveHomebrewItem('item', it);
         for (const ft of hb.feats ?? [])      await saveHomebrewItem('feat', ft);
         for (const m of hb.monsters ?? [])    await saveHomebrewItem('monster', m);
+        for (const c of hb.conditions ?? [])  await saveHomebrewItem('condition', c);
       }
       setResultMsg(
         `Imported ${preview.characterCount} character${preview.characterCount !== 1 ? 's' : ''}` +

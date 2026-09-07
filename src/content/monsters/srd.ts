@@ -13469,6 +13469,189 @@ export const monsterPseudodragon: MonsterTemplate = {
   ],
 };
 
+export const monsterGiantRatDiseased: MonsterTemplate = {
+  id: 'giant_rat_diseased', name: 'Giant Rat (Diseased)', cr: 0.125, srd: true,
+  size: 'small', type: 'beast', alignment: 'unaligned',
+  stats: { str: 7, dex: 15, con: 11, int: 2, wis: 10, cha: 4 },
+  hp: { dice: '2d6', average: 7 },
+  ac: { value: 12, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_rat_diseased_traits', name: 'Keen Smell; Pack Tactics',
+      description: 'Advantage on Wisdom (Perception) checks that rely on smell. Advantage on an attack roll against a creature if at least one of the rat\'s allies is within 5 ft. of it and isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'giant_rat_diseased' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_rat_diseased_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 3 (1d4+2) piercing damage. A hit creature must succeed a DC 10 CON save or contract a disease: until cured, it can\'t regain HP except by magical means, and its HP maximum decreases by 3 (1d6) every 24 hours (dying if this drops to 0).',
+      source: { kind: 'race', refId: 'giant_rat_diseased' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 10 } },
+      abilityEffects: [{ type: 'damage', dice: '1d4+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterRemorhaz: MonsterTemplate = {
+  id: 'remorhaz', name: 'Remorhaz', cr: 11, srd: true,
+  size: 'huge', type: 'monstrosity', alignment: 'unaligned',
+  stats: { str: 24, dex: 13, con: 21, int: 4, wis: 10, cha: 5 },
+  hp: { dice: '17d12+85', average: 195 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'tremorsense 60 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'remorhaz_heated_body', name: 'Heated Body',
+      description: 'A creature that touches the remorhaz or hits it with a melee attack while within 5 ft. takes 10 (3d6) fire damage.',
+      source: { kind: 'race', refId: 'remorhaz' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'remorhaz_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +11 to hit, reach 10 ft., one target. Hit: 40 (6d10+7) piercing plus 10 (3d6) fire damage; a creature target is grappled (escape DC 17) and restrained until the grapple ends, and the remorhaz can\'t bite another target while grappling.',
+      source: { kind: 'race', refId: 'remorhaz' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '6d10+7', damageType: 'piercing' },
+        { type: 'damage', dice: '3d6', damageType: 'fire' },
+      ],
+    },
+    {
+      id: 'remorhaz_swallow', name: 'Swallow',
+      description: 'Bites a Medium-or-smaller creature it is grappling; on a hit the target also takes the bite\'s damage and is swallowed (grapple ends), blinded and restrained with total cover, taking 21 (6d6) acid damage at the start of each of the remorhaz\'s turns. If the remorhaz takes 30+ damage in one turn from a swallowed creature, it must succeed a DC 15 CON save at the end of that turn or regurgitate every swallowed creature prone nearby.',
+      source: { kind: 'race', refId: 'remorhaz' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterShrieker: MonsterTemplate = {
+  id: 'shrieker', name: 'Shrieker', cr: 0, srd: true,
+  size: 'medium', type: 'plant', alignment: 'unaligned',
+  stats: { str: 1, dex: 1, con: 10, int: 1, wis: 3, cha: 1 },
+  hp: { dice: '3d8', average: 13 },
+  ac: { value: 5, source: 'dex' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 30 ft (blind beyond)', 'passive Perception 6'],
+  languages: [],
+  features: [
+    {
+      id: 'shrieker_false_appearance', name: 'False Appearance',
+      description: 'While motionless, indistinguishable from an ordinary fungus.',
+      source: { kind: 'race', refId: 'shrieker' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shrieker_shriek', name: 'Shriek',
+      description: 'Reaction: when bright light or a creature comes within 30 ft., the shrieker emits a shriek audible within 300 ft., continuing for as long as the disturbance stays in range and for 1d4 of the shrieker\'s turns afterward. Purely an alarm — no attack, no damage.',
+      source: { kind: 'race', refId: 'shrieker' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const monsterTribalWarrior: MonsterTemplate = {
+  id: 'tribal_warrior', name: 'Tribal Warrior', cr: 0.125, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any alignment',
+  stats: { str: 13, dex: 11, con: 12, int: 8, wis: 11, cha: 8 },
+  hp: { dice: '2d8+2', average: 11 },
+  ac: { value: 12, source: 'hide armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: ['any one language'],
+  features: [
+    {
+      id: 'tribal_warrior_pack_tactics', name: 'Pack Tactics',
+      description: 'The warrior has advantage on an attack roll against a creature if at least one of the warrior\'s allies is within 5 ft. of the creature and the ally isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'tribal_warrior' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'tribal_warrior_spear', name: 'Spear',
+      description: 'Melee or Ranged Weapon Attack: +3 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 4 (1d6+1) piercing damage, or 5 (1d8+1) two-handed melee.',
+      source: { kind: 'race', refId: 'tribal_warrior' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterVioletFungus: MonsterTemplate = {
+  id: 'violet_fungus', name: 'Violet Fungus', cr: 0.25, srd: true,
+  size: 'medium', type: 'plant', alignment: 'unaligned',
+  stats: { str: 3, dex: 1, con: 10, int: 1, wis: 3, cha: 1 },
+  hp: { dice: '4d8', average: 18 },
+  ac: { value: 5, source: 'dex' },
+  speed: 5,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 30 ft (blind beyond)', 'passive Perception 6'],
+  languages: [],
+  features: [
+    {
+      id: 'violet_fungus_false_appearance', name: 'False Appearance',
+      description: 'While motionless, indistinguishable from an ordinary fungus.',
+      source: { kind: 'race', refId: 'violet_fungus' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'violet_fungus_multiattack', name: 'Multiattack',
+      description: 'The fungus makes 1d4 Rotting Touch attacks. Shown as a single action card — no automated multiattack sequencing; roll 1d4 separately to determine how many times to use it.',
+      source: { kind: 'race', refId: 'violet_fungus' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'violet_fungus_rotting_touch', name: 'Rotting Touch',
+      description: 'Melee Weapon Attack: +2 to hit, reach 10 ft., one creature. Hit: 4 (1d8) necrotic damage.',
+      source: { kind: 'race', refId: 'violet_fungus' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'necrotic' }],
+    },
+  ],
+};
+
+export const monsterWarhorseSkeleton: MonsterTemplate = {
+  id: 'warhorse_skeleton', name: 'Warhorse Skeleton', cr: 0.5, srd: true,
+  size: 'large', type: 'undead', alignment: 'lawful evil',
+  stats: { str: 18, dex: 12, con: 15, int: 2, wis: 8, cha: 5 },
+  hp: { dice: '3d10+6', average: 22 },
+  ac: { value: 13, source: 'barding scraps' },
+  speed: 60,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 9'],
+  languages: [],
+  features: [
+    {
+      id: 'warhorse_skeleton_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 11 (2d6+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'warhorse_skeleton' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -13787,6 +13970,12 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterMinotaurSkeleton,
   monsterOgreZombie,
   monsterPseudodragon,
+  monsterGiantRatDiseased,
+  monsterRemorhaz,
+  monsterShrieker,
+  monsterTribalWarrior,
+  monsterVioletFungus,
+  monsterWarhorseSkeleton,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

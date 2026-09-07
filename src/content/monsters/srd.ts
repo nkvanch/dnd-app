@@ -5344,6 +5344,370 @@ export const monsterAdultWhiteDragon: MonsterTemplate = {
   ],
 };
 
+export const monsterAcolyte: MonsterTemplate = {
+  id: 'acolyte', name: 'Acolyte', cr: 0.25, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any alignment',
+  stats: { str: 10, dex: 10, con: 10, int: 10, wis: 14, cha: 11 },
+  hp: { dice: '2d8', average: 9 },
+  ac: { value: 10, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: { medicine: 4, religion: 2 },
+  senses: ['passive Perception 12'],
+  languages: ['any one language (usually Common)'],
+  features: [
+    {
+      id: 'acolyte_spellcasting', name: 'Spellcasting',
+      description: '1st-level WIS spellcaster (DC 12, +4 to hit). Cleric list. Cantrips: light, sacred flame, thaumaturgy. 1st (3 slots): bless, cure wounds, sanctuary.',
+      source: { kind: 'race', refId: 'acolyte' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'acolyte_club', name: 'Club',
+      description: 'Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 2 (1d4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'acolyte' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterBanditCaptain: MonsterTemplate = {
+  id: 'bandit_captain', name: 'Bandit Captain', cr: 2, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any non-lawful alignment',
+  stats: { str: 15, dex: 16, con: 14, int: 14, wis: 11, cha: 14 },
+  hp: { dice: '10d8+20', average: 65 },
+  ac: { value: 15, source: 'studded leather armor' },
+  speed: 30,
+  savingThrows: ['str', 'dex', 'wis'],
+  skills: { athletics: 4, deception: 4 },
+  senses: ['passive Perception 10'],
+  languages: ['any two languages'],
+  features: [
+    {
+      id: 'bandit_captain_parry', name: 'Parry',
+      description: 'Reaction: the captain adds 2 to its AC against one melee attack that would hit it, provided it can see the attacker and is wielding a melee weapon.',
+      source: { kind: 'race', refId: 'bandit_captain' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'bandit_captain_multiattack', name: 'Multiattack',
+      description: 'The captain makes three melee attacks (two scimitar, one dagger), or two ranged dagger attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'bandit_captain' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'bandit_captain_scimitar', name: 'Scimitar',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6+3) slashing damage.',
+      source: { kind: 'race', refId: 'bandit_captain' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+3', damageType: 'slashing' }],
+    },
+    {
+      id: 'bandit_captain_dagger', name: 'Dagger',
+      description: 'Melee or Ranged Weapon Attack: +5 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 5 (1d4+3) piercing damage.',
+      source: { kind: 'race', refId: 'bandit_captain' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '20 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+3', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterBerserker: MonsterTemplate = {
+  id: 'berserker', name: 'Berserker', cr: 2, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any chaotic alignment',
+  stats: { str: 16, dex: 12, con: 17, int: 9, wis: 11, cha: 9 },
+  hp: { dice: '9d8+27', average: 67 },
+  ac: { value: 13, source: 'hide armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: ['any one language (usually Common)'],
+  features: [
+    {
+      id: 'berserker_reckless', name: 'Reckless',
+      description: 'At the start of its turn, the berserker can gain advantage on all melee weapon attack rolls during that turn, but attack rolls against it have advantage until the start of its next turn.',
+      source: { kind: 'race', refId: 'berserker' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'berserker_greataxe', name: 'Greataxe',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 9 (1d12+3) slashing damage.',
+      source: { kind: 'race', refId: 'berserker' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d12+3', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterCultFanatic: MonsterTemplate = {
+  id: 'cult_fanatic', name: 'Cult Fanatic', cr: 2, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any non-good alignment',
+  stats: { str: 11, dex: 14, con: 12, int: 10, wis: 13, cha: 14 },
+  hp: { dice: '6d8-5', average: 22 },
+  ac: { value: 13, source: 'leather armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { deception: 4, persuasion: 4, religion: 2 },
+  senses: ['passive Perception 11'],
+  languages: ['any one language (usually Common)'],
+  features: [
+    {
+      id: 'cult_fanatic_dark_devotion', name: 'Dark Devotion',
+      description: 'The fanatic has advantage on saving throws against being charmed or frightened.',
+      source: { kind: 'race', refId: 'cult_fanatic' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'cult_fanatic_spellcasting', name: 'Spellcasting',
+      description: '4th-level WIS spellcaster (DC 11, +3 to hit). Cleric list. Cantrips: light, sacred flame, thaumaturgy. 1st (4): command, inflict wounds, shield of faith. 2nd (3): hold person, spiritual weapon.',
+      source: { kind: 'race', refId: 'cult_fanatic' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'cult_fanatic_multiattack', name: 'Multiattack',
+      description: 'The fanatic makes two dagger attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'cult_fanatic' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'cult_fanatic_dagger', name: 'Dagger',
+      description: 'Melee or Ranged Weapon Attack: +4 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 4 (1d4+2) piercing damage.',
+      source: { kind: 'race', refId: 'cult_fanatic' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '20 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterCultist: MonsterTemplate = {
+  id: 'cultist', name: 'Cultist', cr: 0.125, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any non-good alignment',
+  stats: { str: 11, dex: 12, con: 10, int: 10, wis: 11, cha: 10 },
+  hp: { dice: '2d8', average: 9 },
+  ac: { value: 12, source: 'leather armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { deception: 2, religion: 2 },
+  senses: ['passive Perception 10'],
+  languages: ['any one language (usually Common)'],
+  features: [
+    {
+      id: 'cultist_dark_devotion', name: 'Dark Devotion',
+      description: 'The cultist has advantage on saving throws against being charmed or frightened.',
+      source: { kind: 'race', refId: 'cultist' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'cultist_scimitar', name: 'Scimitar',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6+1) slashing damage.',
+      source: { kind: 'race', refId: 'cultist' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+1', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterDruid: MonsterTemplate = {
+  id: 'druid', name: 'Druid', cr: 2, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any alignment',
+  stats: { str: 10, dex: 12, con: 13, int: 12, wis: 15, cha: 11 },
+  hp: { dice: '5d8+5', average: 27 },
+  ac: { value: 11, source: 'dex (16 with barkskin)' },
+  speed: 30,
+  savingThrows: [],
+  skills: { medicine: 4, nature: 3, perception: 4 },
+  senses: ['passive Perception 14'],
+  languages: ['Druidic plus any two languages'],
+  features: [
+    {
+      id: 'druid_spellcasting', name: 'Spellcasting',
+      description: '4th-level WIS spellcaster (DC 12, +4 to hit). Druid list. Cantrips: druidcraft, produce flame, shillelagh. 1st (4): entangle, longstrider, speak with animals, thunderwave. 2nd (3): animal messenger, barkskin.',
+      source: { kind: 'race', refId: 'druid' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'druid_quarterstaff', name: 'Quarterstaff',
+      description: 'Melee Weapon Attack: +2 to hit (+4 with shillelagh), reach 5 ft., one target. Hit: 3 (1d6) bludgeoning, or 4 (1d8) two-handed, or 6 (1d8+2) with shillelagh.',
+      source: { kind: 'race', refId: 'druid' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterNoble: MonsterTemplate = {
+  id: 'noble', name: 'Noble', cr: 0.125, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any alignment',
+  stats: { str: 11, dex: 12, con: 11, int: 12, wis: 14, cha: 16 },
+  hp: { dice: '2d8', average: 9 },
+  ac: { value: 15, source: 'breastplate' },
+  speed: 30,
+  savingThrows: [],
+  skills: { deception: 5, insight: 4, persuasion: 5 },
+  senses: ['passive Perception 12'],
+  languages: ['any two languages'],
+  features: [
+    {
+      id: 'noble_parry', name: 'Parry',
+      description: 'Reaction: the noble adds 2 to its AC against one melee attack that would hit it, provided it can see the attacker and is wielding a melee weapon.',
+      source: { kind: 'race', refId: 'noble' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'noble_rapier', name: 'Rapier',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 5 (1d8+1) piercing damage.',
+      source: { kind: 'race', refId: 'noble' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterScout: MonsterTemplate = {
+  id: 'scout', name: 'Scout', cr: 0.5, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any alignment',
+  stats: { str: 11, dex: 14, con: 12, int: 11, wis: 13, cha: 11 },
+  hp: { dice: '3d8+3', average: 16 },
+  ac: { value: 13, source: 'leather armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { nature: 4, perception: 5, stealth: 6, survival: 5 },
+  senses: ['passive Perception 15'],
+  languages: ['any one language (usually Common)'],
+  features: [
+    {
+      id: 'scout_keen_senses', name: 'Keen Hearing and Sight',
+      description: 'The scout has advantage on Wisdom (Perception) checks that rely on hearing or sight.',
+      source: { kind: 'race', refId: 'scout' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'scout_multiattack', name: 'Multiattack',
+      description: 'The scout makes two melee attacks or two ranged attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'scout' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'scout_shortsword', name: 'Shortsword',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) piercing damage.',
+      source: { kind: 'race', refId: 'scout' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'scout_longbow', name: 'Longbow',
+      description: 'Ranged Weapon Attack: +4 to hit, range 150/600 ft., one target. Hit: 6 (1d8+2) piercing damage.',
+      source: { kind: 'race', refId: 'scout' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '150 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterSpy: MonsterTemplate = {
+  id: 'spy', name: 'Spy', cr: 1, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any alignment',
+  stats: { str: 10, dex: 15, con: 10, int: 12, wis: 14, cha: 16 },
+  hp: { dice: '6d8', average: 27 },
+  ac: { value: 12, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: { deception: 5, insight: 4, investigation: 5, perception: 6, persuasion: 5, stealth: 4 },
+  senses: ['passive Perception 16'],
+  languages: ['any two languages'],
+  features: [
+    {
+      id: 'spy_cunning_action', name: 'Cunning Action',
+      description: 'On each of its turns, the spy can use a bonus action to take the Dash, Disengage, or Hide action.',
+      source: { kind: 'race', refId: 'spy' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'spy_sneak_attack', name: 'Sneak Attack (1/Turn)',
+      description: 'The spy deals an extra 7 (2d6) damage when it hits with a weapon attack it has advantage on, or when the target is within 5 ft. of a non-incapacitated ally of the spy and the spy doesn\'t have disadvantage.',
+      source: { kind: 'race', refId: 'spy' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'spy_multiattack', name: 'Multiattack',
+      description: 'The spy makes two melee attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'spy' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'spy_shortsword', name: 'Shortsword',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) piercing damage.',
+      source: { kind: 'race', refId: 'spy' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'spy_hand_crossbow', name: 'Hand Crossbow',
+      description: 'Ranged Weapon Attack: +4 to hit, range 30/120 ft., one target. Hit: 5 (1d6+2) piercing damage.',
+      source: { kind: 'race', refId: 'spy' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterThug: MonsterTemplate = {
+  id: 'thug', name: 'Thug', cr: 0.5, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any non-good alignment',
+  stats: { str: 15, dex: 11, con: 14, int: 10, wis: 10, cha: 11 },
+  hp: { dice: '5d8+10', average: 32 },
+  ac: { value: 11, source: 'leather armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { intimidation: 2 },
+  senses: ['passive Perception 10'],
+  languages: ['any one language (usually Common)'],
+  features: [
+    {
+      id: 'thug_pack_tactics', name: 'Pack Tactics',
+      description: 'The thug has advantage on an attack roll against a creature if at least one of the thug\'s allies is within 5 ft. of the creature and the ally isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'thug' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'thug_multiattack', name: 'Multiattack',
+      description: 'The thug makes two mace attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'thug' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'thug_mace', name: 'Mace',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) bludgeoning damage.',
+      source: { kind: 'race', refId: 'thug' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'thug_heavy_crossbow', name: 'Heavy Crossbow',
+      description: 'Ranged Weapon Attack: +2 to hit, range 100/400 ft., one target. Hit: 5 (1d10) piercing damage.',
+      source: { kind: 'race', refId: 'thug' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '100 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10', damageType: 'piercing' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -5458,6 +5822,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterAdultGreenDragon,
   monsterYoungWhiteDragon,
   monsterAdultWhiteDragon,
+  monsterAcolyte,
+  monsterBanditCaptain,
+  monsterBerserker,
+  monsterCultFanatic,
+  monsterCultist,
+  monsterDruid,
+  monsterNoble,
+  monsterScout,
+  monsterSpy,
+  monsterThug,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

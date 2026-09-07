@@ -13041,6 +13041,434 @@ export const monsterMagmin: MonsterTemplate = {
   ],
 };
 
+export const monsterAnimatedArmor: MonsterTemplate = {
+  id: 'animated_armor', name: 'Animated Armor', cr: 1, srd: true,
+  size: 'medium', type: 'construct', alignment: 'unaligned',
+  stats: { str: 14, dex: 11, con: 13, int: 1, wis: 3, cha: 1 },
+  hp: { dice: '6d8+6', average: 33 },
+  ac: { value: 18, source: 'natural armor' },
+  speed: 25,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 60 ft (blind beyond)', 'passive Perception 6'],
+  languages: [],
+  features: [
+    {
+      id: 'animated_armor_antimagic_susceptibility', name: 'Antimagic Susceptibility',
+      description: 'Incapacitated while in an antimagic field. If targeted by dispel magic, must succeed a CON save against the caster\'s spell save DC or fall unconscious for 1 minute.',
+      source: { kind: 'race', refId: 'animated_armor' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'animated_armor_false_appearance', name: 'False Appearance',
+      description: 'While motionless, indistinguishable from a normal suit of armor.',
+      source: { kind: 'race', refId: 'animated_armor' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'animated_armor_multiattack', name: 'Multiattack',
+      description: 'The armor makes two slam attacks. Shown as a separate action card — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'animated_armor' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'animated_armor_slam', name: 'Slam',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) bludgeoning damage.',
+      source: { kind: 'race', refId: 'animated_armor' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterAwakenedShrub: MonsterTemplate = {
+  id: 'awakened_shrub', name: 'Awakened Shrub', cr: 0, srd: true,
+  size: 'small', type: 'plant', alignment: 'unaligned',
+  stats: { str: 3, dex: 8, con: 11, int: 10, wis: 10, cha: 6 },
+  hp: { dice: '3d6', average: 10 },
+  ac: { value: 9, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: ['one language known by its creator'],
+  features: [
+    {
+      id: 'awakened_shrub_false_appearance', name: 'False Appearance',
+      description: 'While motionless, indistinguishable from a normal shrub. Vulnerable to fire; resistant to piercing damage.',
+      source: { kind: 'race', refId: 'awakened_shrub' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'awakened_shrub_rake', name: 'Rake',
+      description: 'Melee Weapon Attack: +1 to hit, reach 5 ft., one target. Hit: 1 (1d4-1) slashing damage.',
+      source: { kind: 'race', refId: 'awakened_shrub' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4-1', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterAwakenedTree: MonsterTemplate = {
+  id: 'awakened_tree', name: 'Awakened Tree', cr: 2, srd: true,
+  size: 'huge', type: 'plant', alignment: 'unaligned',
+  stats: { str: 19, dex: 6, con: 15, int: 10, wis: 10, cha: 7 },
+  hp: { dice: '7d12+14', average: 59 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: ['one language known by its creator'],
+  features: [
+    {
+      id: 'awakened_tree_false_appearance', name: 'False Appearance',
+      description: 'While motionless, indistinguishable from a normal tree. Vulnerable to fire; resistant to bludgeoning and piercing damage.',
+      source: { kind: 'race', refId: 'awakened_tree' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'awakened_tree_slam', name: 'Slam',
+      description: 'Melee Weapon Attack: +6 to hit, reach 10 ft., one target. Hit: 14 (3d6+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'awakened_tree' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d6+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterDeepGnomeSvirfneblin: MonsterTemplate = {
+  id: 'deep_gnome_svirfneblin', name: 'Deep Gnome (Svirfneblin)', cr: 0.5, srd: true,
+  size: 'small', type: 'humanoid (gnome)', alignment: 'neutral good',
+  stats: { str: 15, dex: 14, con: 14, int: 12, wis: 10, cha: 9 },
+  hp: { dice: '3d6+6', average: 16 },
+  ac: { value: 15, source: 'chain shirt' },
+  speed: 20,
+  savingThrows: [],
+  skills: { investigation: 3, perception: 2, stealth: 4 },
+  senses: ['darkvision 120 ft', 'passive Perception 12'],
+  languages: ['Gnomish', 'Terran', 'Undercommon'],
+  features: [
+    {
+      id: 'deep_gnome_svirfneblin_traits', name: 'Stone Camouflage; Gnome Cunning',
+      description: 'Advantage on Dexterity (Stealth) checks made to hide in rocky terrain. Advantage on Intelligence, Wisdom, and Charisma saving throws against magic.',
+      source: { kind: 'race', refId: 'deep_gnome_svirfneblin' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'deep_gnome_svirfneblin_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'INT-based (spell save DC 11), verbal/somatic components only. At will: nondetection (self only). 1/day each: blindness/deafness, blur, disguise self.',
+      source: { kind: 'race', refId: 'deep_gnome_svirfneblin' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'deep_gnome_svirfneblin_war_pick', name: 'War Pick',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 6 (1d8+2) piercing damage.',
+      source: { kind: 'race', refId: 'deep_gnome_svirfneblin' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'deep_gnome_svirfneblin_poisoned_dart', name: 'Poisoned Dart',
+      description: 'Ranged Weapon Attack: +4 to hit, range 30/120 ft., one creature. Hit: 4 (1d4+2) piercing damage, plus DC 12 CON save or poisoned for 1 minute (repeatable each turn, ending on a success).',
+      source: { kind: 'race', refId: 'deep_gnome_svirfneblin' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: { ability: 'con', dc: 12 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d4+2', damageType: 'piercing' },
+        { type: 'apply_condition', conditionId: 'poisoned', duration: { unit: 'minutes', remaining: 1 } },
+      ],
+    },
+  ],
+};
+
+export const monsterDrider: MonsterTemplate = {
+  id: 'drider', name: 'Drider', cr: 6, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'chaotic evil',
+  stats: { str: 16, dex: 16, con: 18, int: 13, wis: 14, cha: 12 },
+  hp: { dice: '13d10+52', average: 123 },
+  ac: { value: 19, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { perception: 5, stealth: 9 },
+  senses: ['darkvision 120 ft', 'passive Perception 15'],
+  languages: ['Elvish', 'Undercommon'],
+  features: [
+    {
+      id: 'drider_fey_ancestry', name: 'Fey Ancestry',
+      description: 'Advantage on saving throws against being charmed, and magic can\'t put the drider to sleep.',
+      source: { kind: 'race', refId: 'drider' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'drider_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'WIS-based (spell save DC 13), verbal/somatic components only. At will: dancing lights. 1/day each: darkness, faerie fire.',
+      source: { kind: 'race', refId: 'drider' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'drider_traits', name: 'Spider Climb; Sunlight Sensitivity; Web Walker',
+      description: 'Can climb difficult surfaces, including upside down on ceilings, without an ability check. While in sunlight, has disadvantage on attack rolls and Wisdom (Perception) checks that rely on sight. Ignores movement restrictions caused by webbing.',
+      source: { kind: 'race', refId: 'drider' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'drider_multiattack', name: 'Multiattack',
+      description: 'The drider makes three attacks (longsword or longbow), and can replace one with a bite. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'drider' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'drider_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one creature. Hit: 2 (1d4) piercing plus 9 (2d8) poison damage.',
+      source: { kind: 'race', refId: 'drider' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d4', damageType: 'piercing' },
+        { type: 'damage', dice: '2d8', damageType: 'poison' },
+      ],
+    },
+    {
+      id: 'drider_longsword', name: 'Longsword',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 7 (1d8+3) slashing damage, or 8 (1d10+3) two-handed.',
+      source: { kind: 'race', refId: 'drider' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+3', damageType: 'slashing' }],
+    },
+    {
+      id: 'drider_longbow', name: 'Longbow',
+      description: 'Ranged Weapon Attack: +6 to hit, range 150/600 ft., one target. Hit: 7 (1d8+3) piercing plus 4 (1d8) poison damage.',
+      source: { kind: 'race', refId: 'drider' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '150 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d8+3', damageType: 'piercing' },
+        { type: 'damage', dice: '1d8', damageType: 'poison' },
+      ],
+    },
+  ],
+};
+
+export const monsterGladiator: MonsterTemplate = {
+  id: 'gladiator', name: 'Gladiator', cr: 5, srd: true,
+  size: 'medium', type: 'humanoid (any race)', alignment: 'any alignment',
+  stats: { str: 18, dex: 15, con: 16, int: 10, wis: 12, cha: 15 },
+  hp: { dice: '15d8+45', average: 112 },
+  ac: { value: 16, source: 'studded leather armor, shield' },
+  speed: 30,
+  savingThrows: ['str', 'dex', 'con'],
+  skills: { athletics: 10, intimidation: 5 },
+  senses: ['passive Perception 11'],
+  languages: ['any one language (usually Common)'],
+  features: [
+    {
+      id: 'gladiator_traits', name: 'Brave; Brute',
+      description: 'Advantage on saving throws against being frightened. A melee weapon deals one extra damage die when the gladiator hits with it (already included in its attacks below).',
+      source: { kind: 'race', refId: 'gladiator' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gladiator_parry', name: 'Parry',
+      description: 'Reaction: the gladiator adds 3 to its AC against one melee attack that would hit it, provided it can see the attacker and is wielding a melee weapon.',
+      source: { kind: 'race', refId: 'gladiator' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gladiator_multiattack', name: 'Multiattack',
+      description: 'The gladiator makes three melee attacks, or two ranged attacks (spear only). Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'gladiator' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gladiator_spear', name: 'Spear',
+      description: 'Melee or Ranged Weapon Attack: +7 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 11 (2d6+4) piercing damage, or 13 (2d8+4) two-handed melee.',
+      source: { kind: 'race', refId: 'gladiator' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '20 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'gladiator_shield_bash', name: 'Shield Bash',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one creature. Hit: 9 (2d4+4) bludgeoning damage; a Medium-or-smaller target must succeed a DC 15 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'gladiator' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterHalfRedDragonVeteran: MonsterTemplate = {
+  id: 'half_red_dragon_veteran', name: 'Half-Red Dragon Veteran', cr: 5, srd: true,
+  size: 'medium', type: 'humanoid (human)', alignment: 'any alignment',
+  stats: { str: 16, dex: 13, con: 14, int: 10, wis: 11, cha: 10 },
+  hp: { dice: '10d8+20', average: 65 },
+  ac: { value: 18, source: 'plate armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 12'],
+  languages: ['Common', 'Draconic'],
+  features: [
+    {
+      id: 'half_red_dragon_veteran_resistances', name: 'Resistances',
+      description: 'Resistant to fire damage.',
+      source: { kind: 'race', refId: 'half_red_dragon_veteran' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'half_red_dragon_veteran_multiattack', name: 'Multiattack',
+      description: 'The veteran makes two longsword attacks; if it has a shortsword drawn, it can also make a shortsword attack. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'half_red_dragon_veteran' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'half_red_dragon_veteran_longsword', name: 'Longsword',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 7 (1d8+3) slashing damage, or 8 (1d10+3) two-handed.',
+      source: { kind: 'race', refId: 'half_red_dragon_veteran' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+3', damageType: 'slashing' }],
+    },
+    {
+      id: 'half_red_dragon_veteran_shortsword', name: 'Shortsword',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6+3) piercing damage.',
+      source: { kind: 'race', refId: 'half_red_dragon_veteran' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+3', damageType: 'piercing' }],
+    },
+    {
+      id: 'half_red_dragon_veteran_heavy_crossbow', name: 'Heavy Crossbow',
+      description: 'Ranged Weapon Attack: +3 to hit, range 100/400 ft., one target. Hit: 6 (1d10+1) piercing damage.',
+      source: { kind: 'race', refId: 'half_red_dragon_veteran' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '100 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+1', damageType: 'piercing' }],
+    },
+    {
+      id: 'half_red_dragon_veteran_fire_breath', name: 'Fire Breath',
+      description: 'Recharge 5-6. Exhales fire in a 15-foot cone. DC 15 DEX save, 24 (7d6) fire damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'half_red_dragon_veteran' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet cone', target: 'area', requiresSave: { ability: 'dex', dc: 15 } },
+      abilityEffects: [{ type: 'damage', dice: '7d6', damageType: 'fire', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterMinotaurSkeleton: MonsterTemplate = {
+  id: 'minotaur_skeleton', name: 'Minotaur Skeleton', cr: 2, srd: true,
+  size: 'large', type: 'undead', alignment: 'lawful evil',
+  stats: { str: 18, dex: 11, con: 15, int: 6, wis: 8, cha: 5 },
+  hp: { dice: '9d10+18', average: 67 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 9'],
+  languages: ['understands Abyssal but can\'t speak'],
+  features: [
+    {
+      id: 'minotaur_skeleton_charge', name: 'Charge',
+      description: 'If the skeleton moves at least 10 ft. straight toward a target and hits it with a Gore attack the same turn, that attack deals an extra 9 (2d8) piercing damage; a creature target must also succeed a DC 14 STR save or be pushed up to 10 ft. away and knocked prone.',
+      source: { kind: 'race', refId: 'minotaur_skeleton' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'minotaur_skeleton_greataxe', name: 'Greataxe',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 17 (2d12+4) slashing damage.',
+      source: { kind: 'race', refId: 'minotaur_skeleton' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d12+4', damageType: 'slashing' }],
+    },
+    {
+      id: 'minotaur_skeleton_gore', name: 'Gore',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) piercing damage.',
+      source: { kind: 'race', refId: 'minotaur_skeleton' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterOgreZombie: MonsterTemplate = {
+  id: 'ogre_zombie', name: 'Ogre Zombie', cr: 2, srd: true,
+  size: 'large', type: 'undead', alignment: 'neutral evil',
+  stats: { str: 19, dex: 6, con: 18, int: 3, wis: 6, cha: 5 },
+  hp: { dice: '9d10+36', average: 85 },
+  ac: { value: 8, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 8'],
+  languages: ['understands Common and Giant but can\'t speak'],
+  features: [
+    {
+      id: 'ogre_zombie_undead_fortitude', name: 'Undead Fortitude',
+      description: 'If damage reduces the zombie to 0 HP, it must make a CON save (DC 5 + damage taken, none for radiant damage or a critical hit) or drop to 1 HP instead.',
+      source: { kind: 'race', refId: 'ogre_zombie' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ogre_zombie_morningstar', name: 'Morningstar',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'ogre_zombie' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterPseudodragon: MonsterTemplate = {
+  id: 'pseudodragon', name: 'Pseudodragon', cr: 0.25, srd: true,
+  size: 'tiny', type: 'dragon', alignment: 'neutral good',
+  stats: { str: 6, dex: 15, con: 13, int: 10, wis: 12, cha: 10 },
+  hp: { dice: '2d4+2', average: 7 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 15,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 4 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 13'],
+  languages: ['understands Common and Draconic but can\'t speak'],
+  features: [
+    {
+      id: 'pseudodragon_traits', name: 'Keen Senses; Magic Resistance; Limited Telepathy',
+      description: 'Advantage on Wisdom (Perception) checks that rely on sight, hearing, or smell. Advantage on saving throws against spells and other magical effects. Can telepathically communicate simple ideas, emotions, and images with any creature within 100 ft. that understands a language.',
+      source: { kind: 'race', refId: 'pseudodragon' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'pseudodragon_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 4 (1d4+2) piercing damage.',
+      source: { kind: 'race', refId: 'pseudodragon' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'pseudodragon_sting', name: 'Sting',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 4 (1d4+2) piercing damage, plus DC 11 CON save or poisoned for 1 hour (unconscious for the same duration if the save fails by 5+; wakes on damage or being shaken awake).',
+      source: { kind: 'race', refId: 'pseudodragon' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d4+2', damageType: 'piercing' },
+        { type: 'apply_condition', conditionId: 'poisoned', duration: { unit: 'hours', remaining: 1 } },
+      ],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -13349,6 +13777,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterLamia,
   monsterSalamander,
   monsterMagmin,
+  monsterAnimatedArmor,
+  monsterAwakenedShrub,
+  monsterAwakenedTree,
+  monsterDeepGnomeSvirfneblin,
+  monsterDrider,
+  monsterGladiator,
+  monsterHalfRedDragonVeteran,
+  monsterMinotaurSkeleton,
+  monsterOgreZombie,
+  monsterPseudodragon,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

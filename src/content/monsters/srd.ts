@@ -9266,6 +9266,282 @@ export const monsterWillOWisp: MonsterTemplate = {
   ],
 };
 
+export const monsterCat: MonsterTemplate = {
+  id: 'cat', name: 'Cat', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 3, dex: 15, con: 10, int: 3, wis: 12, cha: 7 },
+  hp: { dice: '1d4', average: 2 },
+  ac: { value: 12, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 4 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'cat_keen_smell', name: 'Keen Smell',
+      description: 'The cat has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'cat' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'cat_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +0 to hit, reach 5 ft., one target. Hit: 1 slashing damage.',
+      source: { kind: 'race', refId: 'cat' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterRat: MonsterTemplate = {
+  id: 'rat', name: 'Rat', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 2, dex: 11, con: 9, int: 2, wis: 10, cha: 4 },
+  hp: { dice: '1d4-1', average: 1 },
+  ac: { value: 10, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 30 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'rat_keen_smell', name: 'Keen Smell',
+      description: 'The rat has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'rat' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rat_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +0 to hit, reach 5 ft., one target. Hit: 1 piercing damage.',
+      source: { kind: 'race', refId: 'rat' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterBat: MonsterTemplate = {
+  id: 'bat', name: 'Bat', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 2, dex: 15, con: 8, int: 2, wis: 12, cha: 4 },
+  hp: { dice: '1d4-1', average: 1 },
+  ac: { value: 12, source: 'dex' },
+  speed: 5,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 60 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'bat_echolocation', name: 'Echolocation; Keen Hearing',
+      description: 'Can\'t use blindsight while deafened. Advantage on Wisdom (Perception) checks that rely on hearing.',
+      source: { kind: 'race', refId: 'bat' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'bat_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +0 to hit, reach 5 ft., one creature. Hit: 1 piercing damage.',
+      source: { kind: 'race', refId: 'bat' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterOwl: MonsterTemplate = {
+  id: 'owl', name: 'Owl', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 3, dex: 13, con: 8, int: 2, wis: 12, cha: 7 },
+  hp: { dice: '1d4-1', average: 1 },
+  ac: { value: 11, source: 'dex' },
+  speed: 5,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 3 },
+  senses: ['darkvision 120 ft', 'passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'owl_flyby', name: 'Flyby; Keen Hearing and Sight',
+      description: 'Doesn\'t provoke opportunity attacks when it flies out of an enemy\'s reach. Advantage on Wisdom (Perception) checks that rely on hearing or sight.',
+      source: { kind: 'race', refId: 'owl' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'owl_talons', name: 'Talons',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 1 slashing damage.',
+      source: { kind: 'race', refId: 'owl' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterRaven: MonsterTemplate = {
+  id: 'raven', name: 'Raven', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 2, dex: 14, con: 8, int: 2, wis: 12, cha: 6 },
+  hp: { dice: '1d4-1', average: 1 },
+  ac: { value: 12, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'raven_mimicry', name: 'Mimicry',
+      description: 'Can mimic simple sounds it has heard (whispering, a crying baby, an animal); a listener can tell they\'re imitations with a successful DC 10 WIS (Insight) check.',
+      source: { kind: 'race', refId: 'raven' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'raven_beak', name: 'Beak',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 1 piercing damage.',
+      source: { kind: 'race', refId: 'raven' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterWeasel: MonsterTemplate = {
+  id: 'weasel', name: 'Weasel', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 3, dex: 16, con: 8, int: 2, wis: 12, cha: 3 },
+  hp: { dice: '1d4-1', average: 1 },
+  ac: { value: 13, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 5 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'weasel_keen_hearing_smell', name: 'Keen Hearing and Smell',
+      description: 'Advantage on Wisdom (Perception) checks that rely on hearing or smell.',
+      source: { kind: 'race', refId: 'weasel' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'weasel_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one creature. Hit: 1 piercing damage.',
+      source: { kind: 'race', refId: 'weasel' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterBadger: MonsterTemplate = {
+  id: 'badger', name: 'Badger', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 4, dex: 11, con: 12, int: 2, wis: 12, cha: 5 },
+  hp: { dice: '1d4+1', average: 3 },
+  ac: { value: 10, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 30 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'badger_keen_smell', name: 'Keen Smell',
+      description: 'The badger has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'badger' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'badger_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 1 piercing damage.',
+      source: { kind: 'race', refId: 'badger' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterFrog: MonsterTemplate = {
+  id: 'frog', name: 'Frog', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 1, dex: 13, con: 8, int: 1, wis: 8, cha: 3 },
+  hp: { dice: '1d4-1', average: 1 },
+  ac: { value: 11, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: { perception: 1, stealth: 3 },
+  senses: ['darkvision 30 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'frog_traits', name: 'Amphibious; Standing Leap',
+      description: 'Can breathe air and water. Its statistics can also represent a toad. Has no effective attacks. Its long jump is up to 10 ft. and its high jump is up to 5 ft., with or without a running start.',
+      source: { kind: 'race', refId: 'frog' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const monsterLizard: MonsterTemplate = {
+  id: 'lizard', name: 'Lizard', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 2, dex: 11, con: 10, int: 1, wis: 8, cha: 3 },
+  hp: { dice: '1d4', average: 2 },
+  ac: { value: 10, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 30 ft', 'passive Perception 9'],
+  languages: [],
+  features: [
+    {
+      id: 'lizard_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +0 to hit, reach 5 ft., one target. Hit: 1 piercing damage.',
+      source: { kind: 'race', refId: 'lizard' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterVulture: MonsterTemplate = {
+  id: 'vulture', name: 'Vulture', cr: 0, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 7, dex: 10, con: 13, int: 2, wis: 12, cha: 4 },
+  hp: { dice: '1d8+1', average: 5 },
+  ac: { value: 10, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'vulture_traits', name: 'Keen Sight and Smell; Pack Tactics',
+      description: 'Advantage on Wisdom (Perception) checks that rely on sight or smell. Advantage on an attack roll against a creature if at least one of the vulture\'s allies is within 5 ft. of it and isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'vulture' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'vulture_beak', name: 'Beak',
+      description: 'Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 2 (1d4) piercing damage.',
+      source: { kind: 'race', refId: 'vulture' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'piercing' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -9465,6 +9741,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterPlesiosaurus,
   monsterGhast,
   monsterWillOWisp,
+  monsterCat,
+  monsterRat,
+  monsterBat,
+  monsterOwl,
+  monsterRaven,
+  monsterWeasel,
+  monsterBadger,
+  monsterFrog,
+  monsterLizard,
+  monsterVulture,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

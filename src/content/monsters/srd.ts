@@ -10820,6 +10820,329 @@ export const monsterGoat: MonsterTemplate = {
   ],
 };
 
+export const monsterGiantCrocodile: MonsterTemplate = {
+  id: 'giant_crocodile', name: 'Giant Crocodile', cr: 5, srd: true,
+  size: 'huge', type: 'beast', alignment: 'unaligned',
+  stats: { str: 21, dex: 9, con: 17, int: 2, wis: 10, cha: 7 },
+  hp: { dice: '9d12+27', average: 85 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { stealth: 5 },
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_crocodile_hold_breath', name: 'Hold Breath',
+      description: 'The crocodile can hold its breath for 30 minutes.',
+      source: { kind: 'race', refId: 'giant_crocodile' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_crocodile_multiattack', name: 'Multiattack',
+      description: 'The crocodile makes two attacks: one bite and one tail. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'giant_crocodile' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_crocodile_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +8 to hit, reach 5 ft., one target. Hit: 21 (3d10+5) piercing damage; the target is grappled (escape DC 16) and restrained until the grapple ends, and the crocodile can\'t bite another target while grappling.',
+      source: { kind: 'race', refId: 'giant_crocodile' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d10+5', damageType: 'piercing' }],
+    },
+    {
+      id: 'giant_crocodile_tail', name: 'Tail',
+      description: 'Melee Weapon Attack: +8 to hit, reach 10 ft., one target not grappled by the crocodile. Hit: 14 (2d8+5) bludgeoning damage; a creature target must succeed a DC 16 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'giant_crocodile' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+5', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterGiantCentipede: MonsterTemplate = {
+  id: 'giant_centipede', name: 'Giant Centipede', cr: 0.25, srd: true,
+  size: 'small', type: 'beast', alignment: 'unaligned',
+  stats: { str: 5, dex: 14, con: 12, int: 1, wis: 7, cha: 3 },
+  hp: { dice: '1d6+1', average: 4 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 30 ft', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_centipede_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 4 (1d4+2) piercing damage, plus DC 11 CON save or take 10 (3d6) poison damage; if this reduces the target to 0 HP, it\'s instead stable but poisoned for 1 hour (paralyzed while poisoned this way).',
+      source: { kind: 'race', refId: 'giant_centipede' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d4+2', damageType: 'piercing' },
+        { type: 'damage', dice: '3d6', damageType: 'poison' },
+      ],
+    },
+  ],
+};
+
+export const monsterGiantWasp: MonsterTemplate = {
+  id: 'giant_wasp', name: 'Giant Wasp', cr: 0.5, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 10, dex: 14, con: 10, int: 1, wis: 10, cha: 3 },
+  hp: { dice: '3d8', average: 13 },
+  ac: { value: 12, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_wasp_sting', name: 'Sting',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 5 (1d6+2) piercing damage, plus DC 11 CON save, 10 (3d6) poison damage on a failure, half on a success; if this reduces the target to 0 HP, it\'s instead stable but poisoned for 1 hour (paralyzed while poisoned this way).',
+      source: { kind: 'race', refId: 'giant_wasp' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d6+2', damageType: 'piercing' },
+        { type: 'damage', dice: '3d6', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+  ],
+};
+
+export const monsterGiantFireBeetle: MonsterTemplate = {
+  id: 'giant_fire_beetle', name: 'Giant Fire Beetle', cr: 0, srd: true,
+  size: 'small', type: 'beast', alignment: 'unaligned',
+  stats: { str: 8, dex: 10, con: 12, int: 1, wis: 7, cha: 3 },
+  hp: { dice: '1d6+1', average: 4 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 30 ft', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_fire_beetle_illumination', name: 'Illumination',
+      description: 'The beetle sheds bright light in a 10-ft. radius and dim light for another 10 ft. Its light-glands keep glowing for 1d6 days after it dies.',
+      source: { kind: 'race', refId: 'giant_fire_beetle' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_fire_beetle_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +1 to hit, reach 5 ft., one target. Hit: 2 (1d6-1) slashing damage.',
+      source: { kind: 'race', refId: 'giant_fire_beetle' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6-1', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterGiantGoat: MonsterTemplate = {
+  id: 'giant_goat', name: 'Giant Goat', cr: 0.5, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 17, dex: 11, con: 12, int: 3, wis: 12, cha: 6 },
+  hp: { dice: '3d10+3', average: 19 },
+  ac: { value: 11, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_goat_traits', name: 'Charge; Sure-Footed',
+      description: 'If the goat moves at least 20 ft. straight toward a target and hits it with a Ram attack the same turn, that attack deals an extra 5 (2d4) bludgeoning damage; a creature target must also succeed a DC 13 STR save or be knocked prone. Advantage on STR and DEX saving throws made against effects that would knock it prone.',
+      source: { kind: 'race', refId: 'giant_goat' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_goat_ram', name: 'Ram',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 8 (2d4+3) bludgeoning damage.',
+      source: { kind: 'race', refId: 'giant_goat' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+3', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterGiantHyena: MonsterTemplate = {
+  id: 'giant_hyena', name: 'Giant Hyena', cr: 1, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 16, dex: 14, con: 14, int: 2, wis: 12, cha: 7 },
+  hp: { dice: '6d10+12', average: 45 },
+  ac: { value: 12, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_hyena_rampage', name: 'Rampage',
+      description: 'When the hyena reduces a creature to 0 HP with a melee attack on its turn, it can use a bonus action to move up to half its speed and make a bite attack.',
+      source: { kind: 'race', refId: 'giant_hyena' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_hyena_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) piercing damage.',
+      source: { kind: 'race', refId: 'giant_hyena' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterGiantWeasel: MonsterTemplate = {
+  id: 'giant_weasel', name: 'Giant Weasel', cr: 0.125, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 11, dex: 16, con: 10, int: 4, wis: 12, cha: 5 },
+  hp: { dice: '2d8', average: 9 },
+  ac: { value: 13, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 5 },
+  senses: ['darkvision 60 ft', 'passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_weasel_keen_hearing_smell', name: 'Keen Hearing and Smell',
+      description: 'Advantage on Wisdom (Perception) checks that rely on hearing or smell.',
+      source: { kind: 'race', refId: 'giant_weasel' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_weasel_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 5 (1d4+3) piercing damage.',
+      source: { kind: 'race', refId: 'giant_weasel' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+3', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterGiantWolfSpider: MonsterTemplate = {
+  id: 'giant_wolf_spider', name: 'Giant Wolf Spider', cr: 0.25, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 12, dex: 16, con: 13, int: 3, wis: 12, cha: 4 },
+  hp: { dice: '2d8+2', average: 11 },
+  ac: { value: 13, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 7 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_wolf_spider_traits', name: 'Spider Climb; Web Sense; Web Walker',
+      description: 'Can climb difficult surfaces, including upside down on ceilings, without an ability check. While in contact with a web, knows the exact location of any other creature in contact with the same web. Ignores movement restrictions caused by webbing.',
+      source: { kind: 'race', refId: 'giant_wolf_spider' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_wolf_spider_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one creature. Hit: 4 (1d6+1) piercing damage, plus DC 11 CON save, 7 (2d6) poison damage on a failure, half on a success; if this reduces the target to 0 HP, it\'s instead stable but poisoned for 1 hour (paralyzed while poisoned this way).',
+      source: { kind: 'race', refId: 'giant_wolf_spider' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d6+1', damageType: 'piercing' },
+        { type: 'damage', dice: '2d6', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+  ],
+};
+
+export const monsterSeaHorse: MonsterTemplate = {
+  id: 'sea_horse', name: 'Sea Horse', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 1, dex: 12, con: 8, int: 1, wis: 10, cha: 2 },
+  hp: { dice: '1d4-1', average: 1 },
+  ac: { value: 11, source: 'dex' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'sea_horse_water_breathing', name: 'Water Breathing',
+      description: 'The sea horse can breathe only underwater.',
+      source: { kind: 'race', refId: 'sea_horse' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const monsterMummyLord: MonsterTemplate = {
+  id: 'mummy_lord', name: 'Mummy Lord', cr: 15, srd: true,
+  size: 'medium', type: 'undead', alignment: 'lawful evil',
+  stats: { str: 18, dex: 10, con: 17, int: 11, wis: 18, cha: 16 },
+  hp: { dice: '13d8+39', average: 97 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 20,
+  savingThrows: ['con', 'int', 'wis', 'cha'],
+  skills: { history: 5, religion: 5 },
+  senses: ['darkvision 60 ft', 'passive Perception 14'],
+  languages: ['the languages it knew in life'],
+  legendaryActions: 3,
+  features: [
+    {
+      id: 'mummy_lord_traits', name: 'Resistances/Immunities',
+      description: 'Vulnerable to fire damage. Immune to nonmagical bludgeoning/piercing/slashing damage, and to necrotic and poison damage. Immune to charmed, exhaustion, frightened, paralyzed, and poisoned conditions.',
+      source: { kind: 'race', refId: 'mummy_lord' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mummy_lord_magic_resistance', name: 'Magic Resistance; Rejuvenation',
+      description: 'Advantage on saving throws against spells and other magical effects. If its heart remains intact, a destroyed mummy lord gains a new body within 24 hours, regaining all HP and reactivating within 5 ft. of its heart.',
+      source: { kind: 'race', refId: 'mummy_lord' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mummy_lord_spellcasting', name: 'Spellcasting',
+      description: '10th-level WIS spellcaster (DC 17, +9 to hit). Cleric list. Cantrips: sacred flame, thaumaturgy. 1st (4): command, guiding bolt, shield of faith. 2nd (3): hold person, silence, spiritual weapon. 3rd (3): animate dead, dispel magic. 4th (3): divination, guardian of faith. 5th (2): contagion, insect plague. 6th (1): harm.',
+      source: { kind: 'race', refId: 'mummy_lord' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mummy_lord_multiattack', name: 'Multiattack',
+      description: 'The mummy lord can use Dreadful Glare and makes one Rotting Fist attack. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'mummy_lord' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mummy_lord_rotting_fist', name: 'Rotting Fist',
+      description: 'Melee Weapon Attack: +9 to hit, reach 5 ft., one target. Hit: 14 (3d6+4) bludgeoning damage plus 21 (6d6) necrotic damage. DC 16 CON save or cursed with mummy rot: can\'t regain HP and HP maximum decreases by 10 (3d6) every 24 hours (dies and turns to dust if reduced to 0) until remove curse or similar magic.',
+      source: { kind: 'race', refId: 'mummy_lord' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 16 } },
+      abilityEffects: [
+        { type: 'damage', dice: '3d6+4', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '6d6', damageType: 'necrotic' },
+      ],
+    },
+    {
+      id: 'mummy_lord_dreadful_glare', name: 'Dreadful Glare',
+      description: 'Targets one creature it can see within 60 ft. If it can see the mummy lord, DC 16 WIS save or frightened until the end of the mummy lord\'s next turn (also paralyzed for the same duration if it fails by 5+). Success grants 24-hour immunity to Dreadful Glare from mummies and mummy lords.',
+      source: { kind: 'race', refId: 'mummy_lord' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '60 feet', target: 'single', requiresSave: { ability: 'wis', dc: 16 } },
+      abilityEffects: [{ type: 'apply_condition', conditionId: 'frightened', duration: { unit: 'rounds', remaining: 1 } }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -11068,6 +11391,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterQuipper,
   monsterDeer,
   monsterGoat,
+  monsterGiantCrocodile,
+  monsterGiantCentipede,
+  monsterGiantWasp,
+  monsterGiantFireBeetle,
+  monsterGiantGoat,
+  monsterGiantHyena,
+  monsterGiantWeasel,
+  monsterGiantWolfSpider,
+  monsterSeaHorse,
+  monsterMummyLord,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

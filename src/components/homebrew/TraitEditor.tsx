@@ -25,7 +25,7 @@ import type { MoveType, DraftSubrace } from '../../content/traitCompiler';
 // other panel here is pure form state. Only ever reads id/name/level/
 // castingTime, so the lightweight Tier-1 index is sufficient — no need to
 // fetch full spell records just to search/reference a spell by name.
-import { spellRepo } from '../../content/spellRepo';
+import { mergeSpellIndex } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { SafeBottomView } from '../SafeBottomView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -86,11 +86,7 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
   const homebrewSpells = useHomebrewStore(s => s.spells);
   const [cantripSearch, setCantripSearch] = useState('');
   const [leveledSearch, setLeveledSearch] = useState('');
-  const allSpells = useMemo(() => {
-    const homebrewIds = new Set(homebrewSpells.map(s => s.id));
-    const official     = spellRepo.getIndex().filter(s => !homebrewIds.has(s.id));
-    return [...official, ...homebrewSpells];
-  }, [homebrewSpells]);
+  const allSpells = useMemo(() => mergeSpellIndex(homebrewSpells), [homebrewSpells]);
 
   if (!trait) return null;
   const set = (patch: Partial<DraftTrait>) => onChange({ ...trait, ...patch });

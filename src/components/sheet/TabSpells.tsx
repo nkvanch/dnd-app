@@ -15,6 +15,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, CampaignRules, ActionCard, Spell } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
+import { resolveSpellById } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { getClassLevels } from '../../engine/multiclass';
 import { castConcentrationSpell } from '../../engine/combat';
@@ -103,17 +104,15 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
   // Only ever needs ids the character actually knows (spellCards' featureIds)
   // — those are already warmed into spellRepo's Tier-2 cache by
   // characterStore.ts's loadCharacters()/mutation paths, so this is a
-  // synchronous lookup, not a fetch. Homebrew spells aren't in the repo at
-  // all (they're user-authored, not static content) and win on id collision,
-  // same precedence as before this migration.
+  // synchronous lookup, not a fetch. resolveSpellById gives homebrew-first
+  // precedence — see contentResolution.ts.
 
   const spellMap = useMemo(() => {
     const map = new Map<string, Spell>();
     for (const card of spellCards) {
-      const sp = spellRepo.getSpellSync(card.featureId);
+      const sp = resolveSpellById(card.featureId, homebrewSpells);
       if (sp) map.set(card.featureId, sp);
     }
-    for (const s of homebrewSpells) map.set(s.id, s);
     return map;
   }, [spellCards, homebrewSpells]);
 

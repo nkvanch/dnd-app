@@ -14,6 +14,7 @@ import {
 import { Entity, Spell } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
 import type { SpellIndexEntry } from '../../content/spellRepo.types';
+import { mergeSpellIndex } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
@@ -40,15 +41,10 @@ const ACTION_TYPES = ['Action', 'Bonus Action', 'Reaction', 'Ritual / Long'];
 export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
   const homebrewSpells = useHomebrewStore(s => s.spells);
 
-  // Merge the lightweight official index (Tier 1 — id/name/level/school/
+  // Merges the lightweight official index (Tier 1 — id/name/level/school/
   // classes/castingTime/ritual/concentration, no description) with homebrew,
-  // which overrides by id. Homebrew spells are already full Spell objects,
-  // which structurally satisfy SpellIndexEntry (a superset of fields).
-  const allSpells = useMemo<SpellIndexEntry[]>(() => {
-    const homebrewIds = new Set(homebrewSpells.map(s => s.id));
-    const official     = spellRepo.getIndex().filter(s => !homebrewIds.has(s.id));
-    return [...official, ...homebrewSpells];
-  }, [homebrewSpells]);
+  // which overrides by id — see contentResolution.ts.
+  const allSpells = useMemo<SpellIndexEntry[]>(() => mergeSpellIndex(homebrewSpells), [homebrewSpells]);
 
   const homebrewIds = useMemo(() => new Set(homebrewSpells.map(s => s.id)), [homebrewSpells]);
 

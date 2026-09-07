@@ -11,8 +11,8 @@
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { applySpellChoiceToEntity } from '../engine/leveling';
-import { spellRepo } from '../content/spellRepo';
 import type { SpellIndexEntry } from '../content/spellRepo.types';
+import { mergeSpellIndex } from '../content/contentResolution';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { Entity, ChoiceState, CampaignRules } from '../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
@@ -50,11 +50,7 @@ export function SpellChoicePicker({
     return 0;
   }, [spellcasting]);
 
-  const allSpells: SpellIndexEntry[] = useMemo(() => {
-    const homebrewIds = new Set(homebrewSpells.map(s => s.id));
-    const official = spellRepo.getIndex().filter(s => !homebrewIds.has(s.id));
-    return [...official, ...homebrewSpells];
-  }, [homebrewSpells]);
+  const allSpells: SpellIndexEntry[] = useMemo(() => mergeSpellIndex(homebrewSpells), [homebrewSpells]);
 
   const known = new Set([...(spellcasting?.cantrips ?? []), ...(spellcasting?.known ?? [])]);
   const q = search.trim().toLowerCase();

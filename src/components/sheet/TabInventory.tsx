@@ -11,9 +11,8 @@ import {
 import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engine/types';
 import { Alert } from '../../utils/alert';
 import { applyStatModifiers, collectAllEffects } from '../../engine/pipeline';
-import { itemRepo } from '../../content/itemRepo';
-import { toItemIndexEntry } from '../../content/itemRepo.types';
 import type { ItemIndexEntry } from '../../content/itemRepo.types';
+import { mergeItemIndex, resolveItemById } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { usesLargeCreatureWeaponDice } from '../../engine/houseRules';
 import { ALL_INFUSIONS, maxInfusedItems } from '../../content/infusions';
@@ -385,7 +384,10 @@ function AddItemModal({
   }
 
 
-  const allItems: ItemIndexEntry[] = [...itemRepo.getIndex(), ...homebrewItems.map(toItemIndexEntry)];
+  // Deduped by id, homebrew wins on collision — see contentResolution.ts.
+  // (Previously a plain concat with no dedup: a homebrew item reusing an
+  // official id would show up as two separate rows.)
+  const allItems: ItemIndexEntry[] = mergeItemIndex(homebrewItems);
   const q = search.trim().toLowerCase();
   const searchFiltered = q
     ? allItems.filter(i => i.name.toLowerCase().includes(q) ||
@@ -1078,18 +1080,14 @@ export function TabInventory({
 
   const homebrewItemList = useHomebrewStore(s => s.items);
   // Full records — only for equipped/carried instance ids (already warmed
-  // via characterStore.ts's loadCharacters()/handleEquip/handleAddItem) plus
-  // homebrew, which is always a full Item already. NOT the whole catalog —
-  // that's what itemRepo.getIndex() (Tier 1) is for, used by AddItemModal.
-  const homebrewItemIds = new Set(homebrewItemList.map(i => i.id));
+  // via characterStore.ts's loadCharacters()/handleEquip/handleAddItem).
+  // NOT the whole catalog — that's what itemRepo.getIndex() (Tier 1) is for,
+  // used by AddItemModal. resolveItemById gives homebrew-first precedence —
+  // see contentResolution.ts.
   const instanceIds = new Set([...inventory.equipped, ...inventory.carried].map(i => i.itemId));
-  const allItems: Item[] = [
-    ...Array.from(instanceIds)
-      .filter(id => !homebrewItemIds.has(id))
-      .map(id => itemRepo.getItemSync(id))
-      .filter((i): i is Item => !!i),
-    ...homebrewItemList,
-  ];
+  const allItems: Item[] = Array.from(instanceIds)
+    .map(id => resolveItemById(id, homebrewItemList))
+    .filter((i): i is Item => !!i);
 
   const large          = isLargeCreature(entity);
   // Effective STR (race/feat bonuses) — matches the engine's derived values,

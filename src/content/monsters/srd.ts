@@ -12317,6 +12317,346 @@ export const monsterGorgon: MonsterTemplate = {
   ],
 };
 
+export const monsterAxeBeak: MonsterTemplate = {
+  id: 'axe_beak', name: 'Axe Beak', cr: 0.25, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 14, dex: 12, con: 12, int: 2, wis: 10, cha: 5 },
+  hp: { dice: '3d10+3', average: 19 },
+  ac: { value: 11, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'axe_beak_beak', name: 'Beak',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 6 (1d8+2) slashing damage.',
+      source: { kind: 'race', refId: 'axe_beak' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+2', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterBloodHawk: MonsterTemplate = {
+  id: 'blood_hawk', name: 'Blood Hawk', cr: 0.125, srd: true,
+  size: 'small', type: 'beast', alignment: 'unaligned',
+  stats: { str: 6, dex: 14, con: 10, int: 3, wis: 14, cha: 5 },
+  hp: { dice: '2d6', average: 7 },
+  ac: { value: 12, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: { perception: 4 },
+  senses: ['passive Perception 14'],
+  languages: [],
+  features: [
+    {
+      id: 'blood_hawk_traits', name: 'Keen Sight; Pack Tactics',
+      description: 'Advantage on Wisdom (Perception) checks that rely on sight. Advantage on an attack roll against a creature if at least one of the hawk\'s allies is within 5 ft. of it and isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'blood_hawk' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'blood_hawk_beak', name: 'Beak',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 4 (1d4+2) piercing damage.',
+      source: { kind: 'race', refId: 'blood_hawk' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterDeathDog: MonsterTemplate = {
+  id: 'death_dog', name: 'Death Dog', cr: 1, srd: true,
+  size: 'medium', type: 'monstrosity', alignment: 'neutral evil',
+  stats: { str: 15, dex: 14, con: 14, int: 3, wis: 13, cha: 6 },
+  hp: { dice: '6d8+12', average: 39 },
+  ac: { value: 12, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 5, stealth: 4 },
+  senses: ['darkvision 120 ft', 'passive Perception 15'],
+  languages: [],
+  features: [
+    {
+      id: 'death_dog_two_headed', name: 'Two-Headed',
+      description: 'The dog has advantage on Wisdom (Perception) checks and on saving throws against being blinded, charmed, deafened, frightened, stunned, or knocked unconscious.',
+      source: { kind: 'race', refId: 'death_dog' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'death_dog_multiattack', name: 'Multiattack',
+      description: 'The dog makes two bite attacks. Shown as a separate action card — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'death_dog' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'death_dog_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) piercing damage. A hit creature must succeed a DC 12 CON save against disease or become poisoned until cured; it repeats the save every 24 hours, losing 5 (1d10) max HP on a failure (dying if reduced to 0).',
+      source: { kind: 'race', refId: 'death_dog' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 12 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d6+2', damageType: 'piercing' },
+        { type: 'apply_condition', conditionId: 'poisoned', duration: { unit: 'permanent', remaining: 0 } },
+      ],
+    },
+  ],
+};
+
+export const monsterDireWolf: MonsterTemplate = {
+  id: 'dire_wolf', name: 'Dire Wolf', cr: 1, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 17, dex: 15, con: 15, int: 3, wis: 12, cha: 7 },
+  hp: { dice: '5d10+10', average: 37 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 4 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'dire_wolf_traits', name: 'Keen Hearing and Smell; Pack Tactics',
+      description: 'Advantage on Wisdom (Perception) checks that rely on hearing or smell. Advantage on an attack roll against a creature if at least one of the wolf\'s allies is within 5 ft. of it and isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'dire_wolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'dire_wolf_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) piercing damage; a creature target must succeed a DC 13 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'dire_wolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterGiantApe: MonsterTemplate = {
+  id: 'giant_ape', name: 'Giant Ape', cr: 7, srd: true,
+  size: 'huge', type: 'beast', alignment: 'unaligned',
+  stats: { str: 23, dex: 14, con: 18, int: 7, wis: 12, cha: 7 },
+  hp: { dice: '15d12+60', average: 157 },
+  ac: { value: 12, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { athletics: 9, perception: 4 },
+  senses: ['passive Perception 14'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_ape_multiattack', name: 'Multiattack',
+      description: 'The ape makes two fist attacks. Shown as a separate action card — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'giant_ape' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_ape_fist', name: 'Fist',
+      description: 'Melee Weapon Attack: +9 to hit, reach 10 ft., one target. Hit: 22 (3d10+6) bludgeoning damage.',
+      source: { kind: 'race', refId: 'giant_ape' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d10+6', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'giant_ape_rock', name: 'Rock',
+      description: 'Ranged Weapon Attack: +9 to hit, range 50/100 ft., one target. Hit: 30 (7d6+6) bludgeoning damage.',
+      source: { kind: 'race', refId: 'giant_ape' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '50 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '7d6+6', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterGiantBat: MonsterTemplate = {
+  id: 'giant_bat', name: 'Giant Bat', cr: 0.25, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 15, dex: 16, con: 11, int: 2, wis: 12, cha: 6 },
+  hp: { dice: '4d10', average: 22 },
+  ac: { value: 13, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 60 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_bat_traits', name: 'Echolocation; Keen Hearing',
+      description: 'Can\'t use blindsight while deafened. Advantage on Wisdom (Perception) checks that rely on hearing.',
+      source: { kind: 'race', refId: 'giant_bat' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_bat_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 5 (1d6+2) piercing damage.',
+      source: { kind: 'race', refId: 'giant_bat' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterGiantBoar: MonsterTemplate = {
+  id: 'giant_boar', name: 'Giant Boar', cr: 2, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 17, dex: 10, con: 16, int: 2, wis: 7, cha: 5 },
+  hp: { dice: '5d10+15', average: 42 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_boar_charge', name: 'Charge',
+      description: 'If the boar moves at least 20 ft. straight toward a target and hits it with a Tusk attack the same turn, that attack deals an extra 7 (2d6) slashing damage; a creature target must also succeed a DC 13 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'giant_boar' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_boar_relentless', name: 'Relentless',
+      description: 'Recharges after a short/long rest. If damage of 10 or less would reduce the boar to 0 HP, it drops to 1 HP instead.',
+      source: { kind: 'race', refId: 'giant_boar' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_boar_tusk', name: 'Tusk',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) slashing damage.',
+      source: { kind: 'race', refId: 'giant_boar' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterGiantEagle: MonsterTemplate = {
+  id: 'giant_eagle', name: 'Giant Eagle', cr: 1, srd: true,
+  size: 'large', type: 'beast', alignment: 'neutral good',
+  stats: { str: 16, dex: 17, con: 13, int: 8, wis: 14, cha: 10 },
+  hp: { dice: '4d10+4', average: 26 },
+  ac: { value: 13, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: { perception: 4 },
+  senses: ['passive Perception 14'],
+  languages: ['Giant Eagle (understands Common and Auran but can\'t speak)'],
+  features: [
+    {
+      id: 'giant_eagle_keen_sight', name: 'Keen Sight',
+      description: 'The eagle has advantage on Wisdom (Perception) checks that rely on sight.',
+      source: { kind: 'race', refId: 'giant_eagle' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_eagle_multiattack', name: 'Multiattack',
+      description: 'The eagle makes two attacks: one beak and one talons. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'giant_eagle' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_eagle_beak', name: 'Beak',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6+3) piercing damage.',
+      source: { kind: 'race', refId: 'giant_eagle' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+3', damageType: 'piercing' }],
+    },
+    {
+      id: 'giant_eagle_talons', name: 'Talons',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) slashing damage.',
+      source: { kind: 'race', refId: 'giant_eagle' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterGiantElk: MonsterTemplate = {
+  id: 'giant_elk', name: 'Giant Elk', cr: 2, srd: true,
+  size: 'huge', type: 'beast', alignment: 'unaligned',
+  stats: { str: 19, dex: 16, con: 14, int: 7, wis: 14, cha: 10 },
+  hp: { dice: '5d12+10', average: 42 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 60,
+  savingThrows: [],
+  skills: { perception: 4 },
+  senses: ['passive Perception 14'],
+  languages: ['Giant Elk (understands Common, Elvish, and Sylvan but can\'t speak)'],
+  features: [
+    {
+      id: 'giant_elk_charge', name: 'Charge',
+      description: 'If the elk moves at least 20 ft. straight toward a target and hits it with a Ram attack the same turn, that attack deals an extra 7 (2d6) damage; a creature target must also succeed a DC 14 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'giant_elk' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_elk_ram', name: 'Ram',
+      description: 'Melee Weapon Attack: +6 to hit, reach 10 ft., one target. Hit: 11 (2d6+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'giant_elk' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'giant_elk_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one prone creature. Hit: 22 (4d8+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'giant_elk' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d8+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterHellHound: MonsterTemplate = {
+  id: 'hell_hound', name: 'Hell Hound', cr: 3, srd: true,
+  size: 'medium', type: 'fiend', alignment: 'lawful evil',
+  stats: { str: 17, dex: 12, con: 14, int: 6, wis: 13, cha: 6 },
+  hp: { dice: '7d8+14', average: 45 },
+  ac: { value: 15, source: 'natural armor' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 5 },
+  senses: ['darkvision 60 ft', 'passive Perception 15'],
+  languages: ['understands Infernal but can\'t speak it'],
+  features: [
+    {
+      id: 'hell_hound_traits', name: 'Keen Hearing and Smell; Pack Tactics',
+      description: 'Advantage on Wisdom (Perception) checks that rely on hearing or smell. Advantage on an attack roll against a creature if at least one of the hound\'s allies is within 5 ft. of it and isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'hell_hound' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'hell_hound_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 7 (1d8+3) piercing plus 7 (2d6) fire damage.',
+      source: { kind: 'race', refId: 'hell_hound' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d8+3', damageType: 'piercing' },
+        { type: 'damage', dice: '2d6', damageType: 'fire' },
+      ],
+    },
+    {
+      id: 'hell_hound_fire_breath', name: 'Fire Breath',
+      description: 'Recharge 5-6. Exhales fire in a 15-foot cone. DC 12 DEX save, 21 (6d6) fire damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'hell_hound' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet cone', target: 'area', requiresSave: { ability: 'dex', dc: 12 } },
+      abilityEffects: [{ type: 'damage', dice: '6d6', damageType: 'fire', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -12605,6 +12945,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGiantScorpion,
   monsterSpider,
   monsterGorgon,
+  monsterAxeBeak,
+  monsterBloodHawk,
+  monsterDeathDog,
+  monsterDireWolf,
+  monsterGiantApe,
+  monsterGiantBat,
+  monsterGiantBoar,
+  monsterGiantEagle,
+  monsterGiantElk,
+  monsterHellHound,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

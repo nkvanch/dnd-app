@@ -9835,6 +9835,360 @@ export const monsterGiantOwl: MonsterTemplate = {
   ],
 };
 
+export const monsterApe: MonsterTemplate = {
+  id: 'ape', name: 'Ape', cr: 0.5, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 16, dex: 14, con: 14, int: 6, wis: 12, cha: 7 },
+  hp: { dice: '3d8+6', average: 19 },
+  ac: { value: 12, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: { athletics: 5, perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'ape_multiattack', name: 'Multiattack',
+      description: 'The ape makes two fist attacks. Shown as a separate action card — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'ape' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ape_fist', name: 'Fist',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6+3) bludgeoning damage.',
+      source: { kind: 'race', refId: 'ape' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+3', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'ape_rock', name: 'Rock',
+      description: 'Ranged Weapon Attack: +5 to hit, range 25/50 ft., one target. Hit: 6 (1d6+3) bludgeoning damage.',
+      source: { kind: 'race', refId: 'ape' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '25 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+3', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterBaboon: MonsterTemplate = {
+  id: 'baboon', name: 'Baboon', cr: 0, srd: true,
+  size: 'small', type: 'beast', alignment: 'unaligned',
+  stats: { str: 8, dex: 14, con: 11, int: 4, wis: 12, cha: 6 },
+  hp: { dice: '1d6', average: 3 },
+  ac: { value: 12, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'baboon_pack_tactics', name: 'Pack Tactics',
+      description: 'The baboon has advantage on an attack roll against a creature if at least one of the baboon\'s allies is within 5 ft. of the creature and the ally isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'baboon' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'baboon_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +1 to hit, reach 5 ft., one target. Hit: 1 (1d4-1) piercing damage.',
+      source: { kind: 'race', refId: 'baboon' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4-1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterBlackBear: MonsterTemplate = {
+  id: 'black_bear', name: 'Black Bear', cr: 0.5, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 15, dex: 10, con: 14, int: 2, wis: 12, cha: 7 },
+  hp: { dice: '3d8+6', average: 19 },
+  ac: { value: 11, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'black_bear_keen_smell', name: 'Keen Smell',
+      description: 'The bear has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'black_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'black_bear_multiattack', name: 'Multiattack',
+      description: 'The bear makes two attacks: one bite and one claws. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'black_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'black_bear_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) piercing damage.',
+      source: { kind: 'race', refId: 'black_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'black_bear_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 7 (2d4+2) slashing damage.',
+      source: { kind: 'race', refId: 'black_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+2', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterBrownBear: MonsterTemplate = {
+  id: 'brown_bear', name: 'Brown Bear', cr: 1, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 19, dex: 10, con: 16, int: 2, wis: 13, cha: 7 },
+  hp: { dice: '4d10+12', average: 34 },
+  ac: { value: 11, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'brown_bear_keen_smell', name: 'Keen Smell',
+      description: 'The bear has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'brown_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'brown_bear_multiattack', name: 'Multiattack',
+      description: 'The bear makes two attacks: one bite and one claws. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'brown_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'brown_bear_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 8 (1d8+4) piercing damage.',
+      source: { kind: 'race', refId: 'brown_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'brown_bear_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 11 (2d6+4) slashing damage.',
+      source: { kind: 'race', refId: 'brown_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterPolarBear: MonsterTemplate = {
+  id: 'polar_bear', name: 'Polar Bear', cr: 2, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 20, dex: 10, con: 16, int: 2, wis: 13, cha: 7 },
+  hp: { dice: '5d10+15', average: 42 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'polar_bear_keen_smell', name: 'Keen Smell',
+      description: 'The bear has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'polar_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'polar_bear_multiattack', name: 'Multiattack',
+      description: 'The bear makes two attacks: one bite and one claws. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'polar_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'polar_bear_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 9 (1d8+5) piercing damage.',
+      source: { kind: 'race', refId: 'polar_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+5', damageType: 'piercing' }],
+    },
+    {
+      id: 'polar_bear_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 12 (2d6+5) slashing damage.',
+      source: { kind: 'race', refId: 'polar_bear' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+5', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterCrocodile: MonsterTemplate = {
+  id: 'crocodile', name: 'Crocodile', cr: 0.5, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 15, dex: 10, con: 13, int: 2, wis: 10, cha: 5 },
+  hp: { dice: '3d10+3', average: 19 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: { stealth: 2 },
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'crocodile_hold_breath', name: 'Hold Breath',
+      description: 'The crocodile can hold its breath for 15 minutes.',
+      source: { kind: 'race', refId: 'crocodile' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'crocodile_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 7 (1d10+2) piercing damage; the target is grappled (escape DC 12) and restrained until the grapple ends, and the crocodile can\'t bite another target while grappling.',
+      source: { kind: 'race', refId: 'crocodile' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterHyena: MonsterTemplate = {
+  id: 'hyena', name: 'Hyena', cr: 0, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 11, dex: 13, con: 12, int: 2, wis: 12, cha: 5 },
+  hp: { dice: '1d8+1', average: 5 },
+  ac: { value: 11, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'hyena_pack_tactics', name: 'Pack Tactics',
+      description: 'The hyena has advantage on an attack roll against a creature if at least one of the hyena\'s allies is within 5 ft. of the creature and the ally isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'hyena' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'hyena_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 3 (1d6) piercing damage.',
+      source: { kind: 'race', refId: 'hyena' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterJackal: MonsterTemplate = {
+  id: 'jackal', name: 'Jackal', cr: 0, srd: true,
+  size: 'small', type: 'beast', alignment: 'unaligned',
+  stats: { str: 8, dex: 15, con: 11, int: 3, wis: 12, cha: 6 },
+  hp: { dice: '1d6', average: 3 },
+  ac: { value: 12, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'jackal_traits', name: 'Keen Hearing and Smell; Pack Tactics',
+      description: 'Advantage on Wisdom (Perception) checks that rely on hearing or smell. Advantage on an attack roll against a creature if at least one of the jackal\'s allies is within 5 ft. of it and isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'jackal' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'jackal_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +1 to hit, reach 5 ft., one target. Hit: 1 (1d4-1) piercing damage.',
+      source: { kind: 'race', refId: 'jackal' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4-1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterMastiff: MonsterTemplate = {
+  id: 'mastiff', name: 'Mastiff', cr: 0.125, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 13, dex: 14, con: 12, int: 3, wis: 12, cha: 7 },
+  hp: { dice: '1d8+1', average: 5 },
+  ac: { value: 12, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'mastiff_keen_hearing_smell', name: 'Keen Hearing and Smell',
+      description: 'Advantage on Wisdom (Perception) checks that rely on hearing or smell.',
+      source: { kind: 'race', refId: 'mastiff' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mastiff_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6+1) piercing damage; a creature target must succeed a DC 11 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'mastiff' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterPanther: MonsterTemplate = {
+  id: 'panther', name: 'Panther', cr: 0.25, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 14, dex: 15, con: 10, int: 3, wis: 14, cha: 7 },
+  hp: { dice: '3d8', average: 13 },
+  ac: { value: 12, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 4, stealth: 6 },
+  senses: ['passive Perception 14'],
+  languages: [],
+  features: [
+    {
+      id: 'panther_keen_smell', name: 'Keen Smell',
+      description: 'The panther has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'panther' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'panther_pounce', name: 'Pounce',
+      description: 'If the panther moves at least 20 ft. straight toward a creature and hits it with a Claw attack the same turn, that target must succeed a DC 12 STR save or be knocked prone; if prone, the panther can make one Bite attack against it as a bonus action.',
+      source: { kind: 'race', refId: 'panther' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'panther_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) piercing damage.',
+      source: { kind: 'race', refId: 'panther' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'panther_claw', name: 'Claw',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 4 (1d4+2) slashing damage.',
+      source: { kind: 'race', refId: 'panther' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+2', damageType: 'slashing' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -10053,6 +10407,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGiantFrog,
   monsterGiantLizard,
   monsterGiantOwl,
+  monsterApe,
+  monsterBaboon,
+  monsterBlackBear,
+  monsterBrownBear,
+  monsterPolarBear,
+  monsterCrocodile,
+  monsterHyena,
+  monsterJackal,
+  monsterMastiff,
+  monsterPanther,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

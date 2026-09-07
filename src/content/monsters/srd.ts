@@ -10189,6 +10189,355 @@ export const monsterPanther: MonsterTemplate = {
   ],
 };
 
+export const monsterBlackDragonWyrmling: MonsterTemplate = {
+  id: 'black_dragon_wyrmling', name: 'Black Dragon Wyrmling', cr: 2, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'chaotic evil',
+  stats: { str: 15, dex: 14, con: 13, int: 10, wis: 11, cha: 13 },
+  hp: { dice: '6d8+6', average: 33 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 4 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'black_dragon_wyrmling_amphibious', name: 'Amphibious',
+      description: 'The dragon can breathe air and water.',
+      source: { kind: 'race', refId: 'black_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'black_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (1d10+2) piercing plus 2 (1d4) acid damage.',
+      source: { kind: 'race', refId: 'black_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d10+2', damageType: 'piercing' },
+        { type: 'damage', dice: '1d4', damageType: 'acid' },
+      ],
+    },
+    {
+      id: 'black_dragon_wyrmling_acid_breath', name: 'Acid Breath',
+      description: 'Recharge 5-6. The dragon exhales acid in a 15-foot line, 5 ft. wide. DC 11 DEX save, 22 (5d8) acid damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'black_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet line', target: 'area', requiresSave: { ability: 'dex', dc: 11 } },
+      abilityEffects: [{ type: 'damage', dice: '5d8', damageType: 'acid', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterBlueDragonWyrmling: MonsterTemplate = {
+  id: 'blue_dragon_wyrmling', name: 'Blue Dragon Wyrmling', cr: 3, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'lawful evil',
+  stats: { str: 17, dex: 10, con: 15, int: 12, wis: 11, cha: 15 },
+  hp: { dice: '8d8+16', average: 52 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 2 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'blue_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 8 (1d10+3) piercing plus 3 (1d6) lightning damage.',
+      source: { kind: 'race', refId: 'blue_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d10+3', damageType: 'piercing' },
+        { type: 'damage', dice: '1d6', damageType: 'lightning' },
+      ],
+    },
+    {
+      id: 'blue_dragon_wyrmling_lightning_breath', name: 'Lightning Breath',
+      description: 'Recharge 5-6. The dragon exhales lightning in a 30-foot line, 5 ft. wide. DC 12 DEX save, 22 (4d10) lightning damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'blue_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '30 feet line', target: 'area', requiresSave: { ability: 'dex', dc: 12 } },
+      abilityEffects: [{ type: 'damage', dice: '4d10', damageType: 'lightning', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterGreenDragonWyrmling: MonsterTemplate = {
+  id: 'green_dragon_wyrmling', name: 'Green Dragon Wyrmling', cr: 2, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'lawful evil',
+  stats: { str: 15, dex: 12, con: 13, int: 14, wis: 11, cha: 13 },
+  hp: { dice: '7d8+7', average: 38 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 3 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'green_dragon_wyrmling_amphibious', name: 'Amphibious',
+      description: 'The dragon can breathe air and water.',
+      source: { kind: 'race', refId: 'green_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'green_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (1d10+2) piercing plus 3 (1d6) poison damage.',
+      source: { kind: 'race', refId: 'green_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d10+2', damageType: 'piercing' },
+        { type: 'damage', dice: '1d6', damageType: 'poison' },
+      ],
+    },
+    {
+      id: 'green_dragon_wyrmling_poison_breath', name: 'Poison Breath',
+      description: 'Recharge 5-6. The dragon exhales poisonous gas in a 15-foot cone. DC 11 CON save, 21 (6d6) poison damage on a failure, none on a success.',
+      source: { kind: 'race', refId: 'green_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet cone', target: 'area', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [{ type: 'damage', dice: '6d6', damageType: 'poison', saveOnSuccess: 'none' }],
+    },
+  ],
+};
+
+export const monsterRedDragonWyrmling: MonsterTemplate = {
+  id: 'red_dragon_wyrmling', name: 'Red Dragon Wyrmling', cr: 4, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'chaotic evil',
+  stats: { str: 19, dex: 10, con: 17, int: 12, wis: 11, cha: 15 },
+  hp: { dice: '10d8+30', average: 75 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 2 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'red_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 9 (1d10+4) piercing plus 3 (1d6) fire damage.',
+      source: { kind: 'race', refId: 'red_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d10+4', damageType: 'piercing' },
+        { type: 'damage', dice: '1d6', damageType: 'fire' },
+      ],
+    },
+    {
+      id: 'red_dragon_wyrmling_fire_breath', name: 'Fire Breath',
+      description: 'Recharge 5-6. The dragon exhales fire in a 15-foot cone. DC 13 DEX save, 24 (7d6) fire damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'red_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet cone', target: 'area', requiresSave: { ability: 'dex', dc: 13 } },
+      abilityEffects: [{ type: 'damage', dice: '7d6', damageType: 'fire', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterWhiteDragonWyrmling: MonsterTemplate = {
+  id: 'white_dragon_wyrmling', name: 'White Dragon Wyrmling', cr: 2, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'chaotic evil',
+  stats: { str: 14, dex: 10, con: 14, int: 5, wis: 10, cha: 11 },
+  hp: { dice: '5d8+10', average: 32 },
+  ac: { value: 16, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 2 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'white_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (1d10+2) piercing plus 2 (1d4) cold damage.',
+      source: { kind: 'race', refId: 'white_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d10+2', damageType: 'piercing' },
+        { type: 'damage', dice: '1d4', damageType: 'cold' },
+      ],
+    },
+    {
+      id: 'white_dragon_wyrmling_cold_breath', name: 'Cold Breath',
+      description: 'Recharge 5-6. The dragon exhales an icy blast of hail in a 15-foot cone. DC 12 CON save, 22 (5d8) cold damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'white_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet cone', target: 'area', requiresSave: { ability: 'con', dc: 12 } },
+      abilityEffects: [{ type: 'damage', dice: '5d8', damageType: 'cold', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterBrassDragonWyrmling: MonsterTemplate = {
+  id: 'brass_dragon_wyrmling', name: 'Brass Dragon Wyrmling', cr: 1, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'chaotic good',
+  stats: { str: 15, dex: 10, con: 13, int: 10, wis: 11, cha: 13 },
+  hp: { dice: '3d8+3', average: 16 },
+  ac: { value: 16, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 2 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'brass_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (1d10+2) piercing damage.',
+      source: { kind: 'race', refId: 'brass_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'brass_dragon_wyrmling_breath_weapons', name: 'Breath Weapons',
+      description: 'Recharge 5-6. The dragon uses one of two breath weapons. Fire Breath: 20-foot line, 5 ft. wide, DC 11 DEX save, 14 (4d6) fire damage on a failure, half on a success. Sleep Breath: 15-foot cone, DC 11 CON save or fall unconscious for 1 minute (ends early if the creature takes damage or is woken).',
+      source: { kind: 'race', refId: 'brass_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '20 feet line', target: 'area', requiresSave: { ability: 'dex', dc: 11 } },
+      abilityEffects: [{ type: 'damage', dice: '4d6', damageType: 'fire', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterBronzeDragonWyrmling: MonsterTemplate = {
+  id: 'bronze_dragon_wyrmling', name: 'Bronze Dragon Wyrmling', cr: 2, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'lawful good',
+  stats: { str: 17, dex: 10, con: 15, int: 12, wis: 11, cha: 15 },
+  hp: { dice: '5d8+10', average: 32 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 2 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'bronze_dragon_wyrmling_amphibious', name: 'Amphibious',
+      description: 'The dragon can breathe air and water.',
+      source: { kind: 'race', refId: 'bronze_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'bronze_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 8 (1d10+3) piercing damage.',
+      source: { kind: 'race', refId: 'bronze_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+3', damageType: 'piercing' }],
+    },
+    {
+      id: 'bronze_dragon_wyrmling_breath_weapons', name: 'Breath Weapons',
+      description: 'Recharge 5-6. The dragon uses one of two breath weapons. Lightning Breath: 40-foot line, 5 ft. wide, DC 12 DEX save, 16 (3d10) lightning damage on a failure, half on a success. Repulsion Breath: 30-foot cone, DC 12 STR save or be pushed 30 ft. away.',
+      source: { kind: 'race', refId: 'bronze_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '40 feet line', target: 'area', requiresSave: { ability: 'dex', dc: 12 } },
+      abilityEffects: [{ type: 'damage', dice: '3d10', damageType: 'lightning', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterCopperDragonWyrmling: MonsterTemplate = {
+  id: 'copper_dragon_wyrmling', name: 'Copper Dragon Wyrmling', cr: 1, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'chaotic good',
+  stats: { str: 15, dex: 12, con: 13, int: 14, wis: 11, cha: 13 },
+  hp: { dice: '4d8+4', average: 22 },
+  ac: { value: 16, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 3 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'copper_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (1d10+2) piercing damage.',
+      source: { kind: 'race', refId: 'copper_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'copper_dragon_wyrmling_breath_weapons', name: 'Breath Weapons',
+      description: 'Recharge 5-6. The dragon uses one of two breath weapons. Acid Breath: 20-foot line, 5 ft. wide, DC 11 DEX save, 18 (4d8) acid damage on a failure, half on a success. Slowing Breath: 15-foot cone, DC 11 CON save or (for 1 minute, repeatable each turn) can\'t use reactions, speed is halved, can\'t make more than one attack per turn, and can use only an action or a bonus action each turn, not both.',
+      source: { kind: 'race', refId: 'copper_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '20 feet line', target: 'area', requiresSave: { ability: 'dex', dc: 11 } },
+      abilityEffects: [{ type: 'damage', dice: '4d8', damageType: 'acid', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterGoldDragonWyrmling: MonsterTemplate = {
+  id: 'gold_dragon_wyrmling', name: 'Gold Dragon Wyrmling', cr: 3, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'lawful good',
+  stats: { str: 19, dex: 14, con: 17, int: 14, wis: 11, cha: 16 },
+  hp: { dice: '8d8+24', average: 60 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 4 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'gold_dragon_wyrmling_amphibious', name: 'Amphibious',
+      description: 'The dragon can breathe air and water.',
+      source: { kind: 'race', refId: 'gold_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gold_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 9 (1d10+4) piercing damage.',
+      source: { kind: 'race', refId: 'gold_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'gold_dragon_wyrmling_breath_weapons', name: 'Breath Weapons',
+      description: 'Recharge 5-6. The dragon uses one of two breath weapons. Fire Breath: 15-foot cone, DC 13 DEX save, 22 (4d10) fire damage on a failure, half on a success. Weakening Breath: 15-foot cone, DC 13 STR save or disadvantage on STR-based attacks/checks/saves for 1 minute (repeatable each turn).',
+      source: { kind: 'race', refId: 'gold_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet cone', target: 'area', requiresSave: { ability: 'dex', dc: 13 } },
+      abilityEffects: [{ type: 'damage', dice: '4d10', damageType: 'fire', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterSilverDragonWyrmling: MonsterTemplate = {
+  id: 'silver_dragon_wyrmling', name: 'Silver Dragon Wyrmling', cr: 2, srd: true,
+  size: 'medium', type: 'dragon', alignment: 'lawful good',
+  stats: { str: 19, dex: 10, con: 17, int: 12, wis: 11, cha: 15 },
+  hp: { dice: '6d8+18', average: 45 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { perception: 4, stealth: 2 },
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'silver_dragon_wyrmling_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 9 (1d10+4) piercing damage.',
+      source: { kind: 'race', refId: 'silver_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'silver_dragon_wyrmling_breath_weapons', name: 'Breath Weapons',
+      description: 'Recharge 5-6. The dragon uses one of two breath weapons. Cold Breath: 15-foot cone, DC 13 CON save, 18 (4d8) cold damage on a failure, half on a success. Paralyzing Breath: 15-foot cone, DC 13 CON save or paralyzed for 1 minute (repeatable each turn).',
+      source: { kind: 'race', refId: 'silver_dragon_wyrmling' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet cone', target: 'area', requiresSave: { ability: 'con', dc: 13 } },
+      abilityEffects: [{ type: 'damage', dice: '4d8', damageType: 'cold', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -10417,6 +10766,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterJackal,
   monsterMastiff,
   monsterPanther,
+  monsterBlackDragonWyrmling,
+  monsterBlueDragonWyrmling,
+  monsterGreenDragonWyrmling,
+  monsterRedDragonWyrmling,
+  monsterWhiteDragonWyrmling,
+  monsterBrassDragonWyrmling,
+  monsterBronzeDragonWyrmling,
+  monsterCopperDragonWyrmling,
+  monsterGoldDragonWyrmling,
+  monsterSilverDragonWyrmling,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

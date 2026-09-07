@@ -3367,6 +3367,447 @@ export const monsterAncientGreenDragon: MonsterTemplate = {
   ],
 };
 
+export const monsterImp: MonsterTemplate = {
+  id: 'imp', name: 'Imp', cr: 1, srd: true,
+  size: 'tiny', type: 'fiend (devil)', alignment: 'lawful evil',
+  stats: { str: 6, dex: 17, con: 13, int: 11, wis: 12, cha: 14 },
+  hp: { dice: '3d4+3', average: 10 },
+  ac: { value: 13, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: { deception: 4, insight: 3, persuasion: 4, stealth: 5 },
+  senses: ['darkvision 120 ft', 'passive Perception 11'],
+  languages: ['Infernal', 'Common'],
+  features: [
+    {
+      id: 'imp_shapechanger', name: 'Shapechanger',
+      description: 'The imp can polymorph (action) into a rat, raven, or spider beast form (or back), with the same stats except speed. Equipment doesn\'t transform. Reverts to true form if it dies.',
+      source: { kind: 'race', refId: 'imp' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'imp_traits', name: 'Devil\'s Sight; Magic Resistance; Resistances/Immunities',
+      description: 'Magical darkness doesn\'t impede its darkvision. Advantage on saves against spells/magical effects. Resistant to cold and to nonmagical bludgeoning/piercing/slashing damage that isn\'t silvered. Immune to fire and poison damage, and to the poisoned condition.',
+      source: { kind: 'race', refId: 'imp' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'imp_sting', name: 'Sting (Bite in Beast Form)',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 5 (1d4+3) piercing damage. DC 11 CON save, 10 (3d6) poison damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'imp' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d4+3', damageType: 'piercing' },
+        { type: 'damage', dice: '3d6', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+    {
+      id: 'imp_invisibility', name: 'Invisibility',
+      description: 'The imp turns invisible until it attacks or its concentration ends (as if concentrating on a spell). Its gear turns invisible with it.',
+      source: { kind: 'race', refId: 'imp' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const monsterFireElemental: MonsterTemplate = {
+  id: 'fire_elemental', name: 'Fire Elemental', cr: 5, srd: true,
+  size: 'large', type: 'elemental', alignment: 'neutral',
+  stats: { str: 10, dex: 17, con: 16, int: 6, wis: 10, cha: 7 },
+  hp: { dice: '12d10+36', average: 102 },
+  ac: { value: 13, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['Ignan'],
+  features: [
+    {
+      id: 'fire_elemental_traits', name: 'Fire Form; Illumination; Water Susceptibility',
+      description: 'Can move through gaps as narrow as 1 inch without squeezing; touching it or hitting it in melee within 5 ft. deals 5 (1d10) fire damage; entering a hostile creature\'s space the first time on a turn deals 5 (1d10) fire damage and ignites the target (5/1d10 fire damage at the start of its turns until doused). Sheds bright light 30 ft., dim 30 ft. more. Takes 1 cold damage per 5 ft. moved in water or per gallon splashed on it. Resistant to nonmagical bludgeoning/piercing/slashing damage. Immune to fire and poison damage, and to exhaustion/grappled/paralyzed/petrified/poisoned/prone/restrained/unconscious.',
+      source: { kind: 'race', refId: 'fire_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'fire_elemental_multiattack', name: 'Multiattack',
+      description: 'The elemental makes two touch attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'fire_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'fire_elemental_touch', name: 'Touch',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) fire damage. A creature or flammable object hit ignites, taking 5 (1d10) fire damage at the start of its turns until doused.',
+      source: { kind: 'race', refId: 'fire_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'fire' }],
+    },
+  ],
+};
+
+export const monsterWaterElemental: MonsterTemplate = {
+  id: 'water_elemental', name: 'Water Elemental', cr: 5, srd: true,
+  size: 'large', type: 'elemental', alignment: 'neutral',
+  stats: { str: 18, dex: 14, con: 18, int: 5, wis: 10, cha: 8 },
+  hp: { dice: '12d10+48', average: 114 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['Aquan'],
+  features: [
+    {
+      id: 'water_elemental_traits', name: 'Water Form; Freeze; Resistances/Immunities',
+      description: 'Can enter a hostile creature\'s space and stop there; can move through gaps as narrow as 1 inch without squeezing. Taking cold damage halves its speed by 20 ft. until the end of its next turn. Resistant to acid and nonmagical bludgeoning/piercing/slashing damage. Immune to poison damage and to exhaustion/grappled/paralyzed/petrified/poisoned/prone/restrained/unconscious.',
+      source: { kind: 'race', refId: 'water_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'water_elemental_multiattack', name: 'Multiattack',
+      description: 'The elemental makes two slam attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'water_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'water_elemental_slam', name: 'Slam',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'water_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'water_elemental_whelm', name: 'Whelm',
+      description: 'Recharge 4-6. Each creature in the elemental\'s space makes a DC 15 STR save. Failure: 13 (2d8+4) bludgeoning damage, and if Large or smaller, grappled (escape DC 14) and restrained, unable to breathe unless it can breathe water — takes 13 (2d8+4) bludgeoning damage again at the start of each of the elemental\'s turns while grappled (up to 2 Medium/1 Large at once). Success: pushed out of its space.',
+      source: { kind: 'race', refId: 'water_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: 'self', target: 'area', requiresSave: { ability: 'str', dc: 15 } },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterAirElemental: MonsterTemplate = {
+  id: 'air_elemental', name: 'Air Elemental', cr: 5, srd: true,
+  size: 'large', type: 'elemental', alignment: 'neutral',
+  stats: { str: 14, dex: 20, con: 14, int: 6, wis: 10, cha: 6 },
+  hp: { dice: '12d10+24', average: 90 },
+  ac: { value: 15, source: 'dex' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['Auran'],
+  features: [
+    {
+      id: 'air_elemental_traits', name: 'Air Form; Resistances/Immunities',
+      description: 'Flies 90 ft. and hovers (not reflected in the base speed field, which the engine has no fly/hover flag for). Can enter a hostile creature\'s space and stop there; can move through gaps as narrow as 1 inch without squeezing. Resistant to lightning, thunder, and nonmagical bludgeoning/piercing/slashing damage. Immune to poison damage and to exhaustion/grappled/paralyzed/petrified/poisoned/prone/restrained/unconscious.',
+      source: { kind: 'race', refId: 'air_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'air_elemental_multiattack', name: 'Multiattack',
+      description: 'The elemental makes two slam attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'air_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'air_elemental_slam', name: 'Slam',
+      description: 'Melee Weapon Attack: +8 to hit, reach 5 ft., one target. Hit: 14 (2d8+5) bludgeoning damage.',
+      source: { kind: 'race', refId: 'air_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+5', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'air_elemental_whirlwind', name: 'Whirlwind',
+      description: 'Recharge 4-6. Each creature in the elemental\'s space makes a DC 13 STR save. Failure: 15 (3d8+2) bludgeoning damage, flung up to 20 ft. in a random direction and knocked prone (falling damage-style 1d6 per 10 ft. if it strikes something; a struck creature makes a DC 13 DEX save or takes the same and is knocked prone too). Success: half damage, no fling/prone.',
+      source: { kind: 'race', refId: 'air_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: 'self', target: 'area', requiresSave: { ability: 'str', dc: 13 } },
+      abilityEffects: [{ type: 'damage', dice: '3d8+2', damageType: 'bludgeoning', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterEarthElemental: MonsterTemplate = {
+  id: 'earth_elemental', name: 'Earth Elemental', cr: 5, srd: true,
+  size: 'large', type: 'elemental', alignment: 'neutral',
+  stats: { str: 20, dex: 8, con: 20, int: 5, wis: 10, cha: 5 },
+  hp: { dice: '12d10+60', average: 126 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'tremorsense 60 ft', 'passive Perception 10'],
+  languages: ['Terran'],
+  features: [
+    {
+      id: 'earth_elemental_traits', name: 'Earth Glide; Siege Monster; Resistances/Immunities',
+      description: 'Can burrow through nonmagical unworked earth/stone without disturbing it. Deals double damage to objects/structures. Vulnerable to thunder damage. Resistant to nonmagical bludgeoning/piercing/slashing damage. Immune to poison damage and to paralyzed/petrified/poisoned/exhaustion/unconscious.',
+      source: { kind: 'race', refId: 'earth_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'earth_elemental_multiattack', name: 'Multiattack',
+      description: 'The elemental makes two slam attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'earth_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'earth_elemental_slam', name: 'Slam',
+      description: 'Melee Weapon Attack: +8 to hit, reach 10 ft., one target. Hit: 14 (2d8+5) bludgeoning damage.',
+      source: { kind: 'race', refId: 'earth_elemental' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+5', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterFleshGolem: MonsterTemplate = {
+  id: 'flesh_golem', name: 'Flesh Golem', cr: 5, srd: true,
+  size: 'medium', type: 'construct', alignment: 'neutral',
+  stats: { str: 19, dex: 9, con: 18, int: 6, wis: 10, cha: 5 },
+  hp: { dice: '11d8+44', average: 93 },
+  ac: { value: 9, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['understands the languages of its creator but can\'t speak'],
+  features: [
+    {
+      id: 'flesh_golem_berserk', name: 'Berserk',
+      description: 'Whenever it starts its turn at 40 HP or fewer, roll a d6: on a 6 it goes berserk, attacking the nearest creature (or an object if none is near) every turn until destroyed or fully healed. Its creator, within 60 ft. and heard, can spend an action on a DC 15 Persuasion check to calm it; it might go berserk again if damaged while still at 40 HP or fewer.',
+      source: { kind: 'race', refId: 'flesh_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'flesh_golem_traits', name: 'Aversion to Fire; Immutable Form; Lightning Absorption; Magic Resistance/Weapons; Immunities',
+      description: 'Fire damage gives it disadvantage on attacks/checks until the end of its next turn. Immune to any spell/effect that would alter its form. Regains HP equal to any lightning damage dealt to it instead of taking damage. Advantage on saves against spells/magical effects. Its weapon attacks are magical. Immune to lightning and poison damage, and to nonmagical bludgeoning/piercing/slashing damage that isn\'t adamantine. Immune to charmed, exhaustion, frightened, paralyzed, petrified, and poisoned conditions.',
+      source: { kind: 'race', refId: 'flesh_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'flesh_golem_multiattack', name: 'Multiattack',
+      description: 'The golem makes two slam attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'flesh_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'flesh_golem_slam', name: 'Slam',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'flesh_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterClayGolem: MonsterTemplate = {
+  id: 'clay_golem', name: 'Clay Golem', cr: 9, srd: true,
+  size: 'large', type: 'construct', alignment: 'unaligned',
+  stats: { str: 20, dex: 9, con: 18, int: 3, wis: 8, cha: 1 },
+  hp: { dice: '14d10+56', average: 133 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 9'],
+  languages: ['understands the languages of its creator but can\'t speak'],
+  features: [
+    {
+      id: 'clay_golem_traits', name: 'Acid Absorption; Berserk; Immutable Form; Magic Resistance/Weapons; Immunities',
+      description: 'Regains HP equal to any acid damage dealt to it instead of taking damage. Whenever it starts its turn at 60 HP or fewer, roll a d6: on a 6 it goes berserk, attacking the nearest creature (or an object if none is near) every turn until destroyed or fully healed. Immune to any spell/effect that would alter its form. Advantage on saves against spells/magical effects. Its weapon attacks are magical. Immune to acid, poison, and psychic damage, and to nonmagical bludgeoning/piercing/slashing damage that isn\'t adamantine. Immune to charmed, exhaustion, frightened, paralyzed, petrified, and poisoned conditions.',
+      source: { kind: 'race', refId: 'clay_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'clay_golem_multiattack', name: 'Multiattack',
+      description: 'The golem makes two slam attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'clay_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'clay_golem_slam', name: 'Slam',
+      description: 'Melee Weapon Attack: +8 to hit, reach 5 ft., one target. Hit: 16 (2d10+5) bludgeoning damage. DC 15 CON save or its HP maximum is reduced by the damage taken (dies if reduced to 0; lasts until removed by greater restoration or similar magic).',
+      source: { kind: 'race', refId: 'clay_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 15 } },
+      abilityEffects: [{ type: 'damage', dice: '2d10+5', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'clay_golem_haste', name: 'Haste',
+      description: 'Recharge 5-6. Until the end of its next turn: +2 AC, advantage on DEX saves, and can use its slam attack as a bonus action.',
+      source: { kind: 'race', refId: 'clay_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const monsterStoneGolem: MonsterTemplate = {
+  id: 'stone_golem', name: 'Stone Golem', cr: 10, srd: true,
+  size: 'large', type: 'construct', alignment: 'unaligned',
+  stats: { str: 22, dex: 9, con: 20, int: 3, wis: 11, cha: 1 },
+  hp: { dice: '17d10+85', average: 178 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 120 ft', 'passive Perception 10'],
+  languages: ['understands the languages of its creator but can\'t speak'],
+  features: [
+    {
+      id: 'stone_golem_traits', name: 'Immutable Form; Magic Resistance/Weapons; Immunities',
+      description: 'Immune to any spell/effect that would alter its form. Advantage on saves against spells/magical effects. Its weapon attacks are magical. Immune to poison and psychic damage, and to nonmagical bludgeoning/piercing/slashing damage that isn\'t adamantine. Immune to charmed, exhaustion, frightened, paralyzed, petrified, and poisoned conditions.',
+      source: { kind: 'race', refId: 'stone_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'stone_golem_multiattack', name: 'Multiattack',
+      description: 'The golem makes two slam attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'stone_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'stone_golem_slam', name: 'Slam',
+      description: 'Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 19 (3d8+6) bludgeoning damage.',
+      source: { kind: 'race', refId: 'stone_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d8+6', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'stone_golem_slow', name: 'Slow',
+      description: 'Recharge 5-6. Targets one or more creatures within 10 ft. DC 17 WIS save or, for 1 minute, can\'t use reactions, speed is halved, can\'t make more than one attack per turn, and can take only an action or bonus action (not both) — repeatable save each turn.',
+      source: { kind: 'race', refId: 'stone_golem' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'area', requiresSave: { ability: 'wis', dc: 17 } },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterDeva: MonsterTemplate = {
+  id: 'deva', name: 'Deva', cr: 10, srd: true,
+  size: 'medium', type: 'celestial', alignment: 'lawful good',
+  stats: { str: 18, dex: 18, con: 18, int: 17, wis: 20, cha: 20 },
+  hp: { dice: '16d8+64', average: 136 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['wis', 'cha'],
+  skills: { insight: 9, perception: 9 },
+  senses: ['darkvision 120 ft', 'passive Perception 19'],
+  languages: ['all', 'telepathy 120 ft'],
+  features: [
+    {
+      id: 'deva_angelic_weapons', name: 'Angelic Weapons',
+      description: 'The deva\'s weapon attacks are magical and already include an extra 4d8 radiant damage.',
+      source: { kind: 'race', refId: 'deva' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'deva_traits', name: 'Magic Resistance; Resistances/Immunities',
+      description: 'Advantage on saves against spells/magical effects. Resistant to radiant and nonmagical bludgeoning/piercing/slashing damage. Immune to charmed, exhaustion, and frightened conditions.',
+      source: { kind: 'race', refId: 'deva' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'deva_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'CHA-based (spell save DC 17), verbal components only. At will: detect evil and good. 1/day each: commune, raise dead.',
+      source: { kind: 'race', refId: 'deva' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'deva_change_shape', name: 'Change Shape',
+      description: 'Polymorphs into a humanoid or beast of CR equal to or less than its own (or back). Retains its own stats/speech, but AC, movement, STR, DEX, and special senses come from the new form.',
+      source: { kind: 'race', refId: 'deva' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'deva_multiattack', name: 'Multiattack',
+      description: 'The deva makes two mace attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'deva' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'deva_mace', name: 'Mace',
+      description: 'Melee Weapon Attack: +8 to hit, reach 5 ft., one target. Hit: 7 (1d6+4) bludgeoning damage plus 18 (4d8) radiant damage.',
+      source: { kind: 'race', refId: 'deva' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d6+4', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '4d8', damageType: 'radiant' },
+      ],
+    },
+    {
+      id: 'deva_healing_touch', name: 'Healing Touch (3/Day)',
+      description: 'Touch a creature: it regains 20 (4d8+2) HP and is freed from any curse, disease, poison, blindness, or deafness.',
+      source: { kind: 'race', refId: 'deva' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'heal', dice: '4d8+2' }],
+    },
+  ],
+};
+
+export const monsterDjinni: MonsterTemplate = {
+  id: 'djinni', name: 'Djinni', cr: 11, srd: true,
+  size: 'large', type: 'elemental', alignment: 'chaotic good',
+  stats: { str: 21, dex: 15, con: 22, int: 15, wis: 16, cha: 20 },
+  hp: { dice: '14d10+84', average: 161 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'wis', 'cha'],
+  skills: {},
+  senses: ['darkvision 120 ft', 'passive Perception 13'],
+  languages: ['Auran'],
+  features: [
+    {
+      id: 'djinni_elemental_demise', name: 'Elemental Demise',
+      description: 'If the djinni dies, its body disintegrates into a warm breeze, leaving behind only its equipment.',
+      source: { kind: 'race', refId: 'djinni' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'djinni_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'CHA-based (spell save DC 17, +9 to hit), no material components. At will: detect evil and good, detect magic, thunderwave. 3/day each: create food and water (or wine), tongues, wind walk. 1/day each: conjure elemental (air only), creation, gaseous form, invisibility, major image, plane shift.',
+      source: { kind: 'race', refId: 'djinni' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'djinni_multiattack', name: 'Multiattack',
+      description: 'The djinni makes three scimitar attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'djinni' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'djinni_scimitar', name: 'Scimitar',
+      description: 'Melee Weapon Attack: +9 to hit, reach 5 ft., one target. Hit: 12 (2d6+5) slashing damage plus 3 (1d6) lightning or thunder damage (djinni\'s choice).',
+      source: { kind: 'race', refId: 'djinni' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6+5', damageType: 'slashing' },
+        { type: 'damage', dice: '1d6', damageType: 'lightning' },
+      ],
+    },
+    {
+      id: 'djinni_create_whirlwind', name: 'Create Whirlwind',
+      description: 'Forms a 5-ft.-radius, 30-ft.-tall whirlwind within 120 ft., lasting as long as the djinni concentrates. Any other creature entering it makes a DC 18 STR save or is restrained; the djinni can move it up to 60 ft. as an action (restrained creatures move with it). A restrained creature (or another) can break free with a DC 18 STR check as an action.',
+      source: { kind: 'race', refId: 'djinni' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '120 feet', target: 'area', requiresSave: { ability: 'str', dc: 18 } },
+      abilityEffects: [],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -3441,6 +3882,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterAdultBlackDragon,
   monsterIceDevil,
   monsterAncientGreenDragon,
+  monsterImp,
+  monsterFireElemental,
+  monsterWaterElemental,
+  monsterAirElemental,
+  monsterEarthElemental,
+  monsterFleshGolem,
+  monsterClayGolem,
+  monsterStoneGolem,
+  monsterDeva,
+  monsterDjinni,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

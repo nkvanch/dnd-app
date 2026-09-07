@@ -3,12 +3,12 @@
 // CRUD for homebrew content stored in the content_cache table.
 // ============================================================================
 import { Platform } from 'react-native';
-import { Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, Feat } from '../engine/types';
+import { Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, Feat, Condition } from '../engine/types';
 import { MonsterTemplate } from '../content/monsters/types';
 import { getDb } from './db';
 
-export type ContentCacheType = 'race' | 'subrace' | 'class' | 'subclass' | 'spell' | 'background' | 'feature' | 'item' | 'feat' | 'monster';
-export type HomebrewContent   = Race | Subrace | CharClass | HomebrewSubclass | Spell | Feature | Background | Item | Feat | MonsterTemplate;
+export type ContentCacheType = 'race' | 'subrace' | 'class' | 'subclass' | 'spell' | 'background' | 'feature' | 'item' | 'feat' | 'monster' | 'condition';
+export type HomebrewContent   = Race | Subrace | CharClass | HomebrewSubclass | Spell | Feature | Background | Item | Feat | MonsterTemplate | Condition;
 
 type ContentCacheRow = {
   id:      string;

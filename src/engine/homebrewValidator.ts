@@ -218,7 +218,7 @@ export function validateMonster(data: unknown): ValidationResult {
 // ── Generic content validator ─────────────────────────────────────────────────
 
 export function validateContent(
-  type: 'race' | 'class' | 'spell' | 'background' | 'feature' | 'feat' | 'monster',
+  type: 'race' | 'class' | 'spell' | 'background' | 'feature' | 'feat' | 'monster' | 'condition',
   data: unknown
 ): ValidationResult {
   switch (type) {
@@ -226,6 +226,7 @@ export function validateContent(
     case 'class':      return validateClass(data);
     case 'spell':      return validateSpell(data);
     case 'background': return validateRace(data); // same shape: id + name + features[]
+    case 'condition':  return validateRace(data); // same shape: id + name + features[]
     case 'feature':    return validateFeature(data, 'feature');
     case 'feat':       return validateFeat(data);
     case 'monster':    return validateMonster(data);

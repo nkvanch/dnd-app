@@ -9,7 +9,7 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { Platform } from 'react-native';
 import {
-  Entity, ContentDB, Race, Subrace, CharClass, HomebrewSubclass, Spell, Background, Feature, Item, Feat,
+  Entity, ContentDB, Race, Subrace, CharClass, HomebrewSubclass, Spell, Background, Feature, Item, Feat, Condition,
 } from '../engine/types';
 import { MonsterTemplate } from '../content/monsters/types';
 import { ContentCacheType, HomebrewContent } from '../db/contentCacheRepo';
@@ -209,6 +209,7 @@ function wrapAsHomebrewPack(type: ContentCacheType, item: HomebrewContent): Grim
     case 'item':       return { items: [item as Item] };
     case 'feat':       return { feats: [item as Feat] };
     case 'monster':    return { monsters: [item as MonsterTemplate] };
+    case 'condition':  return { conditions: [item as Condition] };
   }
 }
 

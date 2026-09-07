@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { ALL_CONDITIONS } from '../../src/content/conditions';
 import { Alert } from '../../src/utils/alert';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
 import { exportHomebrewItem, ExportFormat, ExportAction } from '../../src/io/exportShare';
@@ -27,6 +28,7 @@ function CreatePanel() {
     { label: '📖  New Feature',      route: '/homebrew/feature-editor' },
     { label: '🌟  New Feat',         route: '/homebrew/feat-builder' },
     { label: '🐉  New Monster',      route: '/homebrew/monster-builder' },
+    { label: '🩹  New Condition',    route: '/homebrew/condition-builder' },
   ];
 
   return (
@@ -53,7 +55,7 @@ function CreatePanel() {
 function LibraryPanel() {
   const router = useRouter();
   const {
-    races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, deleteItem,
+    races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, deleteItem,
     getMergedContentDB,
   } = useHomebrewStore();
   const allRaces = getMergedContentDB().races;
@@ -79,6 +81,15 @@ function LibraryPanel() {
     }
   }
 
+  // Homebrew count only — drives the "no homebrew saved yet" messaging below.
+  // Official conditions (isOfficial:true rows) are appended separately and
+  // always present, so the panel is never truly empty once they're in it —
+  // that's deliberate (A-46: conditions had no browse UI at all before this).
+  const homebrewCount =
+    races.length + subraces.length + classes.length + subclasses.length +
+    items.length + spells.length + backgrounds.length + features.length +
+    feats.length + monsters.length + conditions.length;
+
   const all = [
     ...races.map(r       => ({ type: 'race'       as const, item: r })),
     ...subraces.map(sr   => ({ type: 'subrace'    as const, item: sr, parentName: allRaces.find(r => r.id === sr.parentId)?.name })),
@@ -90,6 +101,13 @@ function LibraryPanel() {
     ...features.map(f    => ({ type: 'feature'    as const, item: f })),
     ...feats.map(f       => ({ type: 'feat'       as const, item: f })),
     ...monsters.map(m    => ({ type: 'monster'    as const, item: m })),
+    ...conditions.map(c  => ({ type: 'condition'  as const, item: c })),
+    // Official conditions — read-only rows (no edit/history/export/delete),
+    // the same catalog the "Add Condition" apply-to-character flow already
+    // uses. Every other official content type already has its own browse UI
+    // elsewhere (spells: AddSpellModal, items: rare-items.tsx, monsters: the
+    // DM monster browser) — conditions never did.
+    ...ALL_CONDITIONS.map(c => ({ type: 'condition' as const, item: c, isOfficial: true })),
   ];
 
   const EDIT_ROUTES: Partial<Record<string, string>> = {
@@ -103,16 +121,8 @@ function LibraryPanel() {
     feature: '/homebrew/feature-editor',
     feat: '/homebrew/feat-builder',
     monster: '/homebrew/monster-builder',
+    condition: '/homebrew/condition-builder',
   };
-
-  if (all.length === 0) {
-    return (
-      <View style={styles.panel}>
-        <Text style={styles.panelTitle}>📚 Library</Text>
-        <Text style={styles.emptyTxt}>No homebrew content saved yet. Create something above.</Text>
-      </View>
-    );
-  }
 
   const CATEGORIES: { id: ContentCacheType | 'all'; label: string }[] = [
     { id: 'all',        label: 'All' },
@@ -126,6 +136,7 @@ function LibraryPanel() {
     { id: 'feature',    label: 'Features' },
     { id: 'feat',       label: 'Feats' },
     { id: 'monster',    label: 'Monsters' },
+    { id: 'condition',  label: 'Conditions' },
   ];
 
   const filtered = all.filter(({ type, item }) => {
@@ -137,6 +148,12 @@ function LibraryPanel() {
   return (
     <View style={styles.panel}>
       <Text style={styles.panelTitle}>📚 Library ({all.length})</Text>
+      {homebrewCount === 0 && (
+        <Text style={styles.emptyTxt}>
+          No homebrew content saved yet — create something above. The official Conditions
+          reference below is always browsable.
+        </Text>
+      )}
 
       <TextInput
         style={styles.search}
@@ -172,6 +189,7 @@ function LibraryPanel() {
       {filtered.map(({ type, item, ...rest }) => {
         const editRoute = EDIT_ROUTES[type];
         const parentName = 'parentName' in rest ? rest.parentName : undefined;
+        const isOfficial = 'isOfficial' in rest && rest.isOfficial === true;
         return (
           <View key={`${type}:${item.id}`} style={styles.libraryRow}>
             <View style={styles.libraryInfo}>
@@ -181,7 +199,16 @@ function LibraryPanel() {
               <View style={[styles.typeBadge, styles[`typeBadge_${type}`] ?? {}]}>
                 <Text style={styles.typeBadgeTxt}>{type}</Text>
               </View>
+              {isOfficial && (
+                <View style={styles.officialBadge}>
+                  <Text style={styles.officialBadgeTxt}>Official</Text>
+                </View>
+              )}
             </View>
+            {/* Official content is reference-only — no edit/history/export/delete,
+                same rule any homebrew-owned action already implicitly follows
+                (these buttons only ever meant anything for a user's own content). */}
+            {!isOfficial && (
             <View style={styles.libraryActions}>
               {editRoute && (
                 <Pressable
@@ -218,6 +245,7 @@ function LibraryPanel() {
                 <Text style={styles.libBtnTxt}>🗑</Text>
               </Pressable>
             </View>
+            )}
           </View>
         );
       })}
@@ -319,6 +347,9 @@ const styles = StyleSheet.create({
   typeBadge_item:       { backgroundColor: Colors.red + '22' },
   typeBadge_feat:       { backgroundColor: Colors.gold + '22' },
   typeBadge_monster:    { backgroundColor: Colors.red + '22' },
+  typeBadge_condition:  { backgroundColor: Colors.blue + '22' },
+  officialBadge:    { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 6, paddingVertical: 2 },
+  officialBadgeTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
   libraryActions: { flexDirection: 'row', gap: Spacing.xs },
   libBtn: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,

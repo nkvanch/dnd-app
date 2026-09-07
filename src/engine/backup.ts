@@ -9,7 +9,7 @@
 // Designed once now so the bigger import pipeline doesn't need a new file
 // format later — exactly what the roadmap asked for.
 //
-import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Background, Feature, Feat } from './types';
+import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Background, Feature, Feat, Condition } from './types';
 import { MonsterTemplate } from '../content/monsters/types';
 
 export const GRIMOIRE_PACK_FORMAT_VERSION = 1;
@@ -25,6 +25,7 @@ export type GrimoirePackHomebrew = {
   features?:    Feature[];
   feats?:       Feat[];
   monsters?:    MonsterTemplate[];
+  conditions?:  Condition[];
 };
 
 export type GrimoirePack = {

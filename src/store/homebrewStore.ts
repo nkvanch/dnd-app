@@ -11,7 +11,7 @@
 // ============================================================================
 import { create } from 'zustand';
 import {
-  Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, Feat, ContentDB,
+  Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, Feat, Condition, ContentDB,
   RulesetId, matchesRuleset,
 } from '../engine/types';
 import { MonsterTemplate } from '../content/monsters/types';
@@ -56,6 +56,7 @@ type HomebrewStore = {
   items:       Item[];
   feats:       Feat[];
   monsters:    MonsterTemplate[];
+  conditions:  Condition[];
   isLoading:   boolean;
 
   /** Load all homebrew from SQLite and merge built-in homebrew. */
@@ -88,6 +89,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   items:       [],
   feats:       [],
   monsters:    [],
+  conditions:  [],
   isLoading:   false,
 
   loadHomebrew: async () => {
@@ -126,6 +128,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         items:       (all.item       ?? []) as Item[],
         feats:       (all.feat       ?? []) as Feat[],
         monsters:    (all.monster    ?? []) as MonsterTemplate[],
+        conditions:  (all.condition  ?? []) as Condition[],
         isLoading:   false,
       });
     } catch (e) {
@@ -135,7 +138,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   },
 
   getMergedContentDB: (activeRuleset?: RulesetId): ContentDB => {
-    const { races, subraces, classes, spells, backgrounds, features, items, feats } = get();
+    const { races, subraces, classes, spells, backgrounds, features, items, feats, conditions } = get();
     const allRaces = [...globalContentDB.races, ...races];
     // Attach standalone subraces (parentId may point at an official OR a
     // homebrew race) onto their parent at read time, rather than requiring
@@ -170,7 +173,9 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       // spellRepo.getIndex() directly instead.
       spells:      spells,
       backgrounds: [...globalContentDB.backgrounds, ...backgrounds].filter(b => matchesRuleset(b.rulesetId, activeRuleset)),
-      conditions:  globalContentDB.conditions.filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
+      // Now includes homebrew conditions too (A-35) — previously official-only,
+      // the one content type with zero homebrew authoring support at all.
+      conditions:  [...globalContentDB.conditions, ...conditions].filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
       // Same rationale as .spells above — official item content lives in
       // itemRepo now, not globalContentDB.
       items:       items,
@@ -193,6 +198,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'item':       return { items:       [...state.items.filter(it => it.id !== (item as Item).id),         item as Item] };
         case 'feat':       return { feats:       [...state.feats.filter(f => f.id !== (item as Feat).id),           item as Feat] };
         case 'monster':    return { monsters:    [...state.monsters.filter(m => m.id !== (item as MonsterTemplate).id), item as MonsterTemplate] };
+        case 'condition':  return { conditions:  [...state.conditions.filter(c => c.id !== (item as Condition).id), item as Condition] };
         default:           return state;
       }
     });
@@ -221,6 +227,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'item':       return { items:       state.items.filter(it => it.id !== id) };
         case 'feat':       return { feats:       state.feats.filter(f => f.id !== id) };
         case 'monster':    return { monsters:    state.monsters.filter(m => m.id !== id) };
+        case 'condition':  return { conditions:  state.conditions.filter(c => c.id !== id) };
         default:           return state;
       }
     });
@@ -247,6 +254,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'item':       return { items:       [...state.items.filter(it => it.id !== id),            restored as Item] };
         case 'feat':       return { feats:       [...state.feats.filter(f => f.id !== id),              restored as Feat] };
         case 'monster':    return { monsters:    [...state.monsters.filter(m => m.id !== id),           restored as MonsterTemplate] };
+        case 'condition':  return { conditions:  [...state.conditions.filter(c => c.id !== id),         restored as Condition] };
         default:           return state;
       }
     });

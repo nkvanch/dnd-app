@@ -669,9 +669,11 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
 
 // ── Trait list + add-by-name flow ─────────────────────────────────────────────
 
-export function TraitListEditor({ traits, onChange }: {
+export function TraitListEditor({ traits, onChange, excludeKinds }: {
   traits: DraftTrait[];
   onChange: (traits: DraftTrait[]) => void;
+  /** Forwarded to the per-trait TraitEditorModal — see its own doc comment. */
+  excludeKinds?: TraitEffectKind[];
 }) {
   const [newName, setNewName] = useState('');
   const [openTraitId, setOpenTraitId] = useState<string | null>(null);
@@ -745,6 +747,7 @@ export function TraitListEditor({ traits, onChange }: {
         onChange={updateTrait}
         onDone={() => setOpenTraitId(null)}
         onDelete={() => openTrait && deleteTrait(openTrait.localId)}
+        excludeKinds={excludeKinds}
       />
     </View>
   );

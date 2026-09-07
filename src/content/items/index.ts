@@ -728,6 +728,196 @@ const HOMEBREW_ITEM_IDS = new Set([
   'greatsword_life_drinking', 'rope_of_mending', 'cast_off_breastplate',
 ]);
 
+// ── Magic items (SRD gap-fill — confirmed missing via the A-31 audit) ────────
+// All 20 pulled from the SRD 5.1 magic-items API (dnd5eapi.co) directly, not
+// authored from memory, matching this project's established discipline for
+// content-copyright cleanliness. Two (Glamoured Studded Leather Armor,
+// Brooch of Shielding) get a real modeled effect — the rest have no clean
+// AbilityEffect mapping (charge/spell-like abilities, crafting rituals,
+// one-shot consumable effects, a DM-controlled hazard object) and are
+// disclosed-only, matching the same pattern already used for Ring of
+// Protection's siblings and every Artificer magic-item feature.
+export const itemArrowCatchingShield: Item = {
+  id: 'arrow_catching_shield', name: 'Arrow-Catching Shield', weight: 6, cost: '—',
+  properties: ['magic item', 'rare', 'requires attunement'],
+  features: [{
+    id: 'arrow_catching_shield_desc', name: 'Arrow-Catching Shield',
+    description: '+2 bonus to AC against ranged attacks (on top of the shield\'s normal AC), and you can use your reaction to become the target of a ranged attack aimed at a creature within 5 feet of you. Not modeled — the bonus is conditional on attack type, which the engine\'s AC formula doesn\'t gate on.',
+    source: { kind: 'item', refId: 'arrow_catching_shield' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemBroochOfShielding: Item = {
+  id: 'brooch_of_shielding', name: 'Brooch of Shielding', weight: 0, cost: '—',
+  properties: ['magic item', 'uncommon', 'requires attunement'],
+  features: [passiveEffectFeature(
+    'brooch_of_shielding_resistance', 'brooch_of_shielding', 'Brooch of Shielding',
+    'Resistance to force damage, and immunity to damage from the magic missile spell (the immunity half isn\'t modeled — no per-spell damage immunity exists in the engine).',
+    [{ type: 'grant_resistance', target: 'force', operation: 'resistance', value: null, condition: null }],
+  )],
+};
+export const itemBroomOfFlying: Item = {
+  id: 'broom_of_flying', name: 'Broom of Flying', weight: 3, cost: '—',
+  properties: ['magic item', 'uncommon'],
+  features: [{
+    id: 'broom_of_flying_desc', name: 'Broom of Flying',
+    description: 'Ridden astride, hovers and flies at 50 feet (30 feet carrying over 200 lbs, up to 400 lbs total). Can be sent to travel alone to a known location within a mile. Not modeled — this is a vehicle/mount you ride, not a personal fly speed the wearer always has.',
+    source: { kind: 'item', refId: 'broom_of_flying' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemCandleOfInvocation: Item = {
+  id: 'candle_of_invocation', name: 'Candle of Invocation', weight: 0, cost: '—',
+  properties: ['magic item', 'very rare', 'requires attunement'],
+  features: [{
+    id: 'candle_of_invocation_desc', name: 'Candle of Invocation',
+    description: 'Dedicated to a deity\'s alignment. While lit (4 hours total before it\'s destroyed), creatures of matching alignment within 30 feet have advantage on attacks/saves/checks, and a matching-alignment cleric or druid can cast prepared 1st-level spells without a slot. Can instead cast gate once, destroying the candle. Not modeled — alignment-gated area buffs and a one-shot 9th-level-equivalent spell have no mechanism in this engine.',
+    source: { kind: 'item', refId: 'candle_of_invocation' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemCircletOfBlasting: Item = {
+  id: 'circlet_of_blasting', name: 'Circlet of Blasting', weight: 0, cost: '—',
+  properties: ['magic item', 'uncommon'],
+  features: [{
+    id: 'circlet_of_blasting_desc', name: 'Circlet of Blasting',
+    description: 'Once per dawn, cast scorching ray (attack bonus +5) as an action. Not modeled — no mechanism for a fixed-attack-bonus spell-like ability independent of the caster\'s own stats.',
+    source: { kind: 'item', refId: 'circlet_of_blasting' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemGlamouredStuddedLeatherArmor: Item = {
+  id: 'glamoured_studded_leather_armor', name: 'Glamoured Studded Leather Armor', weight: 13, cost: '—',
+  properties: ['magic item', 'rare'],
+  features: [passiveEffectFeature(
+    'glamoured_studded_leather_ac', 'glamoured_studded_leather_armor', 'Glamoured Studded Leather Armor',
+    '+1 bonus to AC. Can also be commanded to take on the illusory appearance of ordinary clothing or other armor — cosmetic only, not modeled.',
+    [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 1, condition: null }],
+  )],
+};
+export const itemHelmOfBrilliance: Item = {
+  id: 'helm_of_brilliance', name: 'Helm of Brilliance', weight: 3, cost: '—',
+  properties: ['magic item', 'very rare', 'requires attunement'],
+  features: [{
+    id: 'helm_of_brilliance_desc', name: 'Helm of Brilliance',
+    description: 'Set with diamonds/rubies/fire opals/opals; consuming a gem casts daylight, fireball, prismatic spray, or wall of fire. While it holds a ruby, resistance to fire damage. While it holds a fire opal, can ignite a held weapon for bonus fire damage. While it holds a diamond, damages nearby undead. Loses its magic once every gem is gone. Not modeled — the resource is a depleting pool of distinct gem types, not a clean charge counter or effect the engine has a shape for.',
+    source: { kind: 'item', refId: 'helm_of_brilliance' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemHelmOfComprehendingLanguages: Item = {
+  id: 'helm_of_comprehending_languages', name: 'Helm of Comprehending Languages', weight: 3, cost: '—',
+  properties: ['magic item', 'uncommon'],
+  features: [{
+    id: 'helm_of_comprehending_languages_desc', name: 'Helm of Comprehending Languages',
+    description: 'Cast comprehend languages at will as an action. Not modeled — no mechanism for an at-will non-slot spell-like ability.',
+    source: { kind: 'item', refId: 'helm_of_comprehending_languages' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemHelmOfTelepathy: Item = {
+  id: 'helm_of_telepathy', name: 'Helm of Telepathy', weight: 3, cost: '—',
+  properties: ['magic item', 'uncommon', 'requires attunement'],
+  features: [{
+    id: 'helm_of_telepathy_desc', name: 'Helm of Telepathy',
+    description: 'Cast detect thoughts (DC 13) as an action and telepathically converse with the focused target while concentrating. Once per dawn, cast suggestion (DC 13) on that target instead. Not modeled — no mechanism for a limited-use non-slot spell-like ability.',
+    source: { kind: 'item', refId: 'helm_of_telepathy' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemHelmOfTeleportation: Item = {
+  id: 'helm_of_teleportation', name: 'Helm of Teleportation', weight: 3, cost: '—',
+  properties: ['magic item', 'rare', 'requires attunement'],
+  features: [{
+    id: 'helm_of_teleportation_desc', name: 'Helm of Teleportation',
+    description: 'Has 3 charges; expend 1 as an action to cast teleport. Regains 1d3 charges daily at dawn. Not modeled — no charge-tracking mechanism for a spell-like ability independent of the resource system.',
+    source: { kind: 'item', refId: 'helm_of_teleportation' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemManualOfClayGolems: Item = {
+  id: 'manual_of_clay_golems', name: 'Manual of Clay Golems', weight: 3, cost: '—',
+  properties: ['magic item', 'very rare'],
+  features: [{
+    id: 'manual_of_clay_golems_desc', name: 'Manual of Clay Golems',
+    description: 'A tome of instructions for constructing a clay golem — 30 days of uninterrupted work and 65,000 gp in materials, consumed once the golem is animated. Requires a spellcaster with at least two 5th-level spell slots to decipher; anyone else who attempts to read it takes 6d6 psychic damage. Crafting/downtime and companion-creation are not modeled — flavor-only.',
+    source: { kind: 'item', refId: 'manual_of_clay_golems' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemManualOfFleshGolems: Item = {
+  id: 'manual_of_flesh_golems', name: 'Manual of Flesh Golems', weight: 3, cost: '—',
+  properties: ['magic item', 'very rare'],
+  features: [{
+    id: 'manual_of_flesh_golems_desc', name: 'Manual of Flesh Golems',
+    description: 'A tome of instructions for constructing a flesh golem — 60 days of uninterrupted work and 50,000 gp in materials, consumed once the golem is animated. Requires a spellcaster with at least two 5th-level spell slots to decipher; anyone else who attempts to read it takes 6d6 psychic damage. Crafting/downtime and companion-creation are not modeled — flavor-only.',
+    source: { kind: 'item', refId: 'manual_of_flesh_golems' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemManualOfIronGolems: Item = {
+  id: 'manual_of_iron_golems', name: 'Manual of Iron Golems', weight: 3, cost: '—',
+  properties: ['magic item', 'very rare'],
+  features: [{
+    id: 'manual_of_iron_golems_desc', name: 'Manual of Iron Golems',
+    description: 'A tome of instructions for constructing an iron golem — 120 days of uninterrupted work and 100,000 gp in materials, consumed once the golem is animated. Requires a spellcaster with at least two 5th-level spell slots to decipher; anyone else who attempts to read it takes 6d6 psychic damage. Crafting/downtime and companion-creation are not modeled — flavor-only.',
+    source: { kind: 'item', refId: 'manual_of_iron_golems' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemManualOfStoneGolems: Item = {
+  id: 'manual_of_stone_golems', name: 'Manual of Stone Golems', weight: 3, cost: '—',
+  properties: ['magic item', 'very rare'],
+  features: [{
+    id: 'manual_of_stone_golems_desc', name: 'Manual of Stone Golems',
+    description: 'A tome of instructions for constructing a stone golem — 90 days of uninterrupted work and 80,000 gp in materials, consumed once the golem is animated. Requires a spellcaster with at least two 5th-level spell slots to decipher; anyone else who attempts to read it takes 6d6 psychic damage. Crafting/downtime and companion-creation are not modeled — flavor-only.',
+    source: { kind: 'item', refId: 'manual_of_stone_golems' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemOilOfSlipperiness: Item = {
+  id: 'oil_of_slipperiness', name: 'Oil of Slipperiness', weight: 1, cost: '—',
+  properties: ['magic item', 'uncommon'],
+  features: [{
+    id: 'oil_of_slipperiness_desc', name: 'Oil of Slipperiness',
+    description: 'Applied to a Medium or smaller creature (10 minutes), grants the effect of freedom of movement for 8 hours. Poured on a 10-foot square instead, duplicates grease for 8 hours. Not modeled — a manually-applied consumable buff/battlefield effect, same as other potions in this library.',
+    source: { kind: 'item', refId: 'oil_of_slipperiness' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemPhilterOfLove: Item = {
+  id: 'philter_of_love', name: 'Philter of Love', weight: 0, cost: '—',
+  properties: ['magic item', 'uncommon'],
+  features: [{
+    id: 'philter_of_love_desc', name: 'Philter of Love',
+    description: 'The next creature the drinker sees within 10 minutes charms them for 1 hour; if it\'s a species/gender they\'re normally attracted to, they regard it as their true love. Not modeled — no generic "charmed by the next creature seen" mechanism.',
+    source: { kind: 'item', refId: 'philter_of_love' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemRestorativeOintment: Item = {
+  id: 'restorative_ointment', name: 'Restorative Ointment', weight: 1, cost: '—',
+  properties: ['magic item', 'uncommon'],
+  features: [{
+    id: 'restorative_ointment_desc', name: 'Restorative Ointment',
+    description: '1d4+1 doses; a dose swallowed or applied as an action restores 2d8+2 HP and cures poison and disease. Not modeled — a manually-applied consumable, resolved the same way Potion of Healing already is (HP modal, applied by hand).',
+    source: { kind: 'item', refId: 'restorative_ointment' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemSlippersOfSpiderClimbing: Item = {
+  id: 'slippers_of_spider_climbing', name: 'Slippers of Spider Climbing', weight: 0, cost: '—',
+  properties: ['magic item', 'uncommon', 'requires attunement'],
+  features: [{
+    id: 'slippers_of_spider_climbing_desc', name: 'Slippers of Spider Climbing',
+    description: 'Climbing speed equal to your walking speed on most surfaces (not slippery ones), hands free. Not modeled — the engine\'s grant_movement effect takes a fixed range, not "equal to your own walking speed," which varies by race/effects.',
+    source: { kind: 'item', refId: 'slippers_of_spider_climbing' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemSovereignGlue: Item = {
+  id: 'sovereign_glue', name: 'Sovereign Glue', weight: 0, cost: '—',
+  properties: ['magic item', 'legendary'],
+  features: [{
+    id: 'sovereign_glue_desc', name: 'Sovereign Glue',
+    description: 'A permanent adhesive (1d6+1 ounces per container, 1 ounce covers 1 square foot, sets in 1 minute) — only universal solvent, oil of etherealness, or a wish spell can undo the bond. Flavor-only, no mechanical effect to model.',
+    source: { kind: 'item', refId: 'sovereign_glue' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+export const itemSphereOfAnnihilation: Item = {
+  id: 'sphere_of_annihilation', name: 'Sphere of Annihilation', weight: 0, cost: '—',
+  properties: ['magic item', 'legendary'],
+  features: [{
+    id: 'sphere_of_annihilation_desc', name: 'Sphere of Annihilation',
+    description: 'A 2-foot hovering black sphere that obliterates any matter (other than artifacts) it touches, dealing 4d10 force damage to anything merely grazing it. Controlling and levitating it takes a DC 25 Intelligence (Arcana) check. A DM-controlled hazard object, not a worn/carried bonus — flavor-only, no mechanical effect on the wielder to model.',
+    source: { kind: 'item', refId: 'sphere_of_annihilation' }, level: null, effects: [], actions: [], choices: [], passive: true,
+  }],
+};
+
 const CORE_ITEMS: Item[] = [
   // Simple melee
   itemDagger, itemHandaxe, itemClub, itemGreatclub, itemLightHammer, itemSickle,
@@ -756,6 +946,14 @@ const CORE_ITEMS: Item[] = [
   // Packs
   itemExplorersPack, itemDungeoneersPack, itemPriestsPack, itemScholarsPack,
   itemDiplomatsPack, itemEntertainersPack, itemBurglarsPack,
+  // Magic items (SRD gap-fill — see the section above)
+  itemArrowCatchingShield, itemBroochOfShielding, itemBroomOfFlying,
+  itemCandleOfInvocation, itemCircletOfBlasting, itemGlamouredStuddedLeatherArmor,
+  itemHelmOfBrilliance, itemHelmOfComprehendingLanguages, itemHelmOfTelepathy,
+  itemHelmOfTeleportation, itemManualOfClayGolems, itemManualOfFleshGolems,
+  itemManualOfIronGolems, itemManualOfStoneGolems, itemOilOfSlipperiness,
+  itemPhilterOfLove, itemRestorativeOintment, itemSlippersOfSpiderClimbing,
+  itemSovereignGlue, itemSphereOfAnnihilation,
 ].map(item => ({ ...item, srd: !HOMEBREW_ITEM_IDS.has(item.id) }));
 
 /**

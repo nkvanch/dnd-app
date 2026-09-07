@@ -10538,6 +10538,288 @@ export const monsterSilverDragonWyrmling: MonsterTemplate = {
   ],
 };
 
+export const monsterMule: MonsterTemplate = {
+  id: 'mule', name: 'Mule', cr: 0.125, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 14, dex: 10, con: 13, int: 2, wis: 10, cha: 5 },
+  hp: { dice: '2d8+2', average: 11 },
+  ac: { value: 10, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'mule_traits', name: 'Beast of Burden; Sure-Footed',
+      description: 'Counts as a Large animal for carrying capacity. Advantage on STR and DEX saving throws made against effects that would knock it prone.',
+      source: { kind: 'race', refId: 'mule' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mule_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 4 (1d4+2) bludgeoning damage.',
+      source: { kind: 'race', refId: 'mule' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+2', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterOctopus: MonsterTemplate = {
+  id: 'octopus', name: 'Octopus', cr: 0, srd: true,
+  size: 'small', type: 'beast', alignment: 'unaligned',
+  stats: { str: 4, dex: 15, con: 11, int: 3, wis: 10, cha: 4 },
+  hp: { dice: '1d6', average: 3 },
+  ac: { value: 12, source: 'dex' },
+  speed: 5,
+  savingThrows: [],
+  skills: { perception: 2, stealth: 4 },
+  senses: ['darkvision 30 ft', 'passive Perception 12'],
+  languages: [],
+  features: [
+    {
+      id: 'octopus_traits', name: 'Hold Breath; Underwater Camouflage; Water Breathing',
+      description: 'Out of water, can hold its breath for 30 minutes. Advantage on Dexterity (Stealth) checks made underwater. Can breathe only underwater.',
+      source: { kind: 'race', refId: 'octopus' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'octopus_tentacles', name: 'Tentacles',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 1 bludgeoning damage; the target is grappled (escape DC 10) and the octopus can\'t use tentacles on another target while grappling.',
+      source: { kind: 'race', refId: 'octopus' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'octopus_ink_cloud', name: 'Ink Cloud',
+      description: 'Recharges after a short/long rest. Underwater only. Releases a 5-foot-radius ink cloud, heavily obscuring the area for 1 minute (dispersible by current); can then Dash as a bonus action.',
+      source: { kind: 'race', refId: 'octopus' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'area', requiresSave: null },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterGiantOctopus: MonsterTemplate = {
+  id: 'giant_octopus', name: 'Giant Octopus', cr: 1, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 17, dex: 13, con: 13, int: 4, wis: 10, cha: 4 },
+  hp: { dice: '8d10+8', average: 52 },
+  ac: { value: 11, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: { perception: 4, stealth: 5 },
+  senses: ['darkvision 60 ft', 'passive Perception 14'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_octopus_traits', name: 'Hold Breath; Underwater Camouflage; Water Breathing',
+      description: 'Out of water, can hold its breath for 1 hour. Advantage on Dexterity (Stealth) checks made underwater. Can breathe only underwater.',
+      source: { kind: 'race', refId: 'giant_octopus' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_octopus_tentacles', name: 'Tentacles',
+      description: 'Melee Weapon Attack: +5 to hit, reach 15 ft., one target. Hit: 10 (2d6+3) bludgeoning damage; a creature target is grappled (escape DC 16) and restrained until the grapple ends, and the octopus can\'t use tentacles on another target while grappling.',
+      source: { kind: 'race', refId: 'giant_octopus' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'giant_octopus_ink_cloud', name: 'Ink Cloud',
+      description: 'Recharges after a short/long rest. Underwater only. Releases a 20-foot-radius ink cloud, heavily obscuring the area for 1 minute (dispersible by current); can then Dash as a bonus action.',
+      source: { kind: 'race', refId: 'giant_octopus' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '20 feet', target: 'area', requiresSave: null },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterPony: MonsterTemplate = {
+  id: 'pony', name: 'Pony', cr: 0.125, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 15, dex: 10, con: 13, int: 2, wis: 11, cha: 7 },
+  hp: { dice: '2d8+2', average: 11 },
+  ac: { value: 10, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'pony_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (2d4+2) bludgeoning damage.',
+      source: { kind: 'race', refId: 'pony' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+2', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterDraftHorse: MonsterTemplate = {
+  id: 'draft_horse', name: 'Draft Horse', cr: 0.25, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 18, dex: 10, con: 12, int: 2, wis: 11, cha: 7 },
+  hp: { dice: '3d10+3', average: 19 },
+  ac: { value: 10, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'draft_horse_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 9 (2d4+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'draft_horse' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterRidingHorse: MonsterTemplate = {
+  id: 'riding_horse', name: 'Riding Horse', cr: 0.25, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 16, dex: 10, con: 12, int: 2, wis: 11, cha: 7 },
+  hp: { dice: '2d10+2', average: 13 },
+  ac: { value: 10, source: 'dex' },
+  speed: 60,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'riding_horse_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 8 (2d4+3) bludgeoning damage.',
+      source: { kind: 'race', refId: 'riding_horse' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+3', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterWarhorse: MonsterTemplate = {
+  id: 'warhorse', name: 'Warhorse', cr: 0.5, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 18, dex: 12, con: 13, int: 2, wis: 12, cha: 7 },
+  hp: { dice: '3d10+3', average: 19 },
+  ac: { value: 11, source: 'dex' },
+  speed: 60,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'warhorse_trampling_charge', name: 'Trampling Charge',
+      description: 'If the horse moves at least 20 ft. straight toward a creature and hits it with a Hooves attack the same turn, that target must succeed a DC 14 STR save or be knocked prone; if prone, the horse can make another Hooves attack against it as a bonus action.',
+      source: { kind: 'race', refId: 'warhorse' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'warhorse_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 11 (2d6+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'warhorse' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterQuipper: MonsterTemplate = {
+  id: 'quipper', name: 'Quipper', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 2, dex: 16, con: 9, int: 1, wis: 7, cha: 2 },
+  hp: { dice: '1d4-1', average: 1 },
+  ac: { value: 13, source: 'dex' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'quipper_traits', name: 'Blood Frenzy; Water Breathing',
+      description: 'Advantage on melee attacks against a creature that doesn\'t have all its HP. Can breathe only underwater.',
+      source: { kind: 'race', refId: 'quipper' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'quipper_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 1 piercing damage.',
+      source: { kind: 'race', refId: 'quipper' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterDeer: MonsterTemplate = {
+  id: 'deer', name: 'Deer', cr: 0, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 11, dex: 16, con: 11, int: 2, wis: 14, cha: 5 },
+  hp: { dice: '1d8', average: 4 },
+  ac: { value: 13, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 12'],
+  languages: [],
+  features: [
+    {
+      id: 'deer_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 2 (1d4) piercing damage.',
+      source: { kind: 'race', refId: 'deer' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterGoat: MonsterTemplate = {
+  id: 'goat', name: 'Goat', cr: 0, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 12, dex: 10, con: 11, int: 2, wis: 10, cha: 5 },
+  hp: { dice: '1d8', average: 4 },
+  ac: { value: 10, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'goat_traits', name: 'Charge; Sure-Footed',
+      description: 'If the goat moves at least 20 ft. straight toward a target and hits it with a Ram attack the same turn, that attack deals an extra 2 (1d4) bludgeoning damage and a creature target must succeed a DC 10 STR save or be knocked prone. Advantage on STR and DEX saving throws made against effects that would knock it prone.',
+      source: { kind: 'race', refId: 'goat' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'goat_ram', name: 'Ram',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 3 (1d4+1) bludgeoning damage.',
+      source: { kind: 'race', refId: 'goat' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+1', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -10776,6 +11058,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterCopperDragonWyrmling,
   monsterGoldDragonWyrmling,
   monsterSilverDragonWyrmling,
+  monsterMule,
+  monsterOctopus,
+  monsterGiantOctopus,
+  monsterPony,
+  monsterDraftHorse,
+  monsterRidingHorse,
+  monsterWarhorse,
+  monsterQuipper,
+  monsterDeer,
+  monsterGoat,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

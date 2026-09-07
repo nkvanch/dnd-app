@@ -12657,6 +12657,390 @@ export const monsterHellHound: MonsterTemplate = {
   ],
 };
 
+export const monsterFlyingSnake: MonsterTemplate = {
+  id: 'flying_snake', name: 'Flying Snake', cr: 0.125, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 4, dex: 18, con: 11, int: 2, wis: 12, cha: 5 },
+  hp: { dice: '2d4', average: 5 },
+  ac: { value: 14, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'flying_snake_flyby', name: 'Flyby',
+      description: 'The snake doesn\'t provoke opportunity attacks when it flies out of an enemy\'s reach.',
+      source: { kind: 'race', refId: 'flying_snake' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'flying_snake_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 1 piercing plus 7 (3d4) poison damage.',
+      source: { kind: 'race', refId: 'flying_snake' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1', damageType: 'piercing' },
+        { type: 'damage', dice: '3d4', damageType: 'poison' },
+      ],
+    },
+  ],
+};
+
+export const monsterFlyingSword: MonsterTemplate = {
+  id: 'flying_sword', name: 'Flying Sword', cr: 0.25, srd: true,
+  size: 'small', type: 'construct', alignment: 'unaligned',
+  stats: { str: 12, dex: 15, con: 11, int: 1, wis: 5, cha: 1 },
+  hp: { dice: '5d6', average: 17 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 0,
+  savingThrows: ['dex'],
+  skills: {},
+  senses: ['blindsight 60 ft (blind beyond)', 'passive Perception 7'],
+  languages: [],
+  features: [
+    {
+      id: 'flying_sword_antimagic_susceptibility', name: 'Antimagic Susceptibility',
+      description: 'Incapacitated while in an antimagic field. If targeted by dispel magic, must succeed a CON save against the caster\'s spell save DC or fall unconscious for 1 minute.',
+      source: { kind: 'race', refId: 'flying_sword' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'flying_sword_false_appearance', name: 'False Appearance',
+      description: 'While motionless and not flying, indistinguishable from a normal sword.',
+      source: { kind: 'race', refId: 'flying_sword' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'flying_sword_longsword', name: 'Longsword',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 5 (1d8+1) slashing damage.',
+      source: { kind: 'race', refId: 'flying_sword' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+1', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterPhaseSpider: MonsterTemplate = {
+  id: 'phase_spider', name: 'Phase Spider', cr: 3, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'unaligned',
+  stats: { str: 15, dex: 15, con: 12, int: 6, wis: 10, cha: 6 },
+  hp: { dice: '5d10+5', average: 32 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { stealth: 6 },
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'phase_spider_traits', name: 'Ethereal Jaunt; Spider Climb; Web Walker',
+      description: 'As a bonus action, can shift between the Material and Ethereal Planes. Can climb difficult surfaces, including upside down on ceilings, without an ability check. Ignores movement restrictions caused by webbing.',
+      source: { kind: 'race', refId: 'phase_spider' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'phase_spider_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 7 (1d10+2) piercing damage, plus DC 11 CON save, 18 (4d8) poison damage on a failure, half on a success; if this reduces the target to 0 HP, it\'s instead stable but poisoned for 1 hour (paralyzed while poisoned this way).',
+      source: { kind: 'race', refId: 'phase_spider' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d10+2', damageType: 'piercing' },
+        { type: 'damage', dice: '4d8', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+  ],
+};
+
+export const monsterRugOfSmothering: MonsterTemplate = {
+  id: 'rug_of_smothering', name: 'Rug of Smothering', cr: 2, srd: true,
+  size: 'large', type: 'construct', alignment: 'unaligned',
+  stats: { str: 17, dex: 14, con: 10, int: 1, wis: 3, cha: 1 },
+  hp: { dice: '6d10', average: 33 },
+  ac: { value: 12, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 60 ft (blind beyond)', 'passive Perception 6'],
+  languages: [],
+  features: [
+    {
+      id: 'rug_of_smothering_antimagic_susceptibility', name: 'Antimagic Susceptibility',
+      description: 'Incapacitated while in an antimagic field. If targeted by dispel magic, must succeed a CON save against the caster\'s spell save DC or fall unconscious for 1 minute.',
+      source: { kind: 'race', refId: 'rug_of_smothering' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rug_of_smothering_damage_transfer', name: 'Damage Transfer',
+      description: 'While grappling a creature, the rug takes only half of any damage dealt to it and the grappled creature takes the other half.',
+      source: { kind: 'race', refId: 'rug_of_smothering' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rug_of_smothering_false_appearance', name: 'False Appearance',
+      description: 'While motionless, indistinguishable from a normal rug.',
+      source: { kind: 'race', refId: 'rug_of_smothering' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rug_of_smothering_smother', name: 'Smother',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one Medium or smaller creature. Hit: the target is grappled (escape DC 13), restrained, blinded, and at risk of suffocating (and the rug can\'t smother another target while grappling); at the start of each of the target\'s turns it takes 10 (2d6+3) bludgeoning damage.',
+      source: { kind: 'race', refId: 'rug_of_smothering' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterSaberToothedTiger: MonsterTemplate = {
+  id: 'saber_toothed_tiger', name: 'Saber-Toothed Tiger', cr: 2, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 18, dex: 14, con: 15, int: 3, wis: 12, cha: 8 },
+  hp: { dice: '7d10+14', average: 52 },
+  ac: { value: 12, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 6 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'saber_toothed_tiger_keen_smell', name: 'Keen Smell',
+      description: 'The tiger has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'saber_toothed_tiger' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'saber_toothed_tiger_pounce', name: 'Pounce',
+      description: 'If the tiger moves at least 20 ft. straight toward a creature and hits it with a Claw attack the same turn, that target must succeed a DC 14 STR save or be knocked prone; if prone, the tiger can make one Bite attack against it as a bonus action.',
+      source: { kind: 'race', refId: 'saber_toothed_tiger' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'saber_toothed_tiger_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 10 (1d10+5) piercing damage.',
+      source: { kind: 'race', refId: 'saber_toothed_tiger' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+5', damageType: 'piercing' }],
+    },
+    {
+      id: 'saber_toothed_tiger_claw', name: 'Claw',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 12 (2d6+5) slashing damage.',
+      source: { kind: 'race', refId: 'saber_toothed_tiger' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+5', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterWinterWolf: MonsterTemplate = {
+  id: 'winter_wolf', name: 'Winter Wolf', cr: 3, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'neutral evil',
+  stats: { str: 18, dex: 13, con: 14, int: 7, wis: 12, cha: 8 },
+  hp: { dice: '10d10+20', average: 75 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 5, stealth: 3 },
+  senses: ['passive Perception 15'],
+  languages: ['Common', 'Giant', 'Winter Wolf'],
+  features: [
+    {
+      id: 'winter_wolf_traits', name: 'Keen Hearing and Smell; Pack Tactics; Snow Camouflage',
+      description: 'Advantage on Wisdom (Perception) checks that rely on hearing or smell. Advantage on an attack roll against a creature if at least one of the wolf\'s allies is within 5 ft. of it and isn\'t incapacitated. Advantage on Dexterity (Stealth) checks made to hide in snowy terrain.',
+      source: { kind: 'race', refId: 'winter_wolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'winter_wolf_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 11 (2d6+4) piercing damage; a creature target must succeed a DC 14 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'winter_wolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'winter_wolf_cold_breath', name: 'Cold Breath',
+      description: 'Recharge 5-6. Exhales freezing wind in a 15-foot cone. DC 12 DEX save, 18 (4d8) cold damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'winter_wolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet cone', target: 'area', requiresSave: { ability: 'dex', dc: 12 } },
+      abilityEffects: [{ type: 'damage', dice: '4d8', damageType: 'cold', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterWorg: MonsterTemplate = {
+  id: 'worg', name: 'Worg', cr: 0.5, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'neutral evil',
+  stats: { str: 16, dex: 13, con: 13, int: 7, wis: 11, cha: 8 },
+  hp: { dice: '4d10+4', average: 26 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 4 },
+  senses: ['darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Goblin', 'Worg'],
+  features: [
+    {
+      id: 'worg_keen_hearing_smell', name: 'Keen Hearing and Smell',
+      description: 'Advantage on Wisdom (Perception) checks that rely on hearing or smell.',
+      source: { kind: 'race', refId: 'worg' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'worg_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) piercing damage; a creature target must succeed a DC 13 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'worg' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterLamia: MonsterTemplate = {
+  id: 'lamia', name: 'Lamia', cr: 4, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'chaotic evil',
+  stats: { str: 16, dex: 13, con: 15, int: 14, wis: 15, cha: 16 },
+  hp: { dice: '13d10+26', average: 97 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { deception: 7, insight: 4, stealth: 3 },
+  senses: ['darkvision 60 ft', 'passive Perception 12'],
+  languages: ['Abyssal', 'Common'],
+  features: [
+    {
+      id: 'lamia_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'CHA-based (spell save DC 13), verbal/somatic components only. At will: disguise self (any humanoid form), major image. 3/day each: charm person, mirror image, scrying, suggestion. 1/day: geas.',
+      source: { kind: 'race', refId: 'lamia' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'lamia_multiattack', name: 'Multiattack',
+      description: 'The lamia makes two attacks: one claws and one dagger-or-Intoxicating Touch. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'lamia' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'lamia_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 14 (2d10+3) slashing damage.',
+      source: { kind: 'race', refId: 'lamia' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d10+3', damageType: 'slashing' }],
+    },
+    {
+      id: 'lamia_dagger', name: 'Dagger',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 5 (1d4+3) piercing damage.',
+      source: { kind: 'race', refId: 'lamia' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+3', damageType: 'piercing' }],
+    },
+    {
+      id: 'lamia_intoxicating_touch', name: 'Intoxicating Touch',
+      description: 'Melee Spell Attack: +5 to hit, reach 5 ft., one creature. Hit: the target is magically cursed for 1 hour, with disadvantage on Wisdom saving throws and all ability checks until the curse ends.',
+      source: { kind: 'race', refId: 'lamia' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterSalamander: MonsterTemplate = {
+  id: 'salamander', name: 'Salamander', cr: 5, srd: true,
+  size: 'large', type: 'elemental', alignment: 'neutral evil',
+  stats: { str: 18, dex: 14, con: 15, int: 11, wis: 10, cha: 12 },
+  hp: { dice: '12d10+24', average: 90 },
+  ac: { value: 15, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['Ignan'],
+  features: [
+    {
+      id: 'salamander_traits', name: 'Heated Body; Heated Weapons',
+      description: 'A creature that touches the salamander or hits it with a melee attack while within 5 ft. takes 7 (2d6) fire damage. Any metal melee weapon it wields deals an extra 3 (1d6) fire damage on a hit (already included in its attacks below).',
+      source: { kind: 'race', refId: 'salamander' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'salamander_multiattack', name: 'Multiattack',
+      description: 'The salamander makes two attacks: one spear and one tail. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'salamander' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'salamander_spear', name: 'Spear',
+      description: 'Melee or Ranged Weapon Attack: +7 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 11 (2d6+4) piercing damage (13/2d8+4 two-handed melee) plus 3 (1d6) fire damage.',
+      source: { kind: 'race', refId: 'salamander' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6+4', damageType: 'piercing' },
+        { type: 'damage', dice: '1d6', damageType: 'fire' },
+      ],
+    },
+    {
+      id: 'salamander_tail', name: 'Tail',
+      description: 'Melee Weapon Attack: +7 to hit, reach 10 ft., one target. Hit: 11 (2d6+4) bludgeoning plus 7 (2d6) fire damage; the target is grappled (escape DC 14) and restrained until the grapple ends, and the salamander automatically hits it with tail attacks while grappling (and can\'t tail another target).',
+      source: { kind: 'race', refId: 'salamander' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6+4', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '2d6', damageType: 'fire' },
+      ],
+    },
+  ],
+};
+
+export const monsterMagmin: MonsterTemplate = {
+  id: 'magmin', name: 'Magmin', cr: 0.5, srd: true,
+  size: 'small', type: 'elemental', alignment: 'chaotic neutral',
+  stats: { str: 7, dex: 15, con: 12, int: 8, wis: 11, cha: 10 },
+  hp: { dice: '2d6+2', average: 9 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['Ignan'],
+  features: [
+    {
+      id: 'magmin_death_burst', name: 'Death Burst',
+      description: 'When the magmin dies, it explodes in a burst of fire and magma. Each creature within 10 ft. must make a DC 11 DEX save, taking 7 (2d6) fire damage on a failure, half on a success. Unattended flammable objects in the area ignite.',
+      source: { kind: 'race', refId: 'magmin' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'magmin_ignited_illumination', name: 'Ignited Illumination',
+      description: 'As a bonus action, can ignite or extinguish itself. While ablaze, sheds bright light in a 10-ft. radius and dim light for another 10 ft.',
+      source: { kind: 'race', refId: 'magmin' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'magmin_touch', name: 'Touch',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (2d6) fire damage; a creature or flammable object hit ignites, taking 3 (1d6) fire damage at the end of each of its turns until someone uses an action to douse it.',
+      source: { kind: 'race', refId: 'magmin' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6', damageType: 'fire' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -12955,6 +13339,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGiantEagle,
   monsterGiantElk,
   monsterHellHound,
+  monsterFlyingSnake,
+  monsterFlyingSword,
+  monsterPhaseSpider,
+  monsterRugOfSmothering,
+  monsterSaberToothedTiger,
+  monsterWinterWolf,
+  monsterWorg,
+  monsterLamia,
+  monsterSalamander,
+  monsterMagmin,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

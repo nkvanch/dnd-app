@@ -350,11 +350,17 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
   const freeActions  = all.filter(c => c.activation.actionType === 'free');
 
   const handleUse = useCallback((card: ActionCard) => {
-    if (!onEntityUpdate || !rules || !card.resourceCost) {
-      // No update handler, or nothing to spend — just show the roll modal.
+    if (!onEntityUpdate || !rules) {
+      // No update handler — just show the roll modal.
       setActiveCard(card);
       return;
     }
+    // Always run applyActionCardUse, even for cost-less cards (cantrips,
+    // at-will attacks) — it already no-ops correctly when there's nothing
+    // to spend (see its own cost-branch), but a cost-less concentration
+    // cantrip (True Strike, etc.) still needs the concentration-tracking
+    // half to run, which previously never fired because this whole call
+    // was gated on resourceCost being truthy.
     onEntityUpdate(applyActionCardUse(entity, card, rules));
     setActiveCard(card);
   }, [entity, rules, onEntityUpdate]);

@@ -800,7 +800,10 @@ export function TabCharacter({
   // Unarmed Strike have no backing Feature to store a flag on).
   const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c.featureId));
   function handleUseFavorite(card: ActionCard) {
-    if (card.resourceCost) onEntityUpdate(applyActionCardUse(entity, card, rules));
+    // Same fix as TabActions' handleUse — always run applyActionCardUse
+    // (it no-ops correctly with nothing to spend) so a cost-less
+    // concentration cantrip favorited here also tracks concentration.
+    onEntityUpdate(applyActionCardUse(entity, card, rules));
     setActiveFavCard(card);
   }
   function rollForFavorite(): import('../../engine/types').DiceRoll | null {

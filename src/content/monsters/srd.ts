@@ -8358,6 +8358,462 @@ export const monsterDarkmantle: MonsterTemplate = {
   ],
 };
 
+export const monsterGibberingMouther: MonsterTemplate = {
+  id: 'gibbering_mouther', name: 'Gibbering Mouther', cr: 2, srd: true,
+  size: 'medium', type: 'aberration', alignment: 'neutral',
+  stats: { str: 10, dex: 8, con: 16, int: 3, wis: 10, cha: 6 },
+  hp: { dice: '9d8+27', average: 67 },
+  ac: { value: 9, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'gibbering_mouther_aberrant_ground', name: 'Aberrant Ground',
+      description: 'The ground in a 10-foot radius around the mouther is doughlike difficult terrain. Each creature starting its turn there must succeed a DC 10 STR save or have its speed reduced to 0 until the start of its next turn.',
+      source: { kind: 'race', refId: 'gibbering_mouther' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gibbering_mouther_gibbering', name: 'Gibbering',
+      description: 'While it can see a creature and isn\'t incapacitated, the mouther babbles incoherently. Each creature starting its turn within 20 ft. and able to hear it must succeed a DC 10 WIS save or lose reactions until its next turn and roll a d8 for its turn: 1-4 does nothing, 5-6 moves in a random direction using all movement (no action/bonus action), 7-8 makes a melee attack against a random creature in reach (or nothing if it can\'t).',
+      source: { kind: 'race', refId: 'gibbering_mouther' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gibbering_mouther_multiattack', name: 'Multiattack',
+      description: 'The mouther makes one bite attack and, if able, uses Blinding Spittle. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'gibbering_mouther' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gibbering_mouther_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +2 to hit, reach 5 ft., one creature. Hit: 17 (5d6) piercing damage. A Medium-or-smaller target must succeed a DC 10 STR save or be knocked prone. A creature killed by this damage is absorbed into the mouther.',
+      source: { kind: 'race', refId: 'gibbering_mouther' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '5d6', damageType: 'piercing' }],
+    },
+    {
+      id: 'gibbering_mouther_blinding_spittle', name: 'Blinding Spittle',
+      description: 'Recharge 5-6. Spits a glob up to 15 ft. away that explodes in a blinding flash. Each creature within 5 ft. of the flash must succeed a DC 13 DEX save or be blinded until the end of the mouther\'s next turn.',
+      source: { kind: 'race', refId: 'gibbering_mouther' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet', target: 'area', requiresSave: { ability: 'dex', dc: 13 } },
+      abilityEffects: [{ type: 'apply_condition', conditionId: 'blinded', duration: { unit: 'rounds', remaining: 1 } }],
+    },
+  ],
+};
+
+export const monsterOtyugh: MonsterTemplate = {
+  id: 'otyugh', name: 'Otyugh', cr: 5, srd: true,
+  size: 'large', type: 'aberration', alignment: 'neutral',
+  stats: { str: 16, dex: 11, con: 19, int: 6, wis: 13, cha: 6 },
+  hp: { dice: '12d10+48', average: 114 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['con'],
+  skills: {},
+  senses: ['darkvision 120 ft', 'passive Perception 11'],
+  languages: ['Otyugh'],
+  features: [
+    {
+      id: 'otyugh_limited_telepathy', name: 'Limited Telepathy',
+      description: 'Can magically transmit simple messages and images to any creature within 120 ft. that understands a language (one-way — no reply).',
+      source: { kind: 'race', refId: 'otyugh' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'otyugh_multiattack', name: 'Multiattack',
+      description: 'The otyugh makes three attacks: one bite and two tentacles. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'otyugh' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'otyugh_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 12 (2d8+3) piercing damage. A hit creature must succeed a DC 15 CON save or become poisoned by disease until cured; it repeats the save every 24 hours, losing 5 (1d10) max HP on a failure (dying if reduced to 0), curing on a success.',
+      source: { kind: 'race', refId: 'otyugh' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 15 } },
+      abilityEffects: [
+        { type: 'damage', dice: '2d8+3', damageType: 'piercing' },
+        { type: 'apply_condition', conditionId: 'poisoned', duration: { unit: 'permanent', remaining: 0 } },
+      ],
+    },
+    {
+      id: 'otyugh_tentacle', name: 'Tentacle',
+      description: 'Melee Weapon Attack: +6 to hit, reach 10 ft., one target. Hit: 7 (1d8+3) bludgeoning plus 4 (1d8) piercing damage. A Medium-or-smaller target is grappled (escape DC 13) and restrained until the grapple ends; the otyugh has two tentacles, each able to grapple one target.',
+      source: { kind: 'race', refId: 'otyugh' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d8+3', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '1d8', damageType: 'piercing' },
+      ],
+    },
+    {
+      id: 'otyugh_tentacle_slam', name: 'Tentacle Slam',
+      description: 'Slams creatures it has grappled into each other or a solid surface. Each must succeed a DC 14 CON save or take 10 (2d6+3) bludgeoning damage and be stunned until the end of the otyugh\'s next turn; on a success, half damage and no stun.',
+      source: { kind: 'race', refId: 'otyugh' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'multiple', requiresSave: { ability: 'con', dc: 14 } },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'bludgeoning', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterXorn: MonsterTemplate = {
+  id: 'xorn', name: 'Xorn', cr: 5, srd: true,
+  size: 'medium', type: 'elemental', alignment: 'neutral',
+  stats: { str: 17, dex: 10, con: 22, int: 11, wis: 10, cha: 11 },
+  hp: { dice: '7d8+42', average: 73 },
+  ac: { value: 19, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: { perception: 6, stealth: 3 },
+  senses: ['darkvision 60 ft', 'tremorsense 60 ft', 'passive Perception 16'],
+  languages: ['Terran'],
+  features: [
+    {
+      id: 'xorn_traits', name: 'Earth Glide; Stone Camouflage; Treasure Sense',
+      description: 'Can burrow through nonmagical, unworked earth and stone without disturbing it. Advantage on Stealth checks made to hide in rocky terrain. Can pinpoint, by scent, precious metals and stones within 60 ft.',
+      source: { kind: 'race', refId: 'xorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'xorn_multiattack', name: 'Multiattack',
+      description: 'The xorn makes three claw attacks and one bite attack. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'xorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'xorn_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 13 (3d6+3) piercing damage.',
+      source: { kind: 'race', refId: 'xorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d6+3', damageType: 'piercing' }],
+    },
+    {
+      id: 'xorn_claw', name: 'Claw',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 6 (1d6+3) slashing damage.',
+      source: { kind: 'race', refId: 'xorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+3', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterShamblingMound: MonsterTemplate = {
+  id: 'shambling_mound', name: 'Shambling Mound', cr: 5, srd: true,
+  size: 'large', type: 'plant', alignment: 'unaligned',
+  stats: { str: 18, dex: 8, con: 16, int: 5, wis: 10, cha: 5 },
+  hp: { dice: '16d10+48', average: 136 },
+  ac: { value: 15, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: { stealth: 2 },
+  senses: ['blindsight 60 ft (blind beyond)', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'shambling_mound_lightning_absorption', name: 'Lightning Absorption',
+      description: 'Whenever subjected to lightning damage, the mound takes none and regains HP equal to the lightning damage dealt.',
+      source: { kind: 'race', refId: 'shambling_mound' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shambling_mound_multiattack', name: 'Multiattack',
+      description: 'The mound makes two slam attacks; if both hit a Medium-or-smaller target, it\'s grappled and the mound uses Engulf on it. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'shambling_mound' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shambling_mound_slam', name: 'Slam',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'shambling_mound' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'shambling_mound_engulf', name: 'Engulf',
+      description: 'Engulfs a Medium-or-smaller creature it has grappled: the target is blinded, restrained, and can\'t breathe, taking 13 (2d8+4) bludgeoning damage at the start of each of the mound\'s turns unless it succeeds a DC 14 CON save. Moves with the mound. Only one creature engulfed at a time.',
+      source: { kind: 'race', refId: 'shambling_mound' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 14 } },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'bludgeoning', saveOnSuccess: 'none' }],
+    },
+  ],
+};
+
+export const monsterGargoyle: MonsterTemplate = {
+  id: 'gargoyle', name: 'Gargoyle', cr: 2, srd: true,
+  size: 'medium', type: 'elemental', alignment: 'chaotic evil',
+  stats: { str: 15, dex: 11, con: 16, int: 6, wis: 11, cha: 7 },
+  hp: { dice: '7d8+21', average: 52 },
+  ac: { value: 15, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['Terran'],
+  features: [
+    {
+      id: 'gargoyle_false_appearance', name: 'False Appearance',
+      description: 'While motionless, indistinguishable from an inanimate statue.',
+      source: { kind: 'race', refId: 'gargoyle' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gargoyle_multiattack', name: 'Multiattack',
+      description: 'The gargoyle makes two attacks: one bite and one claws. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'gargoyle' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gargoyle_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) piercing damage.',
+      source: { kind: 'race', refId: 'gargoyle' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'gargoyle_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) slashing damage.',
+      source: { kind: 'race', refId: 'gargoyle' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterShieldGuardian: MonsterTemplate = {
+  id: 'shield_guardian', name: 'Shield Guardian', cr: 7, srd: true,
+  size: 'large', type: 'construct', alignment: 'unaligned',
+  stats: { str: 18, dex: 8, con: 18, int: 7, wis: 10, cha: 3 },
+  hp: { dice: '15d10+60', average: 142 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'darkvision 60 ft', 'passive Perception 10'],
+  languages: ['understands commands given in any language but can\'t speak'],
+  features: [
+    {
+      id: 'shield_guardian_bound', name: 'Bound',
+      description: 'Magically bound to an amulet. On the same plane, the wearer can telepathically summon it and the guardian always knows the amulet\'s distance/direction. Within 60 ft. of the wearer, half of any damage (rounded up) the wearer takes is transferred to the guardian.',
+      source: { kind: 'race', refId: 'shield_guardian' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shield_guardian_regeneration', name: 'Regeneration',
+      description: 'Regains 10 HP at the start of its turn if it has at least 1 HP.',
+      source: { kind: 'race', refId: 'shield_guardian' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shield_guardian_spell_storing', name: 'Spell Storing',
+      description: 'The amulet\'s wearer can cast a spell of 4th level or lower on the guardian to store it (no effect at cast time). On command, or a predefined trigger, the guardian casts the stored spell (with the original caster\'s parameters, no components). Storing a new spell replaces the old one.',
+      source: { kind: 'race', refId: 'shield_guardian' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shield_guardian_multiattack', name: 'Multiattack',
+      description: 'The guardian makes two fist attacks. Shown as a separate action card — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'shield_guardian' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shield_guardian_fist', name: 'Fist',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 11 (2d6+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'shield_guardian' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'shield_guardian_shield', name: 'Shield',
+      description: 'Reaction: when a creature attacks the amulet\'s wearer, the guardian grants a +2 AC bonus to the wearer if the guardian is within 5 ft. of them.',
+      source: { kind: 'race', refId: 'shield_guardian' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const monsterHomunculus: MonsterTemplate = {
+  id: 'homunculus', name: 'Homunculus', cr: 0, srd: true,
+  size: 'tiny', type: 'construct', alignment: 'neutral',
+  stats: { str: 4, dex: 15, con: 11, int: 10, wis: 10, cha: 7 },
+  hp: { dice: '2d4', average: 5 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['understands the languages of its creator but can\'t speak'],
+  features: [
+    {
+      id: 'homunculus_telepathic_bond', name: 'Telepathic Bond',
+      description: 'While on the same plane as its master, can magically convey what it senses and communicate telepathically with them.',
+      source: { kind: 'race', refId: 'homunculus' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'homunculus_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 1 piercing damage, plus DC 10 CON save or poisoned for 1 minute (poisoned for 5/1d10 minutes and unconscious while poisoned if the save fails by 5+; wakes on damage or being shaken awake).',
+      source: { kind: 'race', refId: 'homunculus' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 10 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1', damageType: 'piercing' },
+        { type: 'apply_condition', conditionId: 'poisoned', duration: { unit: 'minutes', remaining: 1 } },
+      ],
+    },
+  ],
+};
+
+export const monsterOni: MonsterTemplate = {
+  id: 'oni', name: 'Oni', cr: 7, srd: true,
+  size: 'large', type: 'giant', alignment: 'lawful evil',
+  stats: { str: 19, dex: 11, con: 16, int: 14, wis: 12, cha: 15 },
+  hp: { dice: '13d10+39', average: 110 },
+  ac: { value: 16, source: 'chain mail' },
+  speed: 30,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: { arcana: 5, deception: 8, perception: 4 },
+  senses: ['darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Common', 'Giant'],
+  features: [
+    {
+      id: 'oni_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'CHA-based (spell save DC 13), verbal/somatic components only. At will: darkness, invisibility. 1/day each: charm person, cone of cold, gaseous form, sleep.',
+      source: { kind: 'race', refId: 'oni' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'oni_magic_weapons', name: 'Magic Weapons; Regeneration',
+      description: 'The oni\'s weapon attacks are magical. Regains 10 HP at the start of its turn if it has at least 1 HP.',
+      source: { kind: 'race', refId: 'oni' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'oni_multiattack', name: 'Multiattack',
+      description: 'The oni makes two attacks, both claws (Oni form only) or both glaive, or one of each. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'oni' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'oni_claw', name: 'Claw (Oni Form Only)',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 8 (1d8+4) slashing damage.',
+      source: { kind: 'race', refId: 'oni' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+4', damageType: 'slashing' }],
+    },
+    {
+      id: 'oni_glaive', name: 'Glaive',
+      description: 'Melee Weapon Attack: +7 to hit, reach 10 ft., one target. Hit: 15 (2d10+4) slashing damage, or 9 (1d10+4) in Small/Medium form.',
+      source: { kind: 'race', refId: 'oni' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d10+4', damageType: 'slashing' }],
+    },
+    {
+      id: 'oni_change_shape', name: 'Change Shape',
+      description: 'Polymorphs into a Small or Medium humanoid, a Large giant, or back into its true form. Stats stay the same except size; only its glaive transforms with it (shrinking in humanoid form). Reverts to its true form (glaive included) if it dies.',
+      source: { kind: 'race', refId: 'oni' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const monsterRakshasa: MonsterTemplate = {
+  id: 'rakshasa', name: 'Rakshasa', cr: 13, srd: true,
+  size: 'medium', type: 'fiend', alignment: 'lawful evil',
+  stats: { str: 14, dex: 17, con: 18, int: 13, wis: 16, cha: 20 },
+  hp: { dice: '13d8+52', average: 110 },
+  ac: { value: 16, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: { deception: 10, insight: 8 },
+  senses: ['darkvision 60 ft', 'passive Perception 13'],
+  languages: ['Common', 'Infernal'],
+  features: [
+    {
+      id: 'rakshasa_limited_magic_immunity', name: 'Limited Magic Immunity',
+      description: 'Can\'t be affected or detected by spells of 6th level or lower unless it wishes to be. Advantage on saving throws against all other spells and magical effects.',
+      source: { kind: 'race', refId: 'rakshasa' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rakshasa_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'CHA-based (spell save DC 18, +10 to hit), verbal/somatic components only. At will: detect thoughts, disguise self, mage hand, minor illusion. 3/day each: charm person, detect magic, invisibility, major image, suggestion. 1/day each: dominate person, fly, plane shift, true seeing.',
+      source: { kind: 'race', refId: 'rakshasa' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rakshasa_multiattack', name: 'Multiattack',
+      description: 'The rakshasa makes two claw attacks. Shown as a separate action card — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'rakshasa' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rakshasa_claw', name: 'Claw',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 9 (2d6+2) slashing damage. A hit creature is cursed — the next short or long rest fills it with dreadful visions and grants no rest benefit, lasting until removed by remove curse or similar magic.',
+      source: { kind: 'race', refId: 'rakshasa' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+2', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterNightmare: MonsterTemplate = {
+  id: 'nightmare', name: 'Nightmare', cr: 3, srd: true,
+  size: 'large', type: 'fiend', alignment: 'neutral evil',
+  stats: { str: 18, dex: 15, con: 16, int: 10, wis: 13, cha: 15 },
+  hp: { dice: '8d10+24', average: 68 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 60,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 11'],
+  languages: ['understands Abyssal, Common, and Infernal but can\'t speak'],
+  features: [
+    {
+      id: 'nightmare_traits', name: 'Confer Fire Resistance; Illumination',
+      description: 'Can grant fire resistance to anyone riding it. Sheds bright light in a 10-ft. radius and dim light for another 10 ft.',
+      source: { kind: 'race', refId: 'nightmare' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'nightmare_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) bludgeoning plus 7 (2d6) fire damage.',
+      source: { kind: 'race', refId: 'nightmare' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '2d8+4', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '2d6', damageType: 'fire' },
+      ],
+    },
+    {
+      id: 'nightmare_ethereal_stride', name: 'Ethereal Stride',
+      description: 'The nightmare and up to three willing creatures within 5 ft. magically enter the Ethereal Plane from the Material Plane, or vice versa.',
+      source: { kind: 'race', refId: 'nightmare' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'multiple', requiresSave: null },
+      abilityEffects: [],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -8537,6 +8993,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterChuul,
   monsterCloaker,
   monsterDarkmantle,
+  monsterGibberingMouther,
+  monsterOtyugh,
+  monsterXorn,
+  monsterShamblingMound,
+  monsterGargoyle,
+  monsterShieldGuardian,
+  monsterHomunculus,
+  monsterOni,
+  monsterRakshasa,
+  monsterNightmare,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

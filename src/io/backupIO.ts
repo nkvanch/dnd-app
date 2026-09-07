@@ -96,6 +96,11 @@ export type ImportPreview = {
   pack:            GrimoirePack;
   characterCount:  number;
   homebrewCount:   number;
+  /** The picked file's own name, extension stripped — used as the default
+   *  display name if this import gets registered as an installed pack
+   *  (content-pack imports only, see app/backup.tsx). Never part of the
+   *  wire format itself, just local UI context from the file picker. */
+  suggestedName:   string;
 };
 
 /**
@@ -124,9 +129,11 @@ export async function pickAndValidateBackup(): Promise<ImportPreview | null> {
   if (problem) throw new Error(problem);
 
   const pack = data as GrimoirePack;
+  const rawName = result.assets[0].name ?? 'Imported Pack';
   return {
     pack,
     characterCount: pack.characters.length,
     homebrewCount:  countHomebrew(pack.homebrew),
+    suggestedName:  rawName.replace(/\.grimoire-pack$/i, ''),
   };
 }

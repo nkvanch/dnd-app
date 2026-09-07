@@ -11,6 +11,7 @@ import { Alert } from '../src/utils/alert';
 import { useHomebrewStore } from '../src/store/homebrewStore';
 import { useSessionStore } from '../src/store/sessionStore';
 import { exportBackup, pickAndValidateBackup, ImportPreview } from '../src/io/backupIO';
+import { recordInstalledPack, PackItemRef } from '../src/db/packRegistryRepo';
 import { useSafeGoBack } from '../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../src/theme';
 
@@ -79,20 +80,29 @@ export default function BackupScreen() {
       for (const entity of preview.pack.characters) {
         applyIncomingEntity(entity);
       }
-      // Homebrew: saveItem is an upsert per category.
+      // Homebrew: saveItem is an upsert per category. itemRefs collects what
+      // was actually imported so a content-pack (not a personal backup —
+      // see below) can be registered as one removable group (A-36).
       const hb = preview.pack.homebrew;
+      const itemRefs: PackItemRef[] = [];
       if (hb) {
-        for (const r of hb.races ?? [])       await saveHomebrewItem('race', r);
-        for (const sr of hb.subraces ?? [])   await saveHomebrewItem('subrace', sr);
-        for (const c of hb.classes ?? [])     await saveHomebrewItem('class', c);
-        for (const sc of hb.subclasses ?? []) await saveHomebrewItem('subclass', sc);
-        for (const s of hb.spells ?? [])      await saveHomebrewItem('spell', s);
-        for (const b of hb.backgrounds ?? []) await saveHomebrewItem('background', b);
-        for (const f of hb.features ?? [])    await saveHomebrewItem('feature', f);
-        for (const it of hb.items ?? [])      await saveHomebrewItem('item', it);
-        for (const ft of hb.feats ?? [])      await saveHomebrewItem('feat', ft);
-        for (const m of hb.monsters ?? [])    await saveHomebrewItem('monster', m);
-        for (const c of hb.conditions ?? [])  await saveHomebrewItem('condition', c);
+        for (const r of hb.races ?? [])       { await saveHomebrewItem('race', r);       itemRefs.push({ type: 'race',       id: r.id }); }
+        for (const sr of hb.subraces ?? [])   { await saveHomebrewItem('subrace', sr);   itemRefs.push({ type: 'subrace',    id: sr.id }); }
+        for (const c of hb.classes ?? [])     { await saveHomebrewItem('class', c);      itemRefs.push({ type: 'class',      id: c.id }); }
+        for (const sc of hb.subclasses ?? []) { await saveHomebrewItem('subclass', sc);  itemRefs.push({ type: 'subclass',   id: sc.id }); }
+        for (const s of hb.spells ?? [])      { await saveHomebrewItem('spell', s);      itemRefs.push({ type: 'spell',      id: s.id }); }
+        for (const b of hb.backgrounds ?? [])  { await saveHomebrewItem('background', b); itemRefs.push({ type: 'background', id: b.id }); }
+        for (const f of hb.features ?? [])    { await saveHomebrewItem('feature', f);    itemRefs.push({ type: 'feature',    id: f.id }); }
+        for (const it of hb.items ?? [])      { await saveHomebrewItem('item', it);      itemRefs.push({ type: 'item',       id: it.id }); }
+        for (const ft of hb.feats ?? [])      { await saveHomebrewItem('feat', ft);      itemRefs.push({ type: 'feat',       id: ft.id }); }
+        for (const m of hb.monsters ?? [])    { await saveHomebrewItem('monster', m);    itemRefs.push({ type: 'monster',    id: m.id }); }
+        for (const c of hb.conditions ?? [])  { await saveHomebrewItem('condition', c);  itemRefs.push({ type: 'condition',  id: c.id }); }
+      }
+      // Only a shared content-pack gets registered — a 'backup' import is
+      // the user restoring their OWN device, not installing someone else's
+      // content, so it doesn't belong in the installed-packs list.
+      if (preview.pack.packType === 'content-pack' && itemRefs.length > 0) {
+        await recordInstalledPack(`pack_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, preview.suggestedName, itemRefs);
       }
       setResultMsg(
         `Imported ${preview.characterCount} character${preview.characterCount !== 1 ? 's' : ''}` +

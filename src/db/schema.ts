@@ -128,6 +128,24 @@ export const CREATE_APP_META_TABLE = `
   );
 `;
 
+// A-36 foundations: tracks which homebrew items arrived together as one
+// imported content-pack, so they can be seen and removed as a group instead
+// of only individually. Deliberately NOT a full pack system yet -- no
+// version/dependency/priority fields, since nothing produces or consumes
+// them today (see the A-36 plan note in memory: foundations only, the rest
+// waits for a real multi-pack/multi-ruleset consumer). itemRefs is a JSON
+// array of {type, id} — content_cache's own composite key shape — rather
+// than a normalized join table, matching this file's own stated blob-
+// storage rationale (small data, no cross-table query need).
+export const CREATE_INSTALLED_PACKS_TABLE = `
+  CREATE TABLE IF NOT EXISTS installed_packs (
+    id         TEXT PRIMARY KEY NOT NULL,
+    name       TEXT NOT NULL,
+    importedAt INTEGER NOT NULL,
+    itemRefs   TEXT NOT NULL
+  );
+`;
+
 // Indexes for common query patterns
 export const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_entities_kind     ON entities    (kind);
@@ -147,5 +165,6 @@ export const ALL_TABLES = [
   CREATE_CHARACTER_TIMELINE_TABLE,
   CREATE_COMBAT_STATE_TABLE,
   CREATE_APP_META_TABLE,
+  CREATE_INSTALLED_PACKS_TABLE,
   CREATE_INDEXES,
 ];

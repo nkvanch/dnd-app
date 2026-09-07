@@ -1,16 +1,91 @@
 // app/(tabs)/homebrew.tsx
-// Homebrew tab — Create and Library sections.
-import { useState } from 'react';
+// Homebrew tab — Installed Packs, Create, and Library sections.
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { ALL_CONDITIONS } from '../../src/content/conditions';
 import { Alert } from '../../src/utils/alert';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
+import { InstalledPack, loadInstalledPacks, deleteInstalledPack } from '../../src/db/packRegistryRepo';
 import { exportHomebrewItem, ExportFormat, ExportAction } from '../../src/io/exportShare';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
 import { VersionHistoryModal } from '../../src/components/homebrew/VersionHistoryModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+
+// ── Installed Packs Panel ────────────────────────────────────────────────────
+// A-36 foundations: content-packs (see app/backup.tsx's import flow) are
+// registered as a group at import time. This lists them and lets a whole
+// pack be uninstalled at once, rather than only item-by-item in the Library
+// below. Native-only (SQLite) — loadInstalledPacks() returns [] on web, so
+// this deliberately renders nothing there rather than showing a permanently-
+// empty section.
+function InstalledPacksPanel() {
+  const deleteHomebrewItem = useHomebrewStore(s => s.deleteItem);
+  const [packs, setPacks] = useState<InstalledPack[]>([]);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    loadInstalledPacks().then(setPacks).catch(e => console.error('[homebrew] loadInstalledPacks failed:', e));
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  if (packs.length === 0) return null;
+
+  function confirmRemove(pack: InstalledPack) {
+    Alert.alert(
+      'Remove Pack',
+      `Remove "${pack.name}" and all ${pack.itemRefs.length} item${pack.itemRefs.length !== 1 ? 's' : ''} it installed? This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove', style: 'destructive', onPress: async () => {
+            setRemovingId(pack.id);
+            try {
+              for (const ref of pack.itemRefs) {
+                await deleteHomebrewItem(ref.type, ref.id);
+              }
+              await deleteInstalledPack(pack.id);
+              refresh();
+            } catch (e) {
+              console.error('[homebrew] pack removal failed:', e);
+              Alert.alert('Removal failed', 'Some items may not have been removed. Check the Library below.');
+            } finally {
+              setRemovingId(null);
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  return (
+    <View style={styles.panel}>
+      <Text style={styles.panelTitle}>📦 Installed Packs ({packs.length})</Text>
+      <Text style={styles.panelSub}>Content imported together as a shared pack — remove one to uninstall everything it added.</Text>
+      {packs.map(pack => (
+        <View key={pack.id} style={styles.libraryRow}>
+          <View style={styles.libraryInfo}>
+            <Text style={styles.libraryName}>{pack.name}</Text>
+            <View style={styles.typeBadge}>
+              <Text style={styles.typeBadgeTxt}>{pack.itemRefs.length} item{pack.itemRefs.length !== 1 ? 's' : ''}</Text>
+            </View>
+          </View>
+          <Pressable
+            style={styles.libBtn}
+            disabled={removingId === pack.id}
+            onPress={() => confirmRemove(pack)}
+          >
+            {removingId === pack.id
+              ? <ActivityIndicator size="small" color={Colors.textPrimary} />
+              : <Text style={styles.libBtnTxt}>🗑</Text>}
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 // ── Create Panel ──────────────────────────────────────────────────────────────
 
@@ -278,6 +353,7 @@ export default function HomebrewScreen() {
         <Text style={styles.title}>Homebrew</Text>
       </View>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <InstalledPacksPanel />
         <CreatePanel />
         <LibraryPanel />
       </ScrollView>

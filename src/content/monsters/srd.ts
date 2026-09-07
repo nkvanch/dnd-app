@@ -11445,6 +11445,423 @@ export const monsterGiantPoisonousSnake: MonsterTemplate = {
   ],
 };
 
+export const monsterCentaur: MonsterTemplate = {
+  id: 'centaur', name: 'Centaur', cr: 2, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'neutral good',
+  stats: { str: 18, dex: 14, con: 14, int: 9, wis: 13, cha: 11 },
+  hp: { dice: '6d10+12', average: 45 },
+  ac: { value: 12, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: { athletics: 6, perception: 3, survival: 3 },
+  senses: ['passive Perception 13'],
+  languages: ['Elvish', 'Sylvan'],
+  features: [
+    {
+      id: 'centaur_charge', name: 'Charge',
+      description: 'If the centaur moves at least 30 ft. straight toward a target and hits it with a Pike attack the same turn, that attack deals an extra 10 (3d6) piercing damage.',
+      source: { kind: 'race', refId: 'centaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'centaur_multiattack', name: 'Multiattack',
+      description: 'The centaur makes two attacks: pike + hooves, or two longbow. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'centaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'centaur_pike', name: 'Pike',
+      description: 'Melee Weapon Attack: +6 to hit, reach 10 ft., one target. Hit: 9 (1d10+4) piercing damage.',
+      source: { kind: 'race', refId: 'centaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'centaur_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 11 (2d6+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'centaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'centaur_longbow', name: 'Longbow',
+      description: 'Ranged Weapon Attack: +4 to hit, range 150/600 ft., one target. Hit: 6 (1d8+2) piercing damage.',
+      source: { kind: 'race', refId: 'centaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '150 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterCouatl: MonsterTemplate = {
+  id: 'couatl', name: 'Couatl', cr: 4, srd: true,
+  size: 'medium', type: 'celestial', alignment: 'lawful good',
+  stats: { str: 16, dex: 20, con: 17, int: 18, wis: 20, cha: 18 },
+  hp: { dice: '13d8+39', average: 97 },
+  ac: { value: 19, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['con', 'wis', 'cha'],
+  skills: {},
+  senses: ['truesight 120 ft', 'passive Perception 15'],
+  languages: ['all', 'telepathy 120 ft'],
+  features: [
+    {
+      id: 'couatl_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'CHA-based (spell save DC 14), verbal components only. At will: detect evil and good, detect magic, detect thoughts. 3/day each: bless, create food and water, cure wounds, lesser restoration, protection from poison, sanctuary, shield. 1/day each: dream, greater restoration, scrying.',
+      source: { kind: 'race', refId: 'couatl' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'couatl_traits', name: 'Magic Weapons; Shielded Mind',
+      description: 'The couatl\'s weapon attacks are magical. Immune to scrying and to any effect that would sense its emotions, read its thoughts, or detect its location.',
+      source: { kind: 'race', refId: 'couatl' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'couatl_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +8 to hit, reach 5 ft., one creature. Hit: 8 (1d6+5) piercing damage, plus DC 13 CON save or poisoned for 24 hours and unconscious while poisoned this way (another creature can shake it awake with an action).',
+      source: { kind: 'race', refId: 'couatl' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 13 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d6+5', damageType: 'piercing' },
+        { type: 'apply_condition', conditionId: 'poisoned', duration: { unit: 'hours', remaining: 24 } },
+      ],
+    },
+    {
+      id: 'couatl_constrict', name: 'Constrict',
+      description: 'Melee Weapon Attack: +6 to hit, reach 10 ft., one Medium or smaller creature. Hit: 10 (2d6+3) bludgeoning damage; the target is grappled (escape DC 15) and restrained until the grapple ends, and the couatl can\'t constrict another target while grappling.',
+      source: { kind: 'race', refId: 'couatl' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'couatl_change_shape', name: 'Change Shape',
+      description: 'Polymorphs into a humanoid or beast of CR equal to or less than its own (or back). Retains its own stats and speech, but AC, movement, STR, DEX, and other actions come from the new form; gains any of the new form\'s traits it lacks (except class features, legendary actions, lair actions). Reverts to its true form if it dies.',
+      source: { kind: 'race', refId: 'couatl' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const monsterCrab: MonsterTemplate = {
+  id: 'crab', name: 'Crab', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 2, dex: 11, con: 10, int: 1, wis: 8, cha: 2 },
+  hp: { dice: '1d4', average: 2 },
+  ac: { value: 11, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: { stealth: 2 },
+  senses: ['blindsight 30 ft', 'passive Perception 9'],
+  languages: [],
+  features: [
+    {
+      id: 'crab_amphibious', name: 'Amphibious',
+      description: 'The crab can breathe air and water.',
+      source: { kind: 'race', refId: 'crab' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'crab_claw', name: 'Claw',
+      description: 'Melee Weapon Attack: +0 to hit, reach 5 ft., one target. Hit: 1 bludgeoning damage.',
+      source: { kind: 'race', refId: 'crab' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterGiantCrab: MonsterTemplate = {
+  id: 'giant_crab', name: 'Giant Crab', cr: 0.125, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 13, dex: 15, con: 11, int: 1, wis: 9, cha: 3 },
+  hp: { dice: '3d8', average: 13 },
+  ac: { value: 15, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { stealth: 4 },
+  senses: ['blindsight 30 ft', 'passive Perception 9'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_crab_amphibious', name: 'Amphibious',
+      description: 'The crab can breathe air and water.',
+      source: { kind: 'race', refId: 'giant_crab' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_crab_claw', name: 'Claw',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6+1) bludgeoning damage; the target is grappled (escape DC 11). The crab has two claws, each able to grapple one target.',
+      source: { kind: 'race', refId: 'giant_crab' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+1', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterDryad: MonsterTemplate = {
+  id: 'dryad', name: 'Dryad', cr: 1, srd: true,
+  size: 'medium', type: 'fey', alignment: 'neutral',
+  stats: { str: 10, dex: 12, con: 11, int: 14, wis: 15, cha: 18 },
+  hp: { dice: '5d8', average: 22 },
+  ac: { value: 11, source: 'dex (16 with barkskin)' },
+  speed: 30,
+  savingThrows: [],
+  skills: { perception: 4, stealth: 5 },
+  senses: ['darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Elvish', 'Sylvan'],
+  features: [
+    {
+      id: 'dryad_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'CHA-based (spell save DC 14), verbal/somatic components only. At will: druidcraft. 3/day each: entangle, goodberry. 1/day each: barkskin, pass without trace, shillelagh.',
+      source: { kind: 'race', refId: 'dryad' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'dryad_traits', name: 'Magic Resistance; Speak with Beasts and Plants; Tree Stride',
+      description: 'Advantage on saving throws against spells and other magical effects. Can communicate with beasts and plants as if sharing a language. Once per turn, can use 10 ft. of movement to step into one living Large-or-bigger tree within reach and emerge from a second such tree within 60 ft., appearing within 5 ft. of it.',
+      source: { kind: 'race', refId: 'dryad' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'dryad_club', name: 'Club',
+      description: 'Melee Weapon Attack: +2 to hit (+6 with shillelagh), reach 5 ft., one target. Hit: 2 (1d4) bludgeoning damage, or 8 (1d8+4) with shillelagh.',
+      source: { kind: 'race', refId: 'dryad' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'dryad_fey_charm', name: 'Fey Charm',
+      description: 'Targets one humanoid or beast within 30 ft. that can see her. DC 14 WIS save or magically charmed, treating the dryad as a trusted friend (repeatable save whenever the dryad or an ally harms it; otherwise lasts 24 hours, until she dies, changes plane, or ends it as a bonus action). Success grants 24-hour immunity. At most one humanoid and three beasts charmed at once.',
+      source: { kind: 'race', refId: 'dryad' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: { ability: 'wis', dc: 14 } },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterEttercap: MonsterTemplate = {
+  id: 'ettercap', name: 'Ettercap', cr: 2, srd: true,
+  size: 'medium', type: 'monstrosity', alignment: 'neutral evil',
+  stats: { str: 14, dex: 15, con: 13, int: 7, wis: 12, cha: 8 },
+  hp: { dice: '8d8+8', average: 44 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 4, survival: 3 },
+  senses: ['darkvision 60 ft', 'passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'ettercap_traits', name: 'Spider Climb; Web Sense; Web Walker',
+      description: 'Can climb difficult surfaces, including upside down on ceilings, without an ability check. While in contact with a web, knows the exact location of any other creature in contact with the same web. Ignores movement restrictions caused by webbing.',
+      source: { kind: 'race', refId: 'ettercap' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ettercap_multiattack', name: 'Multiattack',
+      description: 'The ettercap makes two attacks: one bite and one claws. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'ettercap' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ettercap_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 6 (1d8+2) piercing plus 4 (1d8) poison damage. Target must succeed a DC 11 CON save or be poisoned for 1 minute (repeatable each turn, ending on a success).',
+      source: { kind: 'race', refId: 'ettercap' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d8+2', damageType: 'piercing' },
+        { type: 'damage', dice: '1d8', damageType: 'poison' },
+        { type: 'apply_condition', conditionId: 'poisoned', duration: { unit: 'minutes', remaining: 1 } },
+      ],
+    },
+    {
+      id: 'ettercap_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (2d4+2) slashing damage.',
+      source: { kind: 'race', refId: 'ettercap' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+2', damageType: 'slashing' }],
+    },
+    {
+      id: 'ettercap_web', name: 'Web',
+      description: 'Recharge 5-6. Ranged Weapon Attack: +4 to hit, range 30/60 ft., one Large or smaller creature. Hit: restrained by webbing (AC 10, 5 HP, vulnerable to fire, immune to bludgeoning); the restrained creature can break free with a successful DC 11 STR check as an action.',
+      source: { kind: 'race', refId: 'ettercap' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: null },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterGrick: MonsterTemplate = {
+  id: 'grick', name: 'Grick', cr: 2, srd: true,
+  size: 'medium', type: 'monstrosity', alignment: 'neutral',
+  stats: { str: 14, dex: 14, con: 11, int: 3, wis: 14, cha: 5 },
+  hp: { dice: '6d8', average: 27 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 12'],
+  languages: [],
+  features: [
+    {
+      id: 'grick_stone_camouflage', name: 'Stone Camouflage',
+      description: 'The grick has advantage on Dexterity (Stealth) checks made to hide in rocky terrain.',
+      source: { kind: 'race', refId: 'grick' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'grick_multiattack', name: 'Multiattack',
+      description: 'The grick makes one Tentacles attack; if it hits, it can make one Beak attack against the same target. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'grick' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'grick_tentacles', name: 'Tentacles',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 9 (2d6+2) slashing damage.',
+      source: { kind: 'race', refId: 'grick' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+2', damageType: 'slashing' }],
+    },
+    {
+      id: 'grick_beak', name: 'Beak',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) piercing damage.',
+      source: { kind: 'race', refId: 'grick' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterHawk: MonsterTemplate = {
+  id: 'hawk', name: 'Hawk', cr: 0, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 5, dex: 16, con: 8, int: 2, wis: 14, cha: 6 },
+  hp: { dice: '1d4-1', average: 1 },
+  ac: { value: 13, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: { perception: 4 },
+  senses: ['passive Perception 14'],
+  languages: [],
+  features: [
+    {
+      id: 'hawk_keen_sight', name: 'Keen Sight',
+      description: 'The hawk has advantage on Wisdom (Perception) checks that rely on sight.',
+      source: { kind: 'race', refId: 'hawk' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'hawk_talons', name: 'Talons',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 1 slashing damage.',
+      source: { kind: 'race', refId: 'hawk' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterLion: MonsterTemplate = {
+  id: 'lion', name: 'Lion', cr: 1, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 17, dex: 15, con: 13, int: 3, wis: 12, cha: 8 },
+  hp: { dice: '4d10+4', average: 26 },
+  ac: { value: 12, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 6 },
+  senses: ['passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'lion_keen_smell', name: 'Keen Smell; Pack Tactics; Running Leap',
+      description: 'Advantage on Wisdom (Perception) checks that rely on smell. Advantage on an attack roll against a creature if at least one of the lion\'s allies is within 5 ft. of it and isn\'t incapacitated. With a 10-foot running start, can long jump up to 25 ft.',
+      source: { kind: 'race', refId: 'lion' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'lion_pounce', name: 'Pounce',
+      description: 'If the lion moves at least 20 ft. straight toward a creature and hits it with a Claw attack the same turn, that target must succeed a DC 13 STR save or be knocked prone; if prone, the lion can make one Bite attack against it as a bonus action.',
+      source: { kind: 'race', refId: 'lion' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'lion_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 7 (1d8+3) piercing damage.',
+      source: { kind: 'race', refId: 'lion' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+3', damageType: 'piercing' }],
+    },
+    {
+      id: 'lion_claw', name: 'Claw',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6+3) slashing damage.',
+      source: { kind: 'race', refId: 'lion' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+3', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterTiger: MonsterTemplate = {
+  id: 'tiger', name: 'Tiger', cr: 1, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 17, dex: 15, con: 14, int: 3, wis: 12, cha: 8 },
+  hp: { dice: '5d10+10', average: 37 },
+  ac: { value: 12, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 3, stealth: 6 },
+  senses: ['darkvision 60 ft', 'passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'tiger_keen_smell', name: 'Keen Smell',
+      description: 'The tiger has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'tiger' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'tiger_pounce', name: 'Pounce',
+      description: 'If the tiger moves at least 20 ft. straight toward a creature and hits it with a Claw attack the same turn, that target must succeed a DC 13 STR save or be knocked prone; if prone, the tiger can make one Bite attack against it as a bonus action.',
+      source: { kind: 'race', refId: 'tiger' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'tiger_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 8 (1d10+3) piercing damage.',
+      source: { kind: 'race', refId: 'tiger' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+3', damageType: 'piercing' }],
+    },
+    {
+      id: 'tiger_claw', name: 'Claw',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 7 (1d8+3) slashing damage.',
+      source: { kind: 'race', refId: 'tiger' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+3', damageType: 'slashing' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -11713,6 +12130,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGiantConstrictorSnake,
   monsterPoisonousSnake,
   monsterGiantPoisonousSnake,
+  monsterCentaur,
+  monsterCouatl,
+  monsterCrab,
+  monsterGiantCrab,
+  monsterDryad,
+  monsterEttercap,
+  monsterGrick,
+  monsterHawk,
+  monsterLion,
+  monsterTiger,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

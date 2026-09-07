@@ -11143,6 +11143,308 @@ export const monsterMummyLord: MonsterTemplate = {
   ],
 };
 
+export const monsterReefShark: MonsterTemplate = {
+  id: 'reef_shark', name: 'Reef Shark', cr: 0.5, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 14, dex: 13, con: 13, int: 1, wis: 10, cha: 4 },
+  hp: { dice: '4d8+4', average: 22 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 2 },
+  senses: ['blindsight 30 ft', 'passive Perception 12'],
+  languages: [],
+  features: [
+    {
+      id: 'reef_shark_traits', name: 'Pack Tactics; Water Breathing',
+      description: 'Advantage on an attack roll against a creature if at least one of the shark\'s allies is within 5 ft. of it and isn\'t incapacitated. Can breathe only underwater.',
+      source: { kind: 'race', refId: 'reef_shark' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'reef_shark_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 6 (1d8+2) piercing damage.',
+      source: { kind: 'race', refId: 'reef_shark' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterHunterShark: MonsterTemplate = {
+  id: 'hunter_shark', name: 'Hunter Shark', cr: 2, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 18, dex: 13, con: 15, int: 1, wis: 10, cha: 4 },
+  hp: { dice: '6d10+12', average: 45 },
+  ac: { value: 12, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 2 },
+  senses: ['darkvision 30 ft', 'passive Perception 12'],
+  languages: [],
+  features: [
+    {
+      id: 'hunter_shark_traits', name: 'Blood Frenzy; Water Breathing',
+      description: 'Advantage on melee attack rolls against a creature that doesn\'t have all its HP. Can breathe only underwater.',
+      source: { kind: 'race', refId: 'hunter_shark' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'hunter_shark_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) piercing damage.',
+      source: { kind: 'race', refId: 'hunter_shark' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterGiantShark: MonsterTemplate = {
+  id: 'giant_shark', name: 'Giant Shark', cr: 5, srd: true,
+  size: 'huge', type: 'beast', alignment: 'unaligned',
+  stats: { str: 23, dex: 11, con: 21, int: 1, wis: 10, cha: 5 },
+  hp: { dice: '11d12+55', average: 126 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['blindsight 60 ft', 'passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_shark_traits', name: 'Blood Frenzy; Water Breathing',
+      description: 'Advantage on melee attack rolls against a creature that doesn\'t have all its HP. Can breathe only underwater.',
+      source: { kind: 'race', refId: 'giant_shark' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_shark_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +9 to hit, reach 5 ft., one target. Hit: 22 (3d10+6) piercing damage.',
+      source: { kind: 'race', refId: 'giant_shark' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d10+6', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterKillerWhale: MonsterTemplate = {
+  id: 'killer_whale', name: 'Killer Whale', cr: 3, srd: true,
+  size: 'huge', type: 'beast', alignment: 'unaligned',
+  stats: { str: 19, dex: 10, con: 13, int: 3, wis: 12, cha: 7 },
+  hp: { dice: '12d12+12', average: 90 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 60,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['blindsight 120 ft', 'passive Perception 13'],
+  languages: [],
+  features: [
+    {
+      id: 'killer_whale_traits', name: 'Echolocation; Hold Breath; Keen Hearing',
+      description: 'Can\'t use blindsight while deafened. Can hold its breath for 30 minutes. Advantage on Wisdom (Perception) checks that rely on hearing.',
+      source: { kind: 'race', refId: 'killer_whale' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'killer_whale_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 21 (5d6+4) piercing damage.',
+      source: { kind: 'race', refId: 'killer_whale' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '5d6+4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterGiantSeaHorse: MonsterTemplate = {
+  id: 'giant_sea_horse', name: 'Giant Sea Horse', cr: 0.5, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 12, dex: 15, con: 11, int: 2, wis: 12, cha: 5 },
+  hp: { dice: '3d10', average: 16 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_sea_horse_traits', name: 'Charge; Water Breathing',
+      description: 'If the sea horse moves at least 20 ft. straight toward a target and hits it with a Ram attack the same turn, that attack deals an extra 7 (2d6) bludgeoning damage; a creature target must also succeed a DC 11 STR save or be knocked prone. Can breathe only underwater.',
+      source: { kind: 'race', refId: 'giant_sea_horse' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_sea_horse_ram', name: 'Ram',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6+1) bludgeoning damage.',
+      source: { kind: 'race', refId: 'giant_sea_horse' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+1', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterGiantVulture: MonsterTemplate = {
+  id: 'giant_vulture', name: 'Giant Vulture', cr: 1, srd: true,
+  size: 'large', type: 'beast', alignment: 'neutral evil',
+  stats: { str: 15, dex: 10, con: 15, int: 6, wis: 12, cha: 7 },
+  hp: { dice: '3d10+6', average: 22 },
+  ac: { value: 10, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: { perception: 3 },
+  senses: ['passive Perception 13'],
+  languages: ['understands Common but can\'t speak'],
+  features: [
+    {
+      id: 'giant_vulture_traits', name: 'Keen Sight and Smell; Pack Tactics',
+      description: 'Advantage on Wisdom (Perception) checks that rely on sight or smell. Advantage on an attack roll against a creature if at least one of the vulture\'s allies is within 5 ft. of it and isn\'t incapacitated.',
+      source: { kind: 'race', refId: 'giant_vulture' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_vulture_multiattack', name: 'Multiattack',
+      description: 'The vulture makes two attacks: one beak and one talons. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'giant_vulture' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_vulture_beak', name: 'Beak',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (2d4+2) piercing damage.',
+      source: { kind: 'race', refId: 'giant_vulture' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'giant_vulture_talons', name: 'Talons',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 9 (2d6+2) slashing damage.',
+      source: { kind: 'race', refId: 'giant_vulture' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+2', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterConstrictorSnake: MonsterTemplate = {
+  id: 'constrictor_snake', name: 'Constrictor Snake', cr: 0.25, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 15, dex: 14, con: 12, int: 1, wis: 10, cha: 3 },
+  hp: { dice: '2d10+2', average: 13 },
+  ac: { value: 12, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'constrictor_snake_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 5 (1d6+2) piercing damage.',
+      source: { kind: 'race', refId: 'constrictor_snake' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'constrictor_snake_constrict', name: 'Constrict',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 6 (1d8+2) bludgeoning damage; the target is grappled (escape DC 14) and restrained until the grapple ends, and the snake can\'t constrict another target while grappling.',
+      source: { kind: 'race', refId: 'constrictor_snake' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+2', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterGiantConstrictorSnake: MonsterTemplate = {
+  id: 'giant_constrictor_snake', name: 'Giant Constrictor Snake', cr: 2, srd: true,
+  size: 'huge', type: 'beast', alignment: 'unaligned',
+  stats: { str: 19, dex: 14, con: 12, int: 1, wis: 10, cha: 3 },
+  hp: { dice: '8d12+8', average: 60 },
+  ac: { value: 12, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: { perception: 2 },
+  senses: ['blindsight 10 ft', 'passive Perception 12'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_constrictor_snake_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 10 ft., one creature. Hit: 11 (2d6+4) piercing damage.',
+      source: { kind: 'race', refId: 'giant_constrictor_snake' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'giant_constrictor_snake_constrict', name: 'Constrict',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one creature. Hit: 13 (2d8+4) bludgeoning damage; the target is grappled (escape DC 16) and restrained until the grapple ends, and the snake can\'t constrict another target while grappling.',
+      source: { kind: 'race', refId: 'giant_constrictor_snake' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterPoisonousSnake: MonsterTemplate = {
+  id: 'poisonous_snake', name: 'Poisonous Snake', cr: 0.125, srd: true,
+  size: 'tiny', type: 'beast', alignment: 'unaligned',
+  stats: { str: 2, dex: 16, con: 11, int: 1, wis: 10, cha: 3 },
+  hp: { dice: '1d4', average: 2 },
+  ac: { value: 13, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'poisonous_snake_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 1 piercing damage, plus DC 10 CON save, 5 (2d4) poison damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'poisonous_snake' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 10 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1', damageType: 'piercing' },
+        { type: 'damage', dice: '2d4', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+  ],
+};
+
+export const monsterGiantPoisonousSnake: MonsterTemplate = {
+  id: 'giant_poisonous_snake', name: 'Giant Poisonous Snake', cr: 0.25, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 10, dex: 18, con: 13, int: 2, wis: 10, cha: 3 },
+  hp: { dice: '2d8+2', average: 11 },
+  ac: { value: 14, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: { perception: 2 },
+  senses: ['blindsight 10 ft', 'passive Perception 12'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_poisonous_snake_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 10 ft., one target. Hit: 6 (1d4+4) piercing damage, plus DC 11 CON save, 10 (3d6) poison damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'giant_poisonous_snake' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d4+4', damageType: 'piercing' },
+        { type: 'damage', dice: '3d6', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -11401,6 +11703,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGiantWolfSpider,
   monsterSeaHorse,
   monsterMummyLord,
+  monsterReefShark,
+  monsterHunterShark,
+  monsterGiantShark,
+  monsterKillerWhale,
+  monsterGiantSeaHorse,
+  monsterGiantVulture,
+  monsterConstrictorSnake,
+  monsterGiantConstrictorSnake,
+  monsterPoisonousSnake,
+  monsterGiantPoisonousSnake,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

@@ -4295,6 +4295,438 @@ export const monsterGlabrezu: MonsterTemplate = {
   ],
 };
 
+export const monsterGrayOoze: MonsterTemplate = {
+  id: 'gray_ooze', name: 'Gray Ooze', cr: 0.5, srd: true,
+  size: 'medium', type: 'ooze', alignment: 'unaligned',
+  stats: { str: 12, dex: 6, con: 16, int: 1, wis: 6, cha: 2 },
+  hp: { dice: '3d8+9', average: 22 },
+  ac: { value: 8, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: { stealth: 2 },
+  senses: ['blindsight 60 ft (blind beyond this radius)', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'gray_ooze_traits', name: 'Amorphous; Corrode Metal; False Appearance; Resistances',
+      description: 'Can move through gaps as narrow as 1 inch without squeezing. Any nonmagical metal weapon that hits it corrodes, taking a cumulative -1 damage penalty (destroyed at -5); nonmagical metal ammunition is destroyed after hitting. Can eat through 2-inch-thick nonmagical metal in a round. While motionless, indistinguishable from an oily pool or wet rock. Resistant to acid, cold, and fire.',
+      source: { kind: 'race', refId: 'gray_ooze' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'gray_ooze_pseudopod', name: 'Pseudopod',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6+1) bludgeoning damage plus 7 (2d6) acid damage. Nonmagical metal armor worn by the target corrodes, taking a cumulative -1 AC penalty (destroyed if reduced to AC 10).',
+      source: { kind: 'race', refId: 'gray_ooze' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d6+1', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '2d6', damageType: 'acid' },
+      ],
+    },
+  ],
+};
+
+export const monsterShadow: MonsterTemplate = {
+  id: 'shadow', name: 'Shadow', cr: 0.5, srd: true,
+  size: 'medium', type: 'undead', alignment: 'chaotic evil',
+  stats: { str: 6, dex: 14, con: 13, int: 6, wis: 10, cha: 8 },
+  hp: { dice: '3d8+3', average: 16 },
+  ac: { value: 12, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { stealth: 4 },
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'shadow_traits', name: 'Amorphous; Shadow Stealth; Sunlight Weakness; Resistances/Immunities',
+      description: 'Can move through gaps as narrow as 1 inch without squeezing. In dim light or darkness, can Hide as a bonus action with its Stealth bonus improved to +6. In sunlight, disadvantage on attack rolls, ability checks, and saving throws. Vulnerable to radiant damage. Resistant to acid, cold, fire, lightning, thunder, and nonmagical bludgeoning/piercing/slashing damage. Immune to necrotic and poison damage, and to exhaustion/frightened/grappled/paralyzed/petrified/poisoned/prone/restrained.',
+      source: { kind: 'race', refId: 'shadow' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'shadow_strength_drain', name: 'Strength Drain',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 9 (2d6+2) necrotic damage, and the target\'s Strength score is reduced by 1d4 (dies if reduced to 0; otherwise lasts until a short or long rest). A non-evil humanoid slain this way rises as a new shadow in 1d4 hours.',
+      source: { kind: 'race', refId: 'shadow' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+2', damageType: 'necrotic' }],
+    },
+  ],
+};
+
+export const monsterSpecter: MonsterTemplate = {
+  id: 'specter', name: 'Specter', cr: 1, srd: true,
+  size: 'medium', type: 'undead', alignment: 'chaotic evil',
+  stats: { str: 1, dex: 14, con: 11, int: 10, wis: 10, cha: 11 },
+  hp: { dice: '5d8', average: 22 },
+  ac: { value: 12, source: 'dex' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['understands all languages it knew in life but can\'t speak'],
+  features: [
+    {
+      id: 'specter_incorporeal_movement', name: 'Incorporeal Movement',
+      description: 'The specter can move through other creatures and objects as if difficult terrain, taking 5 (1d10) force damage if it ends its turn inside an object. It hovers and flies at speed 50 ft. (not reflected in the base speed field, which the engine has no incorporeal/hover flag for).',
+      source: { kind: 'race', refId: 'specter' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'specter_sunlight_sensitivity', name: 'Sunlight Sensitivity',
+      description: 'While in sunlight, the specter has disadvantage on attack rolls, as well as on Wisdom (Perception) checks that rely on sight.',
+      source: { kind: 'race', refId: 'specter' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'specter_traits', name: 'Resistances/Immunities',
+      description: 'Resistant to acid, cold, fire, lightning, thunder, and nonmagical bludgeoning/piercing/slashing damage. Immune to necrotic and poison damage, and to charmed/exhaustion/grappled/paralyzed/petrified/poisoned/prone/restrained/unconscious conditions.',
+      source: { kind: 'race', refId: 'specter' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'specter_life_drain', name: 'Life Drain',
+      description: 'Melee Spell Attack: +4 to hit, reach 5 ft., one creature. Hit: 10 (3d6) necrotic damage. DC 10 CON save or its HP maximum is reduced by the damage taken until it finishes a long rest; dies if reduced to 0.',
+      source: { kind: 'race', refId: 'specter' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 10 } },
+      abilityEffects: [{ type: 'damage', dice: '3d6', damageType: 'necrotic' }],
+    },
+  ],
+};
+
+export const monsterMummy: MonsterTemplate = {
+  id: 'mummy', name: 'Mummy', cr: 3, srd: true,
+  size: 'medium', type: 'undead', alignment: 'lawful evil',
+  stats: { str: 16, dex: 8, con: 15, int: 6, wis: 10, cha: 12 },
+  hp: { dice: '9d8+18', average: 58 },
+  ac: { value: 11, source: 'natural armor' },
+  speed: 20,
+  savingThrows: ['wis'],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 10'],
+  languages: ['the languages it knew in life'],
+  features: [
+    {
+      id: 'mummy_traits', name: 'Resistances/Immunities',
+      description: 'Vulnerable to fire damage. Resistant to nonmagical bludgeoning/piercing/slashing damage. Immune to necrotic and poison damage, and to charmed/exhaustion/frightened/paralyzed/poisoned conditions.',
+      source: { kind: 'race', refId: 'mummy' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mummy_multiattack', name: 'Multiattack',
+      description: 'The mummy can use Dreadful Glare and makes one Rotting Fist attack. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'mummy' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'mummy_rotting_fist', name: 'Rotting Fist',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) bludgeoning damage plus 10 (3d6) necrotic damage. DC 12 CON save or cursed with mummy rot: can\'t regain HP and HP maximum decreases by 10 (3d6) every 24 hours (dies and turns to dust if reduced to 0) until remove curse or similar magic.',
+      source: { kind: 'race', refId: 'mummy' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 12 } },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6+3', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '3d6', damageType: 'necrotic' },
+      ],
+    },
+    {
+      id: 'mummy_dreadful_glare', name: 'Dreadful Glare',
+      description: 'Targets one creature it can see within 60 ft. If it can see the mummy, DC 11 WIS save or frightened until the end of the mummy\'s next turn (also paralyzed for the same duration if it fails by 5+). Success grants 24-hour immunity to Dreadful Glare from mummies (not mummy lords).',
+      source: { kind: 'race', refId: 'mummy' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '60 feet', target: 'single', requiresSave: { ability: 'wis', dc: 11 } },
+      abilityEffects: [{ type: 'apply_condition', conditionId: 'frightened', duration: { unit: 'rounds', remaining: 1 } }],
+    },
+  ],
+};
+
+export const monsterOchreJelly: MonsterTemplate = {
+  id: 'ochre_jelly', name: 'Ochre Jelly', cr: 2, srd: true,
+  size: 'large', type: 'ooze', alignment: 'unaligned',
+  stats: { str: 15, dex: 6, con: 14, int: 2, wis: 6, cha: 1 },
+  hp: { dice: '6d10+12', average: 45 },
+  ac: { value: 8, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 60 ft (blind beyond this radius)', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'ochre_jelly_traits', name: 'Amorphous; Spider Climb; Resistances/Immunities',
+      description: 'Can move through gaps as narrow as 1 inch without squeezing. Can climb difficult surfaces, including upside down on ceilings, without a check. Resistant to acid. Immune to lightning and slashing damage, and to blinded/charmed/exhaustion/frightened/prone conditions.',
+      source: { kind: 'race', refId: 'ochre_jelly' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ochre_jelly_split', name: 'Split',
+      description: 'Reaction: when a Medium-or-larger jelly with at least 10 HP takes lightning or slashing damage, it splits into two new jellies, each with half the original\'s (rounded down) HP and one size smaller.',
+      source: { kind: 'race', refId: 'ochre_jelly' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ochre_jelly_pseudopod', name: 'Pseudopod',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 9 (2d6+2) bludgeoning damage plus 3 (1d6) acid damage.',
+      source: { kind: 'race', refId: 'ochre_jelly' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6+2', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '1d6', damageType: 'acid' },
+      ],
+    },
+  ],
+};
+
+export const monsterGhost: MonsterTemplate = {
+  id: 'ghost', name: 'Ghost', cr: 4, srd: true,
+  size: 'medium', type: 'undead', alignment: 'any alignment',
+  stats: { str: 7, dex: 13, con: 10, int: 10, wis: 12, cha: 17 },
+  hp: { dice: '10d8', average: 45 },
+  ac: { value: 11, source: 'dex' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 11'],
+  languages: ['any languages it knew in life'],
+  features: [
+    {
+      id: 'ghost_ethereal_sight', name: 'Ethereal Sight',
+      description: 'The ghost can see 60 ft. into the Ethereal Plane from the Material Plane, and vice versa.',
+      source: { kind: 'race', refId: 'ghost' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ghost_incorporeal_movement', name: 'Incorporeal Movement',
+      description: 'The ghost can move through other creatures and objects as if difficult terrain, taking 5 (1d10) force damage if it ends its turn inside an object. It hovers and flies at speed 40 ft. (not reflected in the base speed field, which the engine has no incorporeal/hover flag for).',
+      source: { kind: 'race', refId: 'ghost' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ghost_traits', name: 'Resistances/Immunities',
+      description: 'Resistant to acid, fire, lightning, thunder, and nonmagical bludgeoning/piercing/slashing damage. Immune to cold, necrotic, and poison damage, and to charmed/exhaustion/frightened/grappled/paralyzed/petrified/poisoned/prone/restrained conditions.',
+      source: { kind: 'race', refId: 'ghost' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ghost_withering_touch', name: 'Withering Touch',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 17 (4d6+3) necrotic damage.',
+      source: { kind: 'race', refId: 'ghost' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d6+3', damageType: 'necrotic' }],
+    },
+    {
+      id: 'ghost_etherealness', name: 'Etherealness',
+      description: 'The ghost moves from the Material Plane to the Ethereal Plane or back. While in the Border Ethereal it\'s visible from the other plane but can\'t affect or be affected by anything there.',
+      source: { kind: 'race', refId: 'ghost' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ghost_horrifying_visage', name: 'Horrifying Visage',
+      description: 'Each non-undead creature within 60 ft. that can see the ghost makes a DC 13 WIS save or is frightened for 1 minute (also ages 1d4×10 years if it fails by 5+, reversible with greater restoration within 24 hours); repeatable save each turn; success grants 24-hour immunity.',
+      source: { kind: 'race', refId: 'ghost' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '60 feet', target: 'area', requiresSave: { ability: 'wis', dc: 13 } },
+      abilityEffects: [{ type: 'apply_condition', conditionId: 'frightened', duration: { unit: 'minutes', remaining: 1 } }],
+    },
+    {
+      id: 'ghost_possession', name: 'Possession (Recharge 6)',
+      description: 'One humanoid within 5 ft. it can see makes a DC 13 CHA save or is possessed: the ghost disappears, the target is incapacitated and loses control of its body (retaining awareness) while the ghost controls it using its own alignment/INT/WIS/CHA and charm/fear immunity but the target\'s other statistics. Lasts until the body hits 0 HP, the ghost ends it as a bonus action, or it\'s dispelled/turned; the ghost then reappears within 5 ft. Target is immune to this ghost\'s Possession for 24 hours after a success or after possession ends.',
+      source: { kind: 'race', refId: 'ghost' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'cha', dc: 13 } },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterBlackPudding: MonsterTemplate = {
+  id: 'black_pudding', name: 'Black Pudding', cr: 4, srd: true,
+  size: 'large', type: 'ooze', alignment: 'unaligned',
+  stats: { str: 16, dex: 5, con: 16, int: 1, wis: 6, cha: 1 },
+  hp: { dice: '10d10+30', average: 85 },
+  ac: { value: 7, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 60 ft (blind beyond this radius)', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'black_pudding_traits', name: 'Amorphous; Spider Climb; Immunities',
+      description: 'Can move through gaps as narrow as 1 inch without squeezing. Can climb difficult surfaces, including upside down on ceilings, without a check. Immune to acid, cold, lightning, and slashing damage, and to blinded/charmed/exhaustion/frightened/prone conditions.',
+      source: { kind: 'race', refId: 'black_pudding' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'black_pudding_corrosive_form', name: 'Corrosive Form',
+      description: 'A creature that touches it or hits it in melee within 5 ft. takes 4 (1d8) acid damage. A nonmagical metal or wood weapon that hits it corrodes, taking a cumulative -1 damage penalty (destroyed at -5); nonmagical metal/wood ammunition is destroyed after hitting. Can eat through 2-inch-thick nonmagical wood or metal in a round.',
+      source: { kind: 'race', refId: 'black_pudding' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'black_pudding_split', name: 'Split',
+      description: 'Reaction: when a Medium-or-larger pudding with at least 10 HP takes lightning or slashing damage, it splits into two new puddings, each with half the original\'s (rounded down) HP and one size smaller.',
+      source: { kind: 'race', refId: 'black_pudding' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'black_pudding_pseudopod', name: 'Pseudopod',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6+3) bludgeoning damage plus 18 (4d8) acid damage. Nonmagical armor worn by the target corrodes, taking a cumulative -1 AC penalty (destroyed if reduced to AC 10).',
+      source: { kind: 'race', refId: 'black_pudding' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d6+3', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '4d8', damageType: 'acid' },
+      ],
+    },
+  ],
+};
+
+export const monsterRoper: MonsterTemplate = {
+  id: 'roper', name: 'Roper', cr: 5, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'neutral evil',
+  stats: { str: 18, dex: 8, con: 17, int: 7, wis: 16, cha: 6 },
+  hp: { dice: '11d10+33', average: 93 },
+  ac: { value: 20, source: 'natural armor' },
+  speed: 10,
+  savingThrows: [],
+  skills: { perception: 6, stealth: 5 },
+  senses: ['darkvision 60 ft', 'passive Perception 16'],
+  languages: [],
+  features: [
+    {
+      id: 'roper_traits', name: 'False Appearance; Spider Climb',
+      description: 'While motionless, indistinguishable from a normal cave formation such as a stalagmite. Can climb difficult surfaces, including upside down on ceilings, without a check.',
+      source: { kind: 'race', refId: 'roper' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'roper_grasping_tendrils', name: 'Grasping Tendrils',
+      description: 'The roper has up to 6 tendrils. Each is attackable separately (AC 20, 10 HP, immune to poison/psychic damage) — destroying one doesn\'t damage the roper, which can extrude a replacement on its next turn. A creature can also break one with an action and a successful DC 15 Strength check.',
+      source: { kind: 'race', refId: 'roper' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'roper_multiattack', name: 'Multiattack',
+      description: 'The roper makes four tendril attacks, uses Reel, and makes one bite attack. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'roper' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'roper_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 22 (4d8+4) piercing damage.',
+      source: { kind: 'race', refId: 'roper' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d8+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'roper_tendril', name: 'Tendril',
+      description: 'Melee Weapon Attack: +7 to hit, reach 50 ft., one creature. Hit: no damage — the target is grappled (escape DC 15) and restrained, with disadvantage on STR checks/saves, until the grapple ends; that tendril can\'t be used on another target while grappling.',
+      source: { kind: 'race', refId: 'roper' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '50 feet', target: 'single', requiresSave: null },
+      abilityEffects: [],
+    },
+    {
+      id: 'roper_reel', name: 'Reel',
+      description: 'The roper pulls each creature grappled by it up to 25 ft. straight toward itself.',
+      source: { kind: 'race', refId: 'roper' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
+export const monsterSpiritNaga: MonsterTemplate = {
+  id: 'spirit_naga', name: 'Spirit Naga', cr: 8, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'chaotic evil',
+  stats: { str: 18, dex: 17, con: 14, int: 16, wis: 15, cha: 16 },
+  hp: { dice: '10d10+20', average: 75 },
+  ac: { value: 15, source: 'natural armor' },
+  speed: 40,
+  savingThrows: ['dex', 'con', 'wis', 'cha'],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 12'],
+  languages: ['Abyssal', 'Common'],
+  features: [
+    {
+      id: 'spirit_naga_rejuvenation', name: 'Rejuvenation',
+      description: 'If it dies, the naga returns to life in 1d6 days with all its HP restored. Only a wish spell can prevent this.',
+      source: { kind: 'race', refId: 'spirit_naga' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'spirit_naga_spellcasting', name: 'Spellcasting',
+      description: '10th-level INT spellcaster (DC 14, +6 to hit), verbal components only. Wizard list. Cantrips: mage hand, minor illusion, ray of frost. 1st (4): charm person, detect magic, sleep. 2nd (3): detect thoughts, hold person. 3rd (3): lightning bolt, water breathing. 4th (3): blight, dimension door. 5th (2): dominate person.',
+      source: { kind: 'race', refId: 'spirit_naga' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'spirit_naga_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +7 to hit, reach 10 ft., one creature. Hit: 7 (1d6+4) piercing damage. DC 13 CON save, 31 (7d8) poison damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'spirit_naga' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: { ability: 'con', dc: 13 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d6+4', damageType: 'piercing' },
+        { type: 'damage', dice: '7d8', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+  ],
+};
+
+export const monsterGuardianNaga: MonsterTemplate = {
+  id: 'guardian_naga', name: 'Guardian Naga', cr: 10, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'lawful good',
+  stats: { str: 19, dex: 18, con: 16, int: 16, wis: 19, cha: 18 },
+  hp: { dice: '15d10+45', average: 127 },
+  ac: { value: 18, source: 'natural armor' },
+  speed: 40,
+  savingThrows: ['dex', 'con', 'int', 'wis', 'cha'],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Celestial', 'Common'],
+  features: [
+    {
+      id: 'guardian_naga_rejuvenation', name: 'Rejuvenation',
+      description: 'If it dies, the naga returns to life in 1d6 days with all its HP restored. Only a wish spell can prevent this.',
+      source: { kind: 'race', refId: 'guardian_naga' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'guardian_naga_spellcasting', name: 'Spellcasting',
+      description: '11th-level WIS spellcaster (DC 16, +8 to hit), verbal components only. Cleric list. Cantrips: mending, sacred flame, thaumaturgy. 1st (4): command, cure wounds, shield of faith. 2nd (3): calm emotions, hold person. 3rd (3): bestow curse, clairvoyance. 4th (3): banishment, freedom of movement. 5th (2): flame strike, geas. 6th (1): true seeing.',
+      source: { kind: 'race', refId: 'guardian_naga' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'guardian_naga_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +8 to hit, reach 10 ft., one creature. Hit: 8 (1d8+4) piercing damage. DC 15 CON save, 45 (10d8) poison damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'guardian_naga' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: { ability: 'con', dc: 15 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d8+4', damageType: 'piercing' },
+        { type: 'damage', dice: '10d8', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+    {
+      id: 'guardian_naga_spit_poison', name: 'Spit Poison',
+      description: 'Ranged Weapon Attack: +8 to hit, range 15/30 ft., one creature. Hit: DC 15 CON save, 45 (10d8) poison damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'guardian_naga' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '15 feet', target: 'single', requiresSave: { ability: 'con', dc: 15 } },
+      abilityEffects: [{ type: 'damage', dice: '10d8', damageType: 'poison', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -4389,6 +4821,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterChainDevil,
   monsterBoneDevil,
   monsterGlabrezu,
+  monsterGrayOoze,
+  monsterShadow,
+  monsterSpecter,
+  monsterMummy,
+  monsterOchreJelly,
+  monsterGhost,
+  monsterBlackPudding,
+  monsterRoper,
+  monsterSpiritNaga,
+  monsterGuardianNaga,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

@@ -14,7 +14,7 @@ import { recomputeDerived } from '../../src/engine/pipeline';
 import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
-import { equipItem, unequipItem } from '../../src/engine/inventory';
+import { equipItem, unequipItem, toggleAttunement } from '../../src/engine/inventory';
 import { simulate } from '../../src/engine/simulate';
 import { Entity, ItemInstance, DurationTracker } from '../../src/engine/types';
 import { itemRepo } from '../../src/content/itemRepo';
@@ -254,6 +254,16 @@ export default function CharacterSheetScreen() {
   const itemName = useCallback((itemId: string) =>
     itemRepo.getItemSync(itemId)?.name ?? homebrewItems.find(i => i.id === itemId)?.name ?? itemId,
   [homebrewItems]);
+
+  // A plain boolean flip, unlike equip/unequip — no AC/attack-bonus change
+  // to preview, so this mutates directly like handleAddItem/handleRemoveItem
+  // rather than going through a simulate()-backed preview modal. The cap
+  // check itself lives in toggleAttunement() (a no-op past the cap); the UI
+  // (TabInventory) checks countAttuned()/attunementCap() itself first so it
+  // can show an explanatory Alert instead of a silent no-op.
+  const handleToggleAttune = useCallback((itemId: string) => {
+    mutate(e => toggleAttunement(e, itemId), `Toggled attunement: ${itemName(itemId)}`);
+  }, [mutate, itemName]);
 
   const handleAddItem = useCallback(async (itemId: string) => {
     await itemRepo.ensureLoaded([itemId]);
@@ -641,6 +651,7 @@ export default function CharacterSheetScreen() {
             onUpdateCurrency={handleUpdateCurrency}
             onApplyInfusion={handleApplyInfusion}
             onRemoveInfusion={handleRemoveInfusion}
+            onToggleAttune={handleToggleAttune}
           />
         )}
         {activeTab === 'notes' && (

@@ -379,7 +379,7 @@ const allFeatEntries: Feat[] = [
     PHB, [advantage('melee attacks against unmounted creatures smaller than your mount')]),
 
   feat('mystic_conflux', 'Mystic Conflux', null,
-    'You can attune to up to four magic items instead of three, and can cast Identify once per long rest without a spell slot or material components. (No mechanism for a custom attunement-slot count, and Identify is a leveled spell with no mechanism for a limited-use cast without a slot — neither is applied mechanically.)',
+    'You can attune to up to four magic items instead of three (enforced by the app), and can cast Identify once per long rest without a spell slot or material components. (Identify is a leveled spell with no mechanism for a limited-use cast without a slot — not applied mechanically.)',
     TOH),
 
   feat('observant', 'Observant', null,

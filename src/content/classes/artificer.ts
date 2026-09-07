@@ -130,7 +130,7 @@ export const artificerProgression: ClassProgression = {
       level: 10, hpDie: 8,
       choices: [infusionChoice('artificer_infusions_10', 2)],
       grants: [
-        { kind: 'feature', value: { id: 'magic_item_adept', name: 'Magic Item Adept', description: 'You can attune to up to 4 magic items at once, and crafting a magic item costs you half the usual gold and time. Flavor-only — the app has no attunement-count enforcement or crafting/downtime system.', source: { kind: 'class', refId: 'artificer' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'magic_item_adept', name: 'Magic Item Adept', description: 'You can attune to up to 4 magic items at once (enforced by the app), and crafting a magic item costs you half the usual gold and time. Flavor-only — no crafting/downtime system exists to reflect the cost/time reduction.', source: { kind: 'class', refId: 'artificer' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     {
@@ -145,7 +145,7 @@ export const artificerProgression: ClassProgression = {
       level: 14, hpDie: 8,
       choices: [infusionChoice('artificer_infusions_14', 2)],
       grants: [
-        { kind: 'feature', value: { id: 'magic_item_savant', name: 'Magic Item Savant', description: 'You can attune to up to 5 magic items at once, and you ignore all class, race, spell, and level requirements on attuning to or using a magic item. Flavor-only — no attunement/requirement enforcement exists in the engine.', source: { kind: 'class', refId: 'artificer' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'magic_item_savant', name: 'Magic Item Savant', description: 'You can attune to up to 5 magic items at once (enforced by the app), and you ignore all class, race, spell, and level requirements on attuning to or using a magic item. Flavor-only — no requirement-checking exists in the engine to ignore.', source: { kind: 'class', refId: 'artificer' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     { level: 15, hpDie: 8, choices: [], grants: [] },
@@ -155,7 +155,7 @@ export const artificerProgression: ClassProgression = {
       level: 18, hpDie: 8,
       choices: [infusionChoice('artificer_infusions_18', 2)],
       grants: [
-        { kind: 'feature', value: { id: 'magic_item_master', name: 'Magic Item Master', description: 'You can attune to up to 6 magic items at once. Flavor-only — no attunement-count enforcement exists in the engine.', source: { kind: 'class', refId: 'artificer' }, level: 18, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'magic_item_master', name: 'Magic Item Master', description: 'You can attune to up to 6 magic items at once (enforced by the app).', source: { kind: 'class', refId: 'artificer' }, level: 18, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     { level: 19, hpDie: 8, choices: [asiChoice('artificer_asi_19')], grants: [] },

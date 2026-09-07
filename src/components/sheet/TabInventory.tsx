@@ -17,6 +17,7 @@ import type { ItemIndexEntry } from '../../content/itemRepo.types';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { usesLargeCreatureWeaponDice } from '../../engine/houseRules';
 import { ALL_INFUSIONS, maxInfusedItems } from '../../content/infusions';
+import { itemRequiresAttunement, attunementCap, countAttuned } from '../../engine/inventory';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 const DAMAGE_TYPES = [
@@ -919,6 +920,7 @@ const infuseStyles = StyleSheet.create({
 
 function ItemRow({
   instance, equipped, allItems, onToggle, onRemove, onRemoveInfusion, onQuantityChange, onSetQuantity,
+  onToggleAttune,
 }: {
   instance: ItemInstance;
   equipped: boolean;
@@ -932,6 +934,10 @@ function ItemRow({
    * doesn't want 20 taps of the +1 stepper). Committed on blur/submit, same
    * pattern as the Abilities tab's manual-bonus inputs. */
   onSetQuantity?: (quantity: number) => void;
+  /** Present only when the item's definition requires attunement — the cap
+   * check/explanatory Alert lives in the parent (it needs the whole
+   * inventory to count), this just renders the toggle and calls back. */
+  onToggleAttune?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const item  = allItems.find(i => i.id === instance.itemId);
@@ -939,6 +945,7 @@ function ItemRow({
   const props = item?.properties ?? [];
   const desc  = item?.features?.[0]?.description;
   const infusion = instance.infusedWith ? ALL_INFUSIONS.find(i => i.id === instance.infusedWith) : null;
+  const needsAttunement = itemRequiresAttunement(item);
 
   return (
     <View style={styles.itemWrap}>
@@ -958,9 +965,23 @@ function ItemRow({
             {infusion && (
               <Text style={styles.itemInfused}>✨ Infused: {infusion.name}</Text>
             )}
+            {needsAttunement && (
+              <Text style={styles.itemAttunement}>{instance.attuned ? '🔗 Attuned' : '⚬ Requires attunement'}</Text>
+            )}
           </View>
           <Text style={styles.expandCaret}>{expanded ? '▲' : '▼'}</Text>
         </Pressable>
+        {needsAttunement && onToggleAttune && (
+          <Pressable
+            style={[styles.attuneBtn, instance.attuned && styles.attuneBtnActive]}
+            onPress={onToggleAttune}
+            hitSlop={8}
+          >
+            <Text style={[styles.attuneTxt, instance.attuned && styles.attuneTxtActive]}>
+              {instance.attuned ? 'Attuned' : 'Attune'}
+            </Text>
+          </Pressable>
+        )}
         <Pressable
           style={[styles.toggleBtn, equipped && styles.toggleBtnEquipped]}
           onPress={onToggle}
@@ -1041,11 +1062,12 @@ interface Props {
   /** Present only for classes with Infuse Item (Artificer) — omitted elsewhere. */
   onApplyInfusion?:  (itemId: string, infusionId: string, damageType?: string) => void;
   onRemoveInfusion?: (itemId: string) => void;
+  onToggleAttune?:   (itemId: string) => void;
 }
 
 export function TabInventory({
   entity, onEquip, onUnequip, onAddItem, onRemoveItem, onUpdateQuantity, onSetQuantity, onUpdateCurrency, rules,
-  onApplyInfusion, onRemoveInfusion,
+  onApplyInfusion, onRemoveInfusion, onToggleAttune,
 }: Props) {
   const { inventory } = entity;
   const { currency }  = inventory;
@@ -1083,6 +1105,18 @@ export function TabInventory({
 
   const equippedIds = new Set(inventory.equipped.map(i => i.itemId));
   const carriedIds  = new Set(inventory.carried.map(i => i.itemId));
+
+  const attunedCount = countAttuned(entity);
+  const attuneCap    = attunementCap(entity);
+
+  function handleAttuneToggle(inst: ItemInstance) {
+    if (!onToggleAttune) return;
+    if (!inst.attuned && attunedCount >= attuneCap) {
+      Alert.alert('Attunement Full', `You're already attuned to ${attuneCap} item${attuneCap === 1 ? '' : 's'} — un-attune from one first.`);
+      return;
+    }
+    onToggleAttune(inst.itemId);
+  }
 
   function confirmRemove(itemId: string) {
     const item = allItems.find(i => i.id === itemId);
@@ -1138,6 +1172,13 @@ export function TabInventory({
         </View>
       </View>
 
+      {/* Attunement — only shown once the character owns something that needs it */}
+      {[...inventory.equipped, ...inventory.carried].some(inst => itemRequiresAttunement(allItems.find(i => i.id === inst.itemId))) && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ATTUNEMENT ({attunedCount}/{attuneCap})</Text>
+        </View>
+      )}
+
       {/* Infusions — only shown for classes that know at least one (Artificer) */}
       {onApplyInfusion && knownInfusionIds.length > 0 && (
         <View style={styles.section}>
@@ -1175,6 +1216,7 @@ export function TabInventory({
               onToggle={() => onUnequip(inst.itemId)}
               onRemove={() => confirmRemove(inst.itemId)}
               onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId) : undefined}
+              onToggleAttune={onToggleAttune ? () => handleAttuneToggle(inst) : undefined}
             />
           ))
         )}
@@ -1204,6 +1246,7 @@ export function TabInventory({
               onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId) : undefined}
               onQuantityChange={delta => onUpdateQuantity(inst.itemId, delta)}
               onSetQuantity={qty => onSetQuantity(inst.itemId, qty)}
+              onToggleAttune={onToggleAttune ? () => handleAttuneToggle(inst) : undefined}
             />
           ))
         )}
@@ -1307,6 +1350,7 @@ const styles = StyleSheet.create({
   itemProps: { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 1, lineHeight: 14 },
   itemQty:   { fontSize: FontSize.sm, color: Colors.textSecondary },
   itemInfused: { fontSize: FontSize.xs, color: Colors.purple, marginTop: 2, fontWeight: FontWeight.bold },
+  itemAttunement: { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 2 },
   qtyStepperRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.xs, paddingBottom: Spacing.xs,
@@ -1345,6 +1389,15 @@ const styles = StyleSheet.create({
   toggleBtnEquipped: { borderColor: Colors.gold + '88', backgroundColor: Colors.gold + '22' },
   toggleTxt:         { fontSize: FontSize.sm, color: Colors.textSecondary },
   toggleTxtEquipped: { color: Colors.gold, fontWeight: FontWeight.bold },
+
+  attuneBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  attuneBtnActive: { borderColor: Colors.purple + '88', backgroundColor: Colors.purple + '22' },
+  attuneTxt:        { fontSize: FontSize.sm, color: Colors.textSecondary },
+  attuneTxtActive:  { color: Colors.purple, fontWeight: FontWeight.bold },
 
   removeBtn: { padding: 4 },
   removeTxt: { fontSize: FontSize.md, color: Colors.textDim },

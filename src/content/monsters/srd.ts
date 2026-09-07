@@ -7429,6 +7429,430 @@ export const monsterAzer: MonsterTemplate = {
   ],
 };
 
+export const monsterBulette: MonsterTemplate = {
+  id: 'bulette', name: 'Bulette', cr: 5, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'unaligned',
+  stats: { str: 19, dex: 11, con: 21, int: 2, wis: 10, cha: 5 },
+  hp: { dice: '9d10+45', average: 94 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 6 },
+  senses: ['darkvision 60 ft', 'tremorsense 60 ft', 'passive Perception 16'],
+  languages: [],
+  features: [
+    {
+      id: 'bulette_standing_leap', name: 'Standing Leap',
+      description: 'The bulette\'s long jump is up to 30 ft. and its high jump is up to 15 ft., with or without a running start.',
+      source: { kind: 'race', refId: 'bulette' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'bulette_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 30 (4d12+4) piercing damage.',
+      source: { kind: 'race', refId: 'bulette' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d12+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'bulette_deadly_leap', name: 'Deadly Leap',
+      description: 'If the bulette jumps at least 15 ft. as part of its movement, it can land on its feet among one or more creatures. Each must succeed a DC 16 STR or DEX save (their choice) or be knocked prone and take 14 (3d6+4) bludgeoning plus 14 (3d6+4) slashing damage; on a success, half damage, no prone, and pushed 5 ft. out of the bulette\'s space.',
+      source: { kind: 'race', refId: 'bulette' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: 'self', target: 'area', requiresSave: { ability: 'str', dc: 16 } },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterBehir: MonsterTemplate = {
+  id: 'behir', name: 'Behir', cr: 11, srd: true,
+  size: 'huge', type: 'monstrosity', alignment: 'neutral evil',
+  stats: { str: 23, dex: 16, con: 18, int: 7, wis: 14, cha: 12 },
+  hp: { dice: '16d12+64', average: 168 },
+  ac: { value: 17, source: 'natural armor' },
+  speed: 50,
+  savingThrows: [],
+  skills: { perception: 6, stealth: 7 },
+  senses: ['darkvision 90 ft', 'passive Perception 16'],
+  languages: ['Draconic'],
+  features: [
+    {
+      id: 'behir_multiattack', name: 'Multiattack',
+      description: 'The behir makes two attacks: one bite and one constrict. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'behir' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'behir_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +10 to hit, reach 10 ft., one target. Hit: 22 (3d10+6) piercing damage.',
+      source: { kind: 'race', refId: 'behir' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d10+6', damageType: 'piercing' }],
+    },
+    {
+      id: 'behir_constrict', name: 'Constrict',
+      description: 'Melee Weapon Attack: +10 to hit, reach 5 ft., one Large or smaller creature. Hit: 17 (2d10+6) bludgeoning plus 17 (2d10+6) slashing damage. The target is grappled (escape DC 16, one target at a time) and restrained until the grapple ends.',
+      source: { kind: 'race', refId: 'behir' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '2d10+6', damageType: 'bludgeoning' },
+        { type: 'damage', dice: '2d10+6', damageType: 'slashing' },
+      ],
+    },
+    {
+      id: 'behir_lightning_breath', name: 'Lightning Breath',
+      description: 'Recharge 5-6. Exhales lightning in a 20-foot line, 5 ft. wide. DC 16 DEX save, 66 (12d10) lightning damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'behir' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '20 feet line', target: 'area', requiresSave: { ability: 'dex', dc: 16 } },
+      abilityEffects: [{ type: 'damage', dice: '12d10', damageType: 'lightning', saveOnSuccess: 'half' }],
+    },
+    {
+      id: 'behir_swallow', name: 'Swallow',
+      description: 'Bites a Medium-or-smaller grappled target; on a hit the target is swallowed instead (grapple ends), blinded and restrained with total cover, taking 21 (6d6) acid damage at the start of each of the behir\'s turns. Only one creature swallowed at a time. If the behir takes 30+ damage in one turn from the swallowed creature, it must succeed a DC 14 CON save or regurgitate them prone nearby.',
+      source: { kind: 'race', refId: 'behir' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '6d6', damageType: 'acid' }],
+    },
+  ],
+};
+
+export const monsterWyvern: MonsterTemplate = {
+  id: 'wyvern', name: 'Wyvern', cr: 6, srd: true,
+  size: 'large', type: 'dragon', alignment: 'unaligned',
+  stats: { str: 19, dex: 10, con: 16, int: 5, wis: 12, cha: 6 },
+  hp: { dice: '13d10+39', average: 110 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: { perception: 4 },
+  senses: ['darkvision 60 ft', 'passive Perception 14'],
+  languages: [],
+  features: [
+    {
+      id: 'wyvern_multiattack', name: 'Multiattack',
+      description: 'The wyvern makes two attacks: bite + stinger, or (while flying) it can swap either for claws. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'wyvern' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'wyvern_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +7 to hit, reach 10 ft., one creature. Hit: 11 (2d6+4) piercing damage.',
+      source: { kind: 'race', refId: 'wyvern' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'wyvern_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) slashing damage.',
+      source: { kind: 'race', refId: 'wyvern' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'slashing' }],
+    },
+    {
+      id: 'wyvern_stinger', name: 'Stinger',
+      description: 'Melee Weapon Attack: +7 to hit, reach 10 ft., one creature. Hit: 11 (2d6+4) piercing damage, plus DC 15 CON save, 24 (7d6) poison damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'wyvern' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: { ability: 'con', dc: 15 } },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6+4', damageType: 'piercing' },
+        { type: 'damage', dice: '7d6', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+  ],
+};
+
+export const monsterGriffon: MonsterTemplate = {
+  id: 'griffon', name: 'Griffon', cr: 2, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'unaligned',
+  stats: { str: 18, dex: 15, con: 16, int: 2, wis: 13, cha: 8 },
+  hp: { dice: '7d10+21', average: 59 },
+  ac: { value: 12, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: { perception: 5 },
+  senses: ['darkvision 60 ft', 'passive Perception 15'],
+  languages: [],
+  features: [
+    {
+      id: 'griffon_keen_sight', name: 'Keen Sight',
+      description: 'The griffon has advantage on Wisdom (Perception) checks that rely on sight.',
+      source: { kind: 'race', refId: 'griffon' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'griffon_multiattack', name: 'Multiattack',
+      description: 'The griffon makes two attacks: one beak and one claws. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'griffon' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'griffon_beak', name: 'Beak',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 8 (1d8+4) piercing damage.',
+      source: { kind: 'race', refId: 'griffon' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'griffon_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 11 (2d6+4) slashing damage.',
+      source: { kind: 'race', refId: 'griffon' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterHippogriff: MonsterTemplate = {
+  id: 'hippogriff', name: 'Hippogriff', cr: 1, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'unaligned',
+  stats: { str: 17, dex: 13, con: 13, int: 2, wis: 12, cha: 8 },
+  hp: { dice: '3d10+3', average: 19 },
+  ac: { value: 11, source: 'dex' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 5 },
+  senses: ['passive Perception 15'],
+  languages: [],
+  features: [
+    {
+      id: 'hippogriff_keen_sight', name: 'Keen Sight',
+      description: 'The hippogriff has advantage on Wisdom (Perception) checks that rely on sight.',
+      source: { kind: 'race', refId: 'hippogriff' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'hippogriff_multiattack', name: 'Multiattack',
+      description: 'The hippogriff makes two attacks: one beak and one claws. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'hippogriff' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'hippogriff_beak', name: 'Beak',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 8 (1d10+3) piercing damage.',
+      source: { kind: 'race', refId: 'hippogriff' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d10+3', damageType: 'piercing' }],
+    },
+    {
+      id: 'hippogriff_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) slashing damage.',
+      source: { kind: 'race', refId: 'hippogriff' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+3', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterPegasus: MonsterTemplate = {
+  id: 'pegasus', name: 'Pegasus', cr: 2, srd: true,
+  size: 'large', type: 'celestial', alignment: 'chaotic good',
+  stats: { str: 18, dex: 15, con: 16, int: 10, wis: 15, cha: 13 },
+  hp: { dice: '7d10+21', average: 59 },
+  ac: { value: 12, source: 'dex' },
+  speed: 60,
+  savingThrows: ['dex', 'wis', 'cha'],
+  skills: { perception: 6 },
+  senses: ['passive Perception 16'],
+  languages: ['understands Celestial, Common, Elvish, and Sylvan but can\'t speak'],
+  features: [
+    {
+      id: 'pegasus_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 11 (2d6+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'pegasus' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterUnicorn: MonsterTemplate = {
+  id: 'unicorn', name: 'Unicorn', cr: 5, srd: true,
+  size: 'large', type: 'celestial', alignment: 'lawful good',
+  stats: { str: 18, dex: 14, con: 15, int: 11, wis: 17, cha: 16 },
+  hp: { dice: '9d10+18', average: 67 },
+  ac: { value: 12, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 13'],
+  languages: ['Celestial', 'Elvish', 'Sylvan', 'telepathy 60 ft'],
+  features: [
+    {
+      id: 'unicorn_charge', name: 'Charge',
+      description: 'If the unicorn moves at least 20 ft. straight toward a target and hits it with a Horn attack the same turn, that attack deals an extra 9 (2d8) piercing damage; a creature target must also succeed a DC 15 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'unicorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'unicorn_magic_resistance', name: 'Magic Resistance; Magic Weapons',
+      description: 'Advantage on saving throws against spells and other magical effects. The unicorn\'s weapon attacks are magical.',
+      source: { kind: 'race', refId: 'unicorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'unicorn_innate_spellcasting', name: 'Innate Spellcasting',
+      description: 'CHA-based (spell save DC 14), no components required. At will: detect evil and good, druidcraft, pass without trace. 1/day each: calm emotions, dispel evil and good, entangle.',
+      source: { kind: 'race', refId: 'unicorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'unicorn_multiattack', name: 'Multiattack',
+      description: 'The unicorn makes two attacks: one hooves and one horn. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'unicorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'unicorn_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 11 (2d6+4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'unicorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+4', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'unicorn_horn', name: 'Horn',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 8 (1d8+4) piercing damage.',
+      source: { kind: 'race', refId: 'unicorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+4', damageType: 'piercing' }],
+    },
+    {
+      id: 'unicorn_healing_touch', name: 'Healing Touch (3/Day)',
+      description: 'Touches a creature with its horn: it regains 11 (2d8+2) HP, and all diseases are cured and all poisons neutralized.',
+      source: { kind: 'race', refId: 'unicorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'heal', dice: '2d8+2' }],
+    },
+    {
+      id: 'unicorn_teleport', name: 'Teleport (1/Day)',
+      description: 'Teleports itself and up to three willing creatures within 5 ft. (with equipment) to a familiar location up to 1 mile away.',
+      source: { kind: 'race', refId: 'unicorn' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '1 mile', target: 'multiple', requiresSave: null },
+      abilityEffects: [],
+    },
+  ],
+};
+
+export const monsterAnkheg: MonsterTemplate = {
+  id: 'ankheg', name: 'Ankheg', cr: 2, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'unaligned',
+  stats: { str: 17, dex: 11, con: 13, int: 1, wis: 13, cha: 6 },
+  hp: { dice: '6d10+6', average: 39 },
+  ac: { value: 14, source: 'natural armor (11 while prone)' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'tremorsense 60 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'ankheg_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) slashing plus 3 (1d6) acid damage. A Large-or-smaller target is grappled (escape DC 13); while grappling, the ankheg can only bite that creature, with advantage.',
+      source: { kind: 'race', refId: 'ankheg' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6+3', damageType: 'slashing' },
+        { type: 'damage', dice: '1d6', damageType: 'acid' },
+      ],
+    },
+    {
+      id: 'ankheg_acid_spray', name: 'Acid Spray',
+      description: 'Recharge 6. Only usable while not grappling. Spits acid in a 30-foot line, 5 ft. wide. DC 13 DEX save, 10 (3d6) acid damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'ankheg' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '30 feet line', target: 'area', requiresSave: { ability: 'dex', dc: 13 } },
+      abilityEffects: [{ type: 'damage', dice: '3d6', damageType: 'acid', saveOnSuccess: 'half' }],
+    },
+  ],
+};
+
+export const monsterCockatrice: MonsterTemplate = {
+  id: 'cockatrice', name: 'Cockatrice', cr: 0.5, srd: true,
+  size: 'small', type: 'monstrosity', alignment: 'unaligned',
+  stats: { str: 6, dex: 12, con: 12, int: 2, wis: 13, cha: 5 },
+  hp: { dice: '6d6+6', average: 27 },
+  ac: { value: 11, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'cockatrice_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one creature. Hit: 3 (1d4+1) piercing damage, plus DC 11 CON save against being magically petrified: on a failure the creature is restrained and turning to stone, repeating the save at the end of its next turn (success ends the effect, a second failure petrifies it for 24 hours).',
+      source: { kind: 'race', refId: 'cockatrice' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 11 } },
+      abilityEffects: [
+        { type: 'damage', dice: '1d4+1', damageType: 'piercing' },
+        { type: 'apply_condition', conditionId: 'petrified', duration: { unit: 'permanent', remaining: 0 } },
+      ],
+    },
+  ],
+};
+
+export const monsterRustMonster: MonsterTemplate = {
+  id: 'rust_monster', name: 'Rust Monster', cr: 0.5, srd: true,
+  size: 'medium', type: 'monstrosity', alignment: 'unaligned',
+  stats: { str: 13, dex: 12, con: 13, int: 2, wis: 13, cha: 6 },
+  hp: { dice: '5d8+5', average: 27 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'rust_monster_iron_scent', name: 'Iron Scent',
+      description: 'The rust monster can pinpoint, by scent, the location of ferrous metal within 30 ft.',
+      source: { kind: 'race', refId: 'rust_monster' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rust_monster_rust_metal', name: 'Rust Metal',
+      description: 'Any nonmagical metal weapon that hits the rust monster corrodes, taking a permanent cumulative -1 damage penalty (destroyed at -5). Nonmagical metal ammunition that hits it is destroyed after dealing damage.',
+      source: { kind: 'race', refId: 'rust_monster' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'rust_monster_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 5 (1d8+1) piercing damage.',
+      source: { kind: 'race', refId: 'rust_monster' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+1', damageType: 'piercing' }],
+    },
+    {
+      id: 'rust_monster_antennae', name: 'Antennae',
+      description: 'Corrodes a nonmagical ferrous metal object it can see within 5 ft. — destroys a 1-ft. cube if unworn/uncarried; a wearer/carrier can attempt a DC 11 DEX save to avoid it. Touched metal armor/shield takes a permanent -1 AC penalty (destroyed at AC 10 or +0 bonus); a touched held metal weapon rusts as per Rust Metal.',
+      source: { kind: 'race', refId: 'rust_monster' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -7588,6 +8012,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterMerrow,
   monsterGrimlock,
   monsterAzer,
+  monsterBulette,
+  monsterBehir,
+  monsterWyvern,
+  monsterGriffon,
+  monsterHippogriff,
+  monsterPegasus,
+  monsterUnicorn,
+  monsterAnkheg,
+  monsterCockatrice,
+  monsterRustMonster,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

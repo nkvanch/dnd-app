@@ -6679,6 +6679,299 @@ export const monsterAncientSilverDragon: MonsterTemplate = {
   ],
 };
 
+export const monsterSwarmOfBats: MonsterTemplate = {
+  id: 'swarm_of_bats', name: 'Swarm of Bats', cr: 0.25, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 5, dex: 15, con: 10, int: 2, wis: 12, cha: 4 },
+  hp: { dice: '5d8', average: 22 },
+  ac: { value: 12, source: 'dex' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 60 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_bats_echolocation', name: 'Echolocation; Keen Hearing; Swarm',
+      description: 'Can\'t use blindsight while deafened. Advantage on Perception checks that rely on hearing. Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny bat, and can\'t regain HP or gain temp HP.',
+      source: { kind: 'race', refId: 'swarm_of_bats' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_bats_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +4 to hit, reach 0 ft., one creature in the swarm\'s space. Hit: 5 (2d4) piercing damage, or 2 (1d4) if the swarm has half its HP or fewer.',
+      source: { kind: 'race', refId: 'swarm_of_bats' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '0 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterSwarmOfCentipedes: MonsterTemplate = {
+  id: 'swarm_of_centipedes', name: 'Swarm of Centipedes', cr: 0.5, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 3, dex: 13, con: 10, int: 1, wis: 7, cha: 1 },
+  hp: { dice: '5d8', average: 22 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_centipedes_swarm', name: 'Swarm',
+      description: 'Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny insect, and can\'t regain HP or gain temp HP.',
+      source: { kind: 'race', refId: 'swarm_of_centipedes' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_centipedes_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +3 to hit, reach 0 ft., one target in the swarm\'s space. Hit: 10 (4d4) piercing damage, or 5 (2d4) if the swarm has half its HP or fewer. A creature reduced to 0 HP by this attack is stable but poisoned for 1 hour (even after regaining HP) and paralyzed while poisoned this way.',
+      source: { kind: 'race', refId: 'swarm_of_centipedes' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '0 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterSwarmOfInsects: MonsterTemplate = {
+  id: 'swarm_of_insects', name: 'Swarm of Insects', cr: 0.5, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 3, dex: 13, con: 10, int: 1, wis: 7, cha: 1 },
+  hp: { dice: '5d8', average: 22 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_insects_swarm', name: 'Swarm',
+      description: 'Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny insect, and can\'t regain HP or gain temp HP.',
+      source: { kind: 'race', refId: 'swarm_of_insects' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_insects_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +3 to hit, reach 0 ft., one target in the swarm\'s space. Hit: 10 (4d4) piercing damage, or 5 (2d4) if the swarm has half its HP or fewer.',
+      source: { kind: 'race', refId: 'swarm_of_insects' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '0 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterSwarmOfPoisonousSnakes: MonsterTemplate = {
+  id: 'swarm_of_poisonous_snakes', name: 'Swarm of Poisonous Snakes', cr: 2, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 8, dex: 18, con: 11, int: 1, wis: 10, cha: 3 },
+  hp: { dice: '8d8', average: 36 },
+  ac: { value: 14, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_poisonous_snakes_swarm', name: 'Swarm',
+      description: 'Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny snake, and can\'t regain HP or gain temp HP.',
+      source: { kind: 'race', refId: 'swarm_of_poisonous_snakes' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_poisonous_snakes_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +6 to hit, reach 0 ft., one creature in the swarm\'s space. Hit: 7 (2d6) piercing damage (or 3/1d6 at half HP or fewer), plus DC 10 CON save, 14 (4d6) poison damage on a failure, half on a success.',
+      source: { kind: 'race', refId: 'swarm_of_poisonous_snakes' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '0 feet', target: 'single', requiresSave: { ability: 'con', dc: 10 } },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6', damageType: 'piercing' },
+        { type: 'damage', dice: '4d6', damageType: 'poison', saveOnSuccess: 'half' },
+      ],
+    },
+  ],
+};
+
+export const monsterSwarmOfQuippers: MonsterTemplate = {
+  id: 'swarm_of_quippers', name: 'Swarm of Quippers', cr: 1, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 13, dex: 16, con: 9, int: 1, wis: 7, cha: 2 },
+  hp: { dice: '8d8-8', average: 28 },
+  ac: { value: 13, source: 'dex' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_quippers_traits', name: 'Blood Frenzy; Swarm; Water Breathing',
+      description: 'Advantage on melee attacks against a creature that doesn\'t have all its HP. Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny quipper, and can\'t regain HP or gain temp HP. Can breathe only underwater.',
+      source: { kind: 'race', refId: 'swarm_of_quippers' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_quippers_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +5 to hit, reach 0 ft., one creature in the swarm\'s space. Hit: 14 (4d6) piercing damage, or 7 (2d6) if the swarm has half its HP or fewer.',
+      source: { kind: 'race', refId: 'swarm_of_quippers' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '0 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d6', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterSwarmOfRats: MonsterTemplate = {
+  id: 'swarm_of_rats', name: 'Swarm of Rats', cr: 0.25, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 9, dex: 11, con: 9, int: 2, wis: 10, cha: 3 },
+  hp: { dice: '7d8-7', average: 24 },
+  ac: { value: 10, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 30 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_rats_keen_smell', name: 'Keen Smell; Swarm',
+      description: 'Advantage on Perception checks that rely on smell. Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny rat, and can\'t regain HP or gain temp HP.',
+      source: { kind: 'race', refId: 'swarm_of_rats' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_rats_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +2 to hit, reach 0 ft., one target in the swarm\'s space. Hit: 7 (2d6) piercing damage, or 3 (1d6) if the swarm has half its HP or fewer.',
+      source: { kind: 'race', refId: 'swarm_of_rats' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '0 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterSwarmOfRavens: MonsterTemplate = {
+  id: 'swarm_of_ravens', name: 'Swarm of Ravens', cr: 0.25, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 6, dex: 14, con: 8, int: 3, wis: 12, cha: 6 },
+  hp: { dice: '7d8-7', average: 24 },
+  ac: { value: 12, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 15'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_ravens_swarm', name: 'Swarm',
+      description: 'Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny raven, and can\'t regain HP or gain temp HP.',
+      source: { kind: 'race', refId: 'swarm_of_ravens' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_ravens_beaks', name: 'Beaks',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target in the swarm\'s space. Hit: 7 (2d6) piercing damage, or 3 (1d6) if the swarm has half its HP or fewer.',
+      source: { kind: 'race', refId: 'swarm_of_ravens' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterSwarmOfSpiders: MonsterTemplate = {
+  id: 'swarm_of_spiders', name: 'Swarm of Spiders', cr: 0.5, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 3, dex: 13, con: 10, int: 1, wis: 7, cha: 1 },
+  hp: { dice: '5d8', average: 22 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_spiders_traits', name: 'Swarm; Spider Climb; Web Sense; Web Walker',
+      description: 'Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny insect, and can\'t regain HP or gain temp HP. Can climb difficult surfaces, including upside down on ceilings, without an ability check. While in contact with a web, knows the exact location of any other creature in contact with the same web. Ignores movement restrictions caused by webbing.',
+      source: { kind: 'race', refId: 'swarm_of_spiders' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_spiders_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +3 to hit, reach 0 ft., one target in the swarm\'s space. Hit: 10 (4d4) piercing damage, or 5 (2d4) if the swarm has half its HP or fewer.',
+      source: { kind: 'race', refId: 'swarm_of_spiders' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '0 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterSwarmOfWasps: MonsterTemplate = {
+  id: 'swarm_of_wasps', name: 'Swarm of Wasps', cr: 0.5, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 3, dex: 13, con: 10, int: 1, wis: 7, cha: 1 },
+  hp: { dice: '5d8', average: 22 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 5,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_wasps_swarm', name: 'Swarm',
+      description: 'Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny insect, and can\'t regain HP or gain temp HP.',
+      source: { kind: 'race', refId: 'swarm_of_wasps' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_wasps_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +3 to hit, reach 0 ft., one target in the swarm\'s space. Hit: 10 (4d4) piercing damage, or 5 (2d4) if the swarm has half its HP or fewer.',
+      source: { kind: 'race', refId: 'swarm_of_wasps' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '0 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterSwarmOfBeetles: MonsterTemplate = {
+  id: 'swarm_of_beetles', name: 'Swarm of Beetles', cr: 0.5, srd: true,
+  size: 'medium', type: 'swarm of tiny beasts', alignment: 'unaligned',
+  stats: { str: 3, dex: 13, con: 10, int: 1, wis: 7, cha: 1 },
+  hp: { dice: '5d8', average: 22 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['blindsight 10 ft', 'passive Perception 8'],
+  languages: [],
+  features: [
+    {
+      id: 'swarm_of_beetles_swarm', name: 'Swarm',
+      description: 'Can occupy another creature\'s space and vice versa, can move through any opening large enough for a Tiny insect, and can\'t regain HP or gain temp HP.',
+      source: { kind: 'race', refId: 'swarm_of_beetles' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'swarm_of_beetles_bites', name: 'Bites',
+      description: 'Melee Weapon Attack: +3 to hit, reach 0 ft., one target in the swarm\'s space. Hit: 10 (4d4) piercing damage, or 5 (2d4) if the swarm has half its HP or fewer.',
+      source: { kind: 'race', refId: 'swarm_of_beetles' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '0 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '4d4', damageType: 'piercing' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -6818,6 +7111,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterYoungSilverDragon,
   monsterAdultSilverDragon,
   monsterAncientSilverDragon,
+  monsterSwarmOfBats,
+  monsterSwarmOfCentipedes,
+  monsterSwarmOfInsects,
+  monsterSwarmOfPoisonousSnakes,
+  monsterSwarmOfQuippers,
+  monsterSwarmOfRats,
+  monsterSwarmOfRavens,
+  monsterSwarmOfSpiders,
+  monsterSwarmOfWasps,
+  monsterSwarmOfBeetles,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

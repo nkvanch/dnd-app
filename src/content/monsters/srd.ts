@@ -768,6 +768,451 @@ export const monsterWight: MonsterTemplate = {
   ],
 };
 
+export const monsterGiantToad: MonsterTemplate = {
+  id: 'giant_toad', name: 'Giant Toad', cr: 1, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 15, dex: 13, con: 13, int: 2, wis: 10, cha: 3 },
+  hp: { dice: '6d10+6', average: 39 },
+  ac: { value: 11, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 30 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_toad_amphibious', name: 'Amphibious',
+      description: 'The toad can breathe air and water.',
+      source: { kind: 'race', refId: 'giant_toad' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_toad_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (1d10+2) piercing damage plus 5 (1d10) poison damage, and the target is grappled (escape DC 13) and restrained until the grapple ends; while grappling, the toad can\'t bite another target. On a grappled target it can instead Swallow: the target is blinded and restrained with total cover, taking 10 (3d6) acid damage at the start of each of the toad\'s turns, until it escapes or the toad dies.',
+      source: { kind: 'race', refId: 'giant_toad' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d10+2', damageType: 'piercing' },
+        { type: 'damage', dice: '1d10', damageType: 'poison' },
+      ],
+    },
+  ],
+};
+
+export const monsterHarpy: MonsterTemplate = {
+  id: 'harpy', name: 'Harpy', cr: 1, srd: true,
+  size: 'medium', type: 'monstrosity', alignment: 'chaotic evil',
+  stats: { str: 12, dex: 13, con: 12, int: 7, wis: 10, cha: 13 },
+  hp: { dice: '7d8+7', average: 38 },
+  ac: { value: 11, source: 'dex' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: ['Common'],
+  features: [
+    {
+      id: 'harpy_multiattack', name: 'Multiattack',
+      description: 'The harpy makes two attacks: one with its claws and one with its club. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'harpy' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'harpy_luring_song', name: 'Luring Song',
+      description: 'The harpy sings a magical melody. Every humanoid/giant within 300 ft. that can hear it must succeed on a DC 11 Wisdom save or be charmed until the song ends (incapacitated, must move toward the harpy each turn) — a bonus action sustains the song each round. Damage from another source, or moving into damaging terrain, lets the target re-save; a successful save grants 24-hour immunity to this harpy\'s song.',
+      source: { kind: 'race', refId: 'harpy' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '300 feet', target: 'area', requiresSave: { ability: 'wis', dc: 11 } },
+      abilityEffects: [{ type: 'apply_condition', conditionId: 'charmed', duration: { unit: 'permanent', remaining: 0 } }],
+    },
+    {
+      id: 'harpy_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 6 (2d4+1) slashing damage.',
+      source: { kind: 'race', refId: 'harpy' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+1', damageType: 'slashing' }],
+    },
+    {
+      id: 'harpy_club', name: 'Club',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 3 (1d4+1) bludgeoning damage.',
+      source: { kind: 'race', refId: 'harpy' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+1', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterBasilisk: MonsterTemplate = {
+  id: 'basilisk', name: 'Basilisk', cr: 3, srd: true,
+  size: 'medium', type: 'monstrosity', alignment: 'unaligned',
+  stats: { str: 16, dex: 8, con: 15, int: 2, wis: 8, cha: 7 },
+  hp: { dice: '8d8+16', average: 52 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 20,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 9'],
+  languages: [],
+  features: [
+    {
+      id: 'basilisk_petrifying_gaze', name: 'Petrifying Gaze',
+      description: 'If a creature starts its turn within 30 ft. of the basilisk and both can see each other (and the basilisk isn\'t incapacitated), the basilisk can force a DC 12 Constitution save. Failure: the creature begins turning to stone and is restrained; it repeats the save at the end of its next turn, becoming petrified on a second failure (until freed by greater restoration or similar magic) or ending the effect on a success. A creature that isn\'t surprised can avert its eyes to skip the save at the cost of not seeing the basilisk until its own next turn.',
+      source: { kind: 'race', refId: 'basilisk' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '30 feet', target: 'single', requiresSave: { ability: 'con', dc: 12 } },
+      abilityEffects: [{ type: 'apply_condition', conditionId: 'petrified', duration: { unit: 'permanent', remaining: 0 } }],
+    },
+    {
+      id: 'basilisk_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) piercing damage plus 7 (2d6) poison damage.',
+      source: { kind: 'race', refId: 'basilisk' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '2d6+3', damageType: 'piercing' },
+        { type: 'damage', dice: '2d6', damageType: 'poison' },
+      ],
+    },
+  ],
+};
+
+export const monsterManticore: MonsterTemplate = {
+  id: 'manticore', name: 'Manticore', cr: 3, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'lawful evil',
+  stats: { str: 17, dex: 16, con: 17, int: 7, wis: 12, cha: 8 },
+  hp: { dice: '8d10+24', average: 68 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'manticore_multiattack', name: 'Multiattack',
+      description: 'The manticore makes three attacks: bite + two claws, or three tail spikes. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'manticore' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'manticore_tail_spike_regrowth', name: 'Tail Spike Regrowth',
+      description: 'The manticore has 24 tail spikes; used spikes regrow after a long rest.',
+      source: { kind: 'race', refId: 'manticore' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'manticore_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 7 (1d8+3) piercing damage.',
+      source: { kind: 'race', refId: 'manticore' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+3', damageType: 'piercing' }],
+    },
+    {
+      id: 'manticore_claw', name: 'Claw',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6+3) slashing damage.',
+      source: { kind: 'race', refId: 'manticore' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+3', damageType: 'slashing' }],
+    },
+    {
+      id: 'manticore_tail_spike', name: 'Tail Spike',
+      description: 'Ranged Weapon Attack: +5 to hit, range 100/200 ft., one target. Hit: 7 (1d8+3) piercing damage.',
+      source: { kind: 'race', refId: 'manticore' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '100 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+3', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterMinotaur: MonsterTemplate = {
+  id: 'minotaur', name: 'Minotaur', cr: 3, srd: true,
+  size: 'large', type: 'monstrosity', alignment: 'chaotic evil',
+  stats: { str: 18, dex: 11, con: 16, int: 6, wis: 16, cha: 9 },
+  hp: { dice: '9d10+27', average: 76 },
+  ac: { value: 14, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 7 },
+  senses: ['darkvision 60 ft', 'passive Perception 17'],
+  languages: ['Abyssal'],
+  features: [
+    {
+      id: 'minotaur_charge', name: 'Charge',
+      description: 'If the minotaur moves at least 10 ft. straight toward a target and hits it with a gore attack on the same turn, the target takes an extra 9 (2d8) piercing damage and, if a creature, must succeed on a DC 14 Strength save or be pushed up to 10 ft. away and knocked prone.',
+      source: { kind: 'race', refId: 'minotaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'minotaur_labyrinthine_recall', name: 'Labyrinthine Recall',
+      description: 'The minotaur can perfectly recall any path it has traveled.',
+      source: { kind: 'race', refId: 'minotaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'minotaur_reckless', name: 'Reckless',
+      description: 'At the start of its turn, the minotaur can gain advantage on all melee weapon attacks it makes that turn, but attacks against it have advantage until the start of its next turn.',
+      source: { kind: 'race', refId: 'minotaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'minotaur_greataxe', name: 'Greataxe',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 17 (2d12+4) slashing damage.',
+      source: { kind: 'race', refId: 'minotaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d12+4', damageType: 'slashing' }],
+    },
+    {
+      id: 'minotaur_gore', name: 'Gore',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) piercing damage.',
+      source: { kind: 'race', refId: 'minotaur' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+4', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterWerewolf: MonsterTemplate = {
+  id: 'werewolf', name: 'Werewolf', cr: 3, srd: true,
+  size: 'medium', type: 'humanoid (human, shapechanger)', alignment: 'chaotic evil',
+  stats: { str: 15, dex: 13, con: 14, int: 10, wis: 11, cha: 10 },
+  hp: { dice: '9d8+18', average: 58 },
+  ac: { value: 12, source: 'natural armor (hybrid form)' },
+  speed: 30,
+  savingThrows: [],
+  skills: { perception: 4 },
+  senses: ['passive Perception 14'],
+  languages: ['Common (can\'t speak in wolf form)'],
+  features: [
+    {
+      id: 'werewolf_shapechanger', name: 'Shapechanger',
+      description: 'The werewolf can use its action to polymorph into a wolf-humanoid hybrid or a wolf, or back into its true humanoid form. Its stats, other than AC, are the same in each form. Equipment isn\'t transformed. It reverts to its true form if it dies. Modeled here as its hybrid combat form.',
+      source: { kind: 'race', refId: 'werewolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'werewolf_traits', name: 'Keen Hearing and Smell; Damage Immunities',
+      description: 'Advantage on Wisdom (Perception) checks that rely on hearing or smell. Immune to bludgeoning, piercing, and slashing damage from nonmagical attacks that aren\'t silvered.',
+      source: { kind: 'race', refId: 'werewolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'werewolf_multiattack', name: 'Multiattack',
+      description: 'The werewolf makes two attacks: two with its spear (humanoid form) or one bite and one claws (hybrid form). Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'werewolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'werewolf_bite', name: 'Bite (Hybrid Form Only)',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 6 (1d8+2) piercing damage. If the target is a humanoid, it must succeed on a DC 12 Constitution save or be cursed with werewolf lycanthropy.',
+      source: { kind: 'race', refId: 'werewolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 12 } },
+      abilityEffects: [{ type: 'damage', dice: '1d8+2', damageType: 'piercing' }],
+    },
+    {
+      id: 'werewolf_claws', name: 'Claws (Hybrid Form Only)',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 7 (2d4+2) slashing damage.',
+      source: { kind: 'race', refId: 'werewolf' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+2', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterEttin: MonsterTemplate = {
+  id: 'ettin', name: 'Ettin', cr: 4, srd: true,
+  size: 'large', type: 'giant', alignment: 'chaotic evil',
+  stats: { str: 21, dex: 8, con: 17, int: 6, wis: 10, cha: 8 },
+  hp: { dice: '10d10+30', average: 85 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 4 },
+  senses: ['darkvision 60 ft', 'passive Perception 14'],
+  languages: ['Giant', 'Orc'],
+  features: [
+    {
+      id: 'ettin_two_heads', name: 'Two Heads',
+      description: 'The ettin has advantage on Wisdom (Perception) checks and on saving throws against being blinded, charmed, deafened, frightened, stunned, or knocked unconscious.',
+      source: { kind: 'race', refId: 'ettin' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ettin_wakeful', name: 'Wakeful',
+      description: 'When one of the ettin\'s heads is asleep, its other head is awake.',
+      source: { kind: 'race', refId: 'ettin' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ettin_multiattack', name: 'Multiattack',
+      description: 'The ettin makes two attacks: one with its battleaxe and one with its morningstar. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'ettin' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'ettin_battleaxe', name: 'Battleaxe',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 14 (2d8+5) slashing damage.',
+      source: { kind: 'race', refId: 'ettin' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+5', damageType: 'slashing' }],
+    },
+    {
+      id: 'ettin_morningstar', name: 'Morningstar',
+      description: 'Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 14 (2d8+5) piercing damage.',
+      source: { kind: 'race', refId: 'ettin' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d8+5', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterVampireSpawn: MonsterTemplate = {
+  id: 'vampire_spawn', name: 'Vampire Spawn', cr: 5, srd: true,
+  size: 'medium', type: 'undead', alignment: 'neutral evil',
+  stats: { str: 16, dex: 16, con: 16, int: 11, wis: 10, cha: 12 },
+  hp: { dice: '11d8+33', average: 82 },
+  ac: { value: 15, source: 'natural armor' },
+  speed: 30,
+  savingThrows: ['dex', 'wis'],
+  skills: { perception: 3, stealth: 6 },
+  senses: ['darkvision 60 ft', 'passive Perception 13'],
+  languages: ['the languages it knew in life'],
+  features: [
+    {
+      id: 'vampire_spawn_regeneration', name: 'Regeneration',
+      description: 'The vampire spawn regains 10 HP at the start of its turn if it has at least 1 HP and isn\'t in sunlight or running water. Radiant damage or holy water suppresses this until the start of its next turn.',
+      source: { kind: 'race', refId: 'vampire_spawn' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'vampire_spawn_weaknesses', name: 'Vampire Weaknesses',
+      description: 'Can\'t enter a residence without invitation. Takes 20 acid damage ending its turn in running water. Destroyed by a wooden piercing weapon through the heart while incapacitated in its resting place. Takes 20 radiant damage starting its turn in sunlight, with disadvantage on attacks/checks while in it. Resistant to necrotic and to nonmagical bludgeoning/piercing/slashing damage. Can climb difficult surfaces (including ceilings) without a check.',
+      source: { kind: 'race', refId: 'vampire_spawn' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'vampire_spawn_multiattack', name: 'Multiattack',
+      description: 'The vampire spawn makes two attacks, only one of which can be a bite. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'vampire_spawn' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'vampire_spawn_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one willing/grappled/incapacitated/restrained creature. Hit: 6 (1d6+3) piercing plus 7 (2d6) necrotic damage. Target\'s HP maximum is reduced by the necrotic damage taken (until a long rest; dies if reduced to 0) and the vampire spawn regains that much HP.',
+      source: { kind: 'race', refId: 'vampire_spawn' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [
+        { type: 'damage', dice: '1d6+3', damageType: 'piercing' },
+        { type: 'damage', dice: '2d6', damageType: 'necrotic' },
+      ],
+    },
+    {
+      id: 'vampire_spawn_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one creature. Hit: 8 (2d4+3) slashing damage. Can grapple (escape DC 13) instead of dealing damage.',
+      source: { kind: 'race', refId: 'vampire_spawn' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+3', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterHillGiant: MonsterTemplate = {
+  id: 'hill_giant', name: 'Hill Giant', cr: 5, srd: true,
+  size: 'huge', type: 'giant', alignment: 'chaotic evil',
+  stats: { str: 21, dex: 8, con: 19, int: 5, wis: 9, cha: 6 },
+  hp: { dice: '10d12+40', average: 105 },
+  ac: { value: 13, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: { perception: 2 },
+  senses: ['passive Perception 12'],
+  languages: ['Giant'],
+  features: [
+    {
+      id: 'hill_giant_multiattack', name: 'Multiattack',
+      description: 'The giant makes two greatclub attacks. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'hill_giant' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'hill_giant_greatclub', name: 'Greatclub',
+      description: 'Melee Weapon Attack: +8 to hit, reach 10 ft., one target. Hit: 18 (3d8+5) bludgeoning damage.',
+      source: { kind: 'race', refId: 'hill_giant' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d8+5', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'hill_giant_rock', name: 'Rock',
+      description: 'Ranged Weapon Attack: +8 to hit, range 60/240 ft., one target. Hit: 21 (3d10+5) bludgeoning damage.',
+      source: { kind: 'race', refId: 'hill_giant' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '60 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d10+5', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterWraith: MonsterTemplate = {
+  id: 'wraith', name: 'Wraith', cr: 5, srd: true,
+  size: 'medium', type: 'undead', alignment: 'neutral evil',
+  stats: { str: 6, dex: 16, con: 16, int: 12, wis: 14, cha: 15 },
+  hp: { dice: '9d8+27', average: 67 },
+  ac: { value: 13, source: 'dex' },
+  speed: 0,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 60 ft', 'passive Perception 12'],
+  languages: ['the languages it knew in life'],
+  features: [
+    {
+      id: 'wraith_incorporeal_movement', name: 'Incorporeal Movement',
+      description: 'The wraith can move through other creatures and objects as if difficult terrain, taking 5 (1d10) force damage if it ends its turn inside an object. It hovers and flies at speed 60 ft. (not reflected in the base speed field, which the engine has no incorporeal/hover flag for).',
+      source: { kind: 'race', refId: 'wraith' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'wraith_sunlight_sensitivity', name: 'Sunlight Sensitivity',
+      description: 'While in sunlight, the wraith has disadvantage on attack rolls, as well as on Wisdom (Perception) checks that rely on sight.',
+      source: { kind: 'race', refId: 'wraith' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'wraith_traits', name: 'Undead Traits',
+      description: 'Resistant to acid, cold, fire, lightning, thunder, and to nonmagical bludgeoning/piercing/slashing damage that isn\'t silvered. Immune to necrotic and poison damage, and to the charmed, exhaustion, grappled, paralyzed, petrified, poisoned, prone, and restrained conditions.',
+      source: { kind: 'race', refId: 'wraith' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'wraith_life_drain', name: 'Life Drain',
+      description: 'Melee Weapon Attack: +6 to hit, reach 5 ft., one creature. Hit: 21 (4d8+3) necrotic damage. Target must succeed a DC 14 CON save or its HP maximum is reduced by the damage taken until it finishes a long rest; dies if reduced to 0.',
+      source: { kind: 'race', refId: 'wraith' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: { ability: 'con', dc: 14 } },
+      abilityEffects: [{ type: 'damage', dice: '4d8+3', damageType: 'necrotic' }],
+    },
+    {
+      id: 'wraith_create_specter', name: 'Create Specter',
+      description: 'The wraith targets a humanoid within 10 ft. that has been dead no longer than 1 minute and died violently. The corpse\'s spirit rises as a specter under the wraith\'s control (max 7 at once).',
+      source: { kind: 'race', refId: 'wraith' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -792,6 +1237,16 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGelatinousCube,
   monsterOwlbear,
   monsterWight,
+  monsterGiantToad,
+  monsterHarpy,
+  monsterBasilisk,
+  monsterManticore,
+  monsterMinotaur,
+  monsterWerewolf,
+  monsterEttin,
+  monsterVampireSpawn,
+  monsterHillGiant,
+  monsterWraith,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

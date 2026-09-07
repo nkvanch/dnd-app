@@ -9542,6 +9542,299 @@ export const monsterVulture: MonsterTemplate = {
   ],
 };
 
+export const monsterEagle: MonsterTemplate = {
+  id: 'eagle', name: 'Eagle', cr: 0, srd: true,
+  size: 'small', type: 'beast', alignment: 'unaligned',
+  stats: { str: 6, dex: 15, con: 10, int: 2, wis: 14, cha: 7 },
+  hp: { dice: '1d6', average: 3 },
+  ac: { value: 12, source: 'dex' },
+  speed: 10,
+  savingThrows: [],
+  skills: { perception: 4 },
+  senses: ['passive Perception 14'],
+  languages: [],
+  features: [
+    {
+      id: 'eagle_keen_sight', name: 'Keen Sight',
+      description: 'The eagle has advantage on Wisdom (Perception) checks that rely on sight.',
+      source: { kind: 'race', refId: 'eagle' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'eagle_talons', name: 'Talons',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 4 (1d4+2) slashing damage.',
+      source: { kind: 'race', refId: 'eagle' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4+2', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterCamel: MonsterTemplate = {
+  id: 'camel', name: 'Camel', cr: 0.125, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 16, dex: 8, con: 14, int: 2, wis: 8, cha: 5 },
+  hp: { dice: '2d10+4', average: 15 },
+  ac: { value: 9, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 9'],
+  languages: [],
+  features: [
+    {
+      id: 'camel_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 2 (1d4) bludgeoning damage.',
+      source: { kind: 'race', refId: 'camel' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d4', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterElephant: MonsterTemplate = {
+  id: 'elephant', name: 'Elephant', cr: 4, srd: true,
+  size: 'huge', type: 'beast', alignment: 'unaligned',
+  stats: { str: 22, dex: 9, con: 17, int: 3, wis: 11, cha: 6 },
+  hp: { dice: '8d12+24', average: 76 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'elephant_trampling_charge', name: 'Trampling Charge',
+      description: 'If the elephant moves at least 20 ft. straight toward a creature and hits it with a Gore attack the same turn, that target must succeed a DC 12 STR save or be knocked prone; if prone, the elephant can make one Stomp attack against it as a bonus action.',
+      source: { kind: 'race', refId: 'elephant' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'elephant_gore', name: 'Gore',
+      description: 'Melee Weapon Attack: +8 to hit, reach 5 ft., one target. Hit: 19 (3d8+6) piercing damage.',
+      source: { kind: 'race', refId: 'elephant' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d8+6', damageType: 'piercing' }],
+    },
+    {
+      id: 'elephant_stomp', name: 'Stomp',
+      description: 'Melee Weapon Attack: +8 to hit, reach 5 ft., one prone creature. Hit: 22 (3d10+6) bludgeoning damage.',
+      source: { kind: 'race', refId: 'elephant' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '3d10+6', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterBoar: MonsterTemplate = {
+  id: 'boar', name: 'Boar', cr: 0.25, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 13, dex: 11, con: 12, int: 2, wis: 9, cha: 5 },
+  hp: { dice: '2d8+2', average: 11 },
+  ac: { value: 11, source: 'natural armor' },
+  speed: 40,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 9'],
+  languages: [],
+  features: [
+    {
+      id: 'boar_charge', name: 'Charge',
+      description: 'If the boar moves at least 20 ft. straight toward a target and hits it with a Tusk attack the same turn, that attack deals an extra 3 (1d6) slashing damage; a creature target must also succeed a DC 11 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'boar' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'boar_relentless', name: 'Relentless',
+      description: 'Recharges after a short/long rest. If damage of 7 or less would reduce the boar to 0 HP, it drops to 1 HP instead.',
+      source: { kind: 'race', refId: 'boar' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'boar_tusk', name: 'Tusk',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6+1) slashing damage.',
+      source: { kind: 'race', refId: 'boar' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+1', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterElk: MonsterTemplate = {
+  id: 'elk', name: 'Elk', cr: 0.25, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 16, dex: 10, con: 12, int: 2, wis: 10, cha: 6 },
+  hp: { dice: '2d10+2', average: 13 },
+  ac: { value: 10, source: 'dex' },
+  speed: 50,
+  savingThrows: [],
+  skills: {},
+  senses: ['passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'elk_charge', name: 'Charge',
+      description: 'If the elk moves at least 20 ft. straight toward a target and hits it with a Ram attack the same turn, that attack deals an extra 7 (2d6) damage; a creature target must also succeed a DC 13 STR save or be knocked prone.',
+      source: { kind: 'race', refId: 'elk' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'elk_ram', name: 'Ram',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6+3) bludgeoning damage.',
+      source: { kind: 'race', refId: 'elk' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+3', damageType: 'bludgeoning' }],
+    },
+    {
+      id: 'elk_hooves', name: 'Hooves',
+      description: 'Melee Weapon Attack: +5 to hit, reach 5 ft., one prone creature. Hit: 8 (2d4+3) bludgeoning damage.',
+      source: { kind: 'race', refId: 'elk' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+3', damageType: 'bludgeoning' }],
+    },
+  ],
+};
+
+export const monsterGiantBadger: MonsterTemplate = {
+  id: 'giant_badger', name: 'Giant Badger', cr: 0.25, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 13, dex: 10, con: 15, int: 2, wis: 12, cha: 5 },
+  hp: { dice: '2d8+4', average: 13 },
+  ac: { value: 10, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 30 ft', 'passive Perception 11'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_badger_keen_smell', name: 'Keen Smell',
+      description: 'The badger has advantage on Wisdom (Perception) checks that rely on smell.',
+      source: { kind: 'race', refId: 'giant_badger' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_badger_multiattack', name: 'Multiattack',
+      description: 'The badger makes two attacks: one bite and one claws. Shown as separate action cards — no automated multiattack sequencing.',
+      source: { kind: 'race', refId: 'giant_badger' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_badger_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6+1) piercing damage.',
+      source: { kind: 'race', refId: 'giant_badger' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+1', damageType: 'piercing' }],
+    },
+    {
+      id: 'giant_badger_claws', name: 'Claws',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 6 (2d4+1) slashing damage.',
+      source: { kind: 'race', refId: 'giant_badger' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4+1', damageType: 'slashing' }],
+    },
+  ],
+};
+
+export const monsterGiantFrog: MonsterTemplate = {
+  id: 'giant_frog', name: 'Giant Frog', cr: 0.25, srd: true,
+  size: 'medium', type: 'beast', alignment: 'unaligned',
+  stats: { str: 12, dex: 13, con: 11, int: 2, wis: 10, cha: 3 },
+  hp: { dice: '4d8', average: 18 },
+  ac: { value: 11, source: 'dex' },
+  speed: 30,
+  savingThrows: [],
+  skills: { perception: 2, stealth: 3 },
+  senses: ['darkvision 30 ft', 'passive Perception 12'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_frog_traits', name: 'Amphibious; Standing Leap',
+      description: 'Can breathe air and water. Its long jump is up to 20 ft. and its high jump is up to 10 ft., with or without a running start.',
+      source: { kind: 'race', refId: 'giant_frog' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_frog_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6+1) piercing damage; the target is grappled (escape DC 11) and restrained until the grapple ends, and the frog can\'t bite another target while grappling.',
+      source: { kind: 'race', refId: 'giant_frog' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d6+1', damageType: 'piercing' }],
+    },
+    {
+      id: 'giant_frog_swallow', name: 'Swallow',
+      description: 'Bites a Small-or-smaller target it is grappling; on a hit, the target is swallowed instead (grapple ends), blinded and restrained with total cover, taking 5 (2d4) acid damage at the start of each of the frog\'s turns. Only one creature swallowed at a time; if the frog dies, a swallowed creature can escape with 5 ft. of movement, exiting prone.',
+      source: { kind: 'race', refId: 'giant_frog' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d4', damageType: 'acid' }],
+    },
+  ],
+};
+
+export const monsterGiantLizard: MonsterTemplate = {
+  id: 'giant_lizard', name: 'Giant Lizard', cr: 0.25, srd: true,
+  size: 'large', type: 'beast', alignment: 'unaligned',
+  stats: { str: 15, dex: 12, con: 13, int: 2, wis: 10, cha: 5 },
+  hp: { dice: '3d10+3', average: 19 },
+  ac: { value: 12, source: 'natural armor' },
+  speed: 30,
+  savingThrows: [],
+  skills: {},
+  senses: ['darkvision 30 ft', 'passive Perception 10'],
+  languages: [],
+  features: [
+    {
+      id: 'giant_lizard_bite', name: 'Bite',
+      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 6 (1d8+2) piercing damage.',
+      source: { kind: 'race', refId: 'giant_lizard' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '1d8+2', damageType: 'piercing' }],
+    },
+  ],
+};
+
+export const monsterGiantOwl: MonsterTemplate = {
+  id: 'giant_owl', name: 'Giant Owl', cr: 0.25, srd: true,
+  size: 'large', type: 'beast', alignment: 'neutral',
+  stats: { str: 13, dex: 15, con: 12, int: 8, wis: 13, cha: 10 },
+  hp: { dice: '3d10+3', average: 19 },
+  ac: { value: 12, source: 'dex' },
+  speed: 5,
+  savingThrows: [],
+  skills: { perception: 5, stealth: 4 },
+  senses: ['darkvision 120 ft', 'passive Perception 15'],
+  languages: ['Giant Owl (understands Common, Elvish, and Sylvan but can\'t speak)'],
+  features: [
+    {
+      id: 'giant_owl_flyby', name: 'Flyby; Keen Hearing and Sight',
+      description: 'Doesn\'t provoke opportunity attacks when it flies out of an enemy\'s reach. Advantage on Wisdom (Perception) checks that rely on hearing or sight.',
+      source: { kind: 'race', refId: 'giant_owl' }, level: null,
+      effects: [], actions: [], choices: [], passive: true,
+    },
+    {
+      id: 'giant_owl_talons', name: 'Talons',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 8 (2d6+1) slashing damage.',
+      source: { kind: 'race', refId: 'giant_owl' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      abilityEffects: [{ type: 'damage', dice: '2d6+1', damageType: 'slashing' }],
+    },
+  ],
+};
+
 /** Every SRD monster template, unfiltered. Prefer ALL_MONSTER_TEMPLATES below. */
 export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterGoblin,
@@ -9751,6 +10044,15 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
   monsterFrog,
   monsterLizard,
   monsterVulture,
+  monsterEagle,
+  monsterCamel,
+  monsterElephant,
+  monsterBoar,
+  monsterElk,
+  monsterGiantBadger,
+  monsterGiantFrog,
+  monsterGiantLizard,
+  monsterGiantOwl,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

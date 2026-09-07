@@ -6,6 +6,7 @@
 import { grantCustomFeature } from '../AddCustomFeatureModal';
 import { newDraftTrait } from '../../homebrew/TraitEditor';
 import { removeFeature } from '../../../engine/leveling';
+import { tickDurations } from '../../../engine/conditions';
 import { makeEmptyEntity, DEFAULT_RULES } from '../../../store/characterStore';
 import { recomputeDerived } from '../../../engine/pipeline';
 import { DraftTrait } from '../../../engine/types';
@@ -19,7 +20,7 @@ describe('grantCustomFeature', () => {
   it('grants a feature tagged source.kind:"manual", using the compiled (idPrefix-derived) id', () => {
     const draft: DraftTrait = { ...newDraftTrait('Iron Skin'), effectKind: 'ac_bonus', acBonusAmount: '1' };
     const entity = baseEntity();
-    const updated = grantCustomFeature(entity, draft);
+    const updated = grantCustomFeature(entity, draft, DEFAULT_RULES);
     const granted = updated.features.find(f => f.name === 'Iron Skin');
     expect(granted).toBeDefined();
     expect(granted!.source).toEqual({ kind: 'manual', refId: draft.localId });
@@ -29,7 +30,7 @@ describe('grantCustomFeature', () => {
   it('applies the mechanical effect (recomputed derived AC reflects the bonus)', () => {
     const draft: DraftTrait = { ...newDraftTrait('Iron Skin'), effectKind: 'ac_bonus', acBonusAmount: '1' };
     const entity = baseEntity();
-    const updated = recomputeDerived(grantCustomFeature(entity, draft), DEFAULT_RULES);
+    const updated = recomputeDerived(grantCustomFeature(entity, draft, DEFAULT_RULES), DEFAULT_RULES);
     expect(updated.derived.ac).toBe(entity.derived.ac + 1);
   });
 
@@ -40,7 +41,7 @@ describe('grantCustomFeature', () => {
       limitedUse: true, uses: '2', recharge: 'long_rest', actionType: 'bonus_action',
     };
     const entity = baseEntity();
-    const updated = grantCustomFeature(entity, draft);
+    const updated = grantCustomFeature(entity, draft, DEFAULT_RULES);
     const granted = updated.features.find(f => f.name === 'Channel Power')!;
     expect(granted.activation?.resourceCost?.resourceId).toBe(`${granted.id}_pool`);
 
@@ -54,11 +55,11 @@ describe('grantCustomFeature', () => {
   it('is additive — granting twice adds two distinct features (no dedup, each is its own one-off grant)', () => {
     const draft: DraftTrait = { ...newDraftTrait('Iron Skin'), effectKind: 'ac_bonus', acBonusAmount: '1' };
     const entity = baseEntity();
-    const once = grantCustomFeature(entity, draft);
+    const once = grantCustomFeature(entity, draft, DEFAULT_RULES);
     // A fresh draft (new localId) for the second grant, same as re-opening
     // the modal would produce (useEffect resets the draft on each open).
     const secondDraft: DraftTrait = { ...newDraftTrait('Iron Skin'), effectKind: 'ac_bonus', acBonusAmount: '1' };
-    const twice = grantCustomFeature(once, secondDraft);
+    const twice = grantCustomFeature(once, secondDraft, DEFAULT_RULES);
     expect(twice.features.filter(f => f.name === 'Iron Skin')).toHaveLength(2);
   });
 
@@ -69,7 +70,7 @@ describe('grantCustomFeature', () => {
       limitedUse: true, uses: '2', recharge: 'long_rest', actionType: 'bonus_action',
     };
     const entity = baseEntity();
-    const granted = grantCustomFeature(entity, draft);
+    const granted = grantCustomFeature(entity, draft, DEFAULT_RULES);
     const feature = granted.features.find(f => f.name === 'Channel Power')!;
     const resourceId = feature.activation!.resourceCost!.resourceId;
     expect(granted.resources.custom.some(r => r.id === resourceId)).toBe(true);
@@ -77,5 +78,56 @@ describe('grantCustomFeature', () => {
     const removed = removeFeature(granted, feature.id);
     expect(removed.features.some(f => f.id === feature.id)).toBe(false);
     expect(removed.resources.custom.some(r => r.id === resourceId)).toBe(false);
+  });
+
+  // A-26: a timed grant routes through applyCondition instead of applyGrant,
+  // so it ticks/expires via the exact same mechanism a named condition does.
+  describe('timed grants (A-26 — generalized temporary effects)', () => {
+    it('a permanent (null) duration behaves exactly as before — feature tagged "manual"', () => {
+      const draft: DraftTrait = { ...newDraftTrait('Iron Skin'), effectKind: 'ac_bonus', acBonusAmount: '1' };
+      const entity = baseEntity();
+      const updated = grantCustomFeature(entity, draft, DEFAULT_RULES, null);
+      const granted = updated.features.find(f => f.name === 'Iron Skin')!;
+      expect(granted.source).toEqual({ kind: 'manual', refId: draft.localId });
+    });
+
+    it('a rounds duration tags the feature "condition" and applies the effect immediately', () => {
+      const draft: DraftTrait = { ...newDraftTrait('Blessed Aim'), effectKind: 'ac_bonus', acBonusAmount: '2' };
+      const entity = baseEntity();
+      const updated = grantCustomFeature(entity, draft, DEFAULT_RULES, { unit: 'rounds', remaining: 2 });
+      const granted = updated.features.find(f => f.name === 'Blessed Aim')!;
+      expect(granted.source.kind).toBe('condition');
+      expect(updated.derived.ac).toBe(entity.derived.ac + 2);
+      expect(updated.conditionMonitor.active.some(c => c.id === granted.id)).toBe(true);
+    });
+
+    it('the timed feature and its effect are gone after the duration expires via tickDurations', () => {
+      const draft: DraftTrait = { ...newDraftTrait('Blessed Aim'), effectKind: 'ac_bonus', acBonusAmount: '2' };
+      const entity = baseEntity();
+      let updated = grantCustomFeature(entity, draft, DEFAULT_RULES, { unit: 'rounds', remaining: 1 });
+      expect(updated.derived.ac).toBe(entity.derived.ac + 2);
+
+      updated = tickDurations(updated, DEFAULT_RULES);
+      expect(updated.derived.ac).toBe(entity.derived.ac);
+      expect(updated.features.some(f => f.name === 'Blessed Aim')).toBe(false);
+      expect(updated.conditionMonitor.active).toHaveLength(0);
+    });
+
+    it('a limited-use resource on a timed grant still applies permanently — no timed-resource concept exists', () => {
+      const draft: DraftTrait = {
+        ...newDraftTrait('Channel Power'),
+        effectKind: 'ac_bonus', acBonusAmount: '1',
+        limitedUse: true, uses: '2', recharge: 'long_rest', actionType: 'bonus_action',
+      };
+      const entity = baseEntity();
+      let updated = grantCustomFeature(entity, draft, DEFAULT_RULES, { unit: 'rounds', remaining: 1 });
+      const granted = updated.features.find(f => f.name === 'Channel Power')!;
+      const resourceId = granted.activation!.resourceCost!.resourceId;
+      expect(updated.resources.custom.some(r => r.id === resourceId)).toBe(true);
+
+      updated = tickDurations(updated, DEFAULT_RULES); // the FEATURE expires...
+      expect(updated.features.some(f => f.id === granted.id)).toBe(false);
+      expect(updated.resources.custom.some(r => r.id === resourceId)).toBe(true); // ...the resource does not
+    });
   });
 });

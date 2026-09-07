@@ -236,6 +236,23 @@ export function tickDurations(
     .map(tickCondition)
     .filter((c): c is ActiveCondition => c !== null);
 
+  // Bug fix: a condition expiring here previously only removed its
+  // ActiveCondition entry — the Feature(s) applyCondition() had pushed onto
+  // entity.features (source.kind:'condition', refId: the expired id) stayed
+  // forever, so an expired condition's mechanical effects (an AC penalty,
+  // a stat bonus, anything besides the visible chip) kept applying with no
+  // way to clear them short of a manual removeCondition() call, which
+  // nothing calls automatically on natural expiry. Same feature-stripping
+  // filter removeCondition() already uses for a manual removal.
+  const expiredIds = new Set(
+    entity.conditionMonitor.active
+      .filter(c => !newActive.some(a => a.id === c.id))
+      .map(c => c.id)
+  );
+  const newFeatures = expiredIds.size === 0
+    ? entity.features
+    : entity.features.filter(f => !(f.source.kind === 'condition' && expiredIds.has(f.source.refId)));
+
   const updated = {
     ...entity,
     conditions: newConditions,
@@ -243,6 +260,7 @@ export function tickDurations(
       ...entity.conditionMonitor,
       active: newActive,
     },
+    features: newFeatures,
   };
 
   return recomputeDerived(updated, rules);

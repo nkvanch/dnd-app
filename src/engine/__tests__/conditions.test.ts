@@ -46,4 +46,39 @@ describe('applyCondition — duration', () => {
     updated = takeRest(updated, 'long', DEFAULT_RULES);
     expect(updated.conditionMonitor.active).toHaveLength(1);
   });
+
+  // Regression test for a real bug: tickDurations previously removed the
+  // ActiveCondition entry on expiry but left the Feature(s) applyCondition()
+  // granted sitting in entity.features forever, so the condition's
+  // mechanical effect (here, a flat -2 AC) kept applying after the
+  // condition visibly expired.
+  it('an expired rounds-duration condition also loses the feature (and effect) it granted', () => {
+    const e = makeEmptyEntity('cond-test');
+    const acPenaltyFeature = [{
+      id: 'cursed_ac_penalty', name: 'Cursed', description: '', source: { kind: 'condition' as const, refId: 'cursed' },
+      level: null, effects: [{ type: 'stat_modifier' as const, target: 'ac', operation: 'add' as const, value: -2, condition: null }],
+      actions: [], choices: [], passive: true,
+    }];
+    let updated = applyCondition(e, 'cursed', 'manual', DEFAULT_RULES, acPenaltyFeature, { unit: 'rounds', remaining: 1 });
+    expect(updated.features.some(f => f.id === 'cursed_ac_penalty')).toBe(true);
+    expect(updated.derived.ac).toBe(e.derived.ac - 2);
+
+    updated = tickDurations(updated, DEFAULT_RULES); // 1 -> 0, expires
+    expect(updated.conditionMonitor.active).toHaveLength(0);
+    expect(updated.features.some(f => f.id === 'cursed_ac_penalty')).toBe(false);
+    expect(updated.derived.ac).toBe(e.derived.ac);
+  });
+
+  it('an unrelated still-active condition keeps its feature when a different one expires', () => {
+    const e = makeEmptyEntity('cond-test');
+    const permanentFeature = [{
+      id: 'permanent_marker', name: 'Marked', description: '', source: { kind: 'condition' as const, refId: 'marked' },
+      level: null, effects: [], actions: [], choices: [], passive: true,
+    }];
+    let updated = applyCondition(e, 'marked', 'manual', DEFAULT_RULES, permanentFeature, null);
+    updated = applyCondition(updated, 'blinded', 'manual', DEFAULT_RULES, undefined, { unit: 'rounds', remaining: 1 });
+    updated = tickDurations(updated, DEFAULT_RULES);
+    expect(updated.conditionMonitor.active.map(c => c.id)).toEqual(['marked']);
+    expect(updated.features.some(f => f.id === 'permanent_marker')).toBe(true);
+  });
 });

@@ -170,6 +170,17 @@ describe('recomputeDerived — skills', () => {
     expect(derived.passivePerception).toBe(10 + 5);
     expect(derived.passiveInsight).toBe(10); // unaffected — target was perception-specific
   });
+
+  it('adds a passivePerception/passiveInvestigation-targeted stat_modifier effect (Observant, architecture review U7)', () => {
+    const e = withFeatures([feature('observant', [
+      { type: 'stat_modifier', target: 'passivePerception', operation: 'add', value: 5 },
+      { type: 'stat_modifier', target: 'passiveInvestigation', operation: 'add', value: 5 },
+    ])]);
+    const derived = recomputeDerived(e, DEFAULT_RULES).derived;
+    expect(derived.passivePerception).toBe(10 + 5);
+    expect(derived.passiveInvestigation).toBe(10 + 5);
+    expect(derived.passiveInsight).toBe(10); // unaffected — Observant doesn't touch Insight
+  });
 });
 
 describe('recomputeDerived — spellcasting', () => {
@@ -337,5 +348,13 @@ describe('recomputeDerived — DM overrides', () => {
     const saves = recomputeDerived(e, DEFAULT_RULES).derived.savingThrows;
     expect(saves.dex).toBe(99);
     expect(saves.str).toBe(0); // untouched
+  });
+
+  it('an "add" override on passivePerception is reflected in entity.derived (architecture review U6 — closes the loop: the UI now reads this value directly instead of recomputing it independently)', () => {
+    const e = withFeatures([], {
+      stats: { str: 10, dex: 10, con: 10, int: 10, wis: 14, cha: 10 },
+      dmOverrides: [override({ stat: 'passivePerception', operation: 'add', value: 5 })],
+    });
+    expect(recomputeDerived(e, DEFAULT_RULES).derived.passivePerception).toBe(10 + modifier(14) + 5);
   });
 });

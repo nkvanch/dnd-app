@@ -312,9 +312,17 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     initiative:       modifier(effectiveStats.dex)
                         + (resolveEffectsForTarget('initiative', allEffects, rules) as number),
     speed:            finalSpeed,
-    passivePerception:    10 + resolveSkill(entity, effectiveStats, 'perception', allEffects, profBonus),
-    passiveInvestigation: 10 + resolveSkill(entity, effectiveStats, 'investigation', allEffects, profBonus),
-    passiveInsight:       10 + resolveSkill(entity, effectiveStats, 'insight', allEffects, profBonus),
+    // Bug fix (architecture review U7): a passive-score-targeted
+    // stat_modifier effect (e.g. Observant's +5 to passive Perception and
+    // passive Investigation) used to be silently ignored here — unlike
+    // every other derived stat below, which folds in its own
+    // resolveEffectsForTarget term on top of the base formula.
+    passivePerception:    10 + resolveSkill(entity, effectiveStats, 'perception', allEffects, profBonus)
+                            + (resolveEffectsForTarget('passivePerception', allEffects, rules) as number),
+    passiveInvestigation: 10 + resolveSkill(entity, effectiveStats, 'investigation', allEffects, profBonus)
+                            + (resolveEffectsForTarget('passiveInvestigation', allEffects, rules) as number),
+    passiveInsight:       10 + resolveSkill(entity, effectiveStats, 'insight', allEffects, profBonus)
+                            + (resolveEffectsForTarget('passiveInsight', allEffects, rules) as number),
     senses,
     movement,
     savingThrows:     resolveSavingThrows(effectiveStats, entity.proficiencies.savingThrows, profBonus, allEffects, rules),

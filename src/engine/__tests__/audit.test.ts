@@ -226,3 +226,48 @@ describe('explainValue matches recomputeDerived — Wild Shape AC (audit bug #7d
     expect(trail.total).toBe(derived.derived.ac);
   });
 });
+
+describe('explainValue matches recomputeDerived — passiveInvestigation/passiveInsight/kiSaveDC (audit bug E3)', () => {
+  it('no longer falls through to an empty trail for passiveInvestigation', () => {
+    const e = withFeatures([], { stats: { str: 10, dex: 10, con: 10, int: 16, wis: 10, cha: 10 } });
+    const derived = recomputeDerived(e, DEFAULT_RULES);
+    const trail = explainValue(derived, 'passiveInvestigation');
+    expect(trail.entries.length).toBeGreaterThan(0);
+    expect(trail.total).toBe(derived.derived.passiveInvestigation);
+  });
+
+  it('no longer falls through to an empty trail for passiveInsight', () => {
+    const e = withFeatures([], { stats: { str: 10, dex: 10, con: 10, int: 10, wis: 16, cha: 10 } });
+    const derived = recomputeDerived(e, DEFAULT_RULES);
+    const trail = explainValue(derived, 'passiveInsight');
+    expect(trail.entries.length).toBeGreaterThan(0);
+    expect(trail.total).toBe(derived.derived.passiveInsight);
+  });
+
+  it('includes an Observant-style passive-score bonus in the passiveInvestigation trail', () => {
+    const e = withFeatures(
+      [feature('observant', [{ type: 'stat_modifier', target: 'passiveInvestigation', operation: 'add', value: 5 }])],
+      { stats: { str: 10, dex: 10, con: 10, int: 16, wis: 10, cha: 10 } },
+    );
+    const derived = recomputeDerived(e, DEFAULT_RULES);
+    const trail = explainValue(derived, 'passiveInvestigation');
+    expect(trail.total).toBe(derived.derived.passiveInvestigation);
+    expect(trail.entries.some(en => en.sourceId === 'observant')).toBe(true);
+  });
+
+  it('agrees on kiSaveDC for a Monk (has martial_arts) and returns empty for a non-Monk', () => {
+    const monk = withFeatures(
+      [feature('martial_arts', [])],
+      { stats: { str: 10, dex: 10, con: 10, int: 10, wis: 16, cha: 10 }, identity: { ...makeEmptyEntity('e1').identity, level: 5 } },
+    );
+    const derivedMonk = recomputeDerived(monk, DEFAULT_RULES);
+    const monkTrail = explainValue(derivedMonk, 'kiSaveDC');
+    expect(derivedMonk.derived.kiSaveDC).not.toBeNull();
+    expect(monkTrail.total).toBe(derivedMonk.derived.kiSaveDC);
+
+    const nonMonk = withFeatures([]);
+    const derivedNonMonk = recomputeDerived(nonMonk, DEFAULT_RULES);
+    expect(derivedNonMonk.derived.kiSaveDC).toBeNull();
+    expect(explainValue(derivedNonMonk, 'kiSaveDC').total).toBe(0);
+  });
+});

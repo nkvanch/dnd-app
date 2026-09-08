@@ -74,7 +74,10 @@ function buildEntries(entity: Entity, stat: string): AuditEntry[] {
     case 'ac':               return buildAcEntries(entity);
     case 'initiative':       return buildInitiativeEntries(entity);
     case 'speed':            return buildSpeedEntries(entity);
-    case 'passivePerception': return buildPassivePerceptionEntries(entity);
+    case 'passivePerception':    return buildPassivePerceptionEntries(entity);
+    case 'passiveInvestigation': return buildPassiveInvestigationEntries(entity);
+    case 'passiveInsight':       return buildPassiveInsightEntries(entity);
+    case 'kiSaveDC':          return buildKiSaveDcEntries(entity);
     case 'proficiencyBonus': return buildProficiencyEntries(entity);
     case 'spellSaveDC':      return buildSpellSaveDcEntries(entity);
     case 'spellAttackBonus': return buildSpellAttackEntries(entity);
@@ -210,9 +213,53 @@ function buildSpeedEntries(entity: Entity): AuditEntry[] {
 function buildPassivePerceptionEntries(entity: Entity): AuditEntry[] {
   const entries: AuditEntry[] = [];
   entries.push(entry('Base', 10, 'base', null));
-  const percEntries = buildSkillEntries(entity, 'perception');
-  entries.push(...percEntries);
+  entries.push(...buildSkillEntries(entity, 'perception'));
+  // Effect-based bonuses targeting the passive score itself (e.g. Observant's
+  // +5 to passive Perception/Investigation) — recomputeDerived's own
+  // passivePerception/passiveInvestigation/passiveInsight now fold these in
+  // (architecture review U7); this used to only ever show the skill's own
+  // breakdown, silently dropping any such bonus from the audit trail.
+  entries.push(...buildTargetBonusEntries(collectAllEffects(entity), ['passivePerception']));
   return entries;
+}
+
+// ── Passive Investigation / Passive Insight ───────────────────────────────────
+// Bug fix (architecture review E3): explainValue's switch had no case for
+// these two stats (or kiSaveDC below) at all — falling through to the
+// `default: return []` in buildEntries, so tapping either on the Abilities
+// tab showed a misleading 0 with an empty breakdown while the real,
+// correctly-computed value was displayed elsewhere on the same sheet.
+
+function buildPassiveInvestigationEntries(entity: Entity): AuditEntry[] {
+  const entries: AuditEntry[] = [];
+  entries.push(entry('Base', 10, 'base', null));
+  entries.push(...buildSkillEntries(entity, 'investigation'));
+  entries.push(...buildTargetBonusEntries(collectAllEffects(entity), ['passiveInvestigation']));
+  return entries;
+}
+
+function buildPassiveInsightEntries(entity: Entity): AuditEntry[] {
+  const entries: AuditEntry[] = [];
+  entries.push(entry('Base', 10, 'base', null));
+  entries.push(...buildSkillEntries(entity, 'insight'));
+  entries.push(...buildTargetBonusEntries(collectAllEffects(entity), ['passiveInsight']));
+  return entries;
+}
+
+// ── Ki Save DC ─────────────────────────────────────────────────────────────────
+
+function buildKiSaveDcEntries(entity: Entity): AuditEntry[] {
+  if (!entity.features.some(f => f.id === 'martial_arts')) return [];
+  const prof = proficiencyBonus(entity.identity.level);
+  const allEffects = collectAllEffects(entity);
+  const effectiveStats = applyStatModifiers(entity.stats, allEffects);
+  const mod = modifier(effectiveStats.wis);
+  return [
+    entry('Base', AC_DC_BASE, 'base', null),
+    entry('Proficiency bonus', prof, 'class', null),
+    entry('WIS modifier', mod, 'base', null),
+    ...buildTargetBonusEntries(allEffects, ['ki_save_dc']),
+  ];
 }
 
 // ── Proficiency bonus ─────────────────────────────────────────────────────────

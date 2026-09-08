@@ -387,19 +387,17 @@ export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEnti
   // Effective stats include race/feature bonuses — matches the engine's derived values.
   const effectiveStats = applyStatModifiers(stats, collectAllEffects(entity));
 
-  // Passive score = 10 + ability mod + proficiency (×2 for expertise) + bonus.
-  const passiveScore = (skill: SkillName): number => {
-    const entry = skills.skills[skill];
-    if (!entry) return 10;
-    const baseMod  = modifier(effectiveStats[entry.ability]);
-    const profMult = entry.expertise ? 2 : entry.trained ? 1 : 0;
-    return 10 + baseMod + derived.proficiencyBonus * profMult + (entry.bonus ?? 0);
-  };
-
-  const PASSIVES: { skill: SkillName; label: string }[] = [
-    { skill: 'perception',    label: 'Passive Perception' },
-    { skill: 'investigation', label: 'Passive Investigation' },
-    { skill: 'insight',       label: 'Passive Insight' },
+  // Bug fix (architecture review U6): this used to hand-recompute the
+  // passive-score formula independently of entity.derived, so it had no way
+  // to see a DM override on the passive score (entity.derived.
+  // passivePerception correctly folds those in via recomputeDerived) — a
+  // player could set a Manual Bonus override on Passive Perception and see
+  // it apply everywhere on the sheet except here. Now reads the already-
+  // computed, override-aware, Observant-feat-aware derived values directly.
+  const PASSIVES: { skill: SkillName; stat: keyof Pick<typeof derived, 'passivePerception' | 'passiveInvestigation' | 'passiveInsight'>; label: string }[] = [
+    { skill: 'perception',    stat: 'passivePerception',    label: 'Passive Perception' },
+    { skill: 'investigation', stat: 'passiveInvestigation', label: 'Passive Investigation' },
+    { skill: 'insight',       stat: 'passiveInsight',       label: 'Passive Insight' },
   ];
 
   return (
@@ -474,10 +472,10 @@ export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEnti
       {/* Passive Scores */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>PASSIVE SCORES</Text>
-        {PASSIVES.map(({ skill, label }) => (
-          <Pressable key={skill} style={styles.saveRow} onPress={() => openAudit(skill, label)}>
+        {PASSIVES.map(({ skill, stat, label }) => (
+          <Pressable key={skill} style={styles.saveRow} onPress={() => openAudit(stat, label)}>
             <Text style={styles.saveLabel}>{label}</Text>
-            <Text style={styles.saveVal}>{passiveScore(skill)}</Text>
+            <Text style={styles.saveVal}>{derived[stat]}</Text>
           </Pressable>
         ))}
       </View>

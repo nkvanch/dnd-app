@@ -444,10 +444,24 @@ export function isFeatureAvailable(
       return { available: false, reason: 'No spellcasting.' };
     }
     const tier = cost.spellSlotTier ?? 1;
-    // Check if any slot at or above the required tier has uses left
+    // Check if any slot at or above the required tier has uses left. Also
+    // checks pactSlots — a multiclassed pact caster's Warlock slots live
+    // there entirely, separate from the combined `.slots` table (bug fix:
+    // this used to only ever check `.slots`, so a Warlock/X character with
+    // spent regular slots but full, unused pact slots had every Warlock
+    // spell wrongly marked unavailable). Spells aren't tagged by which
+    // class granted them, so this can't distinguish "a pact slot exists"
+    // from "this specific spell may spend one" any more precisely than
+    // that — same level of imprecision `spellSlotTier`'s own "minimum
+    // tier" semantics already accept elsewhere in this function.
     for (let t = tier; t <= 9; t++) {
-      const slot = entity.spellcasting.slots[t.toString() as keyof typeof entity.spellcasting.slots];
+      const key = t.toString() as keyof typeof entity.spellcasting.slots;
+      const slot = entity.spellcasting.slots[key];
       if (slot && slot.total - slot.used > 0) {
+        return { available: true, reason: null };
+      }
+      const pactSlot = entity.spellcasting.pactSlots?.[key];
+      if (pactSlot && pactSlot.total - pactSlot.used > 0) {
         return { available: true, reason: null };
       }
     }
@@ -542,9 +556,18 @@ export function generateSpellCard(
     requiresSave: null,
   };
 
-  const { available, reason } = cost
-    ? isFeatureAvailable({ activation: { ...activation, resourceCost: cost }, effects: [], abilityEffects: [] } as unknown as Feature, entity)
-    : { available: true, reason: null };
+  // Always call isFeatureAvailable, even for a cantrip (cost === null) —
+  // bug fix: it used to be skipped whenever cost was falsy, which also
+  // skipped the turn-economy check at the TOP of isFeatureAvailable (that
+  // check runs before the resource-cost check, so it applies regardless of
+  // whether there's a cost). A cantrip card was therefore always shown
+  // available:true even after the character had already used their
+  // action/bonus action/reaction this turn. isFeatureAvailable already
+  // handles cost===null correctly on its own (falls through to
+  // available:true once the economy check passes), so no ternary is needed.
+  const { available, reason } = isFeatureAvailable(
+    { activation, effects: [], abilityEffects: [] } as unknown as Feature, entity,
+  );
 
   const tabs: ActionCard['tabs'] = ['spellcasting', 'features'];
   if (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction') {

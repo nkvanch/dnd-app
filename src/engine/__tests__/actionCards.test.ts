@@ -4,12 +4,13 @@
 // auto-applied) plus baseline regression coverage for buildLayer1/2/3, which
 // had zero tests before despite every action card in the app going through
 // them.
-import { Feature, FeatureInstance, Entity } from '../types';
+import { Feature, FeatureInstance, Entity, SpellSlots } from '../types';
 import {
   buildLayer1, buildLayer2, buildLayer3, buildOutcomeLines, generateActionCard,
-  getTriggeredFeatures,
+  getTriggeredFeatures, isFeatureAvailable,
 } from '../actionCards';
 import { makeEmptyEntity } from '../../store/characterStore';
+import { startTurn, markActionSlotUsed } from '../combat';
 
 function makeFeature(overrides: Partial<Feature> = {}): Feature {
   return {
@@ -238,5 +239,82 @@ describe('getTriggeredFeatures', () => {
     const f = makeFeatureInstance({ id: 'uncanny_dodge', level: 5, trigger: 'When hit by an attack you can see.' });
     const entity = entityWithFeatures([f], 5);
     expect(getTriggeredFeatures(entity).map(x => x.id)).toEqual(['uncanny_dodge']);
+  });
+});
+
+function fullSlots(): SpellSlots {
+  const tiers = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+  const slots = {} as SpellSlots;
+  for (const t of tiers) slots[t] = { total: 2, used: 2 };
+  return slots;
+}
+
+describe('isFeatureAvailable — turn economy applies even to a cost-less feature (A-59 audit fix)', () => {
+  // generateSpellCard (a cantrip has resourceCost: null) relies on this:
+  // the economy check must run BEFORE the "no cost → available" shortcut,
+  // not be skipped whenever there's no cost to check. This was previously
+  // broken one level up — the caller skipped calling isFeatureAvailable at
+  // all when cost was falsy — but pinning the invariant here locks in the
+  // fix regardless of which caller relies on it.
+  it('is unavailable when the matching action-economy slot is already used, even with no resource cost', () => {
+    const f = makeFeature({ activation: { actionType: 'action', resourceCost: null, range: null, target: 'single', requiresSave: null } });
+    let entity = startTurn(makeEmptyEntity('e1'));
+    entity = markActionSlotUsed(entity, 'action');
+    const result = isFeatureAvailable(f, entity);
+    expect(result.available).toBe(false);
+    expect(result.reason).toMatch(/already used your action/i);
+  });
+
+  it('is available when the matching slot is unused and there is no resource cost', () => {
+    const f = makeFeature({ activation: { actionType: 'action', resourceCost: null, range: null, target: 'single', requiresSave: null } });
+    const entity = startTurn(makeEmptyEntity('e1'));
+    expect(isFeatureAvailable(f, entity)).toEqual({ available: true, reason: null });
+  });
+});
+
+describe('isFeatureAvailable — spell slots (pactSlots bug fix)', () => {
+  function casterWithSlots(overrides: { slots?: Record<string, { total: number; used: number }>; pactSlots?: Record<string, { total: number; used: number }> }) {
+    const base = makeEmptyEntity('e1');
+    return {
+      ...base,
+      spellcasting: {
+        ability: 'cha' as const,
+        slots: { ...fullSlots(), ...overrides.slots },
+        pactSlots: overrides.pactSlots ? { ...fullSlots(), ...overrides.pactSlots } : undefined,
+        cantrips: [], known: [], prepared: [], concentrating: null,
+      },
+    };
+  }
+
+  const spellFeature = (tier: number) => makeFeature({
+    activation: { actionType: 'action', resourceCost: { resourceId: 'spell_slots', quantity: 1, spellSlotTier: tier as 1 }, range: null, target: 'single', requiresSave: null },
+  });
+
+  it('is available from a regular slot when one is free', () => {
+    const entity = casterWithSlots({ slots: { '1': { total: 2, used: 1 } } });
+    expect(isFeatureAvailable(spellFeature(1), entity)).toEqual({ available: true, reason: null });
+  });
+
+  it('bug: is available from pactSlots when regular slots are exhausted but a pact slot is free', () => {
+    const entity = casterWithSlots({
+      slots: { '1': { total: 2, used: 2 } }, // fully spent regular pool
+      pactSlots: { '1': { total: 1, used: 0 } }, // untouched pact pool
+    });
+    expect(isFeatureAvailable(spellFeature(1), entity)).toEqual({ available: true, reason: null });
+  });
+
+  it('is unavailable when both regular slots and pactSlots at/above the tier are exhausted', () => {
+    const entity = casterWithSlots({
+      slots: { '1': { total: 2, used: 2 } },
+      pactSlots: { '1': { total: 1, used: 1 } },
+    });
+    const result = isFeatureAvailable(spellFeature(1), entity);
+    expect(result.available).toBe(false);
+    expect(result.reason).toMatch(/no spell slots/i);
+  });
+
+  it('is unavailable when there are no pactSlots at all and regular slots are exhausted', () => {
+    const entity = casterWithSlots({ slots: { '1': { total: 2, used: 2 } } });
+    expect(isFeatureAvailable(spellFeature(1), entity).available).toBe(false);
   });
 });

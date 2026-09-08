@@ -103,7 +103,14 @@ export const rogueProgression: ClassProgression = {
         ]),
       ],
       grants: [
-        { kind: 'feature', value: { id: 'sneak_attack', name: 'Sneak Attack', description: 'Once per turn, deal extra 1d6 damage when you have advantage or an ally is adjacent to the target.', source: { kind: 'class', refId: 'rogue' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'sneak_attack', name: 'Sneak Attack', description: 'Once per turn, deal extra 1d6 damage when you have advantage or an ally is adjacent to the target.', source: { kind: 'class', refId: 'rogue' }, level: 1, effects: [], actions: [], choices: [], passive: true,
+      // A-58: trigger-only features (no activation, no card) — the ONLY way
+      // to surface them anywhere in the app is TriggeredFeaturesSection
+      // (TabActions.tsx), which reads Feature.trigger and had literally zero
+      // real content setting it until this pass, despite being shipped and
+      // tested. Sneak Attack was that section's own original motivating
+      // example.
+      trigger: "Once per turn, when you hit with a weapon attack and have advantage, or an ally is within 5 ft of the target and you don't have disadvantage." } },
         { kind: 'feature', value: { id: 'thieves_cant', name: "Thieves' Cant", description: "You have learned thieves' cant, a secret mix of dialect, jargon, and code.", source: { kind: 'class', refId: 'rogue' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
         { kind: 'feature', value: { id: 'expertise_rogue_1', name: 'Expertise', description: 'Choose two of your skill proficiencies to double your proficiency bonus.', source: { kind: 'class', refId: 'rogue' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
       ],
@@ -118,7 +125,8 @@ export const rogueProgression: ClassProgression = {
     { level: 4, hpDie: 8, choices: [asiChoice('rogue_asi_4')], grants: [] },
     { level: 5, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'uncanny_dodge', name: 'Uncanny Dodge', description: 'When an attacker you can see hits you, use your reaction to halve the damage.', source: { kind: 'class', refId: 'rogue' }, level: 5, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'reaction', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } }] },
     { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'expertise_rogue_6', name: 'Expertise', description: 'Choose two more skill proficiencies to double your proficiency bonus.', source: { kind: 'class', refId: 'rogue' }, level: 6, effects: [], actions: [], choices: [], passive: true } }] },
-    { level: 7, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'evasion_rogue', name: 'Evasion', description: 'When subjected to an effect requiring a Dex save, take no damage on success and half on failure.', source: { kind: 'class', refId: 'rogue' }, level: 7, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 7, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'evasion_rogue', name: 'Evasion', description: 'When subjected to an effect requiring a Dex save, take no damage on success and half on failure.', source: { kind: 'class', refId: 'rogue' }, level: 7, effects: [], actions: [], choices: [], passive: true,
+      trigger: 'When you must make a Dexterity saving throw against an effect that deals damage.' } }] },
     { level: 8, hpDie: 8, choices: [asiChoice('rogue_asi_8')], grants: [] },
     ...stubEntries([9], 8),
     { level: 10, hpDie: 8, choices: [asiChoice('rogue_asi_10')], grants: [] },
@@ -369,13 +377,16 @@ export const barbarianProgression: ClassProgression = {
     { level: 6, hpDie: 12, choices: [], grants: [{ kind: 'resource_upgrade', value: { resourceId: 'rage_pool', newMaximum: 4 } }] },
     { level: 7, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'feral_instinct', name: 'Feral Instinct', description: 'You have advantage on initiative rolls.', source: { kind: 'class', refId: 'barbarian' }, level: 7, effects: [{ type: 'stat_modifier', target: 'initiative', operation: 'advantage', value: null, condition: null }], actions: [], choices: [], passive: true } }] },
     { level: 8, hpDie: 12, choices: [asiChoice('barbarian_asi_8')], grants: [] },
-    { level: 9, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'brutal_critical', name: 'Brutal Critical', description: 'You can roll one additional weapon damage die when determining extra damage for a critical hit.', source: { kind: 'class', refId: 'barbarian' }, level: 9, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 9, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'brutal_critical', name: 'Brutal Critical', description: 'You can roll one additional weapon damage die when determining extra damage for a critical hit.', source: { kind: 'class', refId: 'barbarian' }, level: 9, effects: [], actions: [], choices: [], passive: true,
+      trigger: 'When you score a critical hit with a melee weapon attack.' } }] },
     ...stubEntries([10], 12),
-    { level: 11, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'relentless_rage', name: 'Relentless Rage', description: 'Your rage can keep you fighting despite grievous wounds.', source: { kind: 'class', refId: 'barbarian' }, level: 11, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 11, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'relentless_rage', name: 'Relentless Rage', description: 'Your rage can keep you fighting despite grievous wounds.', source: { kind: 'class', refId: 'barbarian' }, level: 11, effects: [], actions: [], choices: [], passive: true,
+      trigger: 'When damage would drop you to 0 HP while raging and you\'re not already at 0 HP — make a DC 10 Constitution save (DC rises by 5 each time you use this since your last short/long rest) to drop to 1 HP instead.' } }] },
     { level: 12, hpDie: 12, choices: [asiChoice('barbarian_asi_12')], grants: [{ kind: 'resource_upgrade', value: { resourceId: 'rage_pool', newMaximum: 5 } }] },
     {
       level: 13, hpDie: 12, choices: [], grants: [
-        { kind: 'feature', value: { id: 'brutal_critical_2', name: 'Brutal Critical (2 dice)', description: 'You can roll two additional weapon damage dice when determining extra damage for a critical hit.', source: { kind: 'class', refId: 'barbarian' }, level: 13, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'brutal_critical_2', name: 'Brutal Critical (2 dice)', description: 'You can roll two additional weapon damage dice when determining extra damage for a critical hit.', source: { kind: 'class', refId: 'barbarian' }, level: 13, effects: [], actions: [], choices: [], passive: true,
+      trigger: 'When you score a critical hit with a melee weapon attack.' } },
       ],
     },
     ...stubEntries([14], 12),
@@ -384,10 +395,12 @@ export const barbarianProgression: ClassProgression = {
     {
       level: 17, hpDie: 12, choices: [], grants: [
         { kind: 'resource_upgrade', value: { resourceId: 'rage_pool', newMaximum: 6 } },
-        { kind: 'feature', value: { id: 'brutal_critical_3', name: 'Brutal Critical (3 dice)', description: 'You can roll three additional weapon damage dice when determining extra damage for a critical hit.', source: { kind: 'class', refId: 'barbarian' }, level: 17, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'brutal_critical_3', name: 'Brutal Critical (3 dice)', description: 'You can roll three additional weapon damage dice when determining extra damage for a critical hit.', source: { kind: 'class', refId: 'barbarian' }, level: 17, effects: [], actions: [], choices: [], passive: true,
+      trigger: 'When you score a critical hit with a melee weapon attack.' } },
       ],
     },
-    { level: 18, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'indomitable_might', name: 'Indomitable Might', description: 'If your total for a Strength check is less than your Strength score, use your Strength score.', source: { kind: 'class', refId: 'barbarian' }, level: 18, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 18, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'indomitable_might', name: 'Indomitable Might', description: 'If your total for a Strength check is less than your Strength score, use your Strength score.', source: { kind: 'class', refId: 'barbarian' }, level: 18, effects: [], actions: [], choices: [], passive: true,
+      trigger: 'When your Strength check total would be less than your Strength score.' } }] },
     { level: 19, hpDie: 12, choices: [asiChoice('barbarian_asi_19')], grants: [] },
     { level: 20, hpDie: 12, choices: [], grants: [{ kind: 'feature', value: { id: 'primal_champion', name: 'Primal Champion', description: 'Your Strength and Constitution scores increase by 4. Your maximum for those scores is now 24.', source: { kind: 'class', refId: 'barbarian' }, level: 20, effects: [{ type: 'stat_modifier', target: 'str', operation: 'add', value: 4, condition: null }, { type: 'stat_modifier', target: 'con', operation: 'add', value: 4, condition: null }], actions: [], choices: [], passive: true } }, { kind: 'resource_upgrade', value: { resourceId: 'rage_pool', newMaximum: 999 } }] },
   ],
@@ -477,7 +490,8 @@ export const rangerProgression: ClassProgression = {
       ],
     },
     { level: 19, hpDie: 10, choices: [asiChoice('ranger_asi_19'), spellChoice('ranger_spells_19', 1, 'Choose 1 more ranger spell known.')], grants: [] },
-    { level: 20, hpDie: 10, choices: [], grants: [{ kind: 'feature', value: { id: 'foe_slayer', name: 'Foe Slayer', description: 'You become an unparalleled hunter of your enemies. Once on each of your turns, you can add your Wisdom modifier to the attack roll or the damage roll of an attack you make against one of your favored enemies.', source: { kind: 'class', refId: 'ranger' }, level: 20, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 20, hpDie: 10, choices: [], grants: [{ kind: 'feature', value: { id: 'foe_slayer', name: 'Foe Slayer', description: 'You become an unparalleled hunter of your enemies. Once on each of your turns, you can add your Wisdom modifier to the attack roll or the damage roll of an attack you make against one of your favored enemies.', source: { kind: 'class', refId: 'ranger' }, level: 20, effects: [], actions: [], choices: [], passive: true,
+      trigger: 'Once on each of your turns, when you attack one of your favored enemies.' } }] },
   ],
 };
 
@@ -559,7 +573,8 @@ export const paladinProgression: ClassProgression = {
     {
       level: 11, hpDie: 10, choices: [], grants: [
         { kind: 'resource_upgrade', value: { resourceId: 'lay_on_hands_pool', newMaximum: 55 } },
-        { kind: 'feature', value: { id: 'improved_divine_smite', name: 'Improved Divine Smite', description: 'Whenever you hit a creature with a melee weapon, the creature takes an extra 1d8 radiant damage — this happens even without expending a spell slot for Divine Smite.', source: { kind: 'class', refId: 'paladin' }, level: 11, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'improved_divine_smite', name: 'Improved Divine Smite', description: 'Whenever you hit a creature with a melee weapon, the creature takes an extra 1d8 radiant damage — this happens even without expending a spell slot for Divine Smite.', source: { kind: 'class', refId: 'paladin' }, level: 11, effects: [], actions: [], choices: [], passive: true,
+      trigger: 'Whenever you hit a creature with a melee weapon attack.' } },
       ],
     },
     { level: 12, hpDie: 10, choices: [asiChoice('paladin_asi_12')], grants: [{ kind: 'resource_upgrade', value: { resourceId: 'lay_on_hands_pool', newMaximum: 60 } }] },

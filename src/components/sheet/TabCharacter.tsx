@@ -33,6 +33,7 @@ import { CompanionSection } from './CompanionSection';
 import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard } from './TabActions';
 import { LevelUpPreviewModal } from './LevelUpPreviewModal';
 import { ProgressionPlannerModal } from './ProgressionPlannerModal';
+import { MulticlassProgressionPlannerModal } from './MulticlassProgressionPlannerModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // Class progressions are looked up from the content library — no hardcoded names.
@@ -365,6 +366,12 @@ function LevelUpSection({
         <Text style={styles.addClassBtnTxt}>+ Add a Class</Text>
       </Pressable>
 
+      {entity.identity.level < maxLevel && (
+        <Pressable style={styles.plannerBtn} onPress={() => setPlannerOpen(true)}>
+          <Text style={styles.plannerBtnTxt}>🔭 Progression Planner</Text>
+        </Pressable>
+      )}
+
       <Modal visible={addClassOpen} animationType="slide" onRequestClose={() => setAddClassOpen(false)}>
         <View style={styles.addClassModalRoot}>
           <View style={styles.addClassHeaderRow}>
@@ -403,6 +410,15 @@ function LevelUpSection({
         after={pendingLevelUp?.after ?? null}
         onConfirm={confirmPendingLevelUp}
         onCancel={() => setPendingLevelUp(null)}
+      />
+      <MulticlassProgressionPlannerModal
+        visible={plannerOpen}
+        entity={entity}
+        rules={rules}
+        availableToAdd={availableToAdd}
+        resolveProgression={resolveProgression}
+        classLabel={classLabel}
+        onClose={() => setPlannerOpen(false)}
       />
     </View>
   );

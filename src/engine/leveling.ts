@@ -1,6 +1,7 @@
 import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
-         KnownSpellsGrant, CustomResource, asSubclassId, asClassId, Background, SkillName } from './types';
+         KnownSpellsGrant, CustomResource, asSubclassId, asClassId, Background, SkillName,
+         CharClass } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { getSpellSlotsForClassLevel, multiclassCasterLevel, MULTICLASS_SPELLCASTER_SLOTS,
          pactSlotTableFor, slotsForLevel } from '../content/classes/spellSlotTables';
@@ -1189,6 +1190,40 @@ export function projectToLevel(
   rules: CampaignRules,
 ): Entity {
   return levelUp(entity, targetLevel, progression, { ...rules, hpMode: 'max' });
+}
+
+/**
+ * A-61: one planned "+1 level" step in a multiclass projection — which
+ * class, its already-resolved ClassProgression (subclass merged in if the
+ * class already has one; see MulticlassProgressionPlannerModal's
+ * resolveProgression call at add-time), and targetClass metadata only
+ * needed the first time a step introduces a brand-new class (drives
+ * levelUpClass's reduced-multiclass-proficiency grant).
+ */
+export type MulticlassPlanStep = {
+  classId:      string;
+  progression:  ClassProgression;
+  targetClass?: CharClass;
+};
+
+/**
+ * Projects an ORDERED sequence of single-class level-ups across possibly
+ * different classes — e.g. Fighter 5/Wizard 2 → +1 Wizard → +1 Fighter →
+ * +1 Wizard, matching how a real multiclass character actually levels
+ * (one class at a time, player's choice each time), unlike projectToLevel's
+ * single-class "jump straight to level N." Each step reuses levelUpClass
+ * exactly as real leveling does — always max HP, same as projectToLevel.
+ */
+export function projectMulticlassSequence(
+  entity: Entity,
+  steps:  MulticlassPlanStep[],
+  rules:  CampaignRules,
+): Entity {
+  const forcedRules: CampaignRules = { ...rules, hpMode: 'max' };
+  return steps.reduce(
+    (updated, step) => levelUpClass(updated, step.classId, step.progression, forcedRules, step.targetClass),
+    entity,
+  );
 }
 
 // ── resolveChoice ─────────────────────────────────────────────────────────────

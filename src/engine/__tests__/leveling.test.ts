@@ -13,7 +13,7 @@ import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import {
   applyGrant, applyHP, levelUp, resolveChoice, applySubclassToEntity,
   applyInfusionChoiceToEntity, applySpellChoiceToEntity, levelUpClass, queueChoice,
-  removeFeature, swapBackground, projectToLevel,
+  removeFeature, swapBackground, projectToLevel, projectMulticlassSequence,
 } from '../leveling';
 import {
   Entity, Grant, ClassProgression, LevelEntry, ChoiceDefinition, CharClass,
@@ -379,6 +379,97 @@ describe('projectToLevel', () => {
     const e = fighterEntity();
     const before = JSON.stringify(e);
     projectToLevel(e, 5, fighterLikeProgression(), DEFAULT_RULES);
+    expect(JSON.stringify(e)).toBe(before);
+  });
+});
+
+describe('projectMulticlassSequence (A-61)', () => {
+  function fighterProgression(): ClassProgression {
+    return {
+      classId: 'fighter',
+      entries: [
+        { level: 1, hpDie: 10, grants: [], choices: [] },
+        { level: 2, hpDie: 10, grants: [{ kind: 'feature', value: {
+          id: 'action_surge', name: 'Action Surge', description: '', effects: [], actions: [], choices: [], passive: true,
+        } }], choices: [] },
+      ],
+    };
+  }
+  function wizardProgression(): ClassProgression {
+    return {
+      classId: 'wizard',
+      entries: [
+        { level: 1, hpDie: 6, grants: [], choices: [] },
+        { level: 2, hpDie: 6, grants: [], choices: [] },
+        { level: 3, hpDie: 6, grants: [{ kind: 'feature', value: {
+          id: 'wizard_l3', name: 'Wizard L3 Feature', description: '', effects: [], actions: [], choices: [], passive: true,
+        } }], choices: [] },
+      ],
+    };
+  }
+  const wizardClass = { multiclassProficiencies: {} } as unknown as CharClass;
+
+  function baseMcEntity(): Entity {
+    return entity({
+      identity: {
+        ...makeEmptyEntity('e1').identity,
+        classes: [{ classId: asClassId('fighter'), subclassId: null, level: 1 }],
+        classId: 'fighter', level: 1,
+      },
+    });
+  }
+
+  it('applies an ordered sequence of per-class level-ups, one level each', () => {
+    const e = baseMcEntity();
+    const projected = projectMulticlassSequence(e, [
+      { classId: 'wizard', progression: wizardProgression(), targetClass: wizardClass }, // new class, wizard 1
+      { classId: 'fighter', progression: fighterProgression() },                          // fighter 2
+      { classId: 'wizard', progression: wizardProgression() },                            // wizard 2
+    ], DEFAULT_RULES);
+
+    expect(projected.identity.classes).toEqual(expect.arrayContaining([
+      { classId: 'fighter', subclassId: null, level: 2 },
+      { classId: 'wizard', subclassId: null, level: 2 },
+    ]));
+    expect(projected.features.map(f => f.id)).toContain('action_surge');
+  });
+
+  it('order matters — a feature at wizard level 3 only appears once enough wizard steps are planned', () => {
+    const e = baseMcEntity();
+    const twoWizardSteps = projectMulticlassSequence(e, [
+      { classId: 'wizard', progression: wizardProgression(), targetClass: wizardClass },
+      { classId: 'wizard', progression: wizardProgression() },
+    ], DEFAULT_RULES);
+    expect(twoWizardSteps.features.map(f => f.id)).not.toContain('wizard_l3');
+
+    const threeWizardSteps = projectMulticlassSequence(e, [
+      { classId: 'wizard', progression: wizardProgression(), targetClass: wizardClass },
+      { classId: 'wizard', progression: wizardProgression() },
+      { classId: 'wizard', progression: wizardProgression() },
+    ], DEFAULT_RULES);
+    expect(threeWizardSteps.features.map(f => f.id)).toContain('wizard_l3');
+  });
+
+  it('forces max HP regardless of the real campaign rules\' hpMode', () => {
+    const e = baseMcEntity();
+    const steps = [{ classId: 'fighter', progression: fighterProgression() }];
+    const rolled = projectMulticlassSequence(e, steps, { ...DEFAULT_RULES, hpMode: 'rolled' });
+    const maxed  = projectMulticlassSequence(e, steps, { ...DEFAULT_RULES, hpMode: 'max' });
+    expect(rolled.resources.hp.maximum).toBe(maxed.resources.hp.maximum);
+  });
+
+  it('an empty sequence returns the entity unchanged', () => {
+    const e = baseMcEntity();
+    const projected = projectMulticlassSequence(e, [], DEFAULT_RULES);
+    expect(projected).toEqual(e);
+  });
+
+  it('never mutates the input entity', () => {
+    const e = baseMcEntity();
+    const before = JSON.stringify(e);
+    projectMulticlassSequence(e, [
+      { classId: 'wizard', progression: wizardProgression(), targetClass: wizardClass },
+    ], DEFAULT_RULES);
     expect(JSON.stringify(e)).toBe(before);
   });
 });

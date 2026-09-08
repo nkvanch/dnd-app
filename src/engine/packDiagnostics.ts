@@ -31,7 +31,8 @@
 import { Entity, Issue } from './types';
 import { InstalledPack, PackItemRef } from '../db/packRegistryRepo';
 import { ContentCacheType } from '../db/contentCacheRepo';
-import { collectEntityContentIds } from './validation';
+import { getClassLevels } from './multiclass';
+import { spellIdsOnEntity } from '../content/spellRepo.types';
 
 /** Just the id (and optional rulesetId) shape diagnosePack needs from each
  *  homebrew content array — a structural subset of HomebrewStoreState's
@@ -59,6 +60,39 @@ const CONTENT_TYPE_TO_STORE_KEY: Record<ContentCacheType, keyof HomebrewContentS
 
 function resolveRef(ref: PackItemRef, homebrew: HomebrewContentSlice) {
   return homebrew[CONTENT_TYPE_TO_STORE_KEY[ref.type]].find(i => i.id === ref.id);
+}
+
+/**
+ * Type-tagged version of validation.ts's collectEntityContentIds, scoped to
+ * this file rather than added there — engine/validation.ts has no
+ * dependency on ContentCacheType (db/) and shouldn't gain one just for this
+ * one check (engine stays below db in the dependency order — see this
+ * file's header comment). Mirrors that function's exact field walk, one
+ * {type, id} ref per typed content reference on the entity.
+ *
+ * Choice selections (ASI/skill/spell/feat picks stored on entity.choices)
+ * are deliberately NOT included here — ChoiceState.selections carries no
+ * reliable content-type tag of its own (see types.ts's note that this
+ * field is genuinely polymorphic per its sibling choice-kind). They're
+ * matched separately below, untyped, against every pack id — the same
+ * conservative (possibly over-broad, but never silently wrong-type)
+ * behavior this whole check had for every reference before this fix.
+ */
+function collectTypedContentRefs(entity: Entity): { type: ContentCacheType; id: string }[] {
+  if (entity.kind !== 'character') return [];
+  const { identity, spellcasting, inventory } = entity;
+  const refs: { type: ContentCacheType; id: string }[] = [];
+  if (identity.raceId) refs.push({ type: 'race', id: identity.raceId });
+  if (identity.subRaceId) refs.push({ type: 'subrace', id: identity.subRaceId });
+  for (const cls of getClassLevels(entity)) {
+    refs.push({ type: 'class', id: cls.classId });
+    if (cls.subclassId) refs.push({ type: 'subclass', id: cls.subclassId });
+  }
+  if (identity.backgroundId) refs.push({ type: 'background', id: identity.backgroundId });
+  if (spellcasting) for (const spellId of spellIdsOnEntity(entity)) refs.push({ type: 'spell', id: spellId });
+  for (const item of inventory.carried)  refs.push({ type: 'item', id: item.itemId });
+  for (const item of inventory.equipped) refs.push({ type: 'item', id: item.itemId });
+  return refs;
 }
 
 export function diagnosePack(
@@ -110,9 +144,29 @@ export function diagnosePack(
   }
 
   // ── Content still used by a saved character ──────────────────────────────
-  const packIds = new Set(pack.itemRefs.map(r => r.id));
+  // Bug fix: this used to compare raw ids across every content type with no
+  // type discrimination (a flat Set<string> of pack item ids matched
+  // against a flat Set<string> of the character's content ids) — unlike
+  // the "shadowed" check above, which correctly pairs {type, id}. Two
+  // different content types sharing the same id string (a real risk with
+  // hand-typed homebrew ids, e.g. a race and an item both slugified to
+  // "iron_will") would produce a false "still in use" warning even though
+  // the character's content and the pack's content were actually
+  // unrelated pieces of content that just happened to share an id.
+  const packIds = new Set(pack.itemRefs.map(r => r.id)); // untyped fallback, choice selections only — see collectTypedContentRefs's own comment
+  const packRefsByType = new Map<ContentCacheType, Set<string>>();
+  for (const ref of pack.itemRefs) {
+    if (!packRefsByType.has(ref.type)) packRefsByType.set(ref.type, new Set());
+    packRefsByType.get(ref.type)!.add(ref.id);
+  }
   for (const character of characters) {
-    const used = [...collectEntityContentIds(character)].filter(id => packIds.has(id));
+    const typedMatches = collectTypedContentRefs(character)
+      .filter(r => packRefsByType.get(r.type)?.has(r.id))
+      .map(r => r.id);
+    const choiceMatches = character.kind === 'character'
+      ? character.choices.filter(c => c.resolved).flatMap(c => c.selections).filter(sel => packIds.has(sel))
+      : [];
+    const used = [...new Set([...typedMatches, ...choiceMatches])];
     if (used.length > 0) {
       issues.push({
         severity: 'warning', code: 'pack_content_in_use',

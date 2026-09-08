@@ -90,4 +90,36 @@ describe('diagnosePack', () => {
     const issues = diagnosePack(pack, [pack], homebrew, [monster]);
     expect(issues.filter(i => i.code === 'pack_content_in_use')).toHaveLength(0);
   });
+
+  it('does not flag a character as using this pack\'s content when only a DIFFERENT content type shares the same id string (audit bug #9)', () => {
+    // The pack installed an ITEM called "iron_will"; the character equips a
+    // completely unrelated ITEM with a different id but has a RACE that
+    // happens to be named "iron_will" too (e.g. two homebrew authors
+    // independently slugified different names to the same id). The old,
+    // type-blind check compared raw ids across every content type and
+    // would have falsely flagged this character as using the pack.
+    const homebrew = emptyHomebrew();
+    homebrew.items.push({ id: 'iron_will' });
+    homebrew.races.push({ id: 'iron_will' });
+    const pack = makePack({ itemRefs: [{ type: 'item', id: 'iron_will' }] });
+    const character: Entity = {
+      ...makeEmptyEntity('char1'),
+      identity: { ...makeEmptyEntity('char1').identity, raceId: 'iron_will' }, // race, not item
+    };
+    const issues = diagnosePack(pack, [pack], homebrew, [character]);
+    expect(issues.filter(i => i.code === 'pack_content_in_use')).toHaveLength(0);
+  });
+
+  it('still flags in-use content correctly when a matching-id race in the SAME pack is actually worn as a race (type-correct positive control)', () => {
+    const homebrew = emptyHomebrew();
+    homebrew.items.push({ id: 'iron_will' });
+    homebrew.races.push({ id: 'iron_will' });
+    const pack = makePack({ itemRefs: [{ type: 'item', id: 'iron_will' }, { type: 'race', id: 'iron_will' }] });
+    const character: Entity = {
+      ...makeEmptyEntity('char1'),
+      identity: { ...makeEmptyEntity('char1').identity, name: 'Vex', raceId: 'iron_will' },
+    };
+    const issues = diagnosePack(pack, [pack], homebrew, [character]);
+    expect(issues).toContainEqual(expect.objectContaining({ code: 'pack_content_in_use', affectedId: 'char1' }));
+  });
 });

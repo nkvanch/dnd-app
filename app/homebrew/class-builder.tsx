@@ -11,7 +11,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { CharClass, Ability, DraftTrait, Entity } from '../../src/engine/types';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { Alert } from '../../src/utils/alert';
-import { itemRepo } from '../../src/content/itemRepo';
+import { mergeItemIndex, resolveItemById } from '../../src/content/contentResolution';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, TraitEditorModal, COMMON_TOOLS } from '../../src/components/homebrew/TraitEditor';
@@ -146,7 +146,12 @@ export default function ClassBuilderScreen() {
     setToolProfs(editing.toolProfs ?? []);
     setStartingEquipment(
       (editing.startingEquipment ?? []).map(id => {
-        const found = [...itemRepo.getIndex(), ...homebrewItems].find(i => i.id === id);
+        // Bug fix (architecture review C9): this used to concat official +
+        // homebrew with no dedup and official listed first, so a homebrew
+        // item overriding an official one by id resolved to the official
+        // name instead of the override — resolveItemById already centralizes
+        // the correct homebrew-first precedence (contentResolution.ts).
+        const found = resolveItemById(id, homebrewItems);
         return { id, name: found?.name ?? id };
       })
     );
@@ -207,8 +212,11 @@ export default function ClassBuilderScreen() {
   function removeStartingItem(id: string) {
     setStartingEquipment(prev => prev.filter(i => i.id !== id));
   }
+  // Bug fix (architecture review C9): same unmerged-concat pattern as
+  // above — mergeItemIndex already dedups by id (homebrew wins) instead of
+  // showing a colliding homebrew/official pair as two separate rows.
   const equipResults = equipSearch.trim().length >= 2
-    ? [...itemRepo.getIndex(), ...homebrewItems]
+    ? mergeItemIndex(homebrewItems)
         .filter(i => i.name.toLowerCase().includes(equipSearch.trim().toLowerCase()))
         .slice(0, 12)
     : [];

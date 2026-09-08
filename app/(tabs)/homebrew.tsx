@@ -5,7 +5,6 @@ import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextI
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useCharacterStore } from '../../src/store/characterStore';
-import { ALL_CONDITIONS } from '../../src/content/conditions';
 import { Alert } from '../../src/utils/alert';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
 import { InstalledPack, loadInstalledPacks, deleteInstalledPack } from '../../src/db/packRegistryRepo';
@@ -223,13 +222,21 @@ function LibraryPanel() {
     ...features.map(f    => ({ type: 'feature'    as const, item: f })),
     ...feats.map(f       => ({ type: 'feat'       as const, item: f })),
     ...monsters.map(m    => ({ type: 'monster'    as const, item: m })),
-    ...conditions.map(c  => ({ type: 'condition'  as const, item: c })),
-    // Official conditions — read-only rows (no edit/history/export/delete),
-    // the same catalog the "Add Condition" apply-to-character flow already
-    // uses. Every other official content type already has its own browse UI
-    // elsewhere (spells: AddSpellModal, items: rare-items.tsx, monsters: the
-    // DM monster browser) — conditions never did.
-    ...ALL_CONDITIONS.map(c => ({ type: 'condition' as const, item: c, isOfficial: true })),
+    // Bug fix (architecture review C11): this used to hand-concat homebrew
+    // conditions AND the full official ALL_CONDITIONS catalog as two
+    // separate pushes with no dedup — a homebrew condition overriding an
+    // official one by id showed up as two rows instead of one. Use the
+    // already-computed getMergedContentDB().conditions (in scope above,
+    // already used for races/classes) — it dedups by id, homebrew wins,
+    // matching the precedence used everywhere else. isOfficial is derived
+    // per row by checking whether the WINNING entry actually came from the
+    // homebrew store, preserving the exact same read-only-row gating below
+    // (official conditions get no edit/history/export/delete affordances,
+    // the same catalog the "Add Condition" apply-to-character flow uses).
+    ...getMergedContentDB().conditions.map(c => ({
+      type: 'condition' as const, item: c,
+      isOfficial: !conditions.some(hb => hb.id === c.id),
+    })),
   ];
 
   const EDIT_ROUTES: Partial<Record<string, string>> = {

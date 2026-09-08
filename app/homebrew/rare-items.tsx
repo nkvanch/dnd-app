@@ -10,9 +10,8 @@ import { useMemo, useState } from 'react';
 import { View, Text, ScrollView, FlatList, Pressable, StyleSheet, TextInput, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Item } from '../../src/engine/types';
-import { itemRepo } from '../../src/content/itemRepo';
-import { toItemIndexEntry } from '../../src/content/itemRepo.types';
 import type { ItemIndexEntry } from '../../src/content/itemRepo.types';
+import { mergeItemIndex } from '../../src/content/contentResolution';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -81,11 +80,11 @@ export default function RareItemsScreen() {
 
   const homebrewById = useMemo(() => new Map(homebrewItems.map(i => [i.id, i])), [homebrewItems]);
 
-  const allEntries = useMemo(() => {
-    const official = itemRepo.getIndex();
-    const homebrew = homebrewItems.map(toItemIndexEntry);
-    return [...official, ...homebrew];
-  }, [homebrewItems]);
+  // Bug fix (architecture review C10): this used to concat official +
+  // homebrew with no dedup — a homebrew item overriding an official one
+  // by id showed up as two separate rows. mergeItemIndex already dedups
+  // by id (homebrew wins), matching the precedence used everywhere else.
+  const allEntries = useMemo(() => mergeItemIndex(homebrewItems), [homebrewItems]);
 
   // Rarity is computed once per entry here (was previously recomputed by
   // both the sort comparator and RareItemRow itself — redundant work

@@ -115,10 +115,18 @@ function homebrewSubclassEntry(sub: HomebrewSubclass): SubclassEntry {
  * that's a separate, already-tracked gap that predates homebrew subclasses.
  */
 export function subclassEntriesForClassMerged(classId: string, homebrew: HomebrewSubclass[]): SubclassEntry[] {
-  return [
-    ...subclassEntriesForClass(classId),
-    ...homebrew.filter(s => s.classId === classId).map(homebrewSubclassEntry),
-  ];
+  // Bug fix (architecture review C1): this used to plain-concatenate with
+  // no dedup — official first, homebrew appended after, so a homebrew
+  // subclass sharing a derived id with an official one (a realistic
+  // collision: both derive/author ids by slugifying the subclass name,
+  // e.g. a homebrew "Thief" reimagining) showed as two entries, and any
+  // id-keyed lookup (.find()) always resolved to the official one — the
+  // opposite of the homebrew-wins precedence used everywhere else in this
+  // app (contentResolution.ts's mergeSpellIndex/mergeItemIndex, etc.).
+  const homebrewEntries = homebrew.filter(s => s.classId === classId).map(homebrewSubclassEntry);
+  const homebrewIds = new Set(homebrewEntries.map(s => s.id));
+  const officialEntries = subclassEntriesForClass(classId).filter(s => !homebrewIds.has(s.id));
+  return [...officialEntries, ...homebrewEntries];
 }
 
 /** Look up a single subclass entry (official or homebrew) by classId + subclass id. */

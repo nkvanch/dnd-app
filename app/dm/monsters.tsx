@@ -118,10 +118,16 @@ export default function MonstersScreen() {
   const [preview,  setPreview]  = useState<MonsterTemplate | null>(null);
 
   const homebrewMonsters = useHomebrewStore(s => s.monsters);
-  const allTemplates = useMemo(
-    () => [...ALL_MONSTER_TEMPLATES, ...homebrewMonsters],
-    [homebrewMonsters],
-  );
+  // Bug fix (architecture review C6): this used to plain-concatenate with
+  // no dedup, same pattern already fixed elsewhere for items (C9/C10) and
+  // conditions (C11) — a homebrew monster overriding an official one by id
+  // showed up as two rows. Homebrew wins, matching the precedence used
+  // everywhere else.
+  const allTemplates = useMemo(() => {
+    const homebrewIds = new Set(homebrewMonsters.map(m => m.id));
+    const official = ALL_MONSTER_TEMPLATES.filter(t => !homebrewIds.has(t.id));
+    return [...official, ...homebrewMonsters];
+  }, [homebrewMonsters]);
 
   const filtered = useMemo(() => {
     return allTemplates.filter(t => {

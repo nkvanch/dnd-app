@@ -275,3 +275,98 @@ describe('discardHitDie', () => {
     expect(discardHitDie(e, DEFAULT_RULES)).toBe(e);
   });
 });
+
+// ── Mixed hit-dice pools (multiclass bug fix) ───────────────────────────────
+// A Fighter 3/Wizard 1 has 3 real d10s and 1 real d6 — `pools` is how that
+// gets tracked instead of the old single {die,total,remaining} triple
+// silently mislabeling everything as whichever class leveled most recently.
+
+describe('spendHitDie / discardHitDie with a mixed pool', () => {
+  const originalRandom = Math.random;
+  afterEach(() => { Math.random = originalRandom; });
+
+  function mixedPoolEntity() {
+    return baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        hp: { current: 10, maximum: 50, temp: 0 },
+        hitDice: {
+          die: 6, total: 4, remaining: 4,
+          pools: [{ die: 10, total: 3, remaining: 3 }, { die: 6, total: 1, remaining: 1 }],
+        },
+      },
+    });
+  }
+
+  it('spendHitDie rolls the largest available die, not the legacy `die` field', () => {
+    Math.random = () => 0.99; // near-max roll: d10→10, d6→6 — distinguishes which die was actually rolled
+    const result = spendHitDie(mixedPoolEntity(), DEFAULT_RULES);
+    // +0 CON mod: healed amount equals the die rolled.
+    expect(result.resources.hp.current).toBe(10 + 10);
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 3, remaining: 2 }, // the d10 pool lost one...
+      { die: 6, total: 1, remaining: 1 },  // ...the d6 pool untouched
+    ]);
+    expect(result.resources.hitDice.remaining).toBe(3); // sum stays correct
+  });
+
+  it('spends from the d6 pool once every d10 is gone', () => {
+    Math.random = () => 0.99;
+    const e = mixedPoolEntity();
+    const drained = {
+      ...e,
+      resources: {
+        ...e.resources,
+        hitDice: { ...e.resources.hitDice, remaining: 1, pools: [{ die: 10, total: 3, remaining: 0 }, { die: 6, total: 1, remaining: 1 }] },
+      },
+    };
+    const result = spendHitDie(drained, DEFAULT_RULES);
+    expect(result.resources.hp.current).toBe(10 + 6); // rolled the d6, not a phantom d10
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 3, remaining: 0 },
+      { die: 6, total: 1, remaining: 0 },
+    ]);
+  });
+
+  it('discardHitDie decrements the largest pool and keeps the sum correct', () => {
+    const result = discardHitDie(mixedPoolEntity(), DEFAULT_RULES);
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 3, remaining: 2 },
+      { die: 6, total: 1, remaining: 1 },
+    ]);
+    expect(result.resources.hitDice.remaining).toBe(3);
+  });
+});
+
+describe('long rest hit-dice restore with a mixed pool', () => {
+  function mixedDrainedEntity() {
+    return baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        hitDice: {
+          die: 6, total: 4, remaining: 0,
+          pools: [{ die: 10, total: 3, remaining: 0 }, { die: 6, total: 1, remaining: 0 }],
+        },
+      },
+    });
+  }
+
+  it('restores across pools in acquisition order, capped per pool', () => {
+    // fullHitDiceOnLongRest house rule off by default → restores
+    // max(1, floor(level/2)); baseEntity()'s level is 0 → restores 1.
+    const result = takeRest(mixedDrainedEntity(), 'long', DEFAULT_RULES);
+    const restored = result.resources.hitDice.pools!;
+    expect(restored[0].remaining).toBeLessThanOrEqual(3);
+    expect(restored[1].remaining).toBeLessThanOrEqual(1);
+    expect(restored[0].remaining + restored[1].remaining).toBe(result.resources.hitDice.remaining);
+  });
+
+  it('never restores a pool past its own total even with the full-restore house rule', () => {
+    const result = takeRest(mixedDrainedEntity(), 'long', { ...DEFAULT_RULES, customRules: { fullHitDiceOnLongRest: true } });
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 3, remaining: 3 },
+      { die: 6, total: 1, remaining: 1 },
+    ]);
+    expect(result.resources.hitDice.remaining).toBe(4);
+  });
+});

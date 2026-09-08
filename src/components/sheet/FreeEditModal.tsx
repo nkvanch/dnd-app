@@ -85,10 +85,15 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
     onApply(updated);
   }
 
+  // Both setters clear `pools` (rather than spreading it through) — a
+  // manual override collapses a mixed multiclass hit-dice pool back to one
+  // simple die/total/remaining triple, which is the whole point of this
+  // screen. Leaving a stale `pools` array around would make `total`/
+  // `remaining` (its sum) disagree with what the player just typed here.
   function setHitDieSize(size: number) {
     onApply({
       ...entity,
-      resources: { ...entity.resources, hitDice: { ...entity.resources.hitDice, die: size } },
+      resources: { ...entity.resources, hitDice: { ...entity.resources.hitDice, die: size, pools: undefined } },
     });
   }
 
@@ -102,6 +107,7 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
           ...entity.resources.hitDice,
           total,
           remaining: Math.min(entity.resources.hitDice.remaining, total),
+          pools: undefined,
         },
       },
     });

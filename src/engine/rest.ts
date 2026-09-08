@@ -2,7 +2,7 @@
 // FILE: src/engine/rest.ts
 // PROJECT: Short Rest & Long Rest Recovery Engine
 // ============================================================================
-import { Entity, SpellcastingBlock, SpellSlots, CampaignRules } from './types';
+import { Entity, SpellcastingBlock, SpellSlots, CampaignRules, HitDiceBlock } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { removeCondition, reduceExhaustion } from './conditions';
 import { dropConcentration } from './combat';
@@ -115,13 +115,7 @@ function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity 
     ...updated,
     resources: {
       ...updated.resources,
-      hitDice: {
-        ...updated.resources.hitDice,
-        remaining: Math.min(
-          updated.resources.hitDice.total,
-          updated.resources.hitDice.remaining + restoreCount
-        ),
-      },
+      hitDice: restoreHitDice(updated.resources.hitDice, restoreCount),
     },
   };
 
@@ -155,6 +149,49 @@ function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity 
 // ── Hit dice ──────────────────────────────────────────────────────────────────
 
 /**
+ * Picks a pool to spend one hit die from — largest die first. RAW lets the
+ * player choose freely; this app has no "which die to spend" picker UI yet,
+ * so largest-first is a reasonable, deterministic default that (unlike the
+ * bug this replaces) always spends a die size the character actually owns.
+ * No-op shape (single-pool / no `pools`) behaves exactly as before this fix.
+ */
+function spendFromHitDicePools(hitDice: HitDiceBlock): { die: number; hitDice: HitDiceBlock } {
+  const { pools } = hitDice;
+  if (!pools) {
+    return { die: hitDice.die, hitDice: { ...hitDice, remaining: hitDice.remaining - 1 } };
+  }
+  const spendable = [...pools].filter(p => p.remaining > 0).sort((a, b) => b.die - a.die);
+  const chosen = spendable[0];
+  const die = chosen?.die ?? hitDice.die; // defensive fallback; remaining>0 guarantees a match in practice
+  const nextPools = pools.map(p => p.die === die ? { ...p, remaining: p.remaining - 1 } : p);
+  return {
+    die,
+    hitDice: { ...hitDice, remaining: hitDice.remaining - 1, pools: nextPools },
+  };
+}
+
+/** Restores up to `count` hit dice, pool by pool (in the order each die size
+ *  was first acquired) when the character has a mixed pool; a flat count
+ *  restore otherwise — identical to the pre-fix behavior in that case. */
+function restoreHitDice(hitDice: HitDiceBlock, count: number): HitDiceBlock {
+  if (!hitDice.pools) {
+    return { ...hitDice, remaining: Math.min(hitDice.total, hitDice.remaining + count) };
+  }
+  let toRestore = count;
+  const nextPools = hitDice.pools.map(p => {
+    if (toRestore <= 0) return p;
+    const restore = Math.min(p.total - p.remaining, toRestore);
+    toRestore -= restore;
+    return { ...p, remaining: p.remaining + restore };
+  });
+  return {
+    ...hitDice,
+    remaining: nextPools.reduce((sum, p) => sum + p.remaining, 0),
+    pools: nextPools,
+  };
+}
+
+/**
  * Player spends one hit die during a short rest.
  * Rolls the die, adds CON modifier, heals the entity.
  * Minimum heal: 1. Cannot exceed maximum HP.
@@ -165,7 +202,7 @@ export function spendHitDie(
 ): Entity {
   if (entity.resources.hitDice.remaining <= 0) return entity;
 
-  const { die } = entity.resources.hitDice;
+  const { die, hitDice } = spendFromHitDicePools(entity.resources.hitDice);
   const roll     = Math.floor(Math.random() * die) + 1;
   // Use effective CON (race/feat bonuses included), consistent with HP calc.
   const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
@@ -182,10 +219,7 @@ export function spendHitDie(
     resources: {
       ...entity.resources,
       hp: { ...entity.resources.hp, current: newCurrent },
-      hitDice: {
-        ...entity.resources.hitDice,
-        remaining: entity.resources.hitDice.remaining - 1,
-      },
+      hitDice,
     },
   };
 
@@ -202,14 +236,12 @@ export function discardHitDie(
   rules:  CampaignRules = DEFAULT_RULES
 ): Entity {
   if (entity.resources.hitDice.remaining <= 0) return entity;
+  const { hitDice } = spendFromHitDicePools(entity.resources.hitDice);
   const updated = {
     ...entity,
     resources: {
       ...entity.resources,
-      hitDice: {
-        ...entity.resources.hitDice,
-        remaining: entity.resources.hitDice.remaining - 1,
-      },
+      hitDice,
     },
   };
   return recomputeDerived(updated, rules);

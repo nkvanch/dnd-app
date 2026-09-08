@@ -220,6 +220,61 @@ describe('applyHP', () => {
     const updated = applyHP(e, 6, 'fixed', 1, DEFAULT_RULES, 'con', false);
     expect(updated.resources.hp.maximum).toBe(20 + 4); // floor(6/2)+1=4, NOT the max-die 6
   });
+
+  // Bug fix: a multiclass character's hit dice used to be tracked as one
+  // {die,total,remaining} triple — every applyHP call unconditionally
+  // overwrote `die`, silently mislabeling hit dice gained from OTHER
+  // classes. `pools` (HitDiceBlock, types.ts) is the fix — see its own doc
+  // comment for the full failure scenario this closes.
+  describe('mixed hit-dice pools across classes', () => {
+    it('stays pools-free for a single class (identical to pre-fix behavior)', () => {
+      let e = entity({ resources: { ...makeEmptyEntity('e1').resources, hitDice: { die: 10, total: 2, remaining: 2 } } });
+      e = applyHP(e, 10, 'max', 3, DEFAULT_RULES, 'con', false);
+      expect(e.resources.hitDice).toEqual({ die: 10, total: 3, remaining: 3 });
+      expect(e.resources.hitDice.pools).toBeUndefined();
+    });
+
+    it('stays pools-free when a second class shares the same die size', () => {
+      // Fighter 1 (d10) then Paladin 1 (also d10) — no real mix, no pools needed.
+      let e = entity({ resources: { ...makeEmptyEntity('e1').resources, hitDice: { die: 10, total: 1, remaining: 1 } } });
+      e = applyHP(e, 10, 'fixed', 1, DEFAULT_RULES, 'con', true);
+      expect(e.resources.hitDice).toEqual({ die: 10, total: 2, remaining: 2 });
+      expect(e.resources.hitDice.pools).toBeUndefined();
+    });
+
+    it('backfills pools from existing scalar state the first time a second die size appears', () => {
+      // Fighter 3 (3x d10) already on the sheet, then this class's own
+      // level-1 Wizard grant (d6) lands via applyHP — the exact multiclass
+      // scenario from the bug report.
+      const fighter3 = entity({ resources: { ...makeEmptyEntity('e1').resources, hitDice: { die: 10, total: 3, remaining: 3 } } });
+      const withWizard = applyHP(fighter3, 6, 'fixed', 1, DEFAULT_RULES, 'con', true);
+      expect(withWizard.resources.hitDice.pools).toEqual([
+        { die: 10, total: 3, remaining: 3 }, // the 3 real Fighter d10s, correctly preserved
+        { die: 6, total: 1, remaining: 1 },  // the new Wizard d6
+      ]);
+      // total/remaining stay correct sums — every existing reader that only
+      // wants the aggregate count keeps working unchanged.
+      expect(withWizard.resources.hitDice.total).toBe(4);
+      expect(withWizard.resources.hitDice.remaining).toBe(4);
+    });
+
+    it('accumulates further levels into the matching pool, not a fresh one', () => {
+      const mixed = entity({
+        resources: {
+          ...makeEmptyEntity('e1').resources,
+          hitDice: { die: 6, total: 4, remaining: 4, pools: [{ die: 10, total: 3, remaining: 3 }, { die: 6, total: 1, remaining: 1 }] },
+        },
+      });
+      // Fighter levels again (back to d10) — must land in the EXISTING d10
+      // pool, not overwrite it or create a duplicate d10 entry.
+      const updated = applyHP(mixed, 10, 'fixed', 4, DEFAULT_RULES, 'con', false);
+      expect(updated.resources.hitDice.pools).toEqual([
+        { die: 10, total: 4, remaining: 4 },
+        { die: 6, total: 1, remaining: 1 },
+      ]);
+      expect(updated.resources.hitDice.total).toBe(5);
+    });
+  });
 });
 
 describe('levelUp', () => {

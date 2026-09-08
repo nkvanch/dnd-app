@@ -1144,7 +1144,14 @@ export function TabCharacter({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>HIT DICE</Text>
           <Text style={styles.hitDiceCount}>
-            {resources.hitDice.remaining}/{resources.hitDice.total}  ·  d{resources.hitDice.die}
+            {resources.hitDice.remaining}/{resources.hitDice.total}  ·  {
+              // A mixed multiclass pool (see HitDiceBlock's doc comment)
+              // can't be summarized by the single `die` field alone —
+              // show each size's own remaining/total instead.
+              resources.hitDice.pools
+                ? resources.hitDice.pools.map(p => `${p.remaining}d${p.die}`).join(' + ')
+                : `d${resources.hitDice.die}`
+            }
           </Text>
         </View>
         <View style={styles.hitDieRow}>

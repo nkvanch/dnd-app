@@ -335,12 +335,31 @@ export function applyHP(
         maximum: entity.resources.hp.maximum + gain,
         temp:    entity.resources.hp.temp
       },
-      hitDice: {
-        die,
-        total:     entity.resources.hitDice.total + 1,
-        remaining: entity.resources.hitDice.remaining + 1
-      }
+      hitDice: addHitDie(entity.resources.hitDice, die),
     }
+  };
+}
+
+/**
+ * Adds one hit die of the given size to a HitDiceBlock, correctly — see
+ * HitDiceBlock's own doc comment (types.ts) for the bug this fixes.
+ * Backfills `pools` from the existing scalar state the first time a
+ * SECOND die size shows up; stays pools-free (and therefore identical to
+ * the pre-fix behavior) for single-class characters and same-die-size
+ * multiclass combinations.
+ */
+function addHitDie(hitDice: Entity['resources']['hitDice'], die: number): Entity['resources']['hitDice'] {
+  const pools = hitDice.pools
+    ?? (hitDice.total > 0 ? [{ die: hitDice.die, total: hitDice.total, remaining: hitDice.remaining }] : []);
+  const idx = pools.findIndex(p => p.die === die);
+  const nextPools = idx >= 0
+    ? pools.map((p, i) => i === idx ? { ...p, total: p.total + 1, remaining: p.remaining + 1 } : p)
+    : [...pools, { die, total: 1, remaining: 1 }];
+  return {
+    die,
+    total:     nextPools.reduce((sum, p) => sum + p.total, 0),
+    remaining: nextPools.reduce((sum, p) => sum + p.remaining, 0),
+    pools:     nextPools.length > 1 ? nextPools : undefined,
   };
 }
 

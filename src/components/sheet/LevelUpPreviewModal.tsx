@@ -29,7 +29,13 @@ export function buildLevelUpSummaryRows(before: Entity, after: Entity): Row[] {
     rows.push({ label: `Max HP: ${before.resources.hp.maximum} → ${after.resources.hp.maximum}` });
   }
   if (before.resources.hitDice.total !== after.resources.hitDice.total) {
-    rows.push({ label: `Hit Dice: ${before.resources.hitDice.total} → ${after.resources.hitDice.total} (d${after.resources.hitDice.die})` });
+    // A multiclass level-up can introduce a second hit-die size (see
+    // HitDiceBlock's doc comment) — show the whole pool breakdown rather
+    // than just the die size this one level happened to add.
+    const dieLabel = after.resources.hitDice.pools
+      ? after.resources.hitDice.pools.map(p => `d${p.die}×${p.total}`).join(' + ')
+      : `d${after.resources.hitDice.die}`;
+    rows.push({ label: `Hit Dice: ${before.resources.hitDice.total} → ${after.resources.hitDice.total} (${dieLabel})` });
   }
 
   if (before.spellcasting && after.spellcasting) {

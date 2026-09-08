@@ -721,11 +721,41 @@ export type HPBlock = {
   temp:    number;
 };
 
-/** Tracks the pool of hit dice available for short-rest healing. */
+/** One die-size's own total/remaining count within a mixed hit-dice pool. */
+export type HitDicePool = {
+  die:       number;
+  total:     number;
+  remaining: number;
+};
+
+/**
+ * Tracks the pool of hit dice available for short-rest healing.
+ *
+ * Bug fix: a multiclass character's hit dice used to be tracked as a
+ * single {die, total, remaining} triple — every level-up (in ANY class)
+ * unconditionally overwrote `die` with whatever die size that class uses,
+ * silently mislabeling every hit die from OTHER classes (e.g. a Fighter
+ * 3/Wizard 1 would show 4 d6 hit dice, losing the 3 real d10s, and roll
+ * the wrong die size — and wrong average heal — for 3 of the 4 spends).
+ *
+ * `pools` fixes this by tracking each distinct die size separately once a
+ * character actually has more than one. It's absent for single-class
+ * characters and multiclass characters whose classes all share one die
+ * size (Fighter/Paladin, both d10) — those cases are already exact via
+ * `die`/`total`/`remaining` alone, so there's no reason to carry the extra
+ * structure. `total`/`remaining` always stay the correct SUM across every
+ * pool regardless, so every existing reader that only wants the aggregate
+ * count (rest previews, level-up previews, the sheet's progress display)
+ * keeps working unchanged.
+ */
 export type HitDiceBlock = {
-  die:       number;   // Die size: 6, 8, 10, or 12
-  total:     number;   // Equals character level
-  remaining: number;   // How many are left to spend
+  die:       number;   // Die size: 4, 6, 8, 10, or 12. Once `pools` has more
+                        // than one entry this is only a display fallback (the
+                        // most-recently-added die size) — read `pools` for
+                        // anything that needs to be exact.
+  total:     number;   // Sum across every pool. Equals character level.
+  remaining: number;   // Sum across every pool. How many are left to spend.
+  pools?:    HitDicePool[];
 };
 
 export type CustomResource = {

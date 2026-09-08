@@ -1,16 +1,20 @@
 // app/(tabs)/homebrew.tsx
 // Homebrew tab — Installed Packs, Create, and Library sections.
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { useCharacterStore } from '../../src/store/characterStore';
 import { ALL_CONDITIONS } from '../../src/content/conditions';
 import { Alert } from '../../src/utils/alert';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
 import { InstalledPack, loadInstalledPacks, deleteInstalledPack } from '../../src/db/packRegistryRepo';
+import { diagnosePack } from '../../src/engine/packDiagnostics';
+import { Issue } from '../../src/engine/types';
 import { exportHomebrewItem, ExportFormat, ExportAction } from '../../src/io/exportShare';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
 import { VersionHistoryModal } from '../../src/components/homebrew/VersionHistoryModal';
+import { IssuesModal } from '../../src/components/sheet/IssuesModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Installed Packs Panel ────────────────────────────────────────────────────
@@ -22,14 +26,37 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 // empty section.
 function InstalledPacksPanel() {
   const deleteHomebrewItem = useHomebrewStore(s => s.deleteItem);
+  // A-62: individually-selected (not one combined object literal) — same
+  // reasoning as every other multi-field homebrew-store read in this file,
+  // avoids a fresh-reference-every-render footgun feeding into useMemo below.
+  const races       = useHomebrewStore(s => s.races);
+  const subraces    = useHomebrewStore(s => s.subraces);
+  const classes     = useHomebrewStore(s => s.classes);
+  const subclasses  = useHomebrewStore(s => s.subclasses);
+  const spells      = useHomebrewStore(s => s.spells);
+  const backgrounds = useHomebrewStore(s => s.backgrounds);
+  const features     = useHomebrewStore(s => s.features);
+  const items        = useHomebrewStore(s => s.items);
+  const feats         = useHomebrewStore(s => s.feats);
+  const monsters       = useHomebrewStore(s => s.monsters);
+  const conditions      = useHomebrewStore(s => s.conditions);
+  const characters       = useCharacterStore(s => s.characters);
   const [packs, setPacks] = useState<InstalledPack[]>([]);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [diagnosingPack, setDiagnosingPack] = useState<InstalledPack | null>(null);
 
   const refresh = useCallback(() => {
     loadInstalledPacks().then(setPacks).catch(e => console.error('[homebrew] loadInstalledPacks failed:', e));
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const diagnosticsByPackId = useMemo(() => {
+    const homebrew = { races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions };
+    const map = new Map<string, Issue[]>();
+    for (const pack of packs) map.set(pack.id, diagnosePack(pack, packs, homebrew, characters));
+    return map;
+  }, [packs, races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, characters]);
 
   if (packs.length === 0) return null;
 
@@ -64,25 +91,45 @@ function InstalledPacksPanel() {
     <View style={styles.panel}>
       <Text style={styles.panelTitle}>📦 Installed Packs ({packs.length})</Text>
       <Text style={styles.panelSub}>Content imported together as a shared pack — remove one to uninstall everything it added.</Text>
-      {packs.map(pack => (
-        <View key={pack.id} style={styles.libraryRow}>
-          <View style={styles.libraryInfo}>
-            <Text style={styles.libraryName}>{pack.name}</Text>
-            <View style={styles.typeBadge}>
-              <Text style={styles.typeBadgeTxt}>{pack.itemRefs.length} item{pack.itemRefs.length !== 1 ? 's' : ''}</Text>
+      {packs.map(pack => {
+        const packIssues = diagnosticsByPackId.get(pack.id) ?? [];
+        return (
+          <View key={pack.id} style={styles.libraryRow}>
+            <View style={styles.libraryInfo}>
+              <Text style={styles.libraryName}>{pack.name}</Text>
+              <View style={styles.typeBadge}>
+                <Text style={styles.typeBadgeTxt}>{pack.itemRefs.length} item{pack.itemRefs.length !== 1 ? 's' : ''}</Text>
+              </View>
             </View>
+            {/* A-62: only rendered when there's something to show, same
+                "hidden when clean" rule the sheet's own Issues badge (A-54)
+                uses in app/sheet/[id].tsx. */}
+            {packIssues.length > 0 && (
+              <Pressable style={styles.libBtn} onPress={() => setDiagnosingPack(pack)}>
+                <Text style={styles.libBtnTxt}>
+                  {packIssues.some(i => i.severity === 'error') ? '⛔' : '⚠️'} {packIssues.length}
+                </Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={styles.libBtn}
+              disabled={removingId === pack.id}
+              onPress={() => confirmRemove(pack)}
+            >
+              {removingId === pack.id
+                ? <ActivityIndicator size="small" color={Colors.textPrimary} />
+                : <Text style={styles.libBtnTxt}>🗑</Text>}
+            </Pressable>
           </View>
-          <Pressable
-            style={styles.libBtn}
-            disabled={removingId === pack.id}
-            onPress={() => confirmRemove(pack)}
-          >
-            {removingId === pack.id
-              ? <ActivityIndicator size="small" color={Colors.textPrimary} />
-              : <Text style={styles.libBtnTxt}>🗑</Text>}
-          </Pressable>
-        </View>
-      ))}
+        );
+      })}
+
+      <IssuesModal
+        visible={diagnosingPack !== null}
+        title={diagnosingPack ? `Pack Diagnostics: ${diagnosingPack.name}` : ''}
+        issues={diagnosingPack ? diagnosticsByPackId.get(diagnosingPack.id) ?? [] : []}
+        onClose={() => setDiagnosingPack(null)}
+      />
     </View>
   );
 }

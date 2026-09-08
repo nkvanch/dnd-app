@@ -17,15 +17,16 @@ const SEVERITY_COLOR: Record<Issue['severity'], string> = {
 interface Props {
   visible: boolean;
   issues:  Issue[];
+  title?:  string;
   onClose: () => void;
 }
 
-export function IssuesModal({ visible, issues, onClose }: Props) {
+export function IssuesModal({ visible, issues, title, onClose }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
-          <Text style={styles.title}>Character Issues</Text>
+          <Text style={styles.title}>{title ?? 'Character Issues'}</Text>
 
           {issues.length === 0 ? (
             <Text style={styles.emptyTxt}>No issues found — this character opens cleanly.</Text>

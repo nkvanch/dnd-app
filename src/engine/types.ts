@@ -556,7 +556,10 @@ export type IssueSeverity = 'error' | 'warning' | 'info';
 export type IssueCode =
   | 'missing_race' | 'missing_subrace' | 'missing_class' | 'missing_subclass'
   | 'missing_background' | 'missing_spell' | 'missing_item'
-  | 'ruleset_mismatch' | 'orphaned_choice_selection';
+  | 'ruleset_mismatch' | 'orphaned_choice_selection'
+  // A-62: pack-level diagnostics (see src/engine/packDiagnostics.ts).
+  | 'pack_broken_reference' | 'pack_content_shadowed' | 'pack_ruleset_mixed'
+  | 'pack_content_in_use';
 
 export type Issue = {
   severity: IssueSeverity;

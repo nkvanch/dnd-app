@@ -167,3 +167,35 @@ export function validateEntity(
 
   return issues;
 }
+
+/**
+ * Every content id an Entity actually references — race/subrace/class(es)/
+ * subclass(es)/background, known spells, carried+equipped items, and
+ * resolved choice selections — regardless of whether that id currently
+ * resolves. Unlike validateEntity() above, this never reports a problem;
+ * it's a plain collection, used by src/engine/packDiagnostics.ts (A-62) to
+ * answer "would removing this pack leave any saved character with a
+ * dangling reference?" by intersecting against a pack's own item ids.
+ */
+export function collectEntityContentIds(entity: Entity): Set<string> {
+  const ids = new Set<string>();
+  if (entity.kind !== 'character') return ids;
+
+  const { identity, spellcasting, inventory, choices } = entity;
+  if (identity.raceId) ids.add(identity.raceId);
+  if (identity.subRaceId) ids.add(identity.subRaceId);
+  for (const cls of getClassLevels(entity)) {
+    ids.add(cls.classId);
+    if (cls.subclassId) ids.add(cls.subclassId);
+  }
+  if (identity.backgroundId) ids.add(identity.backgroundId);
+  if (spellcasting) for (const spellId of spellIdsOnEntity(entity)) ids.add(spellId);
+  for (const item of inventory.carried)  ids.add(item.itemId);
+  for (const item of inventory.equipped) ids.add(item.itemId);
+  for (const choice of choices) {
+    if (!choice.resolved) continue;
+    for (const sel of choice.selections) ids.add(sel);
+  }
+
+  return ids;
+}

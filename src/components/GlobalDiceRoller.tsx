@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { useDiceLogStore } from '../store/diceLogStore';
 import { ManualRollInput } from './ManualRollInput';
+import { rollWithAdvantage, rollWithDisadvantage } from '../engine/dice';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 const QUICK_DICE = ['1d4','1d6','1d8','1d10','1d12','1d20','d100','2d6','4d6kh3'];
@@ -45,6 +46,20 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
     } catch {
       setError(`Invalid expression: "${expr}"`);
     }
+  }
+
+  // A-59 (adjacent finding): rollWithAdvantage/rollWithDisadvantage
+  // (src/engine/dice.ts) already existed — 2d20, keep higher/lower — but
+  // had zero callers anywhere in the app. This is their first real wiring.
+  // Reads a plain "+3"/"3"/"-1"-shaped expression as the modifier (a
+  // natural thing to type before tapping one of these); anything else
+  // (blank, a full dice expression) rolls at +0 rather than guessing.
+  function rollD20WithState(kind: 'advantage' | 'disadvantage') {
+    setError('');
+    const typed = expr.trim();
+    const modifier = /^[+-]?\d+$/.test(typed) ? parseInt(typed, 10) : 0;
+    const rollFn = kind === 'advantage' ? rollWithAdvantage : rollWithDisadvantage;
+    pushRoll(rollFn(modifier, label.trim() || undefined));
   }
 
   const latest = history[0] ?? null;
@@ -101,6 +116,15 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
             <Pressable style={styles.rollBtn} onPress={roll}>
               <Text style={styles.rollBtnTxt}>Roll</Text>
             </Pressable>
+
+            <View style={styles.advRow}>
+              <Pressable style={styles.advBtn} onPress={() => rollD20WithState('advantage')}>
+                <Text style={styles.advBtnTxt}>▲ Advantage</Text>
+              </Pressable>
+              <Pressable style={styles.advBtn} onPress={() => rollD20WithState('disadvantage')}>
+                <Text style={styles.advBtnTxt}>▼ Disadvantage</Text>
+              </Pressable>
+            </View>
 
             <ManualRollInput
               expression={expr.trim() || '1d20'}
@@ -196,6 +220,14 @@ const styles = StyleSheet.create({
     padding: Spacing.md, alignItems: 'center',
   },
   rollBtnTxt: { color: Colors.bg, fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+
+  advRow: { flexDirection: 'row', gap: Spacing.sm },
+  advBtn: {
+    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingVertical: Spacing.sm, alignItems: 'center',
+  },
+  advBtnTxt: { color: Colors.textPrimary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
 
   resultBox: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,

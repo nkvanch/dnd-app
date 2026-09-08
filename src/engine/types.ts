@@ -159,6 +159,15 @@ export type Subrace = {
   parentId: string;    // id of the parent Race
   features: Feature[];
   /**
+   * Overrides the parent Race's size for this subrace specifically (e.g. a
+   * "Giant" skeleton subrace that's Large while the base Skeleton race is
+   * Medium). Mirrors Race.size's own optional shape — undefined means
+   * "same size as the parent race." See isLargeCreature() in
+   * engine/actionCards.ts for the one mechanical consumer (doubling weapon
+   * damage dice for a Large creature, per the DMG house rule).
+   */
+  size?: Race['size'];
+  /**
    * Resource pools this subrace grants (e.g. a limited-use racial ability).
    * Applied the same way class-level resource grants are — via applyGrant
    * with {kind:'resource', value: r} — reusing existing, already-tested

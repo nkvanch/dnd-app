@@ -2345,7 +2345,7 @@ export const raceSkeleton: Race = {
   ],
   subraces: [
     {
-      id: 'skeleton_giant', name: 'Giant', parentId: 'skeleton', srd: false,
+      id: 'skeleton_giant', name: 'Giant', parentId: 'skeleton', srd: false, size: 'Large',
       features: [
         {
           id: 'skeleton_giant_remains',

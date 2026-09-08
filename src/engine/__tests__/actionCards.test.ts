@@ -4,13 +4,15 @@
 // auto-applied) plus baseline regression coverage for buildLayer1/2/3, which
 // had zero tests before despite every action card in the app going through
 // them.
-import { Feature, FeatureInstance, Entity, SpellSlots } from '../types';
+import { Feature, FeatureInstance, Entity, SpellSlots, Race, Subrace } from '../types';
 import {
   buildLayer1, buildLayer2, buildLayer3, buildOutcomeLines, generateActionCard,
-  getTriggeredFeatures, isFeatureAvailable,
+  getTriggeredFeatures, isFeatureAvailable, isLargeCreature,
 } from '../actionCards';
 import { makeEmptyEntity } from '../../store/characterStore';
 import { startTurn, markActionSlotUsed } from '../combat';
+import { useHomebrewStore } from '../../store/homebrewStore';
+import { raceSkeleton } from '../../content/races';
 
 function makeFeature(overrides: Partial<Feature> = {}): Feature {
   return {
@@ -316,5 +318,57 @@ describe('isFeatureAvailable — spell slots (pactSlots bug fix)', () => {
   it('is unavailable when there are no pactSlots at all and regular slots are exhausted', () => {
     const entity = casterWithSlots({ slots: { '1': { total: 2, used: 2 } } });
     expect(isFeatureAvailable(spellFeature(1), entity).available).toBe(false);
+  });
+});
+
+describe('isLargeCreature — reads Race.size/Subrace.size content instead of a hardcoded id allowlist (architecture review E6)', () => {
+  afterEach(() => {
+    useHomebrewStore.setState({ races: [] });
+  });
+
+  function entityWithRace(raceId: string, subRaceId: string | null = null): Entity {
+    const e = makeEmptyEntity('e1');
+    return { ...e, identity: { ...e.identity, raceId, subRaceId } };
+  }
+
+  it('is false for a Medium official race (Human)', () => {
+    expect(isLargeCreature(entityWithRace('human'))).toBe(false);
+  });
+
+  it('is true for the "Giant" skeleton subrace, tagged size:Large as part of this fix', () => {
+    // raceSkeleton is intentionally not in the default library (content-
+    // honesty — see its own comment), but it's real, existing content a
+    // homebrew pack can surface; seed it directly to prove the size:'Large'
+    // tag this fix added to its skeleton_giant subrace is actually read.
+    useHomebrewStore.setState({ races: [raceSkeleton] });
+    expect(isLargeCreature(entityWithRace('skeleton', 'skeleton_giant'))).toBe(true);
+    expect(isLargeCreature(entityWithRace('skeleton'))).toBe(false); // base Skeleton race is Medium
+  });
+
+  it('is true for a brand-new homebrew Large race — no allowlist edit required', () => {
+    const homebrewOgrish: Race = { id: 'ogrish', name: 'Ogrish', size: 'Large', features: [] };
+    useHomebrewStore.setState({ races: [homebrewOgrish] });
+    expect(isLargeCreature(entityWithRace('ogrish'))).toBe(true);
+  });
+
+  it('a Large-race subrace can override back down to Medium', () => {
+    const smallSubrace: Subrace = { id: 'ogrish_runt', name: 'Runt', parentId: 'ogrish', size: 'Medium', features: [] };
+    const homebrewOgrish: Race = { id: 'ogrish', name: 'Ogrish', size: 'Large', features: [], subraces: [smallSubrace] };
+    useHomebrewStore.setState({ races: [homebrewOgrish] });
+    expect(isLargeCreature(entityWithRace('ogrish', 'ogrish_runt'))).toBe(false);
+    expect(isLargeCreature(entityWithRace('ogrish'))).toBe(true); // base race, no subrace picked
+  });
+
+  it('falls back to the skeleton_giant_remains feature marker when race content can\'t be resolved (e.g. a stale/deleted homebrew race)', () => {
+    const e = makeEmptyEntity('e1');
+    const entity: Entity = {
+      ...e,
+      identity: { ...e.identity, raceId: 'deleted_homebrew_race', subRaceId: null },
+      features: [{
+        id: 'skeleton_giant_remains', name: 'Giant Remains', description: '', source: { kind: 'race', refId: 'x' },
+        level: null, effects: [], actions: [], choices: [], passive: true, isActive: true,
+      }],
+    };
+    expect(isLargeCreature(entity)).toBe(true);
   });
 });

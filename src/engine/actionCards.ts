@@ -22,13 +22,27 @@ import { CampaignRules } from './types';
 
 // ── Large-creature weapon dice (house rule) ──────────────────────────
 
-// Minimal Large-creature detection (mirrors TabInventory) so the engine doesn't
-// import from a component. Extend these sets as more Large races are added.
-const LARGE_SUBRACE_IDS = new Set(['skeleton_giant']);
-const LARGE_RACE_IDS    = new Set<string>();
-function isLargeCreature(entity: Entity): boolean {
-  if (entity.identity.subRaceId && LARGE_SUBRACE_IDS.has(entity.identity.subRaceId)) return true;
-  if (entity.identity.raceId    && LARGE_RACE_IDS.has(entity.identity.raceId))       return true;
+// Bug fix (architecture review E6): this used to be a hardcoded 1-entry id
+// allowlist that a race/subrace dev had to remember to hand-edit for every
+// new Large race — Race.size/Subrace.size already exist as content fields
+// for exactly this, but were never read for mechanics anywhere. Now reads
+// the entity's actual race/subrace content record (subrace's own `size`
+// wins when set, since it can override the parent race's — e.g. a Large
+// "Giant" subrace of an otherwise-Medium race) instead of an id lookup
+// table. The feature-id fallback stays as a last-resort safety net for a
+// homebrew race authored before this field existed.
+export function isLargeCreature(entity: Entity): boolean {
+  const raceId = entity.identity.raceId;
+  if (raceId) {
+    const race = useHomebrewStore.getState().getMergedContentDB().races.find(r => r.id === raceId);
+    if (race) {
+      const subrace = entity.identity.subRaceId
+        ? race.subraces?.find(sr => sr.id === entity.identity.subRaceId)
+        : undefined;
+      const size = subrace?.size ?? race.size;
+      if (size) return size === 'Large';
+    }
+  }
   return entity.features.some(f => f.id === 'skeleton_giant_remains');
 }
 

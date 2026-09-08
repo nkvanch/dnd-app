@@ -45,6 +45,22 @@ async function loadDeletedBuiltins(): Promise<Set<string>> {
   }
 }
 
+/**
+ * Official + homebrew, deduped by id with homebrew winning — the same
+ * precedence `contentResolution.ts`'s mergeSpellIndex/mergeItemIndex
+ * already established and tested for spells/items. Bug fix: races,
+ * classes, backgrounds, conditions, and feats never got the equivalent
+ * fix in getMergedContentDB below — official content was plain-
+ * concatenated FIRST, so a user's homebrew edit to an official-id race/
+ * class/etc. was invisible everywhere (every real lookup is `.find()`,
+ * which returns the first match). Every content type below now goes
+ * through this so none of them can silently regress the same way again.
+ */
+function homebrewWinsById<T extends { id: string }>(official: T[], homebrew: T[]): T[] {
+  const homebrewIds = new Set(homebrew.map(x => x.id));
+  return [...official.filter(x => !homebrewIds.has(x.id)), ...homebrew];
+}
+
 type HomebrewStore = {
   races:       Race[];
   subraces:    Subrace[];
@@ -139,7 +155,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
 
   getMergedContentDB: (activeRuleset?: RulesetId): ContentDB => {
     const { races, subraces, classes, spells, backgrounds, features, items, feats, conditions } = get();
-    const allRaces = [...globalContentDB.races, ...races];
+    const allRaces = homebrewWinsById(globalContentDB.races, races);
     // Attach standalone subraces (parentId may point at an official OR a
     // homebrew race) onto their parent at read time, rather than requiring
     // a subrace to be nested inside a race the user owns/authored — see
@@ -163,7 +179,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     // own ruleset filtering whenever Phase 6 needs it.
     return {
       races:       racesWithStandaloneSubraces.filter(r => matchesRuleset(r.rulesetId, activeRuleset)),
-      classes:     [...globalContentDB.classes,     ...classes].filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
+      classes:     homebrewWinsById(globalContentDB.classes, classes).filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
       // Official spell content moved out of globalContentDB and into
       // spellRepo (SQLite-backed on native, still eager on web) — see
       // src/content/spellRepo.ts. Nothing currently reads ContentDB.spells
@@ -172,15 +188,15 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       // that need the full official+homebrew spell list use
       // spellRepo.getIndex() directly instead.
       spells:      spells,
-      backgrounds: [...globalContentDB.backgrounds, ...backgrounds].filter(b => matchesRuleset(b.rulesetId, activeRuleset)),
+      backgrounds: homebrewWinsById(globalContentDB.backgrounds, backgrounds).filter(b => matchesRuleset(b.rulesetId, activeRuleset)),
       // Now includes homebrew conditions too (A-35) — previously official-only,
       // the one content type with zero homebrew authoring support at all.
-      conditions:  [...globalContentDB.conditions, ...conditions].filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
+      conditions:  homebrewWinsById(globalContentDB.conditions, conditions).filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
       // Same rationale as .spells above — official item content lives in
       // itemRepo now, not globalContentDB.
       items:       items,
-      features:    [...globalContentDB.features,    ...features],
-      feats:       [...(globalContentDB.feats ?? []), ...feats].filter(f => matchesRuleset(f.rulesetId, activeRuleset)),
+      features:    homebrewWinsById(globalContentDB.features, features),
+      feats:       homebrewWinsById(globalContentDB.feats ?? [], feats).filter(f => matchesRuleset(f.rulesetId, activeRuleset)),
     };
   },
 

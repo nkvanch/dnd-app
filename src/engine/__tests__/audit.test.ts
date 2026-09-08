@@ -8,6 +8,7 @@ import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import { recomputeDerived } from '../pipeline';
 import { explainValue } from '../audit';
 import { Entity, Effect, Feature, FeatureInstance } from '../types';
+import { formWolf } from '../../content/beastforms';
 
 function feature(id: string, effects: Partial<Effect>[]): FeatureInstance {
   return {
@@ -133,5 +134,95 @@ describe('explainValue matches recomputeDerived — skills', () => {
     e.skills.skills.perception = { ability: 'wis', trained: true, expertise: false, bonus: null };
     const derived = recomputeDerived(e, DEFAULT_RULES);
     expect(explainValue(derived, 'perception').total + 10).toBe(derived.derived.passivePerception);
+  });
+});
+
+// The 4 divergences below were found in an audit pass looking for spots
+// where explainValue's own hand-rolled logic could disagree with
+// recomputeDerived's real calculation — each is a case the original
+// "agrees on X" tests above didn't happen to cover.
+describe('explainValue matches recomputeDerived — competing speed "set" effects (audit bug #7a)', () => {
+  it('agrees regardless of which order the competing sets are collected in', () => {
+    const low  = feature('speed_low',  [{ target: 'speed', operation: 'set', value: 25 }]);
+    const high = feature('speed_high', [{ target: 'speed', operation: 'set', value: 30 }]);
+
+    const forward  = withFeatures([low, high]);
+    const reversed = withFeatures([high, low]);
+
+    const dForward  = recomputeDerived(forward, DEFAULT_RULES);
+    const dReversed = recomputeDerived(reversed, DEFAULT_RULES);
+
+    // Both orderings must agree with each other AND with the audit trail —
+    // this used to pick "last collected" (array-order-dependent) instead of
+    // highest value, so a dwarf's audit could disagree with its own sheet
+    // depending on how collectAllEffects happened to order its features.
+    expect(dForward.derived.speed).toBe(30);
+    expect(dReversed.derived.speed).toBe(30);
+    expect(explainValue(dForward, 'speed').total).toBe(dForward.derived.speed);
+    expect(explainValue(dReversed, 'speed').total).toBe(dReversed.derived.speed);
+  });
+});
+
+describe('explainValue matches recomputeDerived — spell save DC effect bonus (audit bug #7b)', () => {
+  it('includes an item-granted +N spell save DC bonus in the breakdown', () => {
+    const e = makeEmptyEntity('e1');
+    e.stats = { str: 10, dex: 10, con: 10, int: 10, wis: 16, cha: 10 };
+    e.identity.level = 5;
+    e.spellcasting = { ability: 'wis', slots: {} as any, cantrips: [], known: [], prepared: [], concentrating: null };
+    e.inventory = {
+      ...e.inventory,
+      equipped: [{
+        itemId: 'ring_of_spell_focus', quantity: 1, attuned: true,
+        features: [itemFeature('ring_of_spell_focus_bonus', [{ target: 'spellSaveDC', operation: 'add', value: 1 }])],
+      }],
+    };
+    const derived = recomputeDerived(e, DEFAULT_RULES);
+    const trail = explainValue(derived, 'spellSaveDC');
+    // This used to silently drop the item's bonus from the breakdown (the
+    // real derived.spellSaveDC already included it) — total would disagree.
+    expect(trail.total).toBe(derived.derived.spellSaveDC);
+    expect(trail.entries.some(en => en.sourceId === 'ring_of_spell_focus')).toBe(true);
+  });
+});
+
+describe('explainValue matches recomputeDerived — AC "multiply" effect (audit bug #7c)', () => {
+  it('agrees when an AC "add" effect is combined with a "multiply" effect (homebrew-only today, no official content does this)', () => {
+    const e = withFeatures(
+      [
+        feature('shield', [{ target: 'ac', operation: 'add', value: 4 }]),
+        feature('doubling_ward', [{ target: 'ac', operation: 'multiply', value: 2 }]),
+      ],
+      { resources: { ...makeEmptyEntity('e1').resources, ac: 16 } },
+    );
+    const derived = recomputeDerived(e, DEFAULT_RULES);
+    const trail = explainValue(derived, 'ac');
+    // resolveCombine applies 'multiply' to (base + addSum) of the AC-target
+    // effects themselves — (0 + 4) * 2 = 8 — on top of the 16 armor AC, for
+    // 24 total. The old buggy code summed every effect's raw value
+    // regardless of operation (4 + 2 = 6, treating 'multiply' as if it were
+    // 'add'), so the audit trail would have shown 22, disagreeing with the
+    // sheet's real 24.
+    expect(derived.derived.ac).toBe(24);
+    expect(trail.total).toBe(derived.derived.ac);
+  });
+});
+
+describe('explainValue matches recomputeDerived — Wild Shape AC (audit bug #7d)', () => {
+  it('shows the beast form flat AC, not the player\'s own gear/formula breakdown', () => {
+    const e = withFeatures([], {
+      stats: { str: 10, dex: 18, con: 10, int: 10, wis: 10, cha: 10 },
+      resources: { ...makeEmptyEntity('e1').resources, ac: 16 }, // player's own armor — must be ignored while wildshaped
+      wildShapeState: {
+        active: true, formId: formWolf.id, beastHp: formWolf.hp, beastHpMax: formWolf.hp,
+        expiresAt: { unit: 'hours', remaining: 1 },
+      },
+    });
+    const derived = recomputeDerived(e, DEFAULT_RULES);
+    const trail = explainValue(derived, 'ac');
+    // Previously this function had no Wild Shape awareness at all, so it
+    // would show the player's own 16 AC + DEX-formula breakdown instead of
+    // the wolf's actual flat AC 13 the sheet is really using.
+    expect(derived.derived.ac).toBe(formWolf.ac);
+    expect(trail.total).toBe(derived.derived.ac);
   });
 });

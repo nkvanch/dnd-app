@@ -25,12 +25,14 @@
 // ============================================================================
 
 import {
-  Entity, Ability, SkillName, AuditEntry, AuditTrail, AuditSourceKind,
+  Entity, Ability, SkillName, AuditEntry, AuditTrail, AuditSourceKind, ActiveEffect,
 } from './types';
 import {
   modifier, collectAllEffects, applyStatModifiers,
   proficiencyBonus, AC_DC_BASE, selectBestAcFormula,
 } from './pipeline';
+import { resolveCombine } from './resolver';
+import { ALL_BEAST_FORMS } from '../content/beastforms';
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -83,40 +85,26 @@ function buildEntries(entity: Entity, stat: string): AuditEntry[] {
 // ── AC ────────────────────────────────────────────────────────────────────────
 
 function buildAcEntries(entity: Entity): AuditEntry[] {
+  const allEffects = collectAllEffects(entity);
+
+  // Wild Shape: recomputeDerived's own beastForm short-circuit replaces AC
+  // entirely with the beast's flat total (calculatedBaseAc = beastForm.ac,
+  // acBonus = 0 — no formula, no item/feature bonuses stack on top while
+  // transformed). This function previously had zero Wild Shape awareness,
+  // so a wildshaped entity's audit showed the player's own (irrelevant)
+  // gear/formula breakdown instead of the actual AC in use.
+  const beastForm = entity.wildShapeState?.active
+    ? ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId) ?? null
+    : null;
+  if (beastForm) {
+    return [entry(`${beastForm.name} (beast form)`, beastForm.ac, 'base', null)];
+  }
+
   const entries: AuditEntry[] = [];
   // Use effective stats (base + race/feature modifiers) so the breakdown shows
   // the real DEX/CON contributions — not the raw assigned scores.
-  const allEffects     = collectAllEffects(entity);
   const effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const dexMod = modifier(effectiveStats.dex);
-
-  // Gather every flat AC bonus (shields, magic items, feature bonuses).
-  // The base formula (armor on equipped items, Unarmored Defense on features)
-  // is resolved separately below via the same selectBestAcFormula()
-  // recomputeDerived() uses, so this breakdown can never pick a different
-  // winner than the actual entity.derived.ac calculation — including item-
-  // granted formulas, which this used to miss entirely (it only walked
-  // entity.features, not equipped-item effects).
-  const flats: AuditEntry[] = [];
-
-  for (const item of entity.inventory.equipped) {
-    for (const f of item.features) {
-      for (const e of f.effects) {
-        if (e.type === 'stat_modifier' && e.target === 'ac' && typeof e.value === 'number') {
-          flats.push(entry(f.name, e.value, 'item', item.itemId));
-        }
-      }
-    }
-  }
-
-  for (const f of entity.features) {
-    if (!f.isActive) continue;
-    for (const e of f.effects) {
-      if (e.type === 'stat_modifier' && e.target === 'ac' && typeof e.value === 'number') {
-        flats.push(entry(f.name, e.value, f.source.kind as AuditSourceKind, f.id));
-      }
-    }
-  }
 
   // Same 3-tier priority as recomputeDerived's calculatedBaseAc: a
   // base_ac_formula effect wins over armor, which wins over the flat
@@ -137,7 +125,19 @@ function buildAcEntries(entity: Entity): AuditEntry[] {
     entries.push(entry('DEX modifier', dexMod, 'base', null));
   }
 
-  entries.push(...flats);
+  // Flat AC bonuses (shields, magic items, feature bonuses) — every
+  // stat_modifier effect targeting 'ac' (base_ac_formula is a separate
+  // effect type, handled above). Bug fix: this used to hand-walk
+  // entity.inventory.equipped/entity.features directly, which (a) skipped
+  // collectAllEffects's condition-gating — a conditionally-suppressed AC
+  // effect could incorrectly still show here — and (b) summed every
+  // effect's raw value regardless of 'operation', silently treating a
+  // 'multiply' effect as if it were 'add'. Now filters the same allEffects
+  // recomputeDerived's own acBonus uses, and defers to resolveCombine (the
+  // same function acBonus is computed with) for anything beyond a plain
+  // sum of 'add' effects, so these entries can never sum to a different
+  // total than entity.derived.ac actually is.
+  entries.push(...buildTargetBonusEntries(allEffects, ['ac']));
   return entries;
 }
 
@@ -164,39 +164,34 @@ function buildInitiativeEntries(entity: Entity): AuditEntry[] {
 function buildSpeedEntries(entity: Entity): AuditEntry[] {
   const entries: AuditEntry[] = [];
 
-  // Single pass over every speed effect (features — which include condition-
-  // sourced features — and equipped items), partitioned by operation.
+  // collectAllEffects already condition-gates (a suppressed condition's
+  // speed effect won't appear) and carries sourceName/sourceKind/sourceId —
+  // this used to hand-walk entity.features/entity.inventory.equipped
+  // directly, which skipped that gating entirely.
   type Found = {
     label: string; value: number; kind: AuditSourceKind; id: string | null;
     op: string;
   };
-  const found: Found[] = [];
-
-  for (const f of entity.features) {
-    if (!f.isActive) continue;
-    const label = f.source.kind === 'condition' ? `${f.name} (condition)` : f.name;
-    for (const e of f.effects) {
-      if (e.type === 'stat_modifier' && e.target === 'speed' && typeof e.value === 'number') {
-        found.push({ label, value: e.value, kind: f.source.kind as AuditSourceKind, id: f.id, op: e.operation });
-      }
-    }
-  }
-  for (const item of entity.inventory.equipped) {
-    for (const f of item.features) {
-      for (const e of f.effects) {
-        if (e.type === 'stat_modifier' && e.target === 'speed' && typeof e.value === 'number') {
-          found.push({ label: f.name, value: e.value, kind: 'item', id: item.itemId, op: e.operation });
-        }
-      }
-    }
-  }
+  const found: Found[] = collectAllEffects(entity)
+    .filter(ae => ae.effect.type === 'stat_modifier' && ae.effect.target === 'speed' && typeof ae.effect.value === 'number')
+    .map(ae => ({
+      label: ae.sourceKind === 'condition' ? `${ae.sourceName} (condition)` : ae.sourceName,
+      value: ae.effect.value as number,
+      kind:  ae.sourceKind ?? 'base',
+      id:    ae.sourceId,
+      op:    ae.effect.operation,
+    }));
 
   const sets = found.filter(x => x.op === 'set');
   if (sets.length > 0) {
     // 'set' REPLACES the base speed (Dwarf 25, Grappled 0). Showing base 30
-    // PLUS "25" was the old bug — a dwarf's audit displayed 55. The pipeline's
-    // last-collected set wins, so mirror that ordering here.
-    const winner = sets[sets.length - 1];
+    // PLUS "25" was the old bug — a dwarf's audit displayed 55. Competing
+    // sets now resolve by HIGHEST value — matching resolveCombine's own
+    // order-independent tie-break — rather than "last collected", which is
+    // order-dependent and was itself a bug (fixed in resolver.ts's Phase 1
+    // hardening; this mirrors that fix instead of the stale ordering it
+    // replaced).
+    const winner = sets.reduce((best, x) => (x.value > best.value ? x : best));
     entries.push(entry(`${winner.label} (sets speed)`, winner.value, winner.kind, winner.id));
   } else {
     entries.push(entry('Base speed', entity.resources.speed, 'base', null));
@@ -233,12 +228,19 @@ function buildSpellSaveDcEntries(entity: Entity): AuditEntry[] {
   if (!entity.spellcasting) return [];
   const prof    = proficiencyBonus(entity.identity.level);
   const ability = entity.spellcasting.ability;
-  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const allEffects = collectAllEffects(entity);
+  const effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const mod     = modifier(effectiveStats[ability]);
   return [
     entry('Base', AC_DC_BASE, 'base', null),
     entry('Proficiency bonus', prof, 'class', null),
     entry(`${ability.toUpperCase()} modifier`, mod, 'base', null),
+    // Effect-based bonuses (items/features granting +N to spell save DC).
+    // recomputeDerived's own spellSaveDC accepts either target spelling
+    // ('spell_save_dc'/'spellSaveDC') — this used to only ever emit the 3
+    // entries above, silently dropping any such bonus from the breakdown
+    // while it still correctly affected the real derived number.
+    ...buildTargetBonusEntries(allEffects, ['spell_save_dc', 'spellSaveDC']),
   ];
 }
 
@@ -248,12 +250,50 @@ function buildSpellAttackEntries(entity: Entity): AuditEntry[] {
   if (!entity.spellcasting) return [];
   const prof    = proficiencyBonus(entity.identity.level);
   const ability = entity.spellcasting.ability;
-  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const allEffects = collectAllEffects(entity);
+  const effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const mod     = modifier(effectiveStats[ability]);
   return [
     entry('Proficiency bonus', prof, 'class', null),
     entry(`${ability.toUpperCase()} modifier`, mod, 'base', null),
+    // Same effect-based-bonus gap as buildSpellSaveDcEntries above, for the
+    // 'spell_attack_bonus'/'spellAttackBonus' target pair.
+    ...buildTargetBonusEntries(allEffects, ['spell_attack_bonus', 'spellAttackBonus']),
   ];
+}
+
+// ── Shared: effect-based bonus entries for a stat_modifier target set ────────
+
+/**
+ * Per-source additive AuditEntry list for every stat_modifier effect
+ * targeting any of `targets`, guaranteed to sum to exactly what
+ * resolveCombine (the same function recomputeDerived's own acBonus/
+ * spellSaveDC/spellAttackBonus bonuses are computed with) would produce for
+ * that target. Plain 'add' effects each get their own line (the common
+ * case, preserves per-source detail); any 'set'/'multiply' effects are
+ * folded into one merged line, since no single line can represent a
+ * multiplier's own contribution — this keeps the total always correct even
+ * though no official content actually uses 'set'/'multiply' on these
+ * targets today (homebrew can).
+ */
+function buildTargetBonusEntries(allEffects: ActiveEffect[], targets: string[]): AuditEntry[] {
+  const entries: AuditEntry[] = [];
+  for (const target of targets) {
+    const relevant = allEffects.filter(ae => ae.effect.type === 'stat_modifier' && ae.effect.target === target);
+    if (relevant.length === 0) continue;
+    const addOnes = relevant.filter(ae => ae.effect.operation === 'add');
+    const others  = relevant.filter(ae => ae.effect.operation !== 'add');
+    for (const ae of addOnes) {
+      entries.push(entry(ae.sourceName, ae.effect.value as number, ae.sourceKind ?? 'base', ae.sourceId));
+    }
+    if (others.length > 0) {
+      const combined = resolveCombine(relevant);
+      const addSum   = addOnes.reduce((s, ae) => s + (ae.effect.value as number), 0);
+      const rep      = others[others.length - 1];
+      entries.push(entry(`${rep.sourceName} (combined)`, combined - addSum, rep.sourceKind ?? 'base', rep.sourceId));
+    }
+  }
+  return entries;
 }
 
 // ── Ability scores ────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@
 import { Entity, CampaignRules, SkillName } from './types';
 import { MonsterTemplate } from '../content/monsters/types';
 import { makeEmptyEntity }  from '../store/characterStore';
-import { recomputeDerived } from './pipeline';
+import { recomputeDerived, modifier } from './pipeline';
 import { rollExpression }   from './dice';
 import { DEFAULT_RULES }    from '../store/characterStore';
 import { applyGrant }       from './leveling';
@@ -44,13 +44,23 @@ export function spawnMonster(
   }));
 
   // ── Skill block: apply flat bonuses from template ───────────────────────────
+  // Bug fix: a monster stat block's printed skill bonus (e.g. "Stealth +6")
+  // is already the FULL total — ability modifier and proficiency both baked
+  // in. Setting both trained:true (which makes resolveSkill separately add
+  // proficiency again) AND bonus:<printed value> double-counted proficiency
+  // into every monster with an authored skill. Store trained:false and back
+  // out the ability-mod portion, so resolveSkill's baseMod + 0 + bonus
+  // reproduces the printed total exactly regardless of which ability the
+  // skill uses.
   const skillsBlock = { ...base.skills };
   for (const [name, bonus] of Object.entries(template.skills)) {
     const key = name as SkillName;
-    if (skillsBlock.skills[key]) {
+    const entry = skillsBlock.skills[key];
+    if (entry && typeof bonus === 'number') {
+      const baseMod = modifier(template.stats[entry.ability]);
       skillsBlock.skills = {
         ...skillsBlock.skills,
-        [key]: { ...skillsBlock.skills[key], trained: true, bonus: bonus ?? null },
+        [key]: { ...entry, trained: false, bonus: bonus - baseMod },
       };
     }
   }

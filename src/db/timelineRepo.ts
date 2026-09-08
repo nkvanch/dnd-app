@@ -7,6 +7,19 @@
 import { Platform } from 'react-native';
 import { getDb } from './db';
 
+/**
+ * A-63: closed set of coarse buckets for filtering a character's timeline
+ * — matches this app's existing "closed union, not open string" pattern
+ * (Effect.type, IssueCode, etc.). The `category` column has existed since
+ * Phase B of the undo/redo track, but no caller ever passed one until now
+ * — every stored entry's category was NULL. Old rows stay NULL (shown
+ * under "Other" in the filter, never crash) rather than being
+ * backfilled — there's no reliable way to infer a past entry's category
+ * from its label text alone.
+ */
+export type TimelineCategory =
+  | 'combat' | 'rest' | 'inventory' | 'spells' | 'leveling' | 'features' | 'other';
+
 export type TimelineEntry = {
   id:        number;
   entityId:  string;
@@ -34,7 +47,7 @@ export async function recordTimelineEntry(
   entityId: string,
   label:    string,
   timestamp: number,
-  category?: string,
+  category?: TimelineCategory,
 ): Promise<void> {
   if (Platform.OS === 'web') return;
   try {

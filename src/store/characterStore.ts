@@ -15,7 +15,7 @@ import { Entity, CampaignRules, SkillName, SkillEntry, AbilityScores, ItemInstan
 import {
   saveEntity, loadAllEntities, deleteEntity, loadAllEntityMeta, EntityMeta,
 } from '../db/entityRepo';
-import { recordTimelineEntry } from '../db/timelineRepo';
+import { recordTimelineEntry, TimelineCategory } from '../db/timelineRepo';
 import { syncManager } from '../sync/syncManager';
 import { deepMerge } from '../sync/diff';
 import { spellRepo } from '../content/spellRepo';
@@ -333,7 +333,7 @@ type CharacterStore = {
    * mechanical timeline show for this step — every existing call site
    * omitting it keeps compiling and just shows the generic default.
    */
-  updateCharacter: (id: string, updater: (e: Entity) => Entity, label?: string) => void;
+  updateCharacter: (id: string, updater: (e: Entity) => Entity, label?: string, category?: TimelineCategory) => void;
   deleteCharacter: (id: string) => void;
 
   /** Steps back one entry in undoStack, pushing the replaced state onto
@@ -465,7 +465,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
 
   // ── Character management ───────────────────────────────────────────────────
 
-  updateCharacter: (id, updater, label = 'Edit') => {
+  updateCharacter: (id, updater, label = 'Edit', category) => {
     let updated: Entity | null = null;
     let previous: Entity | null = null;
     const timestamp = Date.now();
@@ -497,7 +497,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       // session-local undo entry above, fire-and-forget (never awaited),
       // same non-blocking style scheduleSave already uses. Survives app
       // restart, unlike undoStack — that's the deliberate distinction.
-      void recordTimelineEntry(id, label, timestamp);
+      void recordTimelineEntry(id, label, timestamp, category);
       // Sync only what changed since `previous` — role-aware: broadcasts
       // directly if we're the DM, or pushes up to the DM (who relays onward)
       // if we're a player. No-op if offline. Sending a diff instead of the

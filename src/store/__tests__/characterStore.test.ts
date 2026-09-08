@@ -136,7 +136,18 @@ describe('updateCharacter — persistent timeline write (Phase B)', () => {
     // The state update already happened synchronously — updateCharacter
     // never awaits recordTimelineEntry's returned promise.
     expect(useCharacterStore.getState().characters[0].notes).toBe('hi');
-    expect(recordSpy).toHaveBeenCalledWith('c1', 'Took 8 damage', expect.any(Number));
+    // 4th arg (category, A-63) is undefined here — this call site doesn't pass one.
+    expect(recordSpy).toHaveBeenCalledWith('c1', 'Took 8 damage', expect.any(Number), undefined);
+    recordSpy.mockRestore();
+  });
+
+  it('passes a category through to recordTimelineEntry when the caller supplies one (A-63)', () => {
+    const recordSpy = jest.spyOn(timelineRepo, 'recordTimelineEntry').mockResolvedValue(undefined);
+    reset([testCharacter('c1')]);
+
+    useCharacterStore.getState().updateCharacter('c1', e => ({ ...e, notes: 'hi' }), 'Took 8 damage', 'combat');
+
+    expect(recordSpy).toHaveBeenCalledWith('c1', 'Took 8 damage', expect.any(Number), 'combat');
     recordSpy.mockRestore();
   });
 });

@@ -33,6 +33,7 @@ import { TabNotes }     from '../../src/components/sheet/TabNotes';
 import { TabSpells }    from '../../src/components/sheet/TabSpells';
 import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
 import { CharacterHistoryModal } from '../../src/components/sheet/CharacterHistoryModal';
+import { TimelineCategory } from '../../src/db/timelineRepo';
 import { IssuesModal } from '../../src/components/sheet/IssuesModal';
 import { RestPreviewModal, buildRestMutation } from '../../src/components/sheet/RestPreviewModal';
 import { EquipmentPreviewModal } from '../../src/components/sheet/EquipmentPreviewModal';
@@ -155,12 +156,12 @@ export default function CharacterSheetScreen() {
   // Tab min-width: fills screen for 6 tabs, scrollable for 7.
   const TAB_MIN_W = Math.floor(Dimensions.get('window').width / 6);
 
-  const mutate = useCallback((updater: (e: Entity) => Entity, label?: string) => {
+  const mutate = useCallback((updater: (e: Entity) => Entity, label?: string, category?: TimelineCategory) => {
     if (!id) return;
     updateCharacter(id, e => {
       const updated = updater(e);
       return recomputeDerived(updated, rules);
-    }, label);
+    }, label, category);
   }, [id, updateCharacter, rules]);
 
   // ── Handlers (all pure engine calls → mutate) ─────────────────────────────
@@ -173,25 +174,25 @@ export default function CharacterSheetScreen() {
     // applies to the real-HP path.
     mutate(e => e.wildShapeState?.active
       ? applyWildShapeDamage(e, amount, rules)
-      : applyDamage(e, amount, rules, damageType), `Took ${amount}${damageType ? ` ${damageType}` : ''} damage`);
+      : applyDamage(e, amount, rules, damageType), `Took ${amount}${damageType ? ` ${damageType}` : ''} damage`, 'combat');
   }, [mutate, rules]);
 
   const handleHeal = useCallback((amount: number) => {
     // Per the book rule, healing has no effect on a Wild Shape beast form's
     // hit points — no-op while transformed, rather than incorrectly healing
     // the player's real HP underneath (which isn't the pool being damaged).
-    mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amount, rules), `Healed ${amount}`);
+    mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amount, rules), `Healed ${amount}`, 'combat');
   }, [mutate, rules]);
 
   const handleAddCondition = useCallback((condId: string, duration: DurationTracker | null) => {
     // Look up the condition's mechanical features from content so the engine
     // can enforce them (e.g. Grappled sets speed to 0 in the pipeline).
     const condContent = CONDITIONS_BY_ID[condId];
-    mutate(e => applyCondition(e, condId, 'manual', rules, condContent?.features, duration), `Added condition: ${condContent?.name ?? condId}`);
+    mutate(e => applyCondition(e, condId, 'manual', rules, condContent?.features, duration), `Added condition: ${condContent?.name ?? condId}`, 'combat');
   }, [mutate, rules]);
 
   const handleRemoveCondition = useCallback((condId: string) => {
-    mutate(e => removeCondition(e, condId, rules), `Removed condition: ${CONDITIONS_BY_ID[condId]?.name ?? condId}`);
+    mutate(e => removeCondition(e, condId, rules), `Removed condition: ${CONDITIONS_BY_ID[condId]?.name ?? condId}`, 'combat');
   }, [mutate, rules]);
 
   const handleResourceChange = useCallback((resourceId: string, delta: number) => {
@@ -206,7 +207,7 @@ export default function CharacterSheetScreen() {
             : r
         ),
       },
-    }), `${delta > 0 ? 'Restored' : 'Spent'} ${resourceName}`);
+    }), `${delta > 0 ? 'Restored' : 'Spent'} ${resourceName}`, 'combat');
   }, [mutate, entity]);
 
   const handleSpendSlot = useCallback((tier: string) => {
@@ -224,7 +225,7 @@ export default function CharacterSheetScreen() {
           },
         },
       };
-    }, `Spent level ${tier} spell slot`);
+    }, `Spent level ${tier} spell slot`, 'spells');
   }, [mutate]);
 
   const handleRestoreSlot = useCallback((tier: string) => {
@@ -242,7 +243,7 @@ export default function CharacterSheetScreen() {
           },
         },
       };
-    }, `Restored level ${tier} spell slot`);
+    }, `Restored level ${tier} spell slot`, 'spells');
   }, [mutate]);
 
   // Set by handleEquip/handleUnequip once the change has been simulated but
@@ -277,7 +278,7 @@ export default function CharacterSheetScreen() {
 
   const confirmEquipPreview = useCallback(() => {
     if (!equipPreview) return;
-    mutate(() => equipPreview.after, `${equipPreview.kind === 'equip' ? 'Equipped' : 'Unequipped'} ${equipPreview.itemName}`);
+    mutate(() => equipPreview.after, `${equipPreview.kind === 'equip' ? 'Equipped' : 'Unequipped'} ${equipPreview.itemName}`, 'inventory');
     setEquipPreview(null);
   }, [mutate, equipPreview]);
 
@@ -295,7 +296,7 @@ export default function CharacterSheetScreen() {
   // (TabInventory) checks countAttuned()/attunementCap() itself first so it
   // can show an explanatory Alert instead of a silent no-op.
   const handleToggleAttune = useCallback((itemId: string) => {
-    mutate(e => toggleAttunement(e, itemId), `Toggled attunement: ${itemName(itemId)}`);
+    mutate(e => toggleAttunement(e, itemId), `Toggled attunement: ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
 
   const handleAddItem = useCallback(async (itemId: string) => {
@@ -310,7 +311,7 @@ export default function CharacterSheetScreen() {
         ? e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity: i.quantity + 1 } : i)
         : [...e.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }];
       return { ...e, inventory: { ...e.inventory, carried } };
-    }, `Added item: ${itemName(itemId)}`);
+    }, `Added item: ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
 
   const handleRemoveItem = useCallback((itemId: string) => {
@@ -321,7 +322,7 @@ export default function CharacterSheetScreen() {
         equipped: e.inventory.equipped.filter(i => i.itemId !== itemId),
         carried:  e.inventory.carried.filter(i => i.itemId !== itemId),
       },
-    }), `Removed item: ${itemName(itemId)}`);
+    }), `Removed item: ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
 
   // +/- stepper on a carried stack's quantity. Dropping to 0 removes it
@@ -336,7 +337,7 @@ export default function CharacterSheetScreen() {
         ? e.inventory.carried.filter(i => i.itemId !== itemId)
         : e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity: nextQty } : i);
       return { ...e, inventory: { ...e.inventory, carried } };
-    }, `${delta > 0 ? '+' : ''}${delta} ${itemName(itemId)}`);
+    }, `${delta > 0 ? '+' : ''}${delta} ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
 
   // Typed exact quantity (e.g. "you just picked up 20 arrows") — same
@@ -349,7 +350,7 @@ export default function CharacterSheetScreen() {
         ? e.inventory.carried.filter(i => i.itemId !== itemId)
         : e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity } : i);
       return { ...e, inventory: { ...e.inventory, carried } };
-    }, `Set ${itemName(itemId)} quantity to ${quantity}`);
+    }, `Set ${itemName(itemId)} quantity to ${quantity}`, 'inventory');
   }, [mutate, itemName]);
 
   const handleApplyInfusion = useCallback((itemId: string, infusionId: string, damageType?: string) => {
@@ -392,7 +393,7 @@ export default function CharacterSheetScreen() {
           carried:  e.inventory.carried.map(applyTo),
         },
       };
-    }, `Infused ${itemName(itemId)}: ${getInfusion(infusionId)?.name ?? infusionId}`);
+    }, `Infused ${itemName(itemId)}: ${getInfusion(infusionId)?.name ?? infusionId}`, 'inventory');
   }, [mutate, itemName]);
 
   const handleRemoveInfusion = useCallback((itemId: string) => {
@@ -410,15 +411,15 @@ export default function CharacterSheetScreen() {
           carried:  e.inventory.carried.map(removeFrom),
         },
       };
-    }, `Removed infusion from ${itemName(itemId)}`);
+    }, `Removed infusion from ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
 
   const handleUpdateCurrency = useCallback((currency: import('../../src/engine/types').Currency) => {
-    mutate(e => ({ ...e, inventory: { ...e.inventory, currency } }), 'Updated currency');
+    mutate(e => ({ ...e, inventory: { ...e.inventory, currency } }), 'Updated currency', 'inventory');
   }, [mutate]);
 
   const handleSaveNotes = useCallback((notes: string) => {
-    mutate(e => ({ ...e, notes }), 'Edited notes');
+    mutate(e => ({ ...e, notes }), 'Edited notes', 'other');
   }, [mutate]);
 
   // Wild Shape duration is tracked in hours (wildShapeState.expiresAt), but
@@ -431,7 +432,7 @@ export default function CharacterSheetScreen() {
   // simplifies. (This composition lives in buildRestMutation, shared with
   // RestPreviewModal, so the preview and the real action can never drift.)
   const handleRest = useCallback((kind: 'short' | 'long') => {
-    mutate(buildRestMutation(kind, rules), kind === 'short' ? 'Short Rest' : 'Long Rest');
+    mutate(buildRestMutation(kind, rules), kind === 'short' ? 'Short Rest' : 'Long Rest', 'rest');
   }, [mutate, rules]);
 
   const [restPreview, setRestPreview] = useState<'short' | 'long' | null>(null);
@@ -633,13 +634,13 @@ export default function CharacterSheetScreen() {
                 onResourceChange={handleResourceChange}
                 onSpendSlot={handleSpendSlot}
                 onRestoreSlot={handleRestoreSlot}
-                onEntityUpdate={updated => mutate(() => updated, 'Character progression')}
+                onEntityUpdate={updated => mutate(() => updated, 'Character progression', 'combat')}
               />
             ) : (
               <TabExploration
                 entity={entity}
                 rules={rules}
-                onEntityUpdate={updated => mutate(() => updated, 'Exploration action')}
+                onEntityUpdate={updated => mutate(() => updated, 'Exploration action', 'other')}
                 onDamage={handleDamage}
                 onHeal={handleHeal}
                 onAddCondition={handleAddCondition}
@@ -653,14 +654,14 @@ export default function CharacterSheetScreen() {
           <TabActions
             entity={entity}
             rules={rules}
-            onEntityUpdate={updated => mutate(() => updated, 'Used action card')}
+            onEntityUpdate={updated => mutate(() => updated, 'Used action card', 'combat')}
           />
         )}
         {activeTab === 'spells' && (
           <TabSpells
             entity={entity}
             rules={rules}
-            onEntityUpdate={updated => mutate(() => updated, 'Cast spell')}
+            onEntityUpdate={updated => mutate(() => updated, 'Cast spell', 'spells')}
           />
         )}
         {activeTab === 'abilities' && (
@@ -670,14 +671,14 @@ export default function CharacterSheetScreen() {
             isDm={isDm}
             campaignId={campaignId}
             deviceId={deviceId}
-            onEntityUpdate={updated => mutate(() => updated, 'Ability override')}
+            onEntityUpdate={updated => mutate(() => updated, 'Ability override', 'other')}
           />
         )}
         {activeTab === 'features' && (
           <TabFeatures
             entity={entity}
             rules={rules}
-            onEntityUpdate={updated => mutate(() => updated, 'Edited features')}
+            onEntityUpdate={updated => mutate(() => updated, 'Edited features', 'features')}
           />
         )}
         {activeTab === 'inventory' && (
@@ -723,7 +724,7 @@ export default function CharacterSheetScreen() {
         visible={freeEditOpen}
         entity={entity}
         rules={rules}
-        onApply={updated => mutate(() => updated, 'Free edit')}
+        onApply={updated => mutate(() => updated, 'Free edit', 'other')}
         onClose={() => setFreeEditOpen(false)}
       />
 

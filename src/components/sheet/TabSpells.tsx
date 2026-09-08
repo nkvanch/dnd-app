@@ -11,7 +11,7 @@
 // and a toggle to add/remove spells from entity.spellcasting.prepared.
 // Spontaneous casters: all known spells are castable; no prepared toggle.
 // ============================================================================
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, CampaignRules, ActionCard, Spell } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
@@ -55,6 +55,19 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
   const homebrewSpells = useHomebrewStore(s => s.spells);
   const [addSpellOpen, setAddSpellOpen] = useState(false);
 
+  // Mirrors the latest `entity` prop for handlers that span an async gap —
+  // bug fix: addSpell (below) used to read the `entity` closed over at the
+  // moment it was called, which could be stale by the time its await
+  // resolved if any other mutation (damage, a rest, a synced update from
+  // the DM) landed on the store in the meantime. Since onEntityUpdate
+  // installs a full entity rather than merging, committing that stale
+  // snapshot silently reverted whatever changed during the wait. Every
+  // sibling handler in this file already resolves its async lookup BEFORE
+  // touching `entity`; addSpell is the one that reads it AFTER, so it's
+  // the one that needs this.
+  const entityRef = useRef(entity);
+  entityRef.current = entity;
+
   // A character may reach this tab without a spellcasting block (e.g. a Skeleton
   // whose Doomed Touch cantrip hasn't been initialised). Use a safe default so
   // the Add Spell action can initialise a real block on first use.
@@ -75,7 +88,10 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
     // Warm Tier 2 before this id ever reaches the engine pipeline (spellMap
     // lookup / generateAllActionCards on the next render).
     await spellRepo.ensureLoaded([spellId]);
-    const block = entity.spellcasting ?? {
+    // Read the CURRENT entity via the ref, not the stale `entity` closed
+    // over when addSpell was called — see entityRef's own doc comment.
+    const current = entityRef.current;
+    const block = current.spellcasting ?? {
       ability: 'con' as const,
       slots: { '1':{total:0,used:0}, '2':{total:0,used:0}, '3':{total:0,used:0}, '4':{total:0,used:0}, '5':{total:0,used:0}, '6':{total:0,used:0}, '7':{total:0,used:0}, '8':{total:0,used:0}, '9':{total:0,used:0} },
       cantrips: [], known: [], prepared: [], concentrating: null,
@@ -83,7 +99,7 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
     const next = level === 0
       ? { ...block, cantrips: [...new Set([...block.cantrips, spellId])] }
       : { ...block, known:    [...new Set([...block.known,    spellId])] };
-    onEntityUpdate({ ...entity, spellcasting: next });
+    onEntityUpdate({ ...current, spellcasting: next });
   }
 
   // Multiclass-aware: a character is a "prepared caster" for this tab's

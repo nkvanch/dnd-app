@@ -20,7 +20,7 @@ import { useHomebrewStore } from '../../store/homebrewStore';
 import { getClassLevels } from '../../engine/multiclass';
 import { castConcentrationSpell } from '../../engine/combat';
 import { rollExpression } from '../../engine/dice';
-import { UseModal } from './TabActions';
+import { UseModal, applyActionCardUse } from './TabActions';
 import { AddSpellModal } from './AddSpellModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
@@ -150,55 +150,29 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
   // ── Cast handler (mirrors TabActions.handleUse exactly) ──────────────────
 
   const handleCast = useCallback((card: ActionCard) => {
-    const cost  = card.resourceCost;
-    const spell = spellMap.get(card.featureId);
+    // Bug fix (architecture review U5): this used to hand-duplicate
+    // applyActionCardUse's spell-slot/resource-spend logic without ever
+    // calling markActionSlotUsed — casting a spell from this tab consumed
+    // a slot but never marked the action-economy slot used, so the same
+    // character could still use an Actions-tab feature that same turn.
+    // Delegating to the shared implementation also picks up its
+    // abilityEffects application, which this handler never had at all.
+    let updated = applyActionCardUse(entity, card, rules);
 
-    if (!cost) {
-      // Cantrip or free cast — no resource to spend, but it may still start
-      // concentration (True Strike, Resistance, Dancing Lights, Abyssal
-      // Claim are real cost-less concentration cantrips in this content).
+    // applyActionCardUse's own concentration check only looks up official
+    // spellRepo content — this tab's spellMap resolves homebrew-first (see
+    // its own comment above), so re-check on top for a homebrew
+    // concentration spell it would otherwise miss. Only when the cast
+    // actually went through (updated !== entity — applyActionCardUse
+    // returns the original entity unchanged on any failed-cost guard).
+    // castConcentrationSpell's drop-then-begin design makes a second call
+    // for the same spell (the official-content case, already handled
+    // inside applyActionCardUse) a safe no-op, not a double-application bug.
+    if (updated !== entity) {
+      const spell = spellMap.get(card.featureId);
       if (spell?.concentration) {
-        onEntityUpdate(castConcentrationSpell(entity, spell, rules));
+        updated = castConcentrationSpell(updated, spell, rules);
       }
-      setActiveCard(card);
-      return;
-    }
-
-    let updated = entity;
-
-    if (cost.resourceId === 'spell_slots') {
-      if (!updated.spellcasting) return;
-      const tier = String(cost.spellSlotTier ?? 1) as keyof typeof updated.spellcasting.slots;
-      const slot = updated.spellcasting.slots[tier];
-      if (!slot || slot.used >= slot.total) return;
-      updated = {
-        ...updated,
-        spellcasting: {
-          ...updated.spellcasting,
-          slots: {
-            ...updated.spellcasting.slots,
-            [tier]: { ...slot, used: slot.used + 1 },
-          },
-        },
-      };
-    } else {
-      const res = updated.resources.custom.find(r => r.id === cost.resourceId);
-      if (!res || res.current < cost.quantity) return;
-      updated = {
-        ...updated,
-        resources: {
-          ...updated.resources,
-          custom: updated.resources.custom.map(r =>
-            r.id === cost.resourceId
-              ? { ...r, current: Math.max(0, r.current - cost.quantity) }
-              : r
-          ),
-        },
-      };
-    }
-
-    if (spell?.concentration) {
-      updated = castConcentrationSpell(updated, spell, rules);
     }
 
     onEntityUpdate(updated);

@@ -10,7 +10,9 @@ import {
   startWildShape, endWildShape, applyWildShapeDamage,
   concentrationCheck, castConcentrationSpell, dropConcentration,
   parseConcentrationDuration, tickConcentrationDuration, startEncounter,
+  startTurn, markActionSlotUsed, toggleActionEconomy, endTurn,
 } from '../combat';
+import { isFeatureAvailable } from '../actionCards';
 import { setRandomSource } from '../dice';
 import { Entity, SpellSlots, FeatureInstance, Spell } from '../types';
 
@@ -65,6 +67,134 @@ describe('startEncounter', () => {
     setRandomSource(() => sequence[calls++]);
     const result = startEncounter([low, high], 'enc1');
     expect(result.order.map(e => e.entityId)).toEqual(['high', 'low']);
+  });
+});
+
+// ── A-25: turn/action economy ────────────────────────────────────────────────
+
+describe('startTurn', () => {
+  it('resets all 3 slots to unused, replacing a null turnState', () => {
+    const e = testEntity();
+    expect(e.turnState).toBeUndefined();
+    const started = startTurn(e);
+    expect(started.turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: false });
+  });
+
+  it('resets all 3 slots even if some were already used', () => {
+    const e = { ...testEntity(), turnState: { actionUsed: true, bonusActionUsed: true, reactionUsed: true } };
+    expect(startTurn(e).turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: false });
+  });
+});
+
+describe('markActionSlotUsed', () => {
+  it('sets only the given slot, leaving the other two untouched', () => {
+    const e = startTurn(testEntity());
+    const after = markActionSlotUsed(e, 'bonus_action');
+    expect(after.turnState).toEqual({ actionUsed: false, bonusActionUsed: true, reactionUsed: false });
+  });
+
+  it('is a no-op when turnState is null (not actively tracked)', () => {
+    const e = testEntity();
+    const after = markActionSlotUsed(e, 'action');
+    expect(after).toBe(e);
+    expect(after.turnState).toBeUndefined();
+  });
+});
+
+describe('toggleActionEconomy', () => {
+  it('initializes turnState (via startTurn) if it was null, then sets the slot', () => {
+    const e = testEntity();
+    const after = toggleActionEconomy(e, 'reaction');
+    expect(after.turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: true });
+  });
+
+  it('flips true back to false — a manual correction, unlike markActionSlotUsed', () => {
+    const e = startTurn(testEntity());
+    const usedOnce = toggleActionEconomy(e, 'action');
+    expect(usedOnce.turnState?.actionUsed).toBe(true);
+    const toggledBack = toggleActionEconomy(usedOnce, 'action');
+    expect(toggledBack.turnState?.actionUsed).toBe(false);
+  });
+});
+
+describe('endTurn — action economy', () => {
+  it("starts a fresh turn (resets action economy) for whoever's turn is now current, leaving the entity whose turn just ended untouched", () => {
+    const a = { ...testEntity(), id: 'a', identity: { ...testEntity().identity, name: 'A' }, turnState: { actionUsed: true, bonusActionUsed: true, reactionUsed: true } };
+    const b = { ...testEntity(), id: 'b', identity: { ...testEntity().identity, name: 'B' }, turnState: { actionUsed: true, bonusActionUsed: false, reactionUsed: true } };
+    const combat = {
+      active: true, round: 1, turnIndex: 0, encounterId: 'enc1',
+      order: [
+        { entityId: 'a', name: 'A', initiative: 20, tiebreak: 3, isPlayer: true, hasTakenTurn: false },
+        { entityId: 'b', name: 'B', initiative: 10, tiebreak: 1, isPlayer: true, hasTakenTurn: false },
+      ],
+    };
+    const result = endTurn(combat, [a, b], DEFAULT_RULES);
+
+    const newA = result.entities.find(e => e.id === 'a')!;
+    const newB = result.entities.find(e => e.id === 'b')!;
+    // B's turn is now current (turnIndex advanced 0 -> 1) — fresh turnState.
+    expect(newB.turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: false });
+    // A's turn just ended — its (fully-used) turnState is untouched, stays
+    // spent until A's own next turn comes around.
+    expect(newA.turnState).toEqual({ actionUsed: true, bonusActionUsed: true, reactionUsed: true });
+  });
+
+  it('wraps correctly — the last combatant ending their turn resets the first combatant for the new round', () => {
+    const a = { ...testEntity(), id: 'a', turnState: { actionUsed: false, bonusActionUsed: false, reactionUsed: false } };
+    const b = { ...testEntity(), id: 'b', turnState: { actionUsed: true, bonusActionUsed: true, reactionUsed: true } };
+    const combat = {
+      active: true, round: 1, turnIndex: 1, encounterId: 'enc1', // B's turn, last in order
+      order: [
+        { entityId: 'a', name: 'A', initiative: 20, tiebreak: 3, isPlayer: true, hasTakenTurn: true },
+        { entityId: 'b', name: 'B', initiative: 10, tiebreak: 1, isPlayer: true, hasTakenTurn: false },
+      ],
+    };
+    const result = endTurn(combat, [a, b], DEFAULT_RULES);
+    expect(result.combat.round).toBe(2);
+    expect(result.combat.turnIndex).toBe(0);
+    const newA = result.entities.find(e => e.id === 'a')!;
+    expect(newA.turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: false });
+  });
+});
+
+describe('isFeatureAvailable — turn-economy gate (A-25)', () => {
+  const actionFeature: FeatureInstance = {
+    id: 'f1', name: 'Test Action', description: '', source: { kind: 'manual', refId: 'x' },
+    level: null, effects: [], actions: [], choices: [], passive: false, isActive: true,
+    activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+  };
+
+  it('is available when turnState is null (not actively tracked)', () => {
+    const e = testEntity();
+    expect(isFeatureAvailable(actionFeature, e)).toEqual({ available: true, reason: null });
+  });
+
+  it('is available when tracked but the action slot is unused', () => {
+    const e = startTurn(testEntity());
+    expect(isFeatureAvailable(actionFeature, e)).toEqual({ available: true, reason: null });
+  });
+
+  it('is unavailable, with a labeled reason, once the action slot is used', () => {
+    const e = markActionSlotUsed(startTurn(testEntity()), 'action');
+    expect(isFeatureAvailable(actionFeature, e)).toEqual({
+      available: false, reason: 'Already used your action this turn.',
+    });
+  });
+
+  it('a bonus_action card is gated independently of the action slot', () => {
+    const bonusFeature: FeatureInstance = {
+      ...actionFeature, activation: { ...actionFeature.activation!, actionType: 'bonus_action' },
+    };
+    const e = markActionSlotUsed(startTurn(testEntity()), 'action'); // action used, bonus still free
+    expect(isFeatureAvailable(bonusFeature, e)).toEqual({ available: true, reason: null });
+  });
+
+  it("a 'passive' or 'free' actionType is never gated by turn economy", () => {
+    const freeFeature: FeatureInstance = {
+      ...actionFeature, activation: { ...actionFeature.activation!, actionType: 'free' },
+    };
+    const e = { ...startTurn(testEntity()), turnState: { actionUsed: true, bonusActionUsed: true, reactionUsed: true } };
+    expect(isFeatureAvailable(freeFeature, e)).toEqual({ available: true, reason: null });
   });
 });
 

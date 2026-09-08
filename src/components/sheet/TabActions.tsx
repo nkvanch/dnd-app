@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules } from '../../engine/types';
-import { applyAbilityEffects, endWildShape, castConcentrationSpell } from '../../engine/combat';
+import { applyAbilityEffects, endWildShape, castConcentrationSpell, markActionSlotUsed } from '../../engine/combat';
 import { getTriggeredFeatures } from '../../engine/actionCards';
 import { recomputeDerived } from '../../engine/pipeline';
 import { rollExpression } from '../../engine/dice';
@@ -24,6 +24,13 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 export function applyActionCardUse(entity: Entity, card: ActionCard, rules: CampaignRules): Entity {
   let updated = entity;
   const cost = card.resourceCost;
+
+  // A-25: mark the action-economy slot used, when the entity is actively
+  // tracking a turn (see TurnState's doc comment — a no-op otherwise).
+  const actionType = card.activation.actionType;
+  if (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction') {
+    updated = markActionSlotUsed(updated, actionType);
+  }
 
   if (cost) {
     if (cost.resourceId === 'spell_slots') {

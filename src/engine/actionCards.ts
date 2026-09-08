@@ -411,14 +411,31 @@ export function getTriggeredFeatures(entity: Entity): FeatureInstance[] {
 
 // ── Availability ──────────────────────────────────────────────────────────────
 
+const ACTION_ECONOMY_LABEL: Record<string, string> = {
+  action: 'action', bonus_action: 'bonus action', reaction: 'reaction',
+};
+
 /**
  * Returns whether a feature can currently be used.
- * Checks resource pools and spell slot availability.
+ * Checks turn/action-economy usage (A-25), then resource pools and spell
+ * slot availability. The turn-economy check only applies when
+ * entity.turnState is non-null — see that type's own doc comment for why
+ * null means "not actively tracked, don't gate anything."
  */
 export function isFeatureAvailable(
   feature: Feature,
   entity: Entity,
 ): { available: boolean; reason: string | null } {
+  const actionType = feature.activation?.actionType;
+  if (entity.turnState && actionType && actionType in ACTION_ECONOMY_LABEL) {
+    const used = actionType === 'action' ? entity.turnState.actionUsed
+      : actionType === 'bonus_action' ? entity.turnState.bonusActionUsed
+      : entity.turnState.reactionUsed;
+    if (used) {
+      return { available: false, reason: `Already used your ${ACTION_ECONOMY_LABEL[actionType]} this turn.` };
+    }
+  }
+
   const cost = feature.activation?.resourceCost;
   if (!cost) return { available: true, reason: null };
 
@@ -611,6 +628,13 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
   const unarmed = entity.derived.attackBonuses.find(ab => ab.id === 'unarmed_strike');
   if (unarmed) {
     const dmgStr = `${unarmed.damageDice}${unarmed.damageBonus !== 0 ? fmtBonus(unarmed.damageBonus) : ''} ${capitalize(unarmed.damageType)}`;
+    const unarmedActivation: FeatureActivation = { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null };
+    // Was hardcoded available:true, unconditionally — bypassed
+    // isFeatureAvailable() entirely, which is otherwise the only card ever
+    // exempt from A-25's action-economy gate (a real attack, not a passive).
+    const { available, reason } = isFeatureAvailable(
+      { activation: unarmedActivation, effects: [], abilityEffects: [] } as unknown as Feature, entity,
+    );
     cards.push({
       featureId: 'unarmed_strike',
       name:      'Unarmed Strike',
@@ -621,11 +645,11 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
       layer3:    null,
       outcomes:  [],
       triggerNote: null,
-      activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+      activation: unarmedActivation,
       resourceCost: null,
       tabs: ['actions', 'features'],
-      available: true,
-      unavailableReason: null,
+      available,
+      unavailableReason: reason,
     });
   }
 

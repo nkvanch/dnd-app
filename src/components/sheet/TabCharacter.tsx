@@ -11,7 +11,7 @@ import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracke
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
 import { tickDurations } from '../../engine/conditions';
-import { tickConcentrationDuration } from '../../engine/combat';
+import { tickConcentrationDuration, startTurn, toggleActionEconomy } from '../../engine/combat';
 import { recomputeDerived } from '../../engine/pipeline';
 import { levelUp, levelUpClass } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
@@ -1198,19 +1198,41 @@ export function TabCharacter({
           </View>
         )}
 
-        {/* Player-facing turn tick — ticks 'rounds' durations down without
-            needing a DM's initiative tracker (app/dm/encounter.tsx), which
-            a solo player never has. No preview gate: advancing a turn is
+        {/* A-25: action/bonus-action/reaction pips — tap to correct manually
+            (real play has actions the app never models as a card: Dash/
+            Dodge/Help/Search, a reaction spent narratively). Auto-set when
+            an actual action-type card gets used, via applyActionCardUse. */}
+        <View style={styles.turnEconomyRow}>
+          {(['action', 'bonus_action', 'reaction'] as const).map(slot => {
+            const used = slot === 'action' ? entity.turnState?.actionUsed
+              : slot === 'bonus_action' ? entity.turnState?.bonusActionUsed
+              : entity.turnState?.reactionUsed;
+            const label = slot === 'action' ? 'Action' : slot === 'bonus_action' ? 'Bonus' : 'Reaction';
+            return (
+              <Pressable
+                key={slot}
+                style={[styles.turnPip, used && styles.turnPipUsed]}
+                onPress={() => onEntityUpdate(toggleActionEconomy(entity, slot))}
+              >
+                <Text style={[styles.turnPipTxt, used && styles.turnPipTxtUsed]}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Player-facing turn tick — ticks 'rounds' durations down and
+            resets action economy for the next turn, without needing a DM's
+            initiative tracker (app/dm/encounter.tsx), which a solo player
+            never has. Always visible now (previously hidden unless a
+            rounds-duration existed) — action-economy reset is relevant
+            every turn regardless. No preview gate: advancing a turn is
             expected/mundane, not a surprising commit. */}
-        {(conditions.some(c => c.duration?.unit === 'rounds') ||
-          spellcasting?.concentratingDuration?.unit === 'rounds') && (
-          <Pressable
-            style={styles.endTurnBtn}
-            onPress={() => onEntityUpdate(tickConcentrationDuration(tickDurations(entity, rules), rules))}
-          >
-            <Text style={styles.endTurnBtnTxt}>⏭ End Turn</Text>
-          </Pressable>
-        )}
+        <Pressable
+          style={styles.endTurnBtn}
+          onPress={() => onEntityUpdate(startTurn(tickConcentrationDuration(tickDurations(entity, rules), rules)))}
+        >
+          <Text style={styles.endTurnBtnTxt}>⏭ End Turn</Text>
+        </Pressable>
 
         {/* Mechanical effect reminders for active conditions */}
         {conditions.filter(c => CONDITION_WARNINGS[c.id]).map(c => (
@@ -1754,6 +1776,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 6,
   },
   endTurnBtnTxt: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+
+  turnEconomyRow: { flexDirection: 'row', gap: Spacing.xs, marginTop: Spacing.xs },
+  turnPip: {
+    backgroundColor: Colors.green + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.green + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  turnPipUsed: { backgroundColor: Colors.surfaceHigh, borderColor: Colors.border },
+  turnPipTxt: { fontSize: FontSize.xs, color: Colors.green, fontWeight: FontWeight.bold },
+  turnPipTxtUsed: { color: Colors.textDim },
 
   concIndicator: {
     backgroundColor: Colors.blue + '22', borderRadius: Radius.md,

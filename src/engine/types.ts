@@ -1189,6 +1189,25 @@ export type WildShapeState = {
 };
 
 /**
+ * A-25 — the core 5e action economy (action / bonus action / reaction),
+ * reset at the start of each of the entity's own turns via startTurn().
+ * Deliberately just these 3 slots, not a generic once-per-turn/round
+ * limiter system for arbitrary abilities (Sneak Attack-style limits) —
+ * that's a separate, harder, still-open design question (even the
+ * aspirational architecture-review docs flag it unresolved). Movement-per-
+ * turn is also deliberately not tracked here yet — a numeric budget with
+ * its own UI, lower urgency than the 3 boolean slots. A reaction resets at
+ * the start of the entity's OWN turn but can be spent on any turn (5e's
+ * real rule) — that already falls out correctly here: nothing resets it
+ * except this entity's own next startTurn() call.
+ */
+export type TurnState = {
+  actionUsed:      boolean;
+  bonusActionUsed: boolean;
+  reactionUsed:    boolean;
+};
+
+/**
  * The master entity. Characters, monsters, and NPCs all share this shape.
  *   conditions       = flat active condition list for UI rendering.
  *   conditionMonitor = full runtime state: exhaustion, flags, suppressions.
@@ -1258,6 +1277,15 @@ export type Entity = {
    * comment near the top of this file.
    */
   rulesetId?: RulesetId;
+  /**
+   * Action/bonus-action/reaction usage for the entity's current turn. Null
+   * when not actively tracked (outside combat, or before the first
+   * startTurn() call this session) — every consumer (isFeatureAvailable,
+   * the Combat tab's pills) treats null as "don't gate/show anything",
+   * same optional-overlay philosophy as wildShapeState. Optional/defaults
+   * to undefined so existing saved entities parse unchanged.
+   */
+  turnState?: TurnState | null;
 };
 
 // ── 7. Leveling schemas ──────────────────────────────────────────────────────

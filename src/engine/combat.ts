@@ -67,11 +67,49 @@ export function startEncounter(
   };
 }
 
+// ── Turn/action economy (A-25) ───────────────────────────────────────────────
+
+/** Fresh turn — all 3 action-economy slots reset to unused. Also the first
+ *  call that turns turnState from null into an actively-tracked object. */
+export function startTurn(entity: Entity): Entity {
+  return { ...entity, turnState: { actionUsed: false, bonusActionUsed: false, reactionUsed: false } };
+}
+
+/** Marks one action-economy slot used. A no-op if turnState is null (not
+ *  actively tracked — see the type's own doc comment) or already unused-
+ *  irrelevant (a 'free'/'passive' actionType never calls this at all —
+ *  callers only invoke it for 'action'/'bonus_action'/'reaction' cards). */
+export function markActionSlotUsed(
+  entity: Entity,
+  slot:   'action' | 'bonus_action' | 'reaction',
+): Entity {
+  if (!entity.turnState) return entity;
+  const key = slot === 'action' ? 'actionUsed' : slot === 'bonus_action' ? 'bonusActionUsed' : 'reactionUsed';
+  return { ...entity, turnState: { ...entity.turnState, [key]: true } };
+}
+
+/** Flips one action-economy slot, for a player directly tapping the
+ *  Combat-tab pill rather than using an action card — real play has
+ *  actions the app doesn't model as a card at all (Dash/Dodge/Help/Search,
+ *  a reaction spent narratively), so a manual correction needs to work in
+ *  both directions, unlike markActionSlotUsed's card-use one-way set.
+ *  Unlike markActionSlotUsed, this also INITIALIZES turnState (via
+ *  startTurn) if it was null — a manual tap is itself "start tracking." */
+export function toggleActionEconomy(
+  entity: Entity,
+  slot:   'action' | 'bonus_action' | 'reaction',
+): Entity {
+  const base = entity.turnState ? entity : startTurn(entity);
+  const key = slot === 'action' ? 'actionUsed' : slot === 'bonus_action' ? 'bonusActionUsed' : 'reactionUsed';
+  return { ...base, turnState: { ...base.turnState!, [key]: !base.turnState![key] } };
+}
+
 /**
  * Ends the current creature's turn.
  * - Ticks round-based durations on the acting entity.
  * - Advances the turn pointer.
  * - Increments the round counter when the order wraps.
+ * - Starts a fresh turn (resets action economy) for whoever's turn is now current.
  */
 export function endTurn(
   combat:   CombatState,
@@ -81,13 +119,19 @@ export function endTurn(
   const current = combat.order[combat.turnIndex];
 
   // Tick durations on the entity whose turn just ended
-  const updatedEntities = entities.map(e =>
+  const durationTicked = entities.map(e =>
     e.id === current.entityId ? tickConcentrationDuration(tickDurations(e, rules), rules) : e
   );
 
   // Advance turn pointer; wrap around at the end of the order
   const nextIndex = (combat.turnIndex + 1) % combat.order.length;
   const newRound  = nextIndex === 0 ? combat.round + 1 : combat.round;
+
+  // Reset action economy for whoever's turn is now current.
+  const nextEntityId = combat.order[nextIndex]?.entityId;
+  const updatedEntities = durationTicked.map(e =>
+    e.id === nextEntityId ? startTurn(e) : e
+  );
 
   const updatedOrder = combat.order.map((entry, i) =>
     i === combat.turnIndex ? { ...entry, hasTakenTurn: true } : entry

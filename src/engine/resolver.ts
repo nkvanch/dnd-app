@@ -72,7 +72,7 @@ export function resolveEffectsForTarget(target: string, effects: ActiveEffect[],
  *      in a fixed base→add→multiply sequence keeps the whole function that
  *      way too.
  */
-function resolveCombine(effects: ActiveEffect[]): number {
+export function resolveCombine(effects: ActiveEffect[]): number {
   let base = 0;
   let hasSet = false;
   let addSum = 0;

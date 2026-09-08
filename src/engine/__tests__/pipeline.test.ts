@@ -48,6 +48,33 @@ describe('applyStatModifiers', () => {
     ];
     expect(applyStatModifiers(base, effects).str).toBe(20);
   });
+
+  it('picks the highest of two competing "set" effects, regardless of collection order (order-independence bug fix)', () => {
+    const base = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+    const setLow = { effect: { type: 'stat_modifier', target: 'str', operation: 'set', value: 19, condition: null } as Effect, sourceName: 'belt_of_giant_strength_lesser', sourceId: 'x', appliedAt: 0 };
+    const setHigh = { effect: { type: 'stat_modifier', target: 'str', operation: 'set', value: 23, condition: null } as Effect, sourceName: 'belt_of_giant_strength_greater', sourceId: 'y', appliedAt: 1 };
+    // Bug: this used to be "last one in the array wins" — so which value won
+    // depended on collectAllEffects's iteration order, not on which item is
+    // actually stronger. Both orderings must now agree on the higher value.
+    expect(applyStatModifiers(base, [setLow, setHigh]).str).toBe(23);
+    expect(applyStatModifiers(base, [setHigh, setLow]).str).toBe(23);
+  });
+
+  it('is fully order-independent across a shuffled mix of set/add for one ability', () => {
+    const base = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+    const effects = [
+      { effect: { type: 'stat_modifier', target: 'str', operation: 'set', value: 19, condition: null } as Effect, sourceName: 'A', sourceId: 'A', appliedAt: 0 },
+      { effect: { type: 'stat_modifier', target: 'str', operation: 'add', value: 2, condition: null } as Effect, sourceName: 'B', sourceId: 'B', appliedAt: 1 },
+      { effect: { type: 'stat_modifier', target: 'str', operation: 'set', value: 17, condition: null } as Effect, sourceName: 'C', sourceId: 'C', appliedAt: 2 }, // loses to A's higher set
+      { effect: { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null } as Effect, sourceName: 'D', sourceId: 'D', appliedAt: 3 },
+    ];
+    const expected = applyStatModifiers(base, effects).str;
+    expect(expected).toBe(22); // 19 (highest set) + 2 + 1
+    for (let i = 0; i < 5; i++) {
+      const shuffled = [...effects].sort(() => Math.random() - 0.5);
+      expect(applyStatModifiers(base, shuffled).str).toBe(expected);
+    }
+  });
 });
 
 describe('recomputeDerived — AC', () => {

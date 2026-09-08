@@ -14,7 +14,7 @@ import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
   Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus, AuditSourceKind,
 } from './types';
-import { resolveEffectsForTarget, resolveBinary } from './resolver';
+import { resolveEffectsForTarget, resolveBinary, resolveCombine } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
 import { generateAllActionCards } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
@@ -91,21 +91,20 @@ export function applyStatModifiers(
     const relevant = effects.filter(
       ae => ae.effect.type === 'stat_modifier' && ae.effect.target === ab
     );
-    let value = base[ab];
-    // 'set' effects (e.g. Belt of Giant Strength) establish a new base —
-    // last one wins, same convention resolveCombine already uses for ac/speed —
-    // then 'add' effects stack on top of that base.
-    for (const ae of relevant) {
-      if (ae.effect.operation === 'set' && typeof ae.effect.value === 'number') {
-        value = ae.effect.value;
-      }
-    }
-    for (const ae of relevant) {
-      if (ae.effect.operation === 'add' && typeof ae.effect.value === 'number') {
-        value += ae.effect.value;
-      }
-    }
-    result[ab] = value;
+    if (relevant.length === 0) continue;
+    // Bug fix: this used to pick the 'set' effect by array order ("last
+    // one wins"), which is order-dependent — shuffling collectAllEffects's
+    // iteration order could change which 'set' effect won, and therefore
+    // the character's effective ability score. resolveCombine (resolver.ts)
+    // already resolves competing 'set' effects order-independently
+    // (highest value wins) for ac/speed/every other stat_modifier target;
+    // this now uses the exact same function, and the exact same "does a
+    // 'set' exist? then that resolved value IS the score; otherwise add
+    // the resolved (additive-only) delta to base" pattern speed already
+    // uses just below (see the "Speed: respect 'set' operations" block).
+    const hasSet   = relevant.some(ae => ae.effect.operation === 'set');
+    const resolved = resolveCombine(relevant);
+    result[ab] = hasSet ? resolved : base[ab] + resolved;
   }
   return result;
 }

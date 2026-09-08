@@ -1537,6 +1537,34 @@ export type FeatureActivation = {
    * needing its own bespoke DerivedStats field like kiSaveDC got first.
    */
   requiresSave: { ability: Ability; dc: 'spell_save_dc' | 'ki_save_dc' | { ability: Ability } | number } | null;
+  /**
+   * A-57: discrete alternative ways to use this same activation — e.g.
+   * Divine Smite's choice of which spell-slot tier to expend for more
+   * damage, or Great Weapon Master's -5-to-hit/+10-damage tradeoff.
+   * Undefined/empty means "use it the one way `resourceCost` already
+   * describes," exactly like every card before this field existed — zero
+   * behavior change for the ~600 existing cards that don't set it.
+   * Purely descriptive beyond `resourceCost` itself: this app doesn't
+   * auto-resolve combat (see actionCards.ts's own "app shows dice
+   * expression, player announces it" philosophy), so `description` is text
+   * for the player to read, not a computed effect.
+   */
+  options?: ActivationOption[];
+};
+
+/**
+ * One entry in FeatureActivation.options (A-57). Choosing an option with a
+ * `resourceCost` REPLACES the activation's own `resourceCost` for that use
+ * (see applyActionCardUse's optional 4th parameter in TabActions.tsx) —
+ * omitting it means "same cost as the base activation, this option only
+ * changes flavor" (e.g. Great Weapon Master's two attack choices cost
+ * nothing extra either way).
+ */
+export type ActivationOption = {
+  id:            string;
+  label:         string;         // e.g. "2nd-level slot"
+  resourceCost?: ResourceCost;
+  description?:  string;         // e.g. "+3d8 radiant damage"
 };
 
 /** Describes what resource(s) an ability consumes when used. */

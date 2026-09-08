@@ -2,7 +2,7 @@
 // Tab 2 — Action Cards. [Use] consumes resources and shows a dice result modal.
 import { useState, useCallback, useEffect } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
-import { Entity, ActionCard, CampaignRules } from '../../engine/types';
+import { Entity, ActionCard, CampaignRules, ActivationOption } from '../../engine/types';
 import { applyAbilityEffects, endWildShape, castConcentrationSpell, markActionSlotUsed } from '../../engine/combat';
 import { getTriggeredFeatures } from '../../engine/actionCards';
 import { recomputeDerived } from '../../engine/pipeline';
@@ -20,10 +20,21 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
  * spending. Returns the entity unchanged if the cost can't be paid (caller
  * should check card.available before calling this, same as the Use button
  * already does via its disabled state).
+ *
+ * `chosenOption` (A-57): when the card's activation declares `options`
+ * (e.g. Divine Smite's choice of spell-slot tier), the caller resolves
+ * which one via a picker BEFORE calling this — see handleUse/
+ * ActivationOptionModal below — and its resourceCost (falling back to the
+ * card's own) is what actually gets spent. Omitted entirely (every
+ * existing card, and the Favorites-star shortcut in TabCharacter.tsx,
+ * which doesn't offer a picker) keeps the exact prior behavior: spend
+ * card.resourceCost as-is.
  */
-export function applyActionCardUse(entity: Entity, card: ActionCard, rules: CampaignRules): Entity {
+export function applyActionCardUse(
+  entity: Entity, card: ActionCard, rules: CampaignRules, chosenOption?: ActivationOption,
+): Entity {
   let updated = entity;
-  const cost = card.resourceCost;
+  const cost = chosenOption?.resourceCost ?? card.resourceCost;
 
   // A-25: mark the action-economy slot used, when the entity is actively
   // tracking a turn (see TurnState's doc comment — a no-op otherwise).
@@ -207,6 +218,40 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
   );
 }
 
+// ── Activation option picker (A-57) ────────────────────────────────────────────
+// Shown BEFORE spending, when a card's activation declares multiple discrete
+// ways to use it (e.g. Divine Smite's spell-slot tier choice). Picking an
+// option is what triggers applyActionCardUse — see handleChooseOption above.
+
+interface ActivationOptionModalProps {
+  card:     ActionCard | null;
+  onChoose: (option: ActivationOption) => void;
+  onClose:  () => void;
+}
+
+function ActivationOptionModal({ card, onChoose, onClose }: ActivationOptionModalProps) {
+  if (!card || !card.activation.options || card.activation.options.length === 0) return null;
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
+          <Text style={styles.modalName}>{card.name}</Text>
+          <Text style={styles.modalL1}>Choose how to use this:</Text>
+          {card.activation.options.map(opt => (
+            <Pressable key={opt.id} style={styles.optionRow} onPress={() => onChoose(opt)}>
+              <Text style={styles.optionLabel}>{opt.label}</Text>
+              {opt.description && <Text style={styles.optionDesc}>{opt.description}</Text>}
+            </Pressable>
+          ))}
+          <Pressable style={styles.closeBtn} onPress={onClose}>
+            <Text style={styles.closeBtnTxt}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── Action Card Row ───────────────────────────────────────────────────────────
 
 interface CardRowProps {
@@ -347,6 +392,10 @@ interface Props {
 
 export function TabActions({ entity, rules, onEntityUpdate }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
+  // A-57: set instead of activeCard when a card declares activation.options
+  // — the picker must resolve BEFORE spending, since handleUse below
+  // otherwise spends immediately on tap.
+  const [pendingOptionCard, setPendingOptionCard] = useState<ActionCard | null>(null);
 
   const all        = (entity.actionCards ?? []).filter(c => c.tabs.includes('actions'));
   const actions      = all.filter(c => c.activation.actionType === 'action');
@@ -357,6 +406,10 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
   const freeActions  = all.filter(c => c.activation.actionType === 'free');
 
   const handleUse = useCallback((card: ActionCard) => {
+    if (card.activation.options && card.activation.options.length > 0) {
+      setPendingOptionCard(card);
+      return;
+    }
     if (!onEntityUpdate || !rules) {
       // No update handler — just show the roll modal.
       setActiveCard(card);
@@ -371,6 +424,14 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
     onEntityUpdate(applyActionCardUse(entity, card, rules));
     setActiveCard(card);
   }, [entity, rules, onEntityUpdate]);
+
+  const handleChooseOption = useCallback((option: ActivationOption) => {
+    const card = pendingOptionCard;
+    setPendingOptionCard(null);
+    if (!card) return;
+    if (onEntityUpdate && rules) onEntityUpdate(applyActionCardUse(entity, card, rules, option));
+    setActiveCard(card);
+  }, [entity, rules, onEntityUpdate, pendingOptionCard]);
 
   const favoriteIds = new Set([
     ...(entity.favoriteActionIds ?? []),
@@ -431,6 +492,11 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
         card={activeCard}
         onRoll={rollForCard}
         onClose={() => setActiveCard(null)}
+      />
+      <ActivationOptionModal
+        card={pendingOptionCard}
+        onChoose={handleChooseOption}
+        onClose={() => setPendingOptionCard(null)}
       />
     </ScrollView>
   );
@@ -519,4 +585,13 @@ const styles = StyleSheet.create({
 
   closeBtn:    { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.xs },
   closeBtnTxt: { color: Colors.textSecondary, fontSize: FontSize.md },
+
+  // Activation option picker (A-57)
+  optionRow: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm,
+  },
+  optionLabel: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  optionDesc:  { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
 });

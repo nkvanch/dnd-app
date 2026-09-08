@@ -22,6 +22,7 @@ import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
 import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { disambiguateId } from '../../src/content/traitCompiler';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Same 18-skill list used in race-builder.tsx and the PDF export.
@@ -242,9 +243,19 @@ export default function BackgroundBuilderScreen() {
         level: null, actions: [], choices: [], passive: true, effects: [],
       });
     }
+    // Bug fix: this used to build each custom feature's id as
+    // `${id}_${toId(f.name)}` with no collision check — two custom features
+    // with the same (or same-once-slugified) name silently produced the
+    // identical Feature.id, with the second silently shadowing lookups for
+    // the first. Seed usedIds with the 4 reserved ids above (only the ones
+    // actually pushed) plus every already-pushed custom feature id, same
+    // "_2/_3 disambiguation" pattern already used by the trait-based
+    // builders (race/monster/subclass/condition-builder) via
+    // traitCompiler's disambiguateId.
+    const usedIds = new Set(bgFeatures.map(f => f.id));
     for (const f of features) {
       bgFeatures.push({
-        id: `${id}_${toId(f.name)}`, name: f.name,
+        id: disambiguateId(`${id}_${toId(f.name)}`, usedIds), name: f.name,
         description: f.description.trim() || f.name,
         source: { kind: 'background', refId: id },
         level: null, actions: [], choices: [], passive: true, effects: [],

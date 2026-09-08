@@ -109,7 +109,7 @@ export function newDraftTrait(name: string): DraftTrait {
  * is omitted — every existing caller that doesn't pass one keeps its exact
  * prior behavior.
  */
-function disambiguateId(base: string, usedIds?: Set<string>): string {
+export function disambiguateId(base: string, usedIds?: Set<string>): string {
   if (!usedIds) return base;
   let candidate = base;
   let n = 2;

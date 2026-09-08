@@ -7,7 +7,7 @@
 // `usedIds` Set threaded through disambiguates collisions by appending
 // `_2`, `_3`, etc., while every caller that doesn't pass one keeps the
 // exact prior (collision-prone but unchanged) behavior.
-import { buildTraitFeature, buildSubrace, newDraftTrait, newDraftSubrace } from '../traitCompiler';
+import { buildTraitFeature, buildSubrace, newDraftTrait, newDraftSubrace, disambiguateId } from '../traitCompiler';
 import { DraftTrait } from '../../engine/types';
 
 function trait(name: string, overrides: Partial<DraftTrait> = {}): DraftTrait {
@@ -26,6 +26,35 @@ describe('buildTraitFeature — id derivation', () => {
     const a = buildTraitFeature(trait('Resilience'), baseOpts);
     const b = buildTraitFeature(trait('Resilience'), baseOpts);
     expect(a.feature.id).toBe(b.feature.id);
+  });
+});
+
+describe('disambiguateId — exported directly for callers that build Feature ids without going through buildTraitFeature (audit bug #8)', () => {
+  it('is a no-op when usedIds is omitted', () => {
+    expect(disambiguateId('bg_custom_feature')).toBe('bg_custom_feature');
+  });
+
+  it('leaves a non-colliding id untouched and records it', () => {
+    const usedIds = new Set<string>();
+    expect(disambiguateId('bg_keen_senses', usedIds)).toBe('bg_keen_senses');
+    expect(usedIds.has('bg_keen_senses')).toBe(true);
+  });
+
+  it('appends _2, _3 for repeated collisions', () => {
+    const usedIds = new Set<string>();
+    expect(disambiguateId('bg_gift', usedIds)).toBe('bg_gift');
+    expect(disambiguateId('bg_gift', usedIds)).toBe('bg_gift_2');
+    expect(disambiguateId('bg_gift', usedIds)).toBe('bg_gift_3');
+  });
+
+  it('matches background-builder.tsx\'s own usage: seeding usedIds with the reserved skills/tools/languages/equipment ids first still disambiguates a colliding custom feature name', () => {
+    // Mirrors buildBackground()'s own seed: reserved ids that were actually
+    // pushed, then one call per custom feature in order.
+    const usedIds = new Set(['bg_acolyte_skills', 'bg_acolyte_languages']);
+    const first  = disambiguateId(`bg_acolyte_${'gift'}`, usedIds);
+    const second = disambiguateId(`bg_acolyte_${'gift'}`, usedIds); // same slugified name authored twice
+    expect(first).toBe('bg_acolyte_gift');
+    expect(second).toBe('bg_acolyte_gift_2'); // no longer silently collides with `first`
   });
 });
 

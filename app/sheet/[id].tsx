@@ -16,8 +16,11 @@ import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { equipItem, unequipItem, toggleAttunement } from '../../src/engine/inventory';
 import { simulate } from '../../src/engine/simulate';
-import { Entity, ItemInstance, DurationTracker } from '../../src/engine/types';
+import { validateEntity } from '../../src/engine/validation';
+import { Entity, ItemInstance, DurationTracker, Issue } from '../../src/engine/types';
 import { itemRepo } from '../../src/content/itemRepo';
+import { spellRepo } from '../../src/content/spellRepo';
+import { spellIdsOnEntity } from '../../src/content/spellRepo.types';
 import { getInfusion, maxInfusedItems } from '../../src/content/infusions';
 import { CONDITIONS_BY_ID } from '../../src/content/conditions/index';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
@@ -30,6 +33,7 @@ import { TabNotes }     from '../../src/components/sheet/TabNotes';
 import { TabSpells }    from '../../src/components/sheet/TabSpells';
 import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
 import { CharacterHistoryModal } from '../../src/components/sheet/CharacterHistoryModal';
+import { IssuesModal } from '../../src/components/sheet/IssuesModal';
 import { RestPreviewModal, buildRestMutation } from '../../src/components/sheet/RestPreviewModal';
 import { EquipmentPreviewModal } from '../../src/components/sheet/EquipmentPreviewModal';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
@@ -69,15 +73,44 @@ export default function CharacterSheetScreen() {
   const campaignId  = useCampaignStore(s => s.activeCampaign?.id ?? '');
   const deviceId    = useSessionStore(s => s.session?.deviceId ?? '');
   const homebrewItems = useHomebrewStore(s => s.items);
+  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
   const entity = characters.find(c => c.id === id);
   const [activeTab, setActiveTab] = useState<TabId>('character');
   const [sheetMode, setSheetMode] = useState<'combat' | 'exploration'>('combat');
   const [freeEditOpen, setFreeEditOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const [issues, setIssues] = useState<Issue[]>([]);
   const [exportSheetOpen, setExportSheetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const goBack = useSafeGoBack('/(tabs)');
+
+  // A-54: recompute diagnostics whenever the viewed entity actually changes
+  // (a real mutation, not every render — `entity` is only a new object
+  // reference after updateCharacter runs). Ensure-load the entity's own
+  // spells/items first: on native both repos only warm their in-memory
+  // cache on demand (getSpellSync/getItemSync read that cache synchronously
+  // and never touch SQLite themselves), so calling validateEntity before
+  // this would misreport real, present content as "missing" — the same
+  // false-positive trap the level-up preview's own spellIdsOnEntity +
+  // ensureLoaded pairing already avoids.
+  useEffect(() => {
+    if (!entity) { setIssues([]); return; }
+    let cancelled = false;
+    void (async () => {
+      await spellRepo.ensureLoaded(spellIdsOnEntity(entity));
+      await itemRepo.ensureLoaded([
+        ...entity.inventory.carried.map(i => i.itemId),
+        ...entity.inventory.equipped.map(i => i.itemId),
+      ]);
+      if (cancelled) return;
+      const contentDB = getMergedContentDB(entity.rulesetId);
+      setIssues(validateEntity(entity, contentDB, homebrewSubclasses));
+    })();
+    return () => { cancelled = true; };
+  }, [entity, getMergedContentDB, homebrewSubclasses]);
 
   // Track "last opened" explicitly — the Home screen's old heuristic
   // (last entry in the in-memory characters array) reflected creation
@@ -468,6 +501,15 @@ export default function CharacterSheetScreen() {
           <Pressable style={styles.freeEditBtn} onPress={() => setHistoryOpen(true)}>
             <Text style={styles.freeEditTxt}>🕘</Text>
           </Pressable>
+          {/* A-54: non-blocking diagnostics badge — only rendered when there's
+              something to show, so a clean character's header stays unchanged. */}
+          {issues.length > 0 && (
+            <Pressable style={styles.freeEditBtn} onPress={() => setIssuesOpen(true)}>
+              <Text style={styles.freeEditTxt}>
+                {issues.some(i => i.severity === 'error') ? '⛔' : '⚠️'} {issues.length}
+              </Text>
+            </Pressable>
+          )}
           {/* Free-edit is offered outside a campaign, unless the DM has locked it. */}
           {freeEditAllowed && (
             <Pressable style={styles.freeEditBtn} onPress={() => setFreeEditOpen(true)}>
@@ -689,6 +731,12 @@ export default function CharacterSheetScreen() {
         visible={historyOpen}
         entityId={id}
         onClose={() => setHistoryOpen(false)}
+      />
+
+      <IssuesModal
+        visible={issuesOpen}
+        issues={issues}
+        onClose={() => setIssuesOpen(false)}
       />
 
       <RestPreviewModal

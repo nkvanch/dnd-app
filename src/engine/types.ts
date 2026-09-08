@@ -544,6 +544,31 @@ export type ContentDB = {
   feats?:      Feat[];   // optional so existing ContentDB literals remain valid
 };
 
+// ── Diagnostics (A-54) ───────────────────────────────────────────────────────
+// Structured, non-blocking validation findings for an Entity. The governing
+// rule, per the app's existing "disclosed, not silently repaired" philosophy:
+// a detected problem never blocks the character from opening — it's surfaced
+// as an Issue for the player/DM to see and decide what to do about, same as
+// every other disclosed-gap pattern already used throughout this codebase.
+
+export type IssueSeverity = 'error' | 'warning' | 'info';
+
+export type IssueCode =
+  | 'missing_race' | 'missing_subrace' | 'missing_class' | 'missing_subclass'
+  | 'missing_background' | 'missing_spell' | 'missing_item'
+  | 'ruleset_mismatch' | 'orphaned_choice_selection';
+
+export type Issue = {
+  severity: IssueSeverity;
+  code:     IssueCode;
+  message:  string;
+  /** The content/selection id this issue is about, e.g. a race or spell id. */
+  affectedId?: string;
+  /** Where on the entity this was found, e.g. 'identity.raceId'. */
+  source?: string;
+  suggestedFix?: string;
+};
+
 // ── 3. Entity runtime schemas ────────────────────────────────────────────────
 
 /** One class the character has taken. `level` is the level in THIS class only — not the character's total level. */

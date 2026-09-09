@@ -5,12 +5,14 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   TextInput, Modal,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Alert } from '../../src/utils/alert';
 import { useCombatStore }    from '../../src/store/combatStore';
 import { useCampaignStore }  from '../../src/store/campaignStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useSessionStore }   from '../../src/store/sessionStore';
+import { useEncounterStore } from '../../src/store/encounterStore';
+import { useHomebrewStore }  from '../../src/store/homebrewStore';
 import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { expireOverrides } from '../../src/engine/dmOverride';
@@ -22,6 +24,8 @@ import { deepDiff, deepMerge } from '../../src/sync/diff';
 import { InitiativeEntry } from '../../src/engine/combat';
 import { DEFAULT_RULES } from '../../src/store/characterStore';
 import { ConcentrationModal } from '../../src/components/sheet/ConcentrationModal';
+import { instantiatePreparedEncounter, instantiateWave, startingCombatantCount } from '../../src/engine/preparedEncounter';
+import { mergeMonsterIndex } from '../../src/content/contentResolution';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const KNOWN_CONDITIONS = [
@@ -275,17 +279,29 @@ function CombatantRow({ entry, entity, isCurrent, onPress }: CombatantRowProps) 
 export default function EncounterScreen() {
   const router          = useRouter();
   const safeGoBack      = useSafeGoBack('/(tabs)');
+  const { preparedId }  = useLocalSearchParams<{ preparedId?: string }>();
   const isDm            = useCampaignStore(s => s.isDm);
   const characters      = useCharacterStore(s => s.characters);
   const updateCharacter = useCharacterStore(s => s.updateCharacter);
   const session         = useSessionStore(s => s.session);
   const rules           = useCharacterStore(s => s.rules) ?? DEFAULT_RULES;
+  const preparedEncounters = useEncounterStore(s => s.encounters);
+  const saveEncounterDraft = useEncounterStore(s => s.saveEncounterDraft);
+  const homebrewMonsters   = useHomebrewStore(s => s.monsters);
 
-  const { combat, entities, startCombat, advanceTurn, endCombat, updateEntity, setInitiative } =
+  const { combat, entities, startCombat, advanceTurn, endCombat, updateEntity, setInitiative, addEntities, removeFromEncounter } =
     useCombatStore();
 
   const [selectedId, setSelectedId]  = useState<string | null>(null);
   const [setupMode,  setSetupMode]   = useState(!combat.active);
+
+  // The PreparedEncounter this run either came from (via ?preparedId=, still
+  // in setupMode/preview) or was instantiated from (combat.active, carries
+  // its own sourcePreparedEncounterId — see CombatState's own doc comment).
+  const previewSource = preparedId ? preparedEncounters.find(e => e.id === preparedId) ?? null : null;
+  const activeSource   = combat.sourcePreparedEncounterId
+    ? preparedEncounters.find(e => e.id === combat.sourcePreparedEncounterId) ?? null
+    : null;
 
   // Selected entity for the quick panel
   const selectedEntity = entities.find(e => e.id === selectedId);
@@ -340,16 +356,41 @@ export default function EncounterScreen() {
     setSetupMode(false);
   }
 
+  // Instantiate a PreparedEncounter into fresh runtime entities and start
+  // combat — starting the same template twice always produces independent
+  // entities (instantiatePreparedEncounter never touches the template), and
+  // starting never mutates `previewSource` itself. Any party members already
+  // added manually in setup mode (rare when arriving via a prepared
+  // encounter, but not disallowed) come along too.
+  function handleStartFromPrepared() {
+    if (!previewSource) return;
+    const spawned = instantiatePreparedEncounter(previewSource, rules, homebrewMonsters);
+    if (spawned.length === 0 && entities.length === 0) {
+      Alert.alert('No combatants', 'This encounter has no combatants present at the start (check waves — they deploy later).');
+      return;
+    }
+    const encounterId = `enc_${Date.now()}`;
+    startCombat([...entities, ...spawned], encounterId, previewSource.id);
+    void saveEncounterDraft({ ...previewSource, lastStartedAt: Date.now(), status: previewSource.status === 'draft' ? 'ready' : previewSource.status });
+    setSetupMode(false);
+  }
+
+  function handleDeployWave(waveId: string) {
+    if (!activeSource) return;
+    const wave = activeSource.waves.find(w => w.id === waveId);
+    const spawned = instantiateWave(activeSource, waveId, rules, homebrewMonsters);
+    if (spawned.length === 0) {
+      Alert.alert('Nothing to deploy', 'No combatants are assigned to this wave.');
+      return;
+    }
+    addEntities(spawned);
+    Alert.alert('Reinforcements deployed', `${wave?.name ?? 'Wave'}: ${spawned.length} combatant${spawned.length !== 1 ? 's' : ''} added to initiative.`);
+  }
+
   function addPartyMember(c: Entity) {
     updateEntity(c.id, () => c); // Add to combat entities
     useCombatStore.setState(s => ({
       entities: s.entities.some(e => e.id === c.id) ? s.entities : [...s.entities, c],
-    }));
-  }
-
-  function removeFromEncounter(id: string) {
-    useCombatStore.setState(s => ({
-      entities: s.entities.filter(e => e.id !== id),
     }));
   }
 
@@ -366,6 +407,13 @@ export default function EncounterScreen() {
               updateCharacter(e.id, () => updated, 'End of encounter (override expiry)');
             }
           });
+          // Mark the PreparedEncounter completed if this run came from one —
+          // the template's own combatant list is left exactly as authored;
+          // live HP/conditions are never copied back into it (see
+          // PreparedEncounter's own doc comment).
+          if (activeSource) {
+            void saveEncounterDraft({ ...activeSource, status: 'completed', completedAt: Date.now() });
+          }
           endCombat();
           safeGoBack();
         },
@@ -394,6 +442,26 @@ export default function EncounterScreen() {
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          {previewSource && (
+            <View style={styles.prepPreview}>
+              <Text style={styles.prepPreviewTitle}>📋 {previewSource.name}</Text>
+              {!!previewSource.description && <Text style={styles.prepPreviewDesc}>{previewSource.description}</Text>}
+              <Text style={styles.prepPreviewMeta}>
+                {startingCombatantCount(previewSource)} combatant{startingCombatantCount(previewSource) !== 1 ? 's' : ''} present from the start
+                {previewSource.waves.length > 0 ? ` · ${previewSource.waves.length} wave${previewSource.waves.length !== 1 ? 's' : ''} held in reserve` : ''}
+              </Text>
+              {previewSource.combatants.filter(c => !c.waveId).map(c => (
+                <Text key={c.id} style={styles.prepPreviewRow}>
+                  • {c.displayName?.trim() || mergeMonsterIndex(homebrewMonsters).find(t => t.id === c.monsterId)?.name || c.monsterId}
+                  {c.quantity > 1 ? ` ×${c.quantity}` : ''}
+                </Text>
+              ))}
+              <Pressable style={styles.prepStartBtn} onPress={handleStartFromPrepared}>
+                <Text style={styles.prepStartBtnTxt}>▶ Start This Encounter</Text>
+              </Pressable>
+            </View>
+          )}
+
           <Text style={styles.sectionLabel}>ADD COMBATANTS</Text>
           {characters.map(c => {
             const inCombat = entities.some(e => e.id === c.id);
@@ -449,6 +517,37 @@ export default function EncounterScreen() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {/* Reinforcements — only meaningful when this run came from a
+            PreparedEncounter with waves defined. Deployment is manual-only
+            (a Deploy button), matching the "at minimum, manual deployment
+            must work" scope — a 'round'/'descriptive' triggerKind is shown
+            as a reminder, never auto-fired. */}
+        {activeSource && activeSource.waves.length > 0 && (
+          <View style={styles.waveSection}>
+            <Text style={styles.sectionLabel}>REINFORCEMENTS</Text>
+            {activeSource.waves.map(w => {
+              const pendingCount = activeSource.combatants
+                .filter(c => c.waveId === w.id)
+                .reduce((sum, c) => sum + Math.max(1, c.quantity), 0);
+              return (
+                <View key={w.id} style={styles.waveRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.waveName}>{w.name}</Text>
+                    <Text style={styles.waveMeta}>
+                      {w.triggerKind === 'round' && w.triggerRound ? `Reminder: round ${w.triggerRound}` : null}
+                      {w.triggerKind === 'descriptive' && w.triggerNote ? w.triggerNote : null}
+                      {w.triggerKind === 'manual' ? `${pendingCount} combatant${pendingCount !== 1 ? 's' : ''} ready` : null}
+                    </Text>
+                  </View>
+                  <Pressable style={styles.waveDeployBtn} onPress={() => handleDeployWave(w.id)}>
+                    <Text style={styles.waveDeployTxt}>Deploy</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* Initiative order */}
         {combat.order.map((entry, idx) => {
           const ent = entities.find(e => e.id === entry.entityId);
@@ -613,6 +712,26 @@ const styles = StyleSheet.create({
     padding: Spacing.md, alignItems: 'center', marginTop: Spacing.md,
   },
   startBtnTxt: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.lg },
+
+  prepPreview: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.gold,
+    padding: Spacing.md, marginBottom: Spacing.md, gap: 4,
+  },
+  prepPreviewTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.gold },
+  prepPreviewDesc:  { fontSize: FontSize.sm, color: Colors.textSecondary },
+  prepPreviewMeta:  { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 4 },
+  prepPreviewRow:   { fontSize: FontSize.sm, color: Colors.textPrimary },
+  prepStartBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm },
+  prepStartBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold },
+  waveSection: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, marginBottom: Spacing.md,
+  },
+  waveRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.xs, gap: Spacing.sm },
+  waveName: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  waveMeta: { fontSize: FontSize.xs, color: Colors.textDim },
+  waveDeployBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 6 },
+  waveDeployTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.xs },
 
   turnBar: {
     backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border,

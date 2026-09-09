@@ -17,6 +17,7 @@ import { getMeta } from '../src/db/appMetaRepo';
 import { useCharacterStore } from '../src/store/characterStore';
 import { useSessionStore }   from '../src/store/sessionStore';
 import { useCampaignStore }  from '../src/store/campaignStore';
+import { useEncounterStore } from '../src/store/encounterStore';
 import { useHomebrewStore }  from '../src/store/homebrewStore';
 import { syncManager }       from '../src/sync/syncManager';
 import { useSyncStore }      from '../src/store/syncStore';
@@ -150,6 +151,15 @@ export default function RootLayout() {
           await useCampaignStore.getState().resumeSync();
         } catch (e) {
           console.error('[_layout] Campaign restore failed:', e);
+        }
+
+        // 8. Prepared-encounter library (DM planning data) — independent of
+        //    campaign/sync restore above, so a failure here can't block them
+        //    (same isolated-per-step pattern the rest of this sequence uses).
+        try {
+          await useEncounterStore.getState().loadEncounters();
+        } catch (e) {
+          console.error('[_layout] Encounter library load failed:', e);
         }
       } catch (e) {
         // Defense in depth — every step above already catches its own

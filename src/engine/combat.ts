@@ -28,6 +28,12 @@ export type CombatState = {
   turnIndex:   number;
   order:       InitiativeEntry[];
   encounterId: string;
+  /** Links this "ActiveEncounter" back to the PreparedEncounter template it
+   *  was instantiated from, if any — undefined for a manually-assembled
+   *  encounter (add party members / spawn monsters directly, the pre-
+   *  existing flow). Used only to let "mark completed" find its way back
+   *  to the template; never used to write live state back into it. */
+  sourcePreparedEncounterId?: string;
 };
 
 /**
@@ -36,7 +42,8 @@ export type CombatState = {
  */
 export function startEncounter(
   entities:    Entity[],
-  encounterId: string
+  encounterId: string,
+  sourcePreparedEncounterId?: string,
 ): CombatState {
   const order: InitiativeEntry[] = entities
     .map(e => ({
@@ -64,6 +71,7 @@ export function startEncounter(
     turnIndex:   0,
     order,
     encounterId,
+    sourcePreparedEncounterId,
   };
 }
 
@@ -156,6 +164,49 @@ export function endTurn(
 /** Ends the encounter and resets combat state. */
 export function endEncounter(combat: CombatState): CombatState {
   return { ...combat, active: false, round: 0, turnIndex: 0, order: [] };
+}
+
+/**
+ * Inserts reinforcements into an already-active encounter — rolls
+ * initiative for the new entities only (reusing the same roll/tiebreak
+ * shape startEncounter uses) and merges them into the existing order,
+ * re-sorted. Preserves which entity currently has the turn across the
+ * re-sort (the pointer is a plain array index, which a mid-array insertion
+ * would otherwise silently invalidate).
+ *
+ * New arrivals are marked hasTakenTurn:false — they'll act once the turn
+ * pointer reaches their rolled position. If that position already passed
+ * this round, they're effectively skipped until the next round's
+ * hasTakenTurn reset (endTurn, above) rather than retroactively inserted
+ * into a round already in progress — a deliberate, disclosed
+ * simplification (this app never auto-advances turns/rounds on its own;
+ * the DM is always the one pressing the button), not an attempt to fully
+ * model RAW's "you can act on your normal turn if it hasn't passed yet."
+ */
+export function addToEncounter(combat: CombatState, newEntities: Entity[]): CombatState {
+  if (!combat.active || newEntities.length === 0) return combat;
+
+  const newEntries: InitiativeEntry[] = newEntities.map(e => ({
+    entityId:     e.id,
+    name:         e.identity.name,
+    initiative:   rollD20Dice(e.derived.initiative).total,
+    tiebreak:     e.derived.initiative,
+    isPlayer:     e.kind === 'character',
+    hasTakenTurn: false,
+  }));
+
+  const currentEntityId = combat.order[combat.turnIndex]?.entityId;
+  const merged = [...combat.order, ...newEntries].sort((a, b) =>
+    b.initiative - a.initiative ||
+    b.tiebreak   - a.tiebreak
+  );
+  const newTurnIndex = currentEntityId ? merged.findIndex(e => e.entityId === currentEntityId) : combat.turnIndex;
+
+  return {
+    ...combat,
+    order:     merged,
+    turnIndex: newTurnIndex >= 0 ? newTurnIndex : combat.turnIndex,
+  };
 }
 
 // ── Concentration ─────────────────────────────────────────────────────────────

@@ -128,6 +128,24 @@ export const CREATE_APP_META_TABLE = `
   );
 `;
 
+// DM-authored planning data — see engine/types.ts's PreparedEncounter doc
+// comment. Same blob-storage shape as campaigns: a full CRUD list, no
+// internal field is ever queried directly. campaignId/status ARE indexed
+// (library search/filter reads them a lot), duplicated out of the blob as
+// plain columns purely for that — the blob (`data`) stays the single
+// source of truth; the columns are kept in sync on every write and never
+// read back into the app, matching content_cache's `type` column doing the
+// same thing for the same reason.
+export const CREATE_PREPARED_ENCOUNTERS_TABLE = `
+  CREATE TABLE IF NOT EXISTS prepared_encounters (
+    id         TEXT PRIMARY KEY NOT NULL,
+    campaignId TEXT,
+    status     TEXT NOT NULL DEFAULT 'draft',
+    data       TEXT NOT NULL,
+    updatedAt  INTEGER NOT NULL
+  );
+`;
+
 // A-36 foundations: tracks which homebrew items arrived together as one
 // imported content-pack, so they can be seen and removed as a group instead
 // of only individually. Deliberately NOT a full pack system yet -- no
@@ -153,6 +171,8 @@ export const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_content_type      ON content_cache (type);
   CREATE INDEX IF NOT EXISTS idx_content_history_contentId ON content_cache_history (contentId);
   CREATE INDEX IF NOT EXISTS idx_timeline_entityId ON character_timeline (entityId);
+  CREATE INDEX IF NOT EXISTS idx_prepared_encounters_campaign ON prepared_encounters (campaignId);
+  CREATE INDEX IF NOT EXISTS idx_prepared_encounters_status   ON prepared_encounters (status);
 `;
 
 export const ALL_TABLES = [
@@ -166,5 +186,6 @@ export const ALL_TABLES = [
   CREATE_COMBAT_STATE_TABLE,
   CREATE_APP_META_TABLE,
   CREATE_INSTALLED_PACKS_TABLE,
+  CREATE_PREPARED_ENCOUNTERS_TABLE,
   CREATE_INDEXES,
 ];

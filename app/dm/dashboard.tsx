@@ -286,6 +286,12 @@ export default function DmDashboard() {
         <Pressable style={styles.encounterBtn} onPress={handleStartEncounter}>
           <Text style={styles.encounterBtnTxt}>⚔️ Start Encounter</Text>
         </Pressable>
+        <Pressable style={[styles.encounterBtn, styles.libraryBtn]} onPress={() => router.push('/dm/encounters' as any)}>
+          <Text style={styles.encounterBtnTxt}>📋 Encounter Library</Text>
+        </Pressable>
+        <Pressable style={[styles.encounterBtn, styles.libraryBtn]} onPress={() => router.push('/dm/monsters' as any)}>
+          <Text style={styles.encounterBtnTxt}>🐉 Monster Library</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -396,4 +402,5 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   encounterBtnTxt: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.lg },
+  libraryBtn: { backgroundColor: Colors.surfaceHigh, borderWidth: 1, borderColor: Colors.gold },
 });

@@ -10,8 +10,8 @@ import { useCombatStore }   from '../../src/store/combatStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { spawnMonster }     from '../../src/engine/monsterFactory';
-import { ALL_MONSTER_TEMPLATES } from '../../src/content/monsters/srd';
 import { MonsterTemplate }  from '../../src/content/monsters/types';
+import { mergeMonsterIndex } from '../../src/content/contentResolution';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -118,16 +118,9 @@ export default function MonstersScreen() {
   const [preview,  setPreview]  = useState<MonsterTemplate | null>(null);
 
   const homebrewMonsters = useHomebrewStore(s => s.monsters);
-  // Bug fix (architecture review C6): this used to plain-concatenate with
-  // no dedup, same pattern already fixed elsewhere for items (C9/C10) and
-  // conditions (C11) — a homebrew monster overriding an official one by id
-  // showed up as two rows. Homebrew wins, matching the precedence used
-  // everywhere else.
-  const allTemplates = useMemo(() => {
-    const homebrewIds = new Set(homebrewMonsters.map(m => m.id));
-    const official = ALL_MONSTER_TEMPLATES.filter(t => !homebrewIds.has(t.id));
-    return [...official, ...homebrewMonsters];
-  }, [homebrewMonsters]);
+  // mergeMonsterIndex dedups by id, homebrew wins — extracted to
+  // contentResolution.ts once a second consumer needed it (preparedEncounter.ts).
+  const allTemplates = useMemo(() => mergeMonsterIndex(homebrewMonsters), [homebrewMonsters]);
 
   const filtered = useMemo(() => {
     return allTemplates.filter(t => {

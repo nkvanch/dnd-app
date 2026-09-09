@@ -10,7 +10,8 @@ import {
   startWildShape, endWildShape, applyWildShapeDamage,
   concentrationCheck, castConcentrationSpell, dropConcentration,
   parseConcentrationDuration, tickConcentrationDuration, startEncounter,
-  startTurn, markActionSlotUsed, toggleActionEconomy, endTurn,
+  startTurn, markActionSlotUsed, toggleActionEconomy, endTurn, addToEncounter,
+  CombatState,
 } from '../combat';
 import { isFeatureAvailable } from '../actionCards';
 import { setRandomSource } from '../dice';
@@ -607,5 +608,74 @@ describe('tickConcentrationDuration', () => {
     const e = concentratingEntity(0); // default fixture has no concentratingDuration set
     const result = tickConcentrationDuration(e, DEFAULT_RULES);
     expect(result.spellcasting!.concentrating).toBe('bless'); // untouched, still concentrating
+  });
+});
+
+// ── addToEncounter — reinforcement merge, turn-pointer preservation ──────────
+// Regression coverage for Phase 1's prepared-encounter wave-deploy feature:
+// inserting mid-combat must roll initiative for new arrivals only, merge them
+// into the existing sorted order, and re-anchor turnIndex (a plain array
+// index) to whichever entity currently has the turn — a naive insertion
+// would silently point turnIndex at the wrong combatant whenever a new
+// entry sorts ahead of the current turn.
+
+describe('addToEncounter', () => {
+  afterEach(() => setRandomSource(Math.random));
+
+  function reinforcement(id: string, initiativeBonus: number): Entity {
+    return { ...testEntity(10), id, identity: { ...testEntity(10).identity, name: id }, derived: { ...testEntity(10).derived, initiative: initiativeBonus } };
+  }
+
+  it('is a no-op when combat is not active', () => {
+    const combat: CombatState = { active: false, round: 0, turnIndex: 0, order: [], encounterId: 'e1' };
+    const result = addToEncounter(combat, [reinforcement('new1', 0)]);
+    expect(result).toBe(combat);
+  });
+
+  it('is a no-op when there are no new entities', () => {
+    const combat: CombatState = { active: true, round: 1, turnIndex: 0, order: [{ entityId: 'a', name: 'A', initiative: 10, tiebreak: 0, isPlayer: false, hasTakenTurn: false }], encounterId: 'e1' };
+    expect(addToEncounter(combat, [])).toBe(combat);
+  });
+
+  it('rolls initiative for new entities only and merges them into the existing sorted order', () => {
+    const combat: CombatState = {
+      active: true, round: 1, turnIndex: 0,
+      order: [
+        { entityId: 'high', name: 'High', initiative: 20, tiebreak: 0, isPlayer: true, hasTakenTurn: true },
+        { entityId: 'low',  name: 'Low',  initiative: 5,  tiebreak: 0, isPlayer: true, hasTakenTurn: false },
+      ],
+      encounterId: 'e1',
+    };
+    setRandomSource(() => 0); // reinforcement rolls a 1 on the d20
+    const result = addToEncounter(combat, [reinforcement('new1', 9)]); // 1 + 9 = 10, lands between high and low
+    expect(result.order.map(e => e.entityId)).toEqual(['high', 'new1', 'low']);
+    expect(result.order.find(e => e.entityId === 'new1')?.hasTakenTurn).toBe(false);
+  });
+
+  it("re-anchors turnIndex to the currently-acting entity's new position after a mid-order insertion", () => {
+    const combat: CombatState = {
+      active: true, round: 1, turnIndex: 1, // "low" currently has the turn
+      order: [
+        { entityId: 'high', name: 'High', initiative: 20, tiebreak: 0, isPlayer: true, hasTakenTurn: true },
+        { entityId: 'low',  name: 'Low',  initiative: 5,  tiebreak: 0, isPlayer: true, hasTakenTurn: false },
+      ],
+      encounterId: 'e1',
+    };
+    setRandomSource(() => 0); // reinforcement rolls a 1
+    const result = addToEncounter(combat, [reinforcement('new1', 9)]); // sorts between high and low, ahead of the pointer
+    expect(result.order[result.turnIndex].entityId).toBe('low'); // pointer followed "low" to its new index (2), not left at stale index 1
+    expect(result.turnIndex).toBe(2);
+  });
+
+  it('merges multiple simultaneous reinforcements in one call', () => {
+    const combat: CombatState = {
+      active: true, round: 1, turnIndex: 0,
+      order: [{ entityId: 'a', name: 'A', initiative: 10, tiebreak: 0, isPlayer: true, hasTakenTurn: false }],
+      encounterId: 'e1',
+    };
+    setRandomSource(() => 0);
+    const result = addToEncounter(combat, [reinforcement('new1', 0), reinforcement('new2', 5)]);
+    expect(result.order).toHaveLength(3);
+    expect(new Set(result.order.map(e => e.entityId))).toEqual(new Set(['a', 'new1', 'new2']));
   });
 });

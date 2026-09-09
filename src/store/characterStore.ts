@@ -578,6 +578,36 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   },
 
   applyIncomingEntity: async (entity) => {
+    // Bug fix (architecture review P1, S0): an incoming FULL snapshot for a
+    // character THIS device already has locally AND currently owns/controls
+    // (syncManager.ownedCharacterId) used to unconditionally overwrite local
+    // state. In practice, the only thing that ever sends a player an
+    // entity_snapshot for an already-existing character is the DM's
+    // reconnect-triggered push (server.ts's onEntitySyncRequested, fired on
+    // every 'hello') — built from the DM's OWN possibly-stale copy. There is
+    // no offline mutation queue for entity patches (syncEntityPatch/
+    // syncEntity just silently no-op via SyncClient.send while
+    // disconnected, with nothing queued to replay) — so a WiFi blip during
+    // which the player took an action (damage, a spell slot spent — saved
+    // correctly to THIS device's own store, just never transmitted) was
+    // silently reverted, in both memory and local SQLite, the moment the
+    // socket reconnected and the DM's stale snapshot arrived.
+    //
+    // This device's own local copy of a character IT owns is authoritative
+    // for that character — the DM only ever legitimately edits an owned
+    // character via a PATCH now (applyIncomingPatch, deep-merged, never a
+    // wholesale replace — see the U1/U2 fix), so a full-snapshot push for
+    // an owned, already-known entity always means "the sender's copy may be
+    // stale," never "here's an intentional edit to accept." Push the local
+    // copy back up instead of accepting the overwrite, correcting the
+    // sender rather than silently losing local state.
+    const state = get();
+    const localCopy = state.characters.find(c => c.id === entity.id);
+    if (localCopy && entity.id === syncManager.ownedCharacterId) {
+      syncManager.pushEntity(localCopy);
+      return;
+    }
+
     // A remote device can push spell/item ids this device has never locally
     // browsed — warm Tier 2 before the entity lands in state so the engine
     // pipeline never hits a synchronous cache miss for it.

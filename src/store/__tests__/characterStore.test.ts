@@ -7,6 +7,7 @@
 import { useCharacterStore, makeEmptyEntity } from '../characterStore';
 import { Entity } from '../../engine/types';
 import * as timelineRepo from '../../db/timelineRepo';
+import { syncManager } from '../../sync/syncManager';
 
 // updateCharacter/undo/redo all call scheduleSave(), which debounces a real
 // SQLite write behind a 600ms setTimeout — with no initDb() call in this
@@ -149,5 +150,55 @@ describe('updateCharacter — persistent timeline write (Phase B)', () => {
 
     expect(recordSpy).toHaveBeenCalledWith('c1', 'Took 8 damage', expect.any(Number), 'combat');
     recordSpy.mockRestore();
+  });
+});
+
+describe('applyIncomingEntity — owned-character reconnect protection (architecture review P1, S0)', () => {
+  it('does NOT overwrite local state with an incoming snapshot for a character this device owns, and pushes the local copy back up instead', async () => {
+    const ownedSpy = jest.spyOn(syncManager, 'ownedCharacterId', 'get').mockReturnValue('c1');
+    const pushSpy  = jest.spyOn(syncManager, 'pushEntity').mockImplementation(() => {});
+    reset([testCharacter('c1', 6)]); // local: HP 6 (the player's own, correct, un-transmitted edit)
+
+    const staleFromDm = testCharacter('c1', 20); // DM's stale pre-blip copy: still full HP
+    await useCharacterStore.getState().applyIncomingEntity(staleFromDm);
+
+    expect(useCharacterStore.getState().characters[0].resources.hp.current).toBe(6); // local state untouched
+    expect(pushSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1', resources: expect.objectContaining({ hp: expect.objectContaining({ current: 6 }) }) }));
+
+    ownedSpy.mockRestore();
+    pushSpy.mockRestore();
+  });
+
+  it('still accepts an incoming snapshot normally for a character this device does NOT own', async () => {
+    const ownedSpy = jest.spyOn(syncManager, 'ownedCharacterId', 'get').mockReturnValue('some_other_character');
+    reset([testCharacter('c1', 6)]);
+
+    const incoming = testCharacter('c1', 20);
+    await useCharacterStore.getState().applyIncomingEntity(incoming);
+
+    expect(useCharacterStore.getState().characters[0].resources.hp.current).toBe(20);
+    ownedSpy.mockRestore();
+  });
+
+  it('still accepts an incoming snapshot for an owned character when this device has no local copy of it yet (nothing to protect)', async () => {
+    const ownedSpy = jest.spyOn(syncManager, 'ownedCharacterId', 'get').mockReturnValue('c1');
+    reset([]); // no local copy at all
+
+    const incoming = testCharacter('c1', 20);
+    await useCharacterStore.getState().applyIncomingEntity(incoming);
+
+    expect(useCharacterStore.getState().characters.find(c => c.id === 'c1')?.resources.hp.current).toBe(20);
+    ownedSpy.mockRestore();
+  });
+
+  it('still accepts an incoming snapshot for a brand-new, not-yet-locally-known entity even when unclaimed (companion insert path)', async () => {
+    const ownedSpy = jest.spyOn(syncManager, 'ownedCharacterId', 'get').mockReturnValue(null);
+    reset([testCharacter('c1', 20)]);
+
+    const companion = testCharacter('companion1', 5);
+    await useCharacterStore.getState().applyIncomingEntity(companion);
+
+    expect(useCharacterStore.getState().characters.find(c => c.id === 'companion1')).toBeDefined();
+    ownedSpy.mockRestore();
   });
 });

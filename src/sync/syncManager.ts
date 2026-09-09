@@ -347,6 +347,12 @@ class SyncManagerClass {
     };
   }
 
+  /** Which character THIS device currently claims/controls (player role
+   *  only — null for DM/offline/unclaimed). See SyncClient.ownedCharacterId. */
+  get ownedCharacterId(): string | null {
+    return this.role === 'player' ? (this.client?.ownedCharacterId ?? null) : null;
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
 
   private applyIncomingEvent(event: SyncEvent): void {

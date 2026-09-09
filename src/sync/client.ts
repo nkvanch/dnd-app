@@ -60,6 +60,11 @@ export class SyncClient {
   // expose for diagnostics
   get target(): string { return `${this.host}:${this.port}`; }
   get lastErrorMessage(): string | null { return this.lastError; }
+  /** Which character this device currently claims/controls, if any — see
+   *  claimCharacter(). Used by characterStore's applyIncomingEntity to
+   *  decide whether an incoming full snapshot for this specific entity
+   *  should override local state or not (architecture review P1). */
+  get ownedCharacterId(): string | null { return this.characterId; }
 
   constructor(deviceId: string, nickname: string, characterId: string | null, callbacks: ClientCallbacks) {
     this.deviceId    = deviceId;

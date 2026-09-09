@@ -15,6 +15,8 @@ import { useEncounterStore } from '../../src/store/encounterStore';
 import { useHomebrewStore }  from '../../src/store/homebrewStore';
 import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
+import { generateActionCard } from '../../src/engine/actionCards';
+import { applyActionCardUse } from '../../src/components/sheet/TabActions';
 import { expireOverrides } from '../../src/engine/dmOverride';
 import { COMMON_DAMAGE_TYPES } from '../../src/content/traitCompiler';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
@@ -105,6 +107,22 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
     c.includes(condSearch.toLowerCase()) && !entity.conditions.some(ac => ac.id === c)
   );
 
+  // Legendary Actions — only shown when the entity actually has the pool
+  // (a monster template with resources: [{resourceId:'legendary_actions',...}]).
+  // Reuses the same ActionCard/applyActionCardUse machinery every player
+  // action card already goes through — a legendary-action Feature is just a
+  // Feature whose activation.resourceCost.resourceId is 'legendary_actions',
+  // same generic ResourceCost mechanism spell slots already use. No preview
+  // gate: matches this app's existing "direct, no-confirm" convention for
+  // every other QuickPanel action (damage/heal/kill/condition).
+  const legendaryPool = entity.resources.custom.find(r => r.id === 'legendary_actions');
+  const legendaryCards = legendaryPool
+    ? entity.features
+        .filter(f => f.activation?.resourceCost?.resourceId === 'legendary_actions')
+        .map(f => generateActionCard(f, entity))
+        .filter((c): c is NonNullable<typeof c> => c !== null)
+    : [];
+
   return (
     <View style={styles.quickPanel}>
       <View style={styles.quickHeader}>
@@ -130,6 +148,32 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
           <Text style={styles.qBtnTxt}>💀 Kill</Text>
         </Pressable>
       </View>
+
+      {/* Legendary Actions */}
+      {legendaryPool && (
+        <View style={styles.legendaryWrap}>
+          <Text style={styles.legendaryHeader}>
+            🐉 Legendary Actions — {legendaryPool.current}/{legendaryPool.maximum}
+          </Text>
+          {legendaryCards.map(card => (
+            <Pressable
+              key={card.featureId}
+              style={[styles.legendaryRow, !card.available && styles.btnDisabled]}
+              disabled={!card.available}
+              onPress={() => {
+                const updated = applyActionCardUse(entity, card, rules);
+                onUpdate(updated, `${entity.identity.name}: used ${card.name}`);
+              }}
+            >
+              <Text style={styles.legendaryName}>{card.name}</Text>
+              <Text style={styles.legendaryDesc}>{card.layer2}{card.layer3 ? ` · ${card.layer3}` : ''}</Text>
+              {!card.available && card.unavailableReason && (
+                <Text style={styles.legendaryReason}>{card.unavailableReason}</Text>
+              )}
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {/* Number input for damage/heal */}
       {(mode === 'damage' || mode === 'heal') && (
@@ -687,6 +731,16 @@ const styles = StyleSheet.create({
   },
   condRowAdd:  { opacity: 0.8 },
   condItemTxt: { fontSize: FontSize.sm, color: Colors.textPrimary, textTransform: 'capitalize' },
+
+  legendaryWrap:   { gap: Spacing.xs, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: Spacing.xs },
+  legendaryHeader: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.gold },
+  legendaryRow: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.xs,
+  },
+  legendaryName:   { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  legendaryDesc:   { fontSize: FontSize.xs, color: Colors.textDim },
+  legendaryReason: { fontSize: FontSize.xs, color: Colors.red },
 
   // Setup mode
   setupRow: {

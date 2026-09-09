@@ -331,6 +331,9 @@ export const monsterLich: MonsterTemplate = {
   senses: ['truesight 120 ft', 'passive Perception 19'],
   languages: ['Common plus up to 5 other languages'],
   legendaryActions: 3,
+  resources: [
+    { resourceId: 'legendary_actions', name: 'Legendary Actions', maximum: 3, recharge: 'start_of_turn' },
+  ],
   features: [
     {
       id: 'lich_paralyzing_touch', name: 'Paralyzing Touch',
@@ -341,6 +344,38 @@ export const monsterLich: MonsterTemplate = {
       abilityEffects: [
         { type: 'damage', dice: '3d6', damageType: 'cold' },
         { type: 'apply_condition', conditionId: 'paralyzed', duration: { unit: 'minutes', remaining: 1 } },
+      ],
+    },
+    // Legendary Actions — the lich can take 3 per round, drawn from below,
+    // only at the end of another creature's turn. Costs are modeled via the
+    // existing generic ResourceCost machinery (resourceId 'legendary_actions'),
+    // the same way spell slots already are — no new Feature field needed.
+    {
+      id: 'lich_legendary_cantrip', name: 'Cantrip',
+      description: 'The lich casts a cantrip.',
+      source: { kind: 'race', refId: 'lich' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: { resourceId: 'legendary_actions', quantity: 1 }, range: null, target: 'self', requiresSave: null },
+      abilityEffects: [],
+    },
+    {
+      id: 'lich_legendary_frightening_gaze', name: 'Frightening Gaze (Costs 2 Actions)',
+      description: 'The lich fixes its gaze on one creature it can see within 10 ft. DC 18 WIS save or frightened for 1 minute (repeats the save at the end of each of its turns).',
+      source: { kind: 'race', refId: 'lich' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: { resourceId: 'legendary_actions', quantity: 2 }, range: '10 feet', target: 'single', requiresSave: { ability: 'wis', dc: 18 } },
+      abilityEffects: [
+        { type: 'apply_condition', conditionId: 'frightened', duration: { unit: 'minutes', remaining: 1 } },
+      ],
+    },
+    {
+      id: 'lich_legendary_disrupt_life', name: 'Disrupt Life (Costs 3 Actions)',
+      description: 'Each non-undead creature within 20 ft. of the lich must make a DC 18 CON save, taking 21 (6d6) necrotic damage on a failure, or half as much on a success.',
+      source: { kind: 'race', refId: 'lich' }, level: null,
+      effects: [], actions: [], choices: [], passive: false,
+      activation: { actionType: 'free', resourceCost: { resourceId: 'legendary_actions', quantity: 3 }, range: '20 feet', target: 'area', requiresSave: { ability: 'con', dc: 18 } },
+      abilityEffects: [
+        { type: 'damage', dice: '6d6', damageType: 'necrotic', saveOnSuccess: 'half' },
       ],
     },
   ],

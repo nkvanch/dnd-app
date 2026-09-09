@@ -78,9 +78,23 @@ export function startEncounter(
 // ── Turn/action economy (A-25) ───────────────────────────────────────────────
 
 /** Fresh turn — all 3 action-economy slots reset to unused. Also the first
- *  call that turns turnState from null into an actively-tracked object. */
+ *  call that turns turnState from null into an actively-tracked object.
+ *  Also refreshes any CustomResource tagged recharge:'start_of_turn' back
+ *  to its maximum — generic (not legendary-action-specific), reusing
+ *  CustomResource.recharge's existing open `| string` field the same way
+ *  'short_rest'/'long_rest' already work, just ticked from a different
+ *  event. First (and currently only) consumer: a monster's Legendary
+ *  Actions pool, which refreshes at the start of its own turn rather than
+ *  on any rest. */
 export function startTurn(entity: Entity): Entity {
-  return { ...entity, turnState: { actionUsed: false, bonusActionUsed: false, reactionUsed: false } };
+  const hasStartOfTurn = entity.resources.custom.some(r => r.recharge === 'start_of_turn');
+  return {
+    ...entity,
+    turnState: { actionUsed: false, bonusActionUsed: false, reactionUsed: false },
+    resources: hasStartOfTurn
+      ? { ...entity.resources, custom: entity.resources.custom.map(r => r.recharge === 'start_of_turn' ? { ...r, current: r.maximum } : r) }
+      : entity.resources,
+  };
 }
 
 /** Marks one action-economy slot used. A no-op if turnState is null (not

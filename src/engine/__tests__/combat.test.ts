@@ -85,6 +85,40 @@ describe('startTurn', () => {
     const e = { ...testEntity(), turnState: { actionUsed: true, bonusActionUsed: true, reactionUsed: true } };
     expect(startTurn(e).turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: false });
   });
+
+  // Regression coverage for the legendary-actions engine mechanism (Phase 4,
+  // legendary/lair actions): a CustomResource tagged recharge:'start_of_turn'
+  // (a monster's Legendary Actions pool) must refresh to full whenever this
+  // entity's own turn starts — a generic mechanism, not legendary-action-
+  // specific, so it's tested against a bare custom resource rather than a
+  // real monster fixture.
+  it("refreshes a resource tagged recharge:'start_of_turn' back to maximum", () => {
+    const e = {
+      ...testEntity(),
+      resources: {
+        ...testEntity().resources,
+        custom: [{ id: 'legendary_actions', name: 'Legendary Actions', current: 0, maximum: 3, recharge: 'start_of_turn' }],
+      },
+    };
+    const started = startTurn(e);
+    expect(started.resources.custom[0].current).toBe(3);
+  });
+
+  it("leaves resources with any other recharge value untouched", () => {
+    const e = {
+      ...testEntity(),
+      resources: {
+        ...testEntity().resources,
+        custom: [{ id: 'second_wind', name: 'Second Wind', current: 0, maximum: 1, recharge: 'short_rest' as const }],
+      },
+    };
+    expect(startTurn(e).resources.custom[0].current).toBe(0);
+  });
+
+  it('is a no-op on resources.custom identity when there is nothing tagged start_of_turn (cheap path)', () => {
+    const e = testEntity();
+    expect(startTurn(e).resources).toBe(e.resources);
+  });
 });
 
 describe('markActionSlotUsed', () => {

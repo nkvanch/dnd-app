@@ -30,6 +30,20 @@ import { instantiatePreparedEncounter, instantiateWave, startingCombatantCount }
 import { mergeMonsterIndex } from '../../src/content/contentResolution';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
+// Reads back the groupName a PreparedEncounter combatant was tagged with at
+// spawn time (preparedEncounter.ts's withPrepMetadata writes it into the
+// notes JSON blob alongside spawnMonster's own cr/size/type metadata) — the
+// first runtime consumer of that field, used here to offer "select this
+// group" as a multi-target shortcut. Best-effort: any entity without prep
+// metadata (manually-added party members, monsters spawned outside a
+// PreparedEncounter) simply has no group and isn't offered.
+function entityGroupName(entity: Entity): string | undefined {
+  try {
+    const parsed = JSON.parse(entity.notes || '{}') as Record<string, unknown>;
+    return typeof parsed.groupName === 'string' ? parsed.groupName : undefined;
+  } catch { return undefined; }
+}
+
 const KNOWN_CONDITIONS = [
   'blinded','charmed','deafened','exhaustion','frightened',
   'grappled','incapacitated','invisible','paralyzed','petrified',
@@ -252,16 +266,160 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
   );
 }
 
+// ── Multi-Target Panel ────────────────────────────────────────────────────────
+// DM multi-target tools: apply the same damage/heal/condition action to every
+// currently-selected combatant in one operation, instead of repeating the
+// single-target QuickPanel flow once per entity. Reuses the exact same
+// engine mutators (applyDamage/applyHealing/applyCondition/removeCondition)
+// QuickPanel already uses — this is a UI/looping addition, not a new engine
+// mechanism. Disclosed limitation: unlike QuickPanel's single-target damage,
+// bulk damage does NOT open a concentration-check modal per affected caster
+// (a correct multi-modal queue is real, separate UI work) — a DM bulk-
+// damaging a group that includes a concentrating spellcaster should resolve
+// that check manually afterward, or damage that entity individually via
+// QuickPanel instead.
+
+interface MultiTargetPanelProps {
+  entities: Entity[];
+  onDamage: (amount: number, damageType?: string) => void;
+  onHeal:   (amount: number) => void;
+  onKill:   () => void;
+  onAddCondition:    (conditionId: string) => void;
+  onRemoveCondition: (conditionId: string) => void;
+  onClose:  () => void;
+}
+
+function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, onRemoveCondition, onClose }: MultiTargetPanelProps) {
+  const [mode,        setMode]        = useState<'damage'|'heal'|'condition'|null>(null);
+  const [valueStr,    setValueStr]    = useState('');
+  const [damageType,  setDamageType]  = useState('');
+  const [condSearch,  setCondSearch]  = useState('');
+
+  const amount = parseInt(valueStr, 10);
+  const validNum = !isNaN(amount) && amount > 0;
+
+  function submitDamage() {
+    if (!validNum) return;
+    onDamage(amount, damageType.trim() || undefined);
+    setMode(null); setValueStr(''); setDamageType('');
+  }
+  function submitHeal() {
+    if (!validNum) return;
+    onHeal(amount);
+    setMode(null); setValueStr('');
+  }
+  function submitKill() {
+    Alert.alert('Kill', `Set all ${entities.length} selected combatants' HP to 0?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Kill', style: 'destructive', onPress: onKill },
+    ]);
+  }
+
+  // Conditions already on every selected entity — removable in one tap.
+  // Conditions on only SOME of the selection aren't offered for removal
+  // here (ambiguous which subset "remove" should target); use QuickPanel
+  // per-entity for that case.
+  const sharedActive = entities.length > 0
+    ? entities[0].conditions.filter(c => entities.every(e => e.conditions.some(ac => ac.id === c.id))).map(c => c.id)
+    : [];
+  const filteredConds = KNOWN_CONDITIONS.filter(c => c.includes(condSearch.toLowerCase()));
+
+  return (
+    <View style={[styles.quickPanel, styles.multiPanel]}>
+      <View style={styles.quickHeader}>
+        <Text style={styles.quickName}>{entities.length} selected</Text>
+        <Pressable onPress={onClose}><Text style={styles.closeTxt}>✕</Text></Pressable>
+      </View>
+      <Text style={styles.multiNames} numberOfLines={2}>
+        {entities.map(e => e.identity.name).join(', ')}
+      </Text>
+
+      <View style={styles.quickBtns}>
+        <Pressable style={[styles.qBtn, styles.qBtnRed]} onPress={() => setMode('damage')}>
+          <Text style={styles.qBtnTxt}>⚔️ Damage</Text>
+        </Pressable>
+        <Pressable style={[styles.qBtn, styles.qBtnGreen]} onPress={() => setMode('heal')}>
+          <Text style={styles.qBtnTxt}>💚 Heal</Text>
+        </Pressable>
+        <Pressable style={[styles.qBtn, styles.qBtnPurple]} onPress={() => setMode('condition')}>
+          <Text style={styles.qBtnTxt}>🔮 Cond</Text>
+        </Pressable>
+        <Pressable style={[styles.qBtn, styles.qBtnDark]} onPress={submitKill}>
+          <Text style={styles.qBtnTxt}>💀 Kill</Text>
+        </Pressable>
+      </View>
+
+      {(mode === 'damage' || mode === 'heal') && (
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.numInput}
+            value={valueStr}
+            onChangeText={setValueStr}
+            keyboardType="number-pad"
+            placeholder="Amount"
+            placeholderTextColor={Colors.textDim}
+            autoFocus
+          />
+          <Pressable
+            style={[styles.submitBtn, !validNum && styles.btnDisabled]}
+            onPress={mode === 'damage' ? submitDamage : submitHeal}
+            disabled={!validNum}
+          >
+            <Text style={styles.submitBtnTxt}>{mode === 'damage' ? 'Apply Damage' : 'Apply Heal'}</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {mode === 'damage' && (
+        <View style={styles.dmgTypeWrap}>
+          {COMMON_DAMAGE_TYPES.map(t => (
+            <Pressable key={t} style={[styles.dmgTypeChip, damageType === t && styles.dmgTypeChipActive]}
+              onPress={() => setDamageType(damageType === t ? '' : t)}>
+              <Text style={[styles.dmgTypeChipTxt, damageType === t && styles.dmgTypeChipTxtActive]}>{t}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {mode === 'condition' && (
+        <View style={styles.condPicker}>
+          <TextInput
+            style={styles.condSearch}
+            value={condSearch}
+            onChangeText={setCondSearch}
+            placeholder="Search conditions…"
+            placeholderTextColor={Colors.textDim}
+          />
+          {sharedActive.map(c => (
+            <Pressable key={c} style={styles.condRowItem} onPress={() => onRemoveCondition(c)}>
+              <Text style={styles.condItemTxt}>{c} — on all selected (tap to remove from all)</Text>
+            </Pressable>
+          ))}
+          {filteredConds.map(c => (
+            <Pressable key={c} style={[styles.condRowItem, styles.condRowAdd]} onPress={() => {
+              onAddCondition(c);
+              setCondSearch('');
+            }}>
+              <Text style={styles.condItemTxt}>+ {c} (to all selected)</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 // ── Combatant Row ─────────────────────────────────────────────────────────────
 
 interface CombatantRowProps {
   entry:      InitiativeEntry;
   entity:     Entity | undefined;
   isCurrent:  boolean;
+  isSelected?: boolean;
   onPress:    () => void;
 }
 
-function CombatantRow({ entry, entity, isCurrent, onPress }: CombatantRowProps) {
+function CombatantRow({ entry, entity, isCurrent, isSelected, onPress }: CombatantRowProps) {
   const hp     = entity?.resources.hp;
   const hpPct  = hp && hp.maximum > 0 ? hp.current / hp.maximum : 0;
 
@@ -278,7 +436,7 @@ function CombatantRow({ entry, entity, isCurrent, onPress }: CombatantRowProps) 
 
   return (
     <Pressable
-      style={[styles.combatantRow, isCurrent && styles.combatantRowActive]}
+      style={[styles.combatantRow, isCurrent && styles.combatantRowActive, isSelected && styles.combatantRowSelected]}
       onPress={onPress}
     >
       <View style={styles.initBox}>
@@ -286,7 +444,7 @@ function CombatantRow({ entry, entity, isCurrent, onPress }: CombatantRowProps) 
       </View>
 
       <View style={styles.combatantInfo}>
-        <Text style={styles.combatantName}>{entry.name}</Text>
+        <Text style={styles.combatantName}>{isSelected ? '☑ ' : ''}{entry.name}</Text>
         {entity && (
           <View style={styles.combatantStatus}>
             {/* DM sees full HP; players see status label only */}
@@ -339,6 +497,15 @@ export default function EncounterScreen() {
   const [selectedId, setSelectedId]  = useState<string | null>(null);
   const [setupMode,  setSetupMode]   = useState(!combat.active);
 
+  // Multi-target selection — separate from selectedId's single-select flow,
+  // active only while multiMode is on. Toggling multiMode off clears the
+  // set so re-entering starts fresh rather than reopening a stale panel.
+  const [multiMode,   setMultiMode]   = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  function toggleSelected(id: string) {
+    setSelectedIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+  }
+
   // The PreparedEncounter this run either came from (via ?preparedId=, still
   // in setupMode/preview) or was instantiated from (combat.active, carries
   // its own sourcePreparedEncounterId — see CombatState's own doc comment).
@@ -350,12 +517,10 @@ export default function EncounterScreen() {
   // Selected entity for the quick panel
   const selectedEntity = entities.find(e => e.id === selectedId);
 
-  function handleEntityUpdate(updated: Entity, label?: string) {
-    // `before` is the combatStore snapshot QuickPanel's own action handlers
-    // (submitDamage/submitHeal/etc.) actually computed `updated` FROM — it's
-    // the `entity` prop QuickPanel was rendered with this same render pass,
-    // closed over here via `selectedEntity`.
-    const before = selectedEntity;
+  // Core apply-one-update logic, extracted so both the single-select
+  // QuickPanel path and the multi-target path (which has its own `before`
+  // per entity, not the single globally-selected one) share it.
+  function applyEntityUpdate(before: Entity | undefined, updated: Entity, label?: string) {
     updateEntity(updated.id, () => updated);
     // If it's a player character, persist to characterStore too — the REAL
     // synced source of truth, not just this DM device's own combatStore
@@ -367,25 +532,80 @@ export default function EncounterScreen() {
       // pre-baked `updated`, which was computed from combatStore's
       // possibly-stale copy. If a player made an independent change on
       // their own device (synced into characterStore) between the DM's
-      // last combatStore snapshot and this QuickPanel action, that change
-      // was silently reverted. Diff what QuickPanel's own action actually
-      // changed (`before` → `updated`) and merge just that patch onto
-      // whatever characterStore's real current state is — the same
-      // deepDiff/deepMerge machinery this app already uses for exactly
-      // this "apply what changed, not a wholesale snapshot" problem in
-      // sync's own applyIncomingPatch.
+      // last combatStore snapshot and this action, that change was
+      // silently reverted. Diff what the action actually changed
+      // (`before` → `updated`) and merge just that patch onto whatever
+      // characterStore's real current state is — the same deepDiff/
+      // deepMerge machinery this app already uses for exactly this "apply
+      // what changed, not a wholesale snapshot" problem in sync's own
+      // applyIncomingPatch.
       if (before) {
         const patch = deepDiff(before, updated);
         if (patch !== undefined) {
           updateCharacter(updated.id, c => deepMerge(c, patch), label);
         }
       } else {
-        // No prior combatStore snapshot to diff against (shouldn't
-        // normally happen — QuickPanel only fires for an already-selected,
-        // already-tracked entity) — fall back to a wholesale replace.
+        // No prior snapshot to diff against — fall back to a wholesale replace.
         updateCharacter(updated.id, () => updated, label);
       }
     }
+  }
+
+  function handleEntityUpdate(updated: Entity, label?: string) {
+    // `before` is the combatStore snapshot QuickPanel's own action handlers
+    // (submitDamage/submitHeal/etc.) actually computed `updated` FROM — it's
+    // the `entity` prop QuickPanel was rendered with this same render pass,
+    // closed over here via `selectedEntity`.
+    applyEntityUpdate(selectedEntity, updated, label);
+  }
+
+  // Applies the same mutator to every currently multi-selected entity —
+  // the "DM multi-target tools" entry point. Each entity's own `before` is
+  // read fresh from combatStore.entities per-iteration (not the single
+  // selectedEntity), so the character-patch diff above stays correct per
+  // entity. Wild Shape branching is handled inline by the caller (same
+  // per-entity check QuickPanel's own submitDamage/submitHeal already do)
+  // since a mixed selection can include both transformed and normal entities.
+  function handleBulkUpdate(mutate: (e: Entity) => Entity, labelFor: (e: Entity) => string) {
+    for (const id of selectedIds) {
+      const before = entities.find(e => e.id === id);
+      if (!before) continue;
+      applyEntityUpdate(before, mutate(before), labelFor(before));
+    }
+  }
+
+  function bulkDamage(amount: number, damageType?: string) {
+    const dt = damageType?.trim() || undefined;
+    handleBulkUpdate(
+      e => e.wildShapeState?.active ? applyWildShapeDamage(e, amount, rules) : applyDamage(e, amount, rules, dt),
+      e => `${e.identity.name}: took ${amount}${dt ? ` ${dt}` : ''} damage`,
+    );
+  }
+  function bulkHeal(amount: number) {
+    handleBulkUpdate(
+      e => e.wildShapeState?.active ? e : applyHealing(e, amount, rules),
+      e => `${e.identity.name}: healed ${amount}`,
+    );
+  }
+  function bulkKill() {
+    handleBulkUpdate(
+      e => e.wildShapeState?.active
+        ? applyWildShapeDamage(e, e.wildShapeState.beastHpMax, rules)
+        : recomputeDerived({ ...e, resources: { ...e.resources, hp: { ...e.resources.hp, current: 0 } } }, rules),
+      e => `${e.identity.name}: set HP to 0 (Kill)`,
+    );
+  }
+  function bulkAddCondition(conditionId: string) {
+    handleBulkUpdate(
+      e => applyCondition(e, conditionId, 'dm', rules),
+      e => `${e.identity.name}: added condition: ${conditionId}`,
+    );
+  }
+  function bulkRemoveCondition(conditionId: string) {
+    handleBulkUpdate(
+      e => removeCondition(e, conditionId, rules),
+      e => `${e.identity.name}: removed condition: ${conditionId}`,
+    );
   }
 
   // ── Setup mode: add party characters ─────────────────────────────────────
@@ -592,6 +812,53 @@ export default function EncounterScreen() {
           </View>
         )}
 
+        {/* Multi-target toggle */}
+        <View style={styles.multiToggleRow}>
+          <Pressable
+            style={[styles.multiToggleBtn, multiMode && styles.multiToggleBtnActive]}
+            onPress={() => {
+              setMultiMode(m => !m);
+              setSelectedIds([]);
+              setSelectedId(null);
+            }}
+          >
+            <Text style={styles.multiToggleTxt}>{multiMode ? '✓ Multi-select on' : '☐ Multi-select'}</Text>
+          </Pressable>
+        </View>
+
+        {/* Group quick-select — first runtime consumer of PreparedEncounter's
+            groupName metadata (see entityGroupName above). Only shown while
+            multi-select is on and at least one live combatant carries a
+            group tag. */}
+        {multiMode && (() => {
+          const groupNames = Array.from(new Set(
+            combat.order
+              .map(e => entities.find(x => x.id === e.entityId))
+              .filter((e): e is Entity => !!e)
+              .map(entityGroupName)
+              .filter((g): g is string => !!g)
+          ));
+          if (groupNames.length === 0) return null;
+          return (
+            <View style={styles.groupChipRow}>
+              {groupNames.map(g => (
+                <Pressable
+                  key={g}
+                  style={styles.groupChip}
+                  onPress={() => setSelectedIds(
+                    combat.order
+                      .map(e => entities.find(x => x.id === e.entityId))
+                      .filter((e): e is Entity => !!e && entityGroupName(e) === g)
+                      .map(e => e.id)
+                  )}
+                >
+                  <Text style={styles.groupChipTxt}>Select group: {g}</Text>
+                </Pressable>
+              ))}
+            </View>
+          );
+        })()}
+
         {/* Initiative order */}
         {combat.order.map((entry, idx) => {
           const ent = entities.find(e => e.id === entry.entityId);
@@ -601,20 +868,35 @@ export default function EncounterScreen() {
               entry={entry}
               entity={ent}
               isCurrent={idx === combat.turnIndex}
-              onPress={() => setSelectedId(
-                selectedId === entry.entityId ? null : entry.entityId
-              )}
+              isSelected={multiMode && selectedIds.includes(entry.entityId)}
+              onPress={() => multiMode
+                ? toggleSelected(entry.entityId)
+                : setSelectedId(selectedId === entry.entityId ? null : entry.entityId)
+              }
             />
           );
         })}
 
-        {/* Quick panel for selected combatant */}
-        {selectedEntity && (
+        {/* Quick panel for a single selected combatant (non-multi mode) */}
+        {!multiMode && selectedEntity && (
           <QuickPanel
             entity={selectedEntity}
             rules={rules}
             onUpdate={handleEntityUpdate}
             onClose={() => setSelectedId(null)}
+          />
+        )}
+
+        {/* Multi-target panel */}
+        {multiMode && selectedIds.length > 0 && (
+          <MultiTargetPanel
+            entities={selectedIds.map(id => entities.find(e => e.id === id)).filter((e): e is Entity => !!e)}
+            onDamage={bulkDamage}
+            onHeal={bulkHeal}
+            onKill={bulkKill}
+            onAddCondition={bulkAddCondition}
+            onRemoveCondition={bulkRemoveCondition}
+            onClose={() => setSelectedIds([])}
           />
         )}
       </ScrollView>
@@ -664,6 +946,7 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
   },
   combatantRowActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '11' },
+  combatantRowSelected: { borderColor: Colors.blue, backgroundColor: Colors.blue + '11' },
   initBox: {
     width: 44, height: 44, borderRadius: Radius.md,
     backgroundColor: Colors.surfaceHigh, alignItems: 'center', justifyContent: 'center',
@@ -683,6 +966,24 @@ const styles = StyleSheet.create({
   condChipTxt: { fontSize: 10, color: Colors.textPrimary },
   currentIndicator:    { width: 20, alignItems: 'center' },
   currentIndicatorTxt: { color: Colors.gold, fontSize: FontSize.md },
+
+  // Multi-target tools
+  multiToggleRow: { marginBottom: Spacing.xs },
+  multiToggleBtn: {
+    alignSelf: 'flex-start', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingVertical: 4, paddingHorizontal: Spacing.sm,
+  },
+  multiToggleBtnActive: { borderColor: Colors.blue, backgroundColor: Colors.blue + '22' },
+  multiToggleTxt: { fontSize: FontSize.xs, color: Colors.textPrimary },
+  groupChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.xs },
+  groupChip: {
+    borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.blue + '66',
+    backgroundColor: Colors.blue + '11', paddingVertical: 4, paddingHorizontal: Spacing.sm,
+  },
+  groupChipTxt: { fontSize: FontSize.xs, color: Colors.textPrimary },
+  multiPanel:  { borderColor: Colors.blue + '44' },
+  multiNames:  { fontSize: FontSize.xs, color: Colors.textDim },
 
   // Quick panel
   quickPanel: {

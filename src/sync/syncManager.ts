@@ -15,7 +15,8 @@ import { Entity, SyncEvent } from '../engine/types';
 import { SyncServer } from './server';
 import { SyncClient } from './client';
 import { ConnectedPlayer } from './protocol';
-import { decodeRoomCode, encodeRoomCode, getLocalIp } from './discovery';
+import { decodeRoomCode, encodeRoomCode, getLocalIp, watchNetworkChanges } from './discovery';
+import type { EventSubscription } from 'expo-modules-core';
 import { queueSyncEvent, markEventApplied, getUnflushedEvents } from '../db/syncRepo';
 import { saveEntity } from '../db/entityRepo';
 import { deepDiff } from './diff';
@@ -66,6 +67,10 @@ class SyncManagerClass {
   private sessionId:   string | null = null;
   private _roster:     ConnectedPlayer[] = [];
   private _lastError:  string | null = null;
+  /** DM role only — watches for the device's network connectivity changing
+   *  while a campaign is hosted, so the room code can regenerate (or clear)
+   *  without restarting the TCP server. See startNetworkWatch(). */
+  private networkSub:  EventSubscription | null = null;
 
   // ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -77,23 +82,31 @@ class SyncManagerClass {
   // ── Role entry points ─────────────────────────────────────────────────────
 
   /**
-   * Start a TCP server on this device (DM role).
-   * Returns the 6-character room code players use to join.
-   * Throws if not on WiFi.
+   * Start hosting on this device (DM role) — CampaignHost, the session/role
+   * concept, not NetworkHostAvailability. Always succeeds regardless of
+   * WiFi/hotspot/network state (throws only for genuine platform/build
+   * incapability — web, or a native TCP module that isn't linked): the TCP
+   * server binds to 0.0.0.0, which doesn't require an active network
+   * interface, so it's always started here. Hosting is valid offline.
+   *
+   * Returns the 7-character room code players use to join, or null if no
+   * usable local network is currently available to derive one from — in
+   * that case the server is still running and ready, just not currently
+   * dialable. startNetworkWatch() picks up a network appearing later (WiFi
+   * connects, a hotspot is enabled) and regenerates the code reactively,
+   * without needing to re-call this method or recreate the campaign.
    */
   async startAsServer(
     campaignId: string,
     sessionId:  string,
     deviceId:   string,
     nickname:   string,
-  ): Promise<string> {
+  ): Promise<string | null> {
     if (Platform.OS === 'web') throw new Error('Sync not supported on web.');
     this.stopAll();
 
     const ip = await getLocalIp();
-    if (!ip) throw new Error('Not connected to WiFi. Cannot host campaign.');
-
-    this.roomCode  = encodeRoomCode(ip);
+    this.roomCode  = ip ? encodeRoomCode(ip) : null;
     this.sessionId = sessionId;
     this.role      = 'dm';
 
@@ -142,8 +155,32 @@ class SyncManagerClass {
     });
 
     await this.server.start();
+    this.startNetworkWatch();
     this.emitStatus();
     return this.roomCode;
+  }
+
+  /**
+   * Subscribes to network connectivity changes while hosting, so a WiFi/
+   * hotspot connection appearing or disappearing updates the room code
+   * reactively (regenerate, or clear to null) without tearing down the
+   * already-running TCP server — "network appears/disappears during
+   * campaign" from the CampaignHost/NetworkHostAvailability split. Torn
+   * down in stopAll(); re-subscribing on every startAsServer call (via the
+   * stopAll() at its top) keeps at most one active subscription.
+   */
+  private startNetworkWatch(): void {
+    this.networkSub = watchNetworkChanges(() => { void this.refreshRoomCode(); });
+  }
+
+  private async refreshRoomCode(): Promise<void> {
+    if (this.role !== 'dm') return;
+    const ip = await getLocalIp();
+    const nextCode = ip ? encodeRoomCode(ip) : null;
+    if (nextCode !== this.roomCode) {
+      this.roomCode = nextCode;
+      this.emitStatus();
+    }
   }
 
   /**
@@ -314,6 +351,8 @@ class SyncManagerClass {
   // ── Teardown ──────────────────────────────────────────────────────────────
 
   stopAll(): void {
+    this.networkSub?.remove();
+    this.networkSub   = null;
     this.server?.stop();
     this.client?.disconnect();
     this.server       = null;

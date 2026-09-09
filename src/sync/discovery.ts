@@ -17,6 +17,7 @@
 // ============================================================================
 import * as Network from 'expo-network';
 import { Platform } from 'react-native';
+import type { EventSubscription } from 'expo-modules-core';
 
 export const SYNC_PORT = 7742;
 
@@ -38,6 +39,39 @@ export async function getLocalIp(): Promise<string | null> {
   } catch (e) {
     console.warn('[discovery] getIpAddressAsync() threw:', e);
     return null;
+  }
+}
+
+/**
+ * Fires `onChange` whenever the device's network connectivity state changes
+ * (WiFi/hotspot/cellular connects, disconnects, or switches) — a cheap
+ * event-driven trigger, not a truth source itself. The caller re-checks
+ * getLocalIp() in response, since `isConnected`/`isInternetReachable` on the
+ * event can be true on a network with no usable LAN (e.g. cellular data) —
+ * getLocalIp() already correctly rejects that case (0.0.0.0/empty).
+ *
+ * Used to pick up a WiFi/hotspot connection appearing or disappearing WHILE
+ * a campaign is already being hosted, so the room code can regenerate (or
+ * clear) without tearing down and restarting the TCP server itself — see
+ * syncManager.ts's startNetworkWatch().
+ *
+ * No-op subscription on web (matches getLocalIp's own web short-circuit).
+ * Also falls back to a no-op subscription if the underlying native call
+ * throws or doesn't return a real subscription object (e.g. an
+ * unlinked/auto-mocked native module) — this is a convenience watcher on
+ * top of getLocalIp(), never something hosting itself should depend on to
+ * function; degrading to "no live updates" is always safe.
+ */
+export function watchNetworkChanges(onChange: () => void): EventSubscription {
+  const noop: EventSubscription = { remove: () => { /* nothing was subscribed */ } };
+  if (Platform.OS === 'web') return noop;
+
+  try {
+    const sub = Network.addNetworkStateListener(() => onChange());
+    return sub && typeof sub.remove === 'function' ? sub : noop;
+  } catch (e) {
+    console.warn('[discovery] addNetworkStateListener() threw:', e);
+    return noop;
   }
 }
 

@@ -107,14 +107,19 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       createdAt:    Date.now(),
     };
 
-    // Start the LAN sync server (DM role). This binds the TCP socket and returns
-    // the real room code encoding this device's WiFi IP. On web or off-WiFi this
-    // throws; we surface that to the caller so the UI can explain why hosting
-    // failed, and we don't persist a campaign that can't actually be hosted.
+    // Start hosting (DM role). This is CampaignHost — a session/role concept
+    // independent of network availability (see syncManager.startAsServer's
+    // own doc comment) — and only throws for a genuine platform/build
+    // incapability (web, or a native TCP module that isn't linked), never
+    // for "no WiFi/hotspot." roomCode may legitimately be null (no usable
+    // local network right now); the campaign is still created and this
+    // device is still the host either way — joining just isn't available
+    // until a network appears, which syncManager's own network watch picks
+    // up reactively without needing to recreate the campaign.
     const roomCode = await syncManager.startAsServer(
       campaign.id, session.deviceId, session.deviceId, session.nickname,
     );
-    campaign.joinCode = roomCode;
+    campaign.joinCode = roomCode ?? '';
 
     await saveCampaign(campaign);
     await useSessionStore.getState().setCampaignId(campaign.id);
@@ -259,14 +264,19 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
     try {
       if (isDm) {
-        // Re-host. The room code is regenerated from the current LAN IP and may
-        // differ from last session; persist the new code so the DM screen and
-        // any QR share reflect reality.
+        // Re-host. Always succeeds regardless of network (see
+        // syncManager.startAsServer) — this device stays the host either
+        // way. The room code is regenerated from the current LAN IP (may be
+        // null if no usable network is available right now) and may differ
+        // from last session; persist it so the DM screen and any QR share
+        // reflect reality — '' (not null; Campaign.joinCode is a plain
+        // string) when there's currently no dialable code.
         const roomCode = await syncManager.startAsServer(
           activeCampaign.id, session.deviceId, session.deviceId, session.nickname,
         );
-        if (roomCode !== activeCampaign.joinCode) {
-          await get().updateCampaign(activeCampaign.id, c => ({ ...c, joinCode: roomCode }));
+        const nextJoinCode = roomCode ?? '';
+        if (nextJoinCode !== activeCampaign.joinCode) {
+          await get().updateCampaign(activeCampaign.id, c => ({ ...c, joinCode: nextJoinCode }));
         }
       } else {
         // Reconnect as a player using the stored join code.
@@ -275,8 +285,12 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
         );
       }
     } catch (e) {
-      // Off-WiFi or unreachable host — the campaign stays active locally and the
-      // sync status simply shows disconnected. Don't throw on boot.
+      // A DM re-host no longer throws for "no network" (see
+      // syncManager.startAsServer) — this now only catches a genuine
+      // platform/build incapability (web, native TCP module not linked) or,
+      // for a player, a malformed stored join code. The campaign stays
+      // active locally either way and the sync status simply shows
+      // disconnected. Don't throw on boot.
       console.warn('[campaignStore] resumeSync failed:', e);
     }
   },

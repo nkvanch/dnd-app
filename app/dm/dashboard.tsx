@@ -195,18 +195,24 @@ export default function DmDashboard() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {/* Room code banner — what players type/scan to join. */}
+        {/* Room code banner — what players type/scan to join. Hosting itself
+            (CampaignHost) never depends on this — only whether a room code
+            is currently dialable does (NetworkHostAvailability). A missing
+            code is a non-blocking recommendation, not an error: this DM
+            screen and every local host/DM tool stay fully usable either
+            way. */}
         {syncStatus.role === 'dm' && (
           <View style={styles.roomCard}>
             <Text style={styles.roomLabel}>ROOM CODE</Text>
             {syncStatus.roomCode ? (
               <Text style={styles.roomCode}>{syncStatus.roomCode}</Text>
             ) : (
-              <Text style={styles.roomCodeDim}>Not hosting — check WiFi</Text>
+              <Text style={styles.roomCodeDim}>No local network — not joinable yet</Text>
             )}
             <Text style={styles.roomHint}>
-              Players join with this code on the same WiFi network.
-              {syncStatus.connected ? '' : ' (Server not running.)'}
+              {syncStatus.roomCode
+                ? 'Players join with this code on the same WiFi network.'
+                : 'Enable Wi-Fi or a mobile hotspot to let other players join. Everything here still works on this device.'}
             </Text>
           </View>
         )}

@@ -555,20 +555,39 @@ function DmActiveView() {
         </View>
 
         <View style={styles.codeSection}>
-          <Text style={styles.codeLabel}>ROOM CODE</Text>
-          <Text style={styles.codeValue}>{roomCode}</Text>
-          <Text style={styles.codeHint}>Players enter this code or scan the QR below</Text>
-          {roomCode ? (() => {
-            try {
-              const { ip } = decodeRoomCode(roomCode);
-              return (
-                <Text style={styles.codeDiag}>
-                  Hosting on {ip}:7742 — this must match this phone's WiFi IP, and
-                  players must be on the same network.
-                </Text>
-              );
-            } catch { return null; }
-          })() : null}
+          {roomCode ? (
+            <>
+              <Text style={styles.codeLabel}>ROOM CODE</Text>
+              <Text style={styles.codeValue}>{roomCode}</Text>
+              <Text style={styles.codeHint}>Players enter this code or scan the QR below</Text>
+              {(() => {
+                try {
+                  const { ip } = decodeRoomCode(roomCode);
+                  return (
+                    <Text style={styles.codeDiag}>
+                      Hosting on {ip}:7742 — this must match this phone's WiFi IP, and
+                      players must be on the same network.
+                    </Text>
+                  );
+                } catch { return null; }
+              })()}
+            </>
+          ) : (
+            // Non-blocking recommendation, not an error — the campaign is
+            // fully open and this device is fully the host (CampaignHost is
+            // a session/role concept, independent of
+            // NetworkHostAvailability). Only joining is unavailable right
+            // now; this updates on its own the moment a usable network
+            // appears (syncManager's network watch), with no action needed
+            // here and nothing to dismiss.
+            <View style={styles.noNetworkNotice}>
+              <Text style={styles.noNetworkTxt}>
+                No local network is available. You can still use this campaign on this
+                device, but other players cannot join. Enable Wi-Fi or a mobile hotspot
+                for live multiplayer.
+              </Text>
+            </View>
+          )}
         </View>
 
         {Platform.OS !== 'web' && roomCode ? (
@@ -1025,6 +1044,8 @@ const styles = StyleSheet.create({
   codeValue:         { fontSize: 36, fontWeight: FontWeight.bold, color: Colors.gold, letterSpacing: 8 },
   codeHint:          { fontSize: FontSize.xs, color: Colors.textDim, textAlign: 'center' },
   codeDiag:          { fontSize: FontSize.xs, color: Colors.textSecondary, textAlign: 'center', marginTop: 4, lineHeight: 16 },
+  noNetworkNotice:   { backgroundColor: Colors.bg, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
+  noNetworkTxt:      { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', lineHeight: 19 },
   qrContainer:       { alignItems: 'center', padding: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg },
   dmBtn:             { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   dmBtnTxt:          { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },

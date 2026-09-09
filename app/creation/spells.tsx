@@ -19,17 +19,26 @@ import type { SpellIndexEntry } from '../../src/content/spellRepo.types';
 import { Alert } from '../../src/utils/alert';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
-// Starting spells known at level 1, by class. Prepared casters (Cleric/Druid)
-// prepare leveled spells from the character sheet, so they only choose cantrips here.
+// Starting spells known at level 1, by class. Prepared casters (Cleric/Druid/
+// Artificer) prepare leveled spells from the character sheet, so they only
+// choose cantrips here (Artificer gets none until 2nd level — 0/0 is the
+// correct RAW value, listed explicitly rather than relying on the fallback
+// below so a reader can tell "no spells at creation" was an intentional,
+// checked call rather than a class this table simply forgot).
+//
+// Wizard is NOT listed here (architecture review U14 fix): its content now
+// carries its own cantrip + spellbook ChoiceDefinitions at level 1 (matching
+// every other known-spell caster below), so it always takes the
+// spellChoices.length > 0 branch above and never reaches this table.
 const SPELLS_AT_L1: Record<string, { cantrips: number; spells: number }> = {
-  wizard:   { cantrips: 3, spells: 6 },
-  sorcerer: { cantrips: 4, spells: 2 },
-  bard:     { cantrips: 2, spells: 4 },
-  warlock:  { cantrips: 2, spells: 2 },
-  cleric:   { cantrips: 3, spells: 0 },
-  druid:    { cantrips: 2, spells: 0 },
-  ranger:   { cantrips: 0, spells: 0 },
-  paladin:  { cantrips: 0, spells: 0 },
+  sorcerer:   { cantrips: 4, spells: 2 },
+  bard:       { cantrips: 2, spells: 4 },
+  warlock:    { cantrips: 2, spells: 2 },
+  cleric:     { cantrips: 3, spells: 0 },
+  druid:      { cantrips: 2, spells: 0 },
+  ranger:     { cantrips: 0, spells: 0 },
+  paladin:    { cantrips: 0, spells: 0 },
+  artificer:  { cantrips: 0, spells: 0 },
 };
 
 /** Marks spellsVisited in notes JSON. */

@@ -195,6 +195,14 @@ export const wizardProgression: ClassProgression = {
           { id: 'scholar',  label: "Scholar's Pack",  items: ['scholars_pack'] },
           { id: 'explorer', label: "Explorer's Pack", items: ['explorers_pack'] },
         ]),
+        // Bug fix (architecture review U14): Wizard's level-1 entry had no
+        // cantrip ChoiceDefinition at all, unlike every other known-spell
+        // caster (Bard/Sorcerer/Warlock all pair a cantrips choice with
+        // their spells-known choice at level 1) — app/creation/spells.tsx's
+        // spellChoices.length > 0 branch takes over rendering entirely once
+        // ANY spell-kind choice exists, so Wizards were never shown a
+        // cantrip picker at creation or on revisit.
+        spellChoice('wizard_cantrips_1', 3, 'Choose 3 wizard cantrips.'),
         spellChoice('wizard_spellbook_1', 6, 'Choose 6 1st-level wizard spells for your spellbook.'),
       ],
       grants: [

@@ -17,12 +17,27 @@ import { useSyncStore }  from '../../src/store/syncStore';
 // ── Party Character Card ──────────────────────────────────────────────────────
 
 function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: boolean; onPress: () => void }) {
-  const { identity, resources, derived, conditions, spellcasting, features } = entity;
-  const hpPct   = resources.hp.maximum > 0 ? resources.hp.current / resources.hp.maximum : 0;
+  const { identity, resources, derived, conditions, spellcasting, features, wildShapeState, conditionMonitor } = entity;
+
+  // While Wild Shaped, the HP bar shown to the DM should reflect the BEAST's
+  // pool (what's actually at risk right now), not the player's real HP
+  // underneath — same "beast HP is the live pool" rule QuickPanel/handleDamage
+  // already apply everywhere else damage is dealt to a transformed character.
+  const hpCurrent = wildShapeState?.active ? wildShapeState.beastHp    : resources.hp.current;
+  const hpMax     = wildShapeState?.active ? wildShapeState.beastHpMax : resources.hp.maximum;
+  const hpPct   = hpMax > 0 ? hpCurrent / hpMax : 0;
   const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
 
   const concentrating = spellcasting?.concentrating ?? null;
   const keyResources  = resources.custom.slice(0, 3); // show first 3 resources as pips
+  const spellTiers = spellcasting
+    ? (Object.keys(spellcasting.slots) as (keyof typeof spellcasting.slots)[])
+        .filter(t => spellcasting.slots[t].total > 0)
+        .map(t => ({ tier: t, ...spellcasting.slots[t] }))
+    : [];
+  const pactSlot = spellcasting?.pactSlots
+    ? Object.values(spellcasting.pactSlots).find(s => s.total > 0)
+    : undefined;
 
   // Death state — deathSaves is real persisted/synced data now, so the DM
   // dashboard can show it at a glance without needing to open the character.
@@ -78,10 +93,16 @@ function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: bo
               <Text style={styles.badgeVal}>{derived.passiveInvestigation}</Text>
             </View>
           )}
+          {wildShapeState?.active && (
+            <View style={[styles.badge, styles.wildShapeBadge]}>
+              <Text style={styles.wildShapeBadgeTxt}>🐾 {wildShapeState.formId}</Text>
+            </View>
+          )}
         </View>
       </View>
 
-      {/* HP bar — always visible, same reasoning as AC/movement/passives above */}
+      {/* HP bar — always visible, same reasoning as AC/movement/passives above.
+          Shows the beast's HP pool while Wild Shaped, real HP otherwise. */}
       <View style={styles.hpRow}>
         <View style={styles.hpBarOuter}>
           <View style={[styles.hpBarFill, {
@@ -89,15 +110,20 @@ function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: bo
             backgroundColor: hpColor,
           }]} />
         </View>
-        <Text style={styles.hpTxt}>{resources.hp.current}/{resources.hp.maximum}</Text>
+        <Text style={styles.hpTxt}>{hpCurrent}/{hpMax}</Text>
       </View>
 
       {/* Everything below is more than a DM could observe at a glance —
           gated behind the dmFullStatVisibility house rule (book default: off). */}
       {showFull && (
         <>
-          {/* Conditions + Concentration */}
+          {/* Conditions + Concentration + Exhaustion */}
           <View style={styles.condRow}>
+            {conditionMonitor.exhaustion > 0 && (
+              <View style={[styles.condPill, styles.exhaustionPill]}>
+                <Text style={styles.condTxt}>😩 Exhaustion {conditionMonitor.exhaustion}</Text>
+              </View>
+            )}
             {conditions.map(c => (
               <View key={c.id} style={styles.condPill}>
                 <Text style={styles.condTxt}>{c.id}</Text>
@@ -108,10 +134,41 @@ function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: bo
                 <Text style={styles.condTxt}>⟳ {concentrating}</Text>
               </View>
             )}
-            {conditions.length === 0 && !concentrating && (
+            {conditions.length === 0 && !concentrating && conditionMonitor.exhaustion === 0 && (
               <Text style={styles.noCondTxt}>No conditions</Text>
             )}
           </View>
+
+          {/* Spell slots — compact per-tier pips, same visual language as the
+              resource pips below. Only tiers the entity actually has (total
+              > 0) are shown; pact slots (Warlock etc.) get their own row
+              since they recover independently on a short rest. */}
+          {spellTiers.length > 0 && (
+            <View style={styles.resourcePips}>
+              {spellTiers.map(s => (
+                <View key={s.tier} style={styles.pipGroup}>
+                  <Text style={styles.pipLabel}>L{s.tier}</Text>
+                  <View style={styles.pips}>
+                    {/* Same fill convention as the resource pips below: filled
+                        = still available (i < remaining), empty = spent. */}
+                    {Array.from({ length: s.total }).map((_, i) => (
+                      <View key={i} style={[styles.pip, i >= s.total - s.used && styles.pipEmpty]} />
+                    ))}
+                  </View>
+                </View>
+              ))}
+              {pactSlot && (
+                <View style={styles.pipGroup}>
+                  <Text style={styles.pipLabel}>Pact</Text>
+                  <View style={styles.pips}>
+                    {Array.from({ length: pactSlot.total }).map((_, i) => (
+                      <View key={i} style={[styles.pip, i >= pactSlot.total - pactSlot.used && styles.pipEmpty]} />
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Resource pips */}
           {keyResources.length > 0 && (
@@ -366,6 +423,8 @@ const styles = StyleSheet.create({
   dyingBadgeTxt: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.red },
   stableBadge:    { backgroundColor: Colors.green + '22', borderWidth: 1, borderColor: Colors.green + '77' },
   stableBadgeTxt: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.green },
+  wildShapeBadge:    { backgroundColor: Colors.green + '22', borderWidth: 1, borderColor: Colors.green + '77' },
+  wildShapeBadgeTxt: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.green, textTransform: 'capitalize' },
 
   hpRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   hpBarOuter:{ flex: 1, height: 6, backgroundColor: Colors.border, borderRadius: Radius.full, overflow: 'hidden' },
@@ -379,6 +438,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.purple + '66',
   },
   concPill:   { backgroundColor: Colors.blue + '33', borderColor: Colors.blue + '66' },
+  exhaustionPill: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold + '66' },
   condTxt:    { fontSize: FontSize.xs, color: Colors.textPrimary, textTransform: 'capitalize' },
   noCondTxt:  { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
 

@@ -14,7 +14,7 @@ import { Platform } from 'react-native';
 import { Entity, SyncEvent } from '../engine/types';
 import { SyncServer } from './server';
 import { SyncClient } from './client';
-import { ConnectedPlayer } from './protocol';
+import { ConnectedPlayer, CombatTurnState } from './protocol';
 import { decodeRoomCode, encodeRoomCode, getLocalIp, watchNetworkChanges } from './discovery';
 import type { EventSubscription } from 'expo-modules-core';
 import { queueSyncEvent, markEventApplied, getUnflushedEvents } from '../db/syncRepo';
@@ -48,6 +48,8 @@ export type SyncManagerCallbacks = {
   /** A partial patch arrived instead of a full entity — merge, don't replace. */
   onEntityPatchReceived: (entityId: string, patch: Record<string, unknown>) => void;
   onSyncEvent:      (event: SyncEvent) => void;
+  /** Player only — the DM's combat state changed (start/advance/end turn). */
+  onCombatTurnReceived?: (turn: CombatTurnState) => void;
 };
 
 // ── generateEventId ───────────────────────────────────────────────────────────
@@ -230,6 +232,9 @@ class SyncManagerClass {
         // applyIncomingPatch, which is the one that actually knows the
         // merged entity shape.
       },
+      onCombatTurn: (turn) => {
+        this.callbacks?.onCombatTurnReceived?.(turn);
+      },
     });
 
     this.client.connect(ip, port);
@@ -248,6 +253,19 @@ class SyncManagerClass {
   broadcastEntity(entity: Entity): void {
     if (this.role === 'dm' && this.server) {
       this.server.broadcastEntity(entity);
+    }
+  }
+
+  /**
+   * Broadcast "whose turn is it" to every connected player — DM-only, same
+   * no-op-for-players shape as broadcastEntity. combatStore.ts calls this on
+   * every combat-state change (start/advance/end turn, reinforcements
+   * added/removed) so player devices can show a live turn banner instead of
+   * having zero visibility into DM-run combat, as before this existed.
+   */
+  broadcastCombatTurn(turn: CombatTurnState): void {
+    if (this.role === 'dm' && this.server) {
+      this.server.broadcastCombatTurn(turn);
     }
   }
 

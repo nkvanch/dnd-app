@@ -18,6 +18,18 @@ export type ConnectedPlayer = {
 
 // ── Message union type ────────────────────────────────────────────────────────
 
+/** A lightweight snapshot of "whose turn is it right now" — deliberately NOT
+ *  the DM's full CombatState (initiative order, per-entry details): players
+ *  only need enough to show a live turn banner (round counter, current
+ *  actor's name, and their own device's id to detect "it's my turn"), not
+ *  the whole encounter roster. See combatStore.ts's broadcastTurn(). */
+export type CombatTurnState = {
+  active:          boolean;
+  round:           number;
+  currentEntityId: string | null;
+  currentName:     string | null;
+};
+
 export type SyncMessage =
   | { type: 'ping' }
   | { type: 'pong' }
@@ -28,6 +40,7 @@ export type SyncMessage =
   | { type: 'entity_snapshot'; entity: Entity }
   | { type: 'entity_patch';   entityId: string; patch: Record<string, unknown> }
   | { type: 'claim_character'; characterId: string | null }
+  | ({ type: 'combat_turn_state' } & CombatTurnState)
   | { type: 'error';          message: string };
 
 // ── Framing helpers ───────────────────────────────────────────────────────────

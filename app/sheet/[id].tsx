@@ -10,6 +10,7 @@ import { setMeta } from '../../src/db/appMetaRepo';
 import { Alert } from '../../src/utils/alert';
 import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
+import { useCombatTurnStore } from '../../src/store/combatTurnStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
@@ -79,6 +80,7 @@ export default function CharacterSheetScreen() {
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
   const entity = characters.find(c => c.id === id);
+  const turn = useCombatTurnStore();
   const [activeTab, setActiveTab] = useState<TabId>('character');
   const [sheetMode, setSheetMode] = useState<'combat' | 'exploration'>('combat');
   const [freeEditOpen, setFreeEditOpen] = useState(false);
@@ -565,6 +567,21 @@ export default function CharacterSheetScreen() {
         </View>
       </View>
 
+      {/* Live-play turn banner — only while the DM has an active encounter
+          running and this device is a connected player (turn.active is
+          false whenever offline/no combat/not a player, so this renders
+          nothing in every other case). Player devices previously had zero
+          visibility into whose turn it was during DM-run combat. */}
+      {turn.active && (
+        <View style={[styles.turnBanner, turn.currentEntityId === entity?.id && styles.turnBannerMine]}>
+          <Text style={styles.turnBannerTxt}>
+            {turn.currentEntityId === entity?.id
+              ? '⚔️ YOUR TURN'
+              : `Round ${turn.round} — ${turn.currentName ?? '…'}'s turn`}
+          </Text>
+        </View>
+      )}
+
       {/* Tab Bar — horizontal ScrollView so spellcasters' 7 tabs can scroll */}
       <ScrollView
         horizontal
@@ -881,6 +898,15 @@ const styles = StyleSheet.create({
   modeBtnActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
   modeTxt:       { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
   modeTxtActive: { color: Colors.gold },
+
+  turnBanner: {
+    paddingVertical: 6, paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.surfaceHigh,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    alignItems: 'center',
+  },
+  turnBannerMine: { backgroundColor: Colors.gold + '33', borderBottomColor: Colors.gold },
+  turnBannerTxt:  { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
 
   restBar: {
     flexDirection:   'row',

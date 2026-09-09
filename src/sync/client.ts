@@ -20,7 +20,7 @@ import { NativeModules } from 'react-native';
 import type Socket from 'react-native-tcp-socket/lib/types/Socket';
 
 import { Entity, SyncEvent } from '../engine/types';
-import { SyncMessage, encodeMessage, parseBuffer } from './protocol';
+import { SyncMessage, encodeMessage, parseBuffer, CombatTurnState } from './protocol';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +31,9 @@ export type ClientCallbacks = {
   onEntitySnapshot: (entity: Entity) => void;
   /** Fired when the DM relays a partial entity PATCH instead of a full snapshot. */
   onEntityPatch?:   (entityId: string, patch: Record<string, unknown>) => void;
+  /** Fired whenever the DM's combat state changes (start/advance/end turn) —
+   *  drives the player-facing "whose turn is it" banner. */
+  onCombatTurn?:    (turn: CombatTurnState) => void;
   /** Fired whenever a connection attempt fails, with a human-readable reason. */
   onError?:         (reason: string) => void;
 };
@@ -204,6 +207,10 @@ export class SyncClient {
 
       case 'entity_patch':
         this.cb.onEntityPatch?.(msg.entityId, msg.patch);
+        break;
+
+      case 'combat_turn_state':
+        this.cb.onCombatTurn?.({ active: msg.active, round: msg.round, currentEntityId: msg.currentEntityId, currentName: msg.currentName });
         break;
 
       default: break;

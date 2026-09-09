@@ -7,6 +7,7 @@ import { Entity, CampaignRules } from '../engine/types';
 import { CombatState, InitiativeEntry, startEncounter, endTurn, endEncounter, addToEncounter } from '../engine/combat';
 import { saveCombatState, clearCombatState } from '../db/combatRepo';
 import { DEFAULT_RULES } from './characterStore';
+import { syncManager } from '../sync/syncManager';
 
 const EMPTY_COMBAT: CombatState = {
   active:      false,
@@ -15,6 +16,24 @@ const EMPTY_COMBAT: CombatState = {
   order:       [],
   encounterId: '',
 };
+
+/** Pushes "whose turn is it" to every connected player device — a no-op on
+ *  a player's own device (syncManager.broadcastCombatTurn is DM-only) and
+ *  a no-op offline (no server running). Player devices previously had zero
+ *  visibility into DM-run combat at all — see sync/protocol.ts's
+ *  CombatTurnState doc comment for the full context. Called after every
+ *  action that can change whether combat is active or who's currently
+ *  acting; NOT called from setOrder/setInitiative, which are manual
+ *  DM corrections typically made before combat starts. */
+function broadcastTurn(combat: CombatState, entities: Entity[]): void {
+  const current = combat.active ? entities.find(e => e.id === combat.order[combat.turnIndex]?.entityId) : undefined;
+  syncManager.broadcastCombatTurn({
+    active:          combat.active,
+    round:           combat.round,
+    currentEntityId: current?.id ?? null,
+    currentName:     current?.identity.name ?? null,
+  });
+}
 
 type CombatStore = {
   combat:   CombatState;
@@ -61,6 +80,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     const combat = startEncounter(entities, encounterId, sourcePreparedEncounterId);
     set({ combat, entities });
     saveCombatState(combat).catch(console.error);
+    broadcastTurn(combat, entities);
   },
 
   advanceTurn: (rules = DEFAULT_RULES) => {
@@ -69,12 +89,15 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     const result = endTurn(combat, entities, rules);
     set({ combat: result.combat, entities: result.entities });
     saveCombatState(result.combat).catch(console.error);
+    broadcastTurn(result.combat, result.entities);
   },
 
   endCombat: () => {
     const { combat } = get();
-    set({ combat: endEncounter(combat), entities: [] });
+    const nextCombat = endEncounter(combat);
+    set({ combat: nextCombat, entities: [] });
     clearCombatState().catch(console.error);
+    broadcastTurn(nextCombat, []);
   },
 
   updateEntity: (id, updater) =>
@@ -86,8 +109,10 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     const { combat, entities } = get();
     if (!combat.active || newEntities.length === 0) return;
     const nextCombat = addToEncounter(combat, newEntities);
-    set({ combat: nextCombat, entities: [...entities, ...newEntities] });
+    const nextEntities = [...entities, ...newEntities];
+    set({ combat: nextCombat, entities: nextEntities });
     saveCombatState(nextCombat).catch(console.error);
+    broadcastTurn(nextCombat, nextEntities);
   },
 
   removeFromEncounter: (id) => {
@@ -107,11 +132,12 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
         : Math.min(combat.turnIndex, Math.max(0, order.length - 1));
       nextCombat = { ...combat, order, turnIndex };
     }
-    set(state => ({
-      combat:   nextCombat,
-      entities: state.entities.filter(e => e.id !== id),
-    }));
-    if (combat.active) saveCombatState(nextCombat).catch(console.error);
+    const nextEntities = get().entities.filter(e => e.id !== id);
+    set({ combat: nextCombat, entities: nextEntities });
+    if (combat.active) {
+      saveCombatState(nextCombat).catch(console.error);
+      broadcastTurn(nextCombat, nextEntities);
+    }
   },
 
   setOrder: (order) =>

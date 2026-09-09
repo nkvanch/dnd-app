@@ -21,6 +21,7 @@ import { useEncounterStore } from '../src/store/encounterStore';
 import { useHomebrewStore }  from '../src/store/homebrewStore';
 import { syncManager }       from '../src/sync/syncManager';
 import { useSyncStore }      from '../src/store/syncStore';
+import { useCombatTurnStore } from '../src/store/combatTurnStore';
 import { useCombatStore }    from '../src/store/combatStore';
 import { loadCombatState }   from '../src/db/combatRepo';
 
@@ -118,6 +119,7 @@ export default function RootLayout() {
         try {
           const { applyIncomingEntity, applyIncomingPatch } = useCharacterStore.getState();
           const { setStatus }           = useSyncStore.getState();
+          const { setTurn }             = useCombatTurnStore.getState();
 
           syncManager.initialise({
             onStatusChange: (status) => {
@@ -128,6 +130,9 @@ export default function RootLayout() {
             },
             onEntityPatchReceived: (entityId, patch) => {
               applyIncomingPatch(entityId, patch);
+            },
+            onCombatTurnReceived: (turn) => {
+              setTurn(turn);
             },
             onSyncEvent: (event) => {
               // DM responds to entity_full_sync requests from players

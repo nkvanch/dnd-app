@@ -13,7 +13,7 @@ import type Socket from 'react-native-tcp-socket/lib/types/Socket';
 
 import { SyncEvent } from '../engine/types';
 import { Entity }    from '../engine/types';
-import { SyncMessage, encodeMessage, parseBuffer, ConnectedPlayer } from './protocol';
+import { SyncMessage, encodeMessage, parseBuffer, ConnectedPlayer, CombatTurnState } from './protocol';
 import { SYNC_PORT } from './discovery';
 
 /**
@@ -163,6 +163,11 @@ export class SyncServer {
   /** Push an entity PATCH (partial, from deepDiff) to every connected player. */
   broadcastEntityPatch(entityId: string, patch: Record<string, unknown>): void {
     this.broadcast({ type: 'entity_patch', entityId, patch });
+  }
+
+  /** Push the current "whose turn is it" summary to every connected player. */
+  broadcastCombatTurn(turn: CombatTurnState): void {
+    this.broadcast({ type: 'combat_turn_state', ...turn });
   }
 
   /** Number of currently connected player clients. */

@@ -12,6 +12,7 @@ import { useCombatStore } from '../combatStore';
 import * as combatRepo from '../../db/combatRepo';
 import { makeEmptyEntity } from '../characterStore';
 import { Entity } from '../../engine/types';
+import { syncManager } from '../../sync/syncManager';
 
 function entityAt(id: string, initiativeBonus: number): Entity {
   const e = makeEmptyEntity(id, 'monster');
@@ -131,6 +132,58 @@ describe('combatStore', () => {
       expect(combat.active).toBe(false);
       expect(entities).toHaveLength(0);
       expect(clearSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Player turn banner (item 8): combatStore pushes "whose turn is it" to
+  // connected players via syncManager on every state-changing action.
+  // syncManager.broadcastCombatTurn is itself a no-op unless this device's
+  // role is 'dm' with a live server (see syncManager.ts) — these tests spy
+  // on it directly rather than standing up a real server/client pair, since
+  // the actual transport is already covered by sync's own test suite; this
+  // file's job is proving combatStore calls it with the right payload at
+  // the right times.
+  describe('broadcastTurn (player live-play turn banner)', () => {
+    let broadcastSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      broadcastSpy = jest.spyOn(syncManager, 'broadcastCombatTurn').mockImplementation(() => {});
+    });
+
+    it('startCombat broadcasts the first actor as current', () => {
+      // Deterministic: single entity, so it's unambiguously first in initiative.
+      useCombatStore.getState().startCombat([entityAt('a', 10)], 'enc1');
+      expect(broadcastSpy).toHaveBeenCalledWith({ active: true, round: 1, currentEntityId: 'a', currentName: 'a' });
+    });
+
+    it('advanceTurn broadcasts the new current actor and round', () => {
+      useCombatStore.getState().startCombat([entityAt('a', 10), entityAt('b', 5)], 'enc1');
+      broadcastSpy.mockClear();
+      useCombatStore.getState().advanceTurn();
+      const { combat } = useCombatStore.getState();
+      const nowActing = combat.order[combat.turnIndex].entityId;
+      expect(broadcastSpy).toHaveBeenCalledWith({ active: true, round: combat.round, currentEntityId: nowActing, currentName: nowActing });
+    });
+
+    it('endCombat broadcasts active:false with no current actor', () => {
+      useCombatStore.getState().startCombat([entityAt('a', 10)], 'enc1');
+      broadcastSpy.mockClear();
+      useCombatStore.getState().endCombat();
+      expect(broadcastSpy).toHaveBeenCalledWith({ active: false, round: 0, currentEntityId: null, currentName: null });
+    });
+
+    it('removeFromEncounter broadcasts the re-anchored current actor when combat is active', () => {
+      useCombatStore.getState().startCombat([entityAt('a', 10), entityAt('b', 5)], 'enc1');
+      broadcastSpy.mockClear();
+      useCombatStore.getState().removeFromEncounter('b');
+      const { combat } = useCombatStore.getState();
+      expect(broadcastSpy).toHaveBeenCalledWith(expect.objectContaining({ currentEntityId: combat.order[combat.turnIndex]?.entityId ?? null }));
+    });
+
+    it('does not broadcast when removeFromEncounter runs with combat inactive', () => {
+      useCombatStore.setState({ entities: [entityAt('a', 10)] });
+      useCombatStore.getState().removeFromEncounter('a');
+      expect(broadcastSpy).not.toHaveBeenCalled();
     });
   });
 });

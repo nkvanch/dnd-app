@@ -130,4 +130,39 @@ describe('grantCustomFeature', () => {
       expect(updated.resources.custom.some(r => r.id === resourceId)).toBe(true); // ...the resource does not
     });
   });
+
+  // DM temporary rulings (multi-target generalization, DmRulingModal.tsx):
+  // applying the SAME draft object to several independent entities must
+  // produce the SAME compiled feature/condition id on each of them — that's
+  // what would let a future "remove this ruling from everyone" action find
+  // every target by one shared id, and it falls out for free since the id
+  // is derived from draft.localId, which is fixed once per DraftTrait
+  // regardless of how many entities the same draft is applied to.
+  describe('applying one draft to multiple entities (DM ruling multi-target)', () => {
+    it('produces the same feature id on every independently-targeted entity', () => {
+      const draft: DraftTrait = { ...newDraftTrait('Blessed'), effectKind: 'ac_bonus', acBonusAmount: '1' };
+      const a = grantCustomFeature(baseEntity(), draft, DEFAULT_RULES);
+      const b = grantCustomFeature(baseEntity(), draft, DEFAULT_RULES);
+      const idA = a.features.find(f => f.name === 'Blessed')!.id;
+      const idB = b.features.find(f => f.name === 'Blessed')!.id;
+      expect(idA).toBe(idB);
+    });
+
+    it('with a duration, tags the same condition id on every targeted entity, independently tickable per entity', () => {
+      const draft: DraftTrait = { ...newDraftTrait('Blessed'), effectKind: 'ac_bonus', acBonusAmount: '1' };
+      const duration = { unit: 'rounds' as const, remaining: 1 };
+      let a = grantCustomFeature(baseEntity(), draft, DEFAULT_RULES, duration);
+      const b = grantCustomFeature(baseEntity(), draft, DEFAULT_RULES, duration);
+      const conditionId = a.features.find(f => f.name === 'Blessed')!.id;
+      expect(b.features.find(f => f.name === 'Blessed')!.id).toBe(conditionId);
+      expect(a.conditionMonitor.active.some(c => c.id === conditionId)).toBe(true);
+      expect(b.conditionMonitor.active.some(c => c.id === conditionId)).toBe(true);
+
+      // Each entity's own copy expires independently — applying to N
+      // entities does not link their durations together.
+      a = tickDurations(a, DEFAULT_RULES);
+      expect(a.features.some(f => f.name === 'Blessed')).toBe(false);
+      expect(b.features.some(f => f.name === 'Blessed')).toBe(true); // untouched
+    });
+  });
 });

@@ -26,6 +26,7 @@ import { deepDiff, deepMerge } from '../../src/sync/diff';
 import { InitiativeEntry } from '../../src/engine/combat';
 import { DEFAULT_RULES } from '../../src/store/characterStore';
 import { ConcentrationModal } from '../../src/components/sheet/ConcentrationModal';
+import { DmRulingModal } from '../../src/components/sheet/DmRulingModal';
 import { instantiatePreparedEncounter, instantiateWave, startingCombatantCount } from '../../src/engine/preparedEncounter';
 import { mergeMonsterIndex } from '../../src/content/contentResolution';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -56,10 +57,11 @@ interface QuickPanelProps {
   entity:    Entity;
   rules:     CampaignRules;
   onUpdate:  (updated: Entity, label?: string) => void;
+  onRuling:  () => void;
   onClose:   () => void;
 }
 
-function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
+function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelProps) {
   const [mode,     setMode]     = useState<'damage'|'heal'|'condition'|null>(null);
   const [valueStr, setValueStr] = useState('');
   const [damageType, setDamageType] = useState('');
@@ -162,6 +164,9 @@ function QuickPanel({ entity, rules, onUpdate, onClose }: QuickPanelProps) {
           <Text style={styles.qBtnTxt}>💀 Kill</Text>
         </Pressable>
       </View>
+      <Pressable style={styles.rulingBtn} onPress={onRuling}>
+        <Text style={styles.rulingBtnTxt}>📜 Add Ruling…</Text>
+      </Pressable>
 
       {/* Legendary Actions */}
       {legendaryPool && (
@@ -286,10 +291,11 @@ interface MultiTargetPanelProps {
   onKill:   () => void;
   onAddCondition:    (conditionId: string) => void;
   onRemoveCondition: (conditionId: string) => void;
+  onRuling: () => void;
   onClose:  () => void;
 }
 
-function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, onRemoveCondition, onClose }: MultiTargetPanelProps) {
+function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, onRemoveCondition, onRuling, onClose }: MultiTargetPanelProps) {
   const [mode,        setMode]        = useState<'damage'|'heal'|'condition'|null>(null);
   const [valueStr,    setValueStr]    = useState('');
   const [damageType,  setDamageType]  = useState('');
@@ -348,6 +354,9 @@ function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, 
           <Text style={styles.qBtnTxt}>💀 Kill</Text>
         </Pressable>
       </View>
+      <Pressable style={styles.rulingBtn} onPress={onRuling}>
+        <Text style={styles.rulingBtnTxt}>📜 Add Ruling to all {entities.length}…</Text>
+      </Pressable>
 
       {(mode === 'damage' || mode === 'heal') && (
         <View style={styles.inputRow}>
@@ -504,6 +513,17 @@ export default function EncounterScreen() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   function toggleSelected(id: string) {
     setSelectedIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+  }
+
+  // DM temporary rulings — set to the resolved target list (one entity, the
+  // current multi-selection, or every combatant) to open DmRulingModal;
+  // null when closed.
+  const [rulingTargets, setRulingTargets] = useState<Entity[] | null>(null);
+  function applyRuling(updates: { before: Entity; after: Entity }[]) {
+    for (const u of updates) {
+      applyEntityUpdate(u.before, u.after, `${u.after.identity.name}: DM ruling applied`);
+    }
+    setRulingTargets(null);
   }
 
   // The PreparedEncounter this run either came from (via ?preparedId=, still
@@ -812,7 +832,7 @@ export default function EncounterScreen() {
           </View>
         )}
 
-        {/* Multi-target toggle */}
+        {/* Multi-target toggle + ruling-for-everyone */}
         <View style={styles.multiToggleRow}>
           <Pressable
             style={[styles.multiToggleBtn, multiMode && styles.multiToggleBtnActive]}
@@ -824,6 +844,11 @@ export default function EncounterScreen() {
           >
             <Text style={styles.multiToggleTxt}>{multiMode ? '✓ Multi-select on' : '☐ Multi-select'}</Text>
           </Pressable>
+          {entities.length > 0 && (
+            <Pressable style={styles.multiToggleBtn} onPress={() => setRulingTargets(entities)}>
+              <Text style={styles.multiToggleTxt}>🌍 Ruling for Everyone</Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Group quick-select — first runtime consumer of PreparedEncounter's
@@ -883,6 +908,7 @@ export default function EncounterScreen() {
             entity={selectedEntity}
             rules={rules}
             onUpdate={handleEntityUpdate}
+            onRuling={() => setRulingTargets([selectedEntity])}
             onClose={() => setSelectedId(null)}
           />
         )}
@@ -896,9 +922,19 @@ export default function EncounterScreen() {
             onKill={bulkKill}
             onAddCondition={bulkAddCondition}
             onRemoveCondition={bulkRemoveCondition}
+            onRuling={() => setRulingTargets(selectedIds.map(id => entities.find(e => e.id === id)).filter((e): e is Entity => !!e))}
             onClose={() => setSelectedIds([])}
           />
         )}
+
+        {/* DM temporary ruling — targets resolved by whichever entry point opened it */}
+        <DmRulingModal
+          visible={rulingTargets !== null}
+          entities={rulingTargets ?? []}
+          rules={rules}
+          onApply={applyRuling}
+          onCancel={() => setRulingTargets(null)}
+        />
       </ScrollView>
 
       {/* End Turn bar */}
@@ -968,7 +1004,7 @@ const styles = StyleSheet.create({
   currentIndicatorTxt: { color: Colors.gold, fontSize: FontSize.md },
 
   // Multi-target tools
-  multiToggleRow: { marginBottom: Spacing.xs },
+  multiToggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.xs },
   multiToggleBtn: {
     alignSelf: 'flex-start', borderRadius: Radius.full,
     borderWidth: 1, borderColor: Colors.border,
@@ -1002,6 +1038,11 @@ const styles = StyleSheet.create({
   qBtnPurple: { backgroundColor: Colors.purple + '22', borderColor: Colors.purple + '66' },
   qBtnDark:   { backgroundColor: Colors.surfaceHigh,   borderColor: Colors.border },
   qBtnTxt:    { fontSize: FontSize.xs, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  rulingBtn: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold + '66',
+    backgroundColor: Colors.gold + '11', padding: Spacing.xs, alignItems: 'center',
+  },
+  rulingBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
 
   inputRow:      { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' },
   dmgTypeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: Spacing.xs },

@@ -42,6 +42,7 @@ import { exportCharacter, ExportFormat, ExportAction } from '../../src/io/export
 import { GlobalDiceRoller } from '../../src/components/GlobalDiceRoller';
 import { SyncStatusDot }   from '../../src/components/SyncStatusDot';
 import { SafeBottomView }  from '../../src/components/SafeBottomView';
+import { ErrorBoundary }   from '../../src/components/ErrorBoundary';
 import { useSafeGoBack }   from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -601,7 +602,16 @@ export default function CharacterSheetScreen() {
         })}
       </ScrollView>
 
-      {/* Tab Content */}
+      {/* Tab Content — wrapped in its own ErrorBoundary (architecture review
+          C8, defense in depth): a structurally malformed character (e.g.
+          imported from a corrupted/hand-edited pack) can throw while
+          rendering derived data here. Scoped BELOW the header/tab bar above
+          (which stay outside, so "← Back" always works even if every tab
+          crashes) and keyed on entity.id + activeTab so navigating to a
+          different character or switching tabs always gets a fresh
+          boundary — a crash on one tab doesn't leave every other tab (or
+          every other character) stuck showing the same stale fallback. */}
+      <ErrorBoundary key={`${entity.id}_${activeTab}`}>
       <View style={styles.tabContent}>
         {activeTab === 'character' && (
           <View style={{ flex: 1 }}>
@@ -701,6 +711,7 @@ export default function CharacterSheetScreen() {
           <TabNotes notes={entity.notes} onSave={handleSaveNotes} />
         )}
       </View>
+      </ErrorBoundary>
 
       {/* Persistent Rest Bar — wrapped so it stays above the Android nav bar */}
       <SafeBottomView>

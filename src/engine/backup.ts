@@ -11,6 +11,7 @@
 //
 import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Background, Feature, Feat, Condition } from './types';
 import { MonsterTemplate } from '../content/monsters/types';
+import { validateContent, validateFeature } from './homebrewValidator';
 
 export const GRIMOIRE_PACK_FORMAT_VERSION = 1;
 
@@ -100,6 +101,84 @@ export function validateGrimoirePack(data: unknown): string | null {
     return 'Missing characters list — this file may be corrupted.';
   }
   return null;
+}
+
+/**
+ * Bug fix (architecture review C8): validateGrimoirePack above only checks
+ * the pack ENVELOPE (formatVersion/packType/characters is an array) — it
+ * never validated any individual homebrew content item's structure, even
+ * though homebrewValidator.ts's per-type validators exist and are already
+ * used by every in-app authoring form. A structurally invalid Feature (e.g.
+ * one missing its `effects` array) previously imported silently, then threw
+ * inside collectAllEffects (pipeline.ts) the moment any screen touching the
+ * character that carries it tried to render — with no per-character error
+ * isolation (see ErrorBoundary.tsx), a single malformed import could crash
+ * the entire app on every subsequent launch.
+ *
+ * Checks every homebrew content item via validateContent, and every
+ * character's own embedded features (entity.features and
+ * entity.inventory.equipped[].features — precisely the two arrays
+ * collectAllEffects walks) via validateFeature. Only hard ERRORS block the
+ * import; warnings are the same "advisory, not blocking" signal every
+ * builder form already treats them as — surfacing a per-item warning
+ * dialog for a multi-item pack import isn't practical the way it is for a
+ * single-item builder save.
+ *
+ * Returns a list of human-readable problems — empty means the pack's
+ * content is structurally sound and safe to commit.
+ */
+export function validatePackContents(pack: GrimoirePack): string[] {
+  const problems: string[] = [];
+
+  const CONTENT_CHECKS: { key: keyof GrimoirePackHomebrew; type: Parameters<typeof validateContent>[0] }[] = [
+    { key: 'races',       type: 'race' },
+    { key: 'subraces',    type: 'subrace' },
+    { key: 'classes',     type: 'class' },
+    { key: 'subclasses',  type: 'subclass' },
+    { key: 'items',       type: 'item' },
+    { key: 'spells',      type: 'spell' },
+    { key: 'backgrounds', type: 'background' },
+    { key: 'features',    type: 'feature' },
+    { key: 'feats',       type: 'feat' },
+    { key: 'monsters',    type: 'monster' },
+    { key: 'conditions',  type: 'condition' },
+  ];
+  const hb = pack.homebrew;
+  if (hb) {
+    for (const { key, type } of CONTENT_CHECKS) {
+      const raw = hb[key];
+      if (!Array.isArray(raw)) continue;
+      const items = raw as { id?: string; name?: string }[];
+      for (const item of items) {
+        const { valid, errors } = validateContent(type, item);
+        if (!valid) {
+          const label = item?.id ?? item?.name ?? '(unknown)';
+          problems.push(`${type} "${label}": ${errors.join('; ')}`);
+        }
+      }
+    }
+  }
+
+  for (const entity of (Array.isArray(pack.characters) ? pack.characters : [])) {
+    const name = entity.identity?.name || entity.id || '(unnamed character)';
+    // Defensively guard against the arrays themselves being malformed (not
+    // just absent) — this function's whole job is to validate untrusted
+    // external data, so it can't assume even the container shapes are sound.
+    const equippedRaw = entity.inventory?.equipped;
+    const equipped = Array.isArray(equippedRaw) ? equippedRaw : [];
+    const featureArrays: [string, unknown[]][] = [
+      ['features', Array.isArray(entity.features) ? entity.features : []],
+      ['equipped item features', equipped.flatMap(i => Array.isArray(i?.features) ? i.features : [])],
+    ];
+    for (const [label, features] of featureArrays) {
+      for (const [i, f] of features.entries()) {
+        const { valid, errors } = validateFeature(f, `${label}[${i}]`);
+        if (!valid) problems.push(`character "${name}" ${label}[${i}]: ${errors.join('; ')}`);
+      }
+    }
+  }
+
+  return problems;
 }
 
 /** Total homebrew item count across all categories, for the import preview. */

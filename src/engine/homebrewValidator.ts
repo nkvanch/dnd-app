@@ -13,7 +13,7 @@ export type ValidationResult = {
 
 // ── Feature validator ─────────────────────────────────────────────────────────
 
-function validateFeature(f: unknown, path: string): ValidationResult {
+export function validateFeature(f: unknown, path: string): ValidationResult {
   const errors:   string[] = [];
   const warnings: string[] = [];
 

@@ -13,7 +13,7 @@ import Constants from 'expo-constants';
 import { Entity } from '../engine/types';
 import {
   GrimoirePack, GrimoirePackHomebrew, createBackupPack, createContentPack,
-  validateGrimoirePack, countHomebrew,
+  validateGrimoirePack, validatePackContents, countHomebrew,
 } from '../engine/backup';
 import { ExportAction, saveTextViaSAF } from './exportShare';
 
@@ -129,6 +129,21 @@ export async function pickAndValidateBackup(): Promise<ImportPreview | null> {
   if (problem) throw new Error(problem);
 
   const pack = data as GrimoirePack;
+
+  // Bug fix (architecture review C8): validateGrimoirePack above only
+  // checks the pack ENVELOPE — it never validated any individual homebrew
+  // content item or character feature's structure. A structurally invalid
+  // Feature previously imported silently, then crashed the app the moment
+  // any screen touching it tried to render (collectAllEffects has no guard
+  // against a malformed effects array). Never import silently — same "never
+  // import silently" rule pickAndValidateBackup's own doc comment already
+  // states for the envelope check.
+  const contentProblems = validatePackContents(pack);
+  if (contentProblems.length > 0) {
+    const shown = contentProblems.slice(0, 5).join('\n');
+    const more = contentProblems.length > 5 ? `\n…and ${contentProblems.length - 5} more.` : '';
+    throw new Error(`This pack contains invalid content and can't be imported safely:\n${shown}${more}`);
+  }
   const rawName = result.assets[0].name ?? 'Imported Pack';
   return {
     pack,

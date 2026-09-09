@@ -18,6 +18,7 @@ import { COMMON_DAMAGE_TYPES } from '../../src/content/traitCompiler';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { Entity, CampaignRules } from '../../src/engine/types';
+import { deepDiff, deepMerge } from '../../src/sync/diff';
 import { InitiativeEntry } from '../../src/engine/combat';
 import { DEFAULT_RULES } from '../../src/store/characterStore';
 import { ConcentrationModal } from '../../src/components/sheet/ConcentrationModal';
@@ -290,10 +291,40 @@ export default function EncounterScreen() {
   const selectedEntity = entities.find(e => e.id === selectedId);
 
   function handleEntityUpdate(updated: Entity, label?: string) {
+    // `before` is the combatStore snapshot QuickPanel's own action handlers
+    // (submitDamage/submitHeal/etc.) actually computed `updated` FROM — it's
+    // the `entity` prop QuickPanel was rendered with this same render pass,
+    // closed over here via `selectedEntity`.
+    const before = selectedEntity;
     updateEntity(updated.id, () => updated);
-    // If it's a player character, persist to store too
+    // If it's a player character, persist to characterStore too — the REAL
+    // synced source of truth, not just this DM device's own combatStore
+    // copy of it.
     if (updated.kind === 'character') {
-      updateCharacter(updated.id, () => updated, label);
+      // Bug fix (architecture review U1/U2): this used to call
+      // updateCharacter(id, () => updated, label) — the updater ignores the
+      // fresh state updateCharacter hands it and always returns the
+      // pre-baked `updated`, which was computed from combatStore's
+      // possibly-stale copy. If a player made an independent change on
+      // their own device (synced into characterStore) between the DM's
+      // last combatStore snapshot and this QuickPanel action, that change
+      // was silently reverted. Diff what QuickPanel's own action actually
+      // changed (`before` → `updated`) and merge just that patch onto
+      // whatever characterStore's real current state is — the same
+      // deepDiff/deepMerge machinery this app already uses for exactly
+      // this "apply what changed, not a wholesale snapshot" problem in
+      // sync's own applyIncomingPatch.
+      if (before) {
+        const patch = deepDiff(before, updated);
+        if (patch !== undefined) {
+          updateCharacter(updated.id, c => deepMerge(c, patch), label);
+        }
+      } else {
+        // No prior combatStore snapshot to diff against (shouldn't
+        // normally happen — QuickPanel only fires for an already-selected,
+        // already-tracked entity) — fall back to a wholesale replace.
+        updateCharacter(updated.id, () => updated, label);
+      }
     }
   }
 

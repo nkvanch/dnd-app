@@ -25,7 +25,7 @@ import { syncManager }       from '../../src/sync/syncManager';
 import { decodeRoomCode }    from '../../src/sync/discovery';
 import { SyncStatusDot }     from '../../src/components/SyncStatusDot';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
-import { Quest, SessionLogEntry } from '../../src/engine/types';
+import { Quest, SessionLogEntry, Campaign } from '../../src/engine/types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -525,13 +525,14 @@ function DmActiveView() {
   }
 
   function confirmEnd() {
-    Alert.alert('End Campaign', 'This will end the campaign for all players. Continue?', [
+    // Bug fix: this used to permanently delete the campaign (leaveCampaign's
+    // old DM behavior) — now it just stops hosting and disconnects any
+    // connected players, same as a network outage. The campaign itself is
+    // untouched and can be resumed later from the campaign list (a DM can
+    // own more than one campaign now — see campaignStore.switchToCampaign).
+    Alert.alert('Stop Hosting', 'Players currently connected will be disconnected. You can resume this campaign later. Continue?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'End Campaign', style: 'destructive', onPress: async () => {
-          syncManager.stopAll();
-          await leaveCampaign();
-        }
-      },
+      { text: 'Stop Hosting', style: 'destructive', onPress: () => { void leaveCampaign(); } },
     ]);
   }
 
@@ -621,7 +622,7 @@ function DmActiveView() {
       <PartySection characterIds={activeCampaign.characterIds} />
 
       <Pressable style={styles.leaveBtn} onPress={confirmEnd}>
-        <Text style={styles.leaveBtnTxt}>🗑 End Campaign</Text>
+        <Text style={styles.leaveBtnTxt}>⏸ Stop Hosting</Text>
       </Pressable>
 
     </ScrollView>
@@ -801,6 +802,71 @@ function PlayerActiveView() {
   );
 }
 
+// ── Saved Campaigns List ──────────────────────────────────────────────────────
+// A DM can own/keep several campaigns but only hosts one at a time — this is
+// how they get back to a campaign they left without deleting it (see
+// campaignStore's switchToCampaign/leaveCampaign — leaving used to
+// permanently delete a DM's campaign, so this list previously had nothing to
+// show). Also lists campaigns this device has joined as a player, for the
+// same "get back in" purpose.
+
+function SavedCampaignsList() {
+  const campaigns        = useCampaignStore(s => s.campaigns);
+  const switchToCampaign = useCampaignStore(s => s.switchToCampaign);
+  const deleteCampaign   = useCampaignStore(s => s.deleteCampaignPermanently);
+  const session           = useSessionStore(s => s.session);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
+
+  if (campaigns.length === 0) return null;
+
+  async function handleResume(id: string) {
+    if (switchingId) return;
+    setSwitchingId(id);
+    try {
+      await switchToCampaign(id);
+    } catch (e: any) {
+      Alert.alert('Couldn’t open campaign', e?.message ?? String(e));
+    } finally {
+      setSwitchingId(null);
+    }
+  }
+
+  function confirmDelete(c: Campaign) {
+    Alert.alert('Delete Campaign', `Permanently delete "${c.name}"? This can’t be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => { void deleteCampaign(c.id); } },
+    ]);
+  }
+
+  return (
+    <View style={[styles.howItWorks, { alignSelf: 'stretch' }]}>
+      <Text style={styles.howTitle}>YOUR CAMPAIGNS</Text>
+      {campaigns.map(c => {
+        const isDm = session?.deviceId === c.dmDeviceId;
+        return (
+          <View key={c.id} style={styles.savedRow}>
+            <Pressable
+              style={{ flex: 1 }}
+              onPress={() => { void handleResume(c.id); }}
+              disabled={switchingId !== null}
+            >
+              <Text style={styles.savedRowName}>{c.name}</Text>
+              <Text style={styles.savedRowMeta}>{isDm ? '👑 You DM this' : '🗡 You play in this'}</Text>
+            </Pressable>
+            {switchingId === c.id ? (
+              <ActivityIndicator color={Colors.gold} />
+            ) : (
+              <Pressable style={styles.savedRowDelete} onPress={() => confirmDelete(c)} hitSlop={8}>
+                <Text style={styles.savedRowDeleteTxt}>🗑</Text>
+              </Pressable>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 // ── No Campaign View ──────────────────────────────────────────────────────────
 
 function NoCampaignView({
@@ -849,6 +915,8 @@ function NoCampaignView({
               </Text>
             </Pressable>
           </View>
+
+          <SavedCampaignsList />
         </>
       )}
 
@@ -1075,6 +1143,14 @@ const styles = StyleSheet.create({
   },
   howTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.gold, marginBottom: 4 },
   howItem:  { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
+  savedRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  savedRowName:      { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  savedRowMeta:       { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 2 },
+  savedRowDelete:     { padding: Spacing.xs },
+  savedRowDeleteTxt:  { fontSize: FontSize.md },
 
   webNote: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,

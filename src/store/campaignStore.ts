@@ -3,7 +3,7 @@
 // Campaign + DM identity state management.
 // ============================================================================
 import { create } from 'zustand';
-import { Campaign, CampaignRules } from '../engine/types';
+import { Campaign, CampaignRules, DeviceSession } from '../engine/types';
 import { saveCampaign, loadAllCampaigns, deleteCampaign, loadCampaign } from '../db/campaignRepo';
 import { useSessionStore } from './sessionStore';
 import { syncManager } from '../sync/syncManager';
@@ -15,6 +15,38 @@ import { DEFAULT_RULES } from './characterStore';
 
 function genId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+/**
+ * Starts the sync transport for `campaign` on this device — hosts it (DM) or
+ * reconnects to it (player) — shared by resumeSync (re-establish the
+ * CURRENTLY active campaign after an app restart) and switchToCampaign
+ * (explicitly activate a DIFFERENT locally-known campaign). Both callers
+ * already caught/handled this graceful-degradation contract identically
+ * before this was extracted, so behavior is unchanged: a DM always becomes
+ * the host locally regardless of network (see syncManager.startAsServer);
+ * a stale/unreachable player join code surfaces later as a disconnected
+ * sync status, not a thrown error here.
+ */
+async function hostOrConnectCampaign(
+  campaign:        Campaign,
+  session:         DeviceSession,
+  isDm:            boolean,
+  updateCampaign:  (id: string, updater: (c: Campaign) => Campaign) => Promise<void>,
+): Promise<void> {
+  if (isDm) {
+    const roomCode = await syncManager.startAsServer(
+      campaign.id, session.deviceId, session.deviceId, session.nickname,
+    );
+    const nextJoinCode = roomCode ?? '';
+    if (nextJoinCode !== campaign.joinCode) {
+      await updateCampaign(campaign.id, c => ({ ...c, joinCode: nextJoinCode }));
+    }
+  } else {
+    await syncManager.startAsClient(
+      campaign.joinCode, session.deviceId, session.nickname, null,
+    );
+  }
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -52,8 +84,35 @@ type CampaignStore = {
   /** Update campaign fields (name, rules, notes, etc.). */
   updateCampaign: (id: string, updater: (c: Campaign) => Campaign) => Promise<void>;
 
-  /** Leave / remove the active campaign. */
+  /**
+   * Stop hosting/connecting to the active campaign and clear it as active —
+   * does NOT delete it. The campaign stays in `campaigns` (and SQLite) and
+   * can be resumed later via switchToCampaign. A DM leaving disconnects any
+   * connected players (the TCP server stops), same as a network outage —
+   * their own devices keep their last-synced state and can reconnect once
+   * the DM re-hosts.
+   */
   leaveCampaign: () => Promise<void>;
+
+  /**
+   * Permanently delete a campaign — SQLite row and local list entry both
+   * gone, unrecoverable. Deliberately separate from leaveCampaign so the
+   * routine "I'm done for tonight" action never destroys data by accident
+   * (this used to be exactly what leaveCampaign did for a DM). Leaves the
+   * campaign first if it's currently active.
+   */
+  deleteCampaignPermanently: (id: string) => Promise<void>;
+
+  /**
+   * A DM can own/keep several campaigns but only hosts one at a time
+   * (CampaignHost, singular, per device — see syncManager). Switches which
+   * LOCALLY KNOWN campaign is active: stops hosting/connecting to whatever
+   * was active before, then hosts (DM) or reconnects (player) the target.
+   * Graceful-degradation rules match resumeSync — a DM never fails to
+   * become the active host locally just because a live network/reconnect
+   * attempt failed; only an unknown campaign id throws.
+   */
+  switchToCampaign: (campaignId: string) => Promise<void>;
 
   /**
    * Re-establish the sync transport for an already-active campaign after an app
@@ -235,55 +294,68 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     const { activeCampaign } = get();
     if (!activeCampaign) return;
 
-    const session = useSessionStore.getState().session;
-    const ownsCampaign = session?.deviceId === activeCampaign.dmDeviceId;
-
-    // Tear down the TCP server/client regardless of role before clearing state.
+    // Bug fix: this used to permanently delete the campaign when a DM left
+    // — the only way a DM could "leave" was to destroy the data, so owning
+    // more than one campaign at a time was impossible (creating a second
+    // one meant deleting the first). Leaving now just stops hosting/
+    // connecting and clears the active reference, for both roles alike —
+    // the campaign's own record is untouched and can be resumed later via
+    // switchToCampaign. See deleteCampaignPermanently for actual deletion.
     syncManager.stopAll();
-
-    if (ownsCampaign) {
-      // DM deletes the campaign entirely
-      await deleteCampaign(activeCampaign.id);
-      set(state => ({
-        campaigns:      state.campaigns.filter(c => c.id !== activeCampaign.id),
-        activeCampaign: null,
-        isDm:           false,
-      }));
-    } else {
-      // Player just clears their local active campaign reference
-      set({ activeCampaign: null, isDm: false });
-    }
-
+    set({ activeCampaign: null, isDm: false });
     await useSessionStore.getState().setCampaignId(null);
   },
 
+  deleteCampaignPermanently: async (id) => {
+    const { activeCampaign, leaveCampaign } = get();
+    if (activeCampaign?.id === id) {
+      // Can't delete what this device is currently hosting/connected to —
+      // leave it first (stops the transport, clears the session pointer).
+      await leaveCampaign();
+    }
+    await deleteCampaign(id);
+    set(state => ({ campaigns: state.campaigns.filter(c => c.id !== id) }));
+  },
+
+  switchToCampaign: async (campaignId) => {
+    const { campaigns, activeCampaign, updateCampaign } = get();
+    const session = useSessionStore.getState().session;
+    if (!session) throw new Error('No device session. Call initSession() first.');
+    if (activeCampaign?.id === campaignId) return; // already active
+
+    const target = campaigns.find(c => c.id === campaignId);
+    if (!target) throw new Error(`Campaign ${campaignId} not found locally.`);
+
+    // A device hosts/connects to one campaign at a time — stop whatever was
+    // active before switching (CampaignHost is singular per device; owning
+    // several campaigns and switching which one is live is the point of
+    // this action, not hosting them all at once).
+    syncManager.stopAll();
+
+    const isDm = target.dmDeviceId === session.deviceId;
+    set({ activeCampaign: target, isDm });
+    await useSessionStore.getState().setCampaignId(target.id);
+
+    try {
+      await hostOrConnectCampaign(target, session, isDm, updateCampaign);
+    } catch (e) {
+      // Same graceful-degradation contract as resumeSync — the switch has
+      // already happened locally either way (activeCampaign/isDm are set
+      // above); only the live transport attempt failed.
+      console.warn('[campaignStore] switchToCampaign failed:', e);
+    }
+  },
+
   resumeSync: async () => {
-    const { activeCampaign, isDm } = get();
+    const { activeCampaign, isDm, updateCampaign } = get();
     const session = useSessionStore.getState().session;
     if (!activeCampaign || !session) return;
 
     try {
-      if (isDm) {
-        // Re-host. Always succeeds regardless of network (see
-        // syncManager.startAsServer) — this device stays the host either
-        // way. The room code is regenerated from the current LAN IP (may be
-        // null if no usable network is available right now) and may differ
-        // from last session; persist it so the DM screen and any QR share
-        // reflect reality — '' (not null; Campaign.joinCode is a plain
-        // string) when there's currently no dialable code.
-        const roomCode = await syncManager.startAsServer(
-          activeCampaign.id, session.deviceId, session.deviceId, session.nickname,
-        );
-        const nextJoinCode = roomCode ?? '';
-        if (nextJoinCode !== activeCampaign.joinCode) {
-          await get().updateCampaign(activeCampaign.id, c => ({ ...c, joinCode: nextJoinCode }));
-        }
-      } else {
-        // Reconnect as a player using the stored join code.
-        await syncManager.startAsClient(
-          activeCampaign.joinCode, session.deviceId, session.nickname, null,
-        );
-      }
+      // Re-host (DM) or reconnect (player) — see hostOrConnectCampaign's own
+      // doc comment for the graceful-degradation contract this shares with
+      // switchToCampaign.
+      await hostOrConnectCampaign(activeCampaign, session, isDm, updateCampaign);
     } catch (e) {
       // A DM re-host no longer throws for "no network" (see
       // syncManager.startAsServer) — this now only catches a genuine

@@ -144,6 +144,24 @@ export function rollWithDisadvantage(modifier = 0, label?: string): DiceRoll {
   return { ...loser, label: label ?? 'Disadvantage', expression: `2d20kl1${modifier !== 0 ? (modifier > 0 ? `+${modifier}` : modifier) : ''}` };
 }
 
+/**
+ * Doubles the DICE portion of a damage expression for a critical hit —
+ * "2d6+4" → "4d6+4", "1d8" → "2d8" — leaving the flat modifier untouched,
+ * per the real 5e rule (roll extra dice, don't double the total). Works on
+ * the standard "NdX(+/-M)" and keep-highest/lowest "NdXkhY(+/-M)" shapes
+ * rollExpression itself already parses; returns the expression unchanged
+ * (not thrown) if it doesn't match either, since a caller can always just
+ * not double an expression it doesn't recognise as dice-shaped.
+ */
+export function doubleDiceCount(expression: string): string {
+  const clean = expression.toLowerCase().replace(/\s/g, '');
+  const keepMatch = clean.match(/^(\d+)(d\d+k[hl]\d+(?:[+-]\d+)?)$/);
+  if (keepMatch) return `${parseInt(keepMatch[1], 10) * 2}${keepMatch[2]}`;
+  const stdMatch = clean.match(/^(\d+)(d\d+(?:[+-]\d+)?)$/);
+  if (stdMatch) return `${parseInt(stdMatch[1], 10) * 2}${stdMatch[2]}`;
+  return expression;
+}
+
 // ── Utility ───────────────────────────────────────────────────────────────────
 
 /** Returns a random 8-character alphanumeric ID. */

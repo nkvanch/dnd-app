@@ -17,7 +17,8 @@ import { levelUp, levelUpClass } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
 import { getClassLevels } from '../../engine/multiclass';
 import { spendHitDie, discardHitDie } from '../../engine/rest';
-import { rollExpression } from '../../engine/dice';
+import { rollExpression, doubleDiceCount } from '../../engine/dice';
+import { useDiceLogStore } from '../../store/diceLogStore';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
 import { getProgressionForClass, mergeSubclassIntoProgression } from '../../content/classes/progressions';
 import { getSubclassEntryMerged } from '../../content/subclasses/subclassBrowse';
@@ -839,11 +840,12 @@ export function TabCharacter({
     onEntityUpdate(applyActionCardUse(entity, card, rules, option));
     setActiveFavCard(card);
   }
-  function rollForFavorite(): import('../../engine/types').DiceRoll | null {
+  function rollForFavorite(crit: boolean): import('../../engine/types').DiceRoll | null {
     if (!activeFavCard) return null;
     const expr = activeFavCard.layer2.match(/(\d+d\d+(?:[+-]\d+)?)/)?.[1];
     if (!expr) return null;
-    try { return rollExpression(expr, activeFavCard.name); }
+    const finalExpr = crit ? doubleDiceCount(expr) : expr;
+    try { return useDiceLogStore.getState().rollAndLog(finalExpr, activeFavCard.name); }
     catch { return null; }
   }
 

@@ -6,7 +6,8 @@ import { Entity, ActionCard, CampaignRules, ActivationOption } from '../../engin
 import { applyAbilityEffects, endWildShape, castConcentrationSpell, markActionSlotUsed } from '../../engine/combat';
 import { getTriggeredFeatures } from '../../engine/actionCards';
 import { recomputeDerived } from '../../engine/pipeline';
-import { rollExpression } from '../../engine/dice';
+import { doubleDiceCount } from '../../engine/dice';
+import { useDiceLogStore } from '../../store/diceLogStore';
 import { DiceRoll } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
 import { ManualRollInput } from '../ManualRollInput';
@@ -149,12 +150,18 @@ const CARD_COLORS: Record<ActionCard['color'], string> = {
 
 export interface UseModalProps {
   card:    ActionCard | null;
-  onRoll:  () => DiceRoll | null;
+  /** `crit` (item 11 — roll improvements): true when the player has toggled
+   *  "Critical Hit" before rolling — the caller is responsible for doubling
+   *  the dice portion (dice.ts's doubleDiceCount) before rolling, not this
+   *  modal, since only the caller knows which expression is actually being
+   *  rolled and how to log it. */
+  onRoll:  (crit: boolean) => DiceRoll | null;
   onClose: () => void;
 }
 
 export function UseModal({ card, onRoll, onClose }: UseModalProps) {
   const [result, setResult] = useState<DiceRoll | null>(null);
+  const [crit, setCrit] = useState(false);
 
   // Reset the stored roll whenever the modal switches to a different card (or
   // closes). Without this, the previous spell's result lingers: the modal shows
@@ -163,6 +170,7 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
   const cardKey = card?.featureId ?? null;
   useEffect(() => {
     setResult(null);
+    setCrit(false);
   }, [cardKey]);
 
   if (!card) return null;
@@ -171,7 +179,7 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
   const diceExpr = card.layer2.match(/(\d+d\d+(?:[+-]\d+)?)/)?.[1] ?? null;
 
   function handleRoll() {
-    setResult(onRoll());
+    setResult(onRoll(crit));
   }
 
   return (
@@ -191,11 +199,14 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
 
           {diceExpr && !result && (
             <View style={styles.rollPrompt}>
-              <Text style={styles.rollExpr}>Roll: {diceExpr}</Text>
+              <Pressable style={[styles.critToggle, crit && styles.critToggleActive]} onPress={() => setCrit(c => !c)}>
+                <Text style={[styles.critToggleTxt, crit && styles.critToggleTxtActive]}>💥 Critical Hit</Text>
+              </Pressable>
+              <Text style={styles.rollExpr}>Roll: {crit ? doubleDiceCount(diceExpr) : diceExpr}</Text>
               <Pressable style={styles.rollBtn} onPress={handleRoll}>
                 <Text style={styles.rollBtnTxt}>🎲 Roll</Text>
               </Pressable>
-              <ManualRollInput expression={diceExpr} label={card.name} onSubmit={setResult} />
+              <ManualRollInput expression={crit ? doubleDiceCount(diceExpr) : diceExpr} label={card.name} onSubmit={setResult} />
             </View>
           )}
 
@@ -444,11 +455,15 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
     if (onEntityUpdate) onEntityUpdate(toggleFavoriteTag(entity, card.featureId));
   }, [entity, onEntityUpdate]);
 
-  function rollForCard(): DiceRoll | null {
+  function rollForCard(crit: boolean): DiceRoll | null {
     if (!activeCard) return null;
     const expr = activeCard.layer2.match(/(\d+d\d+(?:[+-]\d+)?)/)?.[1];
     if (!expr) return null;
-    try { return rollExpression(expr, activeCard.name); }
+    const finalExpr = crit ? doubleDiceCount(expr) : expr;
+    // rollAndLog (not a bare rollExpression call) so a card roll shows up in
+    // the same shared history as GlobalDiceRoller's — item 11 (roll
+    // improvements): these used to be two disconnected roll logs.
+    try { return useDiceLogStore.getState().rollAndLog(finalExpr, activeCard.name); }
     catch { return null; }
   }
 
@@ -573,6 +588,13 @@ const styles = StyleSheet.create({
   rollExpr:    { fontSize: FontSize.lg, color: Colors.textPrimary, fontWeight: FontWeight.bold },
   rollBtn:     { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm },
   rollBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  critToggle: {
+    borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  critToggleActive:    { borderColor: Colors.red, backgroundColor: Colors.red + '22' },
+  critToggleTxt:        { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  critToggleTxtActive:  { color: Colors.red },
 
   resultBox: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,

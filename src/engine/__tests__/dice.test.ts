@@ -5,7 +5,7 @@
 // would otherwise only ever show up as an occasionally-wrong character sheet.
 import {
   rollDie, rollExpression, setRandomSource, rollAbilityScore, rollAbilityScoreSet,
-  rollD20, rollWithAdvantage, rollWithDisadvantage, averageRoll, manualRoll,
+  rollD20, rollWithAdvantage, rollWithDisadvantage, averageRoll, manualRoll, doubleDiceCount,
 } from '../dice';
 
 afterEach(() => {
@@ -230,5 +230,37 @@ describe('averageRoll', () => {
 
   it('throws for an unparseable expression', () => {
     expect(() => averageRoll('nonsense')).toThrow(/Cannot compute average/);
+  });
+});
+
+// Item 11 (roll improvements) — critical-hit damage doubling. Per the real
+// 5e rule, a crit doubles the DICE, not the total/flat modifier.
+describe('doubleDiceCount', () => {
+  it('doubles the dice count on a standard NdX+M expression, leaving the modifier untouched', () => {
+    expect(doubleDiceCount('2d6+4')).toBe('4d6+4');
+  });
+
+  it('doubles a single die with no modifier', () => {
+    expect(doubleDiceCount('1d8')).toBe('2d8');
+  });
+
+  it('handles a negative modifier', () => {
+    expect(doubleDiceCount('1d10-1')).toBe('2d10-1');
+  });
+
+  it('doubles the dice count on a keep-highest/lowest expression, leaving the keep count and modifier untouched', () => {
+    expect(doubleDiceCount('2d6kh1+3')).toBe('4d6kh1+3');
+  });
+
+  it('returns a flat number (no dice) unchanged', () => {
+    expect(doubleDiceCount('8')).toBe('8');
+  });
+
+  it('returns an unparseable expression unchanged rather than throwing', () => {
+    expect(doubleDiceCount('nonsense')).toBe('nonsense');
+  });
+
+  it('is case-insensitive and strips whitespace, matching rollExpression\'s own parsing', () => {
+    expect(doubleDiceCount('2D6 + 4')).toBe('4d6+4');
   });
 });

@@ -19,7 +19,8 @@ import { resolveSpellById } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { getClassLevels } from '../../engine/multiclass';
 import { castConcentrationSpell } from '../../engine/combat';
-import { rollExpression } from '../../engine/dice';
+import { doubleDiceCount } from '../../engine/dice';
+import { useDiceLogStore } from '../../store/diceLogStore';
 import { UseModal, applyActionCardUse, ActivationOptionModal } from './TabActions';
 import { AddSpellModal } from './AddSpellModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -216,11 +217,12 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
     });
   }, [entity, onEntityUpdate]);
 
-  function rollForCard() {
+  function rollForCard(crit: boolean) {
     if (!activeCard) return null;
     const expr = activeCard.layer2.match(/(\d+d\d+(?:[+-]\d+)?)/)?.[1];
     if (!expr) return null;
-    try { return rollExpression(expr, activeCard.name); }
+    const finalExpr = crit ? doubleDiceCount(expr) : expr;
+    try { return useDiceLogStore.getState().rollAndLog(finalExpr, activeCard.name); }
     catch { return null; }
   }
 

@@ -694,6 +694,7 @@ function PlayerActiveView() {
   const [claimOpen, setClaimOpen] = useState(false);
   const [reconnectOpen, setReconnectOpen] = useState(false);
   const [reconnectCode, setReconnectCode] = useState('');
+  const [retrying, setRetrying] = useState(false);
 
   if (!activeCampaign) return null;
 
@@ -701,12 +702,29 @@ function PlayerActiveView() {
   const log    = activeCampaign.sessionLog ?? [];
   const myChar = characters.find(c => activeCampaign.characterIds.includes(c.id)) ?? null;
   const campaignId = activeCampaign.id;
+  const joinCode    = activeCampaign.joinCode;
 
   async function claim(characterId: string) {
     // assignCharacterToCampaign already pushes the entity to the DM and announces
     // the claimed character over sync, so we don't repeat those calls here.
     await assignCharacter(characterId, campaignId);
     setClaimOpen(false);
+  }
+
+  // Item 16 (LAN/session UX) — one tap, no retyping: the stored room code
+  // is almost always still correct (the connection dropped, not the DM's
+  // room), so reconnectWithCode(activeCampaign.joinCode) alone recovers
+  // the common case. The "Enter a new room code" flow below stays for the
+  // real edge case — the DM's IP actually changed (different network).
+  async function handleRetrySavedCode() {
+    setRetrying(true);
+    try {
+      await reconnectWithCode(joinCode);
+    } catch (e) {
+      showError('Reconnect failed', String(e));
+    } finally {
+      setRetrying(false);
+    }
   }
 
   function confirmLeave() {
@@ -730,11 +748,22 @@ function PlayerActiveView() {
         <View style={styles.syncRow}>
           <SyncStatusDot />
           <Text style={styles.campaignMeta}>
-            {syncStatus.connected ? 'Connected to DM' : 'Reconnecting…'}
+            {syncStatus.connected
+              ? 'Connected to DM'
+              // lastError is only set once the client's own retry budget is
+              // exhausted (~3.5 minutes of backoff) — until then this stays
+              // "Reconnecting…" so the two states read differently instead
+              // of showing the same passive text for the whole window.
+              : syncStatus.lastError ? 'Connection lost' : 'Reconnecting…'}
           </Text>
         </View>
         {!syncStatus.connected && syncStatus.lastError && (
           <Text style={styles.syncErrorTxt}>{syncStatus.lastError}</Text>
+        )}
+        {!syncStatus.connected && !reconnectOpen && (
+          <Pressable style={[styles.retryBtn, retrying && styles.retryBtnDisabled]} onPress={handleRetrySavedCode} disabled={retrying}>
+            <Text style={styles.retryBtnTxt}>{retrying ? 'Retrying…' : '🔄 Retry Connection'}</Text>
+          </Pressable>
         )}
         {!syncStatus.connected && (
           reconnectOpen ? (
@@ -774,7 +803,7 @@ function PlayerActiveView() {
             </View>
           ) : (
             <Pressable style={styles.reEnterLink} onPress={() => setReconnectOpen(true)}>
-              <Text style={styles.reEnterTxt}>Enter a new room code →</Text>
+              <Text style={styles.reEnterTxt}>DM's room code changed? Enter a new one →</Text>
             </Pressable>
           )
         )}
@@ -1154,6 +1183,14 @@ const styles = StyleSheet.create({
   syncRow:           { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 },
   campaignMeta:      { fontSize: FontSize.sm, color: Colors.textSecondary },
   syncErrorTxt:      { fontSize: FontSize.xs, color: Colors.red, lineHeight: 17, marginTop: 4 },
+  retryBtn: {
+    marginTop: Spacing.sm, alignSelf: 'flex-start',
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.md, paddingVertical: 6,
+  },
+  retryBtnDisabled: { opacity: 0.5 },
+  retryBtnTxt:      { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold },
   reEnterLink:       { marginTop: Spacing.sm, alignSelf: 'flex-start' },
   reEnterTxt:        { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold },
   reconnectBox:      { marginTop: Spacing.sm, gap: Spacing.xs },

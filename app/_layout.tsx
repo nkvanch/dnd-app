@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useKeepAwake } from 'expo-keep-awake';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../src/theme';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
@@ -186,6 +186,28 @@ export default function RootLayout() {
       if (v !== 'true') router.replace('/onboarding' as any);
     }).catch(() => { /* if the check fails, just skip onboarding rather than block startup */ });
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbReady]);
+
+  // Item 16 (LAN/session UX) — resumeSync() only ever ran once, at cold
+  // boot. A device that sleeps/loses WiFi mid-session (phone locks, walks
+  // out of range) never re-triggers it: JS timers are typically suspended
+  // during sleep, so the client's own backoff retries may have already
+  // silently exhausted themselves in the background by the time the app is
+  // reopened, leaving the player stuck until they notice and manually find
+  // the buried "Enter a new room code" flow. Re-attempting on every
+  // foreground transition (only when not already connected — this is not a
+  // periodic poll, just a resume hook) closes that gap for free: startAsClient
+  // (and startAsServer) already tear down any stale connection first, so this
+  // is always safe to call, never doubles up a working connection.
+  useEffect(() => {
+    if (!dbReady) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      if (useSyncStore.getState().status.connected) return;
+      if (!useCampaignStore.getState().activeCampaign) return;
+      useCampaignStore.getState().resumeSync().catch(e => console.error('[_layout] Foreground resumeSync failed:', e));
+    });
+    return () => sub.remove();
   }, [dbReady]);
 
   if (!dbReady) return <BootScreen />;

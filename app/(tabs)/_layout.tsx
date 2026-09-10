@@ -1,5 +1,5 @@
 // app/(tabs)/_layout.tsx
-// Bottom tab navigator — 4 sections: Home, Campaigns, Characters, Homebrew.
+// Bottom tab navigator — 5 sections: Home, Campaigns, Characters, Homebrew, Compendium.
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,6 +53,13 @@ export default function TabLayout() {
         options={{
           title: 'Homebrew',
           tabBarIcon: ({ focused }) => <TabIcon glyph="📜" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="compendium"
+        options={{
+          title: 'Compendium',
+          tabBarIcon: ({ focused }) => <TabIcon glyph="📖" focused={focused} />,
         }}
       />
     </Tabs>

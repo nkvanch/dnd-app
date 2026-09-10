@@ -1055,6 +1055,24 @@ export type Effect = {
            | 'resistance' | 'immunity' | 'vulnerability' | 'suppress';
   value:     number | string | string[] | null;
   condition: string | null;
+  /**
+   * Item 9 (context-dependent/three-state mechanics): distinct from
+   * `condition` above, which gates on state the ENGINE already tracks
+   * (an active flag/condition id). `situational` marks an effect whose
+   * applicability depends on a real-world fact the app has no way to
+   * observe (positioning, "an ally within 5 feet", "if this is the first
+   * attack this turn") — e.g. Pack Tactics. Three real states: unanswered
+   * (id absent from Entity.situationalAnswers — conservative default,
+   * treated as "No" so a bonus is never silently overstated), explicit
+   * Yes (`situationalAnswers[id] === true`), explicit No (`=== false`).
+   * See collectAllEffects' gating and TabFeatures.tsx's "Situational
+   * Effects" toggle list, the one UI that writes to
+   * Entity.situationalAnswers. `id` should be stable/shared across
+   * entities carrying the same content (e.g. every Wolf's Pack Tactics
+   * uses the same id) so the question only needs answering once per
+   * genuinely distinct fact, not once per feature instance.
+   */
+  situational?: { id: string; question: string } | null;
   formulaAbilities?: Ability[];
   /**
    * Per-ability cap applied AFTER the modifier is computed, for medium armor.
@@ -1353,6 +1371,15 @@ export type Entity = {
    * to undefined so existing saved entities parse unchanged.
    */
   turnState?: TurnState | null;
+  /**
+   * Item 9 (context-dependent/three-state mechanics) — the player/DM's
+   * current answer to each situational fact a currently-held Effect asks
+   * about (keyed by Effect.situational.id). Absent key = unanswered
+   * (conservative default: the effect does not apply — see
+   * Effect.situational's own doc comment). Optional/defaults to {} so
+   * existing saved entities parse unchanged.
+   */
+  situationalAnswers?: Record<string, boolean>;
 };
 
 // ── 7. Leveling schemas ──────────────────────────────────────────────────────

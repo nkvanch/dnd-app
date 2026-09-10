@@ -318,6 +318,56 @@ describe('recomputeDerived — conditional effects', () => {
   });
 });
 
+// Item 9 — context-dependent/three-state mechanics. Distinct from
+// Effect.condition above: `condition` gates on state the ENGINE already
+// tracks (a flag/active condition id); `situational` gates on a real-world
+// fact the app can't observe at all (positioning, "an ally within 5 feet"),
+// so it reads from Entity.situationalAnswers, which only a person can set.
+describe('recomputeDerived — situational effects (item 9)', () => {
+  function situationalAcFeature() {
+    return feature('bonus', [{
+      type: 'stat_modifier', target: 'ac', operation: 'add', value: 2, condition: null,
+      situational: { id: 'ally_adjacent', question: 'Is an ally within 5 feet?' },
+    }]);
+  }
+
+  it('does not apply when unanswered — the conservative default', () => {
+    const e = withFeatures([situationalAcFeature()]);
+    expect(e.situationalAnswers).toBeUndefined();
+    expect(recomputeDerived(e, DEFAULT_RULES).derived.ac).toBe(10);
+  });
+
+  it('does not apply when explicitly answered No', () => {
+    const e = withFeatures([situationalAcFeature()], { situationalAnswers: { ally_adjacent: false } });
+    expect(recomputeDerived(e, DEFAULT_RULES).derived.ac).toBe(10);
+  });
+
+  it('applies once explicitly answered Yes', () => {
+    const e = withFeatures([situationalAcFeature()], { situationalAnswers: { ally_adjacent: true } });
+    expect(recomputeDerived(e, DEFAULT_RULES).derived.ac).toBe(12);
+  });
+
+  it('an unrelated situational answer does not affect a different question', () => {
+    const e = withFeatures([situationalAcFeature()], { situationalAnswers: { some_other_fact: true } });
+    expect(recomputeDerived(e, DEFAULT_RULES).derived.ac).toBe(10);
+  });
+
+  it('gates situational effects on equipped items the same way as features', () => {
+    const e = withFeatures([], {
+      inventory: {
+        ...makeEmptyEntity('e1').inventory,
+        equipped: [{
+          itemId: 'ring1', quantity: 1, attuned: false,
+          features: [situationalAcFeature()],
+        }],
+      },
+    });
+    expect(recomputeDerived(e, DEFAULT_RULES).derived.ac).toBe(10);
+    const answered = { ...e, situationalAnswers: { ally_adjacent: true } };
+    expect(recomputeDerived(answered, DEFAULT_RULES).derived.ac).toBe(12);
+  });
+});
+
 describe('recomputeDerived — DM overrides', () => {
   function override(partial: Partial<DmOverride>): DmOverride {
     return {

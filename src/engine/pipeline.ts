@@ -424,6 +424,13 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
         if (!flagActive && !conditionActive) continue;
       }
 
+      // Gate: skip a situational effect (item 9 — a real-world fact the
+      // engine can't observe, e.g. "an ally within 5 feet") unless the
+      // player/DM has explicitly answered Yes. Unanswered and explicit No
+      // are treated identically — conservative, never silently overstates
+      // a bonus. See Effect.situational's own doc comment.
+      if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
+
       // Gate: skip if this feature's source condition has its effects suppressed
       if (fi.source.kind === 'condition') {
         const sourceCond = entity.conditions.find(c => c.id === fi.source.refId);
@@ -454,6 +461,7 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
           const conditionActive = activeConditionIds.has(effect.condition);
           if (!flagActive && !conditionActive) continue;
         }
+        if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
         effects.push({
           effect,
           sourceName: fi.name,

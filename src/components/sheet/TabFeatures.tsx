@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, FeatureInstance, ActionCard, CampaignRules } from '../../engine/types';
 import { resolveChoice } from '../../engine/leveling';
+import { recomputeDerived } from '../../engine/pipeline';
 import { Alert } from '../../utils/alert';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { SubclassPicker } from '../SubclassPicker';
@@ -188,6 +189,39 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
     groups.get(kind)!.push(f);
   }
 
+  // Situational effects (item 9 — context-dependent/three-state mechanics):
+  // every distinct real-world fact a currently-held effect (feature or
+  // equipped-item) asks about, deduped by situational.id so a fact shared
+  // by several entries (e.g. every copy of the same racial trait) only
+  // needs answering once. See Effect.situational's own doc comment and
+  // pipeline.ts's collectAllEffects gating.
+  const situationalById = new Map<string, { question: string; sourceName: string }>();
+  for (const f of features) {
+    if (!f.isActive) continue;
+    for (const effect of f.effects) {
+      if (effect.situational && !situationalById.has(effect.situational.id)) {
+        situationalById.set(effect.situational.id, { question: effect.situational.question, sourceName: f.name });
+      }
+    }
+  }
+  for (const item of entity.inventory.equipped) {
+    for (const f of item.features) {
+      for (const effect of f.effects) {
+        if (effect.situational && !situationalById.has(effect.situational.id)) {
+          situationalById.set(effect.situational.id, { question: effect.situational.question, sourceName: f.name });
+        }
+      }
+    }
+  }
+  const situationalItems = Array.from(situationalById.entries()).map(([id, v]) => ({ id, ...v }));
+
+  function answerSituational(id: string, value: boolean | undefined) {
+    if (!rules || !onEntityUpdate) return;
+    const next = { ...(entity.situationalAnswers ?? {}) };
+    if (value === undefined) delete next[id]; else next[id] = value;
+    onEntityUpdate(recomputeDerived({ ...entity, situationalAnswers: next }, rules));
+  }
+
   // Spell cards (prepared + known + cantrips)
   const spellCards = spellcasting
     ? (entity.actionCards ?? []).filter(c => c.tabs.includes('spellcasting'))
@@ -331,6 +365,41 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                     Resolve this with your DM for now — an in-app picker for this choice type is coming.
                   </Text>
                 )}
+              </View>
+            );
+          })}
+        </CollapsibleGroup>
+      )}
+
+      {/* Situational effects (item 9) — a fact the app can't observe
+          (positioning, "an ally within 5 feet", etc.), so it's surfaced as
+          an explicit question rather than silently assumed true or false.
+          Unanswered defaults to "doesn't apply" — see answerSituational. */}
+      {situationalItems.length > 0 && (
+        <CollapsibleGroup title={`SITUATIONAL (${situationalItems.length})`}>
+          {situationalItems.map(s => {
+            const current = entity.situationalAnswers?.[s.id]; // undefined | true | false
+            return (
+              <View key={s.id} style={styles.situationalRow}>
+                <Text style={styles.situationalSource}>{s.sourceName}</Text>
+                <Text style={styles.situationalQuestion}>{s.question}</Text>
+                <View style={styles.situationalBtns}>
+                  <Pressable
+                    style={[styles.situationalBtn, current === true && styles.situationalBtnYesActive]}
+                    disabled={!canResolve}
+                    onPress={() => answerSituational(s.id, current === true ? undefined : true)}
+                  >
+                    <Text style={[styles.situationalBtnTxt, current === true && styles.situationalBtnTxtActive]}>Yes</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.situationalBtn, current === false && styles.situationalBtnNoActive]}
+                    disabled={!canResolve}
+                    onPress={() => answerSituational(s.id, current === false ? undefined : false)}
+                  >
+                    <Text style={[styles.situationalBtnTxt, current === false && styles.situationalBtnTxtActive]}>No</Text>
+                  </Pressable>
+                  {current === undefined && <Text style={styles.situationalUnset}>Unset — treated as No</Text>}
+                </View>
               </View>
             );
           })}
@@ -708,6 +777,19 @@ const styles = StyleSheet.create({
   },
   resolveBtnDisabled: { opacity: 0.4 },
   resolveBtnTxt:      { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  situationalRow:      { paddingVertical: Spacing.sm, gap: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  situationalSource:   { fontSize: FontSize.xs, color: Colors.textDim, fontWeight: FontWeight.bold },
+  situationalQuestion: { fontSize: FontSize.sm, color: Colors.textPrimary },
+  situationalBtns:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginTop: 2 },
+  situationalBtn: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  situationalBtnYesActive: { borderColor: Colors.green, backgroundColor: Colors.green + '22' },
+  situationalBtnNoActive:  { borderColor: Colors.red, backgroundColor: Colors.red + '22' },
+  situationalBtnTxt:       { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  situationalBtnTxtActive: { color: Colors.textPrimary },
+  situationalUnset:        { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
   asiModalRoot: { flex: 1, backgroundColor: Colors.bg, paddingTop: Spacing.xl + 8 },
   asiDone:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.lg, padding: Spacing.lg },
   asiDoneTxt:   { fontSize: FontSize.lg, color: Colors.textPrimary },

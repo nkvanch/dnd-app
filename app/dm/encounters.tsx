@@ -11,6 +11,7 @@ import { Alert } from '../../src/utils/alert';
 import { useEncounterStore } from '../../src/store/encounterStore';
 import { useCampaignStore } from '../../src/store/campaignStore';
 import { PreparedEncounter, EncounterStatus } from '../../src/engine/types';
+import { activeSession } from '../../src/engine/session';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -110,7 +111,8 @@ export default function EncounterLibraryScreen() {
   async function handleCreate() {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    const encounter = await createEncounter(trimmed, activeCampaign?.id);
+    const session = activeCampaign ? activeSession(activeCampaign) : null;
+    const encounter = await createEncounter(trimmed, activeCampaign?.id, session?.id);
     setNewName(''); setCreating(false);
     router.push({ pathname: '/dm/encounter-builder', params: { id: encounter.id } } as any);
   }

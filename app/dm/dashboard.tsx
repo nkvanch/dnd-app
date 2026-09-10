@@ -1,7 +1,7 @@
 // app/dm/dashboard.tsx
 // DM party overview dashboard. Only accessible when isDm === true.
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCampaignStore } from '../../src/store/campaignStore';
 import { Alert } from '../../src/utils/alert';
@@ -9,6 +9,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { useCombatStore }    from '../../src/store/combatStore';
 import { Entity } from '../../src/engine/types';
 import { dmFullStatVisibility } from '../../src/engine/houseRules';
+import { activeSession, startSession, endSession } from '../../src/engine/session';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { SyncStatusDot } from '../../src/components/SyncStatusDot';
@@ -198,11 +199,27 @@ export default function DmDashboard() {
   const safeGoBack     = useSafeGoBack('/(tabs)');
   const isDm           = useCampaignStore(s => s.isDm);
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
+  const updateCampaign = useCampaignStore(s => s.updateCampaign);
   const characters     = useCharacterStore(s => s.characters);
   const rules          = useCharacterStore(s => s.rules);
   const startCombat    = useCombatStore(s => s.startCombat);
   const syncStatus     = useSyncStore(s => s.status);
   const showFull       = dmFullStatVisibility(rules);
+  const [endSessionOpen, setEndSessionOpen] = useState(false);
+  const [endSummary, setEndSummary] = useState('');
+
+  const session = activeCampaign ? activeSession(activeCampaign) : null;
+
+  function handleStartSession() {
+    if (!activeCampaign) return;
+    updateCampaign(activeCampaign.id, c => startSession(c));
+  }
+  function handleEndSession() {
+    if (!activeCampaign) return;
+    updateCampaign(activeCampaign.id, c => endSession(c, endSummary));
+    setEndSummary('');
+    setEndSessionOpen(false);
+  }
 
   // Guard: only DMs see this screen
   if (!isDm) {
@@ -273,6 +290,58 @@ export default function DmDashboard() {
             </Text>
           </View>
         )}
+        {/* Session lifecycle (item 14) — start/end a real-world play
+            session, distinct from the sync connection (a DM can be hosting
+            with no session "in progress" yet, e.g. while players are still
+            joining). Builds on the existing Campaigns-tab session log
+            rather than a separate concept — see engine/session.ts. */}
+        {activeCampaign && (
+          <View style={styles.sessionCard}>
+            {session ? (
+              <>
+                <Text style={styles.sessionActiveTxt}>🟢 Session in progress</Text>
+                <Text style={styles.sessionSub}>
+                  Started {new Date(session.startedAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {session.attendedCharacterIds ? ` · ${session.attendedCharacterIds.length} in party` : ''}
+                </Text>
+                <Pressable style={styles.sessionEndBtn} onPress={() => setEndSessionOpen(true)}>
+                  <Text style={styles.sessionEndBtnTxt}>⏹ End Session</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable style={styles.sessionStartBtn} onPress={handleStartSession}>
+                <Text style={styles.sessionStartBtnTxt}>▶ Start Session</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        <Modal visible={endSessionOpen} transparent animationType="fade" onRequestClose={() => setEndSessionOpen(false)}>
+          <View style={styles.sessionModalBackdrop}>
+            <View style={styles.sessionModalSheet}>
+              <Text style={styles.sessionModalTitle}>End Session</Text>
+              <TextInput
+                style={styles.sessionModalInput}
+                value={endSummary}
+                onChangeText={setEndSummary}
+                placeholder="What happened this session? (optional)"
+                placeholderTextColor={Colors.textDim}
+                multiline
+                textAlignVertical="top"
+                autoFocus
+              />
+              <View style={styles.sessionModalBtns}>
+                <Pressable style={styles.sessionModalCancel} onPress={() => setEndSessionOpen(false)}>
+                  <Text style={styles.sessionModalCancelTxt}>Cancel</Text>
+                </Pressable>
+                <Pressable style={styles.sessionModalConfirm} onPress={handleEndSession}>
+                  <Text style={styles.sessionModalConfirmTxt}>End Session</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* Connected players roster (live sync) */}
         {syncStatus.role === 'dm' && (
           <>
@@ -386,6 +455,46 @@ const styles = StyleSheet.create({
   roomCode: { fontSize: 34, fontWeight: FontWeight.black, color: Colors.gold, letterSpacing: 6 },
   roomCodeDim: { fontSize: FontSize.lg, color: Colors.textDim, fontWeight: FontWeight.bold },
   roomHint: { fontSize: FontSize.xs, color: Colors.textSecondary, textAlign: 'center', marginTop: 2 },
+
+  sessionCard: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.md, alignItems: 'center', gap: 4,
+  },
+  sessionActiveTxt: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.green },
+  sessionSub:        { fontSize: FontSize.xs, color: Colors.textDim },
+  sessionStartBtn: {
+    backgroundColor: Colors.green + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.green + '66',
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+  },
+  sessionStartBtnTxt: { fontSize: FontSize.md, color: Colors.green, fontWeight: FontWeight.bold },
+  sessionEndBtn: {
+    backgroundColor: Colors.red + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.red + '66',
+    paddingHorizontal: Spacing.md, paddingVertical: 6, marginTop: 4,
+  },
+  sessionEndBtnTxt: { fontSize: FontSize.sm, color: Colors.red, fontWeight: FontWeight.bold },
+
+  sessionModalBackdrop: { flex: 1, backgroundColor: '#000000cc', justifyContent: 'center', padding: Spacing.md },
+  sessionModalSheet: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg,
+    padding: Spacing.md, gap: Spacing.sm,
+  },
+  sessionModalTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold, textAlign: 'center' },
+  sessionModalInput: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, color: Colors.textPrimary, minHeight: 90,
+  },
+  sessionModalBtns: { flexDirection: 'row', gap: Spacing.sm },
+  sessionModalCancel: {
+    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center',
+  },
+  sessionModalCancelTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  sessionModalConfirm: { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  sessionModalConfirmTxt: { color: Colors.bg, fontWeight: FontWeight.bold },
 
   rosterRow: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,

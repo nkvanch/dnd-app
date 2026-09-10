@@ -15,8 +15,11 @@ type EncounterStore = {
   /** Load all prepared encounters from SQLite. Called after initDb(). */
   loadEncounters: () => Promise<void>;
 
-  /** Create a new draft encounter, persist it, and return it. */
-  createEncounter: (name: string, campaignId?: string) => Promise<PreparedEncounter>;
+  /** Create a new draft encounter, persist it, and return it.
+   *  `sessionId` (item 14) — the campaign's currently-active session, if
+   *  any, so the encounter records which session it was prepared during.
+   *  See PreparedEncounter.sessionId's own doc comment. */
+  createEncounter: (name: string, campaignId?: string, sessionId?: string) => Promise<PreparedEncounter>;
 
   /** Full replace-and-persist for an existing encounter (the builder screen's
    *  own save button uses this — it already holds the complete edited record). */
@@ -49,8 +52,8 @@ export const useEncounterStore = create<EncounterStore>((set, get) => ({
     }
   },
 
-  createEncounter: async (name, campaignId) => {
-    const encounter = newPreparedEncounter(name, campaignId);
+  createEncounter: async (name, campaignId, sessionId) => {
+    const encounter = newPreparedEncounter(name, campaignId, sessionId);
     await saveEncounter(encounter);
     set(state => ({ encounters: [encounter, ...state.encounters] }));
     return encounter;

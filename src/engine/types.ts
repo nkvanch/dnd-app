@@ -1803,10 +1803,30 @@ export type DeviceSession = {
   campaignId: string | null;
 };
 
+/**
+ * Item 14 (Sessions) — a real-world sit-down play session, distinct from
+ * DeviceSession (the LAN connection identity) and SyncEvent.sessionId (the
+ * connection-session id, which changes every time the DM re-hosts). A
+ * session is "active" precisely when the newest entry in
+ * Campaign.sessionLog has `startedAt` set but no `endedAt` — deliberately
+ * not a separate Campaign.activeSessionId field, so there's exactly one
+ * source of truth for session state instead of two that could drift.
+ * `startedAt`/`endedAt`/`attendedCharacterIds` are optional so every
+ * existing hand-added "+ Add Session Note" entry (summary-only, no real
+ * start/end) keeps parsing unchanged — those are just session notes not
+ * tied to a tracked start/end, same as before this existed.
+ */
 export type SessionLogEntry = {
   id:        string;
   summary:   string;
-  date:      number;   // timestamp
+  date:      number;   // timestamp — kept as the "when this entry was created" field, unchanged
+  startedAt?: number;
+  endedAt?:   number;
+  /** Snapshot of campaign.characterIds at the moment the session was
+   *  started — "who was expected," not a live minute-by-minute attendance
+   *  log (the app has no per-player join/leave tracking beyond the sync
+   *  roster, which is connection state, not attendance). */
+  attendedCharacterIds?: string[];
 };
 
 export type Quest = {
@@ -1921,6 +1941,11 @@ export type PreparedEncounter = {
   id:           string;
   /** Undefined = a reusable template, not tied to one campaign. */
   campaignId?:  string;
+  /** Item 14 (Sessions) — the SessionLogEntry.id active when this encounter
+   *  was created, if any (see SessionLogEntry's own doc comment). Lets a
+   *  DM later see which encounters were prepared/run during a given
+   *  session. Undefined for an encounter created outside an active
+   *  session, or one created before this field existed. */
   sessionId?:   string;
   name:         string;
   description?: string;

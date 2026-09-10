@@ -26,10 +26,10 @@ function genId(prefix: string): string {
 
 // ── Constructors ─────────────────────────────────────────────────────────────
 
-export function newPreparedEncounter(name: string, campaignId?: string): PreparedEncounter {
+export function newPreparedEncounter(name: string, campaignId?: string, sessionId?: string): PreparedEncounter {
   const now = Date.now();
   return {
-    id: genId('enc'), campaignId, name, tags: [], status: 'draft',
+    id: genId('enc'), campaignId, sessionId, name, tags: [], status: 'draft',
     combatants: [], groups: [], waves: [], environment: [], rewards: [],
     createdAt: now, updatedAt: now,
   };

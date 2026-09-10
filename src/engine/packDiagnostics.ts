@@ -78,7 +78,7 @@ function resolveRef(ref: PackItemRef, homebrew: HomebrewContentSlice) {
  * conservative (possibly over-broad, but never silently wrong-type)
  * behavior this whole check had for every reference before this fix.
  */
-function collectTypedContentRefs(entity: Entity): { type: ContentCacheType; id: string }[] {
+export function collectTypedContentRefs(entity: Entity): { type: ContentCacheType; id: string }[] {
   if (entity.kind !== 'character') return [];
   const { identity, spellcasting, inventory } = entity;
   const refs: { type: ContentCacheType; id: string }[] = [];
@@ -196,6 +196,31 @@ export function diagnosePack(
  *  uninstalled since the campaign banned them) are silently skipped, not
  *  an error — matches this file's own "detect, disclose, never crash"
  *  posture. */
+// ── Item 18: homebrew "reference usage" (single-item, not whole-pack) ──────────
+// diagnosePack's own 'pack_content_in_use' check (above) already answers this
+// question for a whole PACK; this is the same matching logic — real
+// (collectTypedContentRefs) plus untyped choice-selection fallback — aimed at
+// one specific {type, id} instead of every ref a pack claims. Reused, not
+// duplicated: both this and diagnosePack call collectTypedContentRefs.
+
+/** Every character that references this exact piece of content, either
+ *  through a real typed field (race/class/subclass/background/spell/item)
+ *  or, as a conservative fallback, a resolved choice selection matching
+ *  the id untyped (same reasoning as diagnosePack's own choiceMatches —
+ *  ChoiceState.selections has no reliable type tag to check against). */
+export function contentUsedBy(
+  characters: Entity[],
+  type:       ContentCacheType,
+  id:         string,
+): Entity[] {
+  return characters.filter(character => {
+    const typedMatch = collectTypedContentRefs(character).some(r => r.type === type && r.id === id);
+    if (typedMatch) return true;
+    if (character.kind !== 'character') return false;
+    return character.choices.some(c => c.resolved && c.selections.includes(id));
+  });
+}
+
 export function bannedContentIds(installedPacks: InstalledPack[], bannedPackIds: string[]): Set<string> {
   const banned = new Set(bannedPackIds);
   const ids = new Set<string>();

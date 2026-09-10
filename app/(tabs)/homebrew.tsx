@@ -8,7 +8,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { Alert } from '../../src/utils/alert';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
 import { InstalledPack, loadInstalledPacks, deleteInstalledPack } from '../../src/db/packRegistryRepo';
-import { diagnosePack } from '../../src/engine/packDiagnostics';
+import { diagnosePack, contentUsedBy } from '../../src/engine/packDiagnostics';
 import { Issue } from '../../src/engine/types';
 import { exportHomebrewItem, ExportFormat, ExportAction } from '../../src/io/exportShare';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
@@ -181,6 +181,8 @@ function LibraryPanel() {
   } = useHomebrewStore();
   const allRaces = getMergedContentDB().races;
   const allClasses = getMergedContentDB().classes;
+  // Item 18 (homebrew improvements — reference usage): "Used by N" per row.
+  const characters = useCharacterStore(s => s.characters);
 
   const [exportTarget, setExportTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
@@ -319,6 +321,13 @@ function LibraryPanel() {
         const editRoute = EDIT_ROUTES[type];
         const parentName = 'parentName' in rest ? rest.parentName : undefined;
         const isOfficial = 'isOfficial' in rest && rest.isOfficial === true;
+        // Not shown for official rows — "used by" only means anything for
+        // content the user actually owns/could change. contentUsedBy checks
+        // typed fields (race/class/subclass/background/spell/item) plus an
+        // untyped resolved-choice-selection fallback for everything else
+        // (feature/feat/monster/condition), same conservative matching
+        // diagnosePack's own pack-level check already uses.
+        const usedBy = !isOfficial ? contentUsedBy(characters, type, item.id) : [];
         return (
           <View key={`${type}:${item.id}`} style={styles.libraryRow}>
             <View style={styles.libraryInfo}>
@@ -332,6 +341,17 @@ function LibraryPanel() {
                 <View style={styles.officialBadge}>
                   <Text style={styles.officialBadgeTxt}>Official</Text>
                 </View>
+              )}
+              {usedBy.length > 0 && (
+                <Pressable
+                  style={styles.usedByBadge}
+                  onPress={() => Alert.alert(
+                    `Used by ${usedBy.length} character${usedBy.length === 1 ? '' : 's'}`,
+                    usedBy.map(c => c.identity.name || 'Unnamed').join('\n'),
+                  )}
+                >
+                  <Text style={styles.usedByBadgeTxt}>Used by {usedBy.length}</Text>
+                </Pressable>
               )}
             </View>
             {/* Official content is reference-only — no edit/history/export/delete,
@@ -480,6 +500,8 @@ const styles = StyleSheet.create({
   typeBadge_condition:  { backgroundColor: Colors.blue + '22' },
   officialBadge:    { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 6, paddingVertical: 2 },
   officialBadgeTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  usedByBadge:    { backgroundColor: Colors.blue + '22', borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.blue + '66', paddingHorizontal: 6, paddingVertical: 2 },
+  usedByBadgeTxt: { fontSize: FontSize.xs, color: Colors.blue, fontWeight: FontWeight.bold },
   libraryActions: { flexDirection: 'row', gap: Spacing.xs },
   libBtn: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,

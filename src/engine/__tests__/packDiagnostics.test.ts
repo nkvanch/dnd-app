@@ -1,5 +1,5 @@
 // src/engine/__tests__/packDiagnostics.test.ts
-import { diagnosePack, HomebrewContentSlice, bannedContentIds } from '../packDiagnostics';
+import { diagnosePack, HomebrewContentSlice, bannedContentIds, contentUsedBy } from '../packDiagnostics';
 import { InstalledPack } from '../../db/packRegistryRepo';
 import { makeEmptyEntity } from '../../store/characterStore';
 import { Entity } from '../types';
@@ -121,6 +121,64 @@ describe('diagnosePack', () => {
     };
     const issues = diagnosePack(pack, [pack], homebrew, [character]);
     expect(issues).toContainEqual(expect.objectContaining({ code: 'pack_content_in_use', affectedId: 'char1' }));
+  });
+});
+
+// Item 18 (homebrew improvements — reference usage, single item not a whole pack)
+describe('contentUsedBy', () => {
+  it('finds a character via a typed field (race)', () => {
+    const character: Entity = {
+      ...makeEmptyEntity('char1'),
+      identity: { ...makeEmptyEntity('char1').identity, name: 'Vex', raceId: 'goblinkin' },
+    };
+    const used = contentUsedBy([character], 'race', 'goblinkin');
+    expect(used.map(c => c.id)).toEqual(['char1']);
+  });
+
+  it('finds a character via a typed field (item, carried or equipped)', () => {
+    const carried: Entity = {
+      ...makeEmptyEntity('char1'),
+      inventory: { ...makeEmptyEntity('char1').inventory, carried: [{ itemId: 'iron_sword', quantity: 1, attuned: false, features: [] }] },
+    };
+    expect(contentUsedBy([carried], 'item', 'iron_sword').map(c => c.id)).toEqual(['char1']);
+  });
+
+  it('finds a character via a resolved choice selection, untyped fallback', () => {
+    const character: Entity = {
+      ...makeEmptyEntity('char1'),
+      choices: [{
+        id: 'c1', grantedAt: 1, resolved: true, selections: ['homebrew_feat_x'],
+        definition: { id: 'c1', prompt: 'Pick a feat', kind: 'feat', count: 1, pool: [], grants: [], required: true, resolved: true },
+      }],
+    };
+    expect(contentUsedBy([character], 'feat', 'homebrew_feat_x').map(c => c.id)).toEqual(['char1']);
+  });
+
+  it('does not match an UNresolved choice selection', () => {
+    const character: Entity = {
+      ...makeEmptyEntity('char1'),
+      choices: [{
+        id: 'c1', grantedAt: 1, resolved: false, selections: ['homebrew_feat_x'],
+        definition: { id: 'c1', prompt: 'Pick a feat', kind: 'feat', count: 1, pool: [], grants: [], required: true, resolved: true },
+      }],
+    };
+    expect(contentUsedBy([character], 'feat', 'homebrew_feat_x')).toEqual([]);
+  });
+
+  it('returns an empty array when no character references the content', () => {
+    const character = makeEmptyEntity('char1');
+    expect(contentUsedBy([character], 'race', 'nonexistent')).toEqual([]);
+  });
+
+  it('never matches a monster/companion entity via the choice fallback (kind !== character)', () => {
+    const monster: Entity = {
+      ...makeEmptyEntity('mon1', 'monster'),
+      choices: [{
+        id: 'c1', grantedAt: 1, resolved: true, selections: ['homebrew_feat_x'],
+        definition: { id: 'c1', prompt: 'x', kind: 'feat', count: 1, pool: [], grants: [], required: true, resolved: true },
+      }],
+    };
+    expect(contentUsedBy([monster], 'feat', 'homebrew_feat_x')).toEqual([]);
   });
 });
 

@@ -8,13 +8,18 @@ import {
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Spell } from '../../src/engine/types';
+import { Entity, Spell } from '../../src/engine/types';
 import { validateSpell } from '../../src/engine/homebrewValidator';
 import { Alert } from '../../src/utils/alert';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { PickOrCustom } from '../../src/components/homebrew/PickOrCustom';
+import { simulate } from '../../src/engine/simulate';
+import { castConcentrationSpell } from '../../src/engine/combat';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const LEVELS  = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -68,6 +73,8 @@ export default function SpellBuilderScreen() {
   const [concentration, setConcentration] = useState(false);
   const [spellTypes,  setSpellTypes]  = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: load the existing spell's fields once, when it first resolves.
   useEffect(() => {
@@ -113,6 +120,39 @@ export default function SpellBuilderScreen() {
       concentration,
       spellType:     spellTypes.length > 0 ? spellTypes : undefined,
     };
+  }
+
+  // Item 18 (homebrew improvements — expanded test bench): the last of the
+  // 10 real builders to get one (item/race/class/feat/background/condition/
+  // feature-editor/monster/subclass/subrace already have it — confirmed via
+  // grep). Reuses castConcentrationSpell (engine/combat.ts) — the exact real
+  // function a live cast goes through — as the simulate() mutator, rather
+  // than hand-rolling the feature-grant loop other builders use, since
+  // onConcentrationFeatures is applied through a slightly different path
+  // (also sets spellcasting.concentrating/concentratingDuration) that's
+  // worth exercising for real rather than reimplementing.
+  // Disclosed, not hidden: this builder currently has no UI to AUTHOR
+  // onConcentrationFeatures at all (buildSpell() never sets it) — so every
+  // test today correctly reports "no mechanical effect" via
+  // HomebrewTestModal's own empty-state note, the same honest "mechanism
+  // built, no content exercises it yet" situation this app already has
+  // elsewhere (e.g. Feature.outcomes/trigger before any content set them).
+  // Authoring that UI is separate, larger work — TraitEditorModal wiring
+  // for a spell-specific one-off trait, not attempted here.
+  function runTest() {
+    const spell = buildSpell();
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = {
+      ...empty,
+      identity: { ...empty.identity, level: 1 },
+      spellcasting: {
+        ability: 'int', cantrips: [], known: [], prepared: [], concentrating: null,
+        slots: { '1': { total: 0, used: 0 }, '2': { total: 0, used: 0 }, '3': { total: 0, used: 0 }, '4': { total: 0, used: 0 }, '5': { total: 0, used: 0 }, '6': { total: 0, used: 0 }, '7': { total: 0, used: 0 }, '8': { total: 0, used: 0 }, '9': { total: 0, used: 0 } },
+      },
+    };
+    const { before, after } = simulate(scratch, e => castConcentrationSpell(e, spell, DEFAULT_RULES), DEFAULT_RULES);
+    setTestRows(buildFeatSummaryRows(before, after));
+    setTestOpen(true);
   }
 
   async function handleSave() {
@@ -255,11 +295,21 @@ export default function SpellBuilderScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Spell'}</Text>
           </Pressable>
         </View>
       </SafeBottomView>
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Spell'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -293,8 +343,10 @@ const styles = StyleSheet.create({
   toggleActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
   toggleTxt:    { color: Colors.textSecondary, fontSize: FontSize.sm },
   toggleTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
-  footer:    { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:    { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:   { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt:  { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:   { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

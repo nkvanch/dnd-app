@@ -87,3 +87,40 @@ describe('getMergedContentDB — homebrew wins over official by id', () => {
     expect(merged.races.filter(r => r.id === 'human')).toHaveLength(1);
   });
 });
+
+// Item 15 (campaign content manifest) — the second, opt-in filter param.
+// Every test above omits it entirely, proving the default (undefined) stays
+// a true no-op — these tests exercise the filter itself.
+describe('getMergedContentDB — bannedIds filter (item 15)', () => {
+  afterEach(() => {
+    useHomebrewStore.setState({ races: [], classes: [], items: [] });
+  });
+
+  it('excludes a homebrew race whose id is in the banned set', () => {
+    useHomebrewStore.setState({ races: [{ id: 'homebrew_race_1', name: 'Banned Race', features: [] }] });
+    const merged = useHomebrewStore.getState().getMergedContentDB(undefined, new Set(['homebrew_race_1']));
+    expect(merged.races.some(r => r.id === 'homebrew_race_1')).toBe(false);
+  });
+
+  it('leaves content not in the banned set untouched', () => {
+    useHomebrewStore.setState({ races: [{ id: 'homebrew_race_1', name: 'Not Banned', features: [] }] });
+    const merged = useHomebrewStore.getState().getMergedContentDB(undefined, new Set(['some_other_id']));
+    expect(merged.races.some(r => r.id === 'homebrew_race_1')).toBe(true);
+  });
+
+  it('is a true no-op when bannedIds is omitted, even with homebrew content present', () => {
+    useHomebrewStore.setState({ races: [{ id: 'homebrew_race_1', name: 'X', features: [] }] });
+    const merged = useHomebrewStore.getState().getMergedContentDB();
+    expect(merged.races.some(r => r.id === 'homebrew_race_1')).toBe(true);
+  });
+
+  it('applies across multiple content types in one call', () => {
+    useHomebrewStore.setState({
+      races: [{ id: 'r1', name: 'R', features: [] }],
+      classes: [{ id: 'c1', name: 'C', hitDie: 8, features: [] }],
+    });
+    const merged = useHomebrewStore.getState().getMergedContentDB(undefined, new Set(['r1', 'c1']));
+    expect(merged.races.some(r => r.id === 'r1')).toBe(false);
+    expect(merged.classes.some(c => c.id === 'c1')).toBe(false);
+  });
+});

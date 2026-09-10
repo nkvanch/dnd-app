@@ -5,6 +5,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { useCampaignStore } from '../../src/store/campaignStore';
+import { bannedContentIds } from '../../src/engine/packDiagnostics';
+import { loadInstalledPacks } from '../../src/db/packRegistryRepo';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { applyGrant, queueChoice } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
@@ -105,7 +108,20 @@ export default function RaceDetailScreen() {
   // result directly hands useSyncExternalStore a new object every render,
   // which it reads as "the store changed" and infinite-loops.
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
-  const mergedRaces = getMergedContentDB().races;
+  // Item 15 (campaign content manifest) — the ONE real consumer wired up as
+  // a proof slice; the other creation screens (class/background/feats/
+  // spells) still show the unfiltered library, a disclosed, separate
+  // follow-up. "Which campaign" is the device's currently active campaign
+  // (activeCampaign), the same implicit "current campaign governs
+  // creation" assumption `rules` above already relies on — a character
+  // draft isn't itself campaign-scoped until added to one.
+  const activeCampaign = useCampaignStore(s => s.activeCampaign);
+  const [installedPacks, setInstalledPacks] = useState<Awaited<ReturnType<typeof loadInstalledPacks>>>([]);
+  useEffect(() => {
+    loadInstalledPacks().then(setInstalledPacks).catch(e => console.error('[race-detail] loadInstalledPacks failed:', e));
+  }, []);
+  const banned = bannedContentIds(installedPacks, activeCampaign?.bannedPackIds ?? []);
+  const mergedRaces = getMergedContentDB(undefined, banned).races;
 
   const race   = mergedRaces.find(r => r.id === id);
   // Races self-describe via race.description/age/size/languages (see the

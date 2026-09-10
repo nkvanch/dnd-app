@@ -1,5 +1,5 @@
 // src/engine/__tests__/packDiagnostics.test.ts
-import { diagnosePack, HomebrewContentSlice } from '../packDiagnostics';
+import { diagnosePack, HomebrewContentSlice, bannedContentIds } from '../packDiagnostics';
 import { InstalledPack } from '../../db/packRegistryRepo';
 import { makeEmptyEntity } from '../../store/characterStore';
 import { Entity } from '../types';
@@ -121,5 +121,32 @@ describe('diagnosePack', () => {
     };
     const issues = diagnosePack(pack, [pack], homebrew, [character]);
     expect(issues).toContainEqual(expect.objectContaining({ code: 'pack_content_in_use', affectedId: 'char1' }));
+  });
+});
+
+// Item 15 (campaign content manifest)
+describe('bannedContentIds', () => {
+  it('collects every itemRef id from banned packs only', () => {
+    const packA = makePack({ id: 'a', itemRefs: [{ type: 'item', id: 'sword' }, { type: 'race', id: 'goblinkin' }] });
+    const packB = makePack({ id: 'b', itemRefs: [{ type: 'feat', id: 'power_attack' }] });
+    const ids = bannedContentIds([packA, packB], ['a']);
+    expect(ids).toEqual(new Set(['sword', 'goblinkin']));
+  });
+
+  it('returns an empty set when no pack ids are banned', () => {
+    const packA = makePack({ id: 'a', itemRefs: [{ type: 'item', id: 'sword' }] });
+    expect(bannedContentIds([packA], [])).toEqual(new Set());
+  });
+
+  it('silently skips a banned pack id that is no longer installed', () => {
+    const packA = makePack({ id: 'a', itemRefs: [{ type: 'item', id: 'sword' }] });
+    expect(() => bannedContentIds([packA], ['ghost_pack'])).not.toThrow();
+    expect(bannedContentIds([packA], ['ghost_pack'])).toEqual(new Set());
+  });
+
+  it('combines refs from multiple banned packs into one flat set', () => {
+    const packA = makePack({ id: 'a', itemRefs: [{ type: 'item', id: 'sword' }] });
+    const packB = makePack({ id: 'b', itemRefs: [{ type: 'race', id: 'goblinkin' }] });
+    expect(bannedContentIds([packA, packB], ['a', 'b'])).toEqual(new Set(['sword', 'goblinkin']));
   });
 });

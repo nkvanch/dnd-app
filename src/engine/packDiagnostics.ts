@@ -179,3 +179,29 @@ export function diagnosePack(
 
   return issues;
 }
+
+// ── Item 15: campaign content manifest ────────────────────────────────────────
+// A DM can ban specific installed homebrew packs from a campaign (e.g. "not
+// that one, it's unbalanced") — deliberately scoped to whole PACKS, not
+// individual pieces of content or official-content restriction: the pack
+// registry is the only existing device-side grouping of homebrew content,
+// and DMs almost never want to restrict official PHB content, so per-item
+// allow/deny lists would be real work with little real-world payoff.
+
+/** Every content id (any type) contributed by the given banned pack ids —
+ *  a flat, type-agnostic set, since getMergedContentDB.ts's own arrays are
+ *  each already scoped to one content type, so filtering "any array by id"
+ *  is safe (no cross-type id collision risk any worse than the id-keyed
+ *  homebrew store already accepts elsewhere). Unknown pack ids (already
+ *  uninstalled since the campaign banned them) are silently skipped, not
+ *  an error — matches this file's own "detect, disclose, never crash"
+ *  posture. */
+export function bannedContentIds(installedPacks: InstalledPack[], bannedPackIds: string[]): Set<string> {
+  const banned = new Set(bannedPackIds);
+  const ids = new Set<string>();
+  for (const pack of installedPacks) {
+    if (!banned.has(pack.id)) continue;
+    for (const ref of pack.itemRefs) ids.add(ref.id);
+  }
+  return ids;
+}

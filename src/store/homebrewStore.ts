@@ -79,7 +79,7 @@ type HomebrewStore = {
   loadHomebrew: () => Promise<void>;
 
   /** Merge official + homebrew into a single ContentDB. */
-  getMergedContentDB: (activeRuleset?: RulesetId) => ContentDB;
+  getMergedContentDB: (activeRuleset?: RulesetId, bannedIds?: Set<string>) => ContentDB;
 
   /** Save a new or updated homebrew item. */
   saveItem: (type: ContentCacheType, item: HomebrewContent) => Promise<void>;
@@ -153,8 +153,17 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     }
   },
 
-  getMergedContentDB: (activeRuleset?: RulesetId): ContentDB => {
+  getMergedContentDB: (activeRuleset?: RulesetId, bannedIds?: Set<string>): ContentDB => {
     const { races, subraces, classes, spells, backgrounds, features, items, feats, conditions } = get();
+    // Item 15 (campaign content manifest) — banned homebrew packs' content
+    // ids, pre-computed by the caller (packDiagnostics.ts's
+    // bannedContentIds()) from the active campaign's Campaign.bannedPackIds.
+    // Every call site today omits this (undefined), so notBanned is a
+    // guaranteed identity no-op until a caller actually passes a campaign's
+    // ban set — same "opt-in filter, zero behavior change until wired"
+    // shape activeRuleset already established above.
+    const notBanned = <T extends { id: string }>(arr: T[]): T[] =>
+      bannedIds ? arr.filter(x => !bannedIds.has(x.id)) : arr;
     const allRaces = homebrewWinsById(globalContentDB.races, races);
     // Attach standalone subraces (parentId may point at an official OR a
     // homebrew race) onto their parent at read time, rather than requiring
@@ -178,8 +187,8 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     // (spellRepo/itemRepo), not sourced from globalContentDB, and get their
     // own ruleset filtering whenever Phase 6 needs it.
     return {
-      races:       racesWithStandaloneSubraces.filter(r => matchesRuleset(r.rulesetId, activeRuleset)),
-      classes:     homebrewWinsById(globalContentDB.classes, classes).filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
+      races:       notBanned(racesWithStandaloneSubraces.filter(r => matchesRuleset(r.rulesetId, activeRuleset))),
+      classes:     notBanned(homebrewWinsById(globalContentDB.classes, classes).filter(c => matchesRuleset(c.rulesetId, activeRuleset))),
       // Official spell content moved out of globalContentDB and into
       // spellRepo (SQLite-backed on native, still eager on web) — see
       // src/content/spellRepo.ts. Nothing currently reads ContentDB.spells
@@ -187,16 +196,16 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       // intentionally carries homebrew spells only from here on; browse UIs
       // that need the full official+homebrew spell list use
       // spellRepo.getIndex() directly instead.
-      spells:      spells,
-      backgrounds: homebrewWinsById(globalContentDB.backgrounds, backgrounds).filter(b => matchesRuleset(b.rulesetId, activeRuleset)),
+      spells:      notBanned(spells),
+      backgrounds: notBanned(homebrewWinsById(globalContentDB.backgrounds, backgrounds).filter(b => matchesRuleset(b.rulesetId, activeRuleset))),
       // Now includes homebrew conditions too (A-35) — previously official-only,
       // the one content type with zero homebrew authoring support at all.
-      conditions:  homebrewWinsById(globalContentDB.conditions, conditions).filter(c => matchesRuleset(c.rulesetId, activeRuleset)),
+      conditions:  notBanned(homebrewWinsById(globalContentDB.conditions, conditions).filter(c => matchesRuleset(c.rulesetId, activeRuleset))),
       // Same rationale as .spells above — official item content lives in
       // itemRepo now, not globalContentDB.
-      items:       items,
-      features:    homebrewWinsById(globalContentDB.features, features),
-      feats:       homebrewWinsById(globalContentDB.feats ?? [], feats).filter(f => matchesRuleset(f.rulesetId, activeRuleset)),
+      items:       notBanned(items),
+      features:    notBanned(homebrewWinsById(globalContentDB.features, features)),
+      feats:       notBanned(homebrewWinsById(globalContentDB.feats ?? [], feats).filter(f => matchesRuleset(f.rulesetId, activeRuleset))),
     };
   },
 

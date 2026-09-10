@@ -26,6 +26,7 @@ import { decodeRoomCode }    from '../../src/sync/discovery';
 import { SyncStatusDot }     from '../../src/components/SyncStatusDot';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { Quest, SessionLogEntry, Campaign } from '../../src/engine/types';
+import { InstalledPack, loadInstalledPacks } from '../../src/db/packRegistryRepo';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -464,6 +465,54 @@ function SessionLogSection({ log, editable, onUpdate }: {
   );
 }
 
+// ── Campaign Content Section (item 15 — campaign content manifest) ─────────────
+// DM-only: ban specific installed homebrew packs from this campaign. Native-
+// only (SQLite-backed loadInstalledPacks, same as homebrew.tsx's
+// InstalledPacksPanel it mirrors) — renders nothing on web or when no packs
+// are installed, rather than showing a permanently-empty section.
+
+function CampaignContentSection({ bannedPackIds, onUpdate }: {
+  bannedPackIds: string[];
+  onUpdate: (ids: string[]) => void;
+}) {
+  const [packs, setPacks] = useState<InstalledPack[]>([]);
+
+  useEffect(() => {
+    loadInstalledPacks().then(setPacks).catch(e => console.error('[campaigns] loadInstalledPacks failed:', e));
+  }, []);
+
+  if (packs.length === 0) return null;
+
+  function toggle(packId: string) {
+    onUpdate(bannedPackIds.includes(packId) ? bannedPackIds.filter(id => id !== packId) : [...bannedPackIds, packId]);
+  }
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>CAMPAIGN CONTENT</Text>
+      <Text style={styles.emptyNote}>
+        Ban an installed homebrew pack from this campaign — banned content won't appear when players build or level up a character here.
+      </Text>
+      {packs.map(pack => {
+        const banned = bannedPackIds.includes(pack.id);
+        return (
+          <Pressable key={pack.id} style={styles.packRow} onPress={() => toggle(pack.id)}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.packName}>{pack.name}</Text>
+              <Text style={styles.packMeta}>{pack.itemRefs.length} item{pack.itemRefs.length !== 1 ? 's' : ''}</Text>
+            </View>
+            <View style={[styles.packToggle, banned && styles.packToggleBanned]}>
+              <Text style={[styles.packToggleTxt, banned && styles.packToggleTxtBanned]}>
+                {banned ? 'Banned' : 'Allowed'}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 // ── Party Section ─────────────────────────────────────────────────────────────
 
 function PartySection({ characterIds }: { characterIds: string[] }) {
@@ -618,6 +667,10 @@ function DmActiveView() {
         log={log}
         editable
         onUpdate={l => save({ sessionLog: l })}
+      />
+      <CampaignContentSection
+        bannedPackIds={activeCampaign.bannedPackIds ?? []}
+        onUpdate={ids => save({ bannedPackIds: ids })}
       />
       <PartySection characterIds={activeCampaign.characterIds} />
 
@@ -1015,6 +1068,20 @@ const styles = StyleSheet.create({
     letterSpacing: 2, fontWeight: FontWeight.bold,
   },
   emptyNote: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
+
+  packRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    paddingVertical: Spacing.xs, borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  packName: { fontSize: FontSize.sm, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  packMeta: { fontSize: FontSize.xs, color: Colors.textDim },
+  packToggle: {
+    borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.green + '66',
+    backgroundColor: Colors.green + '22', paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  packToggleBanned:    { borderColor: Colors.red + '66', backgroundColor: Colors.red + '22' },
+  packToggleTxt:        { fontSize: FontSize.xs, color: Colors.green, fontWeight: FontWeight.bold },
+  packToggleTxtBanned:  { color: Colors.red },
 
   // Notes
   notesInput:   { minHeight: 90 },

@@ -1855,6 +1855,15 @@ export type Campaign = {
   sessionLog?:  SessionLogEntry[];
   /** Quest tracker — DM manages status. */
   quests?:      Quest[];
+  /**
+   * Item 15 (campaign content manifest) — InstalledPack.id values (see
+   * src/db/packRegistryRepo.ts) the DM has banned from this specific
+   * campaign. Deliberately scoped to whole homebrew packs, not individual
+   * content or official content — see packDiagnostics.ts's
+   * bannedContentIds() for the full reasoning. Optional/defaults to [] so
+   * every existing campaign parses unchanged and is fully unrestricted.
+   */
+  bannedPackIds?: string[];
 };
 
 // ── Prepared Encounters ──────────────────────────────────────────────────────

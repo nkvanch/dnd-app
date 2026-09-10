@@ -75,6 +75,8 @@ export default function CharacterSheetScreen() {
   const redo            = useCharacterStore(s => s.redo);
   const isDm        = useCampaignStore(s => s.isDm);
   const campaignId  = useCampaignStore(s => s.activeCampaign?.id ?? '');
+  // Item 17 (timeline improvements) — session grouping in CharacterHistoryModal.
+  const activeCampaignSessionLog = useCampaignStore(s => s.activeCampaign?.sessionLog);
   const deviceId    = useSessionStore(s => s.session?.deviceId ?? '');
   const homebrewItems = useHomebrewStore(s => s.items);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
@@ -813,6 +815,7 @@ export default function CharacterSheetScreen() {
         visible={historyOpen}
         entityId={id}
         onClose={() => setHistoryOpen(false)}
+        sessionLog={activeCampaignSessionLog}
       />
 
       <IssuesModal

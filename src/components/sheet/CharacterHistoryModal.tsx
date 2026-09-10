@@ -9,12 +9,75 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Modal, View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { loadTimeline, TimelineEntry, TimelineCategory } from '../../db/timelineRepo';
+import { SessionLogEntry } from '../../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 interface Props {
   visible:  boolean;
   entityId: string;
   onClose:  () => void;
+  /**
+   * Item 17 (timeline improvements — session grouping). The active
+   * campaign's session log, if this character belongs to one — grouping
+   * is entirely derived from comparing each entry's timestamp against
+   * each session's [startedAt, endedAt] range, no schema change to
+   * character_timeline needed. Omitted (no campaign, or a campaign with
+   * no real session data yet) falls back to today's flat list unchanged.
+   */
+  sessionLog?: SessionLogEntry[];
+}
+
+/** A pseudo-session id for entries that fall outside every real session's
+ *  range (recorded between sessions, or before session-tracking existed). */
+const NO_SESSION = '__no_session__';
+
+type HistoryGroup = { sessionId: string; title: string; subtitle: string | null; entries: TimelineEntry[] };
+
+/**
+ * Buckets entries by which session's [startedAt, endedAt] range contains
+ * their timestamp. A session missing startedAt (every hand-added note from
+ * before item 14 existed) can never claim an entry. The currently-active
+ * session (startedAt set, endedAt not) has an open-ended range — anything
+ * at or after its start, up to the next-newer session's start (there can
+ * be only one active session at a time — see engine/session.ts). Sessions
+ * are checked newest-first so a later session's start correctly cuts off
+ * an earlier one's open (or stale) range.
+ */
+export function groupBySession(entries: TimelineEntry[], sessionLog: SessionLogEntry[]): HistoryGroup[] {
+  const real = sessionLog.filter(s => s.startedAt !== undefined);
+  if (real.length === 0) return [{ sessionId: NO_SESSION, title: '', subtitle: null, entries }];
+
+  // Newest first, matching startSession's own prepend order — used both to
+  // number sessions (oldest = Session 1) and to find each entry's bucket.
+  const newestFirst = [...real].sort((a, b) => b.startedAt! - a.startedAt!);
+  const oldestFirst = [...newestFirst].reverse();
+
+  const buckets = new Map<string, TimelineEntry[]>();
+  const outside: TimelineEntry[] = [];
+  for (const entry of entries) {
+    const session = newestFirst.find(s => entry.timestamp >= s.startedAt! && (s.endedAt === undefined || entry.timestamp <= s.endedAt));
+    if (!session) { outside.push(entry); continue; }
+    if (!buckets.has(session.id)) buckets.set(session.id, []);
+    buckets.get(session.id)!.push(entry);
+  }
+
+  const groups: HistoryGroup[] = [];
+  // Render newest session first, matching the entries' own newest-first order.
+  for (let i = oldestFirst.length - 1; i >= 0; i--) {
+    const session = oldestFirst[i];
+    const rows = buckets.get(session.id);
+    if (!rows || rows.length === 0) continue;
+    groups.push({
+      sessionId: session.id,
+      title: `Session ${i + 1}`,
+      subtitle: new Date(session.startedAt!).toLocaleDateString(),
+      entries: rows,
+    });
+  }
+  if (outside.length > 0) {
+    groups.push({ sessionId: NO_SESSION, title: 'Outside a session', subtitle: null, entries: outside });
+  }
+  return groups;
 }
 
 // A-63: 'all' plus every TimelineCategory, in display order. A row whose
@@ -32,15 +95,21 @@ const FILTERS: { key: TimelineCategory | 'all'; label: string }[] = [
   { key: 'other',     label: 'Other' },
 ];
 
-export function CharacterHistoryModal({ visible, entityId, onClose }: Props) {
+export function CharacterHistoryModal({ visible, entityId, onClose, sessionLog }: Props) {
   const [history, setHistory] = useState<TimelineEntry[] | null>(null);
   const [filter, setFilter] = useState<TimelineCategory | 'all'>('all');
+  // Cap the initial render to the most recent N entries — item 17
+  // (navigation): loadTimeline has no LIMIT and a well-played character can
+  // accumulate dozens of rows per session; rendering all of them into one
+  // ScrollView on every open is real, avoidable work. "Show more" expands
+  // in fixed steps rather than loading everything at once.
+  const [visibleCount, setVisibleCount] = useState(25);
 
   // Fetched fresh every open, same as VersionHistoryModal.tsx — the
   // timeline isn't kept in any store at rest, so a re-open naturally shows
   // whatever's accumulated since with no extra plumbing.
   useEffect(() => {
-    if (!visible) { setHistory(null); setFilter('all'); return; }
+    if (!visible) { setHistory(null); setFilter('all'); setVisibleCount(25); return; }
     let cancelled = false;
     void loadTimeline(entityId).then(h => { if (!cancelled) setHistory(h); });
     return () => { cancelled = true; };
@@ -50,6 +119,12 @@ export function CharacterHistoryModal({ visible, entityId, onClose }: Props) {
     if (!history || filter === 'all') return history ?? [];
     return history.filter(h => (h.category ?? 'other') === filter);
   }, [history, filter]);
+
+  const visibleEntries = filtered.slice(0, visibleCount);
+  const groups = useMemo(
+    () => groupBySession(visibleEntries, sessionLog ?? []),
+    [visibleEntries, sessionLog],
+  );
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -79,12 +154,27 @@ export function CharacterHistoryModal({ visible, entityId, onClose }: Props) {
             <Text style={styles.emptyTxt}>No history in this category.</Text>
           ) : (
             <ScrollView style={styles.list}>
-              {filtered.map(h => (
-                <View key={h.id} style={styles.row}>
-                  <Text style={styles.rowLabel}>{h.label}</Text>
-                  <Text style={styles.rowHint}>{new Date(h.timestamp).toLocaleString()}</Text>
+              {groups.map(g => (
+                <View key={g.sessionId}>
+                  {g.title !== '' && (
+                    <View style={styles.groupHeader}>
+                      <Text style={styles.groupTitle}>{g.title}</Text>
+                      {g.subtitle && <Text style={styles.groupSubtitle}>{g.subtitle}</Text>}
+                    </View>
+                  )}
+                  {g.entries.map(h => (
+                    <View key={h.id} style={styles.row}>
+                      <Text style={styles.rowLabel}>{h.label}</Text>
+                      <Text style={styles.rowHint}>{new Date(h.timestamp).toLocaleString()}</Text>
+                    </View>
+                  ))}
                 </View>
               ))}
+              {filtered.length > visibleEntries.length && (
+                <Pressable style={styles.showMoreBtn} onPress={() => setVisibleCount(c => c + 25)}>
+                  <Text style={styles.showMoreTxt}>Show {Math.min(25, filtered.length - visibleEntries.length)} more…</Text>
+                </Pressable>
+              )}
             </ScrollView>
           )}
 
@@ -119,6 +209,11 @@ const styles = StyleSheet.create({
   filterChipTxtActive: { color: Colors.bg },
 
   list: { flexGrow: 0 },
+  groupHeader: { marginTop: Spacing.sm, marginBottom: 2, flexDirection: 'row', alignItems: 'baseline', gap: Spacing.xs },
+  groupTitle: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold, letterSpacing: 1 },
+  groupSubtitle: { fontSize: FontSize.xs, color: Colors.textDim },
+  showMoreBtn: { alignItems: 'center', padding: Spacing.sm },
+  showMoreTxt: { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold },
   row: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,

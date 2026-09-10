@@ -559,14 +559,20 @@ export default function EncounterScreen() {
       // deepMerge machinery this app already uses for exactly this "apply
       // what changed, not a wholesale snapshot" problem in sync's own
       // applyIncomingPatch.
+      // Item 17 (timeline improvements) — bug fix: this never passed a
+      // category, so every action fired from this screen (damage/heal/
+      // kill/condition/ruling/legendary-action use/wave deploy) landed
+      // under "Other" instead of "Combat," the one category that's
+      // actually always correct here (this function only ever runs from
+      // the DM's live encounter/initiative tracker).
       if (before) {
         const patch = deepDiff(before, updated);
         if (patch !== undefined) {
-          updateCharacter(updated.id, c => deepMerge(c, patch), label);
+          updateCharacter(updated.id, c => deepMerge(c, patch), label, 'combat');
         }
       } else {
         // No prior snapshot to diff against — fall back to a wholesale replace.
-        updateCharacter(updated.id, () => updated, label);
+        updateCharacter(updated.id, () => updated, label, 'combat');
       }
     }
   }
@@ -688,7 +694,7 @@ export default function EncounterScreen() {
           entities.forEach(e => {
             if (e.kind === 'character') {
               const updated = expireOverrides(e, 'end_of_encounter', rules);
-              updateCharacter(e.id, () => updated, 'End of encounter (override expiry)');
+              updateCharacter(e.id, () => updated, 'End of encounter (override expiry)', 'combat');
             }
           });
           // Mark the PreparedEncounter completed if this run came from one —

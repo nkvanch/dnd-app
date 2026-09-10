@@ -14,6 +14,7 @@ import { applyCondition, removeCondition } from '../../../src/engine/conditions'
 import { CONDITIONS_BY_ID } from '../../../src/content/conditions/index';
 import { dmFullStatVisibility } from '../../../src/engine/houseRules';
 import { Entity } from '../../../src/engine/types';
+import { TimelineCategory } from '../../../src/db/timelineRepo';
 import { useSafeGoBack } from '../../../src/hooks/useSafeGoBack';
 import { TabCharacter } from '../../../src/components/sheet/TabCharacter';
 import { TabAbilities } from '../../../src/components/sheet/TabAbilities';
@@ -50,9 +51,14 @@ export default function DmCharacterView() {
   // core GM tools needed to run the game regardless of the visibility rule.
   const showFull = dmFullStatVisibility(rules);
 
-  const mutate = useCallback((updater: (e: Entity) => Entity, label?: string) => {
+  // Item 17 (timeline improvements) — bug fix: this used to never pass a
+  // category at all, so every DM-initiated edit (damage/heal/conditions/
+  // resources/slots/overrides) landed under "Other" in the timeline
+  // filter regardless of its real type, unlike the player's own mutate()
+  // in app/sheet/[id].tsx, which always tags one.
+  const mutate = useCallback((updater: (e: Entity) => Entity, label?: string, category?: TimelineCategory) => {
     if (!id) return;
-    updateCharacter(id, e => recomputeDerived(updater(e), rules), label);
+    updateCharacter(id, e => recomputeDerived(updater(e), rules), label, category);
   }, [id, updateCharacter, rules]);
 
   if (!entity) {
@@ -117,10 +123,10 @@ export default function DmCharacterView() {
             // own handleDamage/handleHeal already apply for player-side controls.
             onDamage={(amt, dt) => mutate(e => e.wildShapeState?.active
               ? applyWildShapeDamage(e, amt, rules)
-              : applyDamage(e, amt, rules, dt), `Took ${amt}${dt ? ` ${dt}` : ''} damage`)}
-            onHeal={amt => mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amt, rules), `Healed ${amt}`)}
-            onAddCondition={cId => mutate(e => applyCondition(e, cId, 'dm', rules), `DM: Added condition: ${CONDITIONS_BY_ID[cId]?.name ?? cId}`)}
-            onRemoveCondition={cId => mutate(e => removeCondition(e, cId, rules), `DM: Removed condition: ${CONDITIONS_BY_ID[cId]?.name ?? cId}`)}
+              : applyDamage(e, amt, rules, dt), `Took ${amt}${dt ? ` ${dt}` : ''} damage`, 'combat')}
+            onHeal={amt => mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amt, rules), `Healed ${amt}`, 'combat')}
+            onAddCondition={cId => mutate(e => applyCondition(e, cId, 'dm', rules), `DM: Added condition: ${CONDITIONS_BY_ID[cId]?.name ?? cId}`, 'combat')}
+            onRemoveCondition={cId => mutate(e => removeCondition(e, cId, rules), `DM: Removed condition: ${CONDITIONS_BY_ID[cId]?.name ?? cId}`, 'combat')}
             onResourceChange={(rId, delta) => mutate(e => ({
               ...e,
               resources: {
@@ -129,20 +135,20 @@ export default function DmCharacterView() {
                   r.id === rId ? { ...r, current: Math.max(0, Math.min(r.maximum, r.current + delta)) } : r
                 ),
               },
-            }), `DM: ${delta > 0 ? 'Restored' : 'Spent'} ${entity.resources.custom.find(r => r.id === rId)?.name ?? rId}`)}
+            }), `DM: ${delta > 0 ? 'Restored' : 'Spent'} ${entity.resources.custom.find(r => r.id === rId)?.name ?? rId}`, 'features')}
             onSpendSlot={tier => mutate(e => {
               if (!e.spellcasting) return e;
               const slot = e.spellcasting.slots[tier as keyof typeof e.spellcasting.slots];
               if (!slot || slot.used >= slot.total) return e;
               return { ...e, spellcasting: { ...e.spellcasting, slots: { ...e.spellcasting.slots, [tier]: { ...slot, used: slot.used + 1 } } } };
-            }, `DM: Spent level ${tier} spell slot`)}
+            }, `DM: Spent level ${tier} spell slot`, 'spells')}
             onRestoreSlot={tier => mutate(e => {
               if (!e.spellcasting) return e;
               const slot = e.spellcasting.slots[tier as keyof typeof e.spellcasting.slots];
               if (!slot || slot.used <= 0) return e;
               return { ...e, spellcasting: { ...e.spellcasting, slots: { ...e.spellcasting.slots, [tier]: { ...slot, used: slot.used - 1 } } } };
-            }, `DM: Restored level ${tier} spell slot`)}
-            onEntityUpdate={updated => mutate(() => updated, 'DM: Character tab edit')}
+            }, `DM: Restored level ${tier} spell slot`, 'spells')}
+            onEntityUpdate={updated => mutate(() => updated, 'DM: Character tab edit', 'other')}
           />
         )}
         {activeTab === 'actions'   && <TabActions   entity={entity} />}
@@ -153,7 +159,7 @@ export default function DmCharacterView() {
             isDm={showFull}
             campaignId={campaignId}
             deviceId={deviceId}
-            onEntityUpdate={updated => mutate(() => updated, 'DM: Ability override')}
+            onEntityUpdate={updated => mutate(() => updated, 'DM: Ability override', 'other')}
           />
         )}
         {activeTab === 'features'  && <TabFeatures entity={entity} />}

@@ -7,7 +7,7 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Modal, TextInput,
 } from 'react-native';
-import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker } from '../../engine/types';
+import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker, ActivationOption } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
 import { tickDurations } from '../../engine/conditions';
@@ -30,7 +30,7 @@ import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
 import { ConcentrationModal } from './ConcentrationModal';
 import { CompanionSection } from './CompanionSection';
-import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard } from './TabActions';
+import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard, ActivationOptionModal } from './TabActions';
 import { LevelUpPreviewModal } from './LevelUpPreviewModal';
 import { ProgressionPlannerModal } from './ProgressionPlannerModal';
 import { MulticlassProgressionPlannerModal } from './MulticlassProgressionPlannerModal';
@@ -793,6 +793,7 @@ export function TabCharacter({
   const [maxHpOpen,    setMaxHpOpen]    = useState(false);
   const [tempHpOpen,   setTempHpOpen]   = useState(false);
   const [activeFavCard, setActiveFavCard] = useState<ActionCard | null>(null);
+  const [pendingFavOptionCard, setPendingFavOptionCard] = useState<ActionCard | null>(null);
   const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
   const [sensesOpen, setSensesOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
@@ -816,10 +817,26 @@ export function TabCharacter({
   // Unarmed Strike have no backing Feature to store a flag on).
   const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c.featureId));
   function handleUseFavorite(card: ActionCard) {
+    // A-57 (item 10): a favorited card with discrete use-time options
+    // (e.g. Divine Smite's spell-slot tier) must resolve the picker BEFORE
+    // spending anything, same as TabActions' own handleUse — this call
+    // site used to always pass chosenOption undefined, silently falling
+    // back to the card's default cost/tier instead of asking.
+    if (card.activation.options && card.activation.options.length > 0) {
+      setPendingFavOptionCard(card);
+      return;
+    }
     // Same fix as TabActions' handleUse — always run applyActionCardUse
     // (it no-ops correctly with nothing to spend) so a cost-less
     // concentration cantrip favorited here also tracks concentration.
     onEntityUpdate(applyActionCardUse(entity, card, rules));
+    setActiveFavCard(card);
+  }
+  function handleChooseFavoriteOption(option: ActivationOption) {
+    const card = pendingFavOptionCard;
+    setPendingFavOptionCard(null);
+    if (!card) return;
+    onEntityUpdate(applyActionCardUse(entity, card, rules, option));
     setActiveFavCard(card);
   }
   function rollForFavorite(): import('../../engine/types').DiceRoll | null {
@@ -1523,6 +1540,12 @@ export function TabCharacter({
         card={activeFavCard}
         onRoll={rollForFavorite}
         onClose={() => setActiveFavCard(null)}
+      />
+
+      <ActivationOptionModal
+        card={pendingFavOptionCard}
+        onChoose={handleChooseFavoriteOption}
+        onClose={() => setPendingFavOptionCard(null)}
       />
 
       {/* Add a feat ad-hoc from the sheet */}

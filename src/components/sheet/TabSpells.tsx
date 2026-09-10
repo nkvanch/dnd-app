@@ -13,14 +13,14 @@
 // ============================================================================
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
-import { Entity, CampaignRules, ActionCard, Spell } from '../../engine/types';
+import { Entity, CampaignRules, ActionCard, Spell, ActivationOption } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
 import { resolveSpellById } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { getClassLevels } from '../../engine/multiclass';
 import { castConcentrationSpell } from '../../engine/combat';
 import { rollExpression } from '../../engine/dice';
-import { UseModal, applyActionCardUse } from './TabActions';
+import { UseModal, applyActionCardUse, ActivationOptionModal } from './TabActions';
 import { AddSpellModal } from './AddSpellModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
@@ -50,6 +50,7 @@ interface Props {
 
 export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
+  const [pendingOptionCard, setPendingOptionCard] = useState<ActionCard | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const homebrewSpells = useHomebrewStore(s => s.spells);
@@ -149,7 +150,7 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
 
   // ── Cast handler (mirrors TabActions.handleUse exactly) ──────────────────
 
-  const handleCast = useCallback((card: ActionCard) => {
+  const performCast = useCallback((card: ActionCard, option?: ActivationOption) => {
     // Bug fix (architecture review U5): this used to hand-duplicate
     // applyActionCardUse's spell-slot/resource-spend logic without ever
     // calling markActionSlotUsed — casting a spell from this tab consumed
@@ -157,7 +158,7 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
     // character could still use an Actions-tab feature that same turn.
     // Delegating to the shared implementation also picks up its
     // abilityEffects application, which this handler never had at all.
-    let updated = applyActionCardUse(entity, card, rules);
+    let updated = applyActionCardUse(entity, card, rules, option);
 
     // applyActionCardUse's own concentration check only looks up official
     // spellRepo content — this tab's spellMap resolves homebrew-first (see
@@ -178,6 +179,28 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
     onEntityUpdate(updated);
     setActiveCard(card);
   }, [entity, onEntityUpdate, spellMap, rules]);
+
+  const handleCast = useCallback((card: ActionCard) => {
+    // A-57 (item 10): a spell with discrete use-time options (e.g. a
+    // homebrew spell authored with an ActivationOption tier choice) must
+    // resolve the picker BEFORE spending — this call site used to always
+    // cast with chosenOption undefined, silently falling back to the
+    // card's default cost. No official spell content uses `options` today
+    // (only Divine Smite, a class feature, does), so this is currently a
+    // dormant-but-correct path, not yet exercised by real content.
+    if (card.activation.options && card.activation.options.length > 0) {
+      setPendingOptionCard(card);
+      return;
+    }
+    performCast(card);
+  }, [performCast]);
+
+  const handleChooseOption = useCallback((option: ActivationOption) => {
+    const card = pendingOptionCard;
+    setPendingOptionCard(null);
+    if (!card) return;
+    performCast(card, option);
+  }, [performCast, pendingOptionCard]);
 
   // ── Prepared toggle (prepared casters only) ──────────────────────────────
 
@@ -378,6 +401,12 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
         card={activeCard}
         onRoll={rollForCard}
         onClose={() => setActiveCard(null)}
+      />
+
+      <ActivationOptionModal
+        card={pendingOptionCard}
+        onChoose={handleChooseOption}
+        onClose={() => setPendingOptionCard(null)}
       />
 
       {/* Add Spell picker modal — rich multi-axis filtering */}

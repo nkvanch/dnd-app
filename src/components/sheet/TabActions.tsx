@@ -229,7 +229,7 @@ interface ActivationOptionModalProps {
   onClose:  () => void;
 }
 
-function ActivationOptionModal({ card, onChoose, onClose }: ActivationOptionModalProps) {
+export function ActivationOptionModal({ card, onChoose, onClose }: ActivationOptionModalProps) {
   if (!card || !card.activation.options || card.activation.options.length === 0) return null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>

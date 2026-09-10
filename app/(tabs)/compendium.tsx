@@ -35,6 +35,7 @@ export default function CompendiumScreen() {
   const homebrewConditions = useHomebrewStore(s => s.conditions);
 
   const [search, setSearch] = useState('');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -63,15 +64,18 @@ export default function CompendiumScreen() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const rows = allConditions.filter(c => !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+    let rows = allConditions.filter(c => !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+    if (favoritesOnly) rows = rows.filter(c => favorites.includes(c.id));
     // Favorited rows float to the top, alphabetical within each group —
-    // the whole point of favoriting something in a browse list.
+    // the whole point of favoriting something in a browse list. (A no-op
+    // ordering-wise once favoritesOnly is on, since every row left IS a
+    // favorite — kept as one code path rather than branching.)
     return [...rows].sort((a, b) => {
       const favA = favorites.includes(a.id), favB = favorites.includes(b.id);
       if (favA !== favB) return favA ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
-  }, [allConditions, search, favorites]);
+  }, [allConditions, search, favorites, favoritesOnly]);
 
   return (
     <View style={styles.screen}>
@@ -88,11 +92,21 @@ export default function CompendiumScreen() {
           placeholder="Search conditions…"
           placeholderTextColor={Colors.textDim}
         />
+        <Pressable
+          style={[styles.favToggle, favoritesOnly && styles.favToggleActive]}
+          onPress={() => setFavoritesOnly(v => !v)}
+        >
+          <Text style={[styles.favToggleTxt, favoritesOnly && styles.favToggleTxtActive]}>
+            {favoritesOnly ? '⭐ Favorites only' : '☆ Favorites only'}
+          </Text>
+        </Pressable>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {filtered.length === 0 ? (
-          <Text style={styles.emptyTxt}>No conditions match your search.</Text>
+          <Text style={styles.emptyTxt}>
+            {favoritesOnly ? 'No favorites yet — tap ☆ on a condition to add one.' : 'No conditions match your search.'}
+          </Text>
         ) : (
           filtered.map(c => {
             const isOfficial = !homebrewIds.has(c.id);
@@ -142,12 +156,20 @@ const styles = StyleSheet.create({
   title:    { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
   subtitle: { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 2, marginTop: 2 },
 
-  searchWrap: { padding: Spacing.md, paddingBottom: Spacing.sm },
+  searchWrap: { padding: Spacing.md, paddingBottom: Spacing.sm, gap: Spacing.xs },
   searchInput: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
     paddingHorizontal: Spacing.sm, paddingVertical: 8, color: Colors.textPrimary,
   },
+  favToggle: {
+    alignSelf: 'flex-start', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  favToggleActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  favToggleTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  favToggleTxtActive: { color: Colors.gold },
 
   scroll:  { flex: 1 },
   content: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.xxl, gap: Spacing.xs },

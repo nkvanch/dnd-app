@@ -1,7 +1,7 @@
 // app/(tabs)/characters.tsx
 // Character list — all saved characters. Tap to open sheet. Long press to delete.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useCampaignStore } from '../../src/store/campaignStore';
@@ -75,6 +75,10 @@ export default function CharactersScreen() {
   const [raceFilter, setRaceFilter]     = useState<string | null>(null);
   const [classFilter, setClassFilter]   = useState<string | null>(null);
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+  // Item 20 (QoL) — the two sibling tabs shipped this session (Homebrew,
+  // Compendium) both have a free-text search box; this screen only ever
+  // had sort/filter chips. Matches that established convention.
+  const [search, setSearch] = useState('');
 
   // updatedAt for "sort by date" — characters (full Entity[]) doesn't carry
   // it, only the lightweight meta table does (native only; empty on web,
@@ -109,6 +113,8 @@ export default function CharactersScreen() {
 
   const visibleCharacters = useMemo(() => {
     let list = characters;
+    const q = search.trim().toLowerCase();
+    if (q) list = list.filter(c => (c.identity.name || 'unnamed').toLowerCase().includes(q));
     if (raceFilter)     list = list.filter(c => c.identity.raceId === raceFilter);
     if (classFilter)    list = list.filter(c => c.identity.classId === classFilter);
     if (campaignFilter) list = list.filter(c => campaignByCharId.get(c.id) === campaignFilter);
@@ -122,7 +128,7 @@ export default function CharactersScreen() {
       sorted.sort((a, b) => (campaignByCharId.get(a.id) ?? '￿').localeCompare(campaignByCharId.get(b.id) ?? '￿'));
     }
     return sorted;
-  }, [characters, raceFilter, classFilter, campaignFilter, sortMode, updatedAtById, campaignByCharId]);
+  }, [characters, search, raceFilter, classFilter, campaignFilter, sortMode, updatedAtById, campaignByCharId]);
 
   const openSheet = useCallback((id: string) => {
     router.push(`/sheet/${id}` as any);
@@ -173,6 +179,16 @@ export default function CharactersScreen() {
         />
       ) : (
         <>
+          <View style={styles.searchWrap}>
+            <TextInput
+              style={styles.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search characters…"
+              placeholderTextColor={Colors.textDim}
+            />
+          </View>
+
           <View style={styles.sortFilterBar}>
             <Text style={styles.sortFilterLabel}>Sort</Text>
             <View style={styles.chipRow}>
@@ -222,6 +238,9 @@ export default function CharactersScreen() {
                 onLongPress={() => handleLongPress(item)}
               />
             )}
+            ListEmptyComponent={
+              <Text style={styles.noResultsTxt}>No characters match your search/filters.</Text>
+            }
           />
         </>
       )}
@@ -253,6 +272,13 @@ const styles = StyleSheet.create({
     borderRadius:      Radius.md,
   },
 
+  searchWrap: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+  searchInput: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 8, color: Colors.textPrimary,
+  },
+
   sortFilterBar: {
     paddingHorizontal: Spacing.md,
     paddingTop:      Spacing.sm,
@@ -279,6 +305,7 @@ const styles = StyleSheet.create({
   newBtnText: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 
   list: { padding: Spacing.md, gap: Spacing.sm },
+  noResultsTxt: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic', textAlign: 'center', padding: Spacing.lg },
 
   card: {
     backgroundColor: Colors.surface,

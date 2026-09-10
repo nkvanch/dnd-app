@@ -16,6 +16,7 @@ import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engin
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { equipItem, unequipItem, toggleAttunement } from '../../src/engine/inventory';
+import { captureLoadout, applyLoadout, deleteLoadout } from '../../src/engine/loadout';
 import { simulate } from '../../src/engine/simulate';
 import { validateEntity } from '../../src/engine/validation';
 import { Entity, ItemInstance, DurationTracker, Issue } from '../../src/engine/types';
@@ -301,6 +302,55 @@ export default function CharacterSheetScreen() {
   const handleToggleAttune = useCallback((itemId: string) => {
     mutate(e => toggleAttunement(e, itemId), `Toggled attunement: ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
+
+  // Item 13 (loadouts) — save/apply/delete a named (equipped items,
+  // prepared spells) snapshot. Apply resolves every item definition the
+  // loadout needs to newly EQUIP up front (same itemRepo.ensureLoaded +
+  // homebrew-fallback pattern handleEquip already uses), then applies the
+  // whole swap as one mutation with a plain confirm — a full
+  // simulate()-backed preview (like single-item equip/unequip gets) would
+  // need a new prepared-spell-aware row builder on top of
+  // buildEquipmentSummaryRows; skipped for this slice in favor of a clear
+  // Alert summary, since the player is applying a loadout they themselves
+  // named and saved, not reacting to a surprising external change.
+  const handleSaveLoadout = useCallback((name: string) => {
+    if (!entity) return;
+    mutate(e => ({ ...e, loadouts: [...(e.loadouts ?? []), captureLoadout(e, name)] }), `Saved loadout: ${name}`, 'inventory');
+  }, [entity, mutate]);
+
+  const handleApplyLoadout = useCallback(async (loadoutId: string) => {
+    if (!entity) return;
+    const loadout = entity.loadouts?.find(l => l.id === loadoutId);
+    if (!loadout) return;
+    await itemRepo.ensureLoaded(loadout.equippedItemIds);
+    const itemDefs: Record<string, ReturnType<typeof itemRepo.getItemSync>> = {};
+    for (const id of loadout.equippedItemIds) {
+      itemDefs[id] = itemRepo.getItemSync(id) ?? homebrewItems.find(i => i.id === id);
+    }
+    const willEquip = loadout.equippedItemIds.filter(id => !entity.inventory.equipped.some(i => i.itemId === id));
+    const willUnequip = entity.inventory.equipped.map(i => i.itemId).filter(id => !loadout.equippedItemIds.includes(id));
+    const summary = [
+      willEquip.length   ? `Equip: ${willEquip.map(itemName).join(', ')}` : null,
+      willUnequip.length ? `Unequip: ${willUnequip.map(itemName).join(', ')}` : null,
+      loadout.preparedSpellIds.length ? `Prepare ${loadout.preparedSpellIds.length} spell(s)` : null,
+    ].filter((s): s is string => !!s).join('\n');
+    Alert.alert(`Apply "${loadout.name}"?`, summary || 'No changes.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Apply', onPress: () => {
+        mutate(e => applyLoadout(e, loadout, itemDefs, rules), `Applied loadout: ${loadout.name}`, 'inventory');
+      } },
+    ]);
+  }, [entity, homebrewItems, itemName, mutate, rules]);
+
+  const handleDeleteLoadout = useCallback((loadoutId: string) => {
+    const loadout = entity?.loadouts?.find(l => l.id === loadoutId);
+    Alert.alert('Delete Loadout', `Delete "${loadout?.name ?? 'this loadout'}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => {
+        mutate(e => deleteLoadout(e, loadoutId), `Deleted loadout: ${loadout?.name ?? loadoutId}`, 'inventory');
+      } },
+    ]);
+  }, [entity, mutate]);
 
   const handleAddItem = useCallback(async (itemId: string) => {
     await itemRepo.ensureLoaded([itemId]);
@@ -722,6 +772,9 @@ export default function CharacterSheetScreen() {
             onApplyInfusion={handleApplyInfusion}
             onRemoveInfusion={handleRemoveInfusion}
             onToggleAttune={handleToggleAttune}
+            onSaveLoadout={handleSaveLoadout}
+            onApplyLoadout={handleApplyLoadout}
+            onDeleteLoadout={handleDeleteLoadout}
           />
         )}
         {activeTab === 'notes' && (

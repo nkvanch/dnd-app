@@ -1065,17 +1065,24 @@ interface Props {
   onApplyInfusion?:  (itemId: string, infusionId: string, damageType?: string) => void;
   onRemoveInfusion?: (itemId: string) => void;
   onToggleAttune?:   (itemId: string) => void;
+  /** Item 13 (loadouts) — save/apply/delete a named (equipped items,
+   *  prepared spells) snapshot. Omitted entirely hides the section (same
+   *  optional-prop pattern as onApplyInfusion). */
+  onSaveLoadout?:    (name: string) => void;
+  onApplyLoadout?:   (loadoutId: string) => void;
+  onDeleteLoadout?:  (loadoutId: string) => void;
 }
 
 export function TabInventory({
   entity, onEquip, onUnequip, onAddItem, onRemoveItem, onUpdateQuantity, onSetQuantity, onUpdateCurrency, rules,
-  onApplyInfusion, onRemoveInfusion, onToggleAttune,
+  onApplyInfusion, onRemoveInfusion, onToggleAttune, onSaveLoadout, onApplyLoadout, onDeleteLoadout,
 }: Props) {
   const { inventory } = entity;
   const { currency }  = inventory;
   const [addOpen,    setAddOpen]    = useState(false);
   const [currOpen,   setCurrOpen]   = useState(false);
   const [infuseOpen, setInfuseOpen] = useState(false);
+  const [loadoutName, setLoadoutName] = useState('');
   const knownInfusionIds = entity.knownInfusionIds ?? [];
 
   const homebrewItemList = useHomebrewStore(s => s.items);
@@ -1191,6 +1198,54 @@ export function TabInventory({
           <Text style={styles.emptyNote}>
             Known: {knownInfusionIds.map(id => ALL_INFUSIONS.find(i => i.id === id)?.name ?? id).join(', ')}
           </Text>
+        </View>
+      )}
+
+      {/* Loadouts (item 13) — named saved (equipped items, prepared
+          spells) snapshots the player can swap between. Only shown when
+          the parent screen wires the callbacks (mirrors onApplyInfusion's
+          optional-prop pattern). */}
+      {onSaveLoadout && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>LOADOUTS ({(entity.loadouts ?? []).length})</Text>
+          </View>
+          <View style={styles.loadoutSaveRow}>
+            <TextInput
+              style={styles.loadoutInput}
+              value={loadoutName}
+              onChangeText={setLoadoutName}
+              placeholder="e.g. Dungeon, Social…"
+              placeholderTextColor={Colors.textDim}
+            />
+            <Pressable
+              style={[styles.addBtn, !loadoutName.trim() && styles.addBtnDisabled]}
+              disabled={!loadoutName.trim()}
+              onPress={() => { onSaveLoadout(loadoutName.trim()); setLoadoutName(''); }}
+            >
+              <Text style={styles.addBtnTxt}>💾 Save Current</Text>
+            </Pressable>
+          </View>
+          {(entity.loadouts ?? []).length === 0 ? (
+            <Text style={styles.emptyNote}>No saved loadouts yet</Text>
+          ) : (
+            (entity.loadouts ?? []).map(l => (
+              <View key={l.id} style={styles.loadoutRow}>
+                <View style={styles.loadoutInfo}>
+                  <Text style={styles.loadoutName}>{l.name}</Text>
+                  <Text style={styles.loadoutMeta}>
+                    {l.equippedItemIds.length} equipped · {l.preparedSpellIds.length} prepared
+                  </Text>
+                </View>
+                <Pressable style={styles.loadoutBtn} onPress={() => onApplyLoadout?.(l.id)}>
+                  <Text style={styles.loadoutBtnTxt}>Apply</Text>
+                </Pressable>
+                <Pressable style={styles.loadoutBtnDelete} onPress={() => onDeleteLoadout?.(l.id)}>
+                  <Text style={styles.loadoutBtnDeleteTxt}>✕</Text>
+                </Pressable>
+              </View>
+            ))
+          )}
         </View>
       )}
 
@@ -1330,6 +1385,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 2,
   },
   addBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  addBtnDisabled: { opacity: 0.4 },
   addItemRow: {
     paddingVertical: Spacing.sm, alignItems: 'center',
     borderTopWidth: 1, borderTopColor: Colors.border, marginTop: Spacing.xs,
@@ -1401,4 +1457,26 @@ const styles = StyleSheet.create({
   removeTxt: { fontSize: FontSize.md, color: Colors.textDim },
 
   emptyNote: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
+
+  loadoutSaveRow: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center', marginTop: Spacing.xs },
+  loadoutInput: {
+    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6, color: Colors.textPrimary,
+  },
+  loadoutRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    paddingVertical: Spacing.xs, borderTopWidth: 1, borderTopColor: Colors.border, marginTop: Spacing.xs,
+  },
+  loadoutInfo: { flex: 1 },
+  loadoutName: { fontSize: FontSize.sm, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  loadoutMeta: { fontSize: FontSize.xs, color: Colors.textDim },
+  loadoutBtn: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  loadoutBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  loadoutBtnDelete: { padding: 4 },
+  loadoutBtnDeleteTxt: { fontSize: FontSize.md, color: Colors.textDim },
 });

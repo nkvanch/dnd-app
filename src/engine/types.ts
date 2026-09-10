@@ -1380,6 +1380,31 @@ export type Entity = {
    * existing saved entities parse unchanged.
    */
   situationalAnswers?: Record<string, boolean>;
+  /**
+   * Item 13 (build comparison/checkpoints/loadouts) — named, saved
+   * equipment + prepared-spell configurations a player can swap between
+   * (e.g. "Dungeon Loadout" vs "Social Loadout"), applied via
+   * engine/loadout.ts's applyLoadout(). Deliberately scoped smaller than
+   * "checkpoints" (a full character snapshot with restore) or "build
+   * comparison" (two hypothetical builds diffed side by side) — both
+   * disclosed as separately-scoped, not built here; see loadout.ts's own
+   * doc comment for the full reasoning. Optional/defaults to [] so
+   * existing saved entities parse unchanged.
+   */
+  loadouts?: Loadout[];
+};
+
+/** See Entity.loadouts' doc comment. `equippedItemIds`/`preparedSpellIds`
+ *  are itemId/spellId lists, not full instance snapshots — applying a
+ *  loadout moves matching items between carried/equipped and re-derives
+ *  everything, rather than restoring stored feature/effect data that could
+ *  drift from the item's actual current content definition. */
+export type Loadout = {
+  id:                string;
+  name:              string;
+  equippedItemIds:   string[];
+  preparedSpellIds:  string[];
+  createdAt:         number;
 };
 
 // ── 7. Leveling schemas ──────────────────────────────────────────────────────

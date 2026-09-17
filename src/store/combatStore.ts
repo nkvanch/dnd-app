@@ -6,8 +6,39 @@ import { create } from 'zustand';
 import { Entity, CampaignRules } from '../engine/types';
 import { CombatState, InitiativeEntry, startEncounter, endTurn, endEncounter, addToEncounter } from '../engine/combat';
 import { saveCombatState, clearCombatState } from '../db/combatRepo';
-import { DEFAULT_RULES } from './characterStore';
+import { DEFAULT_RULES, useCharacterStore } from './characterStore';
 import { syncManager } from '../sync/syncManager';
+import { deepDiff, deepMerge } from '../sync/diff';
+
+/**
+ * advanceTurn's duration/concentration tick and action-economy reset used
+ * to apply ONLY to combatStore's own `entities` copy, with no bridge back
+ * to characterStore at all (unlike every other combatStore action, which
+ * routes character-kind changes through app/dm/encounter.tsx's
+ * applyEntityUpdate). A condition expiring, concentration dropping, or a
+ * turn-economy reset on a player character's turn never persisted to
+ * SQLite or synced to that player's own device — it silently "un-expired"
+ * there the moment anything else touched that field (audit finding
+ * SYNC-COMBAT-1, sub-path c). Diffs each character-kind entity's before/
+ * after state (same deepDiff/deepMerge machinery applyEntityUpdate already
+ * uses) and merges the patch onto characterStore directly — combatStore
+ * isn't a React component, so useCharacterStore.getState() is used instead
+ * of the hook form, the same non-hook-store-access pattern this file
+ * already relies on for DEFAULT_RULES's sibling exports.
+ */
+function syncTickedEntitiesToCharacterStore(before: Entity[], after: Entity[]): void {
+  const updateCharacter = useCharacterStore.getState().updateCharacter;
+  const beforeById = new Map(before.map(e => [e.id, e]));
+  for (const entity of after) {
+    if (entity.kind !== 'character') continue;
+    const prior = beforeById.get(entity.id);
+    if (!prior) continue;
+    const patch = deepDiff(prior, entity);
+    if (patch !== undefined) {
+      updateCharacter(entity.id, c => deepMerge(c, patch), 'End of turn', 'combat');
+    }
+  }
+}
 
 const EMPTY_COMBAT: CombatState = {
   active:      false,
@@ -38,6 +69,11 @@ function broadcastTurn(combat: CombatState, entities: Entity[]): void {
 type CombatStore = {
   combat:   CombatState;
   entities: Entity[];   // All entities active in the current encounter
+  /** Most recent SQLite write failure for this store, or null once the
+   *  next write succeeds — same lastPersistError pattern as characterStore
+   *  (audit finding PERSIST-5); every combat-state write here used to be
+   *  fire-and-forget with only a console.error on failure. */
+  lastPersistError: string | null;
 
   /** Start an encounter with the given entities. Rolls initiative for all.
    *  `sourcePreparedEncounterId` links this run back to the PreparedEncounter
@@ -72,14 +108,26 @@ type CombatStore = {
   setInitiative: (entityId: string, value: number) => void;
 };
 
-export const useCombatStore = create<CombatStore>((set, get) => ({
+export const useCombatStore = create<CombatStore>((set, get) => {
+  function persist(combat: CombatState, entities: Entity[], context: string): void {
+    saveCombatState(combat, entities).then(
+      () => set({ lastPersistError: null }),
+      e  => {
+        console.error(`[combatStore] ${context} failed:`, e);
+        set({ lastPersistError: `Couldn't save combat state (${context}) — it may be lost if the app closes.` });
+      }
+    );
+  }
+
+  return {
   combat:   EMPTY_COMBAT,
   entities: [],
+  lastPersistError: null,
 
   startCombat: (entities, encounterId, sourcePreparedEncounterId) => {
     const combat = startEncounter(entities, encounterId, sourcePreparedEncounterId);
     set({ combat, entities });
-    saveCombatState(combat).catch(console.error);
+    persist(combat, entities, 'startCombat');
     broadcastTurn(combat, entities);
   },
 
@@ -88,7 +136,8 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     if (!combat.active) return;
     const result = endTurn(combat, entities, rules);
     set({ combat: result.combat, entities: result.entities });
-    saveCombatState(result.combat).catch(console.error);
+    syncTickedEntitiesToCharacterStore(entities, result.entities);
+    persist(result.combat, result.entities, 'advanceTurn');
     broadcastTurn(result.combat, result.entities);
   },
 
@@ -96,14 +145,32 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     const { combat } = get();
     const nextCombat = endEncounter(combat);
     set({ combat: nextCombat, entities: [] });
-    clearCombatState().catch(console.error);
+    clearCombatState().then(
+      () => set({ lastPersistError: null }),
+      e  => {
+        console.error('[combatStore] endCombat failed:', e);
+        set({ lastPersistError: "Couldn't clear saved combat state — it may reappear on next launch." });
+      }
+    );
     broadcastTurn(nextCombat, []);
   },
 
-  updateEntity: (id, updater) =>
+  updateEntity: (id, updater) => {
+    const { combat } = get();
     set(state => ({
       entities: state.entities.map(e => e.id === id ? updater(e) : e),
-    })),
+    }));
+    // Previously this never persisted at all — every per-combatant HP/
+    // condition/resource change made via the DM's QuickPanel (the most
+    // frequent mutation in live play) lived only in memory until some
+    // OTHER action (advanceTurn, addEntities, ...) happened to also save.
+    // An app kill between such actions lost the change outright (audit
+    // finding PERSIST-2's other half — not just the "no entities at all"
+    // case, but "entities present but stale").
+    if (combat.active) {
+      persist(combat, get().entities, 'updateEntity');
+    }
+  },
 
   addEntities: (newEntities) => {
     const { combat, entities } = get();
@@ -111,7 +178,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     const nextCombat = addToEncounter(combat, newEntities);
     const nextEntities = [...entities, ...newEntities];
     set({ combat: nextCombat, entities: nextEntities });
-    saveCombatState(nextCombat).catch(console.error);
+    persist(nextCombat, nextEntities, 'addEntities');
     broadcastTurn(nextCombat, nextEntities);
   },
 
@@ -135,7 +202,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     const nextEntities = get().entities.filter(e => e.id !== id);
     set({ combat: nextCombat, entities: nextEntities });
     if (combat.active) {
-      saveCombatState(nextCombat).catch(console.error);
+      persist(nextCombat, nextEntities, 'removeFromEncounter');
       broadcastTurn(nextCombat, nextEntities);
     }
   },
@@ -155,4 +222,5 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
           ),
       },
     })),
-}));
+  };
+});

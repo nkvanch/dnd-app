@@ -19,6 +19,20 @@ import { getClassLevels } from './multiclass';
 import { getSubclassEntryMerged } from '../content/subclasses/subclassBrowse';
 import { resolveSpellById, resolveItemById } from '../content/contentResolution';
 import { spellIdsOnEntity } from '../content/spellRepo.types';
+import { getToolById } from '../content/tools';
+import { getLanguageById } from '../content/languages';
+
+// CHOICE-EXPANSION-1: every ChoiceDefinition.kind this app can actually
+// resolve with a real picker today (see TabFeatures.tsx's dispatch). Kept
+// here (not exported) purely to drive the unresolved_choice_kind check
+// below — 'custom' is the one kind in the type union with no structured
+// meaning anywhere in this schema (see leveling.ts's canAutoResolve/
+// resolveChoice), so it's deliberately excluded rather than given
+// speculative rendering semantics.
+const SUPPORTED_CHOICE_KINDS = new Set([
+  'skill', 'spell', 'subclass', 'infusion', 'feature_pool', 'asi', 'feat',
+  'equipment', 'spellcasting_ability', 'expertise', 'tool', 'language',
+]);
 
 export function validateEntity(
   entity: Entity,
@@ -116,14 +130,25 @@ export function validateEntity(
   }
 
   // ── Spells known/prepared/cantrips ──────────────────────────────────────
+  // LIVE-RULESET-3 (item 5): resolved WITHOUT a ruleset filter first (same
+  // two-step shape as race/class/background above) so "missing entirely"
+  // and "exists, but tagged for a different ruleset" stay distinct issue
+  // codes/messages rather than collapsing into one.
   if (spellcasting) {
     for (const spellId of spellIdsOnEntity(entity)) {
-      if (!resolveSpellById(spellId, contentDB.spells)) {
+      const resolvedSpell = resolveSpellById(spellId, contentDB.spells);
+      if (!resolvedSpell) {
         issues.push({
           severity: 'warning', code: 'missing_spell',
           message: `Spell "${spellId}" isn't in the current content library.`,
           affectedId: spellId, source: 'spellcasting',
           suggestedFix: 'Reinstall the pack that provides this spell, or remove it.',
+        });
+      } else if (rulesetId && resolvedSpell.rulesetId && !matchesRuleset(resolvedSpell.rulesetId, rulesetId)) {
+        issues.push({
+          severity: 'info', code: 'ruleset_mismatch',
+          message: `Spell "${resolvedSpell.name}" belongs to a different ruleset than this character.`,
+          affectedId: spellId, source: 'spellcasting',
         });
       }
     }
@@ -135,12 +160,19 @@ export function validateEntity(
     ...inventory.equipped.map(i => i.itemId),
   ]);
   for (const itemId of itemIds) {
-    if (!resolveItemById(itemId, contentDB.items)) {
+    const resolvedItem = resolveItemById(itemId, contentDB.items);
+    if (!resolvedItem) {
       issues.push({
         severity: 'warning', code: 'missing_item',
         message: `Item "${itemId}" isn't in the current content library.`,
         affectedId: itemId, source: 'inventory',
         suggestedFix: 'Reinstall the pack that provides this item, or remove it.',
+      });
+    } else if (rulesetId && resolvedItem.rulesetId && !matchesRuleset(resolvedItem.rulesetId, rulesetId)) {
+      issues.push({
+        severity: 'info', code: 'ruleset_mismatch',
+        message: `Item "${resolvedItem.name}" belongs to a different ruleset than this character.`,
+        affectedId: itemId, source: 'inventory',
       });
     }
   }
@@ -163,6 +195,65 @@ export function validateEntity(
         });
       }
     }
+  }
+
+  // ── Tool / Language selections against the registry (CHOICE-EXPANSION-1) ──
+  // Same shape as the feat/spell check above, now that tool/language have a
+  // real registry to check against — previously deliberately skipped (see
+  // this file's own test suite's prior documentation of that gap).
+  for (const choice of choices) {
+    if (!choice.resolved) continue;
+    const kind = choice.definition.kind;
+    if (kind !== 'tool' && kind !== 'language') continue;
+    for (const sel of choice.selections) {
+      const missing = kind === 'tool' ? !getToolById(sel) : !getLanguageById(sel);
+      if (missing) {
+        issues.push({
+          severity: 'warning',
+          code: kind === 'tool' ? 'missing_tool_definition' : 'missing_language_definition',
+          message: `A previously-chosen ${kind} ("${sel}") isn't in the current registry.`,
+          affectedId: sel, source: `choices["${choice.id}"]`,
+          suggestedFix: 'Reinstall the pack that provides this content, or revisit the choice.',
+        });
+      }
+    }
+  }
+
+  // ── Invalid Expertise targets (item 28) ────────────────────────────────────
+  // Expertise is only ever legal to SELECT while the target skill is
+  // trained (enforced at resolution time by applyExpertiseChoiceToEntity).
+  // The one path in this engine where a skill can legitimately go from
+  // trained to untrained afterward is swapBackground's skill-retrain
+  // checklist — if that happens, the resolved choice is never silently
+  // reassigned to a different skill; it's surfaced here instead.
+  for (const choice of choices) {
+    if (!choice.resolved || choice.definition.kind !== 'expertise') continue;
+    for (const sel of choice.selections) {
+      const entry = entity.skills.skills[sel as keyof typeof entity.skills.skills];
+      if (!entry?.trained) {
+        issues.push({
+          severity: 'warning', code: 'invalid_expertise_target',
+          message: `Expertise was chosen in "${sel}", but this character is no longer proficient in that skill.`,
+          affectedId: sel, source: `choices["${choice.id}"]`,
+          suggestedFix: 'Regain proficiency in this skill, or have your DM adjust this Expertise choice manually.',
+        });
+      }
+    }
+  }
+
+  // ── Unsupported pending choice kinds (item 17/29) ──────────────────────────
+  // A choice that isn't silently dropped from TabFeatures's pending list
+  // (it always renders its prompt/count) but has no picker to resolve it —
+  // surfaced as a real Issue too, not ONLY as UI text in one screen.
+  for (const choice of choices) {
+    if (choice.resolved) continue;
+    if (SUPPORTED_CHOICE_KINDS.has(choice.definition.kind)) continue;
+    issues.push({
+      severity: 'info', code: 'unresolved_choice_kind',
+      message: `"${choice.definition.prompt}" has no in-app picker for its choice type ("${choice.definition.kind}") yet.`,
+      affectedId: choice.id, source: `choices["${choice.id}"]`,
+      suggestedFix: 'Resolve this with your DM for now.',
+    });
   }
 
   return issues;

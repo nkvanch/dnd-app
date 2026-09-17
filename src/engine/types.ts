@@ -46,6 +46,19 @@ export type ConditionId  = Brand<string, 'ConditionId'>;
 export type MonsterId    = Brand<string, 'MonsterId'>;
 /** Not yet used — added now so the Phase 4 ContentHeader/rulesetId work doesn't need to reintroduce the Brand<> pattern. */
 export type RulesetId    = Brand<string, 'RulesetId'>;
+/**
+ * Identifies a GAME SYSTEM (D&D, Pathfinder, Old-School Essentials, …) — one
+ * level above RulesetId (a specific edition/printing WITHIN a game, e.g.
+ * 'dnd5e-2014' vs 'dnd5e-2024'). Content is never tagged with a GameId
+ * directly — only with a RulesetId — a content item's game is always
+ * DERIVED via `gameIdForRuleset()` (src/content/rulesets.ts), which looks
+ * the ruleset up in the static RULESETS registry and returns its `gameId`.
+ * This is deliberate: duplicating the same Game value onto every content
+ * definition alongside its RulesetId would be redundant, derivable data —
+ * exactly the kind of duplicated-truth the ruleset/source/pack metadata
+ * work (see ContentProvenance below) is designed to avoid.
+ */
+export type GameId       = Brand<string, 'GameId'>;
 
 export const asRaceId       = (id: string): RaceId       => id as RaceId;
 export const asSubraceId    = (id: string): SubraceId    => id as SubraceId;
@@ -58,6 +71,7 @@ export const asItemId       = (id: string): ItemId       => id as ItemId;
 export const asConditionId  = (id: string): ConditionId  => id as ConditionId;
 export const asMonsterId    = (id: string): MonsterId    => id as MonsterId;
 export const asRulesetId    = (id: string): RulesetId    => id as RulesetId;
+export const asGameId       = (id: string): GameId       => id as GameId;
 
 /**
  * Documented reference shape, NOT a structural base type — no content type
@@ -92,6 +106,19 @@ export function matchesRuleset(
   activeRuleset:    RulesetId | undefined,
 ): boolean {
   return contentRulesetId === undefined || activeRuleset === undefined || contentRulesetId === activeRuleset;
+}
+
+/**
+ * Same "untagged = shared/matches everything" compatibility policy as
+ * matchesRuleset, one level up: a content item's Game is never stored
+ * directly (see GameId's doc comment) — it's derived by resolving
+ * `contentRulesetId` through the RULESETS registry (src/content/rulesets.ts,
+ * which calls this indirectly via matchesGame there — kept here only as
+ * the boolean-semantics primitive both matchesRuleset and matchesGame
+ * share, so the "undefined means universal" rule is defined exactly once).
+ */
+export function matchesOptionalTag<T>(contentTag: T | undefined, activeTag: T | undefined): boolean {
+  return contentTag === undefined || activeTag === undefined || contentTag === activeTag;
 }
 
 export type Ability = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
@@ -409,6 +436,16 @@ export type CharClass  = {
   // buildProgressionFromClass, which defaults a missing effectKind to 'none'.
   levelFeatures?:         (DraftTrait & { level: number })[];
   /**
+   * CHOICE-AUTHORING-1: real player choices (Expertise/Tool/Language today)
+   * authored per-level, alongside levelFeatures above — e.g. "at level 3,
+   * choose one tool proficiency." Merged into that level's own
+   * LevelEntry.choices by buildProgressionFromClass (progressions.ts),
+   * alongside the ASI/spellcasting-ability choices it already synthesizes.
+   * Each ChoiceDefinition's id should already be namespaced (the builder
+   * does this) so it can't collide with those synthesized ones.
+   */
+  levelChoices?:          { level: number; choices: ChoiceDefinition[] }[];
+  /**
    * Escape hatch for hand-authored classes too complex for the simplified
    * builder fields (subclass features, known-spell grants, custom slot tables,
    * per-level effect-bearing features). When present, getProgressionForClass
@@ -428,6 +465,16 @@ export type CharClass  = {
    * a conservative, disclosed default rather than a guess.
    */
   multiclassProficiencies?: ProficiencyGrant;
+  /**
+   * SRD 5.1 (CC-BY-4.0) legal status. All 12 core PHB classes are SRD-safe
+   * (SRD 5.1 includes the full class chassis, not just a stripped subset).
+   * Same semantics as Spell.srd — undefined = not yet audited = unsafe for
+   * public builds. Mirrors ClassProgression.srd (the mechanical-progression
+   * half of a class); this field is the display-metadata half's own tag,
+   * since CharClass and ClassProgression are two separate objects for the
+   * same class (see ClassProgression's own doc comment).
+   */
+  srd?: boolean;
   /** Which ruleset this class belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
   rulesetId?: RulesetId;
 };
@@ -459,7 +506,43 @@ export type Background = {
    * app/creation/background.tsx's flexAsi state and applyGrant call.
    */
   flexibleAsi?: Race['flexibleAsi'];
+  /**
+   * FILTER-METADATA-2: free-text tool/vehicle proficiency names (e.g.
+   * "Thieves' tools", "Vehicles (land)"), sourced from the same PHB text
+   * app/creation/background.tsx's BG_DETAIL table already displays.
+   * Deliberately NOT mechanically enforced — no grant_proficiency 'tool:'
+   * effect exists for any official background (confirmed: this engine
+   * currently grants zero tool proficiencies from background selection at
+   * all, a real, separate, pre-existing gap, same shape as CharClass's
+   * armor/weapon-proficiency gap — not fixed here). Skill proficiencies
+   * deliberately have NO equivalent field here: they're already real,
+   * structured data via each background's own grant_proficiency 'skill:'
+   * Feature effects — see backgroundSkillGrants() in
+   * src/content/backgrounds/backgroundBrowse.ts, which derives them
+   * without duplicating the same fact in a second field.
+   */
+  toolProficiencies?: string[];
+  /**
+   * CHOICE-AUTHORING-1: choices queued (not auto-resolved) at background-
+   * selection time — e.g. "choose one artisan's tool" or "learn two
+   * languages of your choice." Same mechanism as Race.pendingChoices (see
+   * that field's doc comment and BACKGROUND_CHOICE_PREFIX below): queued
+   * via leveling.ts's queueChoice at grantedAt=0 from both
+   * app/creation/background.tsx's selectBackground() and leveling.ts's
+   * swapBackground(), and swept on background change the same way
+   * Race.pendingChoices is swept on race change.
+   */
+  pendingChoices?: ChoiceDefinition[];
 };
+
+/**
+ * Required id prefix for every entry in Background.pendingChoices — lets
+ * swapBackground()/selectBackground() sweep previously-queued background
+ * choices on background change without needing to know each background's
+ * specific choice ids in advance. Mirrors RACE_CHOICE_PREFIX exactly.
+ */
+export const BACKGROUND_CHOICE_PREFIX = 'background_choice_';
+
 /** rulesetId undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
 export type Condition  = { id: string; name: string; description: string; features: Feature[]; rulesetId?: RulesetId };
 
@@ -527,6 +610,21 @@ export type Feat = {
     picks: { id: string; label: string; mode: 'proficiency' | 'expertise'; from: 'any' | 'proficient' }[];
   };
   /**
+   * CHOICE-AUTHORING-1: real ChoiceDefinition-based choices this feat grants
+   * beyond abilityChoice/skillChoice above (e.g. Prodigy's "one tool
+   * proficiency and one language," Artificer Initiate's "one artisan's
+   * tools of your choice"). Deliberately a SEPARATE field rather than
+   * folded into skillChoice — abilityChoice/skillChoice are a narrower,
+   * feat-specific mechanism resolved inline by AsiFeatPicker itself, while
+   * this reuses the same queueChoice/RepeatedChoicePicker pipeline every
+   * other content type's pendingChoices does. Queued via leveling.ts's
+   * applyFeatToEntity at the moment the feat is taken, namespaced by the
+   * compiled feature's own id (see FEAT_CHOICE_PREFIX below and
+   * removeFeature's choice-sweep) so live feature removal cleans these up
+   * the same way it already cleans up a feat-granted resource.
+   */
+  pendingChoices?: ChoiceDefinition[];
+  /**
    * SRD 5.1 legal status. CONFIRMED via direct verification against the
    * actual SRD 5.1 text (5thsrd.org) on 2026-08-04: the Feats section
    * contains ONLY Grappler. This resolved a prior optimistic guess (all 42
@@ -541,6 +639,15 @@ export type Feat = {
   /** Which ruleset this feat belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
   rulesetId?: RulesetId;
 };
+
+/** Namespacing convention for Feat.pendingChoices ids — see that field's doc
+ * comment. Unlike RACE_CHOICE_PREFIX/BACKGROUND_CHOICE_PREFIX, sweeping on
+ * removal doesn't scan for this prefix directly; removeFeature() instead
+ * namespaces by the compiled feature's own id via queueChoice's originId
+ * param, since a feat (unlike a race/background) is removed individually
+ * while others may remain. This prefix exists purely to avoid id collisions
+ * with other choice sources when a feat is authored. */
+export const FEAT_CHOICE_PREFIX = 'feat_choice_';
 
 export type ContentDB = {
   races:       Race[];
@@ -565,10 +672,43 @@ export type IssueSeverity = 'error' | 'warning' | 'info';
 export type IssueCode =
   | 'missing_race' | 'missing_subrace' | 'missing_class' | 'missing_subclass'
   | 'missing_background' | 'missing_spell' | 'missing_item'
+  // LIVE-RULESET-1: validateEntity() doesn't check feat/condition
+  // references at all today — added for src/engine/rulesetChange.ts's
+  // preview, which is the first consumer that needs them (a character's
+  // feat/condition picks can become unresolved after a ruleset switch the
+  // same way a race/class/spell/item pick already could).
+  | 'missing_feat' | 'missing_condition'
+  // LIVE-RULESET-2: the engine-level guard in rulesetChange.ts refuses to
+  // apply a switch to an unregistered ruleset id or across two known,
+  // different Games — these two codes report why, distinct from
+  // package_unsupported_ruleset (an IMPORT-time diagnostic for a different
+  // flow entirely).
+  | 'unsupported_ruleset' | 'cross_game_ruleset'
   | 'ruleset_mismatch' | 'orphaned_choice_selection'
   // A-62: pack-level diagnostics (see src/engine/packDiagnostics.ts).
   | 'pack_broken_reference' | 'pack_content_shadowed' | 'pack_ruleset_mixed'
-  | 'pack_content_in_use';
+  | 'pack_content_in_use'
+  // HOMEBREW-PACKAGE-1: portable package export/import diagnostics (see
+  // src/engine/contentDependencies.ts / src/io/packageIO.ts). Distinct from
+  // the pack_* codes above, which are about an already-INSTALLED pack's
+  // ongoing health — these fire during export (building a package) or
+  // import (evaluating one before commit).
+  | 'package_missing_dependency' | 'package_unresolved_reference'
+  | 'package_unsupported_ruleset' | 'package_corrupt'
+  | 'package_incompatible_version' | 'package_duplicate_id'
+  // CHOICE-EXPANSION-1: Expertise/Tool/Language interactive choices.
+  // unresolved_choice_kind fires for a pending ChoiceDefinition whose kind
+  // has no picker UI (see TabFeatures.tsx's dispatch) — surfaces the gap as
+  // a real Issue instead of only a silent "ask your DM" note in one screen.
+  // invalid_expertise_target fires when a RESOLVED expertise choice's
+  // selected skill is no longer trained (the one real path in this engine
+  // where that can happen live — see swapBackground's skill-retrain
+  // checklist) — expertise is never silently reassigned to another skill.
+  // missing_tool_definition/missing_language_definition mirror
+  // orphaned_choice_selection for the two content kinds that previously had
+  // no registry to check selections against at all.
+  | 'unresolved_choice_kind' | 'invalid_expertise_target'
+  | 'missing_tool_definition' | 'missing_language_definition';
 
 export type Issue = {
   severity: IssueSeverity;
@@ -808,17 +948,45 @@ export type ResourceBlock = {
   deathSaves: DeathSaves;
 };
 
+// ── STARTING-EQUIPMENT-1 ─────────────────────────────────────────────────────
+// Structured, ruleset-agnostic constraint for "any item matching X" equipment
+// choices (e.g. "any Simple Melee Weapon") — reuses the SAME independent-axis
+// taxonomy src/content/items/itemBrowse.ts already defines for browsing
+// (Category/WeaponClass/WeaponRange/ArmorWeight), never a scripting DSL or a
+// combined-concept string like "Martial Melee". Every field is optional and
+// AND-combined; an empty object matches every item (rare, but valid for a
+// genuinely unconstrained "any item" pick).
+export type ItemFilterConstraint = {
+  category?:    'weapon' | 'armor' | 'shield' | 'ammunition' | 'tool' | 'focus' | 'gear';
+  weaponClass?: 'martial' | 'simple';
+  weaponRange?: 'melee' | 'ranged';
+  armorWeight?: 'heavy' | 'medium' | 'light';
+};
+
 export type ChoiceOption = {
   id:    string;
   label: string;
   value: unknown;
+  /**
+   * STARTING-EQUIPMENT-1: when present, selecting this option ALSO requires
+   * picking `quantity` real items matching `constraint` from the shared Item
+   * browser (in RequiredEquipmentChoice context — see itemBrowseContext.ts),
+   * in addition to (not instead of) any fixed `value` items. This is what
+   * lets an ExactOptions/BundleOptions option represent something like
+   * "a martial weapon and a shield" (fixed shield + 1 filtered martial
+   * weapon) without hardcoding a specific weapon as the option's label —
+   * the anti-pattern this whole mechanism replaces (e.g. "two simple
+   * weapons (Daggers shown)" baking in one example as if it were the only
+   * legal choice).
+   */
+  itemFilter?: { constraint: ItemFilterConstraint; quantity: number };
 };
 
 export type ChoiceDefinition = {
   id:       string;
   prompt:   string;
   kind:     'skill' | 'spell' | 'language' | 'tool' | 'equipment' | 'feat' | 'asi' | 'custom'
-          | 'spellcasting_ability' | 'subclass' | 'infusion' | 'feature_pool';
+          | 'spellcasting_ability' | 'subclass' | 'infusion' | 'feature_pool' | 'expertise';
   count:    number;
   pool:     ChoiceOption[] | 'all' | FilterExpression;
   grants:   Grant[];
@@ -833,6 +1001,26 @@ export type ChoiceDefinition = {
    * stays valid without edits.
    */
   forClassId?: string;
+  /**
+   * STARTING-EQUIPMENT-1: only meaningful for kind:'equipment'. Undefined
+   * (every existing equipment choice literal across src/content) means
+   * 'exact_options' — the original, unchanged behavior (a fixed pool of
+   * named options, each granting a fixed item list). 'bundle_options' is
+   * structurally identical (a whole-pack either/or) — the distinct name
+   * exists for UI/semantic clarity (pack contents render expanded) and so
+   * a future divergence doesn't need a new discriminant. 'filtered_item'
+   * means there is no fixed pool at all — `itemFilter` + `count` alone
+   * describe "choose `count` items matching this constraint," and the
+   * player picks real items from the shared Item browser.
+   */
+  equipmentStyle?: 'exact_options' | 'bundle_options' | 'filtered_item';
+  /** Only used when equipmentStyle === 'filtered_item'. */
+  itemFilter?: ItemFilterConstraint;
+  /** Free-text display grouping for the Starting Equipment progress panel
+   *  (e.g. "Armor", "Weapons", "Pack") — purely presentational, never used
+   *  for legality/matching. Undefined groups under a generic "Equipment"
+   *  heading, so no existing choice literal needs to change. */
+  equipmentGroup?: string;
 };
 
 export type ChoiceState = {
@@ -1320,6 +1508,21 @@ export type Entity = {
   dmOverrides:      DmOverride[];     // always [] for new entities
   wildShapeState:   WildShapeState | null;
   notes:            string;
+  /**
+   * The Exploration tab's own structured notes (scratch text + objectives/
+   * npcs/clues/locations lists), as its own field — separate from `notes`
+   * above, which is the Notes tab's own pure-JSON backstory/session/
+   * personal-notes blob. Both tabs used to share the single `notes` field
+   * with incompatible serialization schemes (a marker-delimited scheme
+   * here, plain JSON there), so using both features on one character
+   * silently corrupted and truncated the other's data (audit finding
+   * NOTES-CORRUPT-1). Optional so an already-saved character with no
+   * exploration notes yet parses fine — TabExploration.tsx's own parseNotes
+   * falls back to reading the OLD marker-embedded format out of `notes`
+   * for backward compatibility with characters saved before this field
+   * existed, but never writes back there again once edited.
+   */
+  explorationNotes?: string;
   /**
    * Infusion ids (see src/content/infusions/index.ts) this entity currently
    * KNOWS — separate from which items are actually infused right now (that's

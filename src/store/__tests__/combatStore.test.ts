@@ -9,13 +9,19 @@
 // helper (app/dm/encounter.tsx) that only filtered `entities`, leaving a
 // ghost row in the initiative order with no entity behind it.
 import { useCombatStore } from '../combatStore';
+import { useCharacterStore, makeEmptyEntity } from '../characterStore';
 import * as combatRepo from '../../db/combatRepo';
-import { makeEmptyEntity } from '../characterStore';
 import { Entity } from '../../engine/types';
+import { applyCondition } from '../../engine/conditions';
 import { syncManager } from '../../sync/syncManager';
 
 function entityAt(id: string, initiativeBonus: number): Entity {
   const e = makeEmptyEntity(id, 'monster');
+  return { ...e, identity: { ...e.identity, name: id }, derived: { ...e.derived, initiative: initiativeBonus } };
+}
+
+function characterAt(id: string, initiativeBonus: number): Entity {
+  const e = makeEmptyEntity(id, 'character');
   return { ...e, identity: { ...e.identity, name: id }, derived: { ...e.derived, initiative: initiativeBonus } };
 }
 
@@ -29,6 +35,7 @@ describe('combatStore', () => {
     useCombatStore.setState({
       combat:   { active: false, round: 0, turnIndex: 0, order: [], encounterId: '' },
       entities: [],
+      lastPersistError: null,
     });
   });
 
@@ -121,6 +128,87 @@ describe('combatStore', () => {
       useCombatStore.getState().removeFromEncounter('a');
       expect(useCombatStore.getState().entities).toHaveLength(0);
       expect(saveSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateEntity', () => {
+    it('persists the change when combat is active (PERSIST-2 regression)', () => {
+      useCombatStore.getState().startCombat([entityAt('a', 10)], 'enc1');
+      saveSpy.mockClear();
+      useCombatStore.getState().updateEntity('a', e => ({ ...e, identity: { ...e.identity, name: 'Damaged A' } }));
+      expect(useCombatStore.getState().entities[0].identity.name).toBe('Damaged A');
+      expect(saveSpy).toHaveBeenCalledTimes(1);
+      const [, savedEntities] = saveSpy.mock.calls[0];
+      expect(savedEntities[0].identity.name).toBe('Damaged A');
+    });
+
+    it('does not persist when combat is not active', () => {
+      useCombatStore.setState({ entities: [entityAt('a', 10)] });
+      useCombatStore.getState().updateEntity('a', e => ({ ...e, identity: { ...e.identity, name: 'X' } }));
+      expect(saveSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('advanceTurn — ticked entities sync to characterStore (SYNC-COMBAT-1 sub-path c)', () => {
+    afterEach(() => {
+      useCharacterStore.setState({ characters: [] });
+    });
+
+    it('merges a rounds-based condition tick onto characterStore, not just combatStore', () => {
+      // 'a' (initiative 10) acts before 'b' (initiative 5) — advanceTurn
+      // ends 'a's turn, which is what ticks 'a's own condition duration
+      // (tickDurations ticks the entity whose turn just ENDED).
+      const a = applyCondition(characterAt('a', 10), 'poisoned', 'test', undefined, undefined, { unit: 'rounds', remaining: 1 });
+      const b = characterAt('b', 5);
+      useCharacterStore.setState({ characters: [a, b] });
+
+      useCombatStore.getState().startCombat([a, b], 'enc1');
+      // startCombat re-rolled initiative onto fresh copies — read the
+      // actual post-start combatStore entity (with the condition intact)
+      // back out rather than assuming order.
+      expect(useCombatStore.getState().entities.find(e => e.id === 'a')!.conditions).toHaveLength(1);
+      // Force turnIndex onto 'a' regardless of roll outcome (same
+      // deterministic-test pattern the removeFromEncounter suite above
+      // already uses) — advanceTurn ticks whoever's turn just ENDED, so
+      // this guarantees it's 'a's condition being ticked, not 'b's.
+      useCombatStore.setState(state => ({
+        combat: { ...state.combat, turnIndex: state.combat.order.findIndex(e => e.entityId === 'a') },
+      }));
+
+      useCombatStore.getState().advanceTurn();
+
+      const combatEntityA = useCombatStore.getState().entities.find(e => e.id === 'a')!;
+      const storeEntityA  = useCharacterStore.getState().characters.find(c => c.id === 'a')!;
+      // The condition expired (1 round remaining, ticked to 0) on BOTH —
+      // before this fix, only combatStore's own copy ever reflected it.
+      expect(combatEntityA.conditions).toHaveLength(0);
+      expect(storeEntityA.conditions).toHaveLength(0);
+    });
+
+    it('does not touch characterStore for a monster-kind entity (nothing to merge onto)', () => {
+      const a = entityAt('a', 10);
+      const b = entityAt('b', 5);
+      useCharacterStore.setState({ characters: [] });
+
+      useCombatStore.getState().startCombat([a, b], 'enc1');
+      expect(() => useCombatStore.getState().advanceTurn()).not.toThrow();
+      expect(useCharacterStore.getState().characters).toHaveLength(0);
+    });
+  });
+
+  describe('lastPersistError — surfaces SQLite write failures instead of only logging them (PERSIST-5)', () => {
+    it('sets lastPersistError when saveCombatState rejects, and clears it on the next successful save', () => {
+      saveSpy.mockRejectedValueOnce(new Error('disk full'));
+      useCombatStore.getState().startCombat([entityAt('a', 10)], 'enc1');
+      return Promise.resolve().then(() => {
+        expect(useCombatStore.getState().lastPersistError).not.toBeNull();
+
+        saveSpy.mockResolvedValueOnce(undefined);
+        useCombatStore.getState().addEntities([entityAt('b', 5)]);
+        return Promise.resolve().then(() => {
+          expect(useCombatStore.getState().lastPersistError).toBeNull();
+        });
+      });
     });
   });
 

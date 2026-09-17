@@ -26,12 +26,29 @@ export function equipItem(
   // equipment screen only store the itemId), so without this, equipping
   // armor adds an item with zero effects and AC never changes.
   const hydrated = itemDef ? { ...inst, features: itemDef.features } : inst;
+  // Merge into an existing equipped stack of the same item (matching
+  // infusion state) instead of adding a second row — mirrors
+  // handleAddItem's carried-side stacking (app/sheet/[id].tsx). Without
+  // this, two separately-acquired copies of the same item (e.g. two
+  // daggers picked up in two different pickup+equip cycles) end up as two
+  // independent equipped rows sharing one itemId, which unequipItem below
+  // cannot safely tell apart (see audit finding INV-1).
+  const existingEquipped = entity.inventory.equipped.find(
+    i => i.itemId === itemId && (i.infusedWith ?? null) === (hydrated.infusedWith ?? null)
+  );
+  const equipped = existingEquipped
+    ? entity.inventory.equipped.map(i => i === existingEquipped ? { ...i, quantity: i.quantity + hydrated.quantity } : i)
+    : [...entity.inventory.equipped, hydrated];
   const updated: Entity = {
     ...entity,
     inventory: {
       ...entity.inventory,
-      carried:  entity.inventory.carried.filter(i => i.itemId !== itemId),
-      equipped: [...entity.inventory.equipped, hydrated],
+      // Removed by reference, not by itemId — carried should never hold
+      // two rows for one itemId (handleAddItem already stacks on add), but
+      // matching unequipItem's own reference-based removal below keeps the
+      // invariant self-enforcing rather than assumed.
+      carried: entity.inventory.carried.filter(i => i !== inst),
+      equipped,
     },
   };
   return recomputeDerived(updated, rules);
@@ -48,12 +65,27 @@ export function unequipItem(
 ): Entity {
   const inst = entity.inventory.equipped.find(i => i.itemId === itemId);
   if (!inst) return entity;
+  // Merge into an existing carried stack of the same item (matching
+  // infusion state) instead of adding a second row — same reasoning as
+  // equipItem's merge above.
+  const existingCarried = entity.inventory.carried.find(
+    i => i.itemId === itemId && (i.infusedWith ?? null) === (inst.infusedWith ?? null)
+  );
+  const carried = existingCarried
+    ? entity.inventory.carried.map(i => i === existingCarried ? { ...i, quantity: i.quantity + inst.quantity } : i)
+    : [...entity.inventory.carried, inst];
   const updated: Entity = {
     ...entity,
     inventory: {
       ...entity.inventory,
-      equipped: entity.inventory.equipped.filter(i => i.itemId !== itemId),
-      carried:  [...entity.inventory.carried, inst],
+      // Removed by reference, not by itemId. Two equipped instances CAN
+      // legitimately share an itemId (an infused and an uninfused copy of
+      // the same item, or — before this fix — two separately-equipped
+      // copies), and `.filter(i => i.itemId !== itemId)` deleted every one
+      // of them while this function only ever restored the single `.find()`
+      // match — a confirmed silent data-loss bug (audit finding INV-1).
+      equipped: entity.inventory.equipped.filter(i => i !== inst),
+      carried,
     },
   };
   return recomputeDerived(updated, rules);
@@ -83,7 +115,9 @@ const KNOWN_ATTUNEMENT_ITEM_IDS = new Set([
  * SRD/imported magic item that has the tag states it), or the item is one of
  * the small curated set above whose tagging is known to be missing.
  */
-export function itemRequiresAttunement(item: Item | undefined): boolean {
+export function itemRequiresAttunement(
+  item: { id: string; properties: string[] } | undefined,
+): boolean {
   if (!item) return false;
   if (KNOWN_ATTUNEMENT_ITEM_IDS.has(item.id)) return true;
   return item.properties.some(p => p.toLowerCase().includes('requires attunement'));
@@ -124,8 +158,11 @@ export function toggleAttunement(entity: Entity, itemId: string): Entity {
             ?? entity.inventory.carried.find(i => i.itemId === itemId);
   if (!inst) return entity;
   if (!inst.attuned && countAttuned(entity) >= attunementCap(entity)) return entity;
+  // Flip by reference, not itemId — otherwise two instances sharing an
+  // itemId (e.g. an infused and uninfused copy) would both flip from one
+  // toggle call, silently double-spending the attunement cap.
   const flip = (list: ItemInstance[]) =>
-    list.map(i => i.itemId === itemId ? { ...i, attuned: !i.attuned } : i);
+    list.map(i => i === inst ? { ...i, attuned: !i.attuned } : i);
   return {
     ...entity,
     inventory: {

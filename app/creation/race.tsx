@@ -1,12 +1,23 @@
 // app/creation/race.tsx
 // Race list — tap row to navigate to detail, long-press chevron to expand description.
 import { View, Text, FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
-import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { globalContentDB } from '../../src/content/classes/library';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import { FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips } from '../../src/components/FilterChipRow';
+import {
+  RACE_SIZE_ORDER, RACE_MOVEMENT_TYPES, hasDarkvision, raceMovementTypes, hasSubraces, raceSortOptions,
+} from '../../src/content/races/raceBrowse';
+import { sortByOption } from '../../src/content/contentQuery';
+import { SortControl } from '../../src/components/SortControl';
+import { useBrowseStateStore } from '../../src/store/browseStateStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+
+const SCREEN_KEY = 'race_picker';
 
 const RACE_DESCRIPTIONS: Record<string, string> = {
   human:      'Humans are the most adaptable and ambitious people among the common races. +1 to all ability scores, one extra language, one extra skill.',
@@ -20,19 +31,95 @@ const RACE_DESCRIPTIONS: Record<string, string> = {
   tiefling:   'Tieflings are derived from humans who made a deal with devils. INT +1, CHA +2. Darkvision 60 ft. Resistance to fire. Hellish Rebuke and Darkness spells.',
 };
 
+// COMPENDIUM-1: SIZE_ORDER/hasDarkvision/raceMovementTypes moved to
+// src/content/races/raceBrowse.ts (imported above) so the Compendium's
+// Race browser shares the exact same derivation, not a second copy.
+const SIZE_ORDER = RACE_SIZE_ORDER;
+
 export default function RaceScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const [search,   setSearch]   = useState('');
+  // BROWSE-STATE-1: restore search/filters/sort saved before navigating away
+  // (e.g. into "+ Create new homebrew race") — session-local, see
+  // browseStateStore.ts's header comment.
+  const saved = useBrowseStateStore.getState().getBrowseState(SCREEN_KEY);
+  const setBrowseState = useBrowseStateStore(s => s.setBrowseState);
+  const savedFilters = saved.filters ?? {};
+  const [search,   setSearch]   = useState(saved.search ?? '');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [sizeFilter, setSizeFilter] = useState<string | null>((savedFilters.sizeFilter as string) ?? null);
+  const [darkvisionOnly, setDarkvisionOnly] = useState(!!savedFilters.darkvisionOnly);
+  const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set((savedFilters.movementFilter as string[]) ?? []));
+  const [rulesetFilter, setRulesetFilter] = useState<string | null>((savedFilters.rulesetFilter as string) ?? null);
+  const [officialFilter, setOfficialFilter] = useState<'all' | 'official' | 'homebrew'>((savedFilters.officialFilter as 'all' | 'official' | 'homebrew') ?? 'all');
+  const [hasSubracesOnly, setHasSubracesOnly] = useState(!!savedFilters.hasSubracesOnly);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState(saved.sort ?? 'name_asc');
+  useEffect(() => {
+    setBrowseState(SCREEN_KEY, {
+      search, sort,
+      filters: { sizeFilter, darkvisionOnly, movementFilter: Array.from(movementFilter), rulesetFilter, officialFilter, hasSubracesOnly },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, sort, sizeFilter, darkvisionOnly, movementFilter, rulesetFilter, officialFilter, hasSubracesOnly]);
   const homebrewRaces = useHomebrewStore(s => s.races);
+  const sortOptions = raceSortOptions(r => homebrewRaces.some(hr => hr.id === r.id));
 
-  const races = globalContentDB.races.filter(r =>
+  // SAVE-AND-ADD-1: if we're returning from "+ Create new" having just
+  // saved a homebrew race, go straight to that race's detail screen — the
+  // same place tapping it in the list would take the player, so nothing
+  // about the "select a race" flow silently forces or skips a choice.
+  // useFocusEffect (not a plain useEffect keyed on homebrewRaces) is
+  // required here: this screen stays MOUNTED but unfocused while the
+  // builder is on top of it in the stack, and Zustand's homebrewStore
+  // subscription doesn't care about focus — a plain effect fired the
+  // instant the builder's saveItem() resolved (while still backgrounded),
+  // racing against the builder's own goBack() and losing almost every
+  // time (confirmed via live testing: the consume+navigate call landed,
+  // but was immediately clobbered by the builder's back-navigation
+  // completing a moment later). useFocusEffect defers this to the moment
+  // the screen actually regains focus, after that race is long over.
+  useFocusEffect(
+    useCallback(() => {
+      const newId = usePendingSelectionStore.getState().consumePending(SCREEN_KEY);
+      if (newId) router.replace(`/creation/race-detail?id=${newId}`);
+    }, [router])
+  );
+
+  // CREATION-FILTERS-1: real, present field only (Race.size is a closed
+  // union) — sizes actually present in the official list, in standard
+  // D&D size order rather than alphabetically.
+  const availableSizes = SIZE_ORDER.filter(s => globalContentDB.races.some(r => r.size === s));
+  const availableMovement = RACE_MOVEMENT_TYPES.filter(m => globalContentDB.races.some(r => raceMovementTypes(r).includes(m)))
+    .map(m => ({ id: m, label: m[0].toUpperCase() + m.slice(1) }));
+  // Ruleset — real field, sparsely populated app-wide (see FilterChipRow's
+  // own <=1-option auto-hide) — lights up once ruleset-tagged races exist.
+  const availableRulesets = Array.from(new Set(globalContentDB.races.map(r => r.rulesetId).filter((r): r is NonNullable<typeof r> => !!r)))
+    .map(String).sort().map(r => ({ id: r, label: r }));
+
+  const races = officialFilter === 'homebrew' ? [] : sortByOption(globalContentDB.races.filter(r =>
+    r.name.toLowerCase().includes(search.toLowerCase()) &&
+    (!sizeFilter || r.size === sizeFilter) &&
+    (!darkvisionOnly || hasDarkvision(r)) &&
+    (movementFilter.size === 0 || Array.from(movementFilter).some(m => raceMovementTypes(r).includes(m))) &&
+    (!rulesetFilter || r.rulesetId === rulesetFilter) &&
+    (!hasSubracesOnly || hasSubraces(r))
+  ), sortOptions, sort);
+  const filteredHomebrewRaces = officialFilter === 'official' ? [] : homebrewRaces.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase())
   );
-  const filteredHomebrewRaces = homebrewRaces.filter(r =>
-    r.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const activeFilterChips = [
+    ...(sizeFilter ? [{ key: 'size', label: sizeFilter, onClear: () => setSizeFilter(null) }] : []),
+    ...(darkvisionOnly ? [{ key: 'dv', label: 'Darkvision', onClear: () => setDarkvisionOnly(false) }] : []),
+    ...Array.from(movementFilter).map(m => ({ key: `mv_${m}`, label: m, onClear: () => setMovementFilter(prev => { const n = new Set(prev); n.delete(m); return n; }) })),
+    ...(rulesetFilter ? [{ key: 'ruleset', label: rulesetFilter, onClear: () => setRulesetFilter(null) }] : []),
+    ...(officialFilter !== 'all' ? [{ key: 'official', label: officialFilter === 'official' ? 'Official' : 'Homebrew', onClear: () => setOfficialFilter('all') }] : []),
+    ...(hasSubracesOnly ? [{ key: 'has_subraces', label: 'Has Subraces', onClear: () => setHasSubracesOnly(false) }] : []),
+  ];
+  function clearAllFilters() {
+    setSizeFilter(null); setDarkvisionOnly(false); setMovementFilter(new Set());
+    setRulesetFilter(null); setOfficialFilter('all'); setHasSubracesOnly(false);
+  }
 
   return (
     <View style={styles.container}>
@@ -40,13 +127,61 @@ export default function RaceScreen() {
       <Text style={styles.heading}>Select Race</Text>
       <View style={styles.divider} />
 
-      <TextInput
-        style={styles.search}
-        placeholder="Search"
-        placeholderTextColor={Colors.textDim}
-        value={search}
-        onChangeText={setSearch}
-      />
+      <View style={styles.searchRow}>
+        <TextInput
+          style={[styles.search, styles.searchFlex]}
+          placeholder="Search"
+          placeholderTextColor={Colors.textDim}
+          value={search}
+          onChangeText={setSearch}
+        />
+      </View>
+
+      {/* PERF-SORT-1 (item 3): Filters + Sort share one row, pinned to
+          opposite ends, consistent with every other browse screen. */}
+      <View style={styles.controlsRow}>
+        <Pressable
+          style={[styles.darkvisionToggle, filtersOpen && styles.darkvisionToggleActive]}
+          onPress={() => setFiltersOpen(v => !v)}
+        >
+          <Text style={[styles.darkvisionToggleTxt, filtersOpen && styles.darkvisionToggleTxtActive]}>Filters</Text>
+        </Pressable>
+        <SortControl options={sortOptions} value={sort} onChange={setSort} />
+      </View>
+
+      {filtersOpen && (
+        <View style={styles.filterPanel}>
+          <FilterSection label="Size">
+            <FilterChipRow options={availableSizes.map(sz => ({ id: sz, label: sz }))} value={sizeFilter} onChange={setSizeFilter} />
+          </FilterSection>
+          <FilterSection label="Movement">
+            <MultiSelectChipRow options={availableMovement} values={movementFilter} onChange={setMovementFilter} />
+          </FilterSection>
+          <FilterSection label="Ruleset">
+            <FilterChipRow options={availableRulesets} value={rulesetFilter} onChange={setRulesetFilter} />
+          </FilterSection>
+          <FilterSection label="Official / Homebrew">
+            <OfficialHomebrewChipRow value={officialFilter} onChange={setOfficialFilter} />
+          </FilterSection>
+          <Pressable
+            style={[styles.darkvisionToggle, hasSubracesOnly && styles.darkvisionToggleActive, styles.darkvisionToggleInline]}
+            onPress={() => setHasSubracesOnly(v => !v)}
+          >
+            <Text style={[styles.darkvisionToggleTxt, hasSubracesOnly && styles.darkvisionToggleTxtActive]}>
+              {hasSubracesOnly ? '✓ ' : ''}Has Subraces / Variants
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.darkvisionToggle, darkvisionOnly && styles.darkvisionToggleActive, styles.darkvisionToggleInline]}
+            onPress={() => setDarkvisionOnly(v => !v)}
+          >
+            <Text style={[styles.darkvisionToggleTxt, darkvisionOnly && styles.darkvisionToggleTxtActive]}>
+              {darkvisionOnly ? '✓ ' : ''}Darkvision only
+            </Text>
+          </Pressable>
+        </View>
+      )}
+      <ActiveFilterChips chips={activeFilterChips} onClearAll={clearAllFilters} />
 
       <FlatList
         data={races}
@@ -63,6 +198,18 @@ export default function RaceScreen() {
                 onPress={() => router.push(`/creation/race-detail?id=${item.id}`)}
               >
                 <Text style={styles.rowName}>{item.name}</Text>
+                {/* Distinguishes same-named ruleset variants (e.g. the
+                    paused 5.5e proof-slice's "Human" alongside the classic
+                    one) — non-production builds show every race unfiltered
+                    regardless of ruleset, so without this they were
+                    genuinely indistinguishable (audit finding
+                    RULESET-DUP-1). */}
+                {item.rulesetId && (
+                  <View style={styles.rulesetTag}>
+                    <Text style={styles.rulesetTagTxt}>{item.rulesetId}</Text>
+                  </View>
+                )}
+                {isNonSrd(item.srd) && <NonSrdBadge />}
                 <Pressable
                   hitSlop={12}
                   onPress={e => { e.stopPropagation(); setExpanded(isOpen ? null : item.id); }}
@@ -154,6 +301,21 @@ const styles = StyleSheet.create({
   },
   list: { paddingHorizontal: Spacing.lg },
 
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginHorizontal: Spacing.lg, marginBottom: Spacing.sm },
+  controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: Spacing.xs, marginHorizontal: Spacing.lg, marginBottom: Spacing.sm },
+  searchFlex: { flex: 1, marginHorizontal: 0, marginBottom: 0 },
+  filterPanel: { marginBottom: Spacing.xs },
+
+  darkvisionToggle: {
+    alignSelf: 'flex-start', marginHorizontal: Spacing.lg, marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface,
+  },
+  darkvisionToggleInline: { marginHorizontal: Spacing.lg },
+  darkvisionToggleActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  darkvisionToggleTxt:    { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  darkvisionToggleTxtActive: { color: Colors.bg },
+
   itemWrap: { borderBottomWidth: 1, borderBottomColor: Colors.border },
   row: {
     flexDirection: 'row', alignItems: 'center',
@@ -197,4 +359,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 2,
   },
   homebrewTagTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  rulesetTag: {
+    backgroundColor: Colors.textSecondary + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.textSecondary + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  rulesetTagTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
 });

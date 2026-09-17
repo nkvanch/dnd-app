@@ -114,6 +114,27 @@ const SAVE_DEBOUNCE_MS = 600;
 const pendingSaves = new Map<string, Entity>();
 const saveTimers   = new Map<string, ReturnType<typeof setTimeout>>();
 
+/**
+ * Reports a SQLite write outcome onto the store's lastPersistError field —
+ * cleared on the next successful write, set (with a user-readable message)
+ * on failure. `useCharacterStore` is referenced here even though it's
+ * declared later in this module: these are plain functions only ever
+ * INVOKED at runtime (via a debounce timer or an async continuation), by
+ * which point the whole module — including the `export const
+ * useCharacterStore = create(...)` assignment below — has already finished
+ * evaluating.
+ */
+function reportPersistOutcome(context: string, error: unknown | null): void {
+  if (error === null) {
+    useCharacterStore.setState({ lastPersistError: null });
+    return;
+  }
+  console.error(`[characterStore] ${context} failed:`, error);
+  useCharacterStore.setState({
+    lastPersistError: `Couldn't save your last change (${context}) — it may be lost if the app closes.`,
+  });
+}
+
 function scheduleSave(entity: Entity): void {
   pendingSaves.set(entity.id, entity);
   const existing = saveTimers.get(entity.id);
@@ -123,8 +144,9 @@ function scheduleSave(entity: Entity): void {
     const toSave = pendingSaves.get(entity.id);
     pendingSaves.delete(entity.id);
     if (toSave) {
-      saveEntity(toSave).catch(e =>
-        console.error('[characterStore] debounced saveEntity failed:', e)
+      saveEntity(toSave).then(
+        () => reportPersistOutcome('debounced save', null),
+        e  => reportPersistOutcome('debounced save', e)
       );
     }
   }, SAVE_DEBOUNCE_MS));
@@ -142,8 +164,9 @@ export function flushPendingSaves(): void {
   const toFlush = Array.from(pendingSaves.values());
   pendingSaves.clear();
   for (const entity of toFlush) {
-    saveEntity(entity).catch(e =>
-      console.error('[characterStore] flushPendingSaves → saveEntity failed:', e)
+    saveEntity(entity).then(
+      () => reportPersistOutcome('flush on background', null),
+      e  => reportPersistOutcome('flush on background', e)
     );
   }
 }
@@ -299,6 +322,18 @@ type CharacterStore = {
   /** Session-local undo/redo history — see UndoEntry's own doc comment. */
   undoStack: UndoEntry[];
   redoStack: UndoEntry[];
+  /**
+   * Human-readable message for the most recent SQLite write failure on
+   * this store (debounced save, draft save, incoming-sync persist, or
+   * delete), or null once the next write succeeds. Every write here used
+   * to be fire-and-forget with only a console.error on failure — the UI
+   * kept showing the successful in-memory mutation while the disk write
+   * silently failed, discovered only after a later restart reverted the
+   * change with no explanation (audit finding PERSIST-5). Mirrors the
+   * existing syncStatus.lastError pattern (src/store/syncStore.ts),
+   * already rendered as a small banner elsewhere in the app.
+   */
+  lastPersistError: string | null;
 
   // ── Startup ──────────────────────────────────────────────────────────────
 
@@ -376,6 +411,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   isLoading:     false,
   undoStack:     [],
   redoStack:     [],
+  lastPersistError: null,
 
   // ── Startup ───────────────────────────────────────────────────────────────
 
@@ -458,8 +494,9 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     set({ characters: updated, draft: null });
 
     // Async SQLite persist — fire and forget (errors logged, not thrown)
-    saveEntity(draft).catch(e =>
-      console.error('[characterStore] saveDraft → saveEntity failed:', e)
+    saveEntity(draft).then(
+      () => reportPersistOutcome('saveDraft', null),
+      e  => reportPersistOutcome('saveDraft', e)
     );
   },
 
@@ -623,8 +660,9 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       return { characters: updated };
     });
     // Persist locally so the entity survives an app restart
-    saveEntity(entity).catch(e =>
-      console.error('[characterStore] applyIncomingEntity → saveEntity failed:', e)
+    saveEntity(entity).then(
+      () => reportPersistOutcome('applyIncomingEntity', null),
+      e  => reportPersistOutcome('applyIncomingEntity', e)
     );
   },
 
@@ -653,8 +691,9 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       return { characters: next };
     });
     if (merged) {
-      saveEntity(merged).catch(e =>
-        console.error('[characterStore] applyIncomingPatch → saveEntity failed:', e)
+      saveEntity(merged).then(
+        () => reportPersistOutcome('applyIncomingPatch', null),
+        e  => reportPersistOutcome('applyIncomingPatch', e)
       );
     }
     // If we don't have a local copy at all, there's nothing to merge onto —
@@ -675,8 +714,9 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     saveTimers.delete(id);
     pendingSaves.delete(id);
 
-    deleteEntity(id).catch(e =>
-      console.error('[characterStore] deleteCharacter → deleteEntity failed:', e)
+    deleteEntity(id).then(
+      () => reportPersistOutcome('deleteCharacter', null),
+      e  => reportPersistOutcome('deleteCharacter', e)
     );
   },
 

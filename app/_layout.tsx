@@ -23,7 +23,7 @@ import { syncManager }       from '../src/sync/syncManager';
 import { useSyncStore }      from '../src/store/syncStore';
 import { useCombatTurnStore } from '../src/store/combatTurnStore';
 import { useCombatStore }    from '../src/store/combatStore';
-import { loadCombatState }   from '../src/db/combatRepo';
+import { loadCombatState, clearCombatState } from '../src/db/combatRepo';
 
 function BootScreen() {
   return (
@@ -108,16 +108,26 @@ export default function RootLayout() {
           console.error('[_layout] loadCharacters/initSession failed:', e);
         }
 
-        // 5. Restore combat state if a combat was active before the app was killed
+        // 5. Restore combat state if a combat was active before the app was killed.
+        // An active combat restored with no entities (either an old,
+        // pre-migration save that never persisted entities at all, or a
+        // genuinely interrupted encounter — see combatRepo.ts's migration
+        // note) can't be resumed: the DM's screen would show ghost
+        // initiative rows with no HP/condition data and no way to act on
+        // them. Clear it instead of restoring a broken-looking "active"
+        // screen (audit finding PERSIST-2).
         loadCombatState().then(state => {
-          if (state?.active) {
-            useCombatStore.setState({ combat: state });
+          if (state?.combat.active && state.entities.length > 0) {
+            useCombatStore.setState({ combat: state.combat, entities: state.entities });
+          } else if (state?.combat.active) {
+            clearCombatState().catch(() => { /* non-critical */ });
           }
         }).catch(() => { /* non-critical */ });
 
         // 6. Wire up the sync manager — must run after stores are hydrated
         try {
           const { applyIncomingEntity, applyIncomingPatch } = useCharacterStore.getState();
+          const { applyIncomingCampaign, applyIncomingCampaignPatch } = useCampaignStore.getState();
           const { setStatus }           = useSyncStore.getState();
           const { setTurn }             = useCombatTurnStore.getState();
 
@@ -130,6 +140,12 @@ export default function RootLayout() {
             },
             onEntityPatchReceived: (entityId, patch) => {
               applyIncomingPatch(entityId, patch);
+            },
+            onCampaignReceived: (campaign) => {
+              applyIncomingCampaign(campaign);
+            },
+            onCampaignPatchReceived: (campaignId, patch) => {
+              applyIncomingCampaignPatch(campaignId, patch);
             },
             onCombatTurnReceived: (turn) => {
               setTurn(turn);
@@ -146,6 +162,24 @@ export default function RootLayout() {
         } catch (e) {
           console.error('[_layout] Sync manager init failed:', e);
         }
+
+        // 6b. Keep characterStore.rules synchronized with the active
+        // campaign's own rules — every engine call in the app reads
+        // characterStore.rules, but Campaign.rules used to be written once
+        // and never read by anything (audit finding CAMPAIGN-RULES-1), so
+        // two devices in the same campaign could silently run under
+        // different house rules. Subscribed here (not scattered across
+        // every campaignStore call site that can set activeCampaign) so
+        // it's one choke point regardless of HOW activeCampaign changed —
+        // join, switch, snapshot/patch sync, or boot restore. Leaving a
+        // campaign (activeCampaign becomes null) intentionally leaves
+        // characterStore.rules as-is — solo play keeps whatever the device's
+        // own default already was, same as before this existed.
+        useCampaignStore.subscribe((state, prevState) => {
+          if (state.activeCampaign && state.activeCampaign.rules !== prevState.activeCampaign?.rules) {
+            useCharacterStore.getState().setRules(state.activeCampaign.rules);
+          }
+        });
 
         // 7. Restore campaign state and re-establish sync if a campaign was
         //    active before the app was last closed. loadCampaigns sets isDm and
@@ -229,10 +263,13 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)"              options={{ headerShown: false }} />
         <Stack.Screen name="creation"            options={{ headerShown: false }} />
         <Stack.Screen name="sheet/[id]"          options={{ headerShown: false }} />
-        <Stack.Screen name="dm/dashboard"        options={{ headerShown: false }} />
-        <Stack.Screen name="dm/encounter"        options={{ headerShown: false }} />
-        <Stack.Screen name="dm/monsters"                  options={{ headerShown: false }} />
-        <Stack.Screen name="dm/character/[id]"           options={{ headerShown: false }} />
+        {/* Every app/dm/* screen (including ones with no explicit entry
+            here before, like encounter-builder/encounters — expo-router
+            auto-discovers them regardless) is now gated by
+            app/dm/_layout.tsx's own isDm check, which also sets
+            headerShown:false for the whole group — see its own header
+            comment (audit finding ROUTE-GUARD-1). */}
+        <Stack.Screen name="dm"                  options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/import-review"      options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/spell-builder"      options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/class-builder"      options={{ headerShown: false }} />
@@ -243,6 +280,14 @@ export default function RootLayout() {
         <Stack.Screen name="homebrew/rare-items"         options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/subrace-builder"    options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/subclass-builder"   options={{ headerShown: false }} />
+        {/* DUPLICATE-HEADER-1: these 4 were missing from this list, so
+            expo-router fell back to its own default native header (filename-
+            derived title, styled via screenOptions above) stacked ON TOP OF
+            each screen's own in-JSX header — the "duplicate header" bug. */}
+        <Stack.Screen name="homebrew/feat-builder"       options={{ headerShown: false }} />
+        <Stack.Screen name="homebrew/monster-builder"    options={{ headerShown: false }} />
+        <Stack.Screen name="homebrew/condition-builder"  options={{ headerShown: false }} />
+        <Stack.Screen name="homebrew/import-package"     options={{ headerShown: false }} />
         <Stack.Screen name="settings"                      options={{ headerShown: false }} />
         <Stack.Screen name="about"                         options={{ headerShown: false }} />
         <Stack.Screen name="backup"                        options={{ headerShown: false }} />

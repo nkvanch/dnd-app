@@ -1,7 +1,13 @@
 // app/creation/level-up.tsx
 // Ability Score Improvement / Feat screen for the creation wizard.
-// Thin wrapper around the shared <AsiFeatPicker>; resolves pending ASI choices
-// on the draft, then returns to the hub (which shows the next one, if any).
+// Thin wrapper around the shared <AsiFeatPicker>. REPEATED-CHOICE-1: a
+// directly-created high-level character can queue several ASI-kind choices
+// at once (one per ASI-granting level reached) — this used to navigate back
+// to the hub after resolving EACH ONE, forcing the player to re-tap into
+// this screen for every remaining choice (the exact "category list → choose
+// one → category list → choose one" bounce the repeated-choice UX rule
+// forbids). Now it stays on this screen, resolving one choice per tap,
+// until none remain, only THEN returning to the hub.
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
@@ -31,9 +37,13 @@ export default function LevelUpScreen() {
       entity={draft}
       choice={asiChoices[0]}
       rules={rules}
+      progressNote={asiChoices.length > 1 ? `${asiChoices.length - 1} more ASI/feat choice${asiChoices.length - 1 === 1 ? '' : 's'} after this one` : undefined}
+      browseStateKey="feat:levelup"
       onResolved={(updated) => {
+        // Stay on this screen — the navigation effect above only leaves for
+        // the hub once `asiChoices` (re-derived from the updated draft)
+        // is actually empty.
         setDraft(updated);
-        router.push('/creation/hub');
       }}
     />
   );

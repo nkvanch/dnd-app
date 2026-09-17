@@ -18,7 +18,7 @@ import { getDb } from './db';
  * from its label text alone.
  */
 export type TimelineCategory =
-  | 'combat' | 'rest' | 'inventory' | 'spells' | 'leveling' | 'features' | 'other';
+  | 'combat' | 'rest' | 'inventory' | 'spells' | 'leveling' | 'features' | 'ruleset' | 'other';
 
 export type TimelineEntry = {
   id:        number;

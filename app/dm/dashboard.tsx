@@ -17,7 +17,7 @@ import { useSyncStore }  from '../../src/store/syncStore';
 
 // ── Party Character Card ──────────────────────────────────────────────────────
 
-function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: boolean; onPress: () => void }) {
+function PartyCard({ entity, showFull, onPress, onPlay }: { entity: Entity; showFull: boolean; onPress: () => void; onPlay: () => void }) {
   const { identity, resources, derived, conditions, spellcasting, features, wildShapeState, conditionMonitor } = entity;
 
   // While Wild Shaped, the HP bar shown to the DM should reflect the BEAST's
@@ -188,6 +188,20 @@ function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: bo
           )}
         </>
       )}
+
+      {/* DM-CLAIM-PC-1: a DM can already open any party character's real
+          player sheet (app/sheet/[id].tsx) directly — it has no isDm gate,
+          and isDm itself is derived from the active campaign, never from
+          which screen is open, so tapping this never affects DM status or
+          tools. What was actually missing was any DISCOVERABLE way to do
+          it — tapping the card itself always opened the DM-tools view
+          (app/dm/character/[id].tsx). This is a separate, explicit
+          affordance for "optionally control this PC," matching the
+          required "keep DM role and character control as separate
+          concepts" (never make the DM count as a normal player). */}
+      <Pressable style={styles.playBtn} onPress={onPlay}>
+        <Text style={styles.playBtnTxt}>▶ Play as {identity.name || 'this character'}</Text>
+      </Pressable>
     </Pressable>
   );
 }
@@ -405,6 +419,7 @@ export default function DmDashboard() {
               entity={c}
               showFull={showFull}
               onPress={() => router.push(`/dm/character/${c.id}` as any)}
+              onPlay={() => router.push(`/sheet/${c.id}` as any)}
             />
           ))
         )}
@@ -539,6 +554,14 @@ const styles = StyleSheet.create({
   hpBarOuter:{ flex: 1, height: 6, backgroundColor: Colors.border, borderRadius: Radius.full, overflow: 'hidden' },
   hpBarFill: { height: '100%', borderRadius: Radius.full },
   hpTxt:     { fontSize: FontSize.sm, color: Colors.textSecondary, width: 70, textAlign: 'right' },
+
+  playBtn: {
+    marginTop: Spacing.sm, alignSelf: 'flex-start',
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  playBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
 
   condRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
   condPill: {

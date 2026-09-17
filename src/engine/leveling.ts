@@ -1,10 +1,12 @@
 import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
          KnownSpellsGrant, CustomResource, asSubclassId, asClassId, Background, SkillName,
-         CharClass } from './types';
+         CharClass, ItemFilterConstraint, BACKGROUND_CHOICE_PREFIX } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { getSpellSlotsForClassLevel, multiclassCasterLevel, MULTICLASS_SPELLCASTER_SLOTS,
          pactSlotTableFor, slotsForLevel } from '../content/classes/spellSlotTables';
+import { itemMatchesConstraint } from '../content/items/itemBrowse';
+import type { ItemIndexEntry } from '../content/itemRepo.types';
 import { hpMinHalfDie, bonusFeatEveryLevel } from './houseRules';
 import { getClassLevels, isMulticlassed, syncLegacyIdentity, multiclassProficienciesFor } from './multiclass';
 
@@ -578,6 +580,11 @@ export function applyFeatToEntity(
   featFeature: Feature,
   featId:      string,
   rules:       CampaignRules,
+  /** CHOICE-AUTHORING-1: Feat.pendingChoices — queued (not auto-resolved)
+   * alongside the feat's own feature grant, namespaced by featFeature.id so
+   * removeFeature() can sweep any still-unresolved ones if the feat is
+   * later removed live. */
+  pendingChoices?: ChoiceDefinition[],
 ): Entity {
   let updated = applyGrant(entity, { kind: 'feature', value: featFeature }, grantedAt);
   updated = {
@@ -586,6 +593,9 @@ export function applyFeatToEntity(
       c.id === choiceId ? { ...c, resolved: true, selections: [`feat:${featId}`] } : c
     ),
   };
+  for (const choice of pendingChoices ?? []) {
+    updated = queueChoice(updated, choice, grantedAt, featFeature.id);
+  }
   updated = reconcileConHp(entity, updated);
   return recomputeDerived(updated, rules);
 }
@@ -616,6 +626,14 @@ export function removeFeature(entity: Entity, featureId: string): Entity {
       ...entity.resources,
       custom: entity.resources.custom.filter(r => r.sourceId !== featureId),
     },
+    // CHOICE-AUTHORING-1: also best-effort strip any STILL-UNRESOLVED choice
+    // namespaced to this exact feature (applyFeatToEntity queues
+    // Feat.pendingChoices with originId=featFeature.id — see queueChoice's
+    // id composition, `${originId}:${choice.id}_${atLevel}`). An already-
+    // RESOLVED choice is left alone — it's part of the character's history,
+    // same "don't silently reassign a past pick" rule invalid_expertise_target
+    // validation follows.
+    choices: entity.choices.filter(c => c.resolved || !c.id.startsWith(`${featureId}:`)),
   };
 }
 
@@ -700,28 +718,56 @@ export function swapBackground(
     if (keep === false && !candidateUntrain.has(skill)) untrain(skill);
   }
 
+  // CHOICE-AUTHORING-1: sweep any still-queued choice that originated from
+  // the OLD background's own features or its pendingChoices — same
+  // "resolved choices are history, unresolved ones get swept" pattern
+  // clearRaceFeatures() uses for RACE_CHOICE_PREFIX. Background features
+  // never carry their own Feature.choices (that's still vestigial/unused
+  // engine-wide), so unlike clearRaceFeatures only the prefix check is
+  // needed here — no feature-sourced choice ids to also collect.
+  const sweptChoices = entity.choices.filter(c =>
+    c.resolved || !c.definition.id.startsWith(BACKGROUND_CHOICE_PREFIX),
+  );
+
   let updated: Entity = {
     ...entity,
     identity: { ...entity.identity, backgroundId: newBackground.id },
     features: otherFeatures,
     skills: { skills: updatedSkills },
+    choices: sweptChoices,
   };
+
+  for (const choice of newBackground.pendingChoices ?? []) {
+    updated = queueChoice(updated, choice, 0);
+  }
 
   for (const feature of newBackground.features) {
     updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
   }
 
   if (newBackground.flexibleAsi && flexAsiPicks && flexAsiPicks.length > 0) {
+    // ABILITY-CAP-1: clamp each pick to remaining headroom under the
+    // effective cap (rules.maxAbilityScore, default Infinity when
+    // uncapped) — same rule applyAsiToEntity() enforces for the plain ASI
+    // path. Effective stats read BEFORE this grant, matching how every
+    // other ASI-mutation path measures headroom against the character's
+    // current score, not a stale pre-session snapshot.
+    const maxScore = rules.maxAbilityScore ?? Infinity;
+    const effectiveBefore = applyStatModifiers(updated.stats, collectAllEffects(updated));
     const flexFeature: Feature = {
       id: `${newBackground.id}_flexible_asi`,
       name: 'Ability Score Increase',
       description: newBackground.flexibleAsi.prompt,
       source: { kind: 'background', refId: newBackground.id },
       level: null, actions: [], choices: [], passive: true,
-      effects: flexAsiPicks.map((ab, idx) => ({
-        type: 'stat_modifier', target: ab, operation: 'add',
-        value: flexAsiAmountFor(newBackground.flexibleAsi!.mode, flexAsiPicks, idx), condition: null,
-      })),
+      effects: flexAsiPicks.map((ab, idx) => {
+        const rawAmount = flexAsiAmountFor(newBackground.flexibleAsi!.mode, flexAsiPicks, idx);
+        const headroom  = Math.max(0, maxScore - effectiveBefore[ab]);
+        return {
+          type: 'stat_modifier' as const, target: ab, operation: 'add' as const,
+          value: Math.min(rawAmount, headroom), condition: null,
+        };
+      }),
     };
     updated = applyGrant(updated, { kind: 'feature', value: { ...flexFeature, isActive: true } }, 0);
   }
@@ -865,24 +911,60 @@ export function applySubclassToEntity(
     ? (classes.find(c => c.classId === classId)?.level ?? entity.identity.level)
     : entity.identity.level;
 
-  let updated: Entity = classId && classes
+  // SUBCLASS-CHANGE-1: this function used to be purely additive — safe the
+  // first time a subclass is picked, but calling it again to CHANGE an
+  // already-resolved subclass (see app/creation/subclass.tsx) stacked the
+  // new subclass's features/resources on top of the old one's, which were
+  // never removed. Strip whatever the PREVIOUS subclass for this specific
+  // class granted (by source.refId/sourceId === the old subclass's own id
+  // — precise even for a multiclass character with two different
+  // subclasses) before applying the new one. A first-time pick has no
+  // previous subclass id, so this is a no-op then — existing callers are
+  // unaffected. Best-effort only, same disclosed scope as removeFeature:
+  // an unresolved pending choice the OLD subclass itself queued (rare —
+  // most subclass sub-choices auto-resolve via canAutoResolve below) is
+  // not retroactively removed.
+  const previousSubclassId = classId && classes
+    ? classes.find(c => c.classId === classId)?.subclassId
+    : entity.identity.subclassId;
+  const strippedEntity: Entity = previousSubclassId
     ? {
         ...entity,
+        features: entity.features.filter(f => !(f.source.kind === 'subclass' && f.source.refId === previousSubclassId)),
+        resources: {
+          ...entity.resources,
+          custom: entity.resources.custom.filter(r => !(r.sourceKind === 'subclass' && r.sourceId === previousSubclassId)),
+        },
+      }
+    : entity;
+
+  let updated: Entity = classId && classes
+    ? {
+        ...strippedEntity,
         identity: {
-          ...entity.identity,
+          ...strippedEntity.identity,
           classes: classes.map(c => c.classId === classId ? { ...c, subclassId: asSubclassId(subclassId) } : c),
         },
       }
     : {
-        ...entity,
-        identity: { ...entity.identity, subclassId },
+        ...strippedEntity,
+        identity: { ...strippedEntity.identity, subclassId },
       };
   if (classId && classes) updated = syncLegacyIdentity(updated);
 
   for (const entry of subclassProgression.entries) {
     if (entry.level > ownClassLevel) continue;
     for (const grant of entry.grants) {
-      updated = applyGrant(updated, grant, entry.level, classId);
+      // SUBCLASS-CHANGE-1: explicit source so a resource this subclass
+      // grants (e.g. Battle Master's Superiority Dice) is correctly tagged
+      // sourceKind:'subclass' instead of defaulting to 'class' (applyGrant's
+      // own fallback when no source is passed) — required for the stripping
+      // above to actually find and remove it on a later subclass change.
+      // Features are unaffected by this — they already carry their own
+      // explicit source on the content literal itself (required for
+      // deriveSubclassId to work at all), so applyGrant's fallback never
+      // applies to them here.
+      updated = applyGrant(updated, grant, entry.level, classId, { kind: 'subclass', id: subclassId });
     }
     for (const choice of entry.choices) {
       if (canAutoResolve(choice)) {
@@ -970,6 +1052,154 @@ export function applySpellChoiceToEntity(
     choices: entity.choices.map(c =>
       c.id === choiceId ? { ...c, resolved: true, selections: spellIds } : c
     ),
+  };
+  return recomputeDerived(updated, rules);
+}
+
+// ── Expertise / Tool / Language choices ──────────────────────────────────────
+
+/**
+ * CHOICE-AUTHORING-1: authoritative pool-restriction check for the three
+ * apply*ChoiceToEntity functions below. Previously each of these trusted the
+ * caller (in practice, always a picker UI reading choiceEligibility.ts's
+ * already-filtered options) to only ever pass pool-legal ids — real for
+ * every existing UI path, but not enforced by the one place that's supposed
+ * to be authoritative for runtime legality, so a restricted pool ("choose
+ * one of smith's tools, brewer's supplies, or mason's tools") was only ever
+ * a UI-layer suggestion, not a real constraint. `'all'`/FilterExpression
+ * pools impose no extra restriction (the eligibility helpers already narrow
+ * those); a literal array pool is checked here.
+ */
+function checkPoolRestriction(pool: ChoiceDefinition['pool'], ids: string[], label: string): void {
+  if (!Array.isArray(pool)) return;
+  const legal = new Set(pool.map(o => String(o.value ?? o.id)));
+  for (const id of ids) {
+    if (!legal.has(id)) throw new Error(`"${id}" is not in this choice's ${label} pool.`);
+  }
+}
+
+/**
+ * Resolves an 'expertise' pending choice. Bypasses resolveChoice for the
+ * same reason ASI/subclass/infusion/spell do — the legal pool is computed
+ * live from the character's own current proficiencies (item 3: "eligible
+ * expertise target = character currently proficient AND not already expert
+ * AND allowed by source choice"), not a static content-authored array, so
+ * only the picker (which reads live entity.skills.skills) can know it.
+ *
+ * Applies by synthesizing ONE Feature (id `${choiceId}_grant`) whose effects
+ * are grant_proficiency/'multiply' per selected skill — the exact mechanism
+ * pipeline.ts already uses for expertise (see applyStatModifiers's sibling
+ * skill-effect handling, and AsiFeatPicker.tsx's Feat.skillChoice, the only
+ * other place in this engine that already builds this effect shape from a
+ * player pick). Granting it through applyGrant({kind:'feature',...}) — the
+ * same choke point every other feature grant goes through — means the
+ * synthetic feature is a normal entity.features entry: it shows up on the
+ * Features tab like any other, and (since its `source.kind` is inherited
+ * from the SAME class the expertise choice came from) it's swept up by the
+ * existing class-change feature-stripping logic exactly like every other
+ * class-sourced feature, satisfying item 6 without new removal machinery.
+ */
+export function applyExpertiseChoiceToEntity(
+  entity:   Entity,
+  choiceId: string,
+  skillIds: string[],
+  rules:    CampaignRules,
+): Entity {
+  const pending = entity.choices.find(c => c.id === choiceId);
+  if (!pending || pending.resolved) return entity;
+  if (skillIds.length !== pending.definition.count) {
+    throw new Error(`Expected ${pending.definition.count} expertise selections, got ${skillIds.length}.`);
+  }
+  if (new Set(skillIds).size !== skillIds.length) {
+    throw new Error('Duplicate expertise selections in the same choice.');
+  }
+  checkPoolRestriction(pending.definition.pool, skillIds, 'restricted skill');
+  for (const id of skillIds) {
+    const entry = entity.skills.skills[id as SkillName];
+    if (!entry) throw new Error(`"${id}" isn't a real skill.`);
+    if (!entry.trained) throw new Error(`Not proficient in "${id}" — expertise requires existing proficiency.`);
+    if (entry.expertise) throw new Error(`Already has expertise in "${id}".`);
+  }
+
+  const grantFeature: Feature = {
+    id: `${choiceId}_grant`,
+    name: pending.definition.prompt || 'Expertise',
+    description: `Expertise: ${skillIds.join(', ')}.`,
+    source: { kind: 'class', refId: pending.definition.forClassId ?? entity.identity.classId },
+    level: pending.grantedAt,
+    effects: skillIds.map(skillId => ({
+      type: 'grant_proficiency' as const, target: `skill:${skillId}`,
+      operation: 'multiply' as const, value: null, condition: null,
+    })),
+    actions: [], choices: [], passive: true,
+  };
+  let updated = applyGrant(entity, { kind: 'feature', value: grantFeature }, pending.grantedAt, pending.definition.forClassId);
+  updated = {
+    ...updated,
+    choices: updated.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections: skillIds } : c),
+  };
+  return recomputeDerived(updated, rules);
+}
+
+/**
+ * Resolves a 'tool' pending choice — reuses the existing Grant.kind:
+ * 'proficiency' mechanism (the same one static content already uses to
+ * grant a FIXED tool list) rather than inventing a new mutation path;
+ * `entity.proficiencies.tools` already dedupes on merge. Bypasses
+ * resolveChoice for the same 'all'-sentinel-pool reason as every other
+ * live-picker-driven choice above; a literal-array pool (a restricted
+ * "choose one of: X, Y, Z") still routes through here too — checkPoolRestriction
+ * enforces it as the authoritative check, not just the picker UI.
+ */
+export function applyToolChoiceToEntity(
+  entity:   Entity,
+  choiceId: string,
+  toolIds:  string[],
+  rules:    CampaignRules,
+): Entity {
+  const pending = entity.choices.find(c => c.id === choiceId);
+  if (!pending || pending.resolved) return entity;
+  if (toolIds.length !== pending.definition.count) {
+    throw new Error(`Expected ${pending.definition.count} tool selections, got ${toolIds.length}.`);
+  }
+  if (new Set(toolIds).size !== toolIds.length) {
+    throw new Error('Duplicate tool selections in the same choice.');
+  }
+  checkPoolRestriction(pending.definition.pool, toolIds, 'restricted tool');
+  for (const id of toolIds) {
+    if (entity.proficiencies.tools.includes(id)) throw new Error(`Already proficient with "${id}".`);
+  }
+  let updated = applyGrant(entity, { kind: 'proficiency', value: { tools: toolIds } }, pending.grantedAt, pending.definition.forClassId);
+  updated = {
+    ...updated,
+    choices: updated.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections: toolIds } : c),
+  };
+  return recomputeDerived(updated, rules);
+}
+
+/** Resolves a 'language' pending choice — same shape as applyToolChoiceToEntity above, targeting entity.proficiencies.languages instead. */
+export function applyLanguageChoiceToEntity(
+  entity:      Entity,
+  choiceId:    string,
+  languageIds: string[],
+  rules:       CampaignRules,
+): Entity {
+  const pending = entity.choices.find(c => c.id === choiceId);
+  if (!pending || pending.resolved) return entity;
+  if (languageIds.length !== pending.definition.count) {
+    throw new Error(`Expected ${pending.definition.count} language selections, got ${languageIds.length}.`);
+  }
+  if (new Set(languageIds).size !== languageIds.length) {
+    throw new Error('Duplicate language selections in the same choice.');
+  }
+  checkPoolRestriction(pending.definition.pool, languageIds, 'restricted language');
+  for (const id of languageIds) {
+    if (entity.proficiencies.languages.includes(id)) throw new Error(`Already knows "${id}".`);
+  }
+  let updated = applyGrant(entity, { kind: 'proficiency', value: { languages: languageIds } }, pending.grantedAt, pending.definition.forClassId);
+  updated = {
+    ...updated,
+    choices: updated.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections: languageIds } : c),
   };
   return recomputeDerived(updated, rules);
 }
@@ -1321,6 +1551,95 @@ export function resolveChoice(
     choices: updated.choices.map(c =>
       c.id === choiceId ? { ...c, resolved: true, selections } : c
     )
+  };
+
+  return recomputeDerived(updated, rules);
+}
+
+// ── STARTING-EQUIPMENT-1 ─────────────────────────────────────────────────────
+// A dedicated resolver for kind:'equipment' choices using the new
+// exact_options/bundle_options/filtered_item styles (ChoiceDefinition's own
+// doc comment explains the shapes). Deliberately separate from
+// resolveChoice() above rather than folding into it: resolveChoice's
+// `selections: string[]` contract (each entry a pool-option id) doesn't fit
+// a filtered_item choice, whose "selections" are real item ids with no pool
+// at all — extending that one shared function's contract to cover this would
+// risk every OTHER choice kind it already serves (skill/spell/language/...).
+// Every existing equipment choice literal in src/content (no `equipmentStyle`
+// set) is untouched and keeps going through resolveChoice() exactly as
+// before — this function is additive, not a replacement.
+
+export type EquipmentChoiceResolution =
+  | { style: 'filtered_item'; itemIds: string[] }
+  | { style: 'exact_options' | 'bundle_options'; optionId: string; filteredItemIds?: string[] };
+
+/** Caller supplies item lookup (Tier-1 index entries) — this function does
+ *  no I/O and doesn't care whether the source is the official spellRepo-
+ *  style index, homebrew, or a merge of both. */
+export function resolveEquipmentChoice(
+  entity: Entity,
+  choiceId: string,
+  resolution: EquipmentChoiceResolution,
+  itemLookup: (id: string) => ItemIndexEntry | undefined,
+  rules: CampaignRules,
+): Entity {
+  const pending = entity.choices.find(c => c.id === choiceId);
+  if (!pending) throw new Error(`Choice not found: ${choiceId}`);
+  if (pending.definition.kind !== 'equipment') throw new Error(`Not an equipment choice: ${choiceId}`);
+
+  function requireMatches(ids: string[], constraint: ItemFilterConstraint) {
+    for (const id of ids) {
+      const item = itemLookup(id);
+      if (!item || !itemMatchesConstraint(item, constraint)) {
+        throw new Error(`Item "${id}" does not satisfy the required constraint for this choice.`);
+      }
+    }
+  }
+
+  let fixedItemIds: string[] = [];
+  let filteredItemIds: string[] = [];
+  let selections: string[] = [];
+
+  if (resolution.style === 'filtered_item') {
+    const constraint = pending.definition.itemFilter ?? {};
+    if (resolution.itemIds.length !== pending.definition.count) {
+      throw new Error(`Expected ${pending.definition.count} item(s), got ${resolution.itemIds.length}.`);
+    }
+    requireMatches(resolution.itemIds, constraint);
+    filteredItemIds = resolution.itemIds;
+    selections = filteredItemIds;
+  } else {
+    const pool = Array.isArray(pending.definition.pool) ? pending.definition.pool : [];
+    const option = pool.find(o => o.id === resolution.optionId);
+    if (!option) throw new Error(`Invalid selection: ${resolution.optionId}`);
+    fixedItemIds = Array.isArray(option.value) ? option.value as string[] : [];
+    if (option.itemFilter) {
+      const got = resolution.filteredItemIds ?? [];
+      if (got.length !== option.itemFilter.quantity) {
+        throw new Error(`Expected ${option.itemFilter.quantity} item(s), got ${got.length}.`);
+      }
+      requireMatches(got, option.itemFilter.constraint);
+      filteredItemIds = got;
+    }
+    selections = [resolution.optionId, ...filteredItemIds];
+  }
+
+  let updated = entity;
+  for (const grant of pending.definition.grants) {
+    updated = applyGrant(updated, grant, pending.grantedAt);
+  }
+  for (const itemId of [...fixedItemIds, ...filteredItemIds]) {
+    updated = {
+      ...updated,
+      inventory: {
+        ...updated.inventory,
+        carried: [...updated.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }],
+      },
+    };
+  }
+  updated = {
+    ...updated,
+    choices: updated.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections } : c),
   };
 
   return recomputeDerived(updated, rules);

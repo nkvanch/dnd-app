@@ -5,7 +5,7 @@
 // single, platform-independent type surface regardless of which one Metro
 // actually resolves.
 // ============================================================================
-import { Entity, Feature, Spell } from '../engine/types';
+import { Entity, Feature, Spell, RulesetId } from '../engine/types';
 
 /**
  * Tier 1 — the lightweight fields browse/filter/search UIs actually key on.
@@ -24,6 +24,20 @@ export type SpellIndexEntry = {
   concentration: boolean;
   classes?:      string[];
   srd?:          boolean;
+  /**
+   * TIER1-EXT-1: added so Ruleset (and the derived Source filter — see
+   * getContentProvenance()) don't need a Tier-2 full-record load just to
+   * filter — same reasoning as ItemIndexEntry.rulesetId.
+   */
+  rulesetId?:    RulesetId;
+  /**
+   * TIER1-EXT-1: V/S/M component letters — real field on the full Spell
+   * type (`components: string[]`), added here specifically so the
+   * Components filter doesn't need Tier-2 loading. A prior header comment
+   * in AddSpellModal.tsx claimed this filter already existed when it
+   * didn't (fixed this session) — this is what makes that claim true.
+   */
+  components?:   string[];
 };
 
 export interface SpellRepo {

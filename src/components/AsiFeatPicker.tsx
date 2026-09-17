@@ -8,11 +8,25 @@ import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Modal } from 
 import { applyAsiToEntity, applyFeatToEntity } from '../engine/leveling';
 import { applyStatModifiers, collectAllEffects } from '../engine/pipeline';
 import { evaluatePrerequisite } from '../engine/featPrereq';
+import {
+  hasAbilityRequirement, hasSpellcastingRequirement, hasArmorProfRequirement,
+  hasWeaponProfRequirement, hasLevelRequirement, hasRaceRequirement,
+  featGrantsAsi, featGrantsProficiency, featGrantsActivation, featSortOptions,
+} from '../content/feats/featBrowse';
+import { sortByOption } from '../content/contentQuery';
 import { asiMode as getAsiMode } from '../engine/houseRules';
 import { ALL_FEATS } from '../content/feats/index';
-import { useHomebrewStore } from '../store/homebrewStore';
-import { Entity, ChoiceState, CampaignRules, Ability, SkillName, Feat } from '../engine/types';
+import { useHomebrewStore, homebrewWinsById } from '../store/homebrewStore';
+import { Entity, ChoiceState, CampaignRules, Ability, SkillName, Feat, matchesRuleset } from '../engine/types';
 import { FeatPreviewModal } from './FeatPreviewModal';
+import { NonSrdBadge, isNonSrd } from './NonSrdBadge';
+import {
+  FilterSection, FilterChipRow, MultiSelectChipRow, OfficialHomebrewChipRow,
+  ActiveFilterChips,
+} from './FilterChipRow';
+import { SortControl } from './SortControl';
+import { usePendingSelectionStore } from '../store/pendingSelectionStore';
+import { useBrowseStateStore } from '../store/browseStateStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 const ABILITIES: { key: Ability; label: string }[] = [
@@ -38,6 +52,16 @@ const SKILL_LIST: { key: SkillName; label: string }[] = [
 
 type Mode = '+2' | '+1+1' | 'feat';
 
+/** LIVE-RULESET-2 (item 1): the picker's own ruleset-compatibility filter,
+ *  extracted as a pure function so it's directly unit-testable without
+ *  rendering the RN component (matching this codebase's established
+ *  preference — see rulesetChange.test.ts, FeatPreviewModal.test.ts, etc.
+ *  — for testing pure logic directly rather than through a render). The
+ *  component below calls this exact function, not a re-derived copy. */
+export function filterFeatsByRuleset(feats: Feat[], entityRulesetId: Entity['rulesetId']): Feat[] {
+  return feats.filter(f => matchesRuleset(f.rulesetId, entityRulesetId));
+}
+
 export function AsiFeatPicker({
   entity,
   choice,
@@ -45,6 +69,9 @@ export function AsiFeatPicker({
   onResolved,
   onClose,
   featOnly = false,
+  progressNote,
+  onCreateNewFeat,
+  browseStateKey,
 }: {
   entity:     Entity;
   choice:     ChoiceState;
@@ -53,6 +80,28 @@ export function AsiFeatPicker({
   onClose?:   () => void;
   /** When true, only the Feat path is shown (used for feats taken at creation). */
   featOnly?:  boolean;
+  /** REPEATED-CHOICE-1: optional note shown under the heading when this
+   *  picker is one of a CHAIN of pending choices being resolved back-to-back
+   *  (e.g. "2 more ASI/feat choices after this one") — callers that chain
+   *  multiple ChoiceState resolutions through one picker instance pass this
+   *  so the player knows more are coming without needing to bounce back to
+   *  a list in between. */
+  progressNote?: string;
+  /** SAVE-AND-ADD-1: opens the homebrew feat builder (e.g. `() =>
+   *  router.push('/homebrew/feat-builder')`). Left to the caller rather
+   *  than importing `useRouter` directly in this shared component — this
+   *  file is imported by non-route consumers (e.g. TabExploration.tsx)
+   *  whose Jest tests don't transform expo-router's ESM output, so a
+   *  module-level `expo-router` import here breaks those tests. Button is
+   *  hidden entirely when omitted. */
+  onCreateNewFeat?: () => void;
+  /** BROWSE-STATE-1: context-aware persistence key for this picker's own
+   *  search/filters/sort (e.g. "feat:creation", "feat:levelup", "feat:live")
+   *  — different hosting contexts get their own state so a filter set while
+   *  leveling up doesn't leak into the in-play "+Feat" ad-hoc picker, etc.
+   *  Omitted entirely = no persistence (safe default for any caller not
+   *  yet updated to pass one). */
+  browseStateKey?: string;
 }) {
   const [mode,   setMode]   = useState<Mode>(
     featOnly ? 'feat' : '+2'
@@ -69,7 +118,56 @@ export function AsiFeatPicker({
   const [first,  setFirst]  = useState<Ability | null>(null);
   const [second, setSecond] = useState<Ability | null>(null);
   const [featId, setFeatId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  // BROWSE-STATE-1: restore this picker's own search/filters/sort from the
+  // context-aware key the caller passed in (undefined key = no restore, a
+  // fresh, empty state every time — the pre-existing behavior for any
+  // caller not yet updated).
+  const savedBrowse = browseStateKey ? useBrowseStateStore.getState().getBrowseState(browseStateKey) : {};
+  const savedFilters = savedBrowse.filters ?? {};
+  const [search, setSearch] = useState(savedBrowse.search ?? '');
+  // CREATION-FILTERS-1: prerequisite is a real field on Feat (free text,
+  // but presence/absence is a clean binary) — helps a player quickly find
+  // feats they actually qualify to take without reading every card.
+  const [prereqFilter, setPrereqFilter] = useState<'all' | 'none' | 'has'>((savedFilters.prereqFilter as 'all' | 'none' | 'has') ?? 'all');
+  // Official/Homebrew — real, derived from homebrewFeatIds membership.
+  const [officialFilter, setOfficialFilter] = useState<'all' | 'official' | 'homebrew'>((savedFilters.officialFilter as 'all' | 'official' | 'homebrew') ?? 'all');
+  // Source/Pack — Feat.source is a REAL per-item field (named sourcebook
+  // constants for official feats, e.g. PHB/XGE/TCE; author-chosen or
+  // 'Homebrew' for homebrew ones) — a distinct axis from Official/Homebrew,
+  // not collapsed into it. Multi-select: OR within this field.
+  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set((savedFilters.sourceFilter as string[] | undefined) ?? []));
+  // FILTER-METADATA-3: requirement-type is derived from the same
+  // prerequisite text evaluatePrerequisite() already parses (see
+  // featBrowse.ts) — a feat's prerequisite can legitimately match more
+  // than one facet (e.g. Cartomancer: "4th level, Spellcasting feature"),
+  // so this is OR-within-field like every other multi-select here.
+  // Grants-ASI/Proficiency/Activation are real, structured Feat/Feature
+  // fields, no parsing involved.
+  const [requirementFilter, setRequirementFilter] = useState<Set<string>>(new Set((savedFilters.requirementFilter as string[] | undefined) ?? []));
+  // OR-within-field, matching every other multi-select filter in this app
+  // (FilterChipRow.tsx's documented convention) — selecting both ASI and
+  // Proficiency shows feats granting EITHER, not only feats granting both.
+  const [grantsFilter, setGrantsFilter] = useState<Set<'asi' | 'proficiency' | 'activation'>>(
+    new Set((savedFilters.grantsFilter as ('asi' | 'proficiency' | 'activation')[] | undefined) ?? [])
+  );
+  // Eligibility — real, evaluated against THIS entity via the same
+  // evaluatePrerequisite() the "take anyway" override already uses.
+  const [eligibilityFilter, setEligibilityFilter] = useState<'all' | 'eligible' | 'ineligible'>((savedFilters.eligibilityFilter as 'all' | 'eligible' | 'ineligible') ?? 'all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState(savedBrowse.sort ?? 'name_asc');
+
+  useEffect(() => {
+    if (!browseStateKey) return;
+    useBrowseStateStore.getState().setBrowseState(browseStateKey, {
+      search, sort,
+      filters: {
+        prereqFilter, officialFilter, eligibilityFilter,
+        sourceFilter: Array.from(sourceFilter),
+        requirementFilter: Array.from(requirementFilter),
+        grantsFilter: Array.from(grantsFilter),
+      },
+    });
+  }, [browseStateKey, search, sort, prereqFilter, officialFilter, eligibilityFilter, sourceFilter, requirementFilter, grantsFilter]);
   // When a player selects a feat whose prerequisite isn't met, we stash it here
   // to drive the "get anyway" confirmation popup.
   const [overridePrompt, setOverridePrompt] = useState<{ featId: string; reason: string } | null>(null);
@@ -108,10 +206,49 @@ export function AsiFeatPicker({
   // alongside the Feature-Editor workaround above, not replacing it (no
   // migration, existing homebrew feats made the old way keep working).
   const homebrewRealFeats = useHomebrewStore(s => s.feats);
+  // Deduped by id with homebrew winning — same homebrewWinsById precedence
+  // used everywhere else content merges happen. Previously a plain concat
+  // with no dedup at all: a colliding id produced a duplicate React key
+  // AND, worse, an internal contradiction — the feat actually applied
+  // (allFeats.find, first match) and the prerequisite enforced (prereqById,
+  // a Record — last write wins) resolved to OPPOSITE entries by accident of
+  // JS array/object semantics (audit finding AICKPICKER-1). Between the two
+  // homebrew sources, the real feat-builder's feats win over the older
+  // Feature-Editor workaround on collision — the more complete authoring
+  // path, and the one added second here.
+  // LIVE-RULESET-2 (spec item 1): filtered by the CHARACTER's own
+  // entity.rulesetId (always available — this component is never rendered
+  // without a real, current entity, see every call site) rather than any
+  // app-global/Compendium ruleset state, so a filter set while browsing
+  // the Compendium can never leak into this picker or vice versa. Untagged
+  // feats (rulesetId undefined — every feat authored before 5.5e, i.e.
+  // nearly all of them) stay visible under every ruleset via
+  // matchesRuleset's own "untagged = shared" rule; an entity with no
+  // rulesetId of its own (every character created before this feature, or
+  // one that's never been switched) applies no filter at all, matching
+  // today's unfiltered behavior exactly.
   const allFeats = useMemo(
-    () => [...ALL_FEATS, ...homebrewFeats, ...homebrewRealFeats],
+    () => filterFeatsByRuleset(homebrewWinsById(ALL_FEATS, homebrewWinsById(homebrewFeats, homebrewRealFeats)), entity.rulesetId),
+    [homebrewFeats, homebrewRealFeats, entity.rulesetId],
+  );
+  // For NonSrdBadge gating — a feat whose winning entry came from either
+  // homebrew source is never flagged "Non-SRD" (that's for official content
+  // that isn't SRD-safe; homebrew is the user's own work).
+  const homebrewFeatIds = useMemo(
+    () => new Set([...homebrewFeats.map(f => f.id), ...homebrewRealFeats.map(f => f.id)]),
     [homebrewFeats, homebrewRealFeats],
   );
+
+  // SAVE-AND-ADD-1: returning from "+ Create new homebrew feat" — select it
+  // (same as tapping its row) rather than silently applying it, so the
+  // player still confirms via the normal Take/Apply flow.
+  useEffect(() => {
+    const newId = usePendingSelectionStore.getState().consumePending('feat_picker');
+    if (newId && allFeats.some(f => f.id === newId)) {
+      setMode('feat');
+      setFeatId(newId);
+    }
+  }, [allFeats]);
 
   // Evaluate each feat's prerequisite against the current entity once.
   const prereqById = useMemo(() => {
@@ -131,12 +268,51 @@ export function AsiFeatPicker({
     () => new Set(entity.features.filter(f => f.source.kind === 'feat').map(f => f.source.refId)),
     [entity.features],
   );
+  const availableSources = useMemo(
+    () => Array.from(new Set(allFeats.map(f => f.source))).sort().map(s => ({ id: s, label: s })),
+    [allFeats],
+  );
+  const REQUIREMENT_CHECKS: Record<string, (p: string | null) => boolean> = {
+    ability: hasAbilityRequirement, spellcasting: hasSpellcastingRequirement,
+    armor: hasArmorProfRequirement, weapon: hasWeaponProfRequirement,
+    level: hasLevelRequirement, race: hasRaceRequirement,
+  };
+  const sortOptions = useMemo(() => featSortOptions(entity, f => homebrewFeatIds.has(f.id)), [entity, homebrewFeatIds]);
   const filteredFeats = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return allFeats
+    const filtered = allFeats
       .filter(f => !takenFeatIds.has(f.id))
-      .filter(f => q === '' || f.name.toLowerCase().includes(q) || f.description.toLowerCase().includes(q));
-  }, [search, takenFeatIds, allFeats]);
+      .filter(f => q === '' || f.name.toLowerCase().includes(q) || f.description.toLowerCase().includes(q))
+      .filter(f => prereqFilter === 'all' || (prereqFilter === 'none' ? !f.prerequisite : !!f.prerequisite))
+      .filter(f => officialFilter === 'all' || (officialFilter === 'homebrew') === homebrewFeatIds.has(f.id))
+      .filter(f => sourceFilter.size === 0 || sourceFilter.has(f.source))
+      .filter(f => requirementFilter.size === 0 || Array.from(requirementFilter).some(r => REQUIREMENT_CHECKS[r](f.prerequisite)))
+      .filter(f => grantsFilter.size === 0 || Array.from(grantsFilter).some(g =>
+        g === 'asi' ? featGrantsAsi(f) : g === 'proficiency' ? featGrantsProficiency(f) : featGrantsActivation(f)))
+      .filter(f => eligibilityFilter === 'all' || (prereqById[f.id]?.met ?? true) === (eligibilityFilter === 'eligible'));
+    return sortByOption(filtered, sortOptions, sort);
+  }, [search, takenFeatIds, allFeats, prereqFilter, officialFilter, sourceFilter, homebrewFeatIds, requirementFilter, grantsFilter, eligibilityFilter, prereqById, sortOptions, sort]);
+
+  const REQUIREMENT_LABELS: Record<string, string> = {
+    ability: 'Ability req.', spellcasting: 'Spellcasting req.', armor: 'Armor prof. req.',
+    weapon: 'Weapon prof. req.', level: 'Level req.', race: 'Race req.',
+  };
+  const activeFilterChips = [
+    ...(prereqFilter !== 'all' ? [{ key: 'prereq', label: prereqFilter === 'none' ? 'No prerequisite' : 'Has prerequisite', onClear: () => setPrereqFilter('all') }] : []),
+    ...(officialFilter !== 'all' ? [{ key: 'official', label: officialFilter === 'official' ? 'Official' : 'Homebrew', onClear: () => setOfficialFilter('all') }] : []),
+    ...(eligibilityFilter !== 'all' ? [{ key: 'eligibility', label: eligibilityFilter === 'eligible' ? 'Eligible' : 'Ineligible', onClear: () => setEligibilityFilter('all') }] : []),
+    ...Array.from(sourceFilter).map(s => ({ key: `src_${s}`, label: s, onClear: () => setSourceFilter(prev => { const n = new Set(prev); n.delete(s); return n; }) })),
+    ...Array.from(requirementFilter).map(r => ({ key: `req_${r}`, label: REQUIREMENT_LABELS[r], onClear: () => setRequirementFilter(prev => { const n = new Set(prev); n.delete(r); return n; }) })),
+    ...Array.from(grantsFilter).map(g => ({ key: `grants_${g}`, label: `Grants ${g}`, onClear: () => setGrantsFilter(prev => { const n = new Set(prev); n.delete(g); return n; }) })),
+  ];
+  function clearAllFilters() {
+    setEligibilityFilter('all');
+    setPrereqFilter('all');
+    setOfficialFilter('all');
+    setSourceFilter(new Set());
+    setRequirementFilter(new Set());
+    setGrantsFilter(new Set());
+  }
 
   function canApply(): boolean {
     if (mode === '+2')   return first !== null;
@@ -154,10 +330,19 @@ export function AsiFeatPicker({
   function featureToApply(f: Feat): Feat['feature'] {
     const extra: Feat['feature']['effects'] = [];
     if (f.abilityChoice && featAbility) {
-      extra.push({
-        type: 'stat_modifier', target: featAbility,
-        operation: 'add', value: f.abilityChoice.amount, condition: null,
-      });
+      // ABILITY-CAP-1: clamp to remaining headroom under the effective cap —
+      // same rule applyAsiToEntity() already enforces for the plain ASI
+      // path (rules.maxAbilityScore, default Infinity when uncapped). A
+      // feat's fixed bonus (e.g. Resilient's +1) must not push a score past
+      // a house-ruled cap above 20 either.
+      const headroom = Math.max(0, maxScore - effectiveStats[featAbility]);
+      const amount = Math.min(f.abilityChoice.amount, headroom);
+      if (amount > 0) {
+        extra.push({
+          type: 'stat_modifier', target: featAbility,
+          operation: 'add', value: amount, condition: null,
+        });
+      }
     }
     if (f.skillChoice) {
       for (const pick of f.skillChoice.picks) {
@@ -207,7 +392,7 @@ export function AsiFeatPicker({
         },
       };
     }
-    const updated = applyFeatToEntity(baseEntity, choice.id, choice.grantedAt, featureToApply(feat), feat.id, rules);
+    const updated = applyFeatToEntity(baseEntity, choice.id, choice.grantedAt, featureToApply(feat), feat.id, rules, feat.pendingChoices);
     setOverridePrompt(null);
     setPendingFeat({ before: originalEntity, after: updated, feat });
   }
@@ -281,6 +466,7 @@ export function AsiFeatPicker({
         )}
       </View>
       <Text style={styles.sub}>{choice.definition.prompt}</Text>
+      {progressNote && <Text style={styles.progressNote}>{progressNote}</Text>}
 
       {/* Mode picker — visibility depends on the table's ASI rule. */}
       {!featOnly && (showAsiTabs || showFeatTab) && (
@@ -326,13 +512,79 @@ export function AsiFeatPicker({
 
       {mode === 'feat' ? (
         <>
-          <TextInput
-            style={styles.search}
-            placeholder="Search feats…"
-            placeholderTextColor={Colors.textSecondary}
-            value={search}
-            onChangeText={setSearch}
-          />
+          <View style={styles.searchRow}>
+            <TextInput
+              style={[styles.search, styles.searchFlex]}
+              placeholder="Search feats…"
+              placeholderTextColor={Colors.textSecondary}
+              value={search}
+              onChangeText={setSearch}
+            />
+          </View>
+          <View style={styles.controlsRow}>
+            <Pressable
+              style={[styles.filtersToggle, filtersOpen && styles.filtersToggleActive]}
+              onPress={() => setFiltersOpen(v => !v)}
+            >
+              <Text style={[styles.filtersToggleTxt, filtersOpen && styles.filtersToggleTxtActive]}>Filters</Text>
+            </Pressable>
+            <SortControl options={sortOptions} value={sort} onChange={setSort} />
+          </View>
+          {onCreateNewFeat && (
+            <Pressable style={styles.createFeatBtn} onPress={onCreateNewFeat}>
+              <Text style={styles.createFeatBtnTxt}>+ Create new homebrew feat</Text>
+            </Pressable>
+          )}
+          {filtersOpen && (
+            <View style={styles.filterPanel}>
+              <FilterSection label="Eligibility">
+                <FilterChipRow
+                  options={[
+                    { id: 'eligible' as const, label: 'Eligible' },
+                    { id: 'ineligible' as const, label: 'Ineligible' },
+                  ]}
+                  value={eligibilityFilter === 'all' ? null : eligibilityFilter}
+                  onChange={v => setEligibilityFilter(v ?? 'all')}
+                />
+              </FilterSection>
+              <FilterSection label="Prerequisite">
+                <FilterChipRow
+                  options={[
+                    { id: 'none' as const, label: 'No prerequisite' },
+                    { id: 'has' as const,  label: 'Has prerequisite' },
+                  ]}
+                  value={prereqFilter === 'all' ? null : prereqFilter}
+                  onChange={v => setPrereqFilter(v ?? 'all')}
+                />
+              </FilterSection>
+              <FilterSection label="Official / Homebrew">
+                <OfficialHomebrewChipRow value={officialFilter} onChange={setOfficialFilter} />
+              </FilterSection>
+              <FilterSection label="Source">
+                <MultiSelectChipRow options={availableSources} values={sourceFilter} onChange={setSourceFilter} scrollable />
+              </FilterSection>
+              <FilterSection label="Requirement Type">
+                <MultiSelectChipRow
+                  options={Object.keys(REQUIREMENT_LABELS).map(id => ({ id, label: REQUIREMENT_LABELS[id] }))}
+                  values={requirementFilter}
+                  onChange={setRequirementFilter}
+                  scrollable
+                />
+              </FilterSection>
+              <FilterSection label="Grants">
+                <MultiSelectChipRow
+                  options={[
+                    { id: 'asi' as const, label: 'ASI' },
+                    { id: 'proficiency' as const, label: 'Proficiency' },
+                    { id: 'activation' as const, label: 'Action/Activation' },
+                  ]}
+                  values={grantsFilter}
+                  onChange={setGrantsFilter}
+                />
+              </FilterSection>
+            </View>
+          )}
+          <ActiveFilterChips chips={activeFilterChips} onClearAll={clearAllFilters} />
           <View style={styles.featList}>
             {filteredFeats.map(f => {
               const selected = featId === f.id;
@@ -346,6 +598,7 @@ export function AsiFeatPicker({
                 >
                   <View style={styles.featHeader}>
                     <Text style={styles.featName}>{f.name}</Text>
+                    {!homebrewFeatIds.has(f.id) && isNonSrd(f.srd) && <NonSrdBadge />}
                     {selected && <Text style={styles.featCheck}>✓</Text>}
                     {unmet && !selected && <Text style={styles.featLock}>⚠</Text>}
                   </View>
@@ -366,14 +619,20 @@ export function AsiFeatPicker({
                         {f.abilityChoice.options.map(ab => {
                           const picked = featAbility === ab;
                           const abLabel = ABILITIES.find(a => a.key === ab)?.label ?? ab;
+                          // ABILITY-CAP-1: an ability already at (or past) the
+                          // effective cap can't take this bonus — same
+                          // headroom rule the ASI grid above already applies,
+                          // now consistent across every ability-mutating path.
+                          const atCap = effectiveStats[ab] >= maxScore;
                           return (
                             <Pressable
                               key={ab}
-                              style={[styles.featChoiceChip, picked && styles.featChoiceChipActive]}
+                              style={[styles.featChoiceChip, picked && styles.featChoiceChipActive, atCap && styles.featChoiceChipDisabled]}
+                              disabled={atCap}
                               onPress={() => setFeatAbility(picked ? null : ab)}
                             >
                               <Text style={[styles.featChoiceTxt, picked && styles.featChoiceTxtActive]}>
-                                {abLabel}
+                                {abLabel}{atCap ? ' (Max)' : ''}
                               </Text>
                             </Pressable>
                           );
@@ -450,7 +709,11 @@ export function AsiFeatPicker({
               );
             })}
             {filteredFeats.length === 0 && (
-              <Text style={styles.featEmpty}>No feats match “{search}”.</Text>
+              <Text style={styles.featEmpty}>
+                {activeFilterChips.length > 0
+                  ? 'No feats match your filters.'
+                  : `No feats match "${search}".`}
+              </Text>
             )}
           </View>
         </>
@@ -581,6 +844,7 @@ const styles = StyleSheet.create({
   heading:   { flex: 1, flexShrink: 1, fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.gold, marginBottom: Spacing.xs },
   close:     { fontSize: FontSize.xl, color: Colors.textSecondary, paddingLeft: Spacing.md },
   sub:       { fontSize: FontSize.md, color: Colors.textSecondary, marginBottom: Spacing.xl },
+  progressNote: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold, marginTop: -Spacing.lg, marginBottom: Spacing.lg },
 
   modeRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
   bothHint: { fontSize: FontSize.sm, color: Colors.gold, fontStyle: 'italic', marginBottom: Spacing.sm, lineHeight: 19 },
@@ -610,8 +874,25 @@ const styles = StyleSheet.create({
   search: {
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
     borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    color: Colors.textPrimary, fontSize: FontSize.md, marginBottom: Spacing.md,
+    color: Colors.textPrimary, fontSize: FontSize.md,
   },
+  searchRow:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.xs },
+  searchFlex: { flex: 1 },
+  controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.xs },
+  filtersToggle: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.surface, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
+  },
+  filtersToggleActive:  { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  filtersToggleTxt:     { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  filtersToggleTxtActive: { color: Colors.gold },
+  filterPanel: { marginBottom: Spacing.xs },
+  createFeatBtn: {
+    alignSelf: 'flex-start', backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 3, marginBottom: Spacing.xs,
+  },
+  createFeatBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
   featList: { gap: Spacing.sm, marginBottom: Spacing.xl },
   featRow: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,
@@ -634,6 +915,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 4,
   },
   featChoiceChipActive: { backgroundColor: Colors.gold + '33', borderColor: Colors.gold },
+  featChoiceChipDisabled: { opacity: 0.4 },
   featChoiceTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
   featChoiceTxtActive: { color: Colors.gold },
   featSkillEmpty: { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },

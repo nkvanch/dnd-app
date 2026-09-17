@@ -43,6 +43,29 @@ describe('packRegistryRepo', () => {
     expect(packs).toEqual([{ id: 'pack_1', name: 'My Pack', importedAt: 1234, itemRefs: refs }]);
   });
 
+  // HOMEBREW-PACKAGE-1 item 15: package provenance (packageVersion/author)
+  // round-trips through the registry — added alongside items/importedAt.
+  it('recordInstalledPack persists packageVersion/author when given, and loadInstalledPacks reads them back', async () => {
+    await repo.recordInstalledPack('pack_2', 'Tideborn Collection', [{ type: 'race', id: 'tideborn' }], { packageVersion: '1.2', author: 'Test Author' });
+    const [, params] = runAsync.mock.calls[0];
+    expect(params[4]).toBe('1.2');
+    expect(params[5]).toBe('Test Author');
+
+    getAllAsync.mockResolvedValue([
+      { id: 'pack_2', name: 'Tideborn Collection', importedAt: 5678, itemRefs: JSON.stringify([{ type: 'race', id: 'tideborn' }]), packageVersion: '1.2', author: 'Test Author' },
+    ]);
+    const packs = await repo.loadInstalledPacks();
+    expect(packs[0].packageVersion).toBe('1.2');
+    expect(packs[0].author).toBe('Test Author');
+  });
+
+  it('recordInstalledPack stores null (not the string "undefined") when packageVersion/author are omitted', async () => {
+    await repo.recordInstalledPack('pack_3', 'No Metadata Pack', []);
+    const [, params] = runAsync.mock.calls[0];
+    expect(params[4]).toBeNull();
+    expect(params[5]).toBeNull();
+  });
+
   it('loadInstalledPacks returns an empty array when nothing is installed', async () => {
     getAllAsync.mockResolvedValue([]);
     expect(await repo.loadInstalledPacks()).toEqual([]);

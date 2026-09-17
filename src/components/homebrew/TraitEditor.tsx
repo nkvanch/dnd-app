@@ -18,7 +18,7 @@ import { DraftTrait, TraitEffectKind, Ability } from '../../engine/types';
 import {
   ABILITIES, SENSE_TYPES, MOVE_TYPES, SKILLS, ACTION_TYPES, RECHARGE_TYPES,
   COMMON_TOOLS, COMMON_DAMAGE_TYPES, SPEED_ZEROING_CONDITIONS,
-  toId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace,
+  toId, disambiguateId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace,
 } from '../../content/traitCompiler';
 import type { MoveType, DraftSubrace } from '../../content/traitCompiler';
 // The one trait-editor field needing live content-DB/store access — every
@@ -33,7 +33,7 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 export {
   ABILITIES, SENSE_TYPES, MOVE_TYPES, SKILLS, ACTION_TYPES, RECHARGE_TYPES,
   COMMON_TOOLS, COMMON_DAMAGE_TYPES, SPEED_ZEROING_CONDITIONS,
-  toId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace,
+  toId, disambiguateId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace,
 };
 export type { MoveType, DraftSubrace };
 

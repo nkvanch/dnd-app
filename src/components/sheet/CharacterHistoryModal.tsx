@@ -92,6 +92,7 @@ const FILTERS: { key: TimelineCategory | 'all'; label: string }[] = [
   { key: 'spells',    label: 'Spells' },
   { key: 'leveling',  label: 'Leveling' },
   { key: 'features',  label: 'Features' },
+  { key: 'ruleset',   label: 'Ruleset' },
   { key: 'other',     label: 'Other' },
 ];
 

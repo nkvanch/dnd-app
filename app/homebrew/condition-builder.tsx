@@ -19,18 +19,21 @@ import {
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Condition, DraftTrait, Entity } from '../../src/engine/types';
+import { Condition, DraftTrait, Entity, RulesetId } from '../../src/engine/types';
 import { validateRace } from '../../src/engine/homebrewValidator';
 import { Alert } from '../../src/utils/alert';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
-import { toId, buildTraitFeature, TraitListEditor } from '../../src/components/homebrew/TraitEditor';
+import { toId, disambiguateId, buildTraitFeature, TraitListEditor } from '../../src/components/homebrew/TraitEditor';
+import { ALL_CONDITIONS } from '../../src/content/conditions/index';
 import { applyCondition } from '../../src/engine/conditions';
 import { simulate } from '../../src/engine/simulate';
 import { buildFeatureGrantRows } from '../../src/components/sheet/featureGrantRows';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
-import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 export default function ConditionBuilderScreen() {
@@ -39,6 +42,8 @@ export default function ConditionBuilderScreen() {
   const conditions = useHomebrewStore(s => s.conditions);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing  = editId ? conditions.find(c => c.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name,        setName]        = useState('');
   const [description, setDescription] = useState('');
@@ -57,12 +62,18 @@ export default function ConditionBuilderScreen() {
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     setDescription(editing.description);
     setTraits([]);
   }, [editing?.id]);
 
   function buildCondition(): Condition {
-    const id = editing?.id ?? (toId(name) || 'homebrew_condition');
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
+    const takenConditionIds = new Set([
+      ...ALL_CONDITIONS.map(c => c.id),
+      ...conditions.filter(c => c.id !== editing?.id).map(c => c.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_condition', takenConditionIds);
     const features = [];
     const usedIds = new Set<string>();
     for (const t of traits) {
@@ -75,6 +86,7 @@ export default function ConditionBuilderScreen() {
       name: name.trim(),
       description: description.trim(),
       features,
+      rulesetId,
     };
   }
 
@@ -137,6 +149,11 @@ export default function ConditionBuilderScreen() {
           <Text style={styles.fieldLabel}>Name *</Text>
           <TextInput style={styles.input} value={name} onChangeText={setName}
             placeholder="Condition name" placeholderTextColor={Colors.textDim} />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Game / Ruleset</Text>
+          <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
         </View>
 
         <View style={styles.field}>

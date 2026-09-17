@@ -2,12 +2,26 @@
 // FILE: src/content/backgrounds/index.ts
 // All 13 PHB backgrounds.
 // ============================================================================
-import { Background, asRulesetId } from '../../engine/types';
+import { Background, RulesetId, ChoiceOption, BACKGROUND_CHOICE_PREFIX } from '../../engine/types';
+import { ALL_TOOLS } from '../tools';
+
+/** CHOICE-EXPANSION-2: same helper other content files use — restricts a
+ * tool choice's pool to one or more canonical categories. */
+function toolCategoryPool(...categories: string[]): ChoiceOption[] {
+  return ALL_TOOLS.filter(t => categories.includes(t.category)).map(t => ({ id: t.id, label: t.name, value: t.id }));
+}
 
 export const bgAcolyte: Background = {
   id: 'acolyte',
   name: 'Acolyte',
   srd: true,
+  // FILTER-METADATA-2: known from the PHB (same authoritative text
+  // app/creation/background.tsx's BG_DETAIL table already displayed) but
+  // not mechanically granted anywhere in the engine — no grant_proficiency
+  // 'tool:' effect exists for backgrounds today (confirmed: zero such
+  // effects in this file), same class of gap as CharClass's armor/weapon
+  // profs. Populated here as additive filter/display metadata only.
+  toolProficiencies: [],
   features: [
     {
       id: 'acolyte_proficiencies',
@@ -47,7 +61,7 @@ export const bgAcolyte: Background = {
 export const bgAcolyte2024: Background = {
   id: 'acolyte_2024',
   name: 'Acolyte',
-  rulesetId: asRulesetId('5.5e'),
+  rulesetId: 'dnd5e-2024' as RulesetId,
   srd: false,
   flexibleAsi: {
     prompt: 'Choose Wisdom, Intelligence, or Charisma: increase one by 2 and a different one by 1, or increase all three by 1 each.',
@@ -86,6 +100,7 @@ export const bgCharlatan: Background = {
   id: 'charlatan',
   name: 'Charlatan',
   srd: false,
+  toolProficiencies: ['Disguise kit', 'Forgery kit'],
   features: [
     {
       id: 'charlatan_proficiencies',
@@ -112,6 +127,18 @@ export const bgCriminal: Background = {
   id: 'criminal',
   name: 'Criminal',
   srd: false,
+  toolProficiencies: ["Thieves' tools", 'One gaming set'],
+  // CHOICE-EXPANSION-2: "one gaming set of your choice" is a genuine player
+  // choice — Thieves' tools above remains a fixed, automatic grant (this
+  // background never mechanically enforced either one before this).
+  pendingChoices: [
+    {
+      id: `${BACKGROUND_CHOICE_PREFIX}criminal_gaming_set`,
+      prompt: 'Choose one gaming set.',
+      kind: 'tool', count: 1, pool: toolCategoryPool('gaming_set'),
+      grants: [], required: true, resolved: false,
+    },
+  ],
   features: [
     {
       id: 'criminal_proficiencies',
@@ -138,6 +165,7 @@ export const bgEntertainer: Background = {
   id: 'entertainer',
   name: 'Entertainer',
   srd: false,
+  toolProficiencies: ['Disguise kit', 'One musical instrument'],
   features: [
     {
       id: 'entertainer_proficiencies',
@@ -164,6 +192,7 @@ export const bgFolkHero: Background = {
   id: 'folk_hero',
   name: 'Folk Hero',
   srd: false,
+  toolProficiencies: ["One artisan's tools", 'Vehicles (land)'],
   features: [
     {
       id: 'folk_hero_proficiencies',
@@ -190,6 +219,7 @@ export const bgGuildArtisan: Background = {
   id: 'guild_artisan',
   name: 'Guild Artisan',
   srd: false,
+  toolProficiencies: ["One artisan's tools"],
   features: [
     {
       id: 'guild_artisan_proficiencies',
@@ -216,6 +246,7 @@ export const bgHermit: Background = {
   id: 'hermit',
   name: 'Hermit',
   srd: false,
+  toolProficiencies: ['Herbalism kit'],
   features: [
     {
       id: 'hermit_proficiencies',
@@ -242,6 +273,7 @@ export const bgNoble: Background = {
   id: 'noble',
   name: 'Noble',
   srd: false,
+  toolProficiencies: ['One gaming set'],
   features: [
     {
       id: 'noble_proficiencies',
@@ -268,6 +300,7 @@ export const bgOutlander: Background = {
   id: 'outlander',
   name: 'Outlander',
   srd: false,
+  toolProficiencies: ['One musical instrument'],
   features: [
     {
       id: 'outlander_proficiencies',
@@ -294,6 +327,7 @@ export const bgSage: Background = {
   id: 'sage',
   name: 'Sage',
   srd: false,
+  toolProficiencies: [],
   features: [
     {
       id: 'sage_proficiencies',
@@ -320,6 +354,7 @@ export const bgSailor: Background = {
   id: 'sailor',
   name: 'Sailor',
   srd: false,
+  toolProficiencies: ["Navigator's tools", 'Vehicles (water)'],
   features: [
     {
       id: 'sailor_proficiencies',
@@ -346,6 +381,7 @@ export const bgSoldier: Background = {
   id: 'soldier',
   name: 'Soldier',
   srd: false,
+  toolProficiencies: ['Gaming Set', 'Vehicles (Land)'],
   features: [
     {
       id: 'soldier_proficiencies',
@@ -372,6 +408,7 @@ export const bgUrchin: Background = {
   id: 'urchin',
   name: 'Urchin',
   srd: false,
+  toolProficiencies: ['Disguise kit', "Thieves' tools"],
   features: [
     {
       id: 'urchin_proficiencies',

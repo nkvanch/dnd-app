@@ -338,5 +338,21 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
       );
       return;
     }
+    case 'condition': {
+      // Missing case — the 'pack' format (wrapAsHomebrewPack above) already
+      // handled 'condition'; this switch, covering txt/md/pdf, silently
+      // fell through with no matching case and no error (audit finding
+      // EXPORT-1). Same buildFeatureListMarkdown/Html pattern background/
+      // item already use — a condition's own description as the subtitle.
+      const cond = item as Condition;
+      await shareByFormat(
+        format,
+        () => buildFeatureListMarkdown(cond.name, cond.description || null, cond.features),
+        () => buildFeatureListHtml(cond.name, cond.description ?? '', cond.features),
+        sanitize(`${cond.name}-condition`),
+        action,
+      );
+      return;
+    }
   }
 }

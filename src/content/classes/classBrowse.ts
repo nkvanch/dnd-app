@@ -10,6 +10,22 @@
 // sensible defaults derived from their hit die and spellcasting config.
 import { CharClass, Feature, Ability } from '../../engine/types';
 import { getProgressionForClass } from './progressions';
+import { SortOption, nameSortOptions, sourceSortOption } from '../contentQuery';
+import { getContentProvenance } from '../provenance';
+
+// SHARED-QUERY-1: hand-authored per-class caster-type map, moved here from
+// app/creation/class.tsx so the Compendium's Class browser can reuse the
+// exact same Caster Type filter/labels. Not derivable from a real field —
+// CharClass.spellcastingStyle exists but is confirmed unpopulated on every
+// official class (see FILTER-METADATA-1's own investigation) — so this
+// stays a disclosed, hand-authored lookup, same as CLASS_META below.
+export const CASTER_TYPE: Record<string, string> = {
+  barbarian: 'Martial', bard: 'Full Caster', cleric: 'Full Caster', druid: 'Full Caster',
+  fighter: 'Martial', monk: 'Martial', paladin: 'Half Caster', ranger: 'Half Caster',
+  rogue: 'Martial', sorcerer: 'Full Caster', warlock: 'Half Caster', wizard: 'Full Caster',
+  artificer: 'Half Caster',
+};
+export const CASTER_TYPES = ['Full Caster', 'Half Caster', 'Martial'] as const;
 
 // ── Layer 1: Class Summary metadata ─────────────────────────────────────────────
 
@@ -293,4 +309,26 @@ function ordinal(n: number): string {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+export function classSourceLabel(cls: CharClass, isHomebrew: boolean): string | undefined {
+  return getContentProvenance(cls, { isHomebrew }).sourceLabel;
+}
+
+/** Real class name for a raw class id, e.g. spell.classes' 'abyss_knight' →
+ *  'Abyss Knight' instead of naively capitalizing the id string (which
+ *  produced 'Abyss_knight' — a real, confirmed display bug). Same lookup
+ *  shape as TabCharacter.tsx's own classLabel(); falls back to the raw id
+ *  only if the class truly can't be found (never expected in practice). */
+export function classDisplayName(classId: string, allClasses: CharClass[]): string {
+  return allClasses.find(c => c.id === classId)?.name ?? classId;
+}
+
+export function classSortOptions(isHomebrewOf: (cls: CharClass) => boolean): SortOption<CharClass>[] {
+  return [
+    ...nameSortOptions<CharClass>(),
+    { id: 'hit_die', label: 'Hit Die', compare: (a, b) => a.hitDie - b.hitDie || a.name.localeCompare(b.name) },
+    { id: 'caster_type', label: 'Caster Type', compare: (a, b) => (CASTER_TYPE[a.id] ?? 'Martial').localeCompare(CASTER_TYPE[b.id] ?? 'Martial') || a.name.localeCompare(b.name) },
+    sourceSortOption<CharClass>(c => classSourceLabel(c, isHomebrewOf(c))),
+  ];
 }

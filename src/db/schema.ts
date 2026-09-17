@@ -155,12 +155,19 @@ export const CREATE_PREPARED_ENCOUNTERS_TABLE = `
 // array of {type, id} — content_cache's own composite key shape — rather
 // than a normalized join table, matching this file's own stated blob-
 // storage rationale (small data, no cross-table query need).
+// HOMEBREW-PACKAGE-1 item 15: packageVersion/author are nullable additions
+// for package provenance (a package's own author-set version string and
+// author name, distinct from content identity) — see db.ts's initDb() for
+// the additive ADD COLUMN migration that brings an existing dev database
+// created before these columns existed up to date.
 export const CREATE_INSTALLED_PACKS_TABLE = `
   CREATE TABLE IF NOT EXISTS installed_packs (
-    id         TEXT PRIMARY KEY NOT NULL,
-    name       TEXT NOT NULL,
-    importedAt INTEGER NOT NULL,
-    itemRefs   TEXT NOT NULL
+    id             TEXT PRIMARY KEY NOT NULL,
+    name           TEXT NOT NULL,
+    importedAt     INTEGER NOT NULL,
+    itemRefs       TEXT NOT NULL,
+    packageVersion TEXT,
+    author         TEXT
   );
 `;
 

@@ -16,7 +16,7 @@ import {
 } from '../engine/types';
 import { MonsterTemplate } from '../content/monsters/types';
 import {
-  saveHomebrewContent, loadAllHomebrew, deleteHomebrewContent,
+  saveHomebrewContent, saveHomebrewContentBatch, loadAllHomebrew, deleteHomebrewContent,
   loadContentHistory, restoreContentVersion,
   ContentCacheType, HomebrewContent, ContentVersionEntry,
 } from '../db/contentCacheRepo';
@@ -56,7 +56,7 @@ async function loadDeletedBuiltins(): Promise<Set<string>> {
  * which returns the first match). Every content type below now goes
  * through this so none of them can silently regress the same way again.
  */
-function homebrewWinsById<T extends { id: string }>(official: T[], homebrew: T[]): T[] {
+export function homebrewWinsById<T extends { id: string }>(official: T[], homebrew: T[]): T[] {
   const homebrewIds = new Set(homebrew.map(x => x.id));
   return [...official.filter(x => !homebrewIds.has(x.id)), ...homebrew];
 }
@@ -84,6 +84,12 @@ type HomebrewStore = {
   /** Save a new or updated homebrew item. */
   saveItem: (type: ContentCacheType, item: HomebrewContent) => Promise<void>;
 
+  /** HOMEBREW-PACKAGE-1 item 14: save several items as ONE atomic SQLite
+   *  transaction (all-or-nothing) plus ONE in-memory state update (all
+   *  items become visible in a single render, not one per item) — used by
+   *  the package-import commit handler instead of looping saveItem(). */
+  saveItems: (items: { type: ContentCacheType; item: HomebrewContent }[]) => Promise<void>;
+
   /** Delete a homebrew item by type and id. */
   deleteItem: (type: ContentCacheType, id: string) => Promise<void>;
 
@@ -93,6 +99,48 @@ type HomebrewStore = {
   /** Restore an old version as current, then refresh the in-memory copy. */
   restoreVersion: (type: ContentCacheType, id: string, version: string) => Promise<void>;
 };
+
+// CONTENT-REGISTRY-PERF-1: getMergedContentDB() previously re-ran the full
+// official+homebrew merge (homebrewWinsById × 6 content types, standalone-
+// subrace attachment, ruleset filtering) from scratch on EVERY call, with
+// zero caching — confirmed via audit that many render-body callers across
+// the app (race-detail.tsx, class-detail.tsx, TabCharacter.tsx,
+// dm/encounter.tsx's QuickPanel, several homebrew builders) call this
+// unmemoized, so a single re-render could redo this merge several times.
+// Single-entry reference-equality cache: since the store's own content
+// arrays only get NEW references on an actual load/save/delete (never
+// mutated in place — confirmed via loadHomebrew's `set({...})` calls and
+// saveItem/deleteItem below), comparing by `===` against the previous
+// call's inputs is a safe, correct way to skip redoing the merge when
+// nothing has actually changed. `bannedIds` callers that construct a fresh
+// Set every render (see race-detail.tsx) simply won't benefit from this
+// cache themselves — the majority of call sites (which pass no bannedIds)
+// still do, with no correctness change either way.
+type MergedContentDBCacheKey = readonly [
+  unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[],
+  RulesetId | undefined, Set<string> | undefined,
+];
+let mergedContentDBCache: { key: MergedContentDBCacheKey; value: ContentDB } | null = null;
+
+/** The per-type upsert-into-array patch for ONE item — factored out of
+ *  saveItem so saveItems (item 14's atomic batch import) can fold N items
+ *  into a single combined state patch instead of one set() call per item. */
+function applyOneItem(state: HomebrewStore, type: ContentCacheType, item: HomebrewContent): Partial<HomebrewStore> {
+  switch (type) {
+    case 'race':       return { races:       [...state.races.filter(r => r.id !== (item as Race).id),             item as Race] };
+    case 'subrace':    return { subraces:    [...state.subraces.filter(sr => sr.id !== (item as Subrace).id),      item as Subrace] };
+    case 'class':      return { classes:     [...state.classes.filter(c => c.id !== (item as CharClass).id),     item as CharClass] };
+    case 'subclass':   return { subclasses:  [...state.subclasses.filter(sc => sc.id !== (item as HomebrewSubclass).id), item as HomebrewSubclass] };
+    case 'spell':      return { spells:      [...state.spells.filter(s => s.id !== (item as Spell).id),          item as Spell] };
+    case 'background': return { backgrounds: [...state.backgrounds.filter(b => b.id !== (item as Background).id), item as Background] };
+    case 'feature':    return { features:    [...state.features.filter(f => f.id !== (item as Feature).id),      item as Feature] };
+    case 'item':       return { items:       [...state.items.filter(it => it.id !== (item as Item).id),         item as Item] };
+    case 'feat':       return { feats:       [...state.feats.filter(f => f.id !== (item as Feat).id),           item as Feat] };
+    case 'monster':    return { monsters:    [...state.monsters.filter(m => m.id !== (item as MonsterTemplate).id), item as MonsterTemplate] };
+    case 'condition':  return { conditions:  [...state.conditions.filter(c => c.id !== (item as Condition).id), item as Condition] };
+    default:           return state;
+  }
+}
 
 export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   races:       [],
@@ -155,6 +203,13 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
 
   getMergedContentDB: (activeRuleset?: RulesetId, bannedIds?: Set<string>): ContentDB => {
     const { races, subraces, classes, spells, backgrounds, features, items, feats, conditions } = get();
+    const cacheKey: MergedContentDBCacheKey = [
+      races, subraces, classes, spells, backgrounds, features, items, feats, conditions,
+      activeRuleset, bannedIds,
+    ];
+    if (mergedContentDBCache && cacheKey.every((v, i) => v === mergedContentDBCache!.key[i])) {
+      return mergedContentDBCache.value;
+    }
     // Item 15 (campaign content manifest) — banned homebrew packs' content
     // ids, pre-computed by the caller (packDiagnostics.ts's
     // bannedContentIds()) from the active campaign's Campaign.bannedPackIds.
@@ -186,7 +241,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     // Deliberately NOT applied to .spells/.items — those are repo-backed
     // (spellRepo/itemRepo), not sourced from globalContentDB, and get their
     // own ruleset filtering whenever Phase 6 needs it.
-    return {
+    const result: ContentDB = {
       races:       notBanned(racesWithStandaloneSubraces.filter(r => matchesRuleset(r.rulesetId, activeRuleset))),
       classes:     notBanned(homebrewWinsById(globalContentDB.classes, classes).filter(c => matchesRuleset(c.rulesetId, activeRuleset))),
       // Official spell content moved out of globalContentDB and into
@@ -207,26 +262,21 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       features:    notBanned(homebrewWinsById(globalContentDB.features, features)),
       feats:       notBanned(homebrewWinsById(globalContentDB.feats ?? [], feats).filter(f => matchesRuleset(f.rulesetId, activeRuleset))),
     };
+    mergedContentDBCache = { key: cacheKey, value: result };
+    return result;
   },
 
   saveItem: async (type, item) => {
     await saveHomebrewContent(type, item);
-    set(state => {
-      switch (type) {
-        case 'race':       return { races:       [...state.races.filter(r => r.id !== (item as Race).id),             item as Race] };
-        case 'subrace':    return { subraces:    [...state.subraces.filter(sr => sr.id !== (item as Subrace).id),      item as Subrace] };
-        case 'class':      return { classes:     [...state.classes.filter(c => c.id !== (item as CharClass).id),     item as CharClass] };
-        case 'subclass':   return { subclasses:  [...state.subclasses.filter(sc => sc.id !== (item as HomebrewSubclass).id), item as HomebrewSubclass] };
-        case 'spell':      return { spells:      [...state.spells.filter(s => s.id !== (item as Spell).id),          item as Spell] };
-        case 'background': return { backgrounds: [...state.backgrounds.filter(b => b.id !== (item as Background).id), item as Background] };
-        case 'feature':    return { features:    [...state.features.filter(f => f.id !== (item as Feature).id),      item as Feature] };
-        case 'item':       return { items:       [...state.items.filter(it => it.id !== (item as Item).id),         item as Item] };
-        case 'feat':       return { feats:       [...state.feats.filter(f => f.id !== (item as Feat).id),           item as Feat] };
-        case 'monster':    return { monsters:    [...state.monsters.filter(m => m.id !== (item as MonsterTemplate).id), item as MonsterTemplate] };
-        case 'condition':  return { conditions:  [...state.conditions.filter(c => c.id !== (item as Condition).id), item as Condition] };
-        default:           return state;
-      }
-    });
+    set(state => applyOneItem(state, type, item));
+  },
+
+  saveItems: async (items) => {
+    if (items.length === 0) return;
+    await saveHomebrewContentBatch(items.map(({ type, item }) => ({ type, content: item })));
+    // One combined patch, one render — not items.length separate set() calls
+    // (item 26: "refresh registry once" for a batch import).
+    set(state => items.reduce((acc, { type, item }) => ({ ...acc, ...applyOneItem(acc, type, item) }), state));
   },
 
   deleteItem: async (type, id) => {

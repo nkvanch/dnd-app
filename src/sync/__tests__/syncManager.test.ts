@@ -22,13 +22,41 @@
 // (CampaignHost independent of NetworkHostAvailability), not SyncServer's
 // native transport — same "don't test the native layer" boundary
 // __mocks__/react-native-tcp-socket.js's own header comment already draws.
+const mockBroadcastCampaign = jest.fn();
+const mockBroadcastCampaignPatch = jest.fn();
 jest.mock('../server', () => ({
   SyncServer: jest.fn().mockImplementation(() => ({
     start:  () => Promise.resolve(),
     stop:   () => {},
     sendTo: () => {},
+    broadcastCampaign:      (...args: unknown[]) => mockBroadcastCampaign(...args),
+    broadcastCampaignPatch: (...args: unknown[]) => mockBroadcastCampaignPatch(...args),
     get clientCount() { return 0; },
   })),
+}));
+
+// Captures the ClientCallbacks object syncManager.startAsClient constructs,
+// so PERSIST-1's regression test below can fire onEntitySnapshot directly
+// without a real socket — same "don't test the native transport" boundary
+// the server mock above already draws.
+let capturedClientCallbacks: import('../client').ClientCallbacks | null = null;
+jest.mock('../client', () => ({
+  SyncClient: jest.fn().mockImplementation((_deviceId, _nickname, characterId, callbacks) => {
+    capturedClientCallbacks = callbacks;
+    return {
+      connect:  () => {},
+      disconnect: () => {},
+      send: () => {},
+      get ownedCharacterId() { return characterId; },
+      get lastErrorMessage() { return null; },
+      get target() { return ''; },
+    };
+  }),
+}));
+
+const mockSaveEntity = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../db/entityRepo', () => ({
+  saveEntity: (...args: unknown[]) => mockSaveEntity(...args),
 }));
 
 import { syncManager } from '../syncManager';
@@ -135,5 +163,86 @@ describe('syncManager — network appearing/disappearing while already hosting (
     expect(afterDrop.role).toBe('dm'); // host state preserved — joining just isn't available
 
     freshManager.stopAll();
+  });
+});
+
+describe('syncManager.syncCampaignPatch — DM-only Campaign sync (CAMPAIGN-SYNC-1)', () => {
+  afterEach(() => {
+    syncManager.stopAll();
+    mockBroadcastCampaign.mockClear();
+    mockBroadcastCampaignPatch.mockClear();
+  });
+
+  function fakeCampaign(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'camp1', name: 'Test', dmDeviceId: 'dm-device', joinCode: 'ABC1234',
+      rules: {}, playerIds: [], characterIds: [], notes: '', createdAt: 0,
+      ...overrides,
+    } as unknown as import('../../engine/types').Campaign;
+  }
+
+  it('broadcasts a full snapshot when there is no prior campaign to diff against', async () => {
+    await syncManager.startAsServer('camp1', 'sess1', 'dm-device', 'DM');
+    syncManager.syncCampaignPatch('camp1', null, fakeCampaign());
+    expect(mockBroadcastCampaign).toHaveBeenCalledWith(fakeCampaign());
+    expect(mockBroadcastCampaignPatch).not.toHaveBeenCalled();
+  });
+
+  it('broadcasts only the diff when a prior campaign is given', async () => {
+    await syncManager.startAsServer('camp1', 'sess1', 'dm-device', 'DM');
+    syncManager.syncCampaignPatch('camp1', fakeCampaign({ notes: 'old' }), fakeCampaign({ notes: 'new' }));
+    expect(mockBroadcastCampaignPatch).toHaveBeenCalledWith('camp1', { notes: 'new' });
+    expect(mockBroadcastCampaign).not.toHaveBeenCalled();
+  });
+
+  it('does not broadcast anything when nothing actually changed', async () => {
+    await syncManager.startAsServer('camp1', 'sess1', 'dm-device', 'DM');
+    const c = fakeCampaign();
+    syncManager.syncCampaignPatch('camp1', c, fakeCampaign());
+    expect(mockBroadcastCampaign).not.toHaveBeenCalled();
+    expect(mockBroadcastCampaignPatch).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op when this device is not the DM (never started as server)', () => {
+    syncManager.syncCampaignPatch('camp1', null, fakeCampaign());
+    expect(mockBroadcastCampaign).not.toHaveBeenCalled();
+  });
+});
+
+describe('syncManager.startAsClient — onEntitySnapshot does not persist directly (PERSIST-1 regression)', () => {
+  afterEach(() => {
+    syncManager.stopAll();
+    capturedClientCallbacks = null;
+    mockSaveEntity.mockClear();
+  });
+
+  it('does not call entityRepo.saveEntity itself when an entity snapshot arrives', async () => {
+    // A previous bug: syncManager's onEntitySnapshot callback called
+    // saveEntity(entity) directly AND ALSO forwarded to
+    // callbacks.onEntityReceived — the latter (wired to characterStore's
+    // applyIncomingEntity in the real app) already owns persistence,
+    // conditioned on its own stale-snapshot guard. The direct call bypassed
+    // that guard and could silently overwrite SQLite with a stale entity
+    // even when applyIncomingEntity correctly rejected it in memory.
+    //
+    // This test proves the fix at the syncManager layer in isolation: no
+    // matter what the store-level onEntityReceived callback decides (it's a
+    // no-op stub here), syncManager itself must never touch entityRepo.
+    let receivedEntity: unknown = null;
+    syncManager.initialise({
+      onStatusChange:        () => {},
+      onEntityReceived:      (entity) => { receivedEntity = entity; },
+      onEntityPatchReceived: () => {},
+      onSyncEvent:           () => {},
+    });
+
+    await syncManager.startAsClient('0000001', 'dev1', 'Nick', 'char1');
+    expect(capturedClientCallbacks).not.toBeNull();
+
+    const fakeEntity = { id: 'char1', kind: 'character' } as unknown as import('../../engine/types').Entity;
+    capturedClientCallbacks!.onEntitySnapshot(fakeEntity);
+
+    expect(receivedEntity).toBe(fakeEntity); // still forwarded to the store layer
+    expect(mockSaveEntity).not.toHaveBeenCalled(); // but never persisted by syncManager itself
   });
 });

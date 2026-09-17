@@ -1,21 +1,27 @@
 // app/sheet/TabFeatures.tsx
 // Tab 4 — Features grouped by source, plus spells if applicable.
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, FeatureInstance, ActionCard, CampaignRules } from '../../engine/types';
-import { resolveChoice } from '../../engine/leveling';
+import { resolveChoice, applyExpertiseChoiceToEntity, applyToolChoiceToEntity, applyLanguageChoiceToEntity } from '../../engine/leveling';
 import { recomputeDerived } from '../../engine/pipeline';
+import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from '../../engine/choiceEligibility';
 import { Alert } from '../../utils/alert';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { SubclassPicker } from '../SubclassPicker';
 import { InfusionPicker } from '../InfusionPicker';
 import { FeaturePoolPicker } from '../FeaturePoolPicker';
 import { SpellChoicePicker } from '../SpellChoicePicker';
+import { RepeatedChoicePicker, RepeatedChoiceOption } from '../RepeatedChoicePicker';
 import { RemoveFeatureModal } from './RemoveFeatureModal';
 import { AddCustomFeatureModal } from './AddCustomFeatureModal';
 import { ChangeBackgroundModal } from './ChangeBackgroundModal';
 import { spellRepo } from '../../content/spellRepo';
+import { spellProgressFor, groupPendingSpellChoices } from '../../content/creationProgress';
 import { DEFAULT_RULES } from '../../store/characterStore';
+import { TOOL_CATEGORY_LABELS, TOOL_CATEGORY_ORDER } from '../../content/tools';
+import { LANGUAGE_CATEGORY_LABELS, LANGUAGE_CATEGORY_ORDER } from '../../content/languages';
+import { ALL_SKILL_OPTIONS } from '../../content/skills';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 const SOURCE_ORDER = ['race','class','subclass','background','feat','item','spell','condition','campaign','manual'] as const;
@@ -30,30 +36,11 @@ const SOURCE_LABELS: Record<string, string> = {
   manual: 'Manual',
 };
 
-// Matches app/creation/skills.tsx's SKILL_LABELS — some subclass features
-// (e.g. Bard College of Lore's Additional Proficiencies) grant "choose N of
-// ANY skill" and mark it with the pool:'all' sentinel rather than a literal
-// option array (same convention as spellChoice() in classes/index.ts).
-const ALL_SKILL_OPTIONS: { id: string; label: string; value: string }[] = [
-  { id: 'athletics', label: 'Athletics', value: 'athletics' },
-  { id: 'acrobatics', label: 'Acrobatics', value: 'acrobatics' },
-  { id: 'sleight_of_hand', label: 'Sleight of Hand', value: 'sleight_of_hand' },
-  { id: 'stealth', label: 'Stealth', value: 'stealth' },
-  { id: 'arcana', label: 'Arcana', value: 'arcana' },
-  { id: 'history', label: 'History', value: 'history' },
-  { id: 'investigation', label: 'Investigation', value: 'investigation' },
-  { id: 'nature', label: 'Nature', value: 'nature' },
-  { id: 'religion', label: 'Religion', value: 'religion' },
-  { id: 'animal_handling', label: 'Animal Handling', value: 'animal_handling' },
-  { id: 'insight', label: 'Insight', value: 'insight' },
-  { id: 'medicine', label: 'Medicine', value: 'medicine' },
-  { id: 'perception', label: 'Perception', value: 'perception' },
-  { id: 'survival', label: 'Survival', value: 'survival' },
-  { id: 'deception', label: 'Deception', value: 'deception' },
-  { id: 'intimidation', label: 'Intimidation', value: 'intimidation' },
-  { id: 'performance', label: 'Performance', value: 'performance' },
-  { id: 'persuasion', label: 'Persuasion', value: 'persuasion' },
-];
+// ALL_SKILL_OPTIONS now comes from ../../content/skills — some subclass
+// features (e.g. Bard College of Lore's Additional Proficiencies) grant
+// "choose N of ANY skill" and mark it with the pool:'all' sentinel rather
+// than a literal option array (same convention as spellChoice() in
+// classes/index.ts).
 
 // Copied from TabExploration.tsx's own "+Feat" flow (Phase 2 of the live
 // feature/background editing track) — a throwaway ChoiceState fabricated
@@ -131,7 +118,7 @@ function CollapsibleGroup({ title, children }: { title: string; children: React.
   );
 }
 
-export function TabFeatures({ entity, rules, onEntityUpdate }: {
+function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
   entity: Entity;
   /** Optional — when provided, pending choices become resolvable in this tab. */
   rules?: CampaignRules;
@@ -144,6 +131,10 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
   const [infusionChoiceOpen, setInfusionChoiceOpen] = useState<string | null>(null);
   const [poolChoiceOpen, setPoolChoiceOpen] = useState<string | null>(null);
   const [spellChoiceOpen, setSpellChoiceOpen] = useState<string | null>(null);
+  const [expertiseChoiceOpen, setExpertiseChoiceOpen] = useState<string | null>(null);
+  const [toolChoiceOpen, setToolChoiceOpen] = useState<string | null>(null);
+  const [languageChoiceOpen, setLanguageChoiceOpen] = useState<string | null>(null);
+  const [repeatedChoiceError, setRepeatedChoiceError] = useState<string | null>(null);
   const [removingFeatureId, setRemovingFeatureId] = useState<string | null>(null);
   const [addFeatOpen, setAddFeatOpen] = useState(false);
   const [addCustomFeatureOpen, setAddCustomFeatureOpen] = useState(false);
@@ -151,6 +142,32 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
 
   const pendingChoices = entity.choices.filter(c => !c.resolved);
   const canResolve     = !!rules && !!onEntityUpdate;
+  // REPEATED-CHOICE-1: total ASI/Feat entitlements still outstanding — shown
+  // on the resolve button so a directly-created high-level character (e.g.
+  // 3 queued ASI-or-feat choices from levels 4/8/12) sees the real count up
+  // front, and the resolve flow (below) chains through all of them without
+  // bouncing back to this list in between.
+  const asiPendingCount = pendingChoices.filter(c => c.definition.kind === 'asi').length;
+
+  // SPELL-ACCUMULATION-2: a known-spell caster (Wizard/Sorcerer/Bard/Warlock/
+  // Ranger/...) queues one small kind:'spell' ChoiceDefinition PER LEVEL that
+  // grants a new cantrip/known spell (see src/content/classes/index.ts). A
+  // directly-created or fast-leveled character can have several of these
+  // unresolved at once, and rendering one PENDING CHOICES row per underlying
+  // ChoiceState — same bug app/creation/spells.tsx's SPELL-ACCUMULATION-1
+  // already fixed for the creation flow — produced a stack of separate
+  // "Choose Spells" rows here on the sheet instead of one cumulative prompt.
+  // Fixed the same way: group by cantrip vs known-spell (same id.includes
+  // ('cantrip') convention spells.tsx/creationProgress.ts already use), show
+  // ONE row per non-empty group with the combined pick-count, and chain the
+  // resolution modal through every remaining choice in that group — same
+  // "stay open, resolve one at a time" pattern the ASI modal below already
+  // uses for REPEATED-CHOICE-1.
+  const { cantripPending, knownSpellPending } = groupPendingSpellChoices(pendingChoices);
+  const cantripPrimaryId    = cantripPending[0]?.id;
+  const knownSpellPrimaryId = knownSpellPending[0]?.id;
+  const cantripPendingTotal    = cantripPending.reduce((sum, c) => sum + c.definition.count, 0);
+  const knownSpellPendingTotal = knownSpellPending.reduce((sum, c) => sum + c.definition.count, 0);
 
   function toggleSkill(choiceId: string, optionId: string, count: number) {
     setSkillSelections(prev => {
@@ -271,10 +288,38 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
               ? ALL_SKILL_OPTIONS
               : (Array.isArray(def.pool) ? def.pool as { id: string; label: string; value: unknown }[] : []);
             const sel       = skillSelections[c.id] ?? [];
+
+            // SPELL-ACCUMULATION-2: only the first unresolved choice in each
+            // group (cantrip / known-spell) renders a row — the rest are
+            // folded into that row's aggregated count and resolved via the
+            // same modal's chaining, never shown individually.
+            if (def.kind === 'spell' && c.id !== cantripPrimaryId && c.id !== knownSpellPrimaryId) {
+              return null;
+            }
+            const isCantripGroup = def.kind === 'spell' && c.id === cantripPrimaryId;
+            const spellGroupTotal = isCantripGroup ? cantripPendingTotal : knownSpellPendingTotal;
+            // spellProgressFor is the same authoritative done/total calculation
+            // app/creation/spells.tsx's "Selected X/Y" header uses — reused here
+            // so the sheet and creation flow report identical entitlement math,
+            // not a second display-only calculation (item 23's own rule).
+            const spellProgress = def.kind === 'spell' ? spellProgressFor(entity) : null;
+            const spellGroupProgress = isCantripGroup ? spellProgress?.cantrips : spellProgress?.spells;
+            const spellGroupPrompt = def.kind === 'spell' && spellGroupProgress
+              ? `Selected ${spellGroupProgress.done} / ${spellGroupProgress.total} ${isCantripGroup ? 'cantrips' : 'known spells'}.`
+              : def.prompt;
+
             return (
               <View key={c.id} style={styles.pendingRow}>
-                <Text style={styles.pendingPrompt}>{def.prompt}</Text>
-                <Text style={styles.pendingMeta}>From level {c.grantedAt} · pick {def.count}</Text>
+                <Text style={styles.pendingPrompt}>{spellGroupPrompt}</Text>
+                {def.kind === 'spell' ? (
+                  <Text style={styles.pendingMeta}>
+                    {(isCantripGroup ? cantripPending : knownSpellPending).length > 1
+                      ? `Across levels ${(isCantripGroup ? cantripPending : knownSpellPending).map(x => x.grantedAt).join(', ')}`
+                      : `From level ${c.grantedAt}`} · pick {spellGroupTotal} total
+                  </Text>
+                ) : (
+                  <Text style={styles.pendingMeta}>From level {c.grantedAt} · pick {def.count}</Text>
+                )}
 
                 {def.kind === 'asi' && (
                   <Pressable
@@ -282,7 +327,9 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                     disabled={!canResolve}
                     onPress={() => setAsiChoiceOpen(c.id)}
                   >
-                    <Text style={styles.resolveBtnTxt}>Resolve — ASI or Feat →</Text>
+                    <Text style={styles.resolveBtnTxt}>
+                      Resolve — ASI or Feat{asiPendingCount > 1 ? ` (${asiPendingCount} pending)` : ''} →
+                    </Text>
                   </Pressable>
                 )}
 
@@ -328,6 +375,36 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                   </Pressable>
                 )}
 
+                {def.kind === 'expertise' && (
+                  <Pressable
+                    style={[styles.resolveBtn, !canResolve && styles.resolveBtnDisabled]}
+                    disabled={!canResolve}
+                    onPress={() => { setRepeatedChoiceError(null); setExpertiseChoiceOpen(c.id); }}
+                  >
+                    <Text style={styles.resolveBtnTxt}>Resolve — Choose Expertise →</Text>
+                  </Pressable>
+                )}
+
+                {def.kind === 'tool' && (
+                  <Pressable
+                    style={[styles.resolveBtn, !canResolve && styles.resolveBtnDisabled]}
+                    disabled={!canResolve}
+                    onPress={() => { setRepeatedChoiceError(null); setToolChoiceOpen(c.id); }}
+                  >
+                    <Text style={styles.resolveBtnTxt}>Resolve — Choose Tool Proficiency →</Text>
+                  </Pressable>
+                )}
+
+                {def.kind === 'language' && (
+                  <Pressable
+                    style={[styles.resolveBtn, !canResolve && styles.resolveBtnDisabled]}
+                    disabled={!canResolve}
+                    onPress={() => { setRepeatedChoiceError(null); setLanguageChoiceOpen(c.id); }}
+                  >
+                    <Text style={styles.resolveBtnTxt}>Resolve — Choose Language →</Text>
+                  </Pressable>
+                )}
+
                 {isSkill && (
                   <>
                     <View style={styles.chipRow}>
@@ -360,9 +437,17 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                   </>
                 )}
 
-                {def.kind !== 'asi' && def.kind !== 'subclass' && def.kind !== 'infusion' && def.kind !== 'feature_pool' && def.kind !== 'spell' && !isSkill && (
+                {def.kind !== 'asi' && def.kind !== 'subclass' && def.kind !== 'infusion' && def.kind !== 'feature_pool'
+                  && def.kind !== 'spell' && def.kind !== 'expertise' && def.kind !== 'tool' && def.kind !== 'language' && !isSkill && (
+                  // CHOICE-EXPANSION-1 item 17/16: a genuinely unsupported kind
+                  // (e.g. 'custom', which carries no structured meaning
+                  // anywhere in this schema today — see leveling.ts's
+                  // canAutoResolve/resolveChoice) stays visible here rather
+                  // than disappearing; validateEntity also surfaces it as an
+                  // 'unresolved_choice_kind' Issue (header badge), so it isn't
+                  // ONLY this one line of text.
                   <Text style={styles.pendingNote}>
-                    Resolve this with your DM for now — an in-app picker for this choice type is coming.
+                    This choice type ("{def.kind}") has no in-app picker yet — resolve it with your DM for now. Nothing has been silently skipped.
                   </Text>
                 )}
               </View>
@@ -487,7 +572,10 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
         </View>
       )}
 
-      {/* ASI / Feat resolution modal */}
+      {/* ASI / Feat resolution modal — REPEATED-CHOICE-1: chains through every
+          remaining pending 'asi' choice instead of closing after one, so a
+          character with N outstanding ASI/feat entitlements (e.g. direct
+          high-level creation) resolves all of them in one continuous flow. */}
       <Modal visible={asiChoiceOpen !== null} animationType="slide" onRequestClose={() => setAsiChoiceOpen(null)}>
         <View style={styles.asiModalRoot}>
           {(() => {
@@ -502,13 +590,20 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                 </View>
               );
             }
+            const remainingAfterThis = pendingChoices.filter(c => c.definition.kind === 'asi' && c.id !== ch.id).length;
             return (
               <AsiFeatPicker
                 entity={entity}
                 choice={ch}
                 rules={rules}
                 onClose={() => setAsiChoiceOpen(null)}
-                onResolved={(updated) => { onEntityUpdate(updated); setAsiChoiceOpen(null); }}
+                onResolved={(updated) => {
+                  onEntityUpdate(updated);
+                  const next = updated.choices.find(c => !c.resolved && c.definition.kind === 'asi');
+                  setAsiChoiceOpen(next ? next.id : null);
+                }}
+                progressNote={remainingAfterThis > 0 ? `${remainingAfterThis} more ASI/feat choice${remainingAfterThis === 1 ? '' : 's'} after this one` : undefined}
+                browseStateKey="feat:levelup"
               />
             );
           })()}
@@ -614,13 +709,163 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
                 </View>
               );
             }
+            // SPELL-ACCUMULATION-2: chains through every remaining unresolved
+            // choice in the SAME group (cantrip vs known-spell) as the one
+            // just resolved — same "stay open, resolve one at a time" shape
+            // as the ASI modal's REPEATED-CHOICE-1 chaining above, scoped to
+            // one group so a cantrip pick never auto-opens a known-spell pick.
+            const wasCantripChoice = ch.definition.id.includes('cantrip');
+            const remainingInGroup = (wasCantripChoice ? cantripPending : knownSpellPending)
+              .filter(c => c.id !== ch.id).length;
             return (
               <SpellChoicePicker
                 entity={entity}
                 choice={ch}
                 rules={rules}
                 onClose={() => setSpellChoiceOpen(null)}
-                onResolved={(updated) => { onEntityUpdate(updated); setSpellChoiceOpen(null); }}
+                onResolved={(updated) => {
+                  onEntityUpdate(updated);
+                  const next = updated.choices.find(c =>
+                    !c.resolved && c.definition.kind === 'spell' && c.definition.id.includes('cantrip') === wasCantripChoice,
+                  );
+                  setSpellChoiceOpen(next ? next.id : null);
+                }}
+                progressNote={remainingInGroup > 0 ? `${remainingInGroup} more ${wasCantripChoice ? 'cantrip' : 'spell'} choice${remainingInGroup === 1 ? '' : 's'} after this one` : undefined}
+              />
+            );
+          })()}
+        </View>
+      </Modal>
+
+      {/* Expertise resolution modal — item 3: eligible pool is skills the
+          character is CURRENTLY trained in and not already expert in,
+          computed live here (not inferred from display strings), further
+          intersected with the choice's own literal pool if it has one
+          (a restricted "choose 2 of these 3" Expertise grant). */}
+      <Modal visible={expertiseChoiceOpen !== null} animationType="slide" onRequestClose={() => setExpertiseChoiceOpen(null)}>
+        <View style={styles.asiModalRoot}>
+          {(() => {
+            const ch = entity.choices.find(c => c.id === expertiseChoiceOpen && !c.resolved);
+            if (!ch || !rules || !onEntityUpdate) {
+              return (
+                <View style={styles.asiDone}>
+                  <Text style={styles.asiDoneTxt}>Nothing to resolve.</Text>
+                  <Pressable style={styles.resolveBtn} onPress={() => setExpertiseChoiceOpen(null)}>
+                    <Text style={styles.resolveBtnTxt}>Close</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            const options: RepeatedChoiceOption[] = eligibleExpertiseOptions(entity, ch.definition.pool);
+            return (
+              <RepeatedChoicePicker
+                heading="Choose Expertise"
+                prompt={ch.definition.prompt}
+                requiredCount={ch.definition.count}
+                options={options}
+                searchable={false}
+                emptyMessage="No eligible skills right now — Expertise requires existing proficiency. Resolve any pending skill-proficiency choices first."
+                commitLabel={n => `Grant Expertise in ${n} Skill${n !== 1 ? 's' : ''} →`}
+                error={repeatedChoiceError}
+                onClose={() => setExpertiseChoiceOpen(null)}
+                onCommit={(sel) => {
+                  try {
+                    onEntityUpdate(applyExpertiseChoiceToEntity(entity, ch.id, sel, rules));
+                    setExpertiseChoiceOpen(null);
+                  } catch (e) {
+                    setRepeatedChoiceError(e instanceof Error ? e.message : String(e));
+                  }
+                }}
+              />
+            );
+          })()}
+        </View>
+      </Modal>
+
+      {/* Tool-proficiency resolution modal — grouped by ToolCategory, searchable
+          (item 8: large registry). A restricted literal pool narrows the
+          registry to just those options (item 12: filters only narrow the
+          legal pool, never broaden it). */}
+      <Modal visible={toolChoiceOpen !== null} animationType="slide" onRequestClose={() => setToolChoiceOpen(null)}>
+        <View style={styles.asiModalRoot}>
+          {(() => {
+            const ch = entity.choices.find(c => c.id === toolChoiceOpen && !c.resolved);
+            if (!ch || !rules || !onEntityUpdate) {
+              return (
+                <View style={styles.asiDone}>
+                  <Text style={styles.asiDoneTxt}>Nothing to resolve.</Text>
+                  <Pressable style={styles.resolveBtn} onPress={() => setToolChoiceOpen(null)}>
+                    <Text style={styles.resolveBtnTxt}>Close</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            const options: RepeatedChoiceOption[] = eligibleToolOptions(entity, ch.definition.pool);
+            return (
+              <RepeatedChoicePicker
+                heading="Choose Tool Proficiency"
+                prompt={ch.definition.prompt}
+                requiredCount={ch.definition.count}
+                options={options}
+                groupLabels={TOOL_CATEGORY_LABELS}
+                groupOrder={TOOL_CATEGORY_ORDER}
+                emptyMessage="No eligible tools right now — you may already be proficient with everything in this choice's pool."
+                commitLabel={n => `Grant Proficiency in ${n} Tool${n !== 1 ? 's' : ''} →`}
+                error={repeatedChoiceError}
+                onClose={() => setToolChoiceOpen(null)}
+                onCommit={(sel) => {
+                  try {
+                    onEntityUpdate(applyToolChoiceToEntity(entity, ch.id, sel, rules));
+                    setToolChoiceOpen(null);
+                  } catch (e) {
+                    setRepeatedChoiceError(e instanceof Error ? e.message : String(e));
+                  }
+                }}
+              />
+            );
+          })()}
+        </View>
+      </Modal>
+
+      {/* Language resolution modal — grouped by LanguageCategory. Secret
+          languages (Thieves' Cant, Druidic) are excluded from the default
+          'all'-sentinel pool (item 13) but remain selectable when a choice's
+          own literal pool explicitly includes them. */}
+      <Modal visible={languageChoiceOpen !== null} animationType="slide" onRequestClose={() => setLanguageChoiceOpen(null)}>
+        <View style={styles.asiModalRoot}>
+          {(() => {
+            const ch = entity.choices.find(c => c.id === languageChoiceOpen && !c.resolved);
+            if (!ch || !rules || !onEntityUpdate) {
+              return (
+                <View style={styles.asiDone}>
+                  <Text style={styles.asiDoneTxt}>Nothing to resolve.</Text>
+                  <Pressable style={styles.resolveBtn} onPress={() => setLanguageChoiceOpen(null)}>
+                    <Text style={styles.resolveBtnTxt}>Close</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            const options: RepeatedChoiceOption[] = eligibleLanguageOptions(entity, ch.definition.pool);
+            return (
+              <RepeatedChoicePicker
+                heading="Choose Languages"
+                prompt={ch.definition.prompt}
+                requiredCount={ch.definition.count}
+                options={options}
+                groupLabels={LANGUAGE_CATEGORY_LABELS}
+                groupOrder={LANGUAGE_CATEGORY_ORDER}
+                emptyMessage="No eligible languages right now — you may already know everything in this choice's pool."
+                commitLabel={n => `Learn ${n} Language${n !== 1 ? 's' : ''} →`}
+                error={repeatedChoiceError}
+                onClose={() => setLanguageChoiceOpen(null)}
+                onCommit={(sel) => {
+                  try {
+                    onEntityUpdate(applyLanguageChoiceToEntity(entity, ch.id, sel, rules));
+                    setLanguageChoiceOpen(null);
+                  } catch (e) {
+                    setRepeatedChoiceError(e instanceof Error ? e.message : String(e));
+                  }
+                }}
               />
             );
           })()}
@@ -633,7 +878,8 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
           {rules && onEntityUpdate ? (
             <AsiFeatPicker entity={entity} choice={makeAdHocFeatChoice()} rules={rules} featOnly
               onClose={() => setAddFeatOpen(false)}
-              onResolved={(updated) => { onEntityUpdate(updated); setAddFeatOpen(false); }} />
+              onResolved={(updated) => { onEntityUpdate(updated); setAddFeatOpen(false); }}
+              browseStateKey="feat:live" />
           ) : (
             <View style={styles.asiDone}>
               <Text style={styles.asiDoneTxt}>Nothing to resolve.</Text>
@@ -645,33 +891,47 @@ export function TabFeatures({ entity, rules, onEntityUpdate }: {
         </View>
       </Modal>
 
-      <RemoveFeatureModal
-        visible={removingFeatureId !== null}
-        entity={entity}
-        rules={rules ?? DEFAULT_RULES}
-        featureId={removingFeatureId}
-        onConfirm={(updated) => { onEntityUpdate?.(updated); setRemovingFeatureId(null); }}
-        onCancel={() => setRemovingFeatureId(null)}
-      />
+      {/* EDIT-PERF-1: gated like every other sheet-level modal
+          (FREEEDIT-PERF-1's precedent in app/sheet/[id].tsx) — these three
+          used to be unconditionally mounted, so their component bodies
+          (state, effects, any data derivation) ran on every render of this
+          tab regardless of whether they were open. */}
+      {removingFeatureId !== null && (
+        <RemoveFeatureModal
+          visible
+          entity={entity}
+          rules={rules ?? DEFAULT_RULES}
+          featureId={removingFeatureId}
+          onConfirm={(updated) => { onEntityUpdate?.(updated); setRemovingFeatureId(null); }}
+          onCancel={() => setRemovingFeatureId(null)}
+        />
+      )}
 
-      <AddCustomFeatureModal
-        visible={addCustomFeatureOpen}
-        entity={entity}
-        rules={rules ?? DEFAULT_RULES}
-        onConfirm={(updated) => { onEntityUpdate?.(updated); setAddCustomFeatureOpen(false); }}
-        onCancel={() => setAddCustomFeatureOpen(false)}
-      />
+      {addCustomFeatureOpen && (
+        <AddCustomFeatureModal
+          visible
+          entity={entity}
+          rules={rules ?? DEFAULT_RULES}
+          onConfirm={(updated) => { onEntityUpdate?.(updated); setAddCustomFeatureOpen(false); }}
+          onCancel={() => setAddCustomFeatureOpen(false)}
+        />
+      )}
 
-      <ChangeBackgroundModal
-        visible={changeBackgroundOpen}
-        entity={entity}
-        rules={rules ?? DEFAULT_RULES}
-        onConfirm={(updated) => { onEntityUpdate?.(updated); setChangeBackgroundOpen(false); }}
-        onCancel={() => setChangeBackgroundOpen(false)}
-      />
+      {changeBackgroundOpen && (
+        <ChangeBackgroundModal
+          visible
+          entity={entity}
+          rules={rules ?? DEFAULT_RULES}
+          onConfirm={(updated) => { onEntityUpdate?.(updated); setChangeBackgroundOpen(false); }}
+          onCancel={() => setChangeBackgroundOpen(false)}
+        />
+      )}
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: see TabCharacter.tsx's identical comment.
+export const TabFeatures = memo(TabFeaturesInner);
 
 const styles = StyleSheet.create({
   scroll:   { flex: 1 },

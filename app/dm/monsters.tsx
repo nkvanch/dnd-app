@@ -1,8 +1,8 @@
 // app/dm/monsters.tsx
 // Monster library — browse SRD monsters, preview stat blocks, spawn into encounter.
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet,
+  View, Text, ScrollView, FlatList, Pressable, StyleSheet,
   TextInput, Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -13,19 +13,32 @@ import { spawnMonster }     from '../../src/engine/monsterFactory';
 import { MonsterTemplate }  from '../../src/content/monsters/types';
 import { mergeMonsterIndex } from '../../src/content/contentResolution';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
+import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import { FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow } from '../../src/components/FilterChipRow';
+import {
+  MONSTER_SIZE_ORDER, MONSTER_MOVEMENT_TYPES, monsterMovementTypes, monsterResistances,
+  monsterImmunities, monsterConditionImmunities, monsterHasDarkvision, monsterIsSpellcaster, crLabel,
+  monsterSortOptions,
+} from '../../src/content/monsters/monsterBrowse';
+import { sortByOption } from '../../src/content/contentQuery';
+import { SortControl } from '../../src/components/SortControl';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { useBrowseStateStore } from '../../src/store/browseStateStore';
 
-function crLabel(cr: number): string {
-  if (cr === 0.125) return '1/8';
-  if (cr === 0.25)  return '1/4';
-  if (cr === 0.5)   return '1/2';
-  return String(cr);
-}
+const SCREEN_KEY = 'monster_library';
+
+const monsterKeyExtractor = (t: MonsterTemplate) => t.id;
+// COMPENDIUM-1: SIZE_ORDER/MOVEMENT_TYPES/the derivation helpers below moved
+// to src/content/monsters/monsterBrowse.ts so the Compendium's Monster
+// browser shares the exact same logic, not a second copy.
+const SIZE_ORDER = MONSTER_SIZE_ORDER;
+const MOVEMENT_TYPES = MONSTER_MOVEMENT_TYPES;
 
 // ── Monster preview modal ─────────────────────────────────────────────────────
 
-function MonsterPreview({ template, onSpawn, onClose }: {
+function MonsterPreview({ template, isHomebrew, onSpawn, onClose }: {
   template: MonsterTemplate;
+  isHomebrew: boolean;
   onSpawn: () => void;
   onClose: () => void;
 }) {
@@ -41,7 +54,10 @@ function MonsterPreview({ template, onSpawn, onClose }: {
         <Pressable style={styles.previewSheet} onPress={e => e.stopPropagation()}>
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* Header */}
-            <Text style={styles.monsterName}>{template.name}</Text>
+            <View style={styles.rowNameLine}>
+              <Text style={styles.monsterName}>{template.name}</Text>
+              {!isHomebrew && isNonSrd(template.srd) && <NonSrdBadge />}
+            </View>
             <Text style={styles.monsterType}>
               {template.size} {template.type}, {template.alignment}
             </Text>
@@ -109,43 +125,216 @@ export default function MonstersScreen() {
   const router       = useRouter();
   const safeGoBack   = useSafeGoBack('/(tabs)');
   const rules        = useCharacterStore(s => s.rules);
-  const addEntity    = useCombatStore(s => s.updateEntity);
   const inCombat     = useCombatStore(s => s.combat.active);
 
-  const [search,   setSearch]   = useState('');
-  const [crMin,    setCrMin]    = useState('');
-  const [crMax,    setCrMax]    = useState('');
+  const saved = useBrowseStateStore.getState().getBrowseState(SCREEN_KEY);
+  const setBrowseState = useBrowseStateStore(s => s.setBrowseState);
+  const savedFilters = saved.filters ?? {};
+  const [search,   setSearch]   = useState(saved.search ?? '');
+  const [crMin,    setCrMin]    = useState((savedFilters.crMin as string) ?? '');
+  const [crMax,    setCrMax]    = useState((savedFilters.crMax as string) ?? '');
   const [preview,  setPreview]  = useState<MonsterTemplate | null>(null);
+  // MONSTER-LIB-FILTERS-1: type/size/official-homebrew — the fields
+  // MonsterTemplate actually carries (confirmed against the real content
+  // type before building this; no environment/tags field exists on
+  // MonsterTemplate, so those aren't offered — see the final report's
+  // "Filter coverage by content type" section). Kept behind a collapsible
+  // panel (filtersOpen) rather than permanent controls, per "don't overload
+  // the screen."
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [typeFilter,  setTypeFilter]  = useState<string | null>((savedFilters.typeFilter as string) ?? null);
+  const [sizeFilter,  setSizeFilter]  = useState<string | null>((savedFilters.sizeFilter as string) ?? null);
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'official' | 'homebrew'>((savedFilters.sourceFilter as 'all' | 'official' | 'homebrew') ?? 'all');
+  const [alignmentFilter, setAlignmentFilter] = useState<string | null>((savedFilters.alignmentFilter as string) ?? null);
+  const [legendaryOnly, setLegendaryOnly] = useState(!!savedFilters.legendaryOnly);
+  const [lairOnly,      setLairOnly]      = useState(!!savedFilters.lairOnly);
+  const [darkvisionOnly, setDarkvisionOnly] = useState(!!savedFilters.darkvisionOnly);
+  const [spellcasterOnly, setSpellcasterOnly] = useState(!!savedFilters.spellcasterOnly);
+  const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set((savedFilters.movementFilter as string[]) ?? []));
+  const [resistanceFilter, setResistanceFilter] = useState<Set<string>>(new Set((savedFilters.resistanceFilter as string[]) ?? []));
+  const [immunityFilter, setImmunityFilter] = useState<Set<string>>(new Set((savedFilters.immunityFilter as string[]) ?? []));
+  const [condImmunityFilter, setCondImmunityFilter] = useState<Set<string>>(new Set((savedFilters.condImmunityFilter as string[]) ?? []));
+  const [languageFilter, setLanguageFilter] = useState<Set<string>>(new Set((savedFilters.languageFilter as string[]) ?? []));
+  // Ruleset: real field (MonsterTemplate.rulesetId), but confirmed zero
+  // monsters currently carry a real (non-undefined) value — every official
+  // monster and every homebrew one so far is "available under every
+  // ruleset." The filter logic below is fully wired for when that changes;
+  // FilterChipRow itself only renders once 2+ distinct values actually
+  // exist, so this correctly stays invisible rather than showing a
+  // meaningless single-option control.
+  const [rulesetFilter, setRulesetFilter] = useState<string | null>((savedFilters.rulesetFilter as string) ?? null);
 
   const homebrewMonsters = useHomebrewStore(s => s.monsters);
   // mergeMonsterIndex dedups by id, homebrew wins — extracted to
   // contentResolution.ts once a second consumer needed it (preparedEncounter.ts).
   const allTemplates = useMemo(() => mergeMonsterIndex(homebrewMonsters), [homebrewMonsters]);
+  const homebrewIds = useMemo(() => new Set(homebrewMonsters.map(m => m.id)), [homebrewMonsters]);
+  const sortOptions = useMemo(() => monsterSortOptions(t => homebrewIds.has(t.id)), [homebrewIds]);
+  const [sort, setSort] = useState(saved.sort ?? 'name_asc');
+  useEffect(() => {
+    setBrowseState(SCREEN_KEY, {
+      search, sort,
+      filters: {
+        crMin, crMax, typeFilter, sizeFilter, sourceFilter, alignmentFilter,
+        legendaryOnly, lairOnly, darkvisionOnly, spellcasterOnly,
+        movementFilter: Array.from(movementFilter), resistanceFilter: Array.from(resistanceFilter),
+        immunityFilter: Array.from(immunityFilter), condImmunityFilter: Array.from(condImmunityFilter),
+        languageFilter: Array.from(languageFilter), rulesetFilter,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    search, sort, crMin, crMax, typeFilter, sizeFilter, sourceFilter, alignmentFilter,
+    legendaryOnly, lairOnly, darkvisionOnly, spellcasterOnly, movementFilter, resistanceFilter,
+    immunityFilter, condImmunityFilter, languageFilter, rulesetFilter,
+  ]);
+
+  // Real, present values only — not a fabricated fixed enum. Sizes still
+  // sort in the standard D&D size order (real data, common ordering) rather
+  // than alphabetically.
+  const availableTypes = useMemo(
+    () => Array.from(new Set(allTemplates.map(t => t.type))).sort(),
+    [allTemplates],
+  );
+  const availableSizes = useMemo(
+    () => Array.from(new Set(allTemplates.map(t => t.size)))
+      .sort((a, b) => SIZE_ORDER.indexOf(a) - SIZE_ORDER.indexOf(b)),
+    [allTemplates],
+  );
+  const availableAlignments = useMemo(
+    () => Array.from(new Set(allTemplates.map(t => t.alignment))).sort(),
+    [allTemplates],
+  );
+  const availableRulesets = useMemo(
+    () => Array.from(new Set(allTemplates.map(t => t.rulesetId).filter((r): r is NonNullable<typeof r> => !!r).map(String))).sort(),
+    [allTemplates],
+  );
+  const availableResistances = useMemo(
+    () => Array.from(new Set(allTemplates.flatMap(t => Array.from(monsterResistances(t))))).sort(),
+    [allTemplates],
+  );
+  const availableImmunities = useMemo(
+    () => Array.from(new Set(allTemplates.flatMap(t => Array.from(monsterImmunities(t))))).sort(),
+    [allTemplates],
+  );
+  const availableCondImmunities = useMemo(
+    () => Array.from(new Set(allTemplates.flatMap(t => Array.from(monsterConditionImmunities(t))))).sort(),
+    [allTemplates],
+  );
+  const availableLanguages = useMemo(
+    () => Array.from(new Set(allTemplates.flatMap(t => t.languages))).sort(),
+    [allTemplates],
+  );
 
   const filtered = useMemo(() => {
-    return allTemplates.filter(t => {
+    return sortByOption(allTemplates.filter(t => {
       const matchName = t.name.toLowerCase().includes(search.toLowerCase()) ||
                         t.type.toLowerCase().includes(search.toLowerCase());
       const min = parseFloat(crMin);
       const max = parseFloat(crMax);
       const matchCr = (isNaN(min) || t.cr >= min) && (isNaN(max) || t.cr <= max);
-      return matchName && matchCr;
-    });
-  }, [allTemplates, search, crMin, crMax]);
+      const matchType = !typeFilter || t.type === typeFilter;
+      const matchSize = !sizeFilter || t.size === sizeFilter;
+      const matchAlignment = !alignmentFilter || t.alignment === alignmentFilter;
+      const matchRuleset = !rulesetFilter || t.rulesetId === rulesetFilter;
+      const isHomebrew = homebrewIds.has(t.id);
+      const matchSource = sourceFilter === 'all' || (sourceFilter === 'homebrew' ? isHomebrew : !isHomebrew);
+      const matchLegendary = !legendaryOnly || (t.legendaryActions ?? 0) > 0;
+      const matchLair = !lairOnly || (t.lairActions?.length ?? 0) > 0;
+      const matchDarkvision = !darkvisionOnly || monsterHasDarkvision(t);
+      const matchSpellcaster = !spellcasterOnly || monsterIsSpellcaster(t);
+      // Multi-select fields: OR within the field (any selected value
+      // matches), AND against every other filter.
+      const matchMovement = movementFilter.size === 0 ||
+        Array.from(movementFilter).some(m => monsterMovementTypes(t).has(m));
+      const matchResistance = resistanceFilter.size === 0 ||
+        Array.from(resistanceFilter).some(r => monsterResistances(t).has(r));
+      const matchImmunity = immunityFilter.size === 0 ||
+        Array.from(immunityFilter).some(i => monsterImmunities(t).has(i));
+      const matchCondImmunity = condImmunityFilter.size === 0 ||
+        Array.from(condImmunityFilter).some(c => monsterConditionImmunities(t).has(c));
+      const matchLanguage = languageFilter.size === 0 ||
+        Array.from(languageFilter).some(l => t.languages.includes(l));
+      return matchName && matchCr && matchType && matchSize && matchAlignment && matchRuleset &&
+        matchSource && matchLegendary && matchLair && matchDarkvision && matchSpellcaster &&
+        matchMovement && matchResistance && matchImmunity && matchCondImmunity && matchLanguage;
+    }), sortOptions, sort);
+  }, [
+    allTemplates, search, crMin, crMax, typeFilter, sizeFilter, alignmentFilter, rulesetFilter,
+    sourceFilter, homebrewIds, legendaryOnly, lairOnly, darkvisionOnly, spellcasterOnly,
+    movementFilter, resistanceFilter, immunityFilter, condImmunityFilter, languageFilter,
+    sortOptions, sort,
+  ]);
+
+  const activeFilterChips: { key: string; label: string; onClear: () => void }[] = [
+    ...(typeFilter ? [{ key: 'type', label: typeFilter, onClear: () => setTypeFilter(null) }] : []),
+    ...(sizeFilter ? [{ key: 'size', label: sizeFilter, onClear: () => setSizeFilter(null) }] : []),
+    ...(alignmentFilter ? [{ key: 'alignment', label: alignmentFilter, onClear: () => setAlignmentFilter(null) }] : []),
+    ...(rulesetFilter ? [{ key: 'ruleset', label: rulesetFilter, onClear: () => setRulesetFilter(null) }] : []),
+    ...(sourceFilter !== 'all' ? [{ key: 'source', label: sourceFilter === 'official' ? 'Official' : 'Homebrew', onClear: () => setSourceFilter('all') }] : []),
+    ...(crMin.trim() || crMax.trim() ? [{ key: 'cr', label: `CR ${crMin || '0'}–${crMax || '30'}`, onClear: () => { setCrMin(''); setCrMax(''); } }] : []),
+    ...(legendaryOnly ? [{ key: 'legendary', label: 'Legendary Actions', onClear: () => setLegendaryOnly(false) }] : []),
+    ...(lairOnly ? [{ key: 'lair', label: 'Lair Actions', onClear: () => setLairOnly(false) }] : []),
+    ...(darkvisionOnly ? [{ key: 'darkvision', label: 'Darkvision', onClear: () => setDarkvisionOnly(false) }] : []),
+    ...(spellcasterOnly ? [{ key: 'spellcaster', label: 'Spellcaster', onClear: () => setSpellcasterOnly(false) }] : []),
+    ...Array.from(movementFilter).map(m => ({ key: `move_${m}`, label: m, onClear: () => setMovementFilter(s => { const n = new Set(s); n.delete(m); return n; }) })),
+    ...Array.from(resistanceFilter).map(r => ({ key: `res_${r}`, label: `Resist ${r}`, onClear: () => setResistanceFilter(s => { const n = new Set(s); n.delete(r); return n; }) })),
+    ...Array.from(immunityFilter).map(i => ({ key: `imm_${i}`, label: `Immune ${i}`, onClear: () => setImmunityFilter(s => { const n = new Set(s); n.delete(i); return n; }) })),
+    ...Array.from(condImmunityFilter).map(c => ({ key: `condimm_${c}`, label: `Immune ${c}`, onClear: () => setCondImmunityFilter(s => { const n = new Set(s); n.delete(c); return n; }) })),
+    ...Array.from(languageFilter).map(l => ({ key: `lang_${l}`, label: l, onClear: () => setLanguageFilter(s => { const n = new Set(s); n.delete(l); return n; }) })),
+  ];
+  function clearAllFilters() {
+    setTypeFilter(null); setSizeFilter(null); setSourceFilter('all'); setCrMin(''); setCrMax('');
+    setAlignmentFilter(null); setRulesetFilter(null); setLegendaryOnly(false); setLairOnly(false);
+    setDarkvisionOnly(false); setSpellcasterOnly(false);
+    setMovementFilter(new Set()); setResistanceFilter(new Set()); setImmunityFilter(new Set());
+    setCondImmunityFilter(new Set()); setLanguageFilter(new Set());
+  }
 
   function handleSpawn(template: MonsterTemplate) {
     const monster = spawnMonster(template, rules);
-    // Add to combat entities
-    useCombatStore.setState(s => ({
-      entities: s.entities.some(e => e.id === monster.id)
-        ? s.entities
-        : [...s.entities, monster],
-    }));
-    setPreview(null);
     if (inCombat) {
+      // Route through the store's own addEntities action (not a raw
+      // setState) — it's the one thing that also gives the monster a real
+      // InitiativeEntry via addToEncounter() and persists/broadcasts the
+      // result, all of which a bare setState silently skipped (audit
+      // finding: spawning while an encounter was already active never
+      // showed up in the initiative tracker and could be lost on restart).
+      useCombatStore.getState().addEntities([monster]);
+      setPreview(null);
       safeGoBack();
+    } else {
+      // Outside an active encounter, combatStore.entities is inert — it's
+      // fully replaced (not merged) by startCombat() the next time an
+      // encounter actually starts (app/dm/encounter.tsx), so there's no
+      // existing "pre-combat roster" mechanism to wire this into here.
+      // Preserve that pre-existing (already-inert) behavior rather than
+      // inventing new pre-combat roster architecture — out of this
+      // finding's scope.
+      useCombatStore.setState(s => ({
+        entities: s.entities.some(e => e.id === monster.id) ? s.entities : [...s.entities, monster],
+      }));
+      setPreview(null);
     }
   }
+
+  const renderMonsterRow = useCallback(({ item: t }: { item: MonsterTemplate }) => (
+    <Pressable style={styles.monsterRow} onPress={() => setPreview(t)}>
+      <View>
+        <View style={styles.rowNameLine}>
+          <Text style={styles.rowName}>{t.name}</Text>
+          {!homebrewIds.has(t.id) && isNonSrd(t.srd) && <NonSrdBadge />}
+        </View>
+        <Text style={styles.rowType}>{t.size} {t.type}</Text>
+      </View>
+      <View style={styles.rowRight}>
+        <View style={styles.crBadge}>
+          <Text style={styles.crTxt}>CR {crLabel(t.cr)}</Text>
+        </View>
+        <Text style={styles.hpTxt}>{t.hp.average} HP</Text>
+      </View>
+    </Pressable>
+  ), [homebrewIds]);
 
   return (
     <View style={styles.screen}>
@@ -183,29 +372,126 @@ export default function MonstersScreen() {
         />
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {filtered.map(t => (
-          <Pressable key={t.id} style={styles.monsterRow} onPress={() => setPreview(t)}>
-            <View>
-              <Text style={styles.rowName}>{t.name}</Text>
-              <Text style={styles.rowType}>{t.size} {t.type}</Text>
+      <View style={styles.controlsRow}>
+        <Pressable
+          style={[styles.filtersToggle, filtersOpen && styles.filtersToggleActive]}
+          onPress={() => setFiltersOpen(v => !v)}
+        >
+          <Text style={[styles.filtersToggleTxt, filtersOpen && styles.filtersToggleTxtActive]}>
+            Filters{activeFilterChips.length > 0 ? ` (${activeFilterChips.length})` : ''}
+          </Text>
+        </Pressable>
+        <SortControl options={sortOptions} value={sort} onChange={setSort} />
+      </View>
+
+      {filtersOpen && (
+        <View style={styles.filterPanel}>
+          <FilterSection label="Type">
+            <FilterChipRow options={availableTypes.map(t => ({ id: t, label: t }))} value={typeFilter} onChange={setTypeFilter} scrollable />
+          </FilterSection>
+          <FilterSection label="Size">
+            <FilterChipRow options={availableSizes.map(s => ({ id: s, label: s }))} value={sizeFilter} onChange={setSizeFilter} scrollable />
+          </FilterSection>
+          <FilterSection label="Alignment">
+            <FilterChipRow options={availableAlignments.map(a => ({ id: a, label: a }))} value={alignmentFilter} onChange={setAlignmentFilter} scrollable />
+          </FilterSection>
+          {/* Ruleset — real field, currently a no-op (renders nothing) since
+              no monster has ever been tagged with a non-default value yet. */}
+          <FilterSection label="Ruleset">
+            <FilterChipRow options={availableRulesets.map(r => ({ id: r, label: r }))} value={rulesetFilter} onChange={setRulesetFilter} scrollable />
+          </FilterSection>
+          <FilterSection label="Source">
+            <OfficialHomebrewChipRow value={sourceFilter} onChange={setSourceFilter} />
+          </FilterSection>
+          <FilterSection label="Movement">
+            <MultiSelectChipRow options={MOVEMENT_TYPES.map(m => ({ id: m, label: m }))} values={movementFilter} onChange={setMovementFilter} />
+          </FilterSection>
+          <FilterSection label="Resistances">
+            <MultiSelectChipRow options={availableResistances.map(r => ({ id: r, label: r }))} values={resistanceFilter} onChange={setResistanceFilter} scrollable />
+          </FilterSection>
+          <FilterSection label="Immunities">
+            <MultiSelectChipRow options={availableImmunities.map(i => ({ id: i, label: i }))} values={immunityFilter} onChange={setImmunityFilter} scrollable />
+          </FilterSection>
+          <FilterSection label="Condition Immunities">
+            <MultiSelectChipRow options={availableCondImmunities.map(c => ({ id: c, label: c }))} values={condImmunityFilter} onChange={setCondImmunityFilter} scrollable />
+          </FilterSection>
+          <FilterSection label="Languages">
+            <MultiSelectChipRow options={availableLanguages.map(l => ({ id: l, label: l }))} values={languageFilter} onChange={setLanguageFilter} scrollable />
+          </FilterSection>
+          <FilterSection label="Other">
+            <View style={styles.chipRow}>
+              <Pressable style={[styles.chip, legendaryOnly && styles.chipActive]} onPress={() => setLegendaryOnly(v => !v)}>
+                <Text style={[styles.chipTxt, legendaryOnly && styles.chipTxtActive]}>Legendary Actions</Text>
+              </Pressable>
+              <Pressable style={[styles.chip, lairOnly && styles.chipActive]} onPress={() => setLairOnly(v => !v)}>
+                <Text style={[styles.chipTxt, lairOnly && styles.chipTxtActive]}>Lair Actions</Text>
+              </Pressable>
+              <Pressable style={[styles.chip, darkvisionOnly && styles.chipActive]} onPress={() => setDarkvisionOnly(v => !v)}>
+                <Text style={[styles.chipTxt, darkvisionOnly && styles.chipTxtActive]}>Darkvision</Text>
+              </Pressable>
+              <Pressable style={[styles.chip, spellcasterOnly && styles.chipActive]} onPress={() => setSpellcasterOnly(v => !v)}>
+                <Text style={[styles.chipTxt, spellcasterOnly && styles.chipTxtActive]}>Spellcaster</Text>
+              </Pressable>
             </View>
-            <View style={styles.rowRight}>
-              <View style={styles.crBadge}>
-                <Text style={styles.crTxt}>CR {crLabel(t.cr)}</Text>
-              </View>
-              <Text style={styles.hpTxt}>{t.hp.average} HP</Text>
-            </View>
+          </FilterSection>
+        </View>
+      )}
+
+      {/* Active filter chips + result count — same pattern to be reused by
+          other browsers as their turn comes (see final report). */}
+      {activeFilterChips.length > 0 && (
+        <View style={styles.activeFilterRow}>
+          {activeFilterChips.map(c => (
+            <Pressable key={c.key} style={styles.activeChip} onPress={c.onClear}>
+              <Text style={styles.activeChipTxt}>{c.label} ×</Text>
+            </Pressable>
+          ))}
+          <Pressable onPress={clearAllFilters}>
+            <Text style={styles.clearAllTxt}>Clear all</Text>
           </Pressable>
-        ))}
-        {filtered.length === 0 && (
-          <Text style={styles.emptyTxt}>No monsters match your filters.</Text>
-        )}
-      </ScrollView>
+        </View>
+      )}
+      <Text style={styles.resultCount}>{filtered.length} result{filtered.length === 1 ? '' : 's'}</Text>
+
+      <FlatList
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        data={filtered}
+        keyExtractor={monsterKeyExtractor}
+        renderItem={renderMonsterRow}
+        // MONSTER-LIB-PERF-1: was a ScrollView + .map() mounting all ~322
+        // rows immediately on every open, regardless of viewport — the
+        // dominant cause of felt open-latency. FlatList windows rendering
+        // to what's actually visible (+ a small overscan buffer), so
+        // opening cost no longer scales with catalog size.
+        initialNumToRender={12}
+        windowSize={7}
+        removeClippedSubviews
+        ListEmptyComponent={
+          // ZERO-RESULT-UX-1: distinguish "nothing exists" from "your
+          // filters excluded everything" — the former basically can't
+          // happen here (322 official monsters always exist), but the
+          // homebrew-only view can genuinely be empty, which is a
+          // different message than "no matches."
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTxt}>
+              {sourceFilter === 'homebrew' && homebrewMonsters.length === 0
+                ? 'No homebrew monsters yet.'
+                : 'No monsters match your filters.'}
+            </Text>
+            {activeFilterChips.length > 0 && (
+              <Pressable style={styles.clearFiltersBtn} onPress={clearAllFilters}>
+                <Text style={styles.clearFiltersBtnTxt}>Clear Filters</Text>
+              </Pressable>
+            )}
+          </View>
+        }
+      />
 
       {preview && (
         <MonsterPreview
           template={preview}
+          isHomebrew={homebrewIds.has(preview.id)}
           onSpawn={() => handleSpawn(preview)}
           onClose={() => setPreview(null)}
         />
@@ -229,11 +515,53 @@ const styles = StyleSheet.create({
   title:   { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
 
   filters: { flexDirection: 'row', gap: Spacing.xs, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh },
+  controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: Spacing.xs, paddingHorizontal: Spacing.sm },
   filterInput: {
     flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
     padding: Spacing.sm, color: Colors.textPrimary, fontSize: FontSize.sm,
   },
+
+  filtersToggle: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.surface, paddingHorizontal: Spacing.sm, justifyContent: 'center',
+  },
+  filtersToggleActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  filtersToggleTxt:     { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  filtersToggleTxtActive: { color: Colors.bg },
+
+  filterPanel: {
+    backgroundColor: Colors.surfaceHigh, paddingHorizontal: Spacing.sm, paddingBottom: Spacing.sm, gap: 4,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  chipRow: { flexDirection: 'row', gap: Spacing.xs, flexWrap: 'wrap' },
+  chip: {
+    paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface,
+  },
+  chipActive:   { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  chipTxt:      { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  chipTxtActive:{ color: Colors.bg },
+
+  activeFilterRow: {
+    flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm, paddingTop: Spacing.xs,
+  },
+  activeChip: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  activeChipTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  clearAllTxt:   { fontSize: FontSize.xs, color: Colors.textDim, textDecorationLine: 'underline' },
+  resultCount:   { fontSize: FontSize.xs, color: Colors.textDim, paddingHorizontal: Spacing.sm, paddingTop: 4 },
+
+  emptyState: { alignItems: 'center', gap: Spacing.sm },
+  clearFiltersBtn: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
+  },
+  clearFiltersBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold },
 
   scroll:  { flex: 1 },
   content: { padding: Spacing.sm, gap: Spacing.xs, paddingBottom: Spacing.xxl },
@@ -244,6 +572,7 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, flexDirection: 'row',
     alignItems: 'center', justifyContent: 'space-between',
   },
+  rowNameLine: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   rowName:   { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   rowType:   { fontSize: FontSize.xs, color: Colors.textSecondary },
   rowRight:  { alignItems: 'flex-end', gap: 4 },

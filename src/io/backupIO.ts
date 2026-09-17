@@ -16,6 +16,58 @@ import {
   validateGrimoirePack, validatePackContents, countHomebrew,
 } from '../engine/backup';
 import { ExportAction, saveTextViaSAF } from './exportShare';
+import { EntityMeta } from '../db/entityRepo';
+
+/**
+ * Returns the display names of characters this pack would overwrite with an
+ * OLDER copy than what's already on this device. Entity carries no
+ * timestamp of its own (see GrimoirePack.createdAt's doc comment), so this
+ * compares the pack's overall createdAt against each LOCAL character's own
+ * SQLite updatedAt — a character not present locally is never "stale"
+ * (nothing to lose). A pure comparison, extracted specifically so it's
+ * unit-testable without a screen render harness (audit finding BACKUP-1).
+ */
+export function findStaleCharacterOverwrites(pack: GrimoirePack, localMeta: EntityMeta[]): string[] {
+  const localById = new Map(localMeta.map(m => [m.id, m]));
+  return pack.characters
+    .filter(c => (localById.get(c.id)?.updatedAt ?? 0) > pack.createdAt)
+    .map(c => c.identity.name || c.id);
+}
+
+const HOMEBREW_CATEGORIES = [
+  'races', 'subraces', 'classes', 'subclasses', 'items', 'spells',
+  'backgrounds', 'features', 'feats', 'monsters', 'conditions',
+] as const satisfies readonly (keyof GrimoirePackHomebrew)[];
+
+export type HomebrewIdCollision = { type: string; id: string; incomingName: string; localName: string };
+
+/**
+ * Returns every {type, id} an incoming pack shares with content ALREADY
+ * present on this device — whether that local content came from a
+ * different installed pack (already covered by packDiagnostics.ts's
+ * pack_content_shadowed check) or was hand-authored locally, never tracked
+ * by any pack (NOT covered by that check — the actual gap, since homebrew
+ * ids are unnamespaced name-slugs with no uniqueness guarantee across
+ * authors/devices). Importing silently overwrites a same-id local item
+ * with the incoming one; this surfaces that before it happens instead of
+ * only after, via content_cache_history (audit finding INV-2).
+ */
+export function findHomebrewIdCollisions(
+  incoming: GrimoirePackHomebrew,
+  local:    GrimoirePackHomebrew,
+): HomebrewIdCollision[] {
+  const collisions: HomebrewIdCollision[] = [];
+  for (const type of HOMEBREW_CATEGORIES) {
+    const localById = new Map((local[type] ?? []).map(item => [item.id, item.name]));
+    for (const item of incoming[type] ?? []) {
+      const localName = localById.get(item.id);
+      if (localName !== undefined) {
+        collisions.push({ type, id: item.id, incomingName: item.name, localName });
+      }
+    }
+  }
+  return collisions;
+}
 
 /**
  * Exports the given characters plus whichever homebrew content they actually

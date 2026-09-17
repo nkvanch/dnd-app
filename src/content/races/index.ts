@@ -2,7 +2,7 @@
 // FILE: src/content/races/index.ts
 // All PHB races expressed as Feature/Effect arrays.
 // ============================================================================
-import { Race, Subrace, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature, Ability, asRulesetId } from '../../engine/types';
+import { Race, Subrace, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature, Ability, RulesetId } from '../../engine/types';
 
 /**
  * Builds one Mordenkainen's Tome of Foes Tiefling bloodline subrace — each
@@ -66,6 +66,18 @@ export const raceHuman: Race = {
   id: 'human',
   name: 'Human',
   srd: true,
+  // CHOICE-EXPANSION-2: "one extra language of your choice" is a genuine
+  // player choice, not a fixed grant (unlike e.g. Dwarvish for a Dwarf) —
+  // migrated from the purely-descriptive human_extra_language Feature below
+  // (kept for its flavor text/display) into a real, resolvable choice.
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}human_extra_language`,
+      prompt: 'Choose one extra language.',
+      kind: 'language', count: 1, pool: 'all',
+      grants: [], required: true, resolved: false,
+    },
+  ],
   features: [
     {
       id: 'human_asi',
@@ -431,7 +443,7 @@ export const raceHuman: Race = {
 export const raceHuman2024: Race = {
   id: 'human_2024',
   name: 'Human',
-  rulesetId: asRulesetId('5.5e'),
+  rulesetId: 'dnd5e-2024' as RulesetId,
   srd: false,
   features: [
     {
@@ -520,6 +532,15 @@ export const raceElf: Race = {
   subraces: [
     {
       id: 'high_elf', name: 'High Elf', parentId: 'elf', srd: true,
+      // CHOICE-EXPANSION-2: real choice, migrated alongside the flavor Feature below.
+      pendingChoices: [
+        {
+          id: `${RACE_CHOICE_PREFIX}high_elf_extra_language`,
+          prompt: 'Choose one additional language.',
+          kind: 'language', count: 1, pool: 'all',
+          grants: [], required: true, resolved: false,
+        },
+      ],
       features: [
         {
           id: 'high_elf_asi',
@@ -787,6 +808,15 @@ export const raceElf: Race = {
     },
     {
       id: 'vahadar_elf', name: 'Vahadar Elf', parentId: 'elf', srd: false,
+      // CHOICE-EXPANSION-2: real choice, migrated alongside the flavor Feature below.
+      pendingChoices: [
+        {
+          id: `${RACE_CHOICE_PREFIX}vahadar_extra_language`,
+          prompt: 'Choose one extra language.',
+          kind: 'language', count: 1, pool: 'all',
+          grants: [], required: true, resolved: false,
+        },
+      ],
       features: [
         {
           id: 'vahadar_asi', name: 'Ability Score Increase',
@@ -1013,6 +1043,22 @@ export const raceDwarf: Race = {
   id: 'dwarf',
   name: 'Dwarf',
   srd: true,
+  // CHOICE-EXPANSION-2: restricted to exactly the 3 named tools per RAW —
+  // never broadened to 'all' artisan's tools. Migrated alongside the flavor
+  // dwarf_tool_proficiency Feature below.
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}dwarf_tool_proficiency`,
+      prompt: 'Choose one: smith\'s tools, brewer\'s supplies, or mason\'s tools.',
+      kind: 'tool', count: 1,
+      pool: [
+        { id: 'smiths_tools', label: 'Smith\'s Tools', value: 'smiths_tools' },
+        { id: 'brewers_supplies', label: 'Brewer\'s Supplies', value: 'brewers_supplies' },
+        { id: 'masons_tools', label: 'Mason\'s Tools', value: 'masons_tools' },
+      ],
+      grants: [], required: true, resolved: false,
+    },
+  ],
   features: [
     {
       id: 'dwarf_asi',
@@ -2471,6 +2517,14 @@ export const raceChangeling: Race = {
       pool: ['deception', 'insight', 'intimidation', 'performance', 'persuasion'].map(s => ({ id: s, label: s, value: s })),
       grants: [], required: true, resolved: false,
     },
+    // CHOICE-EXPANSION-2: previously only a flavor string in the `languages`
+    // display array above with zero mechanical modeling — now a real choice.
+    {
+      id: `${RACE_CHOICE_PREFIX}changeling_extra_language`,
+      prompt: 'Choose one extra language.',
+      kind: 'language', count: 1, pool: 'all',
+      grants: [], required: true, resolved: false,
+    },
   ],
   features: [
     {
@@ -2606,6 +2660,16 @@ export const raceHarengon: Race = {
   resources: [
     { resourceId: 'rabbit_hop_pool', name: 'Rabbit Hop', maximum: 2, recharge: 'long_rest' },
   ],
+  // CHOICE-EXPANSION-2: previously only a flavor string in the `languages`
+  // display array above with zero mechanical modeling — now a real choice.
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}harengon_extra_language`,
+      prompt: 'Choose one extra language.',
+      kind: 'language', count: 1, pool: 'all',
+      grants: [], required: true, resolved: false,
+    },
+  ],
   features: [
     {
       id: 'hare_trigger', name: 'Hare-Trigger',
@@ -2730,6 +2794,16 @@ export const raceOwlin: Race = {
     prompt: 'Increase one ability score by 2 and a different one by 1. (This app\'s flexible-ASI mechanism also offers a "+1 to three different scores" alternative that some other MOTM races use — Owlin\'s own RAW text only specifies the +2/+1 split, so treat the extra option as a minor, disclosed convenience rather than official.)',
     mode: { kind: 'two_one_or_three_one' },
   },
+  // CHOICE-EXPANSION-2: previously only a flavor string in the `languages`
+  // display array above with zero mechanical modeling — now a real choice.
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}owlin_extra_language`,
+      prompt: 'Choose one extra language.',
+      kind: 'language', count: 1, pool: 'all',
+      grants: [], required: true, resolved: false,
+    },
+  ],
   features: [
     {
       id: 'owlin_darkvision', name: 'Darkvision',
@@ -2856,6 +2930,16 @@ export const raceTabaxi: Race = {
   description: 'Tabaxi are catlike wanderers driven by insatiable curiosity, forever chasing rumors, treasures, and tales from one corner of the world to the next.',
   size: 'Medium', languages: ['Common', 'One extra language of your choice'],
   flexibleAsi: { prompt: TWO_ONE_OR_THREE_ONE_PROMPT, mode: { kind: 'two_one_or_three_one' } },
+  // CHOICE-EXPANSION-2: previously only a flavor string in the `languages`
+  // display array above with zero mechanical modeling — now a real choice.
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}tabaxi_extra_language`,
+      prompt: 'Choose one extra language.',
+      kind: 'language', count: 1, pool: 'all',
+      grants: [], required: true, resolved: false,
+    },
+  ],
   features: [
     {
       id: 'tabaxi_climb_speed', name: "Cat's Claws",
@@ -2971,6 +3055,18 @@ export const raceVerdan: Race = {
   id: 'verdan', name: 'Verdan', srd: false,
   description: 'Verdan are a goblinoid people reshaped generations ago by a strange curse, left with black blood, an empathic mind, and a resilience their goblin ancestors never had. You are Small or Medium, your choice.',
   size: 'Medium', languages: ['Common', 'Goblin', 'One extra language of your choice'],
+  // CHOICE-EXPANSION-2: previously only a flavor string in the `languages`
+  // display array above with zero mechanical modeling — now a real choice.
+  // Common/Goblin remain fixed, automatic grants (unchanged) — only the
+  // "one extra language" clause is a genuine player choice.
+  pendingChoices: [
+    {
+      id: `${RACE_CHOICE_PREFIX}verdan_extra_language`,
+      prompt: 'Choose one extra language.',
+      kind: 'language', count: 1, pool: 'all',
+      grants: [], required: true, resolved: false,
+    },
+  ],
   features: [
     {
       id: 'verdan_asi', name: 'Ability Score Increase',

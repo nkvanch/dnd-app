@@ -19,7 +19,7 @@
 //    fully synchronous — no async rewrite of the mutation handlers that
 //    call it.
 // ============================================================================
-import { Spell } from '../engine/types';
+import { Spell, asRulesetId } from '../engine/types';
 import { getContentDb } from '../db/contentDb';
 import type { SpellIndexEntry, SpellRepo } from './spellRepo.types';
 
@@ -28,6 +28,7 @@ const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 type SpellIndexRow = {
   id: string; name: string; level: number; school: string; castingTime: string;
   ritual: number; concentration: number; classes: string | null; srd: number | null;
+  rulesetId: string | null; components: string | null;
 };
 
 let index: SpellIndexEntry[] = [];
@@ -38,7 +39,7 @@ async function init(): Promise<void> {
   try {
     const db = getContentDb();
     const rows = await db.getAllAsync<SpellIndexRow>(
-      'SELECT id, name, level, school, castingTime, ritual, concentration, classes, srd FROM spells'
+      'SELECT id, name, level, school, castingTime, ritual, concentration, classes, srd, rulesetId, components FROM spells'
     );
     const built: SpellIndexEntry[] = [];
     for (const r of rows) {
@@ -54,6 +55,8 @@ async function init(): Promise<void> {
           concentration: r.concentration === 1,
           classes:       r.classes ? (JSON.parse(r.classes) as string[]) : undefined,
           srd:           r.srd === null ? undefined : r.srd === 1,
+          rulesetId:     r.rulesetId ? asRulesetId(r.rulesetId) : undefined,
+          components:    r.components ? (JSON.parse(r.components) as string[]) : undefined,
         });
       } catch (e) {
         // One malformed row (e.g. bad `classes` JSON) shouldn't cost every

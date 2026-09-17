@@ -1,6 +1,6 @@
 // app/sheet/TabAbilities.tsx
 // Tab 3 — Ability scores, saving throws, skills.
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import { Entity, Ability, SkillName, CampaignRules } from '../../engine/types';
 import { modifier, collectAllEffects, applyStatModifiers, recomputeDerived } from '../../engine/pipeline';
@@ -372,7 +372,7 @@ interface AbilitiesProps {
   onEntityUpdate: (updated: Entity) => void;
 }
 
-export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEntityUpdate }: AbilitiesProps) {
+function TabAbilitiesInner({ entity, rules, isDm, campaignId, deviceId, onEntityUpdate }: AbilitiesProps) {
   const [auditStat,  setAuditStat]  = useState<string | null>(null);
   const [auditLabel, setAuditLabel] = useState('');
   const [profOpen, setProfOpen] = useState(false);
@@ -530,6 +530,9 @@ export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEnti
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: see TabCharacter.tsx's identical comment.
+export const TabAbilities = memo(TabAbilitiesInner);
 
 const styles = StyleSheet.create({
   scroll:   { flex: 1 },

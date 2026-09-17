@@ -30,6 +30,25 @@ export async function initDb(): Promise<SQLite.SQLiteDatabase | null> {
     }
   });
 
+  // HOMEBREW-PACKAGE-1 item 15: additive migration for an existing dev
+  // database created before installed_packs had packageVersion/author —
+  // CREATE TABLE IF NOT EXISTS above never adds columns to an already-
+  // existing table. ADD COLUMN is cheap/safe (no table rewrite); the
+  // try/catch swallows the "duplicate column" error a fresh (already-
+  // current) table produces, matching this being the only migration
+  // mechanism this app has (no schema-version tracking — see schema.ts's
+  // own header comment on the JSON-blob-storage rationale).
+  for (const alter of [
+    'ALTER TABLE installed_packs ADD COLUMN packageVersion TEXT',
+    'ALTER TABLE installed_packs ADD COLUMN author TEXT',
+  ]) {
+    try {
+      await _db.execAsync(alter);
+    } catch {
+      // Column already exists — expected on every run after the first.
+    }
+  }
+
   return _db;
 }
 

@@ -3,10 +3,17 @@
 // Rogue subclasses: Thief, Assassin, Arcane Trickster, Inquisitive,
 // Mastermind, Phantom, Scout, Soulknife, Swashbuckler
 // ============================================================================
-import { ClassProgression, Grant } from '../../engine/types';
+import { ClassProgression, ChoiceOption, Grant } from '../../engine/types';
 import { THIRD_CASTER_SLOTS } from '../classes/spellSlotTables';
+import { ALL_TOOLS } from '../tools';
 
 export type SubclassProgression = ClassProgression & { name: string };
+
+/** CHOICE-EXPANSION-2: same helper other content files use — restricts a
+ * tool choice's pool to one or more canonical categories. */
+function toolCategoryPool(...categories: string[]): ChoiceOption[] {
+  return ALL_TOOLS.filter(t => categories.includes(t.category)).map(t => ({ id: t.id, label: t.name, value: t.id }));
+}
 
 // ── Thief ─────────────────────────────────────────────────────────────────────
 
@@ -149,7 +156,14 @@ export const inquisitiveProgression: SubclassProgression = {
 export const mastermindProgression: SubclassProgression = {
   classId: 'rogue', name: 'Mastermind', srd: false,
   entries: [
-    { level: 3, hpDie: 8, choices: [],
+    { level: 3, hpDie: 8,
+      // CHOICE-EXPANSION-2: "one gaming set of your choice" and "learn two
+      // languages of your choice" were previously entirely unmodeled — the
+      // fixed disguise kit/forgery kit grants below are untouched.
+      choices: [
+        { id: 'mastermind_gaming_set_3', prompt: 'Choose one gaming set.', kind: 'tool', count: 1, pool: toolCategoryPool('gaming_set'), grants: [], required: true, resolved: false },
+        { id: 'mastermind_languages_3', prompt: 'Choose two languages.', kind: 'language', count: 2, pool: 'all', grants: [], required: true, resolved: false },
+      ],
       grants: [
         { kind: 'feature', value: { id: 'master_of_intrigue', name: 'Master of Intrigue', description: 'Gain proficiency with the disguise kit, the forgery kit, and one gaming set of your choice, and learn two languages of your choice. After hearing a creature speak for at least 1 minute, unerringly mimic its speech patterns and accent (if you know the language).', source: { kind: 'subclass', refId: 'mastermind' }, level: 3, effects: [
           { type: 'grant_proficiency', target: 'tool:disguise_kit', operation: 'add', value: null, condition: null },

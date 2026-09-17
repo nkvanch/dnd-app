@@ -2,9 +2,10 @@
 // FILE: src/content/classes/index.ts
 // All 12 PHB classes with full level 1-20 progressions.
 // ============================================================================
-import { ClassProgression, LevelEntry, ChoiceDefinition } from '../../engine/types';
+import { ClassProgression, LevelEntry, ChoiceDefinition, ChoiceOption } from '../../engine/types';
 import { fighterProgression } from './fighter';
 import { artificerProgression } from './artificer';
+import { ALL_TOOLS } from '../tools';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -24,17 +25,26 @@ function asiChoice(id: string): ChoiceDefinition {
 /**
  * Builds a level-1 starting-equipment choice. Each option's `value` is an array
  * of item IDs that get added to inventory.carried when the choice is resolved
- * (see resolveChoice in leveling.ts).
+ * (see resolveChoice in leveling.ts). An option may also carry `itemFilter`
+ * (STARTING-EQUIPMENT-1/CHOICE-EXPANSION-3: same mechanism fighter.ts's
+ * fighter_equip_b already uses) for a "fixed items PLUS N picks matching a
+ * constraint" option, e.g. "any simple weapon" — real player choice among
+ * every simple weapon in the catalog, not a single hardcoded example. Setting
+ * equipmentStyle: 'exact_options' whenever any option uses this is required
+ * for app/creation/equipment.tsx to resolve it via the constrained-picker
+ * path instead of the legacy fixed-pool path.
  */
 function equipmentChoice(
   id: string,
   prompt: string,
-  options: { id: string; label: string; items: string[] }[],
+  options: { id: string; label: string; items: string[]; itemFilter?: ChoiceOption['itemFilter'] }[],
 ): ChoiceDefinition {
+  const hasFilter = options.some(o => o.itemFilter);
   return {
     id, prompt, kind: 'equipment', count: 1,
-    pool: options.map(o => ({ id: o.id, label: o.label, value: o.items })),
+    pool: options.map(o => ({ id: o.id, label: o.label, value: o.items, itemFilter: o.itemFilter })),
     grants: [], required: true, resolved: false,
+    ...(hasFilter ? { equipmentStyle: 'exact_options' as const, equipmentGroup: 'Weapons' } : {}),
   };
 }
 
@@ -57,6 +67,31 @@ function spellChoice(id: string, count: number, prompt: string): ChoiceDefinitio
     id, prompt, kind: 'spell', count, pool: 'all',
     grants: [], required: true, resolved: false,
   };
+}
+
+/**
+ * CHOICE-EXPANSION-1: a real interactive Expertise choice — resolved by a
+ * RepeatedChoicePicker via applyExpertiseChoiceToEntity (not resolveChoice;
+ * pool is the 'all' sentinel, same reason ASI/subclass/infusion/spell are).
+ * The eligible pool (skills the character is already trained in and not
+ * yet expert in) is computed live by the picker, not authored here.
+ */
+function expertiseChoice(id: string, count: number, prompt: string): ChoiceDefinition {
+  return {
+    id, prompt, kind: 'expertise', count, pool: 'all',
+    grants: [], required: true, resolved: false,
+  };
+}
+
+/** CHOICE-EXPANSION-2: pool of every canonical tool in one or more
+ * categories — reused wherever official content restricts a tool choice to
+ * "N musical instruments"/"one artisan's tools" rather than any tool. */
+function toolCategoryPool(...categories: string[]): ChoiceOption[] {
+  return ALL_TOOLS.filter(t => categories.includes(t.category)).map(t => ({ id: t.id, label: t.name, value: t.id }));
+}
+
+function toolChoice(id: string, count: number, prompt: string, pool: ChoiceDefinition['pool'] = 'all'): ChoiceDefinition {
+  return { id, prompt, kind: 'tool', count, pool, grants: [], required: true, resolved: false };
 }
 
 // ── Rogue ─────────────────────────────────────────────────────────────────────
@@ -88,6 +123,7 @@ export const rogueProgression: ClassProgression = {
     {
       level: 1, hpDie: 8, choices: [
         rogueSkillChoice,
+        expertiseChoice('rogue_expertise_1', 2, 'Choose two of your skill proficiencies to gain Expertise (double proficiency bonus).'),
         equipmentChoice('rogue_equip_a', 'Choose a weapon: (a) a rapier or (b) a shortsword', [
           { id: 'rapier',     label: 'Rapier',     items: ['rapier'] },
           { id: 'shortsword', label: 'Shortsword', items: ['shortsword'] },
@@ -124,7 +160,7 @@ export const rogueProgression: ClassProgression = {
     { level: 3, hpDie: 8, choices: [{ id: 'rogue_archetype', prompt: 'Choose a Roguish Archetype.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }], grants: [{ kind: 'feature', value: { id: 'rogue_archetype_feature', name: 'Roguish Archetype', description: 'You choose an archetype that you emulate in the exercise of your rogue abilities.', source: { kind: 'class', refId: 'rogue' }, level: 3, effects: [], actions: [], choices: [], passive: true } }] },
     { level: 4, hpDie: 8, choices: [asiChoice('rogue_asi_4')], grants: [] },
     { level: 5, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'uncanny_dodge', name: 'Uncanny Dodge', description: 'When an attacker you can see hits you, use your reaction to halve the damage.', source: { kind: 'class', refId: 'rogue' }, level: 5, effects: [], actions: [], choices: [], passive: false, activation: { actionType: 'reaction', resourceCost: null, range: 'self', target: 'self', requiresSave: null } } }] },
-    { level: 6, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'expertise_rogue_6', name: 'Expertise', description: 'Choose two more skill proficiencies to double your proficiency bonus.', source: { kind: 'class', refId: 'rogue' }, level: 6, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 6, hpDie: 8, choices: [expertiseChoice('rogue_expertise_6', 2, 'Choose two more skill proficiencies to gain Expertise.')], grants: [{ kind: 'feature', value: { id: 'expertise_rogue_6', name: 'Expertise', description: 'Choose two more skill proficiencies to double your proficiency bonus.', source: { kind: 'class', refId: 'rogue' }, level: 6, effects: [], actions: [], choices: [], passive: true } }] },
     { level: 7, hpDie: 8, choices: [], grants: [{ kind: 'feature', value: { id: 'evasion_rogue', name: 'Evasion', description: 'When subjected to an effect requiring a Dex save, take no damage on success and half on failure.', source: { kind: 'class', refId: 'rogue' }, level: 7, effects: [], actions: [], choices: [], passive: true,
       trigger: 'When you must make a Dexterity saving throw against an effect that deals damage.' } }] },
     { level: 8, hpDie: 8, choices: [asiChoice('rogue_asi_8')], grants: [] },
@@ -265,7 +301,7 @@ export const clericProgression: ClassProgression = {
         ]),
         equipmentChoice('cleric_equip_c', 'Choose: (a) a light crossbow and 20 bolts or (b) a simple weapon', [
           { id: 'crossbow', label: 'Light Crossbow & 20 bolts', items: ['light_crossbow', 'bolts_20'] },
-          { id: 'simple',   label: 'Any simple weapon (Mace)',  items: ['mace'] },
+          { id: 'simple',   label: 'A simple weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple' }, quantity: 1 } },
         ]),
         equipmentChoice('cleric_equip_d', "Choose a pack: (a) priest's or (b) explorer's", [
           { id: 'priest',   label: "Priest's Pack",   items: ['priests_pack'] },
@@ -348,12 +384,12 @@ export const barbarianProgression: ClassProgression = {
       level: 1, hpDie: 12, choices: [
         barbarianSkillChoice,
         equipmentChoice('barbarian_equip_a', 'Choose: (a) a greataxe or (b) any martial melee weapon', [
-          { id: 'greataxe', label: 'Greataxe',                  items: ['greataxe'] },
-          { id: 'martial',  label: 'Any martial melee weapon (Longsword)', items: ['longsword'] },
+          { id: 'greataxe', label: 'Greataxe', items: ['greataxe'] },
+          { id: 'martial',  label: 'A martial melee weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'martial', weaponRange: 'melee' }, quantity: 1 } },
         ]),
         equipmentChoice('barbarian_equip_b', 'Choose: (a) two handaxes or (b) any simple weapon', [
-          { id: 'handaxes', label: 'Two Handaxes',          items: ['handaxe', 'handaxe'] },
-          { id: 'simple',   label: 'Any simple weapon (Spear)', items: ['spear'] },
+          { id: 'handaxes', label: 'Two Handaxes', items: ['handaxe', 'handaxe'] },
+          { id: 'simple',   label: 'A simple weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple' }, quantity: 1 } },
         ]),
       ],
       grants: [
@@ -532,8 +568,8 @@ export const paladinProgression: ClassProgression = {
           { id: 'two_martial',   label: 'Two martial weapons (Longsword + Battleaxe)',  items: ['longsword', 'battleaxe'] },
         ]),
         equipmentChoice('paladin_equip_b', 'Choose: (a) five javelins or (b) any simple melee weapon', [
-          { id: 'javelins', label: 'Five Javelins',              items: ['javelin', 'javelin', 'javelin', 'javelin', 'javelin'] },
-          { id: 'simple',   label: 'Any simple melee weapon (Mace)', items: ['mace'] },
+          { id: 'javelins', label: 'Five Javelins', items: ['javelin', 'javelin', 'javelin', 'javelin', 'javelin'] },
+          { id: 'simple',   label: 'A simple melee weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple', weaponRange: 'melee' }, quantity: 1 } },
         ]),
         equipmentChoice('paladin_equip_c', "Choose a pack: (a) priest's or (b) explorer's", [
           { id: 'priest',   label: "Priest's Pack",   items: ['priests_pack'] },
@@ -635,12 +671,12 @@ export const druidProgression: ClassProgression = {
       level: 1, hpDie: 8, choices: [
         druidSkillChoice,
         equipmentChoice('druid_equip_a', 'Choose: (a) a wooden shield or (b) any simple weapon', [
-          { id: 'shield', label: 'Wooden Shield',          items: ['shield'] },
-          { id: 'simple', label: 'Any simple weapon (Club)', items: ['club'] },
+          { id: 'shield', label: 'Wooden Shield', items: ['shield'] },
+          { id: 'simple', label: 'A simple weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple' }, quantity: 1 } },
         ]),
         equipmentChoice('druid_equip_b', 'Choose: (a) a scimitar or (b) any simple melee weapon', [
-          { id: 'scimitar', label: 'Scimitar',                   items: ['scimitar'] },
-          { id: 'simple',   label: 'Any simple melee weapon (Mace)', items: ['mace'] },
+          { id: 'scimitar', label: 'Scimitar', items: ['scimitar'] },
+          { id: 'simple',   label: 'A simple melee weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple', weaponRange: 'melee' }, quantity: 1 } },
         ]),
       ],
       grants: [
@@ -706,20 +742,40 @@ export const bardProgression: ClassProgression = {
           grants: [], required: true, resolved: false,
         },
         equipmentChoice('bard_equip_a', 'Choose a weapon: (a) a rapier, (b) a longsword, or (c) any simple weapon', [
-          { id: 'rapier',    label: 'Rapier',                  items: ['rapier'] },
-          { id: 'longsword', label: 'Longsword',               items: ['longsword'] },
-          { id: 'simple',    label: 'Any simple weapon (Dagger)', items: ['dagger'] },
+          { id: 'rapier',    label: 'Rapier', items: ['rapier'] },
+          { id: 'longsword', label: 'Longsword', items: ['longsword'] },
+          { id: 'simple',    label: 'A simple weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple' }, quantity: 1 } },
         ]),
         equipmentChoice('bard_equip_b', "Choose a pack: (a) diplomat's or (b) entertainer's", [
           { id: 'diplomat',    label: "Diplomat's Pack",    items: ['diplomats_pack'] },
           { id: 'entertainer', label: "Entertainer's Pack", items: ['entertainers_pack'] },
         ]),
+        // CHOICE-EXPANSION-3: "any musical instrument" deliberately NOT
+        // migrated to itemFilter like the "any simple weapon" choices above —
+        // ItemFilterConstraint's category union (weapon/armor/shield/
+        // ammunition/tool/focus/gear) has no musical-instrument-specific
+        // value, and the general Item catalog entries this filters against
+        // don't carry the ToolCategory tag (artisan/gaming_set/
+        // musical_instrument/other) the separate ALL_TOOLS registry uses —
+        // these are two distinct, unbridged content models. Real player
+        // choice among instruments already exists via the Tool/Language/
+        // Expertise ChoiceDefinition system (see toolCategoryPool() usage
+        // elsewhere in this file for "any artisan's tools"-style choices),
+        // but that system grants a PROFICIENCY, not a carried inventory
+        // item — not a safe drop-in replacement for starting equipment.
+        // Left flattened to one example per the "don't infer uncertain
+        // rules" rule; a real fix needs new metadata bridging, not content
+        // authoring.
         equipmentChoice('bard_equip_c', 'Choose an instrument: (a) a lute or (b) any musical instrument', [
-          { id: 'lute',  label: 'Lute',                      items: ['lute'] },
+          { id: 'lute',  label: 'Lute', items: ['lute'] },
           { id: 'other', label: 'Any musical instrument (Lute)', items: ['lute'] },
         ]),
         spellChoice('bard_cantrips_1', 2, 'Choose 2 bard cantrips.'),
         spellChoice('bard_spells_1', 4, 'Choose 4 bard spells known.'),
+        // CHOICE-EXPANSION-2: RAW "three musical instruments of your choice"
+        // proficiency was previously not modeled at all — no grant, no
+        // choice, not even flavor text.
+        toolChoice('bard_instruments_lvl_1', 3, 'Choose three musical instruments.', toolCategoryPool('musical_instrument')),
       ],
       grants: [
         { kind: 'feature', value: { id: 'bard_spellcasting', name: 'Spellcasting', description: 'You have learned to untangle and reshape the fabric of reality in harmony with your wishes and music.', source: { kind: 'class', refId: 'bard' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
@@ -730,7 +786,7 @@ export const bardProgression: ClassProgression = {
       ],
     },
     { level: 2, hpDie: 8, choices: [spellChoice('bard_spells_2', 1, 'Choose 1 more bard spell known.')], grants: [{ kind: 'feature', value: { id: 'jack_of_all_trades', name: 'Jack of All Trades', description: 'You can add half your proficiency bonus to any ability check that doesn\'t use your proficiency bonus.', source: { kind: 'class', refId: 'bard' }, level: 2, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'song_of_rest', name: 'Song of Rest', description: 'You can use soothing music or oration to help revitalize your wounded allies during a short rest.', source: { kind: 'class', refId: 'bard' }, level: 2, effects: [], actions: [], choices: [], passive: true } }] },
-    { level: 3, hpDie: 8, choices: [{ id: 'bard_college_choice', prompt: 'Choose a Bard College.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }, spellChoice('bard_spells_3', 1, 'Choose 1 more bard spell known.')], grants: [{ kind: 'feature', value: { id: 'bard_college', name: 'Bard College', description: 'You delve into the advanced techniques of a bard college of your choice.', source: { kind: 'class', refId: 'bard' }, level: 3, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'expertise_bard', name: 'Expertise', description: 'Choose two of your skill proficiencies to double your proficiency bonus.', source: { kind: 'class', refId: 'bard' }, level: 3, effects: [], actions: [], choices: [], passive: true } }] },
+    { level: 3, hpDie: 8, choices: [{ id: 'bard_college_choice', prompt: 'Choose a Bard College.', kind: 'subclass', count: 1, pool: 'all', grants: [], required: true, resolved: false }, spellChoice('bard_spells_3', 1, 'Choose 1 more bard spell known.'), expertiseChoice('bard_expertise_3', 2, 'Choose two of your skill proficiencies to gain Expertise (double proficiency bonus).')], grants: [{ kind: 'feature', value: { id: 'bard_college', name: 'Bard College', description: 'You delve into the advanced techniques of a bard college of your choice.', source: { kind: 'class', refId: 'bard' }, level: 3, effects: [], actions: [], choices: [], passive: true } }, { kind: 'feature', value: { id: 'expertise_bard', name: 'Expertise', description: 'Choose two of your skill proficiencies to double your proficiency bonus.', source: { kind: 'class', refId: 'bard' }, level: 3, effects: [], actions: [], choices: [], passive: true } }] },
     { level: 4, hpDie: 8, choices: [asiChoice('bard_asi_4'), spellChoice('bard_cantrips_4', 1, 'Choose 1 more bard cantrip.'), spellChoice('bard_spells_4', 1, 'Choose 1 more bard spell known.')], grants: [] },
     {
       level: 5, hpDie: 8, choices: [spellChoice('bard_spells_5', 1, 'Choose 1 more bard spell known.')], grants: [
@@ -750,6 +806,7 @@ export const bardProgression: ClassProgression = {
       choices: [
         spellChoice('bard_cantrips_10', 1, 'Choose 1 more bard cantrip.'),
         spellChoice('bard_spells_10', 2, 'Choose 2 more spells known — including your Magical Secrets picks, this app draws them from your own bard spell list rather than any class’s (a disclosed simplification).'),
+        expertiseChoice('bard_expertise_10', 2, 'Choose two more skill proficiencies to gain Expertise.'),
       ],
       grants: [
         { kind: 'feature', value: { id: 'bardic_inspiration_d10', name: 'Bardic Inspiration (d10)', description: 'Your Bardic Inspiration die improves to a d10.', source: { kind: 'class', refId: 'bard' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
@@ -819,13 +876,18 @@ export const monkProgression: ClassProgression = {
       level: 1, hpDie: 8, choices: [
         monkSkillChoice,
         equipmentChoice('monk_equip_a', 'Choose: (a) a shortsword or (b) any simple weapon', [
-          { id: 'shortsword', label: 'Shortsword',                 items: ['shortsword'] },
-          { id: 'simple',     label: 'Any simple weapon (Quarterstaff)', items: ['quarterstaff'] },
+          { id: 'shortsword', label: 'Shortsword', items: ['shortsword'] },
+          { id: 'simple',     label: 'A simple weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple' }, quantity: 1 } },
         ]),
         equipmentChoice('monk_equip_b', "Choose a pack: (a) dungeoneer's or (b) explorer's", [
           { id: 'dungeoneer', label: "Dungeoneer's Pack", items: ['dungeoneers_pack'] },
           { id: 'explorer',   label: "Explorer's Pack",   items: ['explorers_pack'] },
         ]),
+        // CHOICE-EXPANSION-2: RAW "one type of artisan's tools or one
+        // musical instrument, your choice" was previously not modeled at
+        // all — the legal pool spans BOTH categories, which toolCategoryPool
+        // already supports (it just unions whichever categories are passed).
+        toolChoice('monk_tool_lvl_1', 1, 'Choose one artisan\'s tools or one musical instrument.', toolCategoryPool('artisan', 'musical_instrument')),
       ],
       grants: [
         { kind: 'feature', value: { id: 'unarmored_defense_monk', name: 'Unarmored Defense', description: 'While you are wearing no armor and not wielding a shield, your AC equals 10 + your Dexterity modifier + your Wisdom modifier.', source: { kind: 'class', refId: 'monk' }, level: 1, effects: [{ type: 'base_ac_formula', target: 'ac', operation: 'set', value: 10, condition: null, formulaAbilities: ['dex', 'wis'] }], actions: [], choices: [], passive: true } },
@@ -930,7 +992,7 @@ export const sorcererProgression: ClassProgression = {
         sorcererSkillChoice,
         equipmentChoice('sorcerer_equip_a', 'Choose: (a) a light crossbow and 20 bolts or (b) any simple weapon', [
           { id: 'crossbow', label: 'Light Crossbow & 20 bolts', items: ['light_crossbow', 'bolts_20'] },
-          { id: 'simple',   label: 'Any simple weapon (Dagger)', items: ['dagger'] },
+          { id: 'simple',   label: 'A simple weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple' }, quantity: 1 } },
         ]),
         equipmentChoice('sorcerer_equip_b', 'Choose a focus: (a) a component pouch or (b) an arcane focus', [
           { id: 'pouch', label: 'Component Pouch', items: ['component_pouch'] },
@@ -1033,7 +1095,7 @@ export const warlockProgression: ClassProgression = {
         warlockSkillChoice,
         equipmentChoice('warlock_equip_a', 'Choose: (a) a light crossbow and 20 bolts or (b) any simple weapon', [
           { id: 'crossbow', label: 'Light Crossbow & 20 bolts', items: ['light_crossbow', 'bolts_20'] },
-          { id: 'simple',   label: 'Any simple weapon (Dagger)', items: ['dagger'] },
+          { id: 'simple',   label: 'A simple weapon', items: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple' }, quantity: 1 } },
         ]),
         equipmentChoice('warlock_equip_b', 'Choose a focus: (a) a component pouch or (b) an arcane focus', [
           { id: 'pouch', label: 'Component Pouch', items: ['component_pouch'] },
@@ -1140,18 +1202,66 @@ const MULTICLASS_PROFICIENCIES: Record<string, import('../../engine/types').Prof
   // documented "undefined = grants nothing" semantics.
 };
 
+// NON-SRD-FLAG-1: the 12 core PHB classes below are SRD 5.1-safe (matches
+// the already-asserted claim on ClassProgression.srd's own doc comment —
+// "All 12 core PHB classes are SRD-safe" — this array just never carried
+// the tag itself, so it silently showed "Non-SRD" for legitimately-safe
+// classes once flagging existed, and was excluded entirely from any
+// EXPO_PUBLIC_SRD_ONLY-filtered build). Artificer is deliberately left
+// untagged — it's from Eberron: Rising from the Last War / Tasha's
+// Cauldron, not the core PHB, and is not part of the SRD.
+// FILTER-METADATA-1: savingThrows/armorProfs/weaponProfs/spellcastingAbility
+// below are populated from app/creation/class-detail.tsx's CLASS_DETAIL
+// table (the same hand-authored, RAW-accurate data class-detail.tsx has
+// always displayed as free text) — confirmed via a dedicated investigation
+// that these three CharClass fields are NEVER read for official classes at
+// runtime (class-detail.tsx's `savingThrowAbilities ?? cls.savingThrows`
+// always resolves via CLASS_DETAIL first, since every official class has an
+// entry there), so populating them here is purely additive display/filter
+// metadata with zero risk of disagreeing with — or changing — any existing
+// mechanical behavior. armorProfs/weaponProfs use the same closed
+// 'light'|'medium'|'heavy'|'shield' / 'simple'|'martial' category
+// vocabulary as MULTICLASS_PROFICIENCIES above; a handful of classes grant
+// a shorter NAMED weapon list instead of a full category (e.g. Wizard:
+// "daggers, darts, slings, quarterstaffs, light crossbows", Druid: a
+// fixed non-metal list) — those are left as `[]` (no blanket category
+// access) rather than fabricating a category that overstates what the
+// class actually gets; the named exceptions themselves aren't structured
+// data anywhere in this engine and aren't invented here either.
+// Separately, a genuine mechanical gap was found during this same
+// investigation and is NOT fixed here (out of scope for filter metadata):
+// none of these 13 official classes' ClassProgression actually GRANTS
+// armor/weapon proficiency via a `Grant{kind:'proficiency'}` at level 1 —
+// only CLASS_DETAIL's display text and the sheet's own equipment defaults
+// currently reflect it, so `entity.proficiencies.armor/weapons` stays
+// empty for a freshly-created single-class character today. Flagged, not
+// silently patched, since granting proficiency mechanically is a gameplay
+// change beyond this filter-metadata task's scope.
 export const ALL_CHAR_CLASSES = [
-  { id: 'fighter',   name: 'Fighter',   hitDie: 10, features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.fighter },
-  { id: 'rogue',     name: 'Rogue',     hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.rogue },
-  { id: 'wizard',    name: 'Wizard',    hitDie: 6,  features: [] },
-  { id: 'cleric',    name: 'Cleric',    hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.cleric },
-  { id: 'barbarian', name: 'Barbarian', hitDie: 12, features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.barbarian },
-  { id: 'ranger',    name: 'Ranger',    hitDie: 10, features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.ranger },
-  { id: 'paladin',   name: 'Paladin',   hitDie: 10, features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.paladin },
-  { id: 'druid',     name: 'Druid',     hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.druid },
-  { id: 'bard',      name: 'Bard',      hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.bard },
-  { id: 'monk',      name: 'Monk',      hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.monk },
-  { id: 'sorcerer',  name: 'Sorcerer',  hitDie: 6,  features: [] },
-  { id: 'warlock',   name: 'Warlock',   hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.warlock },
-  { id: 'artificer', name: 'Artificer', hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.artificer },
+  { id: 'fighter',   name: 'Fighter',   hitDie: 10, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.fighter,
+    savingThrows: ['str', 'con'], armorProfs: ['light', 'medium', 'heavy', 'shield'], weaponProfs: ['simple', 'martial'] },
+  { id: 'rogue',     name: 'Rogue',     hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.rogue,
+    savingThrows: ['dex', 'int'], armorProfs: ['light'], weaponProfs: ['simple'] },
+  { id: 'wizard',    name: 'Wizard',    hitDie: 6,  features: [], srd: true,
+    savingThrows: ['int', 'wis'], armorProfs: [], weaponProfs: [], spellcastingAbility: 'int' },
+  { id: 'cleric',    name: 'Cleric',    hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.cleric,
+    savingThrows: ['wis', 'cha'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], spellcastingAbility: 'wis' },
+  { id: 'barbarian', name: 'Barbarian', hitDie: 12, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.barbarian,
+    savingThrows: ['str', 'con'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple', 'martial'] },
+  { id: 'ranger',    name: 'Ranger',    hitDie: 10, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.ranger,
+    savingThrows: ['str', 'dex'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple', 'martial'], spellcastingAbility: 'wis' },
+  { id: 'paladin',   name: 'Paladin',   hitDie: 10, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.paladin,
+    savingThrows: ['wis', 'cha'], armorProfs: ['light', 'medium', 'heavy', 'shield'], weaponProfs: ['simple', 'martial'], spellcastingAbility: 'cha' },
+  { id: 'druid',     name: 'Druid',     hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.druid,
+    savingThrows: ['int', 'wis'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: [], spellcastingAbility: 'wis' },
+  { id: 'bard',      name: 'Bard',      hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.bard,
+    savingThrows: ['dex', 'cha'], armorProfs: ['light'], weaponProfs: ['simple'], spellcastingAbility: 'cha' },
+  { id: 'monk',      name: 'Monk',      hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.monk,
+    savingThrows: ['str', 'dex'], armorProfs: [], weaponProfs: ['simple'] },
+  { id: 'sorcerer',  name: 'Sorcerer',  hitDie: 6,  features: [], srd: true,
+    savingThrows: ['con', 'cha'], armorProfs: [], weaponProfs: [], spellcastingAbility: 'cha' },
+  { id: 'warlock',   name: 'Warlock',   hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.warlock,
+    savingThrows: ['wis', 'cha'], armorProfs: ['light'], weaponProfs: ['simple'], spellcastingAbility: 'cha' },
+  { id: 'artificer', name: 'Artificer', hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.artificer,
+    savingThrows: ['con', 'int'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], spellcastingAbility: 'int' },
 ] as import('../../engine/types').CharClass[];

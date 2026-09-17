@@ -541,13 +541,18 @@ export function generateActionCard(
 
 /**
  * Generates an ActionCard for a known/prepared spell.
- * The spell is looked up from spellRepo's Tier-2 cache by ID.
+ * The spell is looked up from spellRepo's Tier-2 cache by ID, falling back
+ * to homebrewStore for anything spellRepo doesn't have (a homebrew spell —
+ * e.g. one added via "+ Add Additional Spell" or a homebrew spell tagged
+ * for the character's own class — would otherwise silently never get a
+ * card, mirroring the same official-then-homebrew fallback already used
+ * for equipped-item features above).
  */
 export function generateSpellCard(
   spellId: string,
   entity: Entity,
 ): ActionCard | null {
-  const spell = spellRepo.getSpellSync(spellId);
+  const spell = spellRepo.getSpellSync(spellId) ?? useHomebrewStore.getState().spells.find(s => s.id === spellId);
   if (!spell) return null;
 
   const cardType = classifySpell(spell);

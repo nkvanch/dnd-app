@@ -74,4 +74,28 @@ describe('itemRepo.native error handling', () => {
     expect(itemRepo.getItemSync('bad')).toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
   });
+
+  // TIER1-EXT-1: round-trip for the newly-added rulesetId column.
+  it('init() parses rulesetId from the SQLite row into the index entry', async () => {
+    mockGetContentDb.mockReturnValue({
+      getAllAsync: jest.fn().mockResolvedValue([
+        { id: 'ring_1', name: 'Ring of Testing', weight: 0, cost: '—', properties: '["magic item"]', hasDamageEffect: 0, weaponRange: null, srd: 0, rulesetId: 'dnd5e-2024' },
+      ]),
+    });
+
+    await itemRepo.init();
+    expect(itemRepo.getIndex()[0].rulesetId).toBe('dnd5e-2024');
+  });
+
+  // A pre-TIER1-EXT-1 row (rulesetId column absent/NULL) must not crash.
+  it('init() tolerates a row with the rulesetId column absent (pre-migration shape)', async () => {
+    mockGetContentDb.mockReturnValue({
+      getAllAsync: jest.fn().mockResolvedValue([
+        { id: 'old_item', name: 'Old Item', weight: 1, cost: '1 gp', properties: '[]', hasDamageEffect: 0, weaponRange: null, srd: 1, rulesetId: null },
+      ]),
+    });
+
+    await itemRepo.init();
+    expect(itemRepo.getIndex()[0].rulesetId).toBeUndefined();
+  });
 });

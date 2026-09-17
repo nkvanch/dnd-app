@@ -15,21 +15,29 @@ import { useLocalSearchParams } from 'expo-router';
 import { Alert } from '../../src/utils/alert';
 import {
   Race, Subrace, Feature, Ability, SenseType, Sense,
-  MovementSpeeds, ResourceGrant, DraftTrait, Entity,
+  MovementSpeeds, ResourceGrant, DraftTrait, Entity, RulesetId, RACE_CHOICE_PREFIX,
 } from '../../src/engine/types';
+import {
+  ChoiceDefinitionListEditor, DraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import {
-  ABILITIES, SENSE_TYPES, MOVE_TYPES, MoveType, toId,
+  ABILITIES, SENSE_TYPES, MOVE_TYPES, MoveType, toId, disambiguateId,
   DraftSubrace, newDraftSubrace, buildSubrace, buildTraitFeature,
   AbilityScoreGrid, TraitListEditor,
 } from '../../src/components/homebrew/TraitEditor';
+import { globalContentDB } from '../../src/content/classes/library';
 import { simulate } from '../../src/engine/simulate';
 import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
-import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const SIZES = ['Tiny', 'Small', 'Medium', 'Large'] as const;
@@ -135,6 +143,13 @@ export default function RaceBuilderScreen() {
   const homebrewRaces = useHomebrewStore(s => s.races);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing = editId ? homebrewRaces.find(r => r.id === editId) ?? null : null;
+  // HOMEBREW-RULESET-1 (item 2): default to the character/campaign in
+  // progress's own ruleset when this builder was launched mid-creation —
+  // read once, on mount, via the global draft store (no caller changes
+  // needed anywhere this builder is launched from). Never applied when
+  // editing existing content (that content's own rulesetId wins).
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name,        setName]        = useState('');
   const [age,          setAge]         = useState('');
@@ -154,6 +169,7 @@ export default function RaceBuilderScreen() {
   const [draftMoveRange, setDraftMoveRange] = useState('30');
   const [traits, setTraits] = useState<DraftTrait[]>([]);
   const [subraces, setSubraces] = useState<DraftSubrace[]>([]);
+  const [pendingChoices, setPendingChoices] = useState<DraftChoice[]>([]);
   const [saving, setSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testRows, setTestRows] = useState<Row[]>([]);
@@ -168,6 +184,7 @@ export default function RaceBuilderScreen() {
     setAge(editing.age ?? '');
     setSize(editing.size ?? 'Medium');
     setLanguages((editing.languages ?? ['Common']).join(', '));
+    setRulesetId(editing.rulesetId);
     const draft = editing.homebrewDraft as Record<string, unknown> | undefined;
     if (draft) {
       setSpeed(String(draft.speed ?? '30'));
@@ -177,6 +194,18 @@ export default function RaceBuilderScreen() {
       if (draft.movement) setMovement(draft.movement as MovementSpeeds);
       if (draft.traits) setTraits(draft.traits as DraftTrait[]);
       if (draft.subraces) setSubraces(draft.subraces as DraftSubrace[]);
+      if (draft.pendingChoices) setPendingChoices(draft.pendingChoices as DraftChoice[]);
+    }
+    // CHOICE-AUTHORING-1: no draft.pendingChoices (race imported/authored
+    // outside this builder, or before this field existed) — reconstruct
+    // from the compiled Race.pendingChoices instead of dropping them, same
+    // "existing definitions must reopen correctly" guarantee the round-trip
+    // compiler is built for.
+    if (!draft?.pendingChoices && editing.pendingChoices) {
+      const reconstructed = editing.pendingChoices
+        .map(def => definitionToDraftChoice(def, RACE_CHOICE_PREFIX))
+        .filter((d): d is DraftChoice => d !== null);
+      if (reconstructed.length > 0) setPendingChoices(reconstructed);
     }
     // No draft (shouldn't happen for a race created by this builder, but
     // defensive for any other source) — the basics above still loaded, the
@@ -205,7 +234,23 @@ export default function RaceBuilderScreen() {
   }
 
   function buildRace(): Race {
-    const id = editing?.id ?? (toId(name) || 'homebrew_race');
+    // HOMEBREW-ID-COLLISION-1: auto-generated ids used to have no collision
+    // check at all — naming a homebrew race "Human" silently produced id
+    // `human`, identical to the official race. Both then rendered as
+    // apparent duplicates in the race picker, and BOTH rows resolved to the
+    // homebrew version (getMergedContentDB's homebrew-wins-by-id
+    // precedence), so tapping the official-looking row silently opened the
+    // player's own custom race instead. Reuses the existing
+    // disambiguateId() (already used for homebrew feature-id collisions,
+    // src/content/traitCompiler.ts) against BOTH official race ids and
+    // every OTHER homebrew race's id (excluding this one's own, when
+    // editing) — appends _2/_3/... on collision instead of silently
+    // colliding. Editing an existing race keeps its stable id unchanged.
+    const takenIds = new Set([
+      ...globalContentDB.races.map(r => r.id),
+      ...homebrewRaces.filter(r => r.id !== editing?.id).map(r => r.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_race', takenIds);
     const features: Feature[] = [];
     const resources: ResourceGrant[] = [];
 
@@ -283,7 +328,11 @@ export default function RaceBuilderScreen() {
       age: age.trim() || undefined,
       size,
       languages: languages.trim() ? languages.split(',').map(l => l.trim()).filter(Boolean) : undefined,
-      homebrewDraft: { speed, description, abiBonuses, senses, movement, traits, subraces },
+      rulesetId,
+      pendingChoices: pendingChoices.length > 0
+        ? pendingChoices.map(d => draftChoiceToDefinition(d, RACE_CHOICE_PREFIX))
+        : undefined,
+      homebrewDraft: { speed, description, abiBonuses, senses, movement, traits, subraces, pendingChoices },
     };
   }
 
@@ -354,6 +403,10 @@ export default function RaceBuilderScreen() {
     const race = buildRace();
     try {
       await saveItem('race', race);
+      // SAVE-AND-ADD-1: lets the Race picker (app/creation/race.tsx), if
+      // that's what sent us here, select this race automatically on
+      // return instead of making the player find it again in the list.
+      usePendingSelectionStore.getState().setPending('race_picker', race.id);
       goBack();
     } catch (e) {
       console.error('[race-builder] save failed:', e);
@@ -377,6 +430,9 @@ export default function RaceBuilderScreen() {
         <Text style={styles.fieldLabel}>Race Name *</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName}
           placeholder="e.g. Pandafolk" placeholderTextColor={Colors.textDim} />
+
+        <Text style={styles.fieldLabel}>Game / Ruleset</Text>
+        <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
 
         <Text style={styles.fieldLabel}>Age (optional)</Text>
         <TextInput style={styles.input} value={age} onChangeText={setAge}
@@ -471,6 +527,15 @@ export default function RaceBuilderScreen() {
           extra movement, or a limited-use ability like a bonus-action self-heal.
         </Text>
         <TraitListEditor traits={traits} onChange={setTraits} />
+
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Player Choices (optional)</Text>
+        <Text style={styles.helperNote}>
+          A real choice the player resolves when they select this race — e.g. proficiency
+          in one tool of their choice, or an extra language. Unlike a Trait above, this
+          doesn't grant anything by itself; it queues a pick the player makes on the
+          Features tab (or during creation), same as a class's own skill/expertise choices.
+        </Text>
+        <ChoiceDefinitionListEditor choices={pendingChoices} onChange={setPendingChoices} />
 
         <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Subraces (optional)</Text>
         <Text style={styles.helperNote}>

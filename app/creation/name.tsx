@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore, makeEmptyEntity } from '../../src/store/characterStore';
+import { RulesetId } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const LEVEL_OPTIONS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
@@ -27,6 +28,20 @@ export default function NameScreen() {
       ...entity,
       identity: { ...entity.identity, name: trimmed },
       notes: JSON.stringify({ targetLevel: level, campaign: campaign.trim() }),
+      // LIVE-RULESET-4 (item 8): every NEW character gets a canonical
+      // rulesetId from the moment it's created, rather than starting
+      // untagged and only ever getting one via a later, optional Change
+      // Ruleset action. 'dnd5e-2014' is this app's own long-standing
+      // implicit baseline — every piece of content authored before the
+      // 5.5e proof-of-concept was written against it, and it's already the
+      // fallback RulesetChangeModal's own picker assumes for an untagged
+      // character (gameIdForRuleset(RULESETS['dnd5e-2014'].id)). Making
+      // that assumption explicit and stored, rather than re-derived every
+      // time, is the "canonical, not silently defaulted" outcome the spec
+      // asks for. Existing (already-saved) untagged characters are
+      // deliberately NOT touched by this — see loadCharacters()'s own
+      // comment for why a blanket migration isn't done.
+      rulesetId: 'dnd5e-2014' as RulesetId,
     };
 
     setDraft(entity);

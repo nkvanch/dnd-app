@@ -5,7 +5,8 @@
 import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect, DurationTracker } from './types';
 import { recomputeDerived, collectAllEffects } from './pipeline';
 import { resolveResistance } from './resolver';
-import { tickDurations } from './conditions';
+import { tickDurations, applyCondition, removeCondition } from './conditions';
+import { CONDITIONS_BY_ID } from '../content/conditions/index';
 import { rollD20 as rollD20Dice } from './dice';
 import { DEFAULT_RULES } from '../store/characterStore';
 import { deathSavesPersist } from './houseRules';
@@ -559,9 +560,27 @@ export function recordDeathSave(
  * (set_flag, transform) is a pure state change on the player's own entity
  * that has no combat-resolution ambiguity, so it applies immediately.
  *
- * Effect types not yet handled here (apply_condition, remove_condition,
- * grant_speed, spend_resource beyond the base cost) are intentionally left
- * for a future pass — not silently claimed as done.
+ * apply_condition/remove_condition now route through the same
+ * applyCondition()/removeCondition() engine functions the app's condition
+ * pickers already use — the 40+ real content entries authoring these
+ * (monster fear/poison/paralyze attacks, several subclass features) used
+ * to display correctly but produce zero actual game-state change (audit
+ * finding ARCH-2). Condition features are resolved via CONDITIONS_BY_ID
+ * (official content only) — this file lives in src/engine/, which
+ * deliberately has no dependency on src/store/* (confirmed elsewhere in
+ * this codebase), so a homebrew condition applied this way gets its
+ * features attached only if it happens to share an id with a known
+ * official one; same disclosed limitation preparedEncounter.ts's own
+ * identical CONDITIONS_BY_ID usage already has.
+ *
+ * grant_speed and spend_resource (beyond the base activation cost) are
+ * still intentionally left for a future pass — not silently claimed as
+ * done. grant_speed specifically would need a genuine temporary-effect-
+ * tracking mechanism of its own (there's no existing "timed feature grant
+ * that isn't a condition" concept to reuse — tickDurations is hardcoded to
+ * entity.conditionMonitor.active/.conditions), which is real new
+ * architecture, not a contained fix; deferred rather than bolted on as a
+ * parallel state system.
  */
 export function applyAbilityEffects(
   entity:  Entity,
@@ -583,10 +602,14 @@ export function applyAbilityEffects(
       updated = startWildShape(updated, effect.formId, rules);
     } else if (effect.type === 'restore_resource') {
       updated = restoreResource(updated, effect.resourceId, effect.amount);
+    } else if (effect.type === 'apply_condition') {
+      const features = CONDITIONS_BY_ID[effect.conditionId]?.features;
+      updated = applyCondition(updated, effect.conditionId, 'ability', rules, features, effect.duration);
+    } else if (effect.type === 'remove_condition') {
+      updated = removeCondition(updated, effect.conditionId, rules);
     }
     // 'damage' / 'heal': intentionally left to the manual roll+HP-modal flow.
-    // 'apply_condition' / 'remove_condition' / 'grant_speed' / 'spend_resource':
-    // not yet wired — see the doc comment above.
+    // 'grant_speed' / 'spend_resource': not yet wired — see the doc comment above.
   }
 
   return recomputeDerived(updated, rules);

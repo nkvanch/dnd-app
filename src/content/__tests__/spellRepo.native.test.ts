@@ -76,4 +76,42 @@ describe('spellRepo.native error handling', () => {
     expect(spellRepo.getSpellSync('bad')).toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
   });
+
+  // TIER1-EXT-1: round-trip for the newly-added rulesetId/components columns.
+  it('init() parses rulesetId and components from the SQLite row into the index entry', async () => {
+    mockGetContentDb.mockReturnValue({
+      getAllAsync: jest.fn().mockResolvedValue([
+        {
+          id: 'fireball', name: 'Fireball', level: 3, school: 'evocation', castingTime: '1 action',
+          ritual: 0, concentration: 0, classes: '["wizard","sorcerer"]', srd: 1,
+          rulesetId: 'dnd5e-2014', components: '["V","S","M"]',
+        },
+      ]),
+    });
+
+    await spellRepo.init();
+    const entry = spellRepo.getIndex()[0];
+    expect(entry.rulesetId).toBe('dnd5e-2014');
+    expect(entry.components).toEqual(['V', 'S', 'M']);
+  });
+
+  // A pre-TIER1-EXT-1 row (as if the app hadn't re-imported the updated
+  // bundled asset yet, or the columns are simply absent/NULL) must not
+  // crash the index build — rulesetId/components are optional fields.
+  it('init() tolerates a row with rulesetId/components columns absent (pre-migration shape)', async () => {
+    mockGetContentDb.mockReturnValue({
+      getAllAsync: jest.fn().mockResolvedValue([
+        {
+          id: 'old_spell', name: 'Old Spell', level: 1, school: 'evocation', castingTime: '1 action',
+          ritual: 0, concentration: 0, classes: null, srd: 1,
+          rulesetId: null, components: null,
+        },
+      ]),
+    });
+
+    await spellRepo.init();
+    const entry = spellRepo.getIndex()[0];
+    expect(entry.rulesetId).toBeUndefined();
+    expect(entry.components).toBeUndefined();
+  });
 });

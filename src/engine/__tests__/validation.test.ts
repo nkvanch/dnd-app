@@ -92,8 +92,8 @@ describe('validateEntity', () => {
 
   it('flags a ruleset mismatch as info, not error, and still resolves the content', () => {
     const contentDB = baseContentDB();
-    contentDB.races[0] = { ...contentDB.races[0], rulesetId: asRulesetId('5.5e') };
-    const entity = withCharacter({ identity: { raceId: 'human' } as any, rulesetId: asRulesetId('5e') });
+    contentDB.races[0] = { ...contentDB.races[0], rulesetId: asRulesetId('dnd5e-2024') };
+    const entity = withCharacter({ identity: { raceId: 'human' } as any, rulesetId: asRulesetId('dnd5e-2014') });
     const issues = validateEntity(entity, contentDB, []);
     expect(issues).toContainEqual(expect.objectContaining({ code: 'ruleset_mismatch', severity: 'info', affectedId: 'human' }));
     expect(issues.filter(i => i.code === 'missing_race')).toHaveLength(0);
@@ -146,7 +146,7 @@ describe('validateEntity', () => {
     expect(issues.filter(i => i.code === 'orphaned_choice_selection')).toHaveLength(0);
   });
 
-  it('does not flag skill/language/tool-kind choices (no content-id lookup exists for them)', () => {
+  it('does not flag skill-kind choices (skills are a closed engine enum, not a content-id lookup)', () => {
     const entity = withCharacter({
       choices: [{
         id: 'c1',
@@ -156,5 +156,45 @@ describe('validateEntity', () => {
     });
     const issues = validateEntity(entity, baseContentDB(), []);
     expect(issues).toEqual([]);
+  });
+
+  // CHOICE-EXPANSION-1: tool/language now DO have a real registry
+  // (src/content/tools.ts, src/content/languages.ts) to check selections
+  // against — this is the deliberate reversal of the gap the previous test
+  // in this file documented.
+  it('flags a resolved tool choice selection missing from the registry', () => {
+    const entity = withCharacter({
+      choices: [{
+        id: 'c1',
+        definition: { id: 'c1', prompt: '', kind: 'tool', count: 1, pool: 'all', grants: [], required: false, resolved: true },
+        grantedAt: 1, resolved: true, selections: ['nonexistent_tool'],
+      }],
+    });
+    const issues = validateEntity(entity, baseContentDB(), []);
+    expect(issues.some(i => i.code === 'missing_tool_definition' && i.affectedId === 'nonexistent_tool')).toBe(true);
+  });
+
+  it('does not flag a resolved tool choice selection that IS in the registry', () => {
+    const entity = withCharacter({
+      choices: [{
+        id: 'c1',
+        definition: { id: 'c1', prompt: '', kind: 'tool', count: 1, pool: 'all', grants: [], required: false, resolved: true },
+        grantedAt: 1, resolved: true, selections: ['thieves_tools'],
+      }],
+    });
+    const issues = validateEntity(entity, baseContentDB(), []);
+    expect(issues.filter(i => i.code === 'missing_tool_definition')).toHaveLength(0);
+  });
+
+  it('flags a resolved language choice selection missing from the registry', () => {
+    const entity = withCharacter({
+      choices: [{
+        id: 'c1',
+        definition: { id: 'c1', prompt: '', kind: 'language', count: 1, pool: 'all', grants: [], required: false, resolved: true },
+        grantedAt: 1, resolved: true, selections: ['nonexistent_language'],
+      }],
+    });
+    const issues = validateEntity(entity, baseContentDB(), []);
+    expect(issues.some(i => i.code === 'missing_language_definition' && i.affectedId === 'nonexistent_language')).toBe(true);
   });
 });

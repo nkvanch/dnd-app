@@ -1,6 +1,6 @@
 // app/sheet/TabNotes.tsx
 // Tab 6 — Backstory, Session Notes, Personal Notes. Auto-save on blur.
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { ScrollView, View, Text, TextInput, StyleSheet } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
@@ -46,7 +46,7 @@ export function timeAgo(ts: number): string {
   return `${day}d ago`;
 }
 
-export function TabNotes({ notes, onSave }: Props) {
+function TabNotesInner({ notes, onSave }: Props) {
   const parsed = parseNotes(notes);
   const [backstory,     setBackstory]     = useState(parsed.backstory);
   const [sessionNotes,  setSessionNotes]  = useState(parsed.sessionNotes);
@@ -133,6 +133,9 @@ export function TabNotes({ notes, onSave }: Props) {
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: see TabCharacter.tsx's identical comment.
+export const TabNotes = memo(TabNotesInner);
 
 const styles = StyleSheet.create({
   scroll:   { flex: 1 },

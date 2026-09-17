@@ -8,7 +8,7 @@
 // spellRepo.native.ts's two-tier cache design exactly — see that file's
 // header for the full rationale.
 // ============================================================================
-import { Item } from '../engine/types';
+import { Item, asRulesetId } from '../engine/types';
 import { getContentDb } from '../db/contentDb';
 import type { ItemIndexEntry, ItemRepo } from './itemRepo.types';
 
@@ -17,7 +17,7 @@ const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 type ItemIndexRow = {
   id: string; name: string; weight: number; cost: string;
   properties: string; hasDamageEffect: number; weaponRange: string | null;
-  srd: number | null;
+  srd: number | null; rulesetId: string | null;
 };
 
 let index: ItemIndexEntry[] = [];
@@ -28,7 +28,7 @@ async function init(): Promise<void> {
   try {
     const db = getContentDb();
     const rows = await db.getAllAsync<ItemIndexRow>(
-      'SELECT id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd FROM items'
+      'SELECT id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd, rulesetId FROM items'
     );
     const built: ItemIndexEntry[] = [];
     for (const r of rows) {
@@ -43,6 +43,7 @@ async function init(): Promise<void> {
           hasDamageEffect: r.hasDamageEffect === 1,
           weaponRange:     r.weaponRange,
           srd:             r.srd === null ? undefined : r.srd === 1,
+          rulesetId:       r.rulesetId ? asRulesetId(r.rulesetId) : undefined,
         });
       } catch (e) {
         // One malformed row (e.g. bad `properties` JSON) shouldn't cost

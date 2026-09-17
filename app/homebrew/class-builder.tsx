@@ -2,25 +2,33 @@
 // Homebrew class builder — Phase 2 full authoring UI.
 // Sections: Basics → Saving Throws → Proficiencies →
 //           Spellcasting → Per-Level Features → ASI Levels → Save
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { CharClass, Ability, DraftTrait, Entity } from '../../src/engine/types';
+import { CharClass, Ability, DraftTrait, Entity, RulesetId, ChoiceDefinition } from '../../src/engine/types';
+import {
+  ChoiceDefinitionEditorModal, DraftChoice, newDraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { Alert } from '../../src/utils/alert';
 import { mergeItemIndex, resolveItemById } from '../../src/content/contentResolution';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
-import { newDraftTrait, TraitEditorModal, COMMON_TOOLS } from '../../src/components/homebrew/TraitEditor';
+import { newDraftTrait, TraitEditorModal, COMMON_TOOLS, disambiguateId } from '../../src/components/homebrew/TraitEditor';
+import { globalContentDB } from '../../src/content/classes/library';
 import { getProgressionForClass } from '../../src/content/classes/progressions';
 import { simulate } from '../../src/engine/simulate';
 import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
-import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -49,6 +57,7 @@ function toId(name: string): string {
 }
 
 type LevelFeature = DraftTrait & { level: number };
+type LevelChoice = DraftChoice & { level: number };
 
 /**
  * Classes saved before class features gained real effect kinds have
@@ -82,6 +91,8 @@ export default function ClassBuilderScreen() {
   const homebrewClasses = useHomebrewStore(s => s.classes);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing = editId ? homebrewClasses.find(c => c.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   // ── Basics
   const [name,        setName]        = useState('');
@@ -127,6 +138,11 @@ export default function ClassBuilderScreen() {
   const [addName,  setAddName]  = useState('');
   const [openFeatureId, setOpenFeatureId] = useState<string | null>(null);
 
+  // ── Per-level player choices (Expertise/Tool/Language)
+  const [levelChoicesList, setLevelChoicesList] = useState<LevelChoice[]>([]);
+  const [addChoiceLevel, setAddChoiceLevel] = useState('1');
+  const [openChoiceId, setOpenChoiceId] = useState<string | null>(null);
+
   // ── ASI levels
   const [asiLevels, setAsiLevels] = useState<number[]>([...DEFAULT_ASI_LEVELS]);
 
@@ -137,6 +153,7 @@ export default function ClassBuilderScreen() {
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     setHitDie(editing.hitDie as 4|6|8|10|12);
     setHpAbility(editing.hpAbility ?? 'con');
     setDescription(editing.description ?? '');
@@ -166,6 +183,21 @@ export default function ClassBuilderScreen() {
     setSpellStartLevel(String(editing.spellcastingStartLevel ?? 1));
     setLevelFeatures((editing.levelFeatures ?? []).map(normalizeLevelFeature));
     setAsiLevels(editing.asiLevels ?? [...DEFAULT_ASI_LEVELS]);
+    // CHOICE-AUTHORING-1: CharClass.levelChoices stores already-compiled
+    // ChoiceDefinition[] per level (unlike levelFeatures' draft-shaped
+    // DraftTrait[]) — reconstruct via definitionToDraftChoice using the
+    // exact idPrefix buildHomebrewClass() below composes at save time, so
+    // re-saving without changes round-trips to the same ids.
+    if (editing.levelChoices) {
+      const flat: LevelChoice[] = [];
+      for (const entry of editing.levelChoices) {
+        for (const def of entry.choices) {
+          const d = definitionToDraftChoice(def, `${editing.id}_l${entry.level}_`);
+          if (d) flat.push({ ...d, level: entry.level });
+        }
+      }
+      setLevelChoicesList(flat);
+    }
   }, [editing?.id]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -215,11 +247,17 @@ export default function ClassBuilderScreen() {
   // Bug fix (architecture review C9): same unmerged-concat pattern as
   // above — mergeItemIndex already dedups by id (homebrew wins) instead of
   // showing a colliding homebrew/official pair as two separate rows.
-  const equipResults = equipSearch.trim().length >= 2
-    ? mergeItemIndex(homebrewItems)
+  // BUILDER-PERF-1: mergeItemIndex (full ~891-item catalog merge) used to
+  // rerun on every keystroke of equipSearch once it hit 2+ chars — split
+  // into its own memo (only recomputes when homebrewItems actually
+  // changes) so each keystroke only pays for the filter/slice, not the
+  // full merge.
+  const allItemIndex = useMemo(() => mergeItemIndex(homebrewItems), [homebrewItems]);
+  const equipResults = useMemo(() => equipSearch.trim().length >= 2
+    ? allItemIndex
         .filter(i => i.name.toLowerCase().includes(equipSearch.trim().toLowerCase()))
         .slice(0, 12)
-    : [];
+    : [], [allItemIndex, equipSearch]);
   function toggleAsiLevel(lvl: number) {
     setAsiLevels(prev =>
       prev.includes(lvl) ? prev.filter(l => l !== lvl) : [...prev, lvl].sort((a, b) => a - b)
@@ -242,12 +280,45 @@ export default function ClassBuilderScreen() {
     setOpenFeatureId(null);
   }
 
+  function addLevelChoice() {
+    const lvl = parseInt(addChoiceLevel, 10);
+    if (isNaN(lvl) || lvl < 1 || lvl > 20) return;
+    const d: LevelChoice = { ...newDraftChoice('tool'), level: lvl };
+    setLevelChoicesList(prev => [...prev, d]);
+    setOpenChoiceId(d.localId);
+  }
+  function updateLevelChoice(d: DraftChoice) {
+    setLevelChoicesList(prev => prev.map(x => x.localId === d.localId ? { ...x, ...d } : x));
+  }
+  function deleteLevelChoice(localId: string) {
+    setLevelChoicesList(prev => prev.filter(x => x.localId !== localId));
+    setOpenChoiceId(null);
+  }
+
   // ── Build / Save ───────────────────────────────────────────────────────────
 
   function buildHomebrewClass(): CharClass {
     const startLvl = parseInt(spellStartLevel, 10);
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix for the
+    // full explanation — auto-generated ids had no collision check against
+    // official content.
+    const takenClassIds = new Set([
+      ...globalContentDB.classes.map(c => c.id),
+      ...homebrewClasses.filter(c => c.id !== editing?.id).map(c => c.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_class', takenClassIds);
+    // CHOICE-AUTHORING-1: compile draft choices to canonical ChoiceDefinitions
+    // here (not in progressions.ts, unlike levelFeatures) — CharClass.levelChoices
+    // stores the already-compiled shape, grouped back by level.
+    const choicesByLevel = new Map<number, ChoiceDefinition[]>();
+    for (const c of levelChoicesList) {
+      const def = draftChoiceToDefinition(c, `${id}_l${c.level}_`);
+      if (!choicesByLevel.has(c.level)) choicesByLevel.set(c.level, []);
+      choicesByLevel.get(c.level)!.push(def);
+    }
+    const levelChoices = Array.from(choicesByLevel.entries()).map(([level, choices]) => ({ level, choices }));
     return {
-      id:          editing?.id ?? (toId(name) || 'homebrew_class'),
+      id,
       name:        name.trim(),
       hitDie,
       features:    editing?.features ?? [],
@@ -266,6 +337,8 @@ export default function ClassBuilderScreen() {
       asiLevels:               JSON.stringify(asiLevels) !== JSON.stringify(DEFAULT_ASI_LEVELS)
                                  ? asiLevels : undefined,
       levelFeatures:           levelFeatures.length > 0 ? levelFeatures : undefined,
+      levelChoices:            levelChoices.length > 0 ? levelChoices : undefined,
+      rulesetId,
     };
   }
 
@@ -356,6 +429,9 @@ export default function ClassBuilderScreen() {
     // shouldn't depend on it completing.
     try {
       await saveItem('class', cls);
+      // SAVE-AND-ADD-1: tell class.tsx's class picker which class to
+      // navigate to on return. No-op for any other caller.
+      usePendingSelectionStore.getState().setPending('class_picker', cls.id);
       goBack();
     } catch (e) {
       console.error('[class-builder] save failed:', e);
@@ -406,6 +482,9 @@ export default function ClassBuilderScreen() {
         <Text style={styles.fieldLabel}>Class Name *</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName}
           placeholder="e.g. Blood Hunter" placeholderTextColor={Colors.textDim} />
+
+        <Text style={styles.fieldLabel}>Game / Ruleset</Text>
+        <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
 
         <Text style={styles.fieldLabel}>Hit Die</Text>
         <View style={styles.chipRow}>
@@ -704,6 +783,48 @@ export default function ClassBuilderScreen() {
           </Pressable>
         </View>
 
+        {/* ── 5b. Per-Level Player Choices ──────────────────────────────── */}
+        <View style={styles.divider} />
+        <Text style={styles.fieldLabel}>Per-Level Player Choices</Text>
+        <Text style={styles.hint}>
+          A real choice the player resolves at a specific level — e.g. "at level 3,
+          choose one tool proficiency." Distinct from a Feature above: this doesn't
+          grant anything by itself, it queues a pick.
+        </Text>
+        {levelChoicesList.length === 0 ? (
+          <Text style={styles.emptyNote}>No player choices added yet.</Text>
+        ) : (
+          Array.from(new Set(levelChoicesList.map(c => c.level))).sort((a, b) => a - b).map(lvl => (
+            <View key={lvl} style={styles.featureLevelGroup}>
+              <Text style={styles.featureLevelLabel}>LEVEL {lvl}</Text>
+              {levelChoicesList.filter(c => c.level === lvl).map(c => (
+                <Pressable key={c.localId} style={styles.featureItem} onPress={() => setOpenChoiceId(c.localId)}>
+                  <View style={styles.featureItemBody}>
+                    <Text style={styles.featureItemName}>{c.kind === 'expertise' ? 'Expertise' : c.kind === 'tool' ? 'Tool Proficiency' : 'Language'} choice</Text>
+                    <Text style={styles.featureItemDesc} numberOfLines={1}>Choose {c.count}</Text>
+                  </View>
+                  <Pressable style={styles.featureDeleteBtn} onPress={() => deleteLevelChoice(c.localId)} hitSlop={8}>
+                    <Text style={styles.featureDeleteTxt}>✕</Text>
+                  </Pressable>
+                </Pressable>
+              ))}
+            </View>
+          ))
+        )}
+        <View style={styles.inlineAddRow}>
+          <TextInput
+            style={[styles.input, styles.smallInput]}
+            value={addChoiceLevel}
+            onChangeText={setAddChoiceLevel}
+            keyboardType="number-pad"
+            placeholder="Lv"
+            placeholderTextColor={Colors.textDim}
+          />
+          <Pressable style={[styles.inlineAddBtn, { flex: 1 }]} onPress={addLevelChoice}>
+            <Text style={styles.inlineAddTxt}>+ Add Player Choice</Text>
+          </Pressable>
+        </View>
+
         {/* ── 6. ASI Levels ─────────────────────────────────────────────── */}
         <View style={styles.divider} />
         <SectionHeader title="Ability Score Improvements" n={6} />
@@ -745,7 +866,7 @@ export default function ClassBuilderScreen() {
           </Pressable>
           <Pressable
             style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]}
-            onPress={handleSave}
+            onPress={() => { void handleSave(); }}
             disabled={!name.trim() || saving}
           >
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Class'}</Text>
@@ -767,6 +888,14 @@ export default function ClassBuilderScreen() {
         title={`Testing: ${name.trim() || 'New Class'}`}
         rows={testRows}
         onClose={() => setTestOpen(false)}
+      />
+
+      <ChoiceDefinitionEditorModal
+        draft={levelChoicesList.find(c => c.localId === openChoiceId) ?? null}
+        visible={!!openChoiceId}
+        onChange={updateLevelChoice}
+        onDone={() => setOpenChoiceId(null)}
+        onDelete={() => openChoiceId && deleteLevelChoice(openChoiceId)}
       />
 
     </KeyboardAvoidingView>

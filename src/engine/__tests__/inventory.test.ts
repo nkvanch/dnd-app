@@ -47,6 +47,22 @@ describe('equipItem', () => {
     expect(after.inventory.equipped).toHaveLength(1);
     expect(after.inventory.equipped[0].features).toEqual([]);
   });
+
+  it('merges into an existing equipped stack of the same item instead of creating a second row', () => {
+    // Regression for INV-1: two daggers acquired in two separate pickup+equip
+    // cycles used to end up as two independent equipped rows sharing one
+    // itemId, which unequipItem could not safely tell apart.
+    const equippedDagger: ItemInstance = { itemId: 'dagger', quantity: 1, attuned: false, features: [] };
+    const carriedDagger:  ItemInstance = { itemId: 'dagger', quantity: 1, attuned: false, features: [] };
+    let entity = withEquipped(equippedDagger);
+    entity = { ...entity, inventory: { ...entity.inventory, carried: [carriedDagger] } };
+
+    const after = equipItem(entity, 'dagger', undefined, DEFAULT_RULES);
+
+    expect(after.inventory.equipped).toHaveLength(1);
+    expect(after.inventory.equipped[0].quantity).toBe(2);
+    expect(after.inventory.carried).toEqual([]);
+  });
 });
 
 describe('unequipItem', () => {
@@ -71,6 +87,45 @@ describe('unequipItem', () => {
     const entity = makeEmptyEntity('inv-test');
     const after = unequipItem(entity, 'nonexistent', DEFAULT_RULES);
     expect(after).toBe(entity);
+  });
+
+  it('unequipping one of two same-itemId equipped instances leaves the other untouched (INV-1 regression)', () => {
+    // Two daggers, each equipped via a separate pickup+equip cycle (the
+    // pre-fix path that produced two independent equipped rows sharing one
+    // itemId). Before the fix, unequipItem's `.find()`+`.filter(itemId)`
+    // mismatch deleted BOTH rows and restored only one to carried.
+    const daggerA: ItemInstance = { itemId: 'dagger', quantity: 1, attuned: false, features: [] };
+    const daggerB: ItemInstance = { itemId: 'dagger', quantity: 1, attuned: true,  features: [] };
+    const e = makeEmptyEntity('inv-test');
+    const entity: Entity = { ...e, inventory: { ...e.inventory, equipped: [daggerA, daggerB], carried: [] } };
+
+    const after = unequipItem(entity, 'dagger', DEFAULT_RULES);
+
+    // Exactly one dagger moved to carried; the other is still equipped —
+    // neither was silently deleted, and they were kept distinct (not
+    // merged) because their attuned state differs... actually merge only
+    // keys on itemId+infusedWith, so same-itemId same-infusion instances
+    // DO merge on the carried side; assert total dagger count is preserved
+    // instead of asserting non-merge, since merging is itself correct here.
+    const totalDaggers =
+      after.inventory.equipped.filter(i => i.itemId === 'dagger').reduce((s, i) => s + i.quantity, 0) +
+      after.inventory.carried.filter(i => i.itemId === 'dagger').reduce((s, i) => s + i.quantity, 0);
+    expect(totalDaggers).toBe(2);
+    expect(after.inventory.equipped).toHaveLength(1);
+    expect(after.inventory.carried).toHaveLength(1);
+  });
+
+  it('merges into an existing carried stack of the same item instead of creating a second row', () => {
+    const equippedRing: ItemInstance = { itemId: 'ring', quantity: 1, attuned: false, features: [] };
+    const carriedRing:  ItemInstance = { itemId: 'ring', quantity: 2, attuned: false, features: [] };
+    const e = makeEmptyEntity('inv-test');
+    const entity: Entity = { ...e, inventory: { ...e.inventory, equipped: [equippedRing], carried: [carriedRing] } };
+
+    const after = unequipItem(entity, 'ring', DEFAULT_RULES);
+
+    expect(after.inventory.equipped).toEqual([]);
+    expect(after.inventory.carried).toHaveLength(1);
+    expect(after.inventory.carried[0].quantity).toBe(3);
   });
 });
 

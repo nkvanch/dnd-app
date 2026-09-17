@@ -17,8 +17,19 @@ type PreparedEncounterRow = {
   updatedAt:  number;
 };
 
-function fromRow(row: PreparedEncounterRow): PreparedEncounter {
-  return JSON.parse(row.data) as PreparedEncounter;
+/**
+ * Parses one prepared_encounters row, returning null (and logging) on a
+ * malformed blob — used by loadEncounter/loadAllEncounters so one corrupted
+ * row doesn't take down the whole Encounter Library (same shape as
+ * entityRepo.ts's parseEntityRow / PERSIST-4).
+ */
+function fromRow(row: PreparedEncounterRow): PreparedEncounter | null {
+  try {
+    return JSON.parse(row.data) as PreparedEncounter;
+  } catch (e) {
+    console.error(`[encounterRepo] skipping malformed row id=${row.id}:`, e);
+    return null;
+  }
 }
 
 /** Upsert a PreparedEncounter. campaignId/status are duplicated as plain
@@ -57,7 +68,7 @@ export async function loadAllEncounters(): Promise<PreparedEncounter[]> {
   const rows = await db.getAllAsync<PreparedEncounterRow>(
     'SELECT * FROM prepared_encounters ORDER BY updatedAt DESC',
   );
-  return rows.map(fromRow);
+  return rows.map(fromRow).filter((e): e is PreparedEncounter => e !== null);
 }
 
 /** Permanently delete a PreparedEncounter by id. */

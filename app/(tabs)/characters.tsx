@@ -79,6 +79,13 @@ export default function CharactersScreen() {
   // Compendium) both have a free-text search box; this screen only ever
   // had sort/filter chips. Matches that established convention.
   const [search, setSearch] = useState('');
+  // CHARACTERS-DROPDOWN-1: search/sort/filter default collapsed behind one
+  // toggle instead of permanently occupying screen space — a pure UI
+  // visibility flag, not part of visibleCharacters' own deps below, so
+  // expanding/collapsing never recomputes the list. All the real state
+  // above (search/sortMode/*Filter) is untouched by this toggle, so it
+  // survives a collapse exactly as-is.
+  const [panelOpen, setPanelOpen] = useState(false);
 
   // updatedAt for "sort by date" — characters (full Entity[]) doesn't carry
   // it, only the lightweight meta table does (native only; empty on web,
@@ -130,6 +137,9 @@ export default function CharactersScreen() {
     return sorted;
   }, [characters, search, raceFilter, classFilter, campaignFilter, sortMode, updatedAtById, campaignByCharId]);
 
+  const activeFilterCount = (raceFilter ? 1 : 0) + (classFilter ? 1 : 0) + (campaignFilter ? 1 : 0);
+  const sortLabel = sortMode === 'name' ? 'Name' : sortMode === 'date' ? 'Date' : 'Campaign';
+
   const openSheet = useCallback((id: string) => {
     router.push(`/sheet/${id}` as any);
   }, [router]);
@@ -179,52 +189,77 @@ export default function CharactersScreen() {
         />
       ) : (
         <>
-          <View style={styles.searchWrap}>
-            <TextInput
-              style={styles.searchInput}
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search characters…"
-              placeholderTextColor={Colors.textDim}
-            />
-          </View>
-
-          <View style={styles.sortFilterBar}>
-            <Text style={styles.sortFilterLabel}>Sort</Text>
-            <View style={styles.chipRow}>
-              {([['name', 'Name'], ['date', 'Date'], ['campaign', 'Campaign']] as [SortMode, string][]).map(([m, label]) => (
-                <Pressable key={m} style={[styles.chip, sortMode === m && styles.chipActive]} onPress={() => setSortMode(m)}>
-                  <Text style={[styles.chipTxt, sortMode === m && styles.chipTxtActive]}>{label}</Text>
-                </Pressable>
-              ))}
+          <Pressable style={styles.collapsedBar} onPress={() => setPanelOpen(o => !o)}>
+            <Text style={styles.collapsedLabel}>{panelOpen ? '▲' : '▼'} Search &amp; Filter</Text>
+            <View style={styles.collapsedChips}>
+              {search.trim() !== '' && (
+                <View style={styles.summaryChip}>
+                  <Text style={styles.summaryChipTxt} numberOfLines={1}>Search: "{search.trim()}"</Text>
+                </View>
+              )}
+              {activeFilterCount > 0 && (
+                <View style={styles.summaryChip}>
+                  <Text style={styles.summaryChipTxt}>Filters: {activeFilterCount}</Text>
+                </View>
+              )}
+              {sortMode !== 'name' && (
+                <View style={styles.summaryChip}>
+                  <Text style={styles.summaryChipTxt}>Sort: {sortLabel}</Text>
+                </View>
+              )}
             </View>
+          </Pressable>
 
-            {(raceOptions.length > 0 || classOptions.length > 0 || campaignOptions.length > 0) && (
-              <>
-                <Text style={[styles.sortFilterLabel, { marginTop: Spacing.xs }]}>Filter</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-                  {raceOptions.map(r => (
-                    <Pressable key={`race_${r}`} style={[styles.chip, raceFilter === r && styles.chipActive]}
-                      onPress={() => setRaceFilter(f => f === r ? null : r)}>
-                      <Text style={[styles.chipTxt, raceFilter === r && styles.chipTxtActive]}>{r}</Text>
+          {panelOpen && (
+            <View style={styles.panel}>
+              <View style={styles.searchWrap}>
+                <TextInput
+                  style={styles.searchInput}
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search characters…"
+                  placeholderTextColor={Colors.textDim}
+                />
+              </View>
+
+              <View style={styles.sortFilterBar}>
+                <Text style={styles.sortFilterLabel}>Sort</Text>
+                <View style={styles.chipRow}>
+                  {([['name', 'Name'], ['date', 'Date'], ['campaign', 'Campaign']] as [SortMode, string][]).map(([m, label]) => (
+                    <Pressable key={m} style={[styles.chip, sortMode === m && styles.chipActive]} onPress={() => setSortMode(m)}>
+                      <Text style={[styles.chipTxt, sortMode === m && styles.chipTxtActive]}>{label}</Text>
                     </Pressable>
                   ))}
-                  {classOptions.map(c => (
-                    <Pressable key={`class_${c}`} style={[styles.chip, classFilter === c && styles.chipActive]}
-                      onPress={() => setClassFilter(f => f === c ? null : c)}>
-                      <Text style={[styles.chipTxt, classFilter === c && styles.chipTxtActive]}>{c}</Text>
-                    </Pressable>
-                  ))}
-                  {campaignOptions.map(camp => (
-                    <Pressable key={`camp_${camp}`} style={[styles.chip, campaignFilter === camp && styles.chipActive]}
-                      onPress={() => setCampaignFilter(f => f === camp ? null : camp)}>
-                      <Text style={[styles.chipTxt, campaignFilter === camp && styles.chipTxtActive]}>🗺️ {camp}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </>
-            )}
-          </View>
+                </View>
+
+                {(raceOptions.length > 0 || classOptions.length > 0 || campaignOptions.length > 0) && (
+                  <>
+                    <Text style={[styles.sortFilterLabel, { marginTop: Spacing.xs }]}>Filter</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                      {raceOptions.map(r => (
+                        <Pressable key={`race_${r}`} style={[styles.chip, raceFilter === r && styles.chipActive]}
+                          onPress={() => setRaceFilter(f => f === r ? null : r)}>
+                          <Text style={[styles.chipTxt, raceFilter === r && styles.chipTxtActive]}>{r}</Text>
+                        </Pressable>
+                      ))}
+                      {classOptions.map(c => (
+                        <Pressable key={`class_${c}`} style={[styles.chip, classFilter === c && styles.chipActive]}
+                          onPress={() => setClassFilter(f => f === c ? null : c)}>
+                          <Text style={[styles.chipTxt, classFilter === c && styles.chipTxtActive]}>{c}</Text>
+                        </Pressable>
+                      ))}
+                      {campaignOptions.map(camp => (
+                        <Pressable key={`camp_${camp}`} style={[styles.chip, campaignFilter === camp && styles.chipActive]}
+                          onPress={() => setCampaignFilter(f => f === camp ? null : camp)}>
+                          <Text style={[styles.chipTxt, campaignFilter === camp && styles.chipTxtActive]}>🗺️ {camp}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
+              </View>
+            </View>
+          )}
 
           <FlatList
             data={visibleCharacters}
@@ -271,6 +306,20 @@ const styles = StyleSheet.create({
     paddingVertical:   Spacing.sm,
     borderRadius:      Radius.md,
   },
+
+  collapsedBar: {
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.xs,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  collapsedLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  collapsedChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, flexShrink: 1 },
+  summaryChip: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  summaryChipTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  panel: {},
 
   searchWrap: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
   searchInput: {

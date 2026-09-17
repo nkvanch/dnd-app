@@ -113,6 +113,13 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
     const grants: Grant[] = [];
     const levelChoices: ChoiceDefinition[] = [];
 
+    // CHOICE-AUTHORING-1: authored per-level choices (Expertise/Tool/Language
+    // today) — merged in alongside the ASI/spellcasting-ability choices this
+    // loop already synthesizes below.
+    for (const entry of (cls.levelChoices ?? [])) {
+      if (entry.level === level) levelChoices.push(...entry.choices);
+    }
+
     // ─ Level 1: proficiency grant ──────────────────────────────────────────────
     if (level === 1 && (cls.armorProfs?.length || cls.weaponProfs?.length || cls.toolProfs?.length)) {
       grants.push({

@@ -1,6 +1,6 @@
 // app/dm/encounter.tsx
 // Initiative tracker + combat encounter manager (DM only).
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
   TextInput, Modal,
@@ -45,11 +45,23 @@ function entityGroupName(entity: Entity): string | undefined {
   } catch { return undefined; }
 }
 
-const KNOWN_CONDITIONS = [
-  'blinded','charmed','deafened','exhaustion','frightened',
-  'grappled','incapacitated','invisible','paralyzed','petrified',
-  'poisoned','prone','restrained','stunned','unconscious',
-];
+// Same withPrepMetadata blob as entityGroupName above, reading its two
+// sibling keys that previously had no reader anywhere — a DM's "Hidden"
+// flag and per-combatant tactics note were persisted at prep time but had
+// zero effect the moment combat started (audit finding HIDDEN-META-1).
+function entityDmHidden(entity: Entity): boolean {
+  try {
+    const parsed = JSON.parse(entity.notes || '{}') as Record<string, unknown>;
+    return parsed.dmHidden === true;
+  } catch { return false; }
+}
+function entityCombatantNotes(entity: Entity): string | undefined {
+  try {
+    const parsed = JSON.parse(entity.notes || '{}') as Record<string, unknown>;
+    return typeof parsed.combatantNotes === 'string' ? parsed.combatantNotes : undefined;
+  } catch { return undefined; }
+}
+
 
 // ── Inline Quick Panel ────────────────────────────────────────────────────────
 
@@ -69,6 +81,13 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
   const [concOpen,   setConcOpen]   = useState(false);
   const [concEntity, setConcEntity] = useState<Entity | null>(null);
   const [concDamage, setConcDamage] = useState(0);
+  // Sourced from the merged content DB (not the hardcoded, official-only
+  // KNOWN_CONDITIONS array this used to be) so homebrew conditions are
+  // both pickable AND get their mechanical features attached on apply —
+  // audit findings KNOWN_CONDITIONS-1 and CONTENT-8, which are the same
+  // underlying gap seen from two angles and fixed together here.
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  const allConditions = getMergedContentDB().conditions;
 
   const amount = parseInt(valueStr, 10);
   const validNum = !isNaN(amount) && amount > 0;
@@ -119,9 +138,12 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
     ]);
   }
 
-  const filteredConds = KNOWN_CONDITIONS.filter(c =>
-    c.includes(condSearch.toLowerCase()) && !entity.conditions.some(ac => ac.id === c)
-  );
+  // ENCOUNTER-PERF-2: was recomputed on every render/keystroke — same
+  // pattern already fixed in TabCharacter.tsx (TABCHAR-PERF-1).
+  const filteredConds = useMemo(() => allConditions
+    .map(c => c.id)
+    .filter(c => c.includes(condSearch.toLowerCase()) && !entity.conditions.some(ac => ac.id === c)),
+    [allConditions, condSearch, entity.conditions]);
 
   // Legendary Actions — only shown when the entity actually has the pool
   // (a monster template with resources: [{resourceId:'legendary_actions',...}]).
@@ -248,7 +270,8 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
           {/* Add new condition */}
           {filteredConds.map(c => (
             <Pressable key={c} style={[styles.condRowItem, styles.condRowAdd]} onPress={() => {
-              onUpdate(applyCondition(entity, c, 'dm', rules), `${entity.identity.name}: added condition: ${c}`);
+              const features = allConditions.find(cond => cond.id === c)?.features;
+              onUpdate(applyCondition(entity, c, 'dm', rules, features), `${entity.identity.name}: added condition: ${c}`);
               setCondSearch('');
             }}>
               <Text style={styles.condItemTxt}>+ {c}</Text>
@@ -300,12 +323,22 @@ function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, 
   const [valueStr,    setValueStr]    = useState('');
   const [damageType,  setDamageType]  = useState('');
   const [condSearch,  setCondSearch]  = useState('');
+  // Bulk damage skips the per-entity concentration-check modal QuickPanel's
+  // single-target damage has (a real, disclosed limitation — building a
+  // sequential per-caster modal queue is separate, larger UI work) — but
+  // the DM was previously given no signal at all that a check was skipped.
+  // Names any concentrating caster in the selection right before the
+  // damage is applied, so the DM knows to resolve it manually (audit
+  // finding DM-3).
+  const [concWarning, setConcWarning] = useState<string[] | null>(null);
 
   const amount = parseInt(valueStr, 10);
   const validNum = !isNaN(amount) && amount > 0;
 
   function submitDamage() {
     if (!validNum) return;
+    const concentrating = entities.filter(e => e.spellcasting?.concentrating).map(e => e.identity.name);
+    setConcWarning(concentrating.length > 0 ? concentrating : null);
     onDamage(amount, damageType.trim() || undefined);
     setMode(null); setValueStr(''); setDamageType('');
   }
@@ -328,7 +361,15 @@ function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, 
   const sharedActive = entities.length > 0
     ? entities[0].conditions.filter(c => entities.every(e => e.conditions.some(ac => ac.id === c.id))).map(c => c.id)
     : [];
-  const filteredConds = KNOWN_CONDITIONS.filter(c => c.includes(condSearch.toLowerCase()));
+  // Sourced from the merged content DB, matching QuickPanel — see its own
+  // comment (audit findings KNOWN_CONDITIONS-1 / CONTENT-8).
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  const mergedContentDB = getMergedContentDB();
+  // Memoized — same pattern as QuickPanel's filteredConds (ENCOUNTER-PERF-2).
+  const filteredConds = useMemo(() => mergedContentDB.conditions
+    .map(c => c.id)
+    .filter(c => c.includes(condSearch.toLowerCase())),
+    [mergedContentDB, condSearch]);
 
   return (
     <View style={[styles.quickPanel, styles.multiPanel]}>
@@ -339,6 +380,12 @@ function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, 
       <Text style={styles.multiNames} numberOfLines={2}>
         {entities.map(e => e.identity.name).join(', ')}
       </Text>
+
+      {concWarning && (
+        <Text style={styles.concWarningTxt}>
+          🧠 Bulk damage doesn't auto-check concentration — resolve manually for: {concWarning.join(', ')}
+        </Text>
+      )}
 
       <View style={styles.quickBtns}>
         <Pressable style={[styles.qBtn, styles.qBtnRed]} onPress={() => setMode('damage')}>
@@ -426,9 +473,18 @@ interface CombatantRowProps {
   isCurrent:  boolean;
   isSelected?: boolean;
   onPress:    () => void;
+  /** Manual reorder — wires combatStore's own pre-existing setOrder action,
+   *  which had zero UI consumer anywhere (audit finding S9-03) despite
+   *  being fully implemented and documented as "DM drag-to-reorder".
+   *  Simple up/down swap rather than a drag gesture — smaller, safer
+   *  addition that still closes the actual gap (no way to manually
+   *  reorder initiative at all). undefined at a list boundary (nothing to
+   *  swap with) hides that direction's button instead of disabling it. */
+  onMoveUp?:   () => void;
+  onMoveDown?: () => void;
 }
 
-function CombatantRow({ entry, entity, isCurrent, isSelected, onPress }: CombatantRowProps) {
+function CombatantRow({ entry, entity, isCurrent, isSelected, onPress, onMoveUp, onMoveDown }: CombatantRowProps) {
   const hp     = entity?.resources.hp;
   const hpPct  = hp && hp.maximum > 0 ? hp.current / hp.maximum : 0;
 
@@ -453,7 +509,12 @@ function CombatantRow({ entry, entity, isCurrent, isSelected, onPress }: Combata
       </View>
 
       <View style={styles.combatantInfo}>
-        <Text style={styles.combatantName}>{isSelected ? '☑ ' : ''}{entry.name}</Text>
+        <Text style={styles.combatantName}>
+          {isSelected ? '☑ ' : ''}{entity && entityDmHidden(entity) ? '🔒 ' : ''}{entry.name}
+        </Text>
+        {entity && entityCombatantNotes(entity) && (
+          <Text style={styles.combatantNotesTxt} numberOfLines={1}>📝 {entityCombatantNotes(entity)}</Text>
+        )}
         {entity && (
           <View style={styles.combatantStatus}>
             {/* DM sees full HP; players see status label only */}
@@ -475,6 +536,17 @@ function CombatantRow({ entry, entity, isCurrent, isSelected, onPress }: Combata
           </View>
         )}
       </View>
+
+      {(onMoveUp || onMoveDown) && (
+        <View style={styles.reorderBtns}>
+          <Pressable hitSlop={8} disabled={!onMoveUp} onPress={onMoveUp} style={!onMoveUp && styles.reorderBtnHidden}>
+            <Text style={styles.reorderBtnTxt}>▲</Text>
+          </Pressable>
+          <Pressable hitSlop={8} disabled={!onMoveDown} onPress={onMoveDown} style={!onMoveDown && styles.reorderBtnHidden}>
+            <Text style={styles.reorderBtnTxt}>▼</Text>
+          </Pressable>
+        </View>
+      )}
 
       {isCurrent && (
         <View style={styles.currentIndicator}>
@@ -499,8 +571,14 @@ export default function EncounterScreen() {
   const preparedEncounters = useEncounterStore(s => s.encounters);
   const saveEncounterDraft = useEncounterStore(s => s.saveEncounterDraft);
   const homebrewMonsters   = useHomebrewStore(s => s.monsters);
+  // ENCOUNTER-PERF-1: was called fresh inside a .map() over prep-preview
+  // combatants (once per row) — for an N-combatant prepared encounter, that
+  // rebuilt the full official+homebrew monster index N times per render.
+  // Memoized once per homebrewMonsters change instead.
+  const allMonsterTemplates = useMemo(() => mergeMonsterIndex(homebrewMonsters), [homebrewMonsters]);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
-  const { combat, entities, startCombat, advanceTurn, endCombat, updateEntity, setInitiative, addEntities, removeFromEncounter } =
+  const { combat, entities, startCombat, advanceTurn, endCombat, updateEntity, setInitiative, setOrder, addEntities, removeFromEncounter, lastPersistError } =
     useCombatStore();
 
   const [selectedId, setSelectedId]  = useState<string | null>(null);
@@ -534,6 +612,20 @@ export default function EncounterScreen() {
     ? preparedEncounters.find(e => e.id === combat.sourcePreparedEncounterId) ?? null
     : null;
 
+  // Audit finding: setupMode is only evaluated once, at mount, from the
+  // GLOBAL combat.active flag — it has no idea whether ?preparedId= refers
+  // to the encounter actually running. Navigating here for a DIFFERENT
+  // prepared encounter while one is already active (without ending it first)
+  // used to silently render that OTHER encounter's live combat view under
+  // the new preparedId, with no indication anything was wrong. There's only
+  // ever one CombatState globally (no concurrent-encounters architecture
+  // exists, and building one is out of scope for this fix) — so the correct
+  // behavior is a clear warning, not a silent wrong-encounter render.
+  // Derived every render (not stateful) so it self-corrects regardless of
+  // whether navigating here for a new preparedId actually remounts this
+  // screen or just updates its route params.
+  const encounterConflict = combat.active && !!preparedId && combat.sourcePreparedEncounterId !== preparedId;
+
   // Selected entity for the quick panel
   const selectedEntity = entities.find(e => e.id === selectedId);
 
@@ -541,7 +633,6 @@ export default function EncounterScreen() {
   // QuickPanel path and the multi-target path (which has its own `before`
   // per entity, not the single globally-selected one) share it.
   function applyEntityUpdate(before: Entity | undefined, updated: Entity, label?: string) {
-    updateEntity(updated.id, () => updated);
     // If it's a player character, persist to characterStore too — the REAL
     // synced source of truth, not just this DM device's own combatStore
     // copy of it.
@@ -574,6 +665,21 @@ export default function EncounterScreen() {
         // No prior snapshot to diff against — fall back to a wholesale replace.
         updateCharacter(updated.id, () => updated, label, 'combat');
       }
+      // Bug fix (audit finding SYNC-COMBAT-1, sub-paths a/b): combatStore's
+      // own copy of this entity used to be overwritten with `updated` —
+      // the RESULT of this action computed from combatStore's possibly-
+      // stale `before` snapshot. That silently reverted combatStore's live
+      // tracker away from whatever characterStore actually held for any
+      // OTHER field the stale snapshot didn't have (e.g. a player equipped
+      // an item on their own device between DM actions) — wrong AC/HP math
+      // on this screen for the rest of the encounter, even though
+      // characterStore/sync themselves stayed correct. Read characterStore
+      // back out AFTER the merge above and use ITS state to refresh
+      // combatStore, instead of the stale-baseline-derived `updated`.
+      const merged = useCharacterStore.getState().characters.find(c => c.id === updated.id);
+      updateEntity(updated.id, () => merged ?? updated);
+    } else {
+      updateEntity(updated.id, () => updated);
     }
   }
 
@@ -622,8 +728,9 @@ export default function EncounterScreen() {
     );
   }
   function bulkAddCondition(conditionId: string) {
+    const features = getMergedContentDB().conditions.find(c => c.id === conditionId)?.features;
     handleBulkUpdate(
-      e => applyCondition(e, conditionId, 'dm', rules),
+      e => applyCondition(e, conditionId, 'dm', rules, features),
       e => `${e.identity.name}: added condition: ${conditionId}`,
     );
   }
@@ -690,11 +797,20 @@ export default function EncounterScreen() {
       {
         text: 'End Encounter',
         onPress: () => {
-          // Expire end_of_encounter DM overrides on all entities
+          // Expire end_of_encounter DM overrides on all entities. Routed
+          // through applyEntityUpdate (the same diff+merge path every other
+          // mutation on this screen already uses) rather than calling
+          // updateCharacter directly — a direct call here used to pass an
+          // updater that ignored the fresh characterStore state it was
+          // handed and always returned this combatStore-derived `updated`
+          // wholesale, silently discarding any independent edit (e.g. a
+          // player equipping an item on their own device) that landed in
+          // characterStore after this combatStore snapshot was taken
+          // (audit finding PERSIST-3).
           entities.forEach(e => {
             if (e.kind === 'character') {
               const updated = expireOverrides(e, 'end_of_encounter', rules);
-              updateCharacter(e.id, () => updated, 'End of encounter (override expiry)', 'combat');
+              applyEntityUpdate(e, updated, 'End of encounter (override expiry)');
             }
           });
           // Mark the PreparedEncounter completed if this run came from one —
@@ -715,6 +831,27 @@ export default function EncounterScreen() {
     return (
       <View style={styles.screen}>
         <View style={styles.center}><Text style={styles.errorTxt}>DM access only.</Text></View>
+      </View>
+    );
+  }
+
+  if (encounterConflict) {
+    return (
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={safeGoBack}>
+            <Text style={styles.backTxt}>← Back</Text>
+          </Pressable>
+          <Text style={styles.title}>Encounter Already Active</Text>
+        </View>
+        <View style={styles.center}>
+          <Text style={styles.errorTxt}>
+            {activeSource ? `"${activeSource.name}"` : 'Another encounter'} is already running — end it before starting {previewSource ? `"${previewSource.name}"` : 'a new one'}.
+          </Text>
+          <Pressable style={styles.startBtn} onPress={() => router.replace('/dm/encounter')}>
+            <Text style={styles.startBtnTxt}>Go to active encounter</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -742,7 +879,7 @@ export default function EncounterScreen() {
               </Text>
               {previewSource.combatants.filter(c => !c.waveId).map(c => (
                 <Text key={c.id} style={styles.prepPreviewRow}>
-                  • {c.displayName?.trim() || mergeMonsterIndex(homebrewMonsters).find(t => t.id === c.monsterId)?.name || c.monsterId}
+                  • {c.displayName?.trim() || allMonsterTemplates.find(t => t.id === c.monsterId)?.name || c.monsterId}
                   {c.quantity > 1 ? ` ×${c.quantity}` : ''}
                 </Text>
               ))}
@@ -805,6 +942,15 @@ export default function EncounterScreen() {
           <Text style={styles.endBtnTxt}>End</Text>
         </Pressable>
       </View>
+
+      {/* Surfaces a failed combat-state save instead of only logging it
+          (audit finding PERSIST-5) — clears itself on the next successful
+          save. */}
+      {lastPersistError && (
+        <View style={styles.persistErrorBanner}>
+          <Text style={styles.persistErrorTxt}>⚠️ {lastPersistError}</Text>
+        </View>
+      )}
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {/* Reinforcements — only meaningful when this run came from a
@@ -893,6 +1039,11 @@ export default function EncounterScreen() {
         {/* Initiative order */}
         {combat.order.map((entry, idx) => {
           const ent = entities.find(e => e.id === entry.entityId);
+          function swap(a: number, b: number) {
+            const next = [...combat.order];
+            [next[a], next[b]] = [next[b], next[a]];
+            setOrder(next);
+          }
           return (
             <CombatantRow
               key={entry.entityId}
@@ -904,6 +1055,8 @@ export default function EncounterScreen() {
                 ? toggleSelected(entry.entityId)
                 : setSelectedId(selectedId === entry.entityId ? null : entry.entityId)
               }
+              onMoveUp={idx > 0 ? () => swap(idx, idx - 1) : undefined}
+              onMoveDown={idx < combat.order.length - 1 ? () => swap(idx, idx + 1) : undefined}
             />
           );
         })}
@@ -933,14 +1086,19 @@ export default function EncounterScreen() {
           />
         )}
 
-        {/* DM temporary ruling — targets resolved by whichever entry point opened it */}
-        <DmRulingModal
-          visible={rulingTargets !== null}
-          entities={rulingTargets ?? []}
-          rules={rules}
-          onApply={applyRuling}
-          onCancel={() => setRulingTargets(null)}
-        />
+        {/* DM temporary ruling — targets resolved by whichever entry point
+            opened it. Gated (was unconditionally mounted) — same
+            lazy-mount pattern as ConcentrationModal just above and
+            [id].tsx's preview modals. */}
+        {rulingTargets !== null && (
+          <DmRulingModal
+            visible={rulingTargets !== null}
+            entities={rulingTargets ?? []}
+            rules={rules}
+            onApply={applyRuling}
+            onCancel={() => setRulingTargets(null)}
+          />
+        )}
       </ScrollView>
 
       {/* End Turn bar */}
@@ -978,6 +1136,13 @@ const styles = StyleSheet.create({
   },
   endBtnTxt: { color: Colors.red, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
+  persistErrorBanner: {
+    paddingVertical: 6, paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.red + '22',
+    borderBottomWidth: 1, borderBottomColor: Colors.red + '66',
+  },
+  persistErrorTxt: { fontSize: FontSize.xs, color: Colors.red },
+
   scroll:       { flex: 1 },
   content:      { padding: Spacing.sm, gap: Spacing.sm, paddingBottom: Spacing.xxl },
   sectionLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2, fontWeight: FontWeight.bold, padding: Spacing.sm },
@@ -997,6 +1162,7 @@ const styles = StyleSheet.create({
   initNum:        { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
   combatantInfo:  { flex: 1, gap: 4 },
   combatantName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  combatantNotesTxt: { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
   combatantStatus:{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, flexWrap: 'wrap' },
   hpBarOuter: { width: 60, height: 4, backgroundColor: Colors.border, borderRadius: Radius.full, overflow: 'hidden' },
   hpBarFill:  { height: '100%', borderRadius: Radius.full },
@@ -1008,6 +1174,9 @@ const styles = StyleSheet.create({
   condChipTxt: { fontSize: 10, color: Colors.textPrimary },
   currentIndicator:    { width: 20, alignItems: 'center' },
   currentIndicatorTxt: { color: Colors.gold, fontSize: FontSize.md },
+  reorderBtns:    { alignItems: 'center', gap: 2, marginRight: 4 },
+  reorderBtnTxt:  { color: Colors.textSecondary, fontSize: FontSize.sm },
+  reorderBtnHidden: { opacity: 0 },
 
   // Multi-target tools
   multiToggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.xs },
@@ -1026,6 +1195,7 @@ const styles = StyleSheet.create({
   groupChipTxt: { fontSize: FontSize.xs, color: Colors.textPrimary },
   multiPanel:  { borderColor: Colors.blue + '44' },
   multiNames:  { fontSize: FontSize.xs, color: Colors.textDim },
+  concWarningTxt: { fontSize: FontSize.xs, color: Colors.gold, marginTop: 4 },
 
   // Quick panel
   quickPanel: {

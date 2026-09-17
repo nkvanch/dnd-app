@@ -8,10 +8,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCharacterStore } from '../../../src/store/characterStore';
 import { useCampaignStore }  from '../../../src/store/campaignStore';
 import { useSessionStore }   from '../../../src/store/sessionStore';
+import { useHomebrewStore }  from '../../../src/store/homebrewStore';
 import { recomputeDerived }  from '../../../src/engine/pipeline';
 import { applyDamage, applyHealing, applyWildShapeDamage } from '../../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../../src/engine/conditions';
-import { CONDITIONS_BY_ID } from '../../../src/content/conditions/index';
 import { dmFullStatVisibility } from '../../../src/engine/houseRules';
 import { Entity } from '../../../src/engine/types';
 import { TimelineCategory } from '../../../src/db/timelineRepo';
@@ -38,6 +38,7 @@ export default function DmCharacterView() {
   const characters      = useCharacterStore(s => s.characters);
   const updateCharacter = useCharacterStore(s => s.updateCharacter);
   const rules           = useCharacterStore(s => s.rules);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
   const campaignId = useCampaignStore(s => s.activeCampaign?.id ?? '');
   const deviceId   = useSessionStore(s => s.session?.deviceId ?? '');
 
@@ -125,8 +126,18 @@ export default function DmCharacterView() {
               ? applyWildShapeDamage(e, amt, rules)
               : applyDamage(e, amt, rules, dt), `Took ${amt}${dt ? ` ${dt}` : ''} damage`, 'combat')}
             onHeal={amt => mutate(e => e.wildShapeState?.active ? e : applyHealing(e, amt, rules), `Healed ${amt}`, 'combat')}
-            onAddCondition={cId => mutate(e => applyCondition(e, cId, 'dm', rules), `DM: Added condition: ${CONDITIONS_BY_ID[cId]?.name ?? cId}`, 'combat')}
-            onRemoveCondition={cId => mutate(e => removeCondition(e, cId, rules), `DM: Removed condition: ${CONDITIONS_BY_ID[cId]?.name ?? cId}`, 'combat')}
+            onAddCondition={(cId, duration) => {
+              // Merged (not official-only CONDITIONS_BY_ID) so a homebrew
+              // condition's features attach and its real name displays —
+              // audit findings CONTENT-8 / KNOWN_CONDITIONS-1. Also now
+              // threads `duration` through — TabCharacter's picker already
+              // collects one (Permanent/Until Rest/N Rounds), but it was
+              // silently dropped here since this callback only declared
+              // one parameter.
+              const cond = getMergedContentDB().conditions.find(c => c.id === cId);
+              mutate(e => applyCondition(e, cId, 'dm', rules, cond?.features, duration), `DM: Added condition: ${cond?.name ?? cId}`, 'combat');
+            }}
+            onRemoveCondition={cId => mutate(e => removeCondition(e, cId, rules), `DM: Removed condition: ${getMergedContentDB().conditions.find(c => c.id === cId)?.name ?? cId}`, 'combat')}
             onResourceChange={(rId, delta) => mutate(e => ({
               ...e,
               resources: {
@@ -151,7 +162,19 @@ export default function DmCharacterView() {
             onEntityUpdate={updated => mutate(() => updated, 'DM: Character tab edit', 'other')}
           />
         )}
-        {activeTab === 'actions'   && <TabActions   entity={entity} />}
+        {activeTab === 'actions'   && (
+          <TabActions
+            entity={entity}
+            rules={rules}
+            // Without these two props, TabActions.handleUse silently falls
+            // back to a roll-only modal with no visible difference from the
+            // working version — a DM could believe a limited resource was
+            // spent when nothing was actually consumed (audit finding
+            // DM-4). Same mutate() pattern app/sheet/[id].tsx already uses
+            // for its own TabActions.
+            onEntityUpdate={updated => mutate(() => updated, 'DM: Used action card', 'combat')}
+          />
+        )}
         {activeTab === 'abilities' && (
           <TabAbilities
             entity={entity}

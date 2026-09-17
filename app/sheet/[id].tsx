@@ -24,7 +24,6 @@ import { itemRepo } from '../../src/content/itemRepo';
 import { spellRepo } from '../../src/content/spellRepo';
 import { spellIdsOnEntity } from '../../src/content/spellRepo.types';
 import { getInfusion, maxInfusedItems } from '../../src/content/infusions';
-import { CONDITIONS_BY_ID } from '../../src/content/conditions/index';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
 import { TabExploration } from '../../src/components/sheet/TabExploration';
 import { TabActions }   from '../../src/components/sheet/TabActions';
@@ -34,6 +33,7 @@ import { TabInventory } from '../../src/components/sheet/TabInventory';
 import { TabNotes }     from '../../src/components/sheet/TabNotes';
 import { TabSpells }    from '../../src/components/sheet/TabSpells';
 import { FreeEditModal } from '../../src/components/sheet/FreeEditModal';
+import { RulesetChangeModal } from '../../src/components/sheet/RulesetChangeModal';
 import { CharacterHistoryModal } from '../../src/components/sheet/CharacterHistoryModal';
 import { TimelineCategory } from '../../src/db/timelineRepo';
 import { IssuesModal } from '../../src/components/sheet/IssuesModal';
@@ -73,6 +73,7 @@ export default function CharacterSheetScreen() {
   const redoStack       = useCharacterStore(s => s.redoStack);
   const undo            = useCharacterStore(s => s.undo);
   const redo            = useCharacterStore(s => s.redo);
+  const lastPersistError = useCharacterStore(s => s.lastPersistError);
   const isDm        = useCampaignStore(s => s.isDm);
   const campaignId  = useCampaignStore(s => s.activeCampaign?.id ?? '');
   // Item 17 (timeline improvements) — session grouping in CharacterHistoryModal.
@@ -87,6 +88,7 @@ export default function CharacterSheetScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('character');
   const [sheetMode, setSheetMode] = useState<'combat' | 'exploration'>('combat');
   const [freeEditOpen, setFreeEditOpen] = useState(false);
+  const [rulesetChangeOpen, setRulesetChangeOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -191,15 +193,17 @@ export default function CharacterSheetScreen() {
   }, [mutate, rules]);
 
   const handleAddCondition = useCallback((condId: string, duration: DurationTracker | null) => {
-    // Look up the condition's mechanical features from content so the engine
-    // can enforce them (e.g. Grappled sets speed to 0 in the pipeline).
-    const condContent = CONDITIONS_BY_ID[condId];
+    // Merged (not official-only CONDITIONS_BY_ID) so a homebrew condition's
+    // mechanical features attach the same way an official one's do (e.g.
+    // Grappled sets speed to 0 in the pipeline) — audit findings CONTENT-8
+    // / KNOWN_CONDITIONS-1.
+    const condContent = getMergedContentDB().conditions.find(c => c.id === condId);
     mutate(e => applyCondition(e, condId, 'manual', rules, condContent?.features, duration), `Added condition: ${condContent?.name ?? condId}`, 'combat');
-  }, [mutate, rules]);
+  }, [mutate, rules, getMergedContentDB]);
 
   const handleRemoveCondition = useCallback((condId: string) => {
-    mutate(e => removeCondition(e, condId, rules), `Removed condition: ${CONDITIONS_BY_ID[condId]?.name ?? condId}`, 'combat');
-  }, [mutate, rules]);
+    mutate(e => removeCondition(e, condId, rules), `Removed condition: ${getMergedContentDB().conditions.find(c => c.id === condId)?.name ?? condId}`, 'combat');
+  }, [mutate, rules, getMergedContentDB]);
 
   const handleResourceChange = useCallback((resourceId: string, delta: number) => {
     const resourceName = entity?.resources.custom.find(r => r.id === resourceId)?.name ?? resourceId;
@@ -477,6 +481,13 @@ export default function CharacterSheetScreen() {
     mutate(e => ({ ...e, notes }), 'Edited notes', 'other');
   }, [mutate]);
 
+  // Its own field, own handler — see Entity.explorationNotes's doc comment
+  // (audit finding NOTES-CORRUPT-1): the Exploration tab used to share
+  // entity.notes with the Notes tab above, corrupting each other's data.
+  const handleSaveExplorationNotes = useCallback((notes: string) => {
+    mutate(e => ({ ...e, explorationNotes: notes }), 'Edited exploration notes', 'other');
+  }, [mutate]);
+
   // Wild Shape duration is tracked in hours (wildShapeState.expiresAt), but
   // the app has no granular hour-by-hour game clock anywhere else to tick it
   // down against. A rest (short or long) always represents at least the
@@ -491,6 +502,22 @@ export default function CharacterSheetScreen() {
   }, [mutate, rules]);
 
   const [restPreview, setRestPreview] = useState<'short' | 'long' | null>(null);
+
+  // EDIT-PERF-1: each Tab component below is wrapped in React.memo, but that
+  // only helps if its props are actually stable — these onEntityUpdate
+  // closures used to be created inline in JSX (`updated => mutate(...)`), a
+  // fresh function reference on every render of this screen, which defeated
+  // memoization and forced the ENTIRE active tab to re-render on any
+  // unrelated state change here (e.g. opening the Free-Edit modal, which
+  // doesn't touch entity/rules at all). Hoisting them into useCallback,
+  // keyed only on the already-stable `mutate`, makes them real stable
+  // references so React.memo can actually skip re-rendering the tab.
+  const onCombatEntityUpdate      = useCallback((updated: Entity) => mutate(() => updated, 'Character progression', 'combat'), [mutate]);
+  const onExplorationEntityUpdate = useCallback((updated: Entity) => mutate(() => updated, 'Exploration action', 'other'), [mutate]);
+  const onActionsEntityUpdate     = useCallback((updated: Entity) => mutate(() => updated, 'Used action card', 'combat'), [mutate]);
+  const onSpellsEntityUpdate      = useCallback((updated: Entity, label?: string) => mutate(() => updated, label ?? 'Spellbook change', 'spells'), [mutate]);
+  const onAbilitiesEntityUpdate   = useCallback((updated: Entity) => mutate(() => updated, 'Ability override', 'other'), [mutate]);
+  const onFeaturesEntityUpdate    = useCallback((updated: Entity) => mutate(() => updated, 'Edited features', 'features'), [mutate]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -566,6 +593,13 @@ export default function CharacterSheetScreen() {
               </Text>
             </Pressable>
           )}
+          {/* LIVE-RULESET-1: same access gate as Free-Edit — a DM can lock
+              this the same way they lock other significant live edits. */}
+          {freeEditAllowed && (
+            <Pressable style={styles.freeEditBtn} onPress={() => setRulesetChangeOpen(true)}>
+              <Text style={styles.freeEditTxt}>🌐</Text>
+            </Pressable>
+          )}
           {/* Free-edit is offered outside a campaign, unless the DM has locked it. */}
           {freeEditAllowed && (
             <Pressable style={styles.freeEditBtn} onPress={() => setFreeEditOpen(true)}>
@@ -631,6 +665,17 @@ export default function CharacterSheetScreen() {
               ? '⚔️ YOUR TURN'
               : `Round ${turn.round} — ${turn.currentName ?? '…'}'s turn`}
           </Text>
+        </View>
+      )}
+
+      {/* Surfaces a failed local save instead of only logging it — a write
+          failure used to leave the UI looking correct while the disk
+          silently kept the pre-mutation state, discovered only after a
+          later restart reverted the change with no explanation (audit
+          finding PERSIST-5). Clears itself on the next successful save. */}
+      {lastPersistError && (
+        <View style={styles.persistErrorBanner}>
+          <Text style={styles.persistErrorTxt}>⚠️ {lastPersistError}</Text>
         </View>
       )}
 
@@ -713,18 +758,18 @@ export default function CharacterSheetScreen() {
                 onResourceChange={handleResourceChange}
                 onSpendSlot={handleSpendSlot}
                 onRestoreSlot={handleRestoreSlot}
-                onEntityUpdate={updated => mutate(() => updated, 'Character progression', 'combat')}
+                onEntityUpdate={onCombatEntityUpdate}
               />
             ) : (
               <TabExploration
                 entity={entity}
                 rules={rules}
-                onEntityUpdate={updated => mutate(() => updated, 'Exploration action', 'other')}
+                onEntityUpdate={onExplorationEntityUpdate}
                 onDamage={handleDamage}
                 onHeal={handleHeal}
                 onAddCondition={handleAddCondition}
                 onRemoveCondition={handleRemoveCondition}
-                onSaveNotes={handleSaveNotes}
+                onSaveExplorationNotes={handleSaveExplorationNotes}
               />
             )}
           </View>
@@ -733,14 +778,14 @@ export default function CharacterSheetScreen() {
           <TabActions
             entity={entity}
             rules={rules}
-            onEntityUpdate={updated => mutate(() => updated, 'Used action card', 'combat')}
+            onEntityUpdate={onActionsEntityUpdate}
           />
         )}
         {activeTab === 'spells' && (
           <TabSpells
             entity={entity}
             rules={rules}
-            onEntityUpdate={updated => mutate(() => updated, 'Cast spell', 'spells')}
+            onEntityUpdate={onSpellsEntityUpdate}
           />
         )}
         {activeTab === 'abilities' && (
@@ -750,14 +795,14 @@ export default function CharacterSheetScreen() {
             isDm={isDm}
             campaignId={campaignId}
             deviceId={deviceId}
-            onEntityUpdate={updated => mutate(() => updated, 'Ability override', 'other')}
+            onEntityUpdate={onAbilitiesEntityUpdate}
           />
         )}
         {activeTab === 'features' && (
           <TabFeatures
             entity={entity}
             rules={rules}
-            onEntityUpdate={updated => mutate(() => updated, 'Edited features', 'features')}
+            onEntityUpdate={onFeaturesEntityUpdate}
           />
         )}
         {activeTab === 'inventory' && (
@@ -802,53 +847,94 @@ export default function CharacterSheetScreen() {
       {/* Global dice roller — floats above rest bar */}
       <GlobalDiceRoller bottom={72} right={12} />
 
+      {/* FREEEDIT-PERF-1: all 6 modals below used to be unconditionally
+          mounted with only `visible` gating RN Modal's native display —
+          the component body (state, effects, any data fetch/derivation)
+          still ran on every sheet render regardless of whether the modal
+          was open, and each one also added to the render cost paid by
+          every OTHER open/close of any of them (all live in this same
+          parent, so any local state change here re-renders every sibling).
+          Gating the element itself, same pattern already used for
+          MonsterPreview/AddItemModal, means each only does its own work
+          while actually open. */}
+
       {/* Free-edit modal (solo/prep only) */}
-      <FreeEditModal
-        visible={freeEditOpen}
-        entity={entity}
-        rules={rules}
-        onApply={updated => mutate(() => updated, 'Free edit', 'other')}
-        onClose={() => setFreeEditOpen(false)}
-      />
+      {freeEditOpen && (
+        <FreeEditModal
+          visible={freeEditOpen}
+          entity={entity}
+          rules={rules}
+          onApply={updated => mutate(() => updated, 'Free edit', 'other')}
+          onClose={() => setFreeEditOpen(false)}
+        />
+      )}
 
-      <CharacterHistoryModal
-        visible={historyOpen}
-        entityId={id}
-        onClose={() => setHistoryOpen(false)}
-        sessionLog={activeCampaignSessionLog}
-      />
+      {/* LIVE-RULESET-1: commits through the SAME mutation choke point as
+          every other character change — persistence/undo/timeline/sync all
+          come for free, nothing bespoke. `updated` (preview.after) is
+          applied verbatim, matching every other preview-then-commit modal
+          in this app (never re-derive the change on confirm). */}
+      {rulesetChangeOpen && (
+        <RulesetChangeModal
+          visible={rulesetChangeOpen}
+          entity={entity}
+          rules={rules}
+          onConfirm={(updated, label) => {
+            mutate(() => updated, label, 'ruleset');
+            setRulesetChangeOpen(false);
+          }}
+          onCancel={() => setRulesetChangeOpen(false)}
+        />
+      )}
 
-      <IssuesModal
-        visible={issuesOpen}
-        issues={issues}
-        onClose={() => setIssuesOpen(false)}
-      />
+      {historyOpen && (
+        <CharacterHistoryModal
+          visible={historyOpen}
+          entityId={id}
+          onClose={() => setHistoryOpen(false)}
+          sessionLog={activeCampaignSessionLog}
+        />
+      )}
 
-      <RestPreviewModal
-        visible={restPreview !== null}
-        kind={restPreview ?? 'short'}
-        entity={entity}
-        rules={rules}
-        onConfirm={() => { handleRest(restPreview!); setRestPreview(null); }}
-        onCancel={() => setRestPreview(null)}
-      />
+      {issuesOpen && (
+        <IssuesModal
+          visible={issuesOpen}
+          issues={issues}
+          onClose={() => setIssuesOpen(false)}
+        />
+      )}
 
-      <EquipmentPreviewModal
-        visible={equipPreview !== null}
-        kind={equipPreview?.kind ?? 'equip'}
-        itemName={equipPreview?.itemName ?? ''}
-        before={equipPreview?.before ?? null}
-        after={equipPreview?.after ?? null}
-        onConfirm={confirmEquipPreview}
-        onCancel={() => setEquipPreview(null)}
-      />
+      {restPreview !== null && (
+        <RestPreviewModal
+          visible={restPreview !== null}
+          kind={restPreview ?? 'short'}
+          entity={entity}
+          rules={rules}
+          onConfirm={() => { handleRest(restPreview!); setRestPreview(null); }}
+          onCancel={() => setRestPreview(null)}
+        />
+      )}
 
-      <ExportFormatSheet
-        visible={exportSheetOpen}
-        title={`Export "${entity.identity.name || 'Character'}"`}
-        onSelect={handleExportFormat}
-        onClose={() => setExportSheetOpen(false)}
-      />
+      {equipPreview !== null && (
+        <EquipmentPreviewModal
+          visible={equipPreview !== null}
+          kind={equipPreview?.kind ?? 'equip'}
+          itemName={equipPreview?.itemName ?? ''}
+          before={equipPreview?.before ?? null}
+          after={equipPreview?.after ?? null}
+          onConfirm={confirmEquipPreview}
+          onCancel={() => setEquipPreview(null)}
+        />
+      )}
+
+      {exportSheetOpen && (
+        <ExportFormatSheet
+          visible={exportSheetOpen}
+          title={`Export "${entity.identity.name || 'Character'}"`}
+          onSelect={handleExportFormat}
+          onClose={() => setExportSheetOpen(false)}
+        />
+      )}
 
     </View>
   );
@@ -963,6 +1049,13 @@ const styles = StyleSheet.create({
   },
   turnBannerMine: { backgroundColor: Colors.gold + '33', borderBottomColor: Colors.gold },
   turnBannerTxt:  { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+
+  persistErrorBanner: {
+    paddingVertical: 6, paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.red + '22',
+    borderBottomWidth: 1, borderBottomColor: Colors.red + '66',
+  },
+  persistErrorTxt: { fontSize: FontSize.xs, color: Colors.red },
 
   restBar: {
     flexDirection:   'row',

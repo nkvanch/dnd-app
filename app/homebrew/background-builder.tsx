@@ -12,8 +12,15 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Background, Feature, Effect, SkillName, Entity } from '../../src/engine/types';
+import { Background, Feature, Effect, SkillName, Entity, RulesetId, BACKGROUND_CHOICE_PREFIX } from '../../src/engine/types';
+import {
+  ChoiceDefinitionListEditor, DraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
@@ -21,8 +28,9 @@ import { simulate } from '../../src/engine/simulate';
 import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
-import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { disambiguateId } from '../../src/content/traitCompiler';
+import { globalContentDB } from '../../src/content/classes/library';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Same 18-skill list used in race-builder.tsx and the PDF export.
@@ -150,6 +158,8 @@ export default function BackgroundBuilderScreen() {
   const homebrewBackgrounds = useHomebrewStore(s => s.backgrounds);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing = editId ? homebrewBackgrounds.find(b => b.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name, setName] = useState('');
   const [skills, setSkills] = useState<SkillName[]>([]);
@@ -158,6 +168,7 @@ export default function BackgroundBuilderScreen() {
   const [languages, setLanguages] = useState('');
   const [equipmentNote, setEquipmentNote] = useState('');
   const [features, setFeatures] = useState<DraftFeature[]>([]);
+  const [pendingChoices, setPendingChoices] = useState<DraftChoice[]>([]);
   const [testOpen, setTestOpen] = useState(false);
   const [testRows, setTestRows] = useState<Row[]>([]);
 
@@ -167,6 +178,7 @@ export default function BackgroundBuilderScreen() {
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     const draft = editing.homebrewDraft as Record<string, unknown> | undefined;
     if (draft) {
       setSkills((draft.skills as SkillName[]) ?? []);
@@ -174,6 +186,14 @@ export default function BackgroundBuilderScreen() {
       setLanguages(String(draft.languages ?? ''));
       setEquipmentNote(String(draft.equipmentNote ?? ''));
       setFeatures((draft.features as DraftFeature[]) ?? []);
+      if (draft.pendingChoices) setPendingChoices(draft.pendingChoices as DraftChoice[]);
+    }
+    // CHOICE-AUTHORING-1: see race-builder.tsx's identical fallback comment.
+    if (!draft?.pendingChoices && editing.pendingChoices) {
+      const reconstructed = editing.pendingChoices
+        .map(def => definitionToDraftChoice(def, BACKGROUND_CHOICE_PREFIX))
+        .filter((d): d is DraftChoice => d !== null);
+      if (reconstructed.length > 0) setPendingChoices(reconstructed);
     }
   }, [editing?.id]);
 
@@ -194,7 +214,12 @@ export default function BackgroundBuilderScreen() {
   }
 
   function buildBackground(): Background {
-    const id = editing?.id ?? (toId(name) || 'homebrew_background');
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
+    const takenBgIds = new Set([
+      ...globalContentDB.backgrounds.map(b => b.id),
+      ...homebrewBackgrounds.filter(b => b.id !== editing?.id).map(b => b.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_background', takenBgIds);
     const bgFeatures: Feature[] = [];
 
     // Skills — same grant_proficiency (skill:X) pattern as race traits,
@@ -263,8 +288,11 @@ export default function BackgroundBuilderScreen() {
     }
 
     return {
-      id, name: name.trim(), features: bgFeatures,
-      homebrewDraft: { skills, toolProfs, languages, equipmentNote, features },
+      id, name: name.trim(), features: bgFeatures, rulesetId,
+      pendingChoices: pendingChoices.length > 0
+        ? pendingChoices.map(d => draftChoiceToDefinition(d, BACKGROUND_CHOICE_PREFIX))
+        : undefined,
+      homebrewDraft: { skills, toolProfs, languages, equipmentNote, features, pendingChoices },
     };
   }
 
@@ -327,6 +355,7 @@ export default function BackgroundBuilderScreen() {
     const bg = buildBackground();
     try {
       await saveItem('background', bg);
+      usePendingSelectionStore.getState().setPending('background_picker', bg.id);
       goBack();
     } catch (e) {
       console.error('[background-builder] save failed:', e);
@@ -350,6 +379,9 @@ export default function BackgroundBuilderScreen() {
         <Text style={styles.fieldLabel}>Background Name *</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName}
           placeholder="e.g. Wandering Scholar" placeholderTextColor={Colors.textDim} />
+
+        <Text style={styles.fieldLabel}>Game / Ruleset</Text>
+        <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
 
         <Text style={styles.fieldLabel}>Skill Proficiencies (standard: 2)</Text>
         <View style={styles.chipWrap}>
@@ -392,11 +424,24 @@ export default function BackgroundBuilderScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.fieldLabel}>Languages (optional)</Text>
+        <Text style={styles.fieldLabel}>Languages (optional, descriptive)</Text>
         <TextInput style={styles.input} value={languages} onChangeText={setLanguages}
-          placeholder="e.g. one language of your choice" placeholderTextColor={Colors.textDim} />
+          placeholder="e.g. Common and Sylvan" placeholderTextColor={Colors.textDim} />
+        <Text style={styles.hint}>
+          For a FIXED language (always known), just list it here. For a real player
+          choice ("choose one language of your choice"), use Player Choices below
+          instead -- typing that phrase here has no mechanical effect.
+        </Text>
 
-        <Text style={styles.fieldLabel}>Starting Equipment (optional, descriptive)</Text>
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Player Choices (optional)</Text>
+        <Text style={styles.hint}>
+          A real choice the player resolves when they select this background -- e.g.
+          "choose one artisan's tool" or "learn two languages of your choice." Unlike
+          the fixed fields above, this queues a pick the player actually makes.
+        </Text>
+        <ChoiceDefinitionListEditor choices={pendingChoices} onChange={setPendingChoices} />
+
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Starting Equipment (optional, descriptive)</Text>
         <TextInput style={[styles.input, styles.textArea]} value={equipmentNote} onChangeText={setEquipmentNote}
           placeholder="e.g. a set of common clothes, a belt pouch containing 10 gp..."
           placeholderTextColor={Colors.textDim} multiline textAlignVertical="top" />

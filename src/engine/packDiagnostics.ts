@@ -28,16 +28,22 @@
 //  - content still in use:  the one that actually matters before someone
 //                            taps "Remove Pack" — which saved characters
 //                            reference this pack's content right now.
-import { Entity, Issue } from './types';
+import { Entity, Issue, PreparedEncounter } from './types';
 import { InstalledPack, PackItemRef } from '../db/packRegistryRepo';
-import { ContentCacheType } from '../db/contentCacheRepo';
+import { ContentCacheType, HomebrewContent } from '../db/contentCacheRepo';
 import { getClassLevels } from './multiclass';
 import { spellIdsOnEntity } from '../content/spellRepo.types';
+import { collectContentDependencies } from './contentDependencies';
 
 /** Just the id (and optional rulesetId) shape diagnosePack needs from each
  *  homebrew content array — a structural subset of HomebrewStoreState's
  *  fields, so this file doesn't need to import the store (engine/ stays
- *  below store/ in the dependency order). */
+ *  below store/ in the dependency order). Deliberately kept narrow (not
+ *  widened to full HomebrewContent) so existing minimal test fixtures
+ *  (`{id: string}`) keep typechecking — the new "other homebrew depends on
+ *  this pack" check below casts to HomebrewContent at its one call site
+ *  instead, since every REAL call site already passes full content
+ *  objects; only test fixtures are ever narrower than that in practice. */
 export type HomebrewContentSlice = {
   races:       { id: string; rulesetId?: string }[];
   subraces:    { id: string; rulesetId?: string }[];
@@ -100,6 +106,11 @@ export function diagnosePack(
   allPacks: InstalledPack[],
   homebrew: HomebrewContentSlice,
   characters: Entity[],
+  // HOMEBREW-PACKAGE-1 item 17 ("campaigns where applicable"): optional so
+  // every existing call site (which has no encounter list in scope, or
+  // doesn't care) keeps compiling unchanged — defaults to "nothing to
+  // check" rather than requiring every caller to thread this through.
+  preparedEncounters: PreparedEncounter[] = [],
 ): Issue[] {
   const issues: Issue[] = [];
 
@@ -177,6 +188,65 @@ export function diagnosePack(
     }
   }
 
+  // ── Content still referenced by a prepared encounter ─────────────────────
+  // HOMEBREW-PACKAGE-1 item 17: a DM's prepared encounter (campaign
+  // planning data, src/db/encounterRepo.ts) references monsters/conditions
+  // by id independently of any character — a pack uninstall could silently
+  // leave an encounter's combatant pointing at a monster template that no
+  // longer exists. Same type-paired matching discipline as the character
+  // check above (no untyped id-only fallback needed — PreparedCombatant's
+  // fields are already concretely typed per reference).
+  for (const encounter of preparedEncounters) {
+    const used = new Set<string>();
+    for (const combatant of encounter.combatants) {
+      if (packRefsByType.get('monster')?.has(combatant.monsterId)) used.add(`monster:${combatant.monsterId}`);
+      for (const condId of combatant.startingConditionIds ?? []) {
+        if (packRefsByType.get('condition')?.has(condId)) used.add(`condition:${condId}`);
+      }
+    }
+    if (used.size > 0) {
+      issues.push({
+        severity: 'warning', code: 'pack_content_in_use',
+        message: `Encounter "${encounter.name}" uses content from this pack (${[...used].join(', ')}) — removing this pack will leave it with a missing reference.`,
+        affectedId: encounter.id, source: `pack:${pack.id}`,
+        suggestedFix: 'Keep the pack installed, or expect that encounter to show a broken reference afterward.',
+      });
+    }
+  }
+
+  // ── Content depended on by other homebrew ───────────────────────────────
+  // HOMEBREW-PACKAGE-1 item 17: the character check above only catches a
+  // SAVED CHARACTER's own reference; it misses another homebrew DEFINITION
+  // (e.g. a Subclass authored locally, or installed by a different pack)
+  // that references this pack's content structurally (Subrace→Race,
+  // Subclass→Feature, Feat→Spell, ...). Reuses collectContentDependencies
+  // (the same dependency-closure walker export/import already builds on)
+  // rather than a second bespoke reference-walker.
+  const packRefKeys = new Set(pack.itemRefs.map(r => `${r.type}:${r.id}`));
+  for (const [type, key] of Object.entries(CONTENT_TYPE_TO_STORE_KEY) as [ContentCacheType, keyof HomebrewContentSlice][]) {
+    for (const item of homebrew[key]) {
+      // Skip content this SAME pack owns — a pack's own internal references
+      // (e.g. its own Subclass → its own Class) aren't a removal hazard,
+      // they'd be removed together.
+      if (packRefKeys.has(`${type}:${item.id}`)) continue;
+      // Cast: every REAL call site already passes full HomebrewContent
+      // arrays (HomebrewContentSlice is intentionally narrower only so
+      // minimal test fixtures keep typechecking — see its own doc comment).
+      const full = item as unknown as HomebrewContent;
+      const deps = collectContentDependencies(type, full);
+      const hit = deps.find(d => packRefKeys.has(`${d.type}:${d.id}`));
+      if (hit) {
+        const displayName = 'name' in full && typeof full.name === 'string' ? full.name : item.id;
+        issues.push({
+          severity: 'warning', code: 'pack_content_in_use',
+          message: `Homebrew ${type} "${displayName}" → uses ${hit.type}: "${hit.id}" — removing this pack will leave that definition with a missing reference.`,
+          affectedId: item.id, source: `pack:${pack.id}`,
+          suggestedFix: 'Keep the pack installed, or expect that definition to show a broken reference afterward.',
+        });
+      }
+    }
+  }
+
   return issues;
 }
 
@@ -218,6 +288,43 @@ export function contentUsedBy(
     if (typedMatch) return true;
     if (character.kind !== 'character') return false;
     return character.choices.some(c => c.resolved && c.selections.includes(id));
+  });
+}
+
+// ── HOMEBREW-PACKAGE-1 items 33/34: pack version updates ───────────────────
+// A re-imported package whose packageId matches an already-installed pack is
+// an UPDATE, not a fresh install (see app/homebrew/import-package.tsx). The
+// two helpers below answer item 34's own question — "before removing
+// definitions from prior version, check whether they are still referenced"
+// — without a second bespoke reference-walk: they reuse diagnosePack's
+// already-tested character/encounter/other-homebrew "still in use" checks
+// via a synthetic single-purpose pack, the same way this file's other
+// consumers (homebrew.tsx's InstalledPacksPanel) already trust that logic.
+
+/** Every itemRef the OLD installed pack owned that the NEW package version
+ *  no longer includes — pure {type,id} set difference, the first step in
+ *  detecting what a pack update would remove. */
+export function removedPackItemRefs(oldRefs: PackItemRef[], newRefs: { type: ContentCacheType; id: string }[]): PackItemRef[] {
+  const newKeys = new Set(newRefs.map(r => `${r.type}:${r.id}`));
+  return oldRefs.filter(r => !newKeys.has(`${r.type}:${r.id}`));
+}
+
+/** Of a candidate set of (about-to-be-removed) itemRefs, which ones are
+ *  still referenced by a saved character, a prepared encounter, or another
+ *  homebrew definition — these must be KEPT, not silently deleted, when a
+ *  pack update would otherwise drop them for no longer being in the new
+ *  package version. */
+export function stillReferencedRefs(
+  refs: PackItemRef[],
+  allPacks: InstalledPack[],
+  homebrew: HomebrewContentSlice,
+  characters: Entity[],
+  preparedEncounters: PreparedEncounter[] = [],
+): PackItemRef[] {
+  return refs.filter(ref => {
+    const synthetic: InstalledPack = { id: '__pack_update_removal_check__', name: '', importedAt: 0, itemRefs: [ref] };
+    return diagnosePack(synthetic, allPacks, homebrew, characters, preparedEncounters)
+      .some(i => i.code === 'pack_content_in_use');
   });
 }
 

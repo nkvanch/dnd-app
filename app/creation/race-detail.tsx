@@ -1,17 +1,28 @@
 // app/creation/race-detail.tsx
 // Race detail with back button. Strips old race features before applying new ones.
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput } from 'react-native';
 import { useEffect, useState } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useCampaignStore } from '../../src/store/campaignStore';
+import { useBrowseStateStore } from '../../src/store/browseStateStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { bannedContentIds } from '../../src/engine/packDiagnostics';
 import { loadInstalledPacks } from '../../src/db/packRegistryRepo';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { applyGrant, queueChoice } from '../../src/engine/leveling';
-import { recomputeDerived } from '../../src/engine/pipeline';
+import { recomputeDerived, applyStatModifiers, collectAllEffects } from '../../src/engine/pipeline';
 import { Entity, Ability, Feature, RACE_CHOICE_PREFIX } from '../../src/engine/types';
+import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import {
+  FilterSection, MultiSelectChipRow, OfficialHomebrewChipRow, ActiveFilterChips,
+} from '../../src/components/FilterChipRow';
+import { SortControl } from '../../src/components/SortControl';
+import {
+  SubraceOwnTrait, SUBRACE_OWN_TRAIT_LABELS, subraceOwnTraits, subraceSortOptions,
+} from '../../src/content/races/subraceBrowse';
+import { sortByOption } from '../../src/content/contentQuery';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const ABILITY_LABELS: { key: Ability; label: string }[] = [
@@ -122,6 +133,13 @@ export default function RaceDetailScreen() {
   }, []);
   const banned = bannedContentIds(installedPacks, activeCampaign?.bannedPackIds ?? []);
   const mergedRaces = getMergedContentDB(undefined, banned).races;
+  const homebrewRaceIds = useHomebrewStore(s => s.races).map(r => r.id);
+  // Standalone homebrew subraces (attached to a race via subrace-builder —
+  // see homebrewStore.getMergedContentDB's attachment logic). A subrace
+  // nested inside a homebrew RACE is homebrew too even if it isn't in this
+  // array (it was authored as part of that race, not standalone) — see
+  // isHomebrewSubrace below, which checks both.
+  const standaloneHomebrewSubraceIds = new Set(useHomebrewStore(s => s.subraces).map(sr => sr.id));
 
   const race   = mergedRaces.find(r => r.id === id);
   // Races self-describe via race.description/age/size/languages (see the
@@ -156,8 +174,71 @@ export default function RaceDetailScreen() {
   // resolved alongside subrace. See Race.ancestryChoice's doc comment.
   const [ancestryId, setAncestryId] = useState<string | null>(null);
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
-  const subraces         = race?.subraces ?? [];
-  const hasSubraces      = subraces.length > 0;
+  // CREATION-FILTERS-1: subrace search — races like Elf/Human/Tiefling have
+  // 10-15 subraces (Eberron/Ravnica/Innistrad marks & bloodlines, etc.)
+  // with no way to narrow the list before this; only shown once the list
+  // is actually long enough to need it.
+  // BROWSE-STATE-1: keyed per-race (not a single shared "subrace_picker"
+  // key) — each race's subrace list is entirely different, so sharing one
+  // key across races would leave e.g. a Dwarf-scoped search string ("Hill")
+  // showing "no results match" the moment the player opens Elf instead.
+  const subraceScreenKey = `subrace_picker:${id}`;
+  const savedSubraceBrowse = useBrowseStateStore.getState().getBrowseState(subraceScreenKey);
+  const [subraceSearch, setSubraceSearch] = useState(savedSubraceBrowse.search ?? '');
+  // SHARED-QUERY-1: Parent Race/Game/Ruleset are deliberately NOT filter
+  // controls here — this screen is already scoped to one specific race
+  // (context determines Parent Race), matching the same rule applied to
+  // Subclass in class-detail.tsx. "Own changes/grants" are the subrace's
+  // OWN contribution only — see subraceBrowse.ts's header comment for why
+  // that's automatically true (Subrace never stores the parent's features).
+  const [subraceOfficialFilter, setSubraceOfficialFilter] = useState<'all' | 'official' | 'homebrew'>(
+    (savedSubraceBrowse.filters?.officialFilter as 'all' | 'official' | 'homebrew') ?? 'all'
+  );
+  const [subraceTraitFilter, setSubraceTraitFilter] = useState<Set<SubraceOwnTrait>>(
+    new Set((savedSubraceBrowse.filters?.traitFilter as SubraceOwnTrait[] | undefined) ?? [])
+  );
+  const [subraceFiltersOpen, setSubraceFiltersOpen] = useState(false);
+  const [subraceSort, setSubraceSort] = useState(savedSubraceBrowse.sort ?? 'name_asc');
+
+  useEffect(() => {
+    useBrowseStateStore.getState().setBrowseState(subraceScreenKey, {
+      search: subraceSearch, sort: subraceSort,
+      filters: { officialFilter: subraceOfficialFilter, traitFilter: Array.from(subraceTraitFilter) },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subraceSearch, subraceOfficialFilter, subraceTraitFilter, subraceSort]);
+
+  // NESTED-HOMEBREW-1: auto-select a subrace just created via "+ Create New
+  // Homebrew Subrace" (see the button below) once its builder saves and
+  // returns here. Plain effect, not useFocusEffect — this consume path
+  // only sets local `subRaceId` state, it never itself navigates (unlike
+  // race.tsx's own consumer, which replaces the route), so there's no
+  // competing-navigation race to lose.
+  const pendingSubrace = usePendingSelectionStore(s => s.pending.subrace_picker);
+  useEffect(() => {
+    if (!pendingSubrace) return;
+    const newId = usePendingSelectionStore.getState().consumePending('subrace_picker');
+    if (newId) setSubRaceId(newId);
+  }, [pendingSubrace]);
+  const allSubraces      = race?.subraces ?? [];
+  const isHomebrewSubrace = (sr: { id: string }) =>
+    !!race && (homebrewRaceIds.includes(race.id) || standaloneHomebrewSubraceIds.has(sr.id));
+  const availableSubraceTraits = Array.from(new Set(allSubraces.flatMap(sr => Array.from(subraceOwnTraits(sr)))))
+    .map(t => ({ id: t, label: SUBRACE_OWN_TRAIT_LABELS[t] }));
+  const subraceSortOpts = subraceSortOptions(isHomebrewSubrace);
+  const subraces = sortByOption(
+    allSubraces
+      .filter(sr => !subraceSearch.trim() || sr.name.toLowerCase().includes(subraceSearch.trim().toLowerCase()))
+      .filter(sr => subraceOfficialFilter === 'all' || (subraceOfficialFilter === 'homebrew') === isHomebrewSubrace(sr))
+      .filter(sr => subraceTraitFilter.size === 0 || Array.from(subraceTraitFilter).some(t => subraceOwnTraits(sr).has(t))),
+    subraceSortOpts,
+    subraceSort,
+  );
+  const subraceActiveChips = [
+    ...(subraceOfficialFilter !== 'all' ? [{ key: 'official', label: subraceOfficialFilter === 'official' ? 'Official' : 'Homebrew', onClear: () => setSubraceOfficialFilter('all') }] : []),
+    ...Array.from(subraceTraitFilter).map(t => ({ key: `trait_${t}`, label: SUBRACE_OWN_TRAIT_LABELS[t], onClear: () => setSubraceTraitFilter(prev => { const n = new Set(prev); n.delete(t); return n; }) })),
+  ];
+  const hasSubraces      = allSubraces.length > 0;
   const subracesOptional = !!race?.subracesOptional;
   const chosenSubraceForUi = subraces.find(s => s.id === subRaceId) ?? null;
   // A subrace's own ancestryChoice OVERRIDES the race's (Fizban's Chromatic/
@@ -268,16 +349,20 @@ export default function RaceDetailScreen() {
     }
     // ...and the flexible ability score choice, compiled into one generated
     // Feature (mirrors every other racial ASI's stat_modifier-effects shape).
+    // ABILITY-CAP-1: clamp each pick to headroom under the effective cap.
     if (flexAsi && flexPicks.length > 0) {
+      const maxScore = rules.maxAbilityScore ?? Infinity;
+      const effectiveBefore = applyStatModifiers(updated.stats, collectAllEffects(updated));
       const flexFeature: Feature = {
         id: `${race!.id}_flexible_asi`,
         name: 'Ability Score Increase',
         description: flexAsi.prompt,
         source: { kind: 'race', refId: race!.id },
         level: null, actions: [], choices: [], passive: true,
-        effects: flexPicks.map((ab, idx) => ({
-          type: 'stat_modifier', target: ab, operation: 'add', value: flexAmountFor(idx), condition: null,
-        })),
+        effects: flexPicks.map((ab, idx) => {
+          const headroom = Math.max(0, maxScore - effectiveBefore[ab]);
+          return { type: 'stat_modifier' as const, target: ab, operation: 'add' as const, value: Math.min(flexAmountFor(idx), headroom), condition: null };
+        }),
       };
       updated = applyGrant(updated, { kind: 'feature', value: { ...flexFeature, isActive: true } }, 0);
     }
@@ -295,7 +380,10 @@ export default function RaceDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-      <Text style={styles.heading}>{race.name}</Text>
+      <View style={styles.headingRow}>
+        <Text style={styles.heading}>{race.name}</Text>
+        {!homebrewRaceIds.includes(race.id) && isNonSrd(race.srd) && <NonSrdBadge />}
+      </View>
       <View style={styles.divider} />
 
       {detail && (
@@ -349,6 +437,58 @@ export default function RaceDetailScreen() {
           <Text style={styles.sectionTitle}>
             Choose a Subrace{subracesOptional ? ' (optional)' : ''}
           </Text>
+          <Pressable
+            style={styles.createHomebrewBtn}
+            onPress={() => router.push(`/homebrew/subrace-builder?parentId=${race.id}`)}
+          >
+            <Text style={styles.createHomebrewBtnTxt}>+ Create New Homebrew Subrace</Text>
+          </Pressable>
+          {allSubraces.length > 6 && (
+            <View style={styles.subraceSearchRow}>
+              <TextInput
+                style={[styles.subraceSearch, styles.subraceSearchFlex]}
+                placeholder={`Search ${allSubraces.length} subraces…`}
+                placeholderTextColor={Colors.textDim}
+                value={subraceSearch}
+                onChangeText={setSubraceSearch}
+              />
+            </View>
+          )}
+          {allSubraces.length > 1 && (
+            <View style={styles.controlsRow}>
+              {allSubraces.length > 6 && (
+                <Pressable
+                  style={[styles.subraceFiltersToggle, subraceFiltersOpen && styles.subraceFiltersToggleActive]}
+                  onPress={() => setSubraceFiltersOpen(o => !o)}
+                >
+                  <Text style={[styles.subraceFiltersToggleTxt, subraceFiltersOpen && styles.subraceFiltersToggleTxtActive]}>Filters</Text>
+                </Pressable>
+              )}
+              <SortControl options={subraceSortOpts} value={subraceSort} onChange={setSubraceSort} />
+            </View>
+          )}
+          {subraceFiltersOpen && (
+            <View style={styles.subraceFilterPanel}>
+              {/* Only shown when this race actually mixes official + homebrew
+                  subraces — a pure-official or pure-homebrew race has nothing
+                  to filter on this axis. */}
+              {allSubraces.some(isHomebrewSubrace) && allSubraces.some(sr => !isHomebrewSubrace(sr)) && (
+                <FilterSection label="Official / Homebrew">
+                  <OfficialHomebrewChipRow value={subraceOfficialFilter} onChange={setSubraceOfficialFilter} />
+                </FilterSection>
+              )}
+              <FilterSection label="Own Changes / Grants">
+                <MultiSelectChipRow options={availableSubraceTraits} values={subraceTraitFilter} onChange={setSubraceTraitFilter} scrollable />
+              </FilterSection>
+            </View>
+          )}
+          <ActiveFilterChips
+            chips={subraceActiveChips}
+            onClearAll={() => { setSubraceOfficialFilter('all'); setSubraceTraitFilter(new Set()); }}
+          />
+          {subraces.length === 0 && (
+            <Text style={styles.noResultsTxt}>No subraces match your search.</Text>
+          )}
           {subraces.map(sr => {
             const isSel = subRaceId === sr.id;
             const bonusText = summarizeBonuses(sr);
@@ -495,10 +635,33 @@ const styles = StyleSheet.create({
   content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
   backBtn:   { marginBottom: Spacing.md },
   backBtnText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
-  heading: { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
+  headingRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.md },
+  heading: { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center' },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
   description: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 22 },
   sectionTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.sm },
+  createHomebrewBtn: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold,
+    paddingVertical: Spacing.sm, alignItems: 'center', marginBottom: Spacing.md,
+  },
+  createHomebrewBtnTxt: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.gold },
+  subraceSearch: {
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    fontSize: FontSize.sm, color: Colors.textPrimary,
+  },
+  subraceSearchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.sm },
+  controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.sm },
+  subraceSearchFlex: { flex: 1 },
+  subraceFiltersToggle: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.surface, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
+  },
+  subraceFiltersToggleActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  subraceFiltersToggleTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  subraceFiltersToggleTxtActive: { color: Colors.gold },
+  noResultsTxt: { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic', marginBottom: Spacing.sm },
+  subraceFilterPanel: { marginBottom: Spacing.xs },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.xs, borderBottomWidth: 1, borderBottomColor: Colors.border },
   infoLabel: { fontSize: FontSize.md, color: Colors.textSecondary },
   infoValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },

@@ -52,6 +52,8 @@ db.exec(`
     concentration INTEGER NOT NULL,
     classes       TEXT,
     srd           INTEGER,
+    rulesetId     TEXT,
+    components    TEXT,
     data          TEXT NOT NULL
   );
   CREATE INDEX idx_spells_name  ON spells(name);
@@ -67,6 +69,7 @@ db.exec(`
     hasDamageEffect INTEGER NOT NULL,
     weaponRange     TEXT,
     srd             INTEGER,
+    rulesetId       TEXT,
     data            TEXT NOT NULL
   );
   CREATE INDEX idx_items_name ON items(name);
@@ -78,12 +81,12 @@ db.exec(`
 `);
 
 const insertSpell = db.prepare(`
-  INSERT INTO spells (id, name, level, school, castingTime, ritual, concentration, classes, srd, data)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO spells (id, name, level, school, castingTime, ritual, concentration, classes, srd, rulesetId, components, data)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const insertItem = db.prepare(`
-  INSERT INTO items (id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd, data)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO items (id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd, rulesetId, data)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const seenIds = new Set();
@@ -105,6 +108,8 @@ for (const spell of FULL_SPELL_LIBRARY) {
     spell.concentration ? 1 : 0,
     spell.classes && spell.classes.length > 0 ? JSON.stringify(spell.classes) : null,
     spell.srd === undefined ? null : (spell.srd ? 1 : 0),
+    spell.rulesetId ?? null,
+    spell.components && spell.components.length > 0 ? JSON.stringify(spell.components) : null,
     JSON.stringify(spell)
   );
 }
@@ -128,6 +133,7 @@ for (const item of FULL_ITEM_LIBRARY) {
     entry.hasDamageEffect ? 1 : 0,
     entry.weaponRange,
     item.srd === undefined ? null : (item.srd ? 1 : 0),
+    item.rulesetId ?? null,
     JSON.stringify(item)
   );
 }
@@ -135,7 +141,7 @@ for (const item of FULL_ITEM_LIBRARY) {
 const contentVersion = String(Date.now());
 const setMeta = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');
 setMeta.run('contentVersion', contentVersion);
-setMeta.run('schemaVersion', '1');
+setMeta.run('schemaVersion', '2');
 
 db.close();
 

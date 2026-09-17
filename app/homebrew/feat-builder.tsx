@@ -14,19 +14,27 @@ import {
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ability, DraftTrait, Entity, Feat } from '../../src/engine/types';
+import { Ability, DraftTrait, Entity, Feat, RulesetId, FEAT_CHOICE_PREFIX } from '../../src/engine/types';
+import {
+  ChoiceDefinitionListEditor, DraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { validateFeat } from '../../src/engine/homebrewValidator';
 import { Alert } from '../../src/utils/alert';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
-import { toId } from '../../src/content/traitCompiler';
+import { toId, disambiguateId } from '../../src/content/traitCompiler';
+import { FULL_FEAT_LIBRARY } from '../../src/content/feats/index';
 import { simulate } from '../../src/engine/simulate';
 import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
-import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -58,6 +66,8 @@ export default function FeatBuilderScreen() {
   const feats    = useHomebrewStore(s => s.feats);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing  = editId ? feats.find(f => f.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name,         setName]         = useState('');
   const [prerequisite, setPrerequisite] = useState('');
@@ -75,6 +85,7 @@ export default function FeatBuilderScreen() {
     { id: string; label: string; mode: 'proficiency' | 'expertise'; from: 'any' | 'proficient' }[]
   >([]);
 
+  const [pendingChoices, setPendingChoices] = useState<DraftChoice[]>([]);
   const [saving, setSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testRows, setTestRows] = useState<Row[]>([]);
@@ -83,6 +94,7 @@ export default function FeatBuilderScreen() {
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     setPrerequisite(editing.prerequisite ?? '');
     setSource(editing.source);
     setDescription(editing.description);
@@ -99,6 +111,16 @@ export default function FeatBuilderScreen() {
     }
     if (editing.skillChoice) {
       setSkillPicks(editing.skillChoice.picks);
+    }
+    // CHOICE-AUTHORING-1: pendingChoices is already the canonical
+    // ChoiceDefinition[] shape (unlike DraftTrait's lossy Feature compile),
+    // so reconstructing via definitionToDraftChoice directly is lossless —
+    // no separate homebrewDraft blob needed for this field.
+    if (editing.pendingChoices) {
+      const reconstructed = editing.pendingChoices
+        .map(def => definitionToDraftChoice(def, FEAT_CHOICE_PREFIX))
+        .filter((d): d is DraftChoice => d !== null);
+      if (reconstructed.length > 0) setPendingChoices(reconstructed);
     }
   }, [editing?.id]);
 
@@ -118,7 +140,12 @@ export default function FeatBuilderScreen() {
   }
 
   function buildFeat(): Feat {
-    const id = editing?.id ?? (toId(name) || 'homebrew_feat');
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
+    const takenFeatIds = new Set([
+      ...FULL_FEAT_LIBRARY.map(f => f.id),
+      ...feats.filter(f => f.id !== editing?.id).map(f => f.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_feat', takenFeatIds);
     const { feature } = buildTraitFeature(trait, { idPrefix: id, sourceKind: 'feat', sourceRefId: id, level: null });
     return {
       id,
@@ -131,6 +158,10 @@ export default function FeatBuilderScreen() {
         ? { options: abilityOptions, amount: parseInt(abilityAmount, 10) || 1, grantsSaveProficiency: grantsSaveProf }
         : undefined,
       skillChoice: skillPicks.length > 0 ? { picks: skillPicks } : undefined,
+      pendingChoices: pendingChoices.length > 0
+        ? pendingChoices.map(d => draftChoiceToDefinition(d, FEAT_CHOICE_PREFIX))
+        : undefined,
+      rulesetId,
     };
   }
 
@@ -178,6 +209,7 @@ export default function FeatBuilderScreen() {
     setSaving(true);
     try {
       await saveItem('feat', feat);
+      usePendingSelectionStore.getState().setPending('feat_picker', feat.id);
       goBack();
     } catch (e) {
       console.error('[feat-builder] save failed:', e);
@@ -201,6 +233,10 @@ export default function FeatBuilderScreen() {
         <Field label="Name *">
           <TextInput style={styles.input} value={name} onChangeText={setName}
             placeholder="Feat name" placeholderTextColor={Colors.textDim} />
+        </Field>
+
+        <Field label="Game / Ruleset">
+          <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
         </Field>
 
         <Field label="Prerequisite (optional)">
@@ -301,6 +337,15 @@ export default function FeatBuilderScreen() {
           <Pressable style={styles.inlineAddBtn} onPress={addSkillPick}>
             <Text style={styles.inlineAddTxt}>+ Add Skill Pick</Text>
           </Pressable>
+        </Field>
+
+        <Field label="Tool / Language / Expertise Choices (optional)">
+          <Text style={styles.emptyNote}>
+            For feats like Prodigy ("one tool proficiency and one language") or Artificer
+            Initiate ("one artisan's tools of your choice") — a real, resolvable choice,
+            distinct from the Ability/Skill Choice blocks above.
+          </Text>
+          <ChoiceDefinitionListEditor choices={pendingChoices} onChange={setPendingChoices} />
         </Field>
 
       </ScrollView>

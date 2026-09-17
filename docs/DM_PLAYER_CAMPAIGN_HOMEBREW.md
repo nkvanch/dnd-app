@@ -175,9 +175,15 @@ static template into a live `Entity` using the exact same
 Feature/Effect/`recomputeDerived` pipeline a player character uses).
 
 **Known gaps, not yet wired to anything:**
-- `legendaryActions`/`lairActions` exist as fields on the monster data model
-  but aren't consumed by `spawnMonster` or shown in any DM UI — a monster
-  with legendary actions spawns with no mechanical support for them.
+- `legendaryActions`/`lairActions` exist as fields on the monster data model.
+  `lairActions` is never consumed anywhere. `legendaryActions` is a bare
+  count — only ONE monster (the Lich) also has the matching `resources`/
+  `features` entries the QuickPanel legendary-actions UI actually reads
+  (`resourceId: 'legendary_actions'`, the same generic ResourceCost
+  mechanism spell slots use); the other 28 declaring `legendaryActions`
+  spawn with no mechanical support (audit finding LEGENDARY-1) — this was
+  previously stated as "no monster has this wired," which understated the
+  Lich as a real, working exception.
 - No way to save/name a prepared encounter roster for reuse. A DM builds
   the monster list live in setup mode, every session.
 
@@ -365,5 +371,6 @@ Worth knowing about if you're reading the code, not user-visible gaps:
 - `Campaign.playerIds` is set once at join time but never read anywhere —
   the live "who's connected" roster actually comes from `syncStatus.roster`,
   computed fresh by the server on every connection change, not this field.
-- `MonsterTemplate.legendaryActions` / `lairActions` — declared, never
-  consumed (see §3.4).
+- `MonsterTemplate.legendaryActions` — declared and consumed for exactly one
+  monster (the Lich); `lairActions` is declared and never consumed at all
+  (see §3.4).

@@ -11,6 +11,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { AsiFeatPicker } from '../../src/components/AsiFeatPicker';
 import { FEATS_BY_ID } from '../../src/content/feats/index';
 import { Entity, ChoiceState } from '../../src/engine/types';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 /** Builds a fresh, unresolved feat choice anchored at level 1 for the picker. */
@@ -40,7 +41,13 @@ export default function CreationFeatsScreen() {
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
 
-  const [pickerOpen, setPickerOpen] = useState(false);
+  // SAVE-AND-ADD-1: reopen the picker on return from "+ Create new homebrew
+  // feat" so AsiFeatPicker's own effect can consume the pending selection —
+  // this screen (and the Modal wrapping the picker) fully unmounts during
+  // that navigation, so `pickerOpen` would otherwise reset to closed.
+  const [pickerOpen, setPickerOpen] = useState(
+    () => usePendingSelectionStore.getState().pending.feat_picker !== undefined
+  );
 
   useEffect(() => {
     if (!draft) router.replace('/creation/name');
@@ -131,6 +138,8 @@ export default function CreationFeatsScreen() {
               setDraft(markVisited(updated));
               setPickerOpen(false);
             }}
+            onCreateNewFeat={() => router.push('/homebrew/feat-builder')}
+            browseStateKey="feat:creation"
           />
         </View>
       </Modal>

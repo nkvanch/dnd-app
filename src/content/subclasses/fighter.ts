@@ -4,6 +4,13 @@
 // ============================================================================
 import { ClassProgression, ChoiceOption, Feature, Grant } from '../../engine/types';
 import { THIRD_CASTER_SLOTS } from '../classes/spellSlotTables';
+import { ALL_TOOLS } from '../tools';
+
+/** CHOICE-EXPANSION-2: same helper other content files use — restricts a
+ * tool choice's pool to one or more canonical categories. */
+function toolCategoryPool(...categories: string[]): ChoiceOption[] {
+  return ALL_TOOLS.filter(t => categories.includes(t.category)).map(t => ({ id: t.id, label: t.name, value: t.id }));
+}
 
 export type SubclassProgression = ClassProgression & { name: string };
 
@@ -165,10 +172,19 @@ export const battleMasterProgression: SubclassProgression = {
   entries: [
     {
       level: 3, hpDie: 10,
-      choices: [{
-        id: 'battle_master_maneuvers_3', prompt: 'Choose 3 maneuvers. You know 3 maneuvers of your choice.',
-        kind: 'feature_pool', count: 3, pool: MANEUVER_POOL, grants: [], required: true, resolved: false,
-      }],
+      choices: [
+        {
+          id: 'battle_master_maneuvers_3', prompt: 'Choose 3 maneuvers. You know 3 maneuvers of your choice.',
+          kind: 'feature_pool', count: 3, pool: MANEUVER_POOL, grants: [], required: true, resolved: false,
+        },
+        // CHOICE-EXPANSION-2: Student of War's "one type of artisan's tools
+        // of your choice" was previously flavor-only — migrated to a real
+        // choice alongside the flavor Feature below (kept for its text).
+        {
+          id: 'battle_master_tool_3', prompt: 'Choose one type of artisan\'s tools.',
+          kind: 'tool', count: 1, pool: toolCategoryPool('artisan'), grants: [], required: true, resolved: false,
+        },
+      ],
       grants: [
         { kind: 'feature', value: { id: 'combat_superiority', name: 'Combat Superiority', description: 'You learn maneuvers that are fueled by special dice called superiority dice (d8, 4 dice). You regain all expended superiority dice after a short or long rest.', source: { kind: 'subclass', refId: 'battle_master' }, level: 3, effects: [], actions: [], choices: [], passive: true } },
         { kind: 'resource', value: { resourceId: 'superiority_dice', name: 'Superiority Dice', maximum: 4, recharge: 'short_rest' } },

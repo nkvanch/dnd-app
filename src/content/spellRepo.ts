@@ -24,6 +24,8 @@ const index: SpellIndexEntry[] = ALL_SPELLS.map(s => ({
   concentration: s.concentration,
   classes:       s.classes,
   srd:           s.srd,
+  rulesetId:     s.rulesetId,
+  components:    s.components,
 }));
 
 export const spellRepo: SpellRepo = {

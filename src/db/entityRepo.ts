@@ -44,6 +44,22 @@ export async function loadEntity(id: string): Promise<Entity | null> {
   return migrateEntity(JSON.parse(row.data) as Entity);
 }
 
+/**
+ * Parses one entity row, returning null (and logging) instead of throwing
+ * on a malformed blob — used by loadAllEntities/loadEntitiesByKind so one
+ * corrupted row doesn't take down the entire list (audit finding
+ * PERSIST-4). Mirrors the per-row try/catch loadAllEntityMeta already uses
+ * below for the same reason.
+ */
+function parseEntityRow(r: EntityRow): Entity | null {
+  try {
+    return migrateEntity(JSON.parse(r.data) as Entity);
+  } catch (e) {
+    console.error(`[entityRepo] skipping malformed row id=${r.id}:`, e);
+    return null;
+  }
+}
+
 /** Load all stored entities, sorted by updatedAt descending (most recent first). */
 export async function loadAllEntities(): Promise<Entity[]> {
   if (Platform.OS === 'web') return [];
@@ -51,7 +67,7 @@ export async function loadAllEntities(): Promise<Entity[]> {
   const rows = await db.getAllAsync<EntityRow>(
     'SELECT * FROM entities ORDER BY updatedAt DESC'
   );
-  return rows.map(r => migrateEntity(JSON.parse(r.data) as Entity));
+  return rows.map(parseEntityRow).filter((e): e is Entity => e !== null);
 }
 
 /** Load all entities of a specific kind. */
@@ -62,7 +78,7 @@ export async function loadEntitiesByKind(kind: Entity['kind']): Promise<Entity[]
     'SELECT * FROM entities WHERE kind = ? ORDER BY updatedAt DESC',
     [kind]
   );
-  return rows.map(r => migrateEntity(JSON.parse(r.data) as Entity));
+  return rows.map(parseEntityRow).filter((e): e is Entity => e !== null);
 }
 
 export type EntityMeta = {

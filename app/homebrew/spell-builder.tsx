@@ -8,10 +8,13 @@ import {
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Entity, Spell } from '../../src/engine/types';
+import { Entity, Spell, RulesetId } from '../../src/engine/types';
 import { validateSpell } from '../../src/engine/homebrewValidator';
 import { Alert } from '../../src/utils/alert';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { PickOrCustom } from '../../src/components/homebrew/PickOrCustom';
@@ -19,7 +22,9 @@ import { simulate } from '../../src/engine/simulate';
 import { castConcentrationSpell } from '../../src/engine/combat';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
-import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { disambiguateId } from '../../src/content/traitCompiler';
+import { FULL_SPELL_LIBRARY } from '../../src/content/spells/index';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const LEVELS  = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -59,6 +64,8 @@ export default function SpellBuilderScreen() {
   const spells   = useHomebrewStore(s => s.spells);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing  = editId ? spells.find(s => s.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name,        setName]        = useState('');
   const [level,       setLevel]       = useState<number>(0);
@@ -80,6 +87,7 @@ export default function SpellBuilderScreen() {
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     setLevel(editing.level);
     setSchool(editing.school);
     setCastingTime(editing.castingTime);
@@ -105,8 +113,13 @@ export default function SpellBuilderScreen() {
   }
 
   function buildSpell(): Spell {
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
+    const takenSpellIds = new Set([
+      ...FULL_SPELL_LIBRARY.map(s => s.id),
+      ...spells.filter(s => s.id !== editing?.id).map(s => s.id),
+    ]);
     return {
-      id:            editing?.id ?? (toId(name) || 'homebrew_spell'),
+      id:            editing?.id ?? disambiguateId(toId(name) || 'homebrew_spell', takenSpellIds),
       name:          name.trim(),
       level,
       school:        school.trim(),
@@ -119,6 +132,7 @@ export default function SpellBuilderScreen() {
       ritual,
       concentration,
       spellType:     spellTypes.length > 0 ? spellTypes : undefined,
+      rulesetId,
     };
   }
 
@@ -182,6 +196,15 @@ export default function SpellBuilderScreen() {
     setSaving(true);
     try {
       await saveItem('spell', spell);
+      usePendingSelectionStore.getState().setPending('spell_picker', spell.id);
+      // ADDITIONAL-SPELL-1: a second, independent key so "+ Add Additional
+      // Spell"'s own "Create New Homebrew Spell" entry (spells.tsx) can
+      // tell this save apart from the Required-picker's own "+ Create new
+      // homebrew spell" button, which also targets 'spell_picker' — the
+      // Additional consumer adds the spell unconditionally (whole library,
+      // no entitlement consumed), so it must never be confused with the
+      // Required consumer's eligibility-gated add.
+      usePendingSelectionStore.getState().setPending('spell_picker_additional', spell.id);
       goBack();
     } catch (e) {
       console.error('[spell-builder] save failed:', e);
@@ -205,6 +228,10 @@ export default function SpellBuilderScreen() {
         <Field label="Name *">
           <TextInput style={styles.input} value={name} onChangeText={setName}
             placeholder="Spell name" placeholderTextColor={Colors.textDim} />
+        </Field>
+
+        <Field label="Game / Ruleset">
+          <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
         </Field>
 
         <Field label="Level (0 = cantrip)">

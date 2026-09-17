@@ -86,6 +86,39 @@ describe('resolveSpellById', () => {
   it('returns undefined for an id present in neither', () => {
     expect(resolveSpellById('nonexistent', [])).toBeUndefined();
   });
+
+  // LIVE-RULESET-3 (items 5, 17): the actual "same content identity, one
+  // 2014 definition and one 2024 definition" case — two homebrew Spell
+  // records sharing ONE id, each tagged for a different ruleset. Resolution
+  // must pick the one matching the requested context, never an arbitrary
+  // (e.g. array-first) same-id candidate.
+  describe('same-id, multiple ruleset-tagged definitions', () => {
+    const v2014 = makeSpell({ id: 'shared_spell', name: '2014 Version', rulesetId: 'dnd5e-2014' as never });
+    const v2024 = makeSpell({ id: 'shared_spell', name: '2024 Version', rulesetId: 'dnd5e-2024' as never });
+    const both = [v2014, v2024];
+
+    it('resolves the 2014 definition under a 2014 context', () => {
+      expect(resolveSpellById('shared_spell', both, 'dnd5e-2014' as never)?.name).toBe('2014 Version');
+    });
+    it('resolves the 2024 definition under a 2024 context', () => {
+      expect(resolveSpellById('shared_spell', both, 'dnd5e-2024' as never)?.name).toBe('2024 Version');
+    });
+    it('with no active ruleset context, resolves unconditionally (first-wins, unchanged pre-existing behavior)', () => {
+      expect(resolveSpellById('shared_spell', both)?.name).toBe('2014 Version');
+    });
+    it('a context matching NEITHER tagged candidate, with no untagged fallback candidate, is unresolved — never silently picks an arbitrary version', () => {
+      expect(resolveSpellById('shared_spell', both, 'pf2e' as never)).toBeUndefined();
+    });
+    it('falls back to a genuinely untagged candidate when no exact-ruleset match exists among same-id candidates', () => {
+      const universal = makeSpell({ id: 'shared_spell', name: 'Universal Version' });
+      const withUniversal = [v2014, universal];
+      expect(resolveSpellById('shared_spell', withUniversal, 'dnd5e-2024' as never)?.name).toBe('Universal Version');
+    });
+    it('a homebrew candidate that exists but is wrong-ruleset does NOT fall through to an official spell of the same id', () => {
+      const wrongRulesetFireball = makeSpell({ id: 'fireball', name: 'Wrong Ruleset Fireball', rulesetId: 'dnd5e-2024' as never });
+      expect(resolveSpellById('fireball', [wrongRulesetFireball], 'dnd5e-2014' as never)).toBeUndefined();
+    });
+  });
 });
 
 describe('mergeItemIndex', () => {
@@ -110,5 +143,23 @@ describe('resolveItemById', () => {
 
   it('falls back to official when no homebrew match exists', () => {
     expect(resolveItemById('longsword', [])?.id).toBe('longsword');
+  });
+
+  // LIVE-RULESET-3 (items 6, 17): same shape as resolveSpellById's own
+  // same-id-multiple-editions coverage above.
+  describe('same-id, multiple ruleset-tagged definitions', () => {
+    const v2014 = makeItem({ id: 'shared_item', name: '2014 Version', rulesetId: 'dnd5e-2014' as never });
+    const v2024 = makeItem({ id: 'shared_item', name: '2024 Version', rulesetId: 'dnd5e-2024' as never });
+    const both = [v2014, v2024];
+
+    it('resolves the 2014 definition under a 2014 context', () => {
+      expect(resolveItemById('shared_item', both, 'dnd5e-2014' as never)?.name).toBe('2014 Version');
+    });
+    it('resolves the 2024 definition under a 2024 context', () => {
+      expect(resolveItemById('shared_item', both, 'dnd5e-2024' as never)?.name).toBe('2024 Version');
+    });
+    it('a context matching neither tagged candidate is unresolved, not an arbitrary pick', () => {
+      expect(resolveItemById('shared_item', both, 'pf2e' as never)).toBeUndefined();
+    });
   });
 });

@@ -7,13 +7,22 @@
 // item sharing an id with an official one would show up as two separate
 // rows. Found during the A-52 content-precedence audit.
 //
-// Ruleset filtering is applied to the HOMEBREW side only, since homebrew
-// Spell/Item records already carry rulesetId in memory. The OFFICIAL side
-// (spellRepo/itemRepo's Tier-1 index) can't be filtered yet — SpellIndexEntry/
-// ItemIndexEntry don't carry rulesetId, and adding it means a SQLite schema +
-// generator-script change on native, not just this file. Harmless today (no
-// spell/item content sets rulesetId at all yet) — a real, disclosed gap to
-// close if 5.5e ever ships ruleset-tagged official spells/items.
+// LIVE-RULESET-3 (items 5, 6): ruleset filtering now covers BOTH sides.
+// mergeSpellIndex/mergeItemIndex filter the homebrew side by `activeRuleset`
+// (unchanged). resolveSpellById/resolveItemById take an optional
+// `activeRuleset` too — when passed, a resolved candidate (homebrew OR
+// official — SpellIndexEntry/ItemIndexEntry/the full Spell/Item record all
+// carry a real rulesetId field, TIER1-EXT-1) whose OWN ruleset doesn't match
+// is treated as NOT FOUND rather than silently returned, mirroring exactly
+// how rulesetChange.ts already categorizes a wrong-ruleset feat/condition as
+// "incompatible" rather than resolving it. Omitting `activeRuleset` (every
+// pre-existing call site) keeps today's exact unfiltered behavior — this is
+// additive, not a breaking change. No spell/item content is ruleset-tagged
+// yet (see rulesetChange.test.ts's synthetic fixtures for the proof this
+// mechanism actually filters correctly), so this is currently a no-op for
+// every real official/homebrew spell and item — same "mechanism built and
+// tested, no real content exercises it yet" situation the race/background
+// 2024 proof-of-concept content was in before it existed.
 import { Spell, Item, RulesetId, matchesRuleset } from '../engine/types';
 import { spellRepo } from './spellRepo';
 import { itemRepo } from './itemRepo';
@@ -31,9 +40,49 @@ export function mergeSpellIndex(homebrewSpells: Spell[], activeRuleset?: Ruleset
   return [...official, ...inScope];
 }
 
-/** Homebrew-first, official fallback — the single-id version of mergeSpellIndex's precedence. */
-export function resolveSpellById(id: string, homebrewSpells: Spell[]): Spell | undefined {
-  return homebrewSpells.find(s => s.id === id) ?? spellRepo.getSpellSync(id);
+/**
+ * Picks the ruleset-appropriate candidate among every item sharing one id —
+ * the actual "same identity, multiple edition definitions" case (item 5/6's
+ * explicit ask), distinct from "one candidate, reject it if wrong ruleset."
+ * With no active filter, first-wins (today's exact pre-existing behavior,
+ * for the common case of zero or one candidate). With a filter: an EXACT
+ * ruleset match wins outright; failing that, a genuinely untagged/universal
+ * candidate is used (matching every other content pool's "untagged = shared"
+ * rule); failing THAT, undefined — never an arbitrary same-id candidate
+ * tagged for some OTHER, non-matching ruleset.
+ */
+function pickByRuleset<T extends { rulesetId?: RulesetId }>(candidates: T[], activeRuleset: RulesetId | undefined): T | undefined {
+  if (candidates.length === 0) return undefined;
+  if (activeRuleset === undefined) return candidates[0];
+  return candidates.find(c => c.rulesetId === activeRuleset) ?? candidates.find(c => c.rulesetId === undefined);
+}
+
+/**
+ * Homebrew-first, official fallback — the single-id version of
+ * mergeSpellIndex's precedence. `activeRuleset`, when passed, makes this
+ * ruleset-aware via pickByRuleset (see above) — a homebrew candidate that
+ * resolves by id but is tagged for a DIFFERENT ruleset (with no untagged
+ * fallback candidate sharing that id) is treated as not found here, never
+ * silently returned as if compatible, and a same-id homebrew entry tagged
+ * for the REQUESTED ruleset always wins even if it's not array-first.
+ * Callers that need to know WHY something didn't resolve (e.g. "belongs to
+ * a different ruleset" vs. "doesn't exist at all") should use
+ * rulesetChange.ts's own compatibility categorization instead, which already
+ * distinguishes those two cases via a structured Issue. Omit `activeRuleset`
+ * to resolve unconditionally, exactly as before (every pre-existing call
+ * site — this is additive, not a breaking change).
+ */
+export function resolveSpellById(id: string, homebrewSpells: Spell[], activeRuleset?: RulesetId): Spell | undefined {
+  const candidates = homebrewSpells.filter(s => s.id === id);
+  const homebrew = pickByRuleset(candidates, activeRuleset);
+  if (homebrew) return homebrew;
+  // Homebrew candidate(s) exist for this id but none fit the requested
+  // ruleset — homebrew already wins by id precedence, so this must NOT fall
+  // through to an official spell that happens to share the same id.
+  if (candidates.length > 0) return undefined;
+  const official = spellRepo.getSpellSync(id);
+  if (!official) return undefined;
+  return matchesRuleset(official.rulesetId, activeRuleset) ? official : undefined;
 }
 
 /** Official item index + homebrew, deduped by id (homebrew wins), homebrew filtered by ruleset. */
@@ -44,9 +93,18 @@ export function mergeItemIndex(homebrewItems: Item[], activeRuleset?: RulesetId)
   return [...official, ...inScope.map(toItemIndexEntry)];
 }
 
-/** Homebrew-first, official fallback — the single-id version of mergeItemIndex's precedence. */
-export function resolveItemById(id: string, homebrewItems: Item[]): Item | undefined {
-  return homebrewItems.find(i => i.id === id) ?? itemRepo.getItemSync(id);
+/** Homebrew-first, official fallback — the single-id version of
+ *  mergeItemIndex's precedence. `activeRuleset` behaves exactly as
+ *  resolveSpellById's own parameter does — see that function's doc comment,
+ *  including the pickByRuleset same-id-multiple-editions handling. */
+export function resolveItemById(id: string, homebrewItems: Item[], activeRuleset?: RulesetId): Item | undefined {
+  const candidates = homebrewItems.filter(i => i.id === id);
+  const homebrew = pickByRuleset(candidates, activeRuleset);
+  if (homebrew) return homebrew;
+  if (candidates.length > 0) return undefined;
+  const official = itemRepo.getItemSync(id);
+  if (!official) return undefined;
+  return matchesRuleset(official.rulesetId, activeRuleset) ? official : undefined;
 }
 
 /**

@@ -1,20 +1,30 @@
 // src/components/sheet/AddSpellModal.tsx
 // In-sheet spell browser — add any spell to a character at any time.
 // Rich multi-axis filtering over the fields the Spell type actually carries:
-//   level, school, class, casting time (action type), duration, concentration,
-//   ritual, components (V/S/M).
+//   level, school, class, casting time (action type), concentration, ritual,
+//   Official/Homebrew.
 //
-// Damage-type / saving-throw / subclass / source-book filters are intentionally
-// NOT offered: those fields aren't structured on the Spell type, so a filter
-// would be unreliable. They can be added once spell data is enriched.
+// Ruleset, Source/Pack, and Components (V/S/M) are NOT offered: all three
+// live only on the full Spell record (Tier 2), not the lightweight
+// SpellIndexEntry (Tier 1) this browser filters against — bulk-loading
+// Tier 2 for the whole pool just to filter would mean reloading the full
+// spell catalog per keystroke. BLOCKED until spellRepo's Tier-1 index
+// (spellRepo.ts's web array + spellRepo.native.ts's SQLite `spells` table)
+// is extended to carry those fields. Damage-type/saving-throw/subclass
+// filters are also not offered: not structured fields on Spell at all.
 import { useState, useMemo, useEffect } from 'react';
 import {
   Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, SectionList,
 } from 'react-native';
-import { Entity, Spell } from '../../engine/types';
+import { Entity, Spell, CharClass, matchesRuleset } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
 import type { SpellIndexEntry } from '../../content/spellRepo.types';
 import { mergeSpellIndex } from '../../content/contentResolution';
+import { actionType, ACTION_TYPES } from '../../content/spellFilterUtils';
+import { spellSortOptions } from '../../content/spells/spellBrowse';
+import { classDisplayName } from '../../content/classes/classBrowse';
+import { sortByOption } from '../../content/contentQuery';
+import { SortControl } from '../SortControl';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
@@ -23,28 +33,33 @@ interface Props {
   entity:  Entity;
   onAdd:   (spellId: string, isCantrip: boolean) => void;
   onClose: () => void;
-}
-
-// Casting-time → action-type bucket, for the action-type filter.
-function actionType(s: SpellIndexEntry): string {
-  const t = s.castingTime.toLowerCase();
-  if (t.includes('bonus')) return 'Bonus Action';
-  if (t.includes('reaction')) return 'Reaction';
-  if (t.includes('action')) return 'Action';
-  if (t.includes('minute') || t.includes('hour')) return 'Ritual / Long';
-  return 'Other';
+  /** Preset for the Official/Homebrew chip on open — e.g. the "Browse Spell
+   *  Library" vs "Browse Homebrew" split in an "+ Add Additional Spell"
+   *  menu. Defaults to 'all'; the chip stays fully editable afterward. */
+  initialOfficialFilter?: 'all' | 'official' | 'homebrew';
 }
 
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
-const ACTION_TYPES = ['Action', 'Bonus Action', 'Reaction', 'Ritual / Long'];
 
-export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
+export function AddSpellModal({ visible, entity, onAdd, onClose, initialOfficialFilter = 'all' }: Props) {
   const homebrewSpells = useHomebrewStore(s => s.spells);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  const allClasses = getMergedContentDB().classes as CharClass[];
 
   // Merges the lightweight official index (Tier 1 — id/name/level/school/
   // classes/castingTime/ritual/concentration, no description) with homebrew,
-  // which overrides by id — see contentResolution.ts.
-  const allSpells = useMemo<SpellIndexEntry[]>(() => mergeSpellIndex(homebrewSpells), [homebrewSpells]);
+  // which overrides by id — see contentResolution.ts. LIVE-RULESET-2 (item
+  // 7): base-filtered by the character's own entity.rulesetId via the same
+  // "untagged = shared" rule every other content pool uses — an untagged
+  // spell (nearly all of them, spells have no real 5.5e-tagged content yet)
+  // stays visible regardless; a spell explicitly tagged for a DIFFERENT
+  // ruleset than the character's own is hidden. The manual Ruleset filter
+  // chip row below stays a separate, narrower, player-driven override on
+  // top of this base filter, not a replacement for it.
+  const allSpells = useMemo<SpellIndexEntry[]>(
+    () => mergeSpellIndex(homebrewSpells).filter(s => matchesRuleset(s.rulesetId, entity.rulesetId)),
+    [homebrewSpells, entity.rulesetId],
+  );
 
   const homebrewIds = useMemo(() => new Set(homebrewSpells.map(s => s.id)), [homebrewSpells]);
 
@@ -68,7 +83,22 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
   const [actionFilter, setActionFilter] = useState<string | null>(null);
   const [concOnly,     setConcOnly]     = useState(false);
   const [ritualOnly,   setRitualOnly]   = useState(false);
-  const [sort,         setSort]         = useState<'name' | 'level'>('level');
+  const [officialFilter, setOfficialFilter] = useState<'all' | 'official' | 'homebrew'>(initialOfficialFilter);
+  // TIER1-EXT-1: Ruleset/Components(V/S/M) — now real, Tier-1 fields.
+  const [rulesetFilter, setRulesetFilter] = useState<string | null>(null);
+  const [componentFilter, setComponentFilter] = useState<Set<string>>(new Set());
+  // LIVE-RULESET-2 (item 8): this modal stays mounted across opens (visible
+  // toggles, the component doesn't unmount), so a manually-chosen Ruleset
+  // chip survives a live character ruleset switch. Left alone, it would
+  // become an impossible stale filter — exact-matching a ruleset the
+  // character (and the base filter above) has already moved on from,
+  // potentially hiding every result. Reset ONLY this one filter on a real
+  // ruleset change; every other filter/search/sort is untouched.
+  useEffect(() => {
+    setRulesetFilter(null);
+  }, [entity.rulesetId]);
+  const sortOptions = spellSortOptions(s => homebrewIds.has(s.id));
+  const [sort,         setSort]         = useState('level');
 
   // Distinct schools & classes present, for the chip rows.
   const schools = useMemo(
@@ -77,6 +107,14 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
   );
   const classes = useMemo(
     () => Array.from(new Set(allSpells.flatMap(s => s.classes ?? []))).sort(),
+    [allSpells],
+  );
+  const rulesets = useMemo(
+    () => Array.from(new Set(allSpells.map(s => s.rulesetId).filter((r): r is NonNullable<typeof r> => !!r))).map(String).sort(),
+    [allSpells],
+  );
+  const components = useMemo(
+    () => Array.from(new Set(allSpells.flatMap(s => s.components ?? []))).sort(),
     [allSpells],
   );
 
@@ -89,6 +127,9 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
     if (actionFilter && actionType(s) !== actionFilter) return false;
     if (concOnly && !s.concentration) return false;
     if (ritualOnly && !s.ritual) return false;
+    if (officialFilter !== 'all' && (officialFilter === 'homebrew') !== homebrewIds.has(s.id)) return false;
+    if (rulesetFilter && s.rulesetId !== rulesetFilter) return false;
+    if (componentFilter.size > 0 && !Array.from(componentFilter).some(c => (s.components ?? []).includes(c))) return false;
     return true;
   });
 
@@ -101,26 +142,23 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
       if (!m.has(s.level)) m.set(s.level, []);
       m.get(s.level)!.push(s);
     }
-    for (const [, list] of m) {
-      list.sort((a, b) => sort === 'name'
-        ? a.name.localeCompare(b.name)
-        : (a.school.localeCompare(b.school) || a.name.localeCompare(b.name)));
-    }
     const levels = Array.from(m.keys()).sort((a, b) => a - b);
     return levels.map(lvl => ({
       level: lvl,
       title: lvl === 0 ? 'CANTRIPS' : `LEVEL ${lvl}`,
-      data:  m.get(lvl)!,
+      data:  sortByOption(m.get(lvl)!, sortOptions, sort),
     }));
-  }, [filtered, sort]);
+  }, [filtered, sort, sortOptions]);
 
   const activeFilterCount =
     (levelFilter !== null ? 1 : 0) + (schoolFilter ? 1 : 0) + (classFilter ? 1 : 0) +
-    (actionFilter ? 1 : 0) + (concOnly ? 1 : 0) + (ritualOnly ? 1 : 0);
+    (actionFilter ? 1 : 0) + (concOnly ? 1 : 0) + (ritualOnly ? 1 : 0) +
+    (officialFilter !== 'all' ? 1 : 0) + (rulesetFilter ? 1 : 0) + componentFilter.size;
 
   function clearFilters() {
     setLevelFilter(null); setSchoolFilter(null); setClassFilter(null);
     setActionFilter(null); setConcOnly(false); setRitualOnly(false);
+    setOfficialFilter('all'); setRulesetFilter(null); setComponentFilter(new Set());
   }
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -158,19 +196,19 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
 
           {/* Filters dropdown toggle */}
           <View style={s.filterBar}>
-            <Pressable style={s.filterToggle} onPress={() => setFiltersOpen(o => !o)}>
-              <Text style={s.filterToggleTxt}>
-                {filtersOpen ? '▲' : '▼'} Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-              </Text>
-            </Pressable>
-            <Pressable style={s.sortInline} onPress={() => setSort(v => v === 'level' ? 'name' : 'level')}>
-              <Text style={s.sortInlineTxt}>{sort === 'level' ? '↕ By level' : '↕ A–Z'}</Text>
-            </Pressable>
-            {activeFilterCount > 0 && (
-              <Pressable style={s.clearBtn} onPress={clearFilters}>
-                <Text style={s.clearTxt}>Clear ({activeFilterCount})</Text>
+            <View style={s.filterBarLeft}>
+              <Pressable style={s.filterToggle} onPress={() => setFiltersOpen(o => !o)}>
+                <Text style={s.filterToggleTxt}>
+                  {filtersOpen ? '▲' : '▼'} Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                </Text>
               </Pressable>
-            )}
+              {activeFilterCount > 0 && (
+                <Pressable style={s.clearBtn} onPress={clearFilters}>
+                  <Text style={s.clearTxt}>Clear ({activeFilterCount})</Text>
+                </Pressable>
+              )}
+            </View>
+            <SortControl options={sortOptions} value={sort} onChange={setSort} />
           </View>
 
           {filtersOpen && (
@@ -201,7 +239,7 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
                   style={s.chipRow} contentContainerStyle={s.chipRowContent}>
                   <FilterChip label="All classes" active={!classFilter} onPress={() => setClassFilter(null)} />
                   {classes.map(c => (
-                    <FilterChip key={c} label={cap(c)} active={classFilter === c}
+                    <FilterChip key={c} label={classDisplayName(c, allClasses)} active={classFilter === c}
                       onPress={() => setClassFilter(p => p === c ? null : c)} />
                   ))}
                 </ScrollView>
@@ -217,6 +255,41 @@ export function AddSpellModal({ visible, entity, onAdd, onClose }: Props) {
                 <FilterChip label="🧠 Concentration" active={concOnly} onPress={() => setConcOnly(v => !v)} />
                 <FilterChip label="📿 Ritual" active={ritualOnly} onPress={() => setRitualOnly(v => !v)} />
               </ScrollView>
+
+              {/* Official/Homebrew */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                style={s.chipRow} contentContainerStyle={s.chipRowContent}>
+                <FilterChip label="All" active={officialFilter === 'all'} onPress={() => setOfficialFilter('all')} />
+                <FilterChip label="Official" active={officialFilter === 'official'} onPress={() => setOfficialFilter(p => p === 'official' ? 'all' : 'official')} />
+                <FilterChip label="Homebrew" active={officialFilter === 'homebrew'} onPress={() => setOfficialFilter(p => p === 'homebrew' ? 'all' : 'homebrew')} />
+              </ScrollView>
+
+              {/* Ruleset — real, sparsely populated; TIER1-EXT-1 */}
+              {rulesets.length > 1 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                  style={s.chipRow} contentContainerStyle={s.chipRowContent}>
+                  <FilterChip label="All rulesets" active={!rulesetFilter} onPress={() => setRulesetFilter(null)} />
+                  {rulesets.map(r => (
+                    <FilterChip key={r} label={r} active={rulesetFilter === r}
+                      onPress={() => setRulesetFilter(p => p === r ? null : r)} />
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Components (V/S/M) — real, TIER1-EXT-1 */}
+              {components.length > 1 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                  style={s.chipRow} contentContainerStyle={s.chipRowContent}>
+                  {components.map(c => (
+                    <FilterChip key={c} label={c} active={componentFilter.has(c)}
+                      onPress={() => setComponentFilter(prev => {
+                        const next = new Set(prev);
+                        if (next.has(c)) next.delete(c); else next.add(c);
+                        return next;
+                      })} />
+                  ))}
+                </ScrollView>
+              )}
             </View>
           )}
 
@@ -291,8 +364,6 @@ function FilterChip({ label, active, onPress }: { label: string; active: boolean
   );
 }
 
-function cap(str: string): string { return str.charAt(0).toUpperCase() + str.slice(1); }
-
 const s = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000000cc', justifyContent: 'flex-end' },
   sheet: {
@@ -308,19 +379,14 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 3,
   },
   clearTxt: { fontSize: FontSize.xs, color: Colors.red, fontWeight: FontWeight.bold },
-  filterBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: 2 },
+  filterBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: 2 },
+  filterBarLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   filterToggle: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
     paddingHorizontal: Spacing.sm, paddingVertical: 5,
   },
   filterToggleTxt: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
-  sortInline: {
-    backgroundColor: Colors.blue + '18', borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.blue + '44',
-    paddingHorizontal: Spacing.sm, paddingVertical: 5,
-  },
-  sortInlineTxt: { fontSize: FontSize.xs, color: Colors.blue, fontWeight: FontWeight.bold },
   filterPanel: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,

@@ -3,12 +3,12 @@
 // Supports adding items from the content DB (or homebrew),
 // removing items, and adjusting money per denomination.
 // Large creature rules are surfaced when the character is Large-sized.
-import { useState } from 'react';
+import { useState, useMemo, useEffect, memo } from 'react';
 import {
   ScrollView, View, Text, Pressable, StyleSheet,
   Modal, TextInput, SectionList, Image,
 } from 'react-native';
-import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engine/types';
+import { Entity, ItemInstance, Item, Currency, CampaignRules, matchesRuleset, RulesetId } from '../../engine/types';
 import { Alert } from '../../utils/alert';
 import { applyStatModifiers, collectAllEffects } from '../../engine/pipeline';
 import type { ItemIndexEntry } from '../../content/itemRepo.types';
@@ -17,7 +17,19 @@ import { useHomebrewStore } from '../../store/homebrewStore';
 import { usesLargeCreatureWeaponDice } from '../../engine/houseRules';
 import { ALL_INFUSIONS, maxInfusedItems } from '../../content/infusions';
 import { itemRequiresAttunement, attunementCap, countAttuned } from '../../engine/inventory';
+import { NonSrdBadge, isNonSrd } from '../NonSrdBadge';
+import {
+  isMagic, isWeapon, isRangedWeapon, isMartialWeapon, armorWeight, isArmorItem,
+  isShield, isAmmo, isToolOrKit, isFocus, itemCategory, ITEM_CATEGORY_LABELS,
+  type ItemCategoryId, RARITY_TIERS, rarityOf, itemSortOptions, buildSimpleCustomItem,
+} from '../../content/items/itemBrowse';
+import { sortByOption } from '../../content/contentQuery';
+import { SortControl } from '../SortControl';
+import { FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips } from '../FilterChipRow';
+import { useBrowseStateStore } from '../../store/browseStateStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+
+const ITEM_PICKER_SCREEN_KEY = 'item_picker';
 
 const DAMAGE_TYPES = [
   'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic',
@@ -47,6 +59,15 @@ const COIN_COLORS: Record<keyof Currency, string> = {
 };
 
 // ── Item categories ───────────────────────────────────────────────────────────
+// Classification helpers (isMagic/isWeapon/isRangedWeapon/isMartialWeapon/
+// armorWeight/isArmorItem/isShield/isAmmo/isToolOrKit/isFocus) now live in
+// src/content/items/itemBrowse.ts as the shared, independent-axis primitives
+// — see that file's header. ITEM_CATEGORIES/categorise below stay as the
+// results screen's own PRESENTATION grouping (a combined "Magic Weapons —
+// Martial Melee"-style label reads fine as a section header); the actual
+// FILTER controls in AddItemModal go through itemBrowse.ts's independent
+// Category/Magical/WeaponClass/WeaponRange/ArmorWeight fields instead of
+// matching against one of these 25 combined labels.
 
 type ItemCategory = {
   label:  string;
@@ -54,166 +75,8 @@ type ItemCategory = {
   test:   (item: ItemIndexEntry) => boolean;
 };
 
-// ── Classification helpers ─────────────────────────────────────────────
-// These all operate on ItemIndexEntry (Tier 1 — id/name/weight/cost/
-// properties/hasDamageEffect/weaponRange) rather than the full Item record,
-// since the Add Item browse list works off the lightweight index. A full
-// Item satisfies ItemIndexEntry structurally, so these are just as usable
-// wherever a real Item is already in hand (they're pure inspection
-// functions — no mutation, no dependency on `features` beyond the two
-// derived fields).
-
-function propsLower(i: ItemIndexEntry): string[] {
-  return i.properties.map(p => p.toLowerCase());
-}
-function isMagic(i: ItemIndexEntry): boolean {
-  return propsLower(i).some(p => p.includes('magic') || p.includes('wondrous') || p.includes('artifact'));
-}
-// Canonical D&D 5e base weapons → { martial, ranged }. Magic weapons are typed
-// only "Magic Weapon", so we recover the class from the base-weapon name in the
-// item name (e.g. "Flame Tongue Greatsword" → greatsword → martial melee).
-type WeaponClass = { martial: boolean; ranged: boolean };
-const BASE_WEAPONS: Record<string, WeaponClass> = {
-  club: { martial: false, ranged: false },
-  dagger: { martial: false, ranged: false },
-  greatclub: { martial: false, ranged: false },
-  handaxe: { martial: false, ranged: false },
-  javelin: { martial: false, ranged: false },
-  'light hammer': { martial: false, ranged: false },
-  mace: { martial: false, ranged: false },
-  quarterstaff: { martial: false, ranged: false },
-  sickle: { martial: false, ranged: false },
-  spear: { martial: false, ranged: false },
-  yklwa: { martial: false, ranged: false },
-  'light crossbow': { martial: false, ranged: true },
-  dart: { martial: false, ranged: true },
-  shortbow: { martial: false, ranged: true },
-  sling: { martial: false, ranged: true },
-  battleaxe: { martial: true, ranged: false },
-  flail: { martial: true, ranged: false },
-  glaive: { martial: true, ranged: false },
-  greataxe: { martial: true, ranged: false },
-  greatsword: { martial: true, ranged: false },
-  halberd: { martial: true, ranged: false },
-  lance: { martial: true, ranged: false },
-  longsword: { martial: true, ranged: false },
-  maul: { martial: true, ranged: false },
-  morningstar: { martial: true, ranged: false },
-  pike: { martial: true, ranged: false },
-  rapier: { martial: true, ranged: false },
-  scimitar: { martial: true, ranged: false },
-  shortsword: { martial: true, ranged: false },
-  trident: { martial: true, ranged: false },
-  'war pick': { martial: true, ranged: false },
-  warhammer: { martial: true, ranged: false },
-  whip: { martial: true, ranged: false },
-  blowgun: { martial: true, ranged: true },
-  'hand crossbow': { martial: true, ranged: true },
-  'heavy crossbow': { martial: true, ranged: true },
-  longbow: { martial: true, ranged: true },
-  net: { martial: true, ranged: true },
-};
-const WEAPON_WORD_FALLBACK: Record<string, WeaponClass> = {
-  sword: { martial: true, ranged: false },
-  blade: { martial: true, ranged: false },
-  axe: { martial: true, ranged: false },
-  hammer: { martial: true, ranged: false },
-  bow: { martial: true, ranged: true },
-};
-
-type ArmorWeight = 'heavy' | 'medium' | 'light';
-const BASE_ARMORS: Record<string, ArmorWeight> = {
-  padded: 'light', leather: 'light', 'studded leather': 'light',
-  hide: 'medium', 'chain shirt': 'medium', 'scale mail': 'medium',
-  breastplate: 'medium', 'half plate': 'medium',
-  'ring mail': 'heavy', 'chain mail': 'heavy', splint: 'heavy', plate: 'heavy',
-};
-// Words that signal an item is ARMOR even when no specific base armor is named
-// (e.g. "Adamantine Armor", "Demon Armor", "Elven Chain", "Glamoured Studded").
-// Weight is unknown for these, so they route to the "— Other" armor bucket.
-const ARMOR_WORD_HINTS = ['armor', 'mail', 'plate', 'cuirass', 'breastplate', 'chain'];
-
-function hasProp(i: ItemIndexEntry, kw: string): boolean {
-  return propsLower(i).some(p => p.includes(kw));
-}
-
-/** Recover a weapon's { martial, ranged } class from its name, or null. */
-function classifyWeaponByName(i: ItemIndexEntry): WeaponClass | null {
-  const name = i.name.toLowerCase();
-  const bases = Object.keys(BASE_WEAPONS).sort((a, b) => b.length - a.length);
-  for (const base of bases) {
-    if (name.includes(base)) return BASE_WEAPONS[base];
-  }
-  const words = Object.keys(WEAPON_WORD_FALLBACK).sort((a, b) => b.length - a.length);
-  for (const w of words) {
-    if (name.includes(w)) return WEAPON_WORD_FALLBACK[w];
-  }
-  return null;
-}
-
-/** True if the item is a weapon (mundane attack feature, "magic weapon"
- *  property, or a recognizable base-weapon name). */
-function isWeapon(i: ItemIndexEntry): boolean {
-  if (i.hasDamageEffect) return true;
-  if (hasProp(i, 'magic weapon')) return true;
-  return classifyWeaponByName(i) !== null;
-}
-function isRangedWeapon(i: ItemIndexEntry): boolean {
-  const cls = classifyWeaponByName(i);
-  if (cls) return cls.ranged;
-  const p = propsLower(i);
-  if (p.some(x => x.includes('ammunition') || x.includes('thrown'))) return true;
-  return i.hasDamageEffect &&
-    !!i.weaponRange && !['5 feet', 'touch', '10 feet'].includes(i.weaponRange);
-}
-function isMartialWeapon(i: ItemIndexEntry): boolean {
-  const cls = classifyWeaponByName(i);
-  if (cls) return cls.martial;
-  const p = propsLower(i);
-  if (p.some(x => x.includes('martial'))) return true;
-  if (p.some(x => x.includes('simple'))) return false;
-  return p.some(x => ['heavy', 'reach', 'two-handed', 'special'].some(kw => x.includes(kw)));
-}
-
-/** Recover armor weight from properties or base-armor name, or null. */
-function armorWeight(i: ItemIndexEntry): ArmorWeight | null {
-  const p = propsLower(i);
-  if (p.some(x => x.includes('heavy armor')))  return 'heavy';
-  if (p.some(x => x.includes('medium armor'))) return 'medium';
-  if (p.some(x => x.includes('light armor')))  return 'light';
-  const name = i.name.toLowerCase();
-  const bases = Object.keys(BASE_ARMORS).sort((a, b) => b.length - a.length);
-  for (const base of bases) {
-    if (name.includes(base)) return BASE_ARMORS[base];
-  }
-  return null;
-}
-/** True if the item is body armor (specific weight OR a generic armor name). */
-function isArmorItem(i: ItemIndexEntry): boolean {
-  if (hasProp(i, 'armor')) return true;
-  if (armorWeight(i) !== null) return true;
-  const name = i.name.toLowerCase();
-  // Shields are handled separately; don't let "mail"/"chain" steal a shield.
-  if (isShield(i)) return false;
-  return ARMOR_WORD_HINTS.some(w => name.includes(w));
-}
 function isArmor(i: ItemIndexEntry, weight: 'heavy' | 'medium' | 'light'): boolean {
   return armorWeight(i) === weight;
-}
-function isShield(i: ItemIndexEntry): boolean {
-  return hasProp(i, 'shield') || /\bshield\b/.test(i.name.toLowerCase());
-}
-function isAmmo(i: ItemIndexEntry): boolean {
-  if (hasProp(i, 'ammunition')) return true;
-  return /\b(arrow|arrows|bolt|bolts|bullet|bullets|sling stone|needle)\b/.test(i.name.toLowerCase());
-}
-function isToolOrKit(i: ItemIndexEntry): boolean {
-  if (propsLower(i).some(p => ['tool', 'kit', 'instrument', 'artisan'].some(kw => p.includes(kw)))) return true;
-  return /\b(tools|kit|instrument|utensils|supplies)\b/.test(i.name.toLowerCase());
-}
-function isFocus(i: ItemIndexEntry): boolean {
-  if (propsLower(i).some(p => ['focus', 'spellbook', 'component pouch'].some(kw => p.includes(kw)))) return true;
-  return /\b(wand|rod|staff|orb|crystal|talisman|spellbook|component pouch)\b/.test(i.name.toLowerCase());
 }
 
 const ITEM_CATEGORIES: ItemCategory[] = [
@@ -285,63 +148,21 @@ function categorise(items: ItemIndexEntry[]): { cat: ItemCategory; items: ItemIn
 }
 
 // ── Sorting ─────────────────────────────────────────────────────────────
-
-type SortMode = 'name' | 'value' | 'weight' | 'rarity';
-
-const SORT_LABELS: Record<SortMode, string> = {
-  name:   'A–Z',
-  value:  'Value',
-  weight: 'Weight',
-  rarity: 'Rarity',
-};
-
-// D&D rarity tiers (low → high). Items with no rarity sort as 0 (mundane).
-const RARITY_RANK: Record<string, number> = {
-  common: 1, uncommon: 2, rare: 3, 'very rare': 4, legendary: 5, artifact: 6,
-};
-function rarityRank(i: ItemIndexEntry): number {
-  for (const p of i.properties) {
-    const r = RARITY_RANK[p.toLowerCase()];
-    if (r) return r;
-  }
-  return 0;
-}
-
-/** Parses a cost string ("50 gp", "2 sp", "—") into a copper-piece value for sorting. */
-function costInCopper(cost: string): number {
-  if (!cost || cost === '—') return -1; // unknown cost sorts last on value
-  const m = cost.match(/([\d.]+)\s*(pp|gp|ep|sp|cp)/i);
-  if (!m) return -1;
-  const amt = parseFloat(m[1]);
-  const unit = m[2].toLowerCase();
-  const mult = unit === 'pp' ? 1000 : unit === 'gp' ? 100 : unit === 'ep' ? 50 : unit === 'sp' ? 10 : 1;
-  return amt * mult;
-}
-
-function sortItems(items: ItemIndexEntry[], mode: SortMode): ItemIndexEntry[] {
-  const copy = [...items];
-  switch (mode) {
-    case 'value':
-      // Highest value first; unknown (−1) sinks to the bottom.
-      return copy.sort((a, b) => costInCopper(b.cost) - costInCopper(a.cost));
-    case 'weight':
-      // Lightest first.
-      return copy.sort((a, b) => (a.weight ?? 0) - (b.weight ?? 0));
-    case 'rarity':
-      // Highest rarity first, then alphabetical within a tier.
-      return copy.sort((a, b) => rarityRank(b) - rarityRank(a) || a.name.localeCompare(b.name));
-    case 'name':
-    default:
-      return copy.sort((a, b) => a.name.localeCompare(b.name));
-  }
-}
+// Sort options (A–Z/Z–A/Rarity/Value/Weight/Source) now come from the
+// shared itemSortOptions()/SortControl (src/content/items/itemBrowse.ts),
+// same pattern as every other content type this pass.
 
 // ── Add Item Modal ─────────────────────────────────────────────────────────────
 
 function AddItemModal({
-  visible, equippedIds, carriedIds, onAdd, onClose,
+  visible, entityRulesetId, equippedIds, carriedIds, onAdd, onClose,
 }: {
   visible:     boolean;
+  /** LIVE-RULESET-2 (item 7): the character's entity.rulesetId, passed by
+   *  name rather than the whole Entity — this modal otherwise has no need
+   *  for one. Base-filters the pool the same "untagged = shared" way every
+   *  other content pool does. */
+  entityRulesetId: Entity['rulesetId'];
   equippedIds: Set<string>;
   carriedIds:  Set<string>;
   onAdd:       (itemId: string) => void;
@@ -349,11 +170,66 @@ function AddItemModal({
 }) {
   const homebrewItems = useHomebrewStore(s => s.items);
   const saveHomebrew  = useHomebrewStore(s => s.saveItem);
-  const [search,    setSearch]    = useState('');
+  const homebrewItemIds = new Set(homebrewItems.map(i => i.id));
+  // BROWSE-STATE-1: this modal is conditionally mounted (`{addOpen &&
+  // <AddItemModal/>}` in the parent, for perf — see that call site's own
+  // comment), so its internal state would otherwise reset every time it's
+  // reopened. Restore/persist via the shared browseStateStore instead.
+  const savedItemPicker = useBrowseStateStore.getState().getBrowseState(ITEM_PICKER_SCREEN_KEY);
+  const setBrowseState = useBrowseStateStore(s => s.setBrowseState);
+  const savedItemFilters = savedItemPicker.filters ?? {};
+  const [search,    setSearch]    = useState(savedItemPicker.search ?? '');
   const [expanded, setExpanded]  = useState<string | null>(null);
-  // Active category filter (null = all). When set, only that category shows.
-  const [catFilter, setCatFilter] = useState<string | null>(null);
-  const [sortMode,  setSortMode]  = useState<SortMode>('name');
+  // Independent-axis filters (SHARED-QUERY-1): Category/Magical/WeaponClass/
+  // WeaponRange/ArmorWeight/Rarity are each their own field — never combined
+  // into one taxonomy string like the old "Magic Weapons — Martial Melee"
+  // catFilter this replaces. See itemBrowse.ts's header comment.
+  const [categoryFilter, setCategoryFilter] = useState<ItemCategoryId | null>((savedItemFilters.categoryFilter as ItemCategoryId) ?? null);
+  const [magicalFilter, setMagicalFilter] = useState<'all' | 'magical' | 'mundane'>((savedItemFilters.magicalFilter as 'all' | 'magical' | 'mundane') ?? 'all');
+  const [weaponClassFilter, setWeaponClassFilter] = useState<'martial' | 'simple' | null>((savedItemFilters.weaponClassFilter as 'martial' | 'simple') ?? null);
+  const [weaponRangeFilter, setWeaponRangeFilter] = useState<'melee' | 'ranged' | null>((savedItemFilters.weaponRangeFilter as 'melee' | 'ranged') ?? null);
+  const [armorWeightFilter, setArmorWeightFilter] = useState<'heavy' | 'medium' | 'light' | null>((savedItemFilters.armorWeightFilter as 'heavy' | 'medium' | 'light') ?? null);
+  const [rarityFilter, setRarityFilter] = useState<Set<string>>(new Set((savedItemFilters.rarityFilter as string[]) ?? []));
+  const sortOptions = itemSortOptions(i => homebrewItemIds.has(i.id));
+  const [sort, setSort] = useState(savedItemPicker.sort ?? 'name_asc');
+  // Official/Homebrew — real, homebrewItemIds membership (already computed
+  // below for the row badge, now also drives an actual filter). Requires
+  // Attunement — real, itemRequiresAttunement() works off Tier-1 fields
+  // (id/properties) alone, no Tier-2 load needed. Ruleset — TIER1-EXT-1:
+  // now a real Tier-1 field too (ItemIndexEntry was extended). Source/Pack
+  // via getContentProvenance() is not wired here: Item has no per-item
+  // sourcebook field at all (only Feat does), so the derived label would
+  // only ever be "SRD 5.1" or undefined — the existing NonSrdBadge per row
+  // already communicates that narrower signal.
+  const [officialFilter, setOfficialFilter] = useState<'all' | 'official' | 'homebrew'>((savedItemFilters.officialFilter as 'all' | 'official' | 'homebrew') ?? 'all');
+  const [attunementOnly, setAttunementOnly] = useState(!!savedItemFilters.attunementOnly);
+  // LIVE-RULESET-2 (item 8): this filter is persisted via browseStateStore
+  // and shared by KEY across every character/session (ITEM_PICKER_SCREEN_KEY
+  // isn't per-character) — restoring it blindly on mount (this modal is
+  // conditionally mounted, remounting fresh every time the picker opens)
+  // could resurrect a filter chosen for a DIFFERENT character's ruleset,
+  // which combined with the ruleset-aware base filter below could leave
+  // the picker showing zero items with no obvious reason why. Restored
+  // only when it was persisted alongside a matching rulesetFilterSetFor —
+  // every other persisted filter/search/sort restores unconditionally, so
+  // this doesn't cost any of that preservation.
+  const [rulesetFilter, setRulesetFilter] = useState<string | null>(
+    savedItemFilters.rulesetFilterSetFor === entityRulesetId ? (savedItemFilters.rulesetFilter as string) ?? null : null
+  );
+  useEffect(() => {
+    setBrowseState(ITEM_PICKER_SCREEN_KEY, {
+      search, sort,
+      filters: {
+        categoryFilter, magicalFilter, weaponClassFilter, weaponRangeFilter, armorWeightFilter,
+        rarityFilter: Array.from(rarityFilter), officialFilter, attunementOnly, rulesetFilter,
+        // LIVE-RULESET-2 (item 8): which character's ruleset rulesetFilter
+        // was actually chosen under — read back on next mount to decide
+        // whether it's still valid. See the state init above.
+        rulesetFilterSetFor: entityRulesetId,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, sort, categoryFilter, magicalFilter, weaponClassFilter, weaponRangeFilter, armorWeightFilter, rarityFilter, officialFilter, attunementOnly, rulesetFilter, entityRulesetId]);
   // Quick-add custom item form
   const [quickOpen, setQuickOpen] = useState(false);
   const [qName,  setQName]  = useState('');
@@ -365,21 +241,9 @@ function AddItemModal({
   async function handleQuickAdd() {
     const name = qName.trim();
     if (!name) return;
-    const id = 'hb_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') + '_' + Date.now().toString(36);
-    const props = qType.trim() ? qType.split(',').map(p => p.trim().toLowerCase()).filter(Boolean) : [];
-    const custom: Item = {
-      id, name, weight: 0, cost: '\u2014',
-      properties: props,
-      features: [{
-        id: id + '_desc',
-        name,
-        description: qDesc.trim() || name,
-        source: { kind: 'item', refId: id },
-        level: null, effects: [], actions: [], choices: [], passive: true,
-      }],
-    };
+    const custom = buildSimpleCustomItem(name, qType, qDesc);
     await saveHomebrew('item', custom);
-    onAdd(id);
+    onAdd(custom.id);
     setQName(''); setQType(''); setQDesc(''); setQuickOpen(false);
   }
 
@@ -389,16 +253,43 @@ function AddItemModal({
   // official id would show up as two separate rows.)
   const allItems: ItemIndexEntry[] = mergeItemIndex(homebrewItems);
   const q = search.trim().toLowerCase();
-  const searchFiltered = q
-    ? allItems.filter(i => i.name.toLowerCase().includes(q) ||
-        i.properties.some(p => p.toLowerCase().includes(q)))
-    : allItems;
+  // LIVE-RULESET-2 (item 7/8): the manual Ruleset chip OVERRIDES the
+  // character's own ruleset when set (an explicit "show me ONLY this
+  // ruleset's items" ask), otherwise falls back to matchesRuleset against
+  // entityRulesetId — the same "untagged = shared, tagged-different =
+  // hidden" rule every other content pool uses, so the picker defaults to
+  // the character's own ruleset with nothing chosen. Stacking both
+  // (base-filter AND a differently-valued manual chip) would make the
+  // manual chip permanently show zero results whenever it names a ruleset
+  // other than the character's own — override, not intersect.
+  const effectiveRulesetFilter = (rulesetFilter as RulesetId | null) ?? entityRulesetId;
+  const searchFiltered = allItems
+    .filter(i => !q || i.name.toLowerCase().includes(q) || i.properties.some(p => p.toLowerCase().includes(q)))
+    .filter(i => officialFilter === 'all' || (officialFilter === 'homebrew') === homebrewItemIds.has(i.id))
+    .filter(i => !attunementOnly || itemRequiresAttunement(i))
+    .filter(i => matchesRuleset(i.rulesetId, effectiveRulesetFilter))
+    .filter(i => !categoryFilter || itemCategory(i) === categoryFilter)
+    .filter(i => magicalFilter === 'all' || (magicalFilter === 'magical') === isMagic(i))
+    .filter(i => !weaponClassFilter || (itemCategory(i) === 'weapon' && (weaponClassFilter === 'martial' ? isMartialWeapon(i) : !isMartialWeapon(i))))
+    .filter(i => !weaponRangeFilter || (itemCategory(i) === 'weapon' && (weaponRangeFilter === 'ranged' ? isRangedWeapon(i) : !isRangedWeapon(i))))
+    .filter(i => !armorWeightFilter || armorWeight(i) === armorWeightFilter)
+    .filter(i => rarityFilter.size === 0 || (rarityOf(i) !== null && rarityFilter.has(rarityOf(i)!)));
+  const availableItemRulesets = Array.from(new Set(allItems.map(i => i.rulesetId).filter((r): r is NonNullable<typeof r> => !!r))).map(String);
+  const availableRarities = RARITY_TIERS.filter(r => allItems.some(i => rarityOf(i) === r));
 
-  const allGroups = categorise(searchFiltered).map(g => ({
+  const groups = categorise(searchFiltered).map(g => ({
     ...g,
-    items: sortItems(g.items, sortMode),
+    items: sortByOption(g.items, sortOptions, sort),
   }));
-  const groups = catFilter ? allGroups.filter(g => g.cat.label === catFilter) : allGroups;
+  const activeFilterCount =
+    (categoryFilter ? 1 : 0) + (magicalFilter !== 'all' ? 1 : 0) + (weaponClassFilter ? 1 : 0) +
+    (weaponRangeFilter ? 1 : 0) + (armorWeightFilter ? 1 : 0) + rarityFilter.size +
+    (officialFilter !== 'all' ? 1 : 0) + (attunementOnly ? 1 : 0) + (rulesetFilter ? 1 : 0);
+  function clearAllItemFilters() {
+    setCategoryFilter(null); setMagicalFilter('all'); setWeaponClassFilter(null);
+    setWeaponRangeFilter(null); setArmorWeightFilter(null); setRarityFilter(new Set());
+    setOfficialFilter('all'); setAttunementOnly(false); setRulesetFilter(null);
+  }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -460,57 +351,103 @@ function AddItemModal({
             autoFocus
           />
 
-          {/* Filters dropdown toggle + sort inline */}
+          {/* Filters dropdown toggle */}
           <View style={addStyles.filterBar}>
             <Pressable style={addStyles.filterToggle} onPress={() => setFiltersOpen(o => !o)}>
               <Text style={addStyles.filterToggleTxt}>
-                {filtersOpen ? '▲' : '▼'} Filters{catFilter ? ' (1)' : ''}
+                {filtersOpen ? '▲' : '▼'} Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </Text>
             </Pressable>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}
-              style={addStyles.sortInlineRow} contentContainerStyle={addStyles.chipRowContent}>
-              {(Object.keys(SORT_LABELS) as SortMode[]).map(mode => (
-                <Pressable
-                  key={mode}
-                  style={[addStyles.sortBtn, sortMode === mode && addStyles.sortBtnActive]}
-                  onPress={() => setSortMode(mode)}
-                >
-                  <Text style={[addStyles.sortTxt, sortMode === mode && addStyles.sortTxtActive]}>
-                    {SORT_LABELS[mode]}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            <SortControl options={sortOptions} value={sort} onChange={setSort} />
           </View>
 
           {filtersOpen && (
             <View style={addStyles.filterPanel}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={addStyles.chipRow}
-                contentContainerStyle={addStyles.chipRowContent}
+              <FilterSection label="Category">
+                <FilterChipRow
+                  options={(Object.keys(ITEM_CATEGORY_LABELS) as ItemCategoryId[]).map(id => ({ id, label: ITEM_CATEGORY_LABELS[id] }))}
+                  value={categoryFilter}
+                  onChange={setCategoryFilter}
+                  scrollable
+                />
+              </FilterSection>
+              <FilterSection label="Magical / Mundane">
+                <FilterChipRow
+                  options={[{ id: 'magical' as const, label: 'Magical' }, { id: 'mundane' as const, label: 'Mundane' }]}
+                  value={magicalFilter === 'all' ? null : magicalFilter}
+                  onChange={v => setMagicalFilter(v ?? 'all')}
+                />
+              </FilterSection>
+              {categoryFilter === 'weapon' && (
+                <>
+                  <FilterSection label="Weapon Class">
+                    <FilterChipRow
+                      options={[{ id: 'martial' as const, label: 'Martial' }, { id: 'simple' as const, label: 'Simple' }]}
+                      value={weaponClassFilter}
+                      onChange={setWeaponClassFilter}
+                    />
+                  </FilterSection>
+                  <FilterSection label="Weapon Range">
+                    <FilterChipRow
+                      options={[{ id: 'melee' as const, label: 'Melee' }, { id: 'ranged' as const, label: 'Ranged' }]}
+                      value={weaponRangeFilter}
+                      onChange={setWeaponRangeFilter}
+                    />
+                  </FilterSection>
+                </>
+              )}
+              {categoryFilter === 'armor' && (
+                <FilterSection label="Armor Class">
+                  <FilterChipRow
+                    options={[{ id: 'heavy' as const, label: 'Heavy' }, { id: 'medium' as const, label: 'Medium' }, { id: 'light' as const, label: 'Light' }]}
+                    value={armorWeightFilter}
+                    onChange={setArmorWeightFilter}
+                  />
+                </FilterSection>
+              )}
+              {availableRarities.length > 0 && (
+                <FilterSection label="Rarity">
+                  <MultiSelectChipRow
+                    options={availableRarities.map(r => ({ id: r, label: r[0].toUpperCase() + r.slice(1) }))}
+                    values={rarityFilter}
+                    onChange={setRarityFilter}
+                  />
+                </FilterSection>
+              )}
+              <FilterSection label="Official / Homebrew">
+                <OfficialHomebrewChipRow value={officialFilter} onChange={setOfficialFilter} />
+              </FilterSection>
+              <Pressable
+                style={[addStyles.chip, attunementOnly && addStyles.chipActive, addStyles.attunementToggle]}
+                onPress={() => setAttunementOnly(v => !v)}
               >
-                <Pressable
-                  style={[addStyles.chip, !catFilter && addStyles.chipActive]}
-                  onPress={() => setCatFilter(null)}
-                >
-                  <Text style={[addStyles.chipTxt, !catFilter && addStyles.chipTxtActive]}>All</Text>
-                </Pressable>
-                {allGroups.map(({ cat, items }) => (
-                  <Pressable
-                    key={cat.label}
-                    style={[addStyles.chip, catFilter === cat.label && addStyles.chipActive]}
-                    onPress={() => setCatFilter(c => c === cat.label ? null : cat.label)}
-                  >
-                    <Text style={[addStyles.chipTxt, catFilter === cat.label && addStyles.chipTxtActive]}>
-                      {cat.emoji} {cat.label.replace('Weapons — ', '').replace(' Armor', '')} ({items.length})
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+                <Text style={[addStyles.chipTxt, attunementOnly && addStyles.chipTxtActive]}>Requires Attunement</Text>
+              </Pressable>
+              {availableItemRulesets.length > 1 && (
+                <FilterSection label="Ruleset">
+                  <FilterChipRow
+                    options={availableItemRulesets.map(r => ({ id: r, label: r }))}
+                    value={rulesetFilter}
+                    onChange={setRulesetFilter}
+                  />
+                </FilterSection>
+              )}
             </View>
           )}
+          <ActiveFilterChips
+            chips={[
+              ...(categoryFilter ? [{ key: 'cat', label: ITEM_CATEGORY_LABELS[categoryFilter], onClear: () => setCategoryFilter(null) }] : []),
+              ...(magicalFilter !== 'all' ? [{ key: 'magic', label: magicalFilter === 'magical' ? 'Magical' : 'Mundane', onClear: () => setMagicalFilter('all') }] : []),
+              ...(weaponClassFilter ? [{ key: 'wclass', label: weaponClassFilter === 'martial' ? 'Martial' : 'Simple', onClear: () => setWeaponClassFilter(null) }] : []),
+              ...(weaponRangeFilter ? [{ key: 'wrange', label: weaponRangeFilter === 'ranged' ? 'Ranged' : 'Melee', onClear: () => setWeaponRangeFilter(null) }] : []),
+              ...(armorWeightFilter ? [{ key: 'aweight', label: armorWeightFilter[0].toUpperCase() + armorWeightFilter.slice(1), onClear: () => setArmorWeightFilter(null) }] : []),
+              ...Array.from(rarityFilter).map(r => ({ key: `rarity_${r}`, label: r[0].toUpperCase() + r.slice(1), onClear: () => setRarityFilter(prev => { const n = new Set(prev); n.delete(r); return n; }) })),
+              ...(officialFilter !== 'all' ? [{ key: 'official', label: officialFilter === 'official' ? 'Official' : 'Homebrew', onClear: () => setOfficialFilter('all') }] : []),
+              ...(attunementOnly ? [{ key: 'attune', label: 'Requires Attunement', onClear: () => setAttunementOnly(false) }] : []),
+              ...(rulesetFilter ? [{ key: 'ruleset', label: rulesetFilter, onClear: () => setRulesetFilter(null) }] : []),
+            ]}
+            onClearAll={clearAllItemFilters}
+          />
 
           {/* Results grouped by category — SectionList for virtualization,
               since a broad search can force-expand many categories at once
@@ -527,7 +464,7 @@ function AddItemModal({
                 // Collapsed categories render zero items (still show their
                 // header) — same UX as before, but now virtualized for
                 // whichever section(s) actually have visible data.
-                data: (expanded === cat.label || !!q || catFilter === cat.label) ? items : [],
+                data: (expanded === cat.label || !!q || !!categoryFilter) ? items : [],
               }))}
               keyExtractor={item => item.id}
               showsVerticalScrollIndicator={false}
@@ -555,9 +492,12 @@ function AddItemModal({
                 return (
                   <View style={[addStyles.itemRow, owned && addStyles.itemRowOwned]}>
                     <View style={addStyles.itemInfo}>
-                      <Text style={[addStyles.itemName, owned && addStyles.itemNameOwned]}>
-                        {item.name}
-                      </Text>
+                      <View style={addStyles.itemNameLine}>
+                        <Text style={[addStyles.itemName, owned && addStyles.itemNameOwned]}>
+                          {item.name}
+                        </Text>
+                        {!homebrewItemIds.has(item.id) && isNonSrd(item.srd) && <NonSrdBadge />}
+                      </View>
                       {item.properties.length > 0 && (
                         <Text style={addStyles.itemProps} numberOfLines={1}>
                           {item.properties.join(' · ')}
@@ -629,7 +569,6 @@ const addStyles = StyleSheet.create({
   },
   quickAddBtnDisabled: { opacity: 0.4 },
   quickAddBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
-  chipRow: { flexGrow: 0, marginBottom: Spacing.xs },
   chipRowContent: { gap: Spacing.xs, paddingVertical: 2 },
   chip: {
     backgroundColor: Colors.surface, borderRadius: Radius.full,
@@ -639,27 +578,19 @@ const addStyles = StyleSheet.create({
   chipActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
   chipTxt:       { fontSize: FontSize.xs, color: Colors.textSecondary },
   chipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
-  filterBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: 2 },
+  attunementToggle: { alignSelf: 'flex-start', marginBottom: Spacing.sm },
+  filterBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: 2 },
   filterToggle: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
     paddingHorizontal: Spacing.sm, paddingVertical: 5,
   },
   filterToggleTxt: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
-  sortInlineRow: { flexGrow: 0 },
   filterPanel: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
     padding: Spacing.xs, marginBottom: Spacing.xs,
   },
-  sortBtn: {
-    backgroundColor: Colors.surface, borderRadius: Radius.sm,
-    borderWidth: 1, borderColor: Colors.border,
-    paddingHorizontal: Spacing.sm, paddingVertical: 3,
-  },
-  sortBtnActive: { backgroundColor: Colors.blue + '22', borderColor: Colors.blue },
-  sortTxt:       { fontSize: FontSize.xs, color: Colors.textSecondary },
-  sortTxtActive: { color: Colors.blue, fontWeight: FontWeight.bold },
   search: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
@@ -685,6 +616,7 @@ const addStyles = StyleSheet.create({
   // stays live on them (they're still addable, not a disabled state).
   itemRowOwned: {},
   itemInfo:     { flex: 1 },
+  itemNameLine: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   itemName:     { fontSize: FontSize.sm, color: Colors.textPrimary, fontWeight: FontWeight.bold },
   itemNameOwned:{ color: Colors.textPrimary },
   itemProps:    { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 1 },
@@ -1073,7 +1005,7 @@ interface Props {
   onDeleteLoadout?:  (loadoutId: string) => void;
 }
 
-export function TabInventory({
+function TabInventoryInner({
   entity, onEquip, onUnequip, onAddItem, onRemoveItem, onUpdateQuantity, onSetQuantity, onUpdateCurrency, rules,
   onApplyInfusion, onRemoveInfusion, onToggleAttune, onSaveLoadout, onApplyLoadout, onDeleteLoadout,
 }: Props) {
@@ -1098,8 +1030,14 @@ export function TabInventory({
 
   const large          = isLargeCreature(entity);
   // Effective STR (race/feat bonuses) — matches the engine's derived values,
-  // not the raw base score.
-  const effectiveStr  = applyStatModifiers(entity.stats, collectAllEffects(entity)).str;
+  // not the raw base score. Memoized (ITEMS-PERF-3): was recomputed
+  // (full effect-collection pass over entity.features) on every render of
+  // this tab, including renders triggered by unrelated local state
+  // (currOpen/infuseOpen/loadoutName toggles) that don't touch stats/effects.
+  const effectiveStr  = useMemo(
+    () => applyStatModifiers(entity.stats, collectAllEffects(entity)).str,
+    [entity],
+  );
   const carryCapacity  = effectiveStr * (large ? 30 : 15);
   const totalWeight    = [...inventory.equipped, ...inventory.carried].reduce((sum, inst) => {
     const def = allItems.find(i => i.id === inst.itemId);
@@ -1311,13 +1249,22 @@ export function TabInventory({
         )}
       </View>
 
-      <AddItemModal
-        visible={addOpen}
-        equippedIds={equippedIds}
-        carriedIds={carriedIds}
-        onAdd={onAddItem}
-        onClose={() => setAddOpen(false)}
-      />
+      {/* ITEMS-PERF-1: was unconditionally mounted with only `visible` gating
+          RN Modal's native visibility — the component body (full ~891-item
+          catalog merge + 27-category classification pass + sort, none of it
+          memoized) still ran on every TabInventory render regardless of
+          whether the picker was open. Gating the element itself means that
+          work only happens while the picker is actually open. */}
+      {addOpen && (
+        <AddItemModal
+          visible={addOpen}
+          entityRulesetId={entity.rulesetId}
+          equippedIds={equippedIds}
+          carriedIds={carriedIds}
+          onAdd={onAddItem}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
 
       <CurrencyModal
         visible={currOpen}
@@ -1339,6 +1286,9 @@ export function TabInventory({
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: see TabCharacter.tsx's identical comment.
+export const TabInventory = memo(TabInventoryInner);
 
 const styles = StyleSheet.create({
   scroll:   { flex: 1 },

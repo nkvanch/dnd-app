@@ -174,6 +174,27 @@ function JoinModal({ visible, onClose }: { visible: boolean; onClose: () => void
   async function handleJoin(rawCode?: string) {
     const trimmed = (rawCode ?? code).trim().toUpperCase();
     if (trimmed.length !== 7 || !session) return;
+    // JOIN-CONFIRM-1: joinCampaign() calls syncManager.startAsClient(),
+    // which itself calls stopAll() first — if this device is currently
+    // hosting a campaign with players connected, they're silently dropped
+    // mid-session with zero warning. Owning a DM campaign must not BLOCK
+    // joining another (per the app's own campaign-role rules — role is
+    // per-campaign, not per-device), but the DM should at least be told
+    // what's about to happen before it does.
+    const status = useSyncStore.getState().status;
+    if (status.role === 'dm' && status.clientCount > 0) {
+      const proceed = await new Promise<boolean>(resolve => {
+        Alert.alert(
+          'Leave current campaign?',
+          `You're hosting a campaign with ${status.clientCount} player${status.clientCount === 1 ? '' : 's'} connected. Joining a different campaign will disconnect them.`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Join Anyway', style: 'destructive', onPress: () => resolve(true) },
+          ],
+        );
+      });
+      if (!proceed) return;
+    }
     setLoading(true); setScannerOpen(false);
     try {
       // joinCampaign now opens the LAN client connection itself, so we must NOT

@@ -303,15 +303,36 @@ function parseBlock(block) {
 
   const levelMatch = block.match(LEVEL_RE);
   if (!levelMatch) return null; // not a spell block
-  const level  = parseInt(levelMatch[1], 10);
-  const school = cap(levelMatch[2].trim().toLowerCase());
+  const level = parseInt(levelMatch[1], 10);
+
+  // BUG FIX (found during a later filter/sort audit): the level line
+  // captured EVERYTHING after "Level N - " as `school` with no
+  // truncation. Some vault entries put "(ritual)" or "**Classes**: ..."
+  // on that SAME line instead of their own dedicated line, so that text
+  // used to get baked directly into `school` (producing values like
+  // "Conjuration (ritual)" or "Abjuration **Classes**: bard, cleric,
+  // wizard") — and, worse, the classes text landed nowhere useful, since
+  // the separate FIELD.classes regex only matches a **Classes**: line on
+  // its own. Strip both trailing forms here and recover any classes list
+  // found this way as a fallback source.
+  let schoolRaw = levelMatch[2].trim();
+  let classesFromSchoolLine = null;
+  const classesSuffixMatch = schoolRaw.match(/^(.*?)\s*\*\*classes\*\*:\s*(.+)$/i);
+  if (classesSuffixMatch) {
+    schoolRaw = classesSuffixMatch[1].trim();
+    classesFromSchoolLine = classesSuffixMatch[2];
+  } else {
+    const ritualSuffixMatch = schoolRaw.match(/^(.*?)\s*\(ritual\)\s*$/i);
+    if (ritualSuffixMatch) schoolRaw = ritualSuffixMatch[1].trim();
+  }
+  const school = cap(schoolRaw.toLowerCase());
 
   const grab = (re) => { const m = block.match(re); return m ? m[1].trim() : ''; };
   const castingTime = grab(FIELD.castingTime);
   const range       = grab(FIELD.range);
   const components  = parseComponents(grab(FIELD.components));
   const duration    = grab(FIELD.duration);
-  const classesRaw  = grab(FIELD.classes);
+  const classesRaw  = grab(FIELD.classes) || classesFromSchoolLine || '';
   const classes = classesRaw
     ? classesRaw.split(',').map(c => slug(c.trim())).filter(Boolean)
     : [];

@@ -544,9 +544,16 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
   errorTxt: { color: Colors.textSecondary },
+  // ENCOUNTER-HEADER-1: was a flat `padding: Spacing.md` — every sibling DM
+  // screen (dashboard.tsx, encounters.tsx, encounter.tsx) instead reserves
+  // extra top clearance (paddingTop: Spacing.xl + 8) for the status bar/
+  // notch, this screen was the one outlier missing it, sitting noticeably
+  // higher/tighter against the top than the Encounter Library screen this
+  // is reached from.
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: Spacing.sm,
+    paddingTop: Spacing.xl + 8, paddingBottom: Spacing.md, paddingHorizontal: Spacing.md,
+    borderBottomWidth: 1, borderBottomColor: Colors.border, gap: Spacing.sm,
   },
   backBtn: { padding: Spacing.xs },
   backBtnSm: { padding: Spacing.xs, width: 60 },

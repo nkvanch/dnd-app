@@ -8,7 +8,6 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { recalculateAllHP } from '../../src/engine/leveling';
-import { globalContentDB } from '../../src/content/classes/library';
 import { getProgressionForClass } from '../../src/content/classes/progressions';
 import { Ability } from '../../src/engine/types';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
@@ -30,7 +29,7 @@ export default function ReviewScreen() {
   // changed and React threw "Rendered fewer hooks than expected".
   const setDraft  = useCharacterStore(s => s.setDraft);
   const rules     = useCharacterStore(s => s.rules);
-  const homebrewClasses = useHomebrewStore(s => s.classes);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
   useEffect(() => {
     if (!draft) router.replace('/creation/name');
@@ -73,7 +72,12 @@ export default function ReviewScreen() {
     //    CON for every official class and any homebrew class that didn't set
     //    one, so this is a no-op change for everything except homebrew classes
     //    that explicitly reflavor HP around a different ability.
-    const cls = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === draft.identity.classId);
+    // getMergedContentDB() so a homebrew class sharing an official id
+    // correctly wins — this resolution feeds hpAbility, which gets baked
+    // directly into the character's persisted starting HP below, so the
+    // previous official-wins bypass was real data corruption, not just a
+    // display bug (audit finding CONTENT-1/2/3/4).
+    const cls = getMergedContentDB().classes.find(c => c.id === draft.identity.classId);
     const hpAbility: Ability = (cls ? getProgressionForClass(cls).hpAbility : undefined) ?? 'con';
     let finalDraft = recomputeDerived(draft, rules);
     finalDraft     = recalculateAllHP(finalDraft, rules, hpAbility);

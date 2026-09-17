@@ -19,21 +19,31 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, Entity, asSubclassId } from '../../src/engine/types';
+import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, Entity, asSubclassId, RulesetId } from '../../src/engine/types';
+import {
+  ChoiceDefinitionEditorModal, DraftChoice, newDraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
-import { toId } from '../../src/content/traitCompiler';
+import { toId, disambiguateId } from '../../src/content/traitCompiler';
+import { FULL_SUBCLASS_LIBRARY } from '../../src/content/subclasses/index';
+import { deriveSubclassId } from '../../src/content/subclasses/subclassBrowse';
 import { simulate } from '../../src/engine/simulate';
 import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
-import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 type LevelFeature = DraftTrait & { level: number };
+type LevelChoice = DraftChoice & { level: number };
 
 const EFFECT_KIND_LABELS: Record<string, string> = {
   none: 'Flavor only', ability_score: 'Ability score bonus', skill_proficiency: 'Skill proficiency',
@@ -54,6 +64,23 @@ function draftFeaturesFromEntries(entries: LevelEntry[]): LevelFeature[] {
   return out;
 }
 
+// CHOICE-AUTHORING-1: unlike Feature grants (compiled Effect objects, lossy
+// to reverse), entry.choices ARE already the canonical ChoiceDefinition
+// shape this editor authors — reconstructs losslessly via
+// definitionToDraftChoice, filtering out any choice kind this editor
+// doesn't author (e.g. a hand-authored 'feature_pool' from a seeded
+// built-in homebrew subclass) rather than dropping the whole entries array.
+function draftChoicesFromEntries(entries: LevelEntry[], idPrefix: string): LevelChoice[] {
+  const out: LevelChoice[] = [];
+  for (const entry of entries) {
+    for (const def of entry.choices) {
+      const d = definitionToDraftChoice(def, `${idPrefix}_l${entry.level}_`);
+      if (d) out.push({ ...d, level: entry.level });
+    }
+  }
+  return out;
+}
+
 export default function SubclassBuilderScreen() {
   const goBack   = useSafeGoBack('/(tabs)');
   const saveItem = useHomebrewStore(s => s.saveItem);
@@ -63,16 +90,32 @@ export default function SubclassBuilderScreen() {
   // (freshly-object-per-call) return value directly.
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
   const allClasses = getMergedContentDB().classes;
-  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  // NESTED-HOMEBREW-1: an optional `classId` route param pre-selects the
+  // parent class when reached from class-detail.tsx's/subclass.tsx's own
+  // "+ Create New Homebrew Subclass" entry point (same pattern as
+  // subrace-builder.tsx's `parentId` param).
+  const { editId, classId: classIdParam } = useLocalSearchParams<{ editId?: string; classId?: string }>();
   const editing = editId ? homebrewSubclasses.find(sc => sc.id === editId) ?? null : null;
+  // HOMEBREW-RULESET-1 (item 2): prefer the parent class's own ruleset (same
+  // "most specific ambient default" precedent as subrace-builder.tsx),
+  // falling back to the character/campaign draft's ruleset when no parent
+  // class is known yet.
+  const initialParentClass = classIdParam ? allClasses.find(c => c.id === classIdParam) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(
+    () => editing ? editing.rulesetId : (initialParentClass?.rulesetId ?? draftRulesetId),
+  );
 
   const [parentSearch, setParentSearch] = useState('');
-  const [classId, setClassId] = useState<string | null>(null);
+  const [classId, setClassId] = useState<string | null>(classIdParam ?? null);
   const [name, setName] = useState('');
   const [levelFeatures, setLevelFeatures] = useState<LevelFeature[]>([]);
   const [addLevel, setAddLevel] = useState('3');
   const [addName,  setAddName]  = useState('');
   const [openFeatureId, setOpenFeatureId] = useState<string | null>(null);
+  const [levelChoicesList, setLevelChoicesList] = useState<LevelChoice[]>([]);
+  const [addChoiceLevel, setAddChoiceLevel] = useState('3');
+  const [openChoiceId, setOpenChoiceId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testRows, setTestRows] = useState<Row[]>([]);
@@ -87,7 +130,9 @@ export default function SubclassBuilderScreen() {
     if (!editing) return;
     setClassId(editing.classId);
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     setLevelFeatures(draftFeaturesFromEntries(editing.entries));
+    setLevelChoicesList(draftChoicesFromEntries(editing.entries, editing.id));
   }, [editing?.id]);
 
   const parentClass = classId ? allClasses.find(c => c.id === classId) ?? null : null;
@@ -112,6 +157,21 @@ export default function SubclassBuilderScreen() {
     setOpenFeatureId(null);
   }
 
+  function addLevelChoice() {
+    const lvl = parseInt(addChoiceLevel, 10);
+    if (isNaN(lvl) || lvl < 1 || lvl > 20) return;
+    const d: LevelChoice = { ...newDraftChoice('tool'), level: lvl };
+    setLevelChoicesList(prev => [...prev, d]);
+    setOpenChoiceId(d.localId);
+  }
+  function updateLevelChoice(d: DraftChoice) {
+    setLevelChoicesList(prev => prev.map(x => x.localId === d.localId ? { ...x, ...d } : x));
+  }
+  function deleteLevelChoice(localId: string) {
+    setLevelChoicesList(prev => prev.filter(x => x.localId !== localId));
+    setOpenChoiceId(null);
+  }
+
   const featuresByLevel = new Map<number, LevelFeature[]>();
   levelFeatures.forEach(f => {
     if (!featuresByLevel.has(f.level)) featuresByLevel.set(f.level, []);
@@ -122,7 +182,15 @@ export default function SubclassBuilderScreen() {
 
   function buildHomebrewSubclass(): HomebrewSubclass | null {
     if (!classId || !parentClass) return null;
-    const subclassId = editing?.id ?? (toId(name) || 'homebrew_subclass');
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
+    // SubclassProgression has no top-level `id` — its identity is derived
+    // from its features' source.refId (see subclassBrowse.ts's own doc
+    // comment); reuse that same derivation rather than inventing a second one.
+    const takenSubclassIds = new Set([
+      ...FULL_SUBCLASS_LIBRARY.map(deriveSubclassId),
+      ...homebrewSubclasses.filter(s => s.id !== editing?.id).map(s => s.id),
+    ]);
+    const subclassId = editing?.id ?? disambiguateId(toId(name) || 'homebrew_subclass', takenSubclassIds);
     // Every official subclass file mirrors its parent class's hit die on
     // each entry — LevelEntry.hpDie is mandatory, so derive it rather than
     // asking the author to re-specify a value that's already determined by
@@ -144,9 +212,16 @@ export default function SubclassBuilderScreen() {
         for (const ef of extraFeatures ?? []) grants.push({ kind: 'feature', value: ef });
         for (const er of extraResources ?? []) grants.push({ kind: 'resource', value: er });
       }
-      entries.push({ level, hpDie, choices: [], grants });
+      // CHOICE-AUTHORING-1: authored per-level player choices (Expertise/
+      // Tool/Language), compiled straight into this level's own choices —
+      // same array class-progression choices already resolve through via
+      // queueChoice, so no separate runtime wiring is needed here.
+      const levelChoiceDefs = levelChoicesList
+        .filter(c => c.level === level)
+        .map(c => draftChoiceToDefinition(c, `${subclassId}_l${level}_`));
+      entries.push({ level, hpDie, choices: levelChoiceDefs, grants });
     }
-    return { id: asSubclassId(subclassId), name: name.trim(), classId, entries };
+    return { id: asSubclassId(subclassId), name: name.trim(), classId, entries, rulesetId };
   }
 
   // Read-only test: apply EVERY authored level's grants to a disposable
@@ -200,6 +275,9 @@ export default function SubclassBuilderScreen() {
     setSaving(true);
     try {
       await saveItem('subclass', subclass);
+      // SAVE-AND-ADD-1: tell subclass.tsx's picker which subclass to
+      // auto-select on return. No-op for any other caller.
+      usePendingSelectionStore.getState().setPending('subclass_picker', subclass.id);
       goBack();
     } catch (e) {
       console.error('[subclass-builder] save failed:', e);
@@ -258,6 +336,9 @@ export default function SubclassBuilderScreen() {
         <TextInput style={styles.input} value={name} onChangeText={setName}
           placeholder="e.g. Way of the Storm" placeholderTextColor={Colors.textDim} />
 
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Game / Ruleset</Text>
+        <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(initialParentClass?.rulesetId ?? draftRulesetId)} />
+
         <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Per-Level Features</Text>
         <Text style={styles.helperNote}>
           Add a feature by level and name, then tap it to optionally add a description and
@@ -308,6 +389,46 @@ export default function SubclassBuilderScreen() {
           </Pressable>
         </View>
 
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Per-Level Player Choices</Text>
+        <Text style={styles.helperNote}>
+          A real choice the player resolves at a specific level — e.g. "at level 6,
+          choose one tool proficiency." Distinct from a Feature above: this doesn't
+          grant anything by itself, it queues a pick.
+        </Text>
+        {levelChoicesList.length === 0 ? (
+          <Text style={styles.emptyNote}>No player choices added yet.</Text>
+        ) : (
+          Array.from(new Set(levelChoicesList.map(c => c.level))).sort((a, b) => a - b).map(lvl => (
+            <View key={lvl} style={styles.featureLevelGroup}>
+              <Text style={styles.featureLevelLabel}>LEVEL {lvl}</Text>
+              {levelChoicesList.filter(c => c.level === lvl).map(c => (
+                <Pressable key={c.localId} style={styles.featureItem} onPress={() => setOpenChoiceId(c.localId)}>
+                  <View style={styles.featureItemBody}>
+                    <Text style={styles.featureItemName}>{c.kind === 'expertise' ? 'Expertise' : c.kind === 'tool' ? 'Tool Proficiency' : 'Language'} choice</Text>
+                    <Text style={styles.featureItemDesc} numberOfLines={1}>Choose {c.count}</Text>
+                  </View>
+                  <Pressable style={styles.featureDeleteBtn} onPress={() => deleteLevelChoice(c.localId)} hitSlop={8}>
+                    <Text style={styles.featureDeleteTxt}>✕</Text>
+                  </Pressable>
+                </Pressable>
+              ))}
+            </View>
+          ))
+        )}
+        <View style={styles.inlineAddRow}>
+          <TextInput
+            style={[styles.input, styles.smallInput]}
+            value={addChoiceLevel}
+            onChangeText={setAddChoiceLevel}
+            keyboardType="number-pad"
+            placeholder="Lv"
+            placeholderTextColor={Colors.textDim}
+          />
+          <Pressable style={[styles.inlineAddBtn, { flex: 1 }]} onPress={addLevelChoice}>
+            <Text style={styles.inlineAddTxt}>+ Add Player Choice</Text>
+          </Pressable>
+        </View>
+
       </ScrollView>
 
       <SafeBottomView>
@@ -315,7 +436,7 @@ export default function SubclassBuilderScreen() {
           <Pressable style={[styles.testBtn, !canTest && styles.btnDisabled]} onPress={runTest} disabled={!canTest}>
             <Text style={styles.testBtnTxt}>🧪 Test</Text>
           </Pressable>
-          <Pressable style={[styles.saveBtn, !canSave && styles.btnDisabled]} onPress={handleSave} disabled={!canSave}>
+          <Pressable style={[styles.saveBtn, !canSave && styles.btnDisabled]} onPress={() => { void handleSave(); }} disabled={!canSave}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Subclass'}</Text>
           </Pressable>
         </View>
@@ -334,6 +455,14 @@ export default function SubclassBuilderScreen() {
         title={`Testing: ${name.trim() || 'New Subclass'}`}
         rows={testRows}
         onClose={() => setTestOpen(false)}
+      />
+
+      <ChoiceDefinitionEditorModal
+        draft={levelChoicesList.find(c => c.localId === openChoiceId) ?? null}
+        visible={!!openChoiceId}
+        onChange={updateLevelChoice}
+        onDone={() => setOpenChoiceId(null)}
+        onDelete={() => openChoiceId && deleteLevelChoice(openChoiceId)}
       />
     </KeyboardAvoidingView>
   );

@@ -12,7 +12,7 @@ import type Server from 'react-native-tcp-socket/lib/types/Server';
 import type Socket from 'react-native-tcp-socket/lib/types/Socket';
 
 import { SyncEvent } from '../engine/types';
-import { Entity }    from '../engine/types';
+import { Entity, Campaign } from '../engine/types';
 import { SyncMessage, encodeMessage, parseBuffer, ConnectedPlayer, CombatTurnState } from './protocol';
 import { SYNC_PORT } from './discovery';
 
@@ -45,6 +45,9 @@ export type ServerCallbacks = {
   onEntityRequested:     (entityId: string, requesterId: string) => void;
   /** Called when a client (re)connects and needs a full entity sync. */
   onEntitySyncRequested: (requesterId: string) => void;
+  /** Called when a client (re)connects and needs the current Campaign
+   *  snapshot (audit finding CAMPAIGN-SYNC-1) — mirrors onEntitySyncRequested. */
+  onCampaignSyncRequested: (requesterId: string) => void;
   /** Called whenever the connected-player roster changes (join, leave, claim). */
   onRosterChanged:       (roster: ConnectedPlayer[]) => void;
   /** Called when a player pushes their own entity snapshot up to the DM. */
@@ -165,9 +168,46 @@ export class SyncServer {
     this.broadcast({ type: 'entity_patch', entityId, patch });
   }
 
+  /** Push a full Campaign snapshot to every connected player. */
+  broadcastCampaign(campaign: Campaign): void {
+    this.broadcast({ type: 'campaign_snapshot', campaign });
+  }
+
+  /** Push a Campaign PATCH (partial, from deepDiff) to every connected player. */
+  broadcastCampaignPatch(campaignId: string, patch: Record<string, unknown>): void {
+    this.broadcast({ type: 'campaign_patch', campaignId, patch });
+  }
+
   /** Push the current "whose turn is it" summary to every connected player. */
   broadcastCombatTurn(turn: CombatTurnState): void {
     this.broadcast({ type: 'combat_turn_state', ...turn });
+  }
+
+  /**
+   * Tell every connected player WHY this server is about to stop, before
+   * stop() tears the sockets down — reuses the existing (previously
+   * server-side-unused, client-side-dropped) 'error' message type rather
+   * than adding a new one. Callers must await this BEFORE calling stop():
+   * unlike broadcast() (fire-and-forget, fine for routine state pushes),
+   * this waits for each socket.write() to actually flush — stop()'s
+   * socket.destroy() right after would otherwise risk dropping an
+   * unflushed write before the client ever sees it. Resolves once every
+   * write has flushed (or errored) or after a 500ms safety timeout,
+   * whichever comes first — never blocks shutdown indefinitely on one
+   * stuck socket.
+   */
+  announceClosing(reason: string): Promise<void> {
+    const encoded = encodeMessage({ type: 'error', message: reason });
+    const writes = Array.from(this.clients.values()).map(client =>
+      new Promise<void>(resolve => {
+        try { client.socket.write(encoded, undefined, () => resolve()); }
+        catch { resolve(); }
+      })
+    );
+    return Promise.race([
+      Promise.all(writes).then(() => undefined),
+      new Promise<void>(resolve => setTimeout(resolve, 500)),
+    ]);
   }
 
   /** Number of currently connected player clients. */
@@ -253,6 +293,8 @@ export class SyncServer {
         this.cb.onRosterChanged(this.getRoster());
         // Push full entity state to newly connected/reconnected player
         this.cb.onEntitySyncRequested(conn.id);
+        // Push the current Campaign snapshot too (audit finding CAMPAIGN-SYNC-1)
+        this.cb.onCampaignSyncRequested(conn.id);
         break;
       }
 

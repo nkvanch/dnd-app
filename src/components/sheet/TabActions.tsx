@@ -1,6 +1,6 @@
 // app/sheet/TabActions.tsx
 // Tab 2 — Action Cards. [Use] consumes resources and shows a dice result modal.
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules, ActivationOption } from '../../engine/types';
 import { applyAbilityEffects, endWildShape, castConcentrationSpell, markActionSlotUsed } from '../../engine/combat';
@@ -401,7 +401,7 @@ interface Props {
   onEntityUpdate?: (updated: Entity) => void;
 }
 
-export function TabActions({ entity, rules, onEntityUpdate }: Props) {
+function TabActionsInner({ entity, rules, onEntityUpdate }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
   // A-57: set instead of activeCard when a card declares activation.options
   // — the picker must resolve BEFORE spending, since handleUse below
@@ -516,6 +516,9 @@ export function TabActions({ entity, rules, onEntityUpdate }: Props) {
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: see TabCharacter.tsx's identical comment.
+export const TabActions = memo(TabActionsInner);
 
 const styles = StyleSheet.create({
   scroll:  { flex: 1 },

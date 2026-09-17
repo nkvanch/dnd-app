@@ -12,19 +12,19 @@ import { useHomebrewStore } from '../homebrewStore';
 import { asRulesetId } from '../../engine/types';
 
 describe('ruleset tagging end-to-end (Phase 5 proof slice)', () => {
-  it('a 5.5e-active view sees 5.5e-tagged races AND backgrounds, plus untagged/shared content', () => {
-    const db = useHomebrewStore.getState().getMergedContentDB(asRulesetId('5.5e'));
+  it('a dnd5e-2024-active view sees 2024-tagged races AND backgrounds, plus untagged/shared content', () => {
+    const db = useHomebrewStore.getState().getMergedContentDB(asRulesetId('dnd5e-2024'));
     const raceIds = db.races.map(r => r.id);
     const bgIds   = db.backgrounds.map(b => b.id);
-    expect(raceIds).toContain('human_2024'); // 5.5e-tagged — matches exactly
+    expect(raceIds).toContain('human_2024'); // dnd5e-2024-tagged — matches exactly
     expect(raceIds).toContain('human');      // untagged — shared across every ruleset
     expect(raceIds).toContain('elf');        // untagged — shared across every ruleset
-    expect(bgIds).toContain('acolyte_2024'); // 5.5e-tagged — separate filter code path from races
+    expect(bgIds).toContain('acolyte_2024'); // dnd5e-2024-tagged — separate filter code path from races
     expect(bgIds).toContain('acolyte');      // untagged — shared across every ruleset
   });
 
-  it('an explicit 5e-active view does NOT see 5.5e-tagged content, but still sees untagged/shared content', () => {
-    const db = useHomebrewStore.getState().getMergedContentDB(asRulesetId('5e'));
+  it('an explicit dnd5e-2014-active view does NOT see 2024-tagged content, but still sees untagged/shared content', () => {
+    const db = useHomebrewStore.getState().getMergedContentDB(asRulesetId('dnd5e-2014'));
     const raceIds = db.races.map(r => r.id);
     const bgIds   = db.backgrounds.map(b => b.id);
     expect(raceIds).not.toContain('human_2024');

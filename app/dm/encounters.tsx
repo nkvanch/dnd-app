@@ -126,12 +126,25 @@ export default function EncounterLibraryScreen() {
 
   return (
     <View style={styles.screen}>
+      {/* ENCOUNTER-LIB-HEADER-1: "+ New Encounter" used to be its own
+          full-width block below the toolbar (header + toolbar + newBtn
+          stacked to ~184px before any card rendered). Folding it into the
+          header's own right-side slot (previously an empty spacer) removes
+          that whole block in the normal (non-creating) state — same
+          legible header, no typography changes, less dead space above the
+          list. */}
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backTxt}>← Back</Text>
         </Pressable>
         <Text style={styles.title}>Encounter Library</Text>
-        <View style={{ width: 60 }} />
+        {creating
+          ? <View style={{ width: 60 }} />
+          : (
+            <Pressable style={styles.newBtnCompact} onPress={() => setCreating(true)}>
+              <Text style={styles.newBtnCompactTxt}>+ New</Text>
+            </Pressable>
+          )}
       </View>
 
       <View style={styles.toolbar}>
@@ -155,7 +168,7 @@ export default function EncounterLibraryScreen() {
         </ScrollView>
       </View>
 
-      {creating ? (
+      {creating && (
         <View style={styles.createRow}>
           <TextInput
             style={styles.createInput}
@@ -173,10 +186,6 @@ export default function EncounterLibraryScreen() {
             <Text style={styles.createCancelTxt}>Cancel</Text>
           </Pressable>
         </View>
-      ) : (
-        <Pressable style={styles.newBtn} onPress={() => setCreating(true)}>
-          <Text style={styles.newBtnTxt}>+ New Encounter</Text>
-        </Pressable>
       )}
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -208,7 +217,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    backgroundColor: Colors.surfaceHigh,
+    paddingTop: Spacing.xl + 8, paddingBottom: Spacing.md, paddingHorizontal: Spacing.md,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   backBtn: { padding: Spacing.xs },
   backTxt: { color: Colors.gold, fontSize: FontSize.md },
@@ -226,11 +237,11 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
   filterChipTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
   filterChipTxtActive: { color: Colors.bg },
-  newBtn: {
-    marginHorizontal: Spacing.md, marginTop: Spacing.sm, backgroundColor: Colors.gold,
-    borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center',
+  newBtnCompact: {
+    backgroundColor: Colors.gold, borderRadius: Radius.full,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
   },
-  newBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  newBtnCompactTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
   createRow: { flexDirection: 'row', gap: Spacing.xs, marginHorizontal: Spacing.md, marginTop: Spacing.sm },
   createInput: {
     flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,

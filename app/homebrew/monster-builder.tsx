@@ -18,20 +18,23 @@ import {
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ability, DraftTrait, ResourceGrant, Feature, Entity } from '../../src/engine/types';
+import { Ability, DraftTrait, ResourceGrant, Feature, Entity, RulesetId } from '../../src/engine/types';
 import { MonsterTemplate } from '../../src/content/monsters/types';
 import { Alert } from '../../src/utils/alert';
 import { validateMonster } from '../../src/engine/homebrewValidator';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { AbilityScoreGrid, TraitListEditor, buildTraitFeature } from '../../src/components/homebrew/TraitEditor';
-import { toId } from '../../src/content/traitCompiler';
+import { toId, disambiguateId } from '../../src/content/traitCompiler';
+import { FULL_MONSTER_LIBRARY } from '../../src/content/monsters/srd';
 import { PickOrCustom } from '../../src/components/homebrew/PickOrCustom';
 import { spawnMonster } from '../../src/engine/monsterFactory';
 import { collectAllEffects } from '../../src/engine/pipeline';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
-import { DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Read-only test: unlike every other homebrew builder, a monster isn't
@@ -108,6 +111,8 @@ export default function MonsterBuilderScreen() {
   const monsters = useHomebrewStore(s => s.monsters);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing  = editId ? monsters.find(m => m.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name,      setName]      = useState('');
   const [cr,        setCr]        = useState<number>(1);
@@ -133,6 +138,7 @@ export default function MonsterBuilderScreen() {
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     setCr(editing.cr);
     setSize(editing.size);
     setType(editing.type);
@@ -176,7 +182,12 @@ export default function MonsterBuilderScreen() {
   }
 
   function buildMonster(): MonsterTemplate {
-    const id = editing?.id ?? (toId(name) || 'homebrew_monster');
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
+    const takenMonsterIds = new Set([
+      ...FULL_MONSTER_LIBRARY.map(m => m.id),
+      ...monsters.filter(m => m.id !== editing?.id).map(m => m.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_monster', takenMonsterIds);
     const features: Feature[] = [];
     const resources: ResourceGrant[] = [];
     const usedIds = new Set<string>();
@@ -208,6 +219,7 @@ export default function MonsterBuilderScreen() {
       languages: languages.trim() ? languages.split(',').map(l => l.trim()).filter(Boolean) : [],
       legendaryActions: legendaryActions.trim() ? parseInt(legendaryActions, 10) : undefined,
       resources: resources.length > 0 ? resources : undefined,
+      rulesetId,
     };
   }
 
@@ -263,6 +275,10 @@ export default function MonsterBuilderScreen() {
         <Field label="Name *">
           <TextInput style={styles.input} value={name} onChangeText={setName}
             placeholder="Monster name" placeholderTextColor={Colors.textDim} />
+        </Field>
+
+        <Field label="Game / Ruleset">
+          <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
         </Field>
 
         <Field label="Challenge Rating">

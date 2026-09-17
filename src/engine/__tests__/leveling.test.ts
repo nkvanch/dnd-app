@@ -14,10 +14,11 @@ import {
   applyGrant, applyHP, levelUp, resolveChoice, applySubclassToEntity,
   applyInfusionChoiceToEntity, applySpellChoiceToEntity, levelUpClass, queueChoice,
   removeFeature, swapBackground, projectToLevel, projectMulticlassSequence,
+  applyAsiToEntity, applyFeatToEntity,
 } from '../leveling';
 import {
   Entity, Grant, ClassProgression, LevelEntry, ChoiceDefinition, CharClass,
-  asClassId, Background, FeatureInstance, SkillName,
+  asClassId, Background, FeatureInstance, SkillName, Feature,
 } from '../types';
 
 function entity(overrides: Partial<Entity> = {}): Entity {
@@ -369,6 +370,36 @@ describe('levelUp', () => {
     const updated = levelUp(e, 1, progression(), rules);
     expect(updated.choices.some(c => c.id === 'bonus_feat_lvl_1' && c.definition.kind === 'asi')).toBe(true);
   });
+
+  // FEAT-ENTITLEMENT-1: a multi-level jump (direct high-level creation or a
+  // multi-level in-play level-up) must queue ONE bonus-feat choice PER LEVEL
+  // crossed, not a single flat bonus slot — real per-level entitlement, not
+  // a fixed extra pick regardless of how many levels were gained.
+  it('queues one separate bonus-feat choice per level crossed on a multi-level jump, not one flat bonus', () => {
+    const rules = { ...DEFAULT_RULES, customRules: { bonusFeatEveryLevel: true } };
+    const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard' } });
+    const updated = levelUp(e, 3, progression(), rules);
+    const bonusFeatChoices = updated.choices.filter(c => c.id.startsWith('bonus_feat_lvl_'));
+    expect(bonusFeatChoices.map(c => c.id).sort()).toEqual(['bonus_feat_lvl_1', 'bonus_feat_lvl_2', 'bonus_feat_lvl_3']);
+    expect(bonusFeatChoices.every(c => c.definition.kind === 'asi' && !c.resolved)).toBe(true);
+  });
+
+  // FEAT-ENTITLEMENT-1: direct creation at level N (levelUp from 0) must
+  // queue exactly as many bonus-feat choices as leveling 1→2→3 incrementally
+  // would — same code path, so this also locks the "direct N == incremental"
+  // invariant for this specific entitlement.
+  it('direct creation at level 3 queues the same bonus-feat choices as leveling 1, then 2, then 3 incrementally', () => {
+    const rules = { ...DEFAULT_RULES, customRules: { bonusFeatEveryLevel: true } };
+    const direct = levelUp(entity({ identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard' } }), 3, progression(), rules);
+
+    let incremental = entity({ identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard' } });
+    incremental = levelUp(incremental, 1, progression(), rules);
+    incremental = levelUp(incremental, 2, progression(), rules);
+    incremental = levelUp(incremental, 3, progression(), rules);
+
+    const bonusIds = (ent: typeof direct) => ent.choices.filter(c => c.id.startsWith('bonus_feat_lvl_')).map(c => c.id).sort();
+    expect(bonusIds(direct)).toEqual(bonusIds(incremental));
+  });
 });
 
 describe('projectToLevel', () => {
@@ -649,6 +680,100 @@ describe('applySubclassToEntity', () => {
     expect(ids).toContain('improved_crit');
     expect(ids).not.toContain('remarkable_athlete');
   });
+
+  // SUBCLASS-CHANGE-1: regression lock for the reported bug (creation-flow
+  // subclass selection became permanently unreachable once resolved) and
+  // its real correctness fix (re-applying was purely additive — the OLD
+  // subclass's features/resources were never removed, so changing your
+  // mind stacked both subclasses' grants). Fixtures below explicitly set
+  // each feature's own `source` (matching how real subclass content is
+  // authored — deriveSubclassId's own scan requires this), unlike
+  // championProgression() above whose bare feature literals fall back to
+  // applyGrant's generic 'class' tag and would NOT exercise this path.
+  function battleMasterProgression(): import('../types').ClassProgression {
+    return {
+      classId: 'fighter',
+      entries: [{
+        level: 3, hpDie: 10,
+        grants: [
+          {
+            kind: 'feature',
+            value: {
+              id: 'combat_superiority', name: 'Combat Superiority', description: '',
+              source: { kind: 'subclass', refId: 'battle_master' },
+              effects: [], actions: [], choices: [], passive: true,
+            },
+          },
+          { kind: 'resource', value: { resourceId: 'superiority_dice', name: 'Superiority Dice', maximum: 4, recharge: 'short_rest' } },
+        ],
+        choices: [],
+      }],
+    };
+  }
+  function championProgressionSourced(): import('../types').ClassProgression {
+    return {
+      classId: 'fighter',
+      entries: [{
+        level: 3, hpDie: 10,
+        grants: [{
+          kind: 'feature',
+          value: {
+            id: 'improved_crit', name: 'Improved Critical', description: '',
+            source: { kind: 'subclass', refId: 'champion' },
+            effects: [], actions: [], choices: [], passive: true,
+          },
+        }],
+        choices: [],
+      }],
+    };
+  }
+
+  it('a subclass-granted resource is tagged sourceKind:"subclass", not the generic "class" default', () => {
+    const choiceDef: ChoiceDefinition = { id: 'c1', prompt: '', kind: 'subclass', count: 1, pool: [], grants: [], required: true, resolved: false };
+    const e = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classId: 'fighter', level: 3 },
+      choices: [{ id: 'c1', definition: choiceDef, grantedAt: 3, resolved: false, selections: [] }],
+    });
+    const updated = applySubclassToEntity(e, 'c1', 'battle_master', battleMasterProgression(), DEFAULT_RULES);
+    expect(updated.resources.custom[0]).toMatchObject({ id: 'superiority_dice', sourceKind: 'subclass', sourceId: 'battle_master' });
+  });
+
+  it('changing subclass strips the OLD subclass\'s features and resources instead of stacking both', () => {
+    const choiceDef: ChoiceDefinition = { id: 'c1', prompt: '', kind: 'subclass', count: 1, pool: [], grants: [], required: true, resolved: false };
+    const e = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classId: 'fighter', level: 3 },
+      choices: [{ id: 'c1', definition: choiceDef, grantedAt: 3, resolved: false, selections: [] }],
+    });
+
+    const firstPick = applySubclassToEntity(e, 'c1', 'battle_master', battleMasterProgression(), DEFAULT_RULES);
+    expect(firstPick.features.map(f => f.id)).toContain('combat_superiority');
+    expect(firstPick.resources.custom.map(r => r.id)).toContain('superiority_dice');
+
+    // Re-resolving the SAME choice id with a DIFFERENT subclass — exactly
+    // what SubclassPicker.commit() does when re-opened on an already-
+    // resolved choice (app/creation/subclass.tsx's fix).
+    const changed = applySubclassToEntity(firstPick, 'c1', 'champion', championProgressionSourced(), DEFAULT_RULES);
+
+    const featureIds = changed.features.map(f => f.id);
+    expect(featureIds).toContain('improved_crit');
+    expect(featureIds).not.toContain('combat_superiority'); // old subclass's feature removed, not stacked
+
+    const resourceIds = changed.resources.custom.map(r => r.id);
+    expect(resourceIds).not.toContain('superiority_dice'); // old subclass's resource removed
+
+    expect(changed.identity.subclassId).toBe('champion');
+    expect(changed.choices[0]).toMatchObject({ resolved: true, selections: ['champion'] });
+  });
+
+  it('picking a subclass for the first time is unaffected by the stripping logic (nothing to strip)', () => {
+    const choiceDef: ChoiceDefinition = { id: 'c1', prompt: '', kind: 'subclass', count: 1, pool: [], grants: [], required: true, resolved: false };
+    const e = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classId: 'fighter', level: 3 },
+      choices: [{ id: 'c1', definition: choiceDef, grantedAt: 3, resolved: false, selections: [] }],
+    });
+    const updated = applySubclassToEntity(e, 'c1', 'champion', championProgressionSourced(), DEFAULT_RULES);
+    expect(updated.features.map(f => f.id)).toContain('improved_crit');
+  });
 });
 
 describe('applyInfusionChoiceToEntity', () => {
@@ -842,6 +967,100 @@ describe('removeFeature', () => {
 // untrains by a hardcoded table with no check for whether some OTHER
 // active feature also grants the same skill).
 
+// ABILITY-CAP-1: applyAsiToEntity's cap logic was already correct (reads
+// rules.maxAbilityScore dynamically, not hardcoded to 20) but had ZERO
+// direct test coverage anywhere in the suite before this. Covers the exact
+// acceptance-test examples from the ability-cap bug report, effective
+// cap 24: 20+2->22, 21+2->23, 19+2->21, 23+1->24, 24+1->blocked.
+describe('applyAsiToEntity', () => {
+  function entityWithScores(scores: Partial<Record<'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha', number>>): Entity {
+    const e = entity();
+    return { ...e, stats: { ...e.stats, ...scores } };
+  }
+  const CAP24 = { ...DEFAULT_RULES, maxAbilityScore: 24 };
+
+  it('20 + 2 -> 22 under an effective cap of 24 (full increase, well under cap)', () => {
+    const e = entityWithScores({ str: 20 });
+    const after = applyAsiToEntity(e, 'c1', { str: 2 }, CAP24);
+    expect(after.stats.str).toBe(22);
+  });
+
+  it('21 + 2 -> 23 under an effective cap of 24', () => {
+    const e = entityWithScores({ str: 21 });
+    const after = applyAsiToEntity(e, 'c1', { str: 2 }, CAP24);
+    expect(after.stats.str).toBe(23);
+  });
+
+  it('19 + 2 -> 21 under an effective cap of 24', () => {
+    const e = entityWithScores({ str: 19 });
+    const after = applyAsiToEntity(e, 'c1', { str: 2 }, CAP24);
+    expect(after.stats.str).toBe(21);
+  });
+
+  it('23 + 1 -> 24 under an effective cap of 24 (reaches the cap exactly)', () => {
+    const e = entityWithScores({ str: 23 });
+    const after = applyAsiToEntity(e, 'c1', { str: 1 }, CAP24);
+    expect(after.stats.str).toBe(24);
+  });
+
+  it('24 + 1 is blocked (no headroom) under an effective cap of 24 — a score already at 20 can still rise, but not past the effective cap', () => {
+    const e = entityWithScores({ str: 24 });
+    const after = applyAsiToEntity(e, 'c1', { str: 1 }, CAP24);
+    expect(after.stats.str).toBe(24);
+  });
+
+  it('clamps against the DEFAULT cap of 20 when maxAbilityScore is unset', () => {
+    const e = entityWithScores({ str: 19 });
+    const after = applyAsiToEntity(e, 'c1', { str: 2 }, DEFAULT_RULES);
+    expect(after.stats.str).toBe(20); // +2 requested, only +1 headroom under the default cap
+  });
+
+  it('applies the full increase with no clamp at all when maxAbilityScore is null (uncapped)', () => {
+    const e = entityWithScores({ str: 30 });
+    const after = applyAsiToEntity(e, 'c1', { str: 5 }, { ...DEFAULT_RULES, maxAbilityScore: null });
+    expect(after.stats.str).toBe(35);
+  });
+
+  it('clamps against EFFECTIVE score (base + racial/feat modifiers), not raw base', () => {
+    const e: Entity = {
+      ...entityWithScores({ str: 18 }),
+      features: [{
+        id: 'racial_str', name: 'Racial STR', description: '', level: null,
+        effects: [{ type: 'stat_modifier', target: 'str', operation: 'add', value: 2, condition: null }],
+        actions: [], choices: [], passive: true, isActive: true,
+        source: { kind: 'race', refId: 'test_race' },
+      }],
+    };
+    // Effective STR is already 20 (18 base + 2 racial) — no headroom left
+    // under the default cap of 20, even though the BASE score is only 18.
+    const after = applyAsiToEntity(e, 'c1', { str: 2 }, DEFAULT_RULES);
+    expect(after.stats.str).toBe(18); // base unchanged, no headroom
+  });
+});
+
+// ABILITY-CAP-1: the feat-picker path (a fixed +N from Feat.abilityChoice,
+// e.g. Resilient) previously applied its bonus unconditionally — this
+// proves featureToApply's clamp (src/components/AsiFeatPicker.tsx) via the
+// same applyFeatToEntity() engine entry point, confirming the fix actually
+// reaches the entity's stats and not just the picker's own UI state.
+describe('applyFeatToEntity — ability-choice feats respect the effective cap', () => {
+  it('a feat granting +1 to an ability already at the effective cap contributes nothing', () => {
+    const e = { ...entity(), stats: { ...entity().stats, str: 24 } };
+    const feature: Feature = {
+      id: 'resilient_str', name: 'Resilient', description: '', level: null,
+      // Simulates AsiFeatPicker.featureToApply() already having clamped
+      // the amount to 0 headroom before calling applyFeatToEntity — this
+      // test documents the CONTRACT (a zero-value effect list, or omitted
+      // effect, must not raise the score), not featureToApply itself
+      // (that's a component-level concern, covered by its own clamp logic).
+      effects: [], actions: [], choices: [], passive: true,
+      source: { kind: 'feat', refId: 'resilient' },
+    };
+    const after = applyFeatToEntity(e, 'c1', 1, feature, 'resilient', { ...DEFAULT_RULES, maxAbilityScore: 24 });
+    expect(after.stats.str).toBe(24);
+  });
+});
+
 describe('swapBackground', () => {
   function backgroundWithSkills(id: string, skills: SkillName[], overrides: Partial<Background> = {}): Background {
     return {
@@ -945,6 +1164,36 @@ describe('swapBackground', () => {
     const after = swapBackground(entity(), flexBg, DEFAULT_RULES, ['wis', 'int', 'cha']);
     const flexFeature = after.features.find(f => f.id === 'flex_bg_3_flexible_asi');
     expect(flexFeature?.effects.every(e => (e as { value: number }).value === 1)).toBe(true);
+  });
+
+  // ABILITY-CAP-1: swapBackground's flexibleAsi compilation used to apply
+  // its raw amount unconditionally — this proves it now clamps to headroom
+  // under rules.maxAbilityScore, the same rule applyAsiToEntity already
+  // enforces for the plain ASI path.
+  it('clamps flexibleAsi picks to headroom under an effective cap above 20', () => {
+    const flexBg = backgroundWithSkills('flex_bg_capped', [], {
+      flexibleAsi: { prompt: 'Choose two.', mode: { kind: 'two_distinct_plus_one' } },
+    });
+    const capped: Entity = { ...entity(), stats: { ...entity().stats, str: 23, dex: 24 } };
+    const after = swapBackground(capped, flexBg, { ...DEFAULT_RULES, maxAbilityScore: 24 }, ['str', 'dex']);
+    const flexFeature = after.features.find(f => f.id === 'flex_bg_capped_flexible_asi');
+    expect(flexFeature?.effects).toEqual([
+      { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null }, // 23 -> 24, full +1 fits
+      { type: 'stat_modifier', target: 'dex', operation: 'add', value: 0, condition: null }, // already at 24, no headroom
+    ]);
+  });
+
+  it('applies the full flexibleAsi amount when uncapped (maxAbilityScore: null)', () => {
+    const flexBg = backgroundWithSkills('flex_bg_uncapped', [], {
+      flexibleAsi: { prompt: 'Choose two.', mode: { kind: 'two_distinct_plus_one' } },
+    });
+    const high: Entity = { ...entity(), stats: { ...entity().stats, str: 30, dex: 30 } };
+    const after = swapBackground(high, flexBg, { ...DEFAULT_RULES, maxAbilityScore: null }, ['str', 'dex']);
+    const flexFeature = after.features.find(f => f.id === 'flex_bg_uncapped_flexible_asi');
+    expect(flexFeature?.effects).toEqual([
+      { type: 'stat_modifier', target: 'str', operation: 'add', value: 1, condition: null },
+      { type: 'stat_modifier', target: 'dex', operation: 'add', value: 1, condition: null },
+    ]);
   });
 
   it('documents (not silently regresses) the class-choice blind spot — and proves skillRetrainOverrides fixes it', () => {

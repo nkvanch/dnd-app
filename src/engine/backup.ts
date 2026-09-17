@@ -9,11 +9,21 @@
 // Designed once now so the bigger import pipeline doesn't need a new file
 // format later — exactly what the roadmap asked for.
 //
-import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Background, Feature, Feat, Condition } from './types';
+import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Background, Feature, Feat, Condition, RulesetId } from './types';
 import { MonsterTemplate } from '../content/monsters/types';
+import { ContentCacheType } from '../db/contentCacheRepo';
 import { validateContent, validateFeature } from './homebrewValidator';
 
 export const GRIMOIRE_PACK_FORMAT_VERSION = 1;
+// HOMEBREW-PACKAGE-1: the CONTENT (not envelope) schema version — bumped
+// only when GrimoirePackHomebrew's per-type item SHAPE changes in a way an
+// importer needs to know about (a migration point), independent of
+// formatVersion (the envelope/container shape) and independent of
+// packageVersion (an author's own version string for one specific
+// package). Distinct concepts, deliberately not conflated — see this
+// file's own header comment on why one schema serves both backup and
+// content-pack use cases.
+export const HOMEBREW_SCHEMA_VERSION = 1;
 
 export type GrimoirePackHomebrew = {
   races?:       Race[];
@@ -29,6 +39,38 @@ export type GrimoirePackHomebrew = {
   conditions?:  Condition[];
 };
 
+/**
+ * One entry in a package's manifest (GrimoirePack.contents) — a lightweight
+ * {type, id} index of everything actually bundled, letting an import preview
+ * (or a dependency-closure computation) answer "what's in this package"
+ * without deep-scanning every homebrew array. `included` distinguishes what
+ * the exporting user actually picked from what was pulled in automatically
+ * to keep the package self-contained — see contentDependencies.ts.
+ */
+export type PackageContentRef = {
+  type:       ContentCacheType;
+  id:         string;
+  name:       string;
+  rulesetId?: RulesetId;
+  included:   'selected' | 'dependency';
+};
+
+/** Reserved for future local-asset packaging (thumbnails, reference images)
+ *  — see contentDependencies.ts / homebrew builders' existing imageUri
+ *  fields. Always empty today; the shape exists now so the file FORMAT
+ *  never needs to change when media support actually ships, only this
+ *  array needs to start being populated. `data` is a base64 payload,
+ *  mirroring Item.imageUri's own existing "store the bytes inline as a
+ *  data: URI" convention (see item-builder.tsx) rather than a second,
+ *  new asset-reference scheme. */
+export type PackageMediaAsset = {
+  id:       string;
+  kind:     'thumbnail' | 'image';
+  filename: string;
+  mimeType: string;
+  data?:    string;
+};
+
 export type GrimoirePack = {
   formatVersion: number;              // GRIMOIRE_PACK_FORMAT_VERSION at export time
   packType:      'backup' | 'content-pack';
@@ -41,6 +83,37 @@ export type GrimoirePack = {
    *  content-pack, the actual payload being shared). Omitted/empty arrays
    *  mean "none of that type in this pack". */
   homebrew?:     GrimoirePackHomebrew;
+
+  // ── HOMEBREW-PACKAGE-1: package-specific metadata ──────────────────────
+  // All optional and ONLY ever set for packType:'content-pack' packages
+  // built via the new package-export flow (see src/io/packageIO.ts) — a
+  // personal 'backup' pack, and any content-pack exported through the
+  // older single-item exportHomebrewItem() path, simply omit these, and
+  // every consumer (validateGrimoirePack, the import commit flow) already
+  // treats their absence as "no package metadata available," never as
+  // malformed. This is what keeps the format backward- AND forward-
+  // compatible without a formatVersion bump: an old app reading a new
+  // package ignores fields it doesn't know about; a new app reading an
+  // old pack (or a personal backup) just sees them as absent.
+  schemaVersion?:       number;         // HOMEBREW_SCHEMA_VERSION at export time
+  packageId?:           string;         // stable id for THIS exported package, independent of any content item's own id
+  name?:                string;         // package display name (user-facing, distinct from any single content item's name)
+  packageVersion?:      string;         // author-controlled version string for this package, distinct from formatVersion/schemaVersion
+  author?:               string;
+  description?:          string;
+  modifiedAt?:            number;        // epoch ms — set when a package is re-exported after being updated
+  /** Every ruleset actually represented among this package's contents —
+   *  derived at export time from each item's own rulesetId (see
+   *  contentDependencies.ts), never asserted independently of the real
+   *  content. A package with untagged (ruleset-agnostic) content only has
+   *  an empty array here, not a fabricated "universal" tag. */
+  compatibleRulesets?: RulesetId[];
+  /** Manifest of every content item actually bundled in `homebrew` above —
+   *  redundant with homebrew's own arrays in WHAT is included, but adds
+   *  the type/name/rulesetId/included-reason index an import preview needs
+   *  without deep-scanning. */
+  contents?:            PackageContentRef[];
+  media?:                PackageMediaAsset[];
 };
 
 export function createBackupPack(
@@ -74,6 +147,54 @@ export function createContentPack(
     deviceId,
     characters:    [],
     homebrew,
+  };
+}
+
+export type PackageMeta = {
+  name:            string;
+  author?:         string;
+  description?:    string;
+  packageVersion?: string;
+};
+
+/**
+ * HOMEBREW-PACKAGE-1: the richer sibling to createContentPack() used by the
+ * new dependency-aware package export flow (src/io/packageIO.ts) — adds the
+ * package-level metadata/manifest fields (see GrimoirePack's own doc
+ * comment on why these are new, all-optional fields rather than a
+ * formatVersion bump). createContentPack() itself stays untouched and is
+ * still what the Library's existing single-item "Export → pack format"
+ * button (exportHomebrewItem in exportShare.ts) uses — that path has no
+ * user-authored package metadata to attach, so the plain envelope is the
+ * right, honest shape for it; this function is for the NEW multi-item
+ * "Export Selected" / "Export Pack" flows, which do.
+ */
+export function createPackageContentPack(
+  homebrew:   GrimoirePackHomebrew,
+  contents:   PackageContentRef[],
+  meta:       PackageMeta,
+  deviceId:   string | null,
+  appVersion: string,
+): GrimoirePack {
+  const compatibleRulesets = Array.from(new Set(contents.map(c => c.rulesetId).filter((r): r is NonNullable<typeof r> => !!r)));
+  return {
+    formatVersion:  GRIMOIRE_PACK_FORMAT_VERSION,
+    schemaVersion:  HOMEBREW_SCHEMA_VERSION,
+    packType:       'content-pack',
+    createdAt:      Date.now(),
+    modifiedAt:     Date.now(),
+    appVersion,
+    deviceId,
+    characters:     [],
+    homebrew,
+    packageId:      `pkg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+    name:           meta.name,
+    author:         meta.author,
+    description:    meta.description,
+    packageVersion: meta.packageVersion,
+    compatibleRulesets,
+    contents,
+    media:          [],
   };
 }
 

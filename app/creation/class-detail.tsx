@@ -1,20 +1,28 @@
 // app/creation/class-detail.tsx
 // Class detail with back button, collapsible sections, and safe re-selection.
-import { View, Text, ScrollView, Pressable, StyleSheet, Modal } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
-import { globalContentDB } from '../../src/content/classes/library';
 import { levelUp, stripResolvedAsiStats } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { getProgressionForClass } from '../../src/content/classes/progressions';
 import {
   classMeta, featuresByLevel, progressionTable, abilityFullName,
 } from '../../src/content/classes/classBrowse';
-import { subclassEntriesForClassMerged } from '../../src/content/subclasses/subclassBrowse';
+import {
+  subclassEntriesForClassMerged, subclassAdditions, SUBCLASS_ADDITION_LABELS,
+  subclassSourceLabel, subclassSortOptions, SubclassAddition,
+} from '../../src/content/subclasses/subclassBrowse';
+import { sortByOption } from '../../src/content/contentQuery';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Entity } from '../../src/engine/types';
+import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import {
+  FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips,
+} from '../../src/components/FilterChipRow';
+import { SortControl } from '../../src/components/SortControl';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 type ClassDetail = {
@@ -300,6 +308,21 @@ export default function ClassDetailScreen() {
   // Subclass list — collapsed by default, its own dropdown control (inside
   // this class's own detail screen, not the outer class-selection list).
   const [subclassesOpen, setSubclassesOpen] = useState(false);
+  // CREATION-FILTERS-1: dev/personal builds show every subclass (not just
+  // the SRD-tagged one) — some classes have 10+ once every sourcebook's
+  // options are included, with no way to narrow the list before this.
+  const [subclassSearch, setSubclassSearch] = useState('');
+  // SHARED-QUERY-1: Parent Class/Game/Ruleset/Unlock Level are deliberately
+  // NOT filter controls here — this screen is already scoped to one
+  // specific class (context determines Parent Class), and the campaign/
+  // character context already determines Ruleset. Unlock level stays a
+  // per-row badge (real info) but not a filter axis — matches the revised
+  // Subclass filter spec (Source/Pack, Official/Homebrew, "What it adds"
+  // only).
+  const [subclassOfficialFilter, setSubclassOfficialFilter] = useState<'all' | 'official' | 'homebrew'>('all');
+  const [subclassAddsFilter, setSubclassAddsFilter] = useState<Set<SubclassAddition>>(new Set());
+  const [subclassFiltersOpen, setSubclassFiltersOpen] = useState(false);
+  const [subclassSort, setSubclassSort] = useState('name_asc');
 
   // Jump from a progression row to the Features tab, expanding that feature.
   function goToFeature(featureId: string) {
@@ -310,10 +333,15 @@ export default function ClassDetailScreen() {
   const [changePrompt, setChangePrompt] = useState<{
     lines: string[]; className: string; onConfirm: () => void;
   } | null>(null);
-  const homebrewClasses = useHomebrewStore(s => s.classes);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
-  const cls    = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === id);
+  // getMergedContentDB() (not a plain official+homebrew concat) so a
+  // homebrew class sharing an official id correctly wins, matching the
+  // precedence rule every other content-resolution site in the app already
+  // follows (audit finding CONTENT-1/2/3/4 — this call site previously
+  // spread official first, so .find() always returned the official entry).
+  const cls    = getMergedContentDB().classes.find(c => c.id === id);
   const detail = id ? CLASS_DETAIL[id] : null;
 
   useEffect(() => {
@@ -414,6 +442,7 @@ export default function ClassDetailScreen() {
             <Text style={styles.homebrewTagTxt}>Homebrew</Text>
           </View>
         )}
+        {!!detail && isNonSrd(cls.srd) && <NonSrdBadge />}
       </View>
       <View style={styles.divider} />
 
@@ -626,17 +655,67 @@ export default function ClassDetailScreen() {
 
       {/* ── Subclasses — a real dropdown, collapsed by default ── */}
       {(() => {
-        const subs = subclassEntriesForClassMerged(cls.id, homebrewSubclasses);
-        if (subs.length === 0) return null;
+        const allSubs = subclassEntriesForClassMerged(cls.id, homebrewSubclasses);
+        if (allSubs.length === 0) return null;
+        const isHomebrewSub = (sub: typeof allSubs[number]) => homebrewSubclasses.some(hs => hs.id === sub.id);
+        const availableAdditions = Array.from(new Set(allSubs.flatMap(s => Array.from(subclassAdditions(s.progression)))))
+          .map(a => ({ id: a, label: SUBCLASS_ADDITION_LABELS[a] }));
+        const sortOptions = subclassSortOptions(isHomebrewSub);
+        const subs = sortByOption(
+          allSubs
+            .filter(s => !subclassSearch.trim() || s.name.toLowerCase().includes(subclassSearch.trim().toLowerCase()))
+            .filter(s => subclassOfficialFilter === 'all' || (subclassOfficialFilter === 'homebrew') === isHomebrewSub(s))
+            .filter(s => subclassAddsFilter.size === 0 || Array.from(subclassAddsFilter).some(a => subclassAdditions(s.progression).has(a))),
+          sortOptions,
+          subclassSort,
+        );
+        const activeChips = [
+          ...(subclassOfficialFilter !== 'all' ? [{ key: 'official', label: subclassOfficialFilter === 'official' ? 'Official' : 'Homebrew', onClear: () => setSubclassOfficialFilter('all') }] : []),
+          ...Array.from(subclassAddsFilter).map(a => ({ key: `adds_${a}`, label: SUBCLASS_ADDITION_LABELS[a], onClear: () => setSubclassAddsFilter(prev => { const n = new Set(prev); n.delete(a); return n; }) })),
+        ];
         return (
           <>
             <View style={styles.divider} />
             <Pressable style={styles.subclassDropdownHeader} onPress={() => setSubclassesOpen(o => !o)}>
-              <Text style={styles.subclassHeading}>SUBCLASSES ({subs.length})</Text>
+              <Text style={styles.subclassHeading}>SUBCLASSES ({allSubs.length})</Text>
               <Text style={styles.subclassDropdownCaret}>{subclassesOpen ? '▲' : '▼'}</Text>
             </Pressable>
             {subclassesOpen && (
               <View style={{ gap: Spacing.sm }}>
+                {allSubs.length > 6 && (
+                  <View style={styles.subclassSearchRow}>
+                    <TextInput
+                      style={[styles.subclassSearch, styles.subclassSearchFlex]}
+                      placeholder={`Search ${allSubs.length} subclasses…`}
+                      placeholderTextColor={Colors.textDim}
+                      value={subclassSearch}
+                      onChangeText={setSubclassSearch}
+                    />
+                  </View>
+                )}
+                <View style={styles.controlsRow}>
+                  <Pressable
+                    style={[styles.subclassFiltersToggle, subclassFiltersOpen && styles.subclassFiltersToggleActive]}
+                    onPress={() => setSubclassFiltersOpen(o => !o)}
+                  >
+                    <Text style={[styles.subclassFiltersToggleTxt, subclassFiltersOpen && styles.subclassFiltersToggleTxtActive]}>Filters</Text>
+                  </Pressable>
+                  <SortControl options={sortOptions} value={subclassSort} onChange={setSubclassSort} />
+                </View>
+                {subclassFiltersOpen && (
+                  <View>
+                    <FilterSection label="Official / Homebrew">
+                      <OfficialHomebrewChipRow value={subclassOfficialFilter} onChange={setSubclassOfficialFilter} />
+                    </FilterSection>
+                    <FilterSection label="What It Adds">
+                      <MultiSelectChipRow options={availableAdditions} values={subclassAddsFilter} onChange={setSubclassAddsFilter} scrollable />
+                    </FilterSection>
+                  </View>
+                )}
+                <ActiveFilterChips chips={activeChips} onClearAll={() => { setSubclassOfficialFilter('all'); setSubclassAddsFilter(new Set()); }} />
+                {subs.length === 0 && (
+                  <Text style={styles.noResultsTxt}>No subclasses match your search.</Text>
+                )}
                 {subs.map(sub => (
                   <Pressable
                     key={sub.id}
@@ -646,6 +725,7 @@ export default function ClassDetailScreen() {
                     <View style={{ flex: 1 }}>
                       <View style={styles.subclassNameRow}>
                         <Text style={styles.subclassName}>{sub.name}</Text>
+                        {!homebrewSubclasses.some(hs => hs.id === sub.id) && isNonSrd(sub.progression.srd) && <NonSrdBadge />}
                         <View style={styles.subclassLvlBadge}>
                           <Text style={styles.subclassLvlTxt}>Lv {sub.unlockLevel}+</Text>
                         </View>
@@ -880,6 +960,22 @@ const styles = StyleSheet.create({
   },
   subclassDropdownCaret: { fontSize: FontSize.sm, color: Colors.textDim },
   subclassHeading: { fontSize: FontSize.xs, color: Colors.gold, letterSpacing: 2, fontWeight: FontWeight.bold },
+  subclassSearch: {
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    fontSize: FontSize.sm, color: Colors.textPrimary,
+  },
+  subclassSearchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: Spacing.xs },
+  subclassSearchFlex: { flex: 1 },
+  subclassFiltersToggle: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.surface, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
+  },
+  subclassFiltersToggleActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  subclassFiltersToggleTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  subclassFiltersToggleTxtActive: { color: Colors.gold },
+  noResultsTxt: { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic' },
   subclassCard: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     backgroundColor: Colors.surface, borderRadius: Radius.md,

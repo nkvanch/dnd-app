@@ -63,12 +63,17 @@ describe('Lich legendary actions — real content, real pipeline', () => {
     expect(lich.turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: false });
   });
 
-  it('a mechanical legendary action (Frightening Gaze) spends its resource cost; damage/condition stay disclosed-only, matching every other monster attack feature in this content file (applyAbilityEffects deliberately never auto-applies damage/apply_condition — see its own doc comment)', () => {
+  it('a mechanical legendary action (Frightening Gaze) spends its resource cost AND applies its condition (ARCH-2 fix — damage stays a manual roll, but apply_condition is no longer disclosed-only)', () => {
     let lich = spawnMonster(monsterLich, DEFAULT_RULES);
     const frighten = lich.features.find(f => f.id === 'lich_legendary_frightening_gaze')!;
     lich = applyActionCardUse(lich, generateActionCard(frighten, lich)!, DEFAULT_RULES);
     expect(lich.resources.custom.find(r => r.id === 'legendary_actions')?.current).toBe(1); // costs 2 of 3
-    expect(lich.conditions).toHaveLength(0); // condition is disclosed via the card text, never auto-applied
+    // Previously asserted toHaveLength(0) — apply_condition was a no-op
+    // before ARCH-2's fix. applyAbilityEffects now actually applies it,
+    // proven here through the real content pipeline, not a synthetic
+    // fixture (matching this file's own stated purpose).
+    expect(lich.conditions).toHaveLength(1);
+    expect(lich.conditions[0].id).toBe('frightened');
   });
 
   it("startTurn refreshes the pool back to full at the start of the lich's own turn", () => {

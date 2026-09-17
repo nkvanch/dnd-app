@@ -10,8 +10,10 @@ import { useCharacterStore } from '../src/store/characterStore';
 import { Alert } from '../src/utils/alert';
 import { useHomebrewStore } from '../src/store/homebrewStore';
 import { useSessionStore } from '../src/store/sessionStore';
-import { exportBackup, pickAndValidateBackup, ImportPreview } from '../src/io/backupIO';
+import { exportBackup, pickAndValidateBackup, ImportPreview, findStaleCharacterOverwrites, findHomebrewIdCollisions, HomebrewIdCollision } from '../src/io/backupIO';
 import { recordInstalledPack, PackItemRef } from '../src/db/packRegistryRepo';
+import { loadAllEntityMeta } from '../src/db/entityRepo';
+import { HomebrewContent } from '../src/db/contentCacheRepo';
 import { useSafeGoBack } from '../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../src/theme';
 
@@ -29,6 +31,21 @@ export default function BackupScreen() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [committing, setCommitting] = useState(false);
   const [resultMsg, setResultMsg] = useState<string | null>(null);
+  // Names of characters this import would overwrite with an OLDER copy than
+  // what's already on this device — Entity itself carries no timestamp, so
+  // this compares each local character's own SQLite updatedAt (fetched
+  // fresh here, not assumed already loaded into characterStore) against the
+  // pack's overall createdAt. A warning, not a block — restoring an old
+  // backup deliberately (e.g. to undo something) is a legitimate use case;
+  // silently overwriting newer progress with no signal at all is the actual
+  // bug (audit finding BACKUP-1).
+  const [staleWarnings, setStaleWarnings] = useState<string[]>([]);
+  // Homebrew ids are unnamespaced name-slugs with no uniqueness guarantee
+  // across authors/devices — importing silently overwrote a same-id local
+  // item (hand-authored, not from any pack — the one case the existing
+  // pack_content_shadowed diagnostic doesn't cover) with the incoming one,
+  // with zero warning (audit finding INV-2).
+  const [idCollisions, setIdCollisions] = useState<HomebrewIdCollision[]>([]);
 
   async function handleExport() {
     setExporting(true);
@@ -63,7 +80,12 @@ export default function BackupScreen() {
     setResultMsg(null);
     try {
       const result = await pickAndValidateBackup();
-      if (result) setPreview(result);
+      if (result) {
+        setPreview(result);
+        const localMeta = await loadAllEntityMeta();
+        setStaleWarnings(findStaleCharacterOverwrites(result.pack, localMeta));
+        setIdCollisions(findHomebrewIdCollisions(result.pack.homebrew ?? {}, homebrew));
+      }
     } catch (e: any) {
       Alert.alert('That file couldn\u2019t be imported', e?.message ?? 'Unknown error.');
     } finally {
@@ -83,32 +105,47 @@ export default function BackupScreen() {
       // Homebrew: saveItem is an upsert per category. itemRefs collects what
       // was actually imported so a content-pack (not a personal backup —
       // see below) can be registered as one removable group (A-36).
+      //
+      // Tracked INCREMENTALLY (recordInstalledPack after every item, not
+      // just once at the very end) rather than wrapped in a true SQLite
+      // transaction — the store layer (saveHomebrewItem) doesn't expose the
+      // raw db connection this screen would need for db.withTransactionAsync,
+      // and recordInstalledPack is a plain INSERT OR REPLACE, safe to call
+      // repeatedly with a growing list. If a failure happens partway
+      // through, everything saved before it is still registered and
+      // removable as a group instead of becoming untracked, orphaned
+      // content only discoverable via the Library (audit finding BACKUP-2).
       const hb = preview.pack.homebrew;
       const itemRefs: PackItemRef[] = [];
-      if (hb) {
-        for (const r of hb.races ?? [])       { await saveHomebrewItem('race', r);       itemRefs.push({ type: 'race',       id: r.id }); }
-        for (const sr of hb.subraces ?? [])   { await saveHomebrewItem('subrace', sr);   itemRefs.push({ type: 'subrace',    id: sr.id }); }
-        for (const c of hb.classes ?? [])     { await saveHomebrewItem('class', c);      itemRefs.push({ type: 'class',      id: c.id }); }
-        for (const sc of hb.subclasses ?? []) { await saveHomebrewItem('subclass', sc);  itemRefs.push({ type: 'subclass',   id: sc.id }); }
-        for (const s of hb.spells ?? [])      { await saveHomebrewItem('spell', s);      itemRefs.push({ type: 'spell',      id: s.id }); }
-        for (const b of hb.backgrounds ?? [])  { await saveHomebrewItem('background', b); itemRefs.push({ type: 'background', id: b.id }); }
-        for (const f of hb.features ?? [])    { await saveHomebrewItem('feature', f);    itemRefs.push({ type: 'feature',    id: f.id }); }
-        for (const it of hb.items ?? [])      { await saveHomebrewItem('item', it);      itemRefs.push({ type: 'item',       id: it.id }); }
-        for (const ft of hb.feats ?? [])      { await saveHomebrewItem('feat', ft);      itemRefs.push({ type: 'feat',       id: ft.id }); }
-        for (const m of hb.monsters ?? [])    { await saveHomebrewItem('monster', m);    itemRefs.push({ type: 'monster',    id: m.id }); }
-        for (const c of hb.conditions ?? [])  { await saveHomebrewItem('condition', c);  itemRefs.push({ type: 'condition',  id: c.id }); }
+      const isContentPack = preview.pack.packType === 'content-pack';
+      const packId = `pack_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      async function saveAndTrack(type: PackItemRef['type'], item: HomebrewContent) {
+        await saveHomebrewItem(type, item);
+        itemRefs.push({ type, id: item.id });
+        if (isContentPack) {
+          await recordInstalledPack(packId, preview!.suggestedName, itemRefs);
+        }
       }
-      // Only a shared content-pack gets registered — a 'backup' import is
-      // the user restoring their OWN device, not installing someone else's
-      // content, so it doesn't belong in the installed-packs list.
-      if (preview.pack.packType === 'content-pack' && itemRefs.length > 0) {
-        await recordInstalledPack(`pack_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, preview.suggestedName, itemRefs);
+      if (hb) {
+        for (const r of hb.races ?? [])       await saveAndTrack('race', r);
+        for (const sr of hb.subraces ?? [])   await saveAndTrack('subrace', sr);
+        for (const c of hb.classes ?? [])     await saveAndTrack('class', c);
+        for (const sc of hb.subclasses ?? []) await saveAndTrack('subclass', sc);
+        for (const s of hb.spells ?? [])      await saveAndTrack('spell', s);
+        for (const b of hb.backgrounds ?? []) await saveAndTrack('background', b);
+        for (const f of hb.features ?? [])    await saveAndTrack('feature', f);
+        for (const it of hb.items ?? [])      await saveAndTrack('item', it);
+        for (const ft of hb.feats ?? [])      await saveAndTrack('feat', ft);
+        for (const m of hb.monsters ?? [])    await saveAndTrack('monster', m);
+        for (const c of hb.conditions ?? [])  await saveAndTrack('condition', c);
       }
       setResultMsg(
         `Imported ${preview.characterCount} character${preview.characterCount !== 1 ? 's' : ''}` +
         (preview.homebrewCount > 0 ? ` and ${preview.homebrewCount} homebrew item${preview.homebrewCount !== 1 ? 's' : ''}.` : '.')
       );
       setPreview(null);
+      setStaleWarnings([]);
+      setIdCollisions([]);
     } catch (e: any) {
       Alert.alert('Import failed partway through', e?.message ?? 'Some data may have been imported. Check your character list.');
     } finally {
@@ -182,8 +219,25 @@ export default function BackupScreen() {
               Created {new Date(preview.pack.createdAt).toLocaleDateString()}
               {'  \u00b7  '}Grimoire v{preview.pack.appVersion}
             </Text>
+            {staleWarnings.length > 0 && (
+              <View style={styles.staleWarningBox}>
+                <Text style={styles.staleWarningTxt}>
+                  \u26a0\ufe0f {staleWarnings.join(', ')} {staleWarnings.length === 1 ? 'has' : 'have'} been
+                  played more recently than this backup \u2014 importing will overwrite that newer progress.
+                </Text>
+              </View>
+            )}
+            {idCollisions.length > 0 && (
+              <View style={styles.staleWarningBox}>
+                <Text style={styles.staleWarningTxt}>
+                  \u26a0\ufe0f This pack shares an id with content already on this device \u2014 importing will
+                  overwrite it:{'\n'}
+                  {idCollisions.map(c => `"${c.localName}" \u2192 "${c.incomingName}" (${c.type})`).join('\n')}
+                </Text>
+              </View>
+            )}
             <View style={styles.previewBtnRow}>
-              <Pressable style={styles.previewCancelBtn} onPress={() => setPreview(null)} disabled={committing}>
+              <Pressable style={styles.previewCancelBtn} onPress={() => { setPreview(null); setStaleWarnings([]); setIdCollisions([]); }} disabled={committing}>
                 <Text style={styles.previewCancelTxt}>Cancel</Text>
               </Pressable>
               <Pressable style={[styles.previewConfirmBtn, committing && styles.actionBtnDisabled]} onPress={handleConfirmImport} disabled={committing}>
@@ -266,6 +320,11 @@ const styles = StyleSheet.create({
   previewLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
   previewValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   previewNote: { fontSize: FontSize.xs, color: Colors.textDim, textAlign: 'center', marginTop: 4 },
+  staleWarningBox: {
+    marginTop: Spacing.sm, padding: Spacing.sm, borderRadius: Radius.md,
+    backgroundColor: Colors.red + '22', borderWidth: 1, borderColor: Colors.red + '66',
+  },
+  staleWarningTxt: { fontSize: FontSize.xs, color: Colors.red, lineHeight: 17 },
   previewBtnRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
   previewCancelBtn: {
     flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,

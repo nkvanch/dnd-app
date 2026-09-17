@@ -5,7 +5,7 @@
 // Every message is one JSON object followed by '\n'.
 // Receivers buffer incoming TCP chunks and split on '\n' to extract messages.
 // ============================================================================
-import { Entity, SyncEvent } from '../engine/types';
+import { Entity, SyncEvent, Campaign } from '../engine/types';
 
 // ── Connected player roster entry ──────────────────────────────────────────────
 
@@ -39,6 +39,14 @@ export type SyncMessage =
   | { type: 'request_entity'; entityId: string }
   | { type: 'entity_snapshot'; entity: Entity }
   | { type: 'entity_patch';   entityId: string; patch: Record<string, unknown> }
+  // DM-only, one-way (players never author Campaign edits) — pushed on
+  // 'hello' so a newly-joined/reconnected player's local Campaign record
+  // (previously a permanent join-time placeholder, see joinCampaign's own
+  // doc comment) gets the DM's real name/rules/notes/quests/session log,
+  // and again as a patch whenever the DM edits it (audit finding
+  // CAMPAIGN-SYNC-1). Mirrors entity_snapshot/entity_patch's exact shape.
+  | { type: 'campaign_snapshot'; campaign: Campaign }
+  | { type: 'campaign_patch';   campaignId: string; patch: Record<string, unknown> }
   | { type: 'claim_character'; characterId: string | null }
   | ({ type: 'combat_turn_state' } & CombatTurnState)
   | { type: 'error';          message: string };

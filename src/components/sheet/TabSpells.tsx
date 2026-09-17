@@ -11,7 +11,7 @@
 // and a toggle to add/remove spells from entity.spellcasting.prepared.
 // Spontaneous casters: all known spells are castable; no prepared toggle.
 // ============================================================================
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, CampaignRules, ActionCard, Spell, ActivationOption } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
@@ -44,12 +44,17 @@ const SLOT_ORDINALS: Record<number, string> = {
 interface Props {
   entity:         Entity;
   rules:          CampaignRules;
-  onEntityUpdate: (updated: Entity) => void;
+  // Optional label param (audit finding TIMELINE-LABEL-1): this tab funnels
+  // 3 semantically different actions — cast, toggle-prepared, learn a new
+  // spell — through one callback, and the parent sheet screen has no way to
+  // tell them apart on its own. Each call site below now passes its own
+  // specific label; the parent falls back to a generic one if omitted.
+  onEntityUpdate: (updated: Entity, label?: string) => void;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
+function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
   const [pendingOptionCard, setPendingOptionCard] = useState<ActionCard | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -101,7 +106,8 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
     const next = level === 0
       ? { ...block, cantrips: [...new Set([...block.cantrips, spellId])] }
       : { ...block, known:    [...new Set([...block.known,    spellId])] };
-    onEntityUpdate({ ...current, spellcasting: next });
+    const spellName = resolveSpellById(spellId, homebrewSpells)?.name ?? spellId;
+    onEntityUpdate({ ...current, spellcasting: next }, `Learned ${spellName}`);
   }
 
   // Multiclass-aware: a character is a "prepared caster" for this tab's
@@ -177,7 +183,7 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
       }
     }
 
-    onEntityUpdate(updated);
+    onEntityUpdate(updated, `Cast ${card.name}`);
     setActiveCard(card);
   }, [entity, onEntityUpdate, spellMap, rules]);
 
@@ -211,11 +217,12 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
     const newPrepared = alreadyPrepared
       ? entity.spellcasting.prepared.filter(id => id !== spellId)
       : [...entity.spellcasting.prepared, spellId];
+    const spellName = spellMap.get(spellId)?.name ?? spellId;
     onEntityUpdate({
       ...entity,
       spellcasting: { ...entity.spellcasting, prepared: newPrepared },
-    });
-  }, [entity, onEntityUpdate]);
+    }, alreadyPrepared ? `Unprepared ${spellName}` : `Prepared ${spellName}`);
+  }, [entity, onEntityUpdate, spellMap]);
 
   function rollForCard(crit: boolean) {
     if (!activeCard) return null;
@@ -421,6 +428,9 @@ export function TabSpells({ entity, rules, onEntityUpdate }: Props) {
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: see TabCharacter.tsx's identical comment.
+export const TabSpells = memo(TabSpellsInner);
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 

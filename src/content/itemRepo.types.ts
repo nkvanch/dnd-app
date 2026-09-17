@@ -4,7 +4,7 @@
 // (SQLite-backed). Mirrors spellRepo.types.ts's design exactly — see that
 // file's header for the full rationale.
 // ============================================================================
-import { Item, ItemInstance } from '../engine/types';
+import { Item, ItemInstance, RulesetId } from '../engine/types';
 
 /**
  * Tier 1 — the lightweight fields browse/sort/classify UIs actually key on
@@ -31,6 +31,19 @@ export type ItemIndexEntry = {
   hasDamageEffect: boolean;
   weaponRange:     string | null;
   srd?:       boolean;
+  /**
+   * TIER1-EXT-1: added so Ruleset (and the derived Source filter — see
+   * getContentProvenance()) don't need a Tier-2 full-record load just to
+   * filter. Rarity/damage-type/consumable/charges are NOT added here —
+   * confirmed against the Item type (src/engine/types.ts) that none of
+   * those exist as real fields anywhere in this content model, official
+   * or homebrew; adding index columns for them would mean inventing data.
+   * Weapon/armor SUBTYPE is also not added — TabInventory.tsx's own
+   * classifyWeaponByName()/armorWeight() heuristics already do this from
+   * `properties`/`name`, already present in Tier 1, so no new field is
+   * needed for that filter to work.
+   */
+  rulesetId?: RulesetId;
 };
 
 export interface ItemRepo {
@@ -62,6 +75,7 @@ export function toItemIndexEntry(item: Item): ItemIndexEntry {
     hasDamageEffect: !!damageFeature,
     weaponRange:     damageFeature?.activation?.range ?? null,
     srd:             item.srd,
+    rulesetId:       item.rulesetId,
   };
 }
 

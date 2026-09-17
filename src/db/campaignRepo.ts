@@ -38,14 +38,28 @@ export async function loadCampaign(id: string): Promise<Campaign | null> {
   return JSON.parse(row.data) as Campaign;
 }
 
-/** Load all saved campaigns sorted by updatedAt descending. */
+/**
+ * Load all saved campaigns sorted by updatedAt descending. A malformed row
+ * is skipped (and logged) rather than aborting the whole list — previously
+ * one bad row threw inside the .map(), silently returning an empty list
+ * and hiding every other valid campaign (audit finding PERSIST-4).
+ */
 export async function loadAllCampaigns(): Promise<Campaign[]> {
   if (Platform.OS === 'web') return [];
   const db   = getDb();
   const rows = await db.getAllAsync<CampaignRow>(
     'SELECT * FROM campaigns ORDER BY updatedAt DESC'
   );
-  return rows.map(r => JSON.parse(r.data) as Campaign);
+  return rows
+    .map(r => {
+      try {
+        return JSON.parse(r.data) as Campaign;
+      } catch (e) {
+        console.error(`[campaignRepo] skipping malformed row id=${r.id}:`, e);
+        return null;
+      }
+    })
+    .filter((c): c is Campaign => c !== null);
 }
 
 /** Permanently delete a campaign by id. */

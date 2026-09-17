@@ -45,22 +45,42 @@ function equipmentChoice(
 }
 
 const fighterEquipChoices: ChoiceDefinition[] = [
-  equipmentChoice('fighter_equip_a', 'Choose armor: (a) chain mail or (b) leather armor, longbow, and 20 arrows', [
-    { id: 'chain',   label: 'Chain Mail',                       items: ['chain_mail'] },
-    { id: 'leather', label: 'Leather Armor + Longbow + 20 arrows', items: ['leather_armor', 'longbow', 'arrows_20'] },
-  ]),
-  equipmentChoice('fighter_equip_b', 'Choose: (a) a martial weapon and a shield or (b) two martial weapons', [
-    { id: 'weapon_shield', label: 'Martial weapon + Shield (Longsword + Shield)', items: ['longsword', 'shield'] },
-    { id: 'two_martial',   label: 'Two martial weapons (Longsword + Battleaxe)',  items: ['longsword', 'battleaxe'] },
-  ]),
-  equipmentChoice('fighter_equip_c', 'Choose: (a) a light crossbow and 20 bolts or (b) two handaxes', [
-    { id: 'crossbow', label: 'Light Crossbow & 20 bolts', items: ['light_crossbow', 'bolts_20'] },
-    { id: 'handaxes', label: 'Two Handaxes',              items: ['handaxe', 'handaxe'] },
-  ]),
-  equipmentChoice('fighter_equip_d', "Choose a pack: (a) dungeoneer's or (b) explorer's", [
-    { id: 'dungeoneer', label: "Dungeoneer's Pack", items: ['dungeoneers_pack'] },
-    { id: 'explorer',   label: "Explorer's Pack",   items: ['explorers_pack'] },
-  ]),
+  {
+    ...equipmentChoice('fighter_equip_a', 'Choose armor: (a) chain mail or (b) leather armor, longbow, and 20 arrows', [
+      { id: 'chain',   label: 'Chain Mail',                       items: ['chain_mail'] },
+      { id: 'leather', label: 'Leather Armor + Longbow + 20 arrows', items: ['leather_armor', 'longbow', 'arrows_20'] },
+    ]),
+    equipmentGroup: 'Armor',
+  },
+  // STARTING-EQUIPMENT-1: previously hardcoded ONE example weapon per
+  // option ("Longsword + Shield" / "Longsword + Battleaxe") as if it were
+  // the only legal pick, when the actual PHB rule is "any martial weapon."
+  // Rebuilt as exact_options with a nested itemFilter per option so the
+  // player picks from every real qualifying weapon via the shared Item
+  // browser, instead of being handed one hardcoded example.
+  {
+    id: 'fighter_equip_b', prompt: 'Choose: (a) a martial weapon and a shield or (b) two martial weapons',
+    kind: 'equipment', count: 1, grants: [], required: true, resolved: false,
+    equipmentStyle: 'exact_options', equipmentGroup: 'Weapons',
+    pool: [
+      { id: 'weapon_shield', label: 'A martial weapon and a shield', value: ['shield'], itemFilter: { constraint: { category: 'weapon', weaponClass: 'martial' }, quantity: 1 } },
+      { id: 'two_martial',   label: 'Two martial weapons',           value: [],          itemFilter: { constraint: { category: 'weapon', weaponClass: 'martial' }, quantity: 2 } },
+    ],
+  },
+  {
+    ...equipmentChoice('fighter_equip_c', 'Choose: (a) a light crossbow and 20 bolts or (b) two handaxes', [
+      { id: 'crossbow', label: 'Light Crossbow & 20 bolts', items: ['light_crossbow', 'bolts_20'] },
+      { id: 'handaxes', label: 'Two Handaxes',              items: ['handaxe', 'handaxe'] },
+    ]),
+    equipmentGroup: 'Ranged / Secondary Weapon',
+  },
+  {
+    ...equipmentChoice('fighter_equip_d', "Choose a pack: (a) dungeoneer's or (b) explorer's", [
+      { id: 'dungeoneer', label: "Dungeoneer's Pack", items: ['dungeoneers_pack'] },
+      { id: 'explorer',   label: "Explorer's Pack",   items: ['explorers_pack'] },
+    ]),
+    equipmentStyle: 'bundle_options', equipmentGroup: 'Pack',
+  },
 ];
 
 export const fighterProgression: ClassProgression = {

@@ -1,20 +1,99 @@
 // app/(tabs)/homebrew.tsx
 // Homebrew tab — Installed Packs, Create, and Library sections.
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { Alert } from '../../src/utils/alert';
 import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
-import { InstalledPack, loadInstalledPacks, deleteInstalledPack } from '../../src/db/packRegistryRepo';
+import { InstalledPack, loadInstalledPacks, deleteInstalledPack, buildPackOwnershipIndex } from '../../src/db/packRegistryRepo';
+import { loadAllEncounters } from '../../src/db/encounterRepo';
+import { PreparedEncounter } from '../../src/engine/types';
+import { getContentProvenance } from '../../src/content/provenance';
 import { diagnosePack, contentUsedBy } from '../../src/engine/packDiagnostics';
 import { Issue } from '../../src/engine/types';
 import { exportHomebrewItem, ExportFormat, ExportAction } from '../../src/io/exportShare';
 import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
 import { VersionHistoryModal } from '../../src/components/homebrew/VersionHistoryModal';
+import { PackageExportModal } from '../../src/components/homebrew/PackageExportModal';
 import { IssuesModal } from '../../src/components/sheet/IssuesModal';
+import { DependencyRef, collectContentDependencies } from '../../src/engine/contentDependencies';
+import { makeHomebrewLookup } from '../../src/store/homebrewLookup';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+
+// ── View Pack Contents modal ─────────────────────────────────────────────────
+// HOMEBREW-PACKAGE-1 item 16: a read-only listing of what an installed pack
+// actually contains today (by stable id, resolved to a display name via the
+// live homebrew store — so an item renamed since import shows its CURRENT
+// name, not a stale snapshot). Close-only, same "read-only, no mutation"
+// shell already established by HomebrewTestModal/VersionHistoryModal.
+function ViewPackContentsModal({ pack, lookup, onClose }: {
+  pack: InstalledPack | null;
+  lookup: (ref: DependencyRef) => HomebrewContent | undefined;
+  onClose: () => void;
+}) {
+  // HOMEBREW-PACKAGE-1 item 21: "Show Rulesets" / "Show Dependencies" —
+  // both computed live from the pack's current itemRefs rather than a
+  // separately-persisted snapshot, matching this same modal's existing
+  // "resolve to CURRENT name" philosophy for its item rows above.
+  const { rulesets, externalDeps } = useMemo(() => {
+    const rulesetSet = new Set<string>();
+    const ownedKeys = new Set((pack?.itemRefs ?? []).map(r => `${r.type}:${r.id}`));
+    const depMap = new Map<string, { type: ContentCacheType; id: string; name: string }>();
+    for (const ref of pack?.itemRefs ?? []) {
+      const item = lookup({ type: ref.type, id: ref.id });
+      if (!item) continue;
+      const rid = (item as { rulesetId?: string }).rulesetId;
+      if (rid) rulesetSet.add(rid);
+      for (const dep of collectContentDependencies(ref.type, item)) {
+        const key = `${dep.type}:${dep.id}`;
+        if (ownedKeys.has(key) || depMap.has(key)) continue;
+        const depItem = lookup(dep);
+        depMap.set(key, { type: dep.type, id: dep.id, name: depItem?.name ?? dep.id });
+      }
+    }
+    return { rulesets: Array.from(rulesetSet), externalDeps: Array.from(depMap.values()) };
+  }, [pack, lookup]);
+
+  return (
+    <Modal visible={pack !== null} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
+          <Text style={styles.sheetTitle}>{pack?.name}</Text>
+          {pack?.packageVersion && <Text style={styles.sheetSub}>Version {pack.packageVersion}</Text>}
+          {pack?.author && <Text style={styles.sheetSub}>By {pack.author}</Text>}
+          {rulesets.length > 0 && <Text style={styles.sheetSub}>Rulesets: {rulesets.join(', ')}</Text>}
+          <ScrollView style={{ maxHeight: 400 }}>
+            {pack?.itemRefs.map(ref => {
+              const item = lookup({ type: ref.type, id: ref.id });
+              return (
+                <View key={`${ref.type}:${ref.id}`} style={styles.sheetRow}>
+                  <Text style={styles.sheetRowTxt}>{item?.name ?? `(missing: ${ref.id})`}</Text>
+                  <Text style={styles.sheetRowType}>{ref.type}</Text>
+                </View>
+              );
+            })}
+            {externalDeps.length > 0 && (
+              <>
+                <Text style={[styles.sheetSub, { marginTop: Spacing.sm }]}>DEPENDS ON (outside this pack)</Text>
+                {externalDeps.map(dep => (
+                  <View key={`${dep.type}:${dep.id}`} style={styles.sheetRow}>
+                    <Text style={styles.sheetRowTxt}>{dep.name}</Text>
+                    <Text style={styles.sheetRowType}>{dep.type}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+          </ScrollView>
+          <Pressable style={styles.sheetCloseBtn} onPress={onClose}>
+            <Text style={styles.sheetCloseBtnTxt}>Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
 
 // ── Installed Packs Panel ────────────────────────────────────────────────────
 // A-36 foundations: content-packs (see app/backup.tsx's import flow) are
@@ -41,11 +120,26 @@ function InstalledPacksPanel() {
   const conditions      = useHomebrewStore(s => s.conditions);
   const characters       = useCharacterStore(s => s.characters);
   const [packs, setPacks] = useState<InstalledPack[]>([]);
+  // HOMEBREW-PACKAGE-1 item 17: "campaigns where applicable" — prepared
+  // encounters (DM planning data) can reference a pack's monster/condition
+  // content independently of any saved character.
+  const [encounters, setEncounters] = useState<PreparedEncounter[]>([]);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [diagnosingPack, setDiagnosingPack] = useState<InstalledPack | null>(null);
+  // HOMEBREW-PACKAGE-1: "Export Pack" — re-exports an already-installed
+  // pack's CURRENT contents (which may have drifted from what was
+  // originally imported, e.g. after an edit) as a fresh package file.
+  const [exportingPackRefs, setExportingPackRefs] = useState<DependencyRef[] | null>(null);
+  // HOMEBREW-PACKAGE-1 item 16: "View Contents".
+  const [viewingPack, setViewingPack] = useState<InstalledPack | null>(null);
+  const homebrewLookup = useMemo(
+    () => makeHomebrewLookup({ races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions }),
+    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions],
+  );
 
   const refresh = useCallback(() => {
     loadInstalledPacks().then(setPacks).catch(e => console.error('[homebrew] loadInstalledPacks failed:', e));
+    loadAllEncounters().then(setEncounters).catch(e => console.error('[homebrew] loadAllEncounters failed:', e));
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -53,16 +147,25 @@ function InstalledPacksPanel() {
   const diagnosticsByPackId = useMemo(() => {
     const homebrew = { races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions };
     const map = new Map<string, Issue[]>();
-    for (const pack of packs) map.set(pack.id, diagnosePack(pack, packs, homebrew, characters));
+    for (const pack of packs) map.set(pack.id, diagnosePack(pack, packs, homebrew, characters, encounters));
     return map;
-  }, [packs, races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, characters]);
+  }, [packs, races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, characters, encounters]);
 
   if (packs.length === 0) return null;
 
   function confirmRemove(pack: InstalledPack) {
+    // Surface the already-computed pack_content_in_use warnings (which
+    // characters depend on this pack) in the destructive-removal dialog
+    // itself, instead of only via the separate ⚠️ badge a DM could bypass
+    // entirely by going straight for the 🗑 button (audit finding
+    // PACK-REMOVE-1). diagnosticsByPackId is already computed above.
+    const dependents = (diagnosticsByPackId.get(pack.id) ?? []).filter(i => i.code === 'pack_content_in_use');
+    const dependentWarning = dependents.length > 0
+      ? '\n\n⚠️ ' + dependents.map(i => i.message).join('\n\n⚠️ ')
+      : '';
     Alert.alert(
       'Remove Pack',
-      `Remove "${pack.name}" and all ${pack.itemRefs.length} item${pack.itemRefs.length !== 1 ? 's' : ''} it installed? This can't be undone.`,
+      `Remove "${pack.name}" and all ${pack.itemRefs.length} item${pack.itemRefs.length !== 1 ? 's' : ''} it installed? This can't be undone.${dependentWarning}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -99,6 +202,8 @@ function InstalledPacksPanel() {
               <View style={styles.typeBadge}>
                 <Text style={styles.typeBadgeTxt}>{pack.itemRefs.length} item{pack.itemRefs.length !== 1 ? 's' : ''}</Text>
               </View>
+              {pack.packageVersion && <Text style={styles.packMeta}>v{pack.packageVersion}</Text>}
+              {pack.author && <Text style={styles.packMeta}>by {pack.author}</Text>}
             </View>
             {/* A-62: only rendered when there's something to show, same
                 "hidden when clean" rule the sheet's own Issues badge (A-54)
@@ -110,6 +215,15 @@ function InstalledPacksPanel() {
                 </Text>
               </Pressable>
             )}
+            <Pressable style={styles.libBtn} onPress={() => setViewingPack(pack)}>
+              <Text style={styles.libBtnTxt}>👁</Text>
+            </Pressable>
+            <Pressable
+              style={styles.libBtn}
+              onPress={() => setExportingPackRefs(pack.itemRefs.map(r => ({ type: r.type, id: r.id })))}
+            >
+              <Text style={styles.libBtnTxt}>📤</Text>
+            </Pressable>
             <Pressable
               style={styles.libBtn}
               disabled={removingId === pack.id}
@@ -122,6 +236,18 @@ function InstalledPacksPanel() {
           </View>
         );
       })}
+
+      <PackageExportModal
+        visible={exportingPackRefs !== null}
+        selected={exportingPackRefs ?? []}
+        onClose={() => setExportingPackRefs(null)}
+      />
+
+      <ViewPackContentsModal
+        pack={viewingPack}
+        lookup={homebrewLookup}
+        onClose={() => setViewingPack(null)}
+      />
 
       <IssuesModal
         visible={diagnosingPack !== null}
@@ -179,16 +305,69 @@ function LibraryPanel() {
     races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, deleteItem,
     getMergedContentDB,
   } = useHomebrewStore();
-  const allRaces = getMergedContentDB().races;
-  const allClasses = getMergedContentDB().classes;
   // Item 18 (homebrew improvements — reference usage): "Used by N" per row.
   const characters = useCharacterStore(s => s.characters);
+
+  // PERF-1: getMergedContentDB() recomputes/merges on every call — memoize
+  // against the individually-selected store fields above (same "explicit
+  // dependency array, not the function reference" pattern InstalledPacksPanel
+  // already uses for diagnosticsByPackId, to avoid the documented
+  // fresh-reference-every-render footgun).
+  const contentDB = useMemo(
+    () => getMergedContentDB(),
+    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions],
+  );
+  const allRaces = contentDB.races;
+  const allClasses = contentDB.classes;
 
   const [exportTarget, setExportTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
+  // HOMEBREW-PACKAGE-1 item 1: "Export This Entry" — routes through the SAME
+  // dependency-aware PackageExportModal as Export Selected/Export Pack
+  // (never a separate single-entry pack format). exportTarget/exportingId
+  // above stay for the *human-readable* PDF/Markdown/Plain-Text formats
+  // (ExportFormatSheet, a genuinely different feature — reading a homebrew
+  // item outside the app) — the old "Grimoire Pack" option that used to sit
+  // alongside those (via exportHomebrewItem/createContentPack, no
+  // dependency closure) is removed below in favor of this.
+  const [exportingEntryRef, setExportingEntryRef] = useState<DependencyRef | null>(null);
+  // HOMEBREW-PACKAGE-1: multi-select for "Export Selected" — same local
+  // useState<string[]> + toggle shape already established elsewhere in the
+  // app (app/dm/encounter.tsx's QuickPanel selection mode) rather than a
+  // shared component, since no reusable multi-select abstraction exists to
+  // pull from yet (confirmed before writing this).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [showPackageExport, setShowPackageExport] = useState(false);
+  function toggleSelected(type: ContentCacheType, id: string) {
+    const key = `${type}:${id}`;
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ContentCacheType | 'all'>('all');
+  // Ruleset — real field on most content types (not Feature, which has no
+  // rulesetId at all), sparsely populated app-wide — auto-hides below at
+  // <=1 distinct value. Official/Homebrew is N/A here by definition (this
+  // whole panel IS the homebrew set). Game is BLOCKED (no game-system
+  // concept anywhere in the app; matchesGame would also just no-op today
+  // since Ruleset itself is barely populated).
+  const [rulesetFilter, setRulesetFilter] = useState<string | null>(null);
+  // PROVENANCE-1: Source/Pack, finished — real, via getContentProvenance()
+  // + the pack-ownership index (buildPackOwnershipIndex(), derived from
+  // InstalledPack.itemRefs, the one authoritative pack registry — no
+  // duplicated packId field added to content). 'local' / a specific
+  // installed pack's own id.
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'local' | string>('all');
+  const [packs, setPacks] = useState<InstalledPack[]>([]);
+  useEffect(() => {
+    loadInstalledPacks().then(setPacks).catch(e => console.error('[homebrew] loadInstalledPacks failed:', e));
+  }, []);
+  const packOwnership = useMemo(() => buildPackOwnershipIndex(packs), [packs]);
 
   async function handleExportFormat(format: ExportFormat, action: ExportAction) {
     if (!exportTarget) return;
@@ -204,16 +383,16 @@ function LibraryPanel() {
     }
   }
 
-  // Homebrew count only — drives the "no homebrew saved yet" messaging below.
-  // Official conditions (isOfficial:true rows) are appended separately and
-  // always present, so the panel is never truly empty once they're in it —
-  // that's deliberate (A-46: conditions had no browse UI at all before this).
+  // Homebrew count — drives the "no homebrew saved yet" messaging below.
   const homebrewCount =
     races.length + subraces.length + classes.length + subclasses.length +
     items.length + spells.length + backgrounds.length + features.length +
     feats.length + monsters.length + conditions.length;
 
-  const all = [
+  // PERF-1: was recomputed unconditionally on every render (11 array spreads
+  // plus a per-subrace/subclass .find() each); memoized against the same
+  // store fields plus contentDB (already memoized above).
+  const all = useMemo(() => [
     ...races.map(r       => ({ type: 'race'       as const, item: r })),
     ...subraces.map(sr   => ({ type: 'subrace'    as const, item: sr, parentName: allRaces.find(r => r.id === sr.parentId)?.name })),
     ...classes.map(c     => ({ type: 'class'      as const, item: c })),
@@ -224,22 +403,15 @@ function LibraryPanel() {
     ...features.map(f    => ({ type: 'feature'    as const, item: f })),
     ...feats.map(f       => ({ type: 'feat'       as const, item: f })),
     ...monsters.map(m    => ({ type: 'monster'    as const, item: m })),
-    // Bug fix (architecture review C11): this used to hand-concat homebrew
-    // conditions AND the full official ALL_CONDITIONS catalog as two
-    // separate pushes with no dedup — a homebrew condition overriding an
-    // official one by id showed up as two rows instead of one. Use the
-    // already-computed getMergedContentDB().conditions (in scope above,
-    // already used for races/classes) — it dedups by id, homebrew wins,
-    // matching the precedence used everywhere else. isOfficial is derived
-    // per row by checking whether the WINNING entry actually came from the
-    // homebrew store, preserving the exact same read-only-row gating below
-    // (official conditions get no edit/history/export/delete affordances,
-    // the same catalog the "Add Condition" apply-to-character flow uses).
-    ...getMergedContentDB().conditions.map(c => ({
-      type: 'condition' as const, item: c,
-      isOfficial: !conditions.some(hb => hb.id === c.id),
-    })),
-  ];
+    // HOMEBREW-COMPENDIUM-SEPARATION-1: this used to also include official
+    // conditions (via contentDB.conditions) — the Homebrew Library is for
+    // content the user authored/installed, not a browse surface for
+    // official content; that's what the Compendium tab (app/(tabs)/
+    // compendium.tsx) is for, and it already exists. Now homebrew-only,
+    // matching every other content type in this same array (all sourced
+    // directly from the raw homebrew-store arrays, never contentDB).
+    ...conditions.map(c => ({ type: 'condition' as const, item: c, isOfficial: false })),
+  ], [races, subraces, classes, subclasses, items, spells, backgrounds, features, feats, monsters, conditions, allRaces, allClasses]);
 
   const EDIT_ROUTES: Partial<Record<string, string>> = {
     race: '/homebrew/race-builder',
@@ -270,19 +442,73 @@ function LibraryPanel() {
     { id: 'condition',  label: 'Conditions' },
   ];
 
-  const filtered = all.filter(({ type, item }) => {
+  const rulesetIdOf = (item: unknown): string | undefined =>
+    (item && typeof item === 'object' && 'rulesetId' in item) ? (item as { rulesetId?: string }).rulesetId : undefined;
+  const availableRulesets = useMemo(
+    () => Array.from(new Set(all.map(({ item }) => rulesetIdOf(item)).filter((r): r is string => !!r))).sort(),
+    [all],
+  );
+  const filtered = useMemo(() => all.filter(({ type, item }) => {
     if (categoryFilter !== 'all' && type !== categoryFilter) return false;
     if (search.trim() && !item.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    if (rulesetFilter && rulesetIdOf(item) !== rulesetFilter) return false;
+    if (sourceFilter !== 'all') {
+      // Feature.source is a FeatureSource OBJECT (provenance tracking for
+      // where a Feature came from mechanically), not the free-text
+      // sourcebook string every other content type's `.source` means here
+      // — narrow it out rather than passing the wrong shape through.
+      const itemForProvenance = { ...item, source: typeof (item as { source?: unknown }).source === 'string' ? (item as { source: string }).source : undefined };
+      const prov = getContentProvenance(itemForProvenance, { isHomebrew: true, packOwnership, ownershipKey: `${type}:${item.id}` });
+      if (sourceFilter === 'local' ? prov.originKind !== 'local_homebrew' : prov.packId !== sourceFilter) return false;
+    }
     return true;
-  });
+  }), [all, categoryFilter, search, rulesetFilter, sourceFilter, packOwnership]);
+
+  // PERF-1: contentUsedBy() scans every character per row — was called fresh
+  // per visible row on every render. Precompute once per filtered/characters
+  // change, keyed the same way the row list itself is keyed (`${type}:${id}`).
+  const usedByMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof contentUsedBy>>();
+    for (const { type, item, ...rest } of filtered) {
+      const isOfficial = 'isOfficial' in rest && rest.isOfficial === true;
+      if (!isOfficial) {
+        map.set(`${type}:${item.id}`, contentUsedBy(characters, type, item.id));
+      }
+    }
+    return map;
+  }, [filtered, characters]);
 
   return (
     <View style={styles.panel}>
-      <Text style={styles.panelTitle}>📚 Library ({all.length})</Text>
+      <View style={styles.libraryHeaderRow}>
+        <Text style={styles.panelTitle}>📚 Library ({all.length})</Text>
+        {homebrewCount > 0 && (
+          <Pressable
+            style={styles.selectModeBtn}
+            onPress={() => { setSelectMode(v => !v); setSelectedKeys(new Set()); }}
+          >
+            <Text style={styles.selectModeBtnTxt}>{selectMode ? 'Cancel' : 'Select'}</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {selectMode && (
+        <View style={styles.selectBar}>
+          <Text style={styles.selectBarTxt}>{selectedKeys.size} selected</Text>
+          <Pressable
+            style={[styles.selectBarBtn, selectedKeys.size === 0 && styles.btnDisabled]}
+            disabled={selectedKeys.size === 0}
+            onPress={() => setShowPackageExport(true)}
+          >
+            <Text style={styles.selectBarBtnTxt}>Export Selected →</Text>
+          </Pressable>
+        </View>
+      )}
+
       {homebrewCount === 0 && (
         <Text style={styles.emptyTxt}>
-          No homebrew content saved yet — create something above. The official Conditions
-          reference below is always browsable.
+          No homebrew content saved yet — create something above. Browse official content
+          in the Compendium tab.
         </Text>
       )}
 
@@ -313,6 +539,52 @@ function LibraryPanel() {
         })}
       </ScrollView>
 
+      {availableRulesets.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
+          <Pressable
+            style={[styles.categoryChip, !rulesetFilter && styles.categoryChipActive]}
+            onPress={() => setRulesetFilter(null)}
+          >
+            <Text style={[styles.categoryChipTxt, !rulesetFilter && styles.categoryChipTxtActive]}>All rulesets</Text>
+          </Pressable>
+          {availableRulesets.map(r => (
+            <Pressable
+              key={r}
+              style={[styles.categoryChip, rulesetFilter === r && styles.categoryChipActive]}
+              onPress={() => setRulesetFilter(v => v === r ? null : r)}
+            >
+              <Text style={[styles.categoryChipTxt, rulesetFilter === r && styles.categoryChipTxtActive]}>{r}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
+      {packs.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
+          <Pressable
+            style={[styles.categoryChip, sourceFilter === 'all' && styles.categoryChipActive]}
+            onPress={() => setSourceFilter('all')}
+          >
+            <Text style={[styles.categoryChipTxt, sourceFilter === 'all' && styles.categoryChipTxtActive]}>All sources</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.categoryChip, sourceFilter === 'local' && styles.categoryChipActive]}
+            onPress={() => setSourceFilter(v => v === 'local' ? 'all' : 'local')}
+          >
+            <Text style={[styles.categoryChipTxt, sourceFilter === 'local' && styles.categoryChipTxtActive]}>Locally Authored</Text>
+          </Pressable>
+          {packs.map(p => (
+            <Pressable
+              key={p.id}
+              style={[styles.categoryChip, sourceFilter === p.id && styles.categoryChipActive]}
+              onPress={() => setSourceFilter(v => v === p.id ? 'all' : p.id)}
+            >
+              <Text style={[styles.categoryChipTxt, sourceFilter === p.id && styles.categoryChipTxtActive]}>{p.name}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
       {filtered.length === 0 && (
         <Text style={styles.emptyTxt}>No homebrew matches your search or filter.</Text>
       )}
@@ -326,10 +598,18 @@ function LibraryPanel() {
         // typed fields (race/class/subclass/background/spell/item) plus an
         // untyped resolved-choice-selection fallback for everything else
         // (feature/feat/monster/condition), same conservative matching
-        // diagnosePack's own pack-level check already uses.
-        const usedBy = !isOfficial ? contentUsedBy(characters, type, item.id) : [];
+        // diagnosePack's own pack-level check already uses. Precomputed in
+        // usedByMap above (PERF-1) rather than called fresh per row here.
+        const usedBy = usedByMap.get(`${type}:${item.id}`) ?? [];
+        const rowKey = `${type}:${item.id}`;
+        const isSelected = selectedKeys.has(rowKey);
         return (
-          <View key={`${type}:${item.id}`} style={styles.libraryRow}>
+          <View key={rowKey} style={styles.libraryRow}>
+            {selectMode && !isOfficial && (
+              <Pressable style={[styles.checkbox, isSelected && styles.checkboxChecked]} onPress={() => toggleSelected(type, item.id)}>
+                {isSelected && <Text style={styles.checkboxMark}>✓</Text>}
+              </Pressable>
+            )}
             <View style={styles.libraryInfo}>
               <Text style={styles.libraryName}>
                 {item.name}{parentName ? ` (${parentName})` : ''}
@@ -356,8 +636,10 @@ function LibraryPanel() {
             </View>
             {/* Official content is reference-only — no edit/history/export/delete,
                 same rule any homebrew-owned action already implicitly follows
-                (these buttons only ever meant anything for a user's own content). */}
-            {!isOfficial && (
+                (these buttons only ever meant anything for a user's own content).
+                Hidden in select mode too — that mode's only action is the
+                checkbox above + the bulk "Export Selected" bar. */}
+            {!isOfficial && !selectMode && (
             <View style={styles.libraryActions}>
               {editRoute && (
                 <Pressable
@@ -384,6 +666,12 @@ function LibraryPanel() {
               </Pressable>
               <Pressable
                 style={styles.libBtn}
+                onPress={() => setExportingEntryRef({ type, id: item.id })}
+              >
+                <Text style={styles.libBtnTxt}>📦</Text>
+              </Pressable>
+              <Pressable
+                style={styles.libBtn}
                 onPress={() => {
                   Alert.alert('Delete', `Delete "${item.name}"?`, [
                     { text: 'Cancel', style: 'cancel' },
@@ -404,7 +692,21 @@ function LibraryPanel() {
         title={exportTarget ? `Export "${exportTarget.item.name}"` : ''}
         onSelect={handleExportFormat}
         onClose={() => setExportTarget(null)}
-        showPackOption
+      />
+
+      <PackageExportModal
+        visible={showPackageExport}
+        selected={Array.from(selectedKeys).map(key => {
+          const [type, id] = key.split(':') as [ContentCacheType, string];
+          return { type, id };
+        })}
+        onClose={() => { setShowPackageExport(false); setSelectMode(false); setSelectedKeys(new Set()); }}
+      />
+
+      <PackageExportModal
+        visible={exportingEntryRef !== null}
+        selected={exportingEntryRef ? [exportingEntryRef] : []}
+        onClose={() => setExportingEntryRef(null)}
       />
 
       <VersionHistoryModal
@@ -421,10 +723,14 @@ function LibraryPanel() {
 // ── Homebrew Screen ───────────────────────────────────────────────────────────
 
 export default function HomebrewScreen() {
+  const router = useRouter();
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>Homebrew</Text>
+        <Pressable style={styles.importBtn} onPress={() => router.push('/homebrew/import-package')}>
+          <Text style={styles.importBtnTxt}>⬇️ Import Homebrew</Text>
+        </Pressable>
       </View>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <InstalledPacksPanel />
@@ -443,10 +749,38 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xl + 8, paddingBottom: Spacing.md,
     paddingHorizontal: Spacing.md,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm,
   },
   title:  { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
+  importBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+  },
+  importBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
   scroll: { flex: 1 },
   content:{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },
+
+  libraryHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  selectModeBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  selectModeBtnTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  selectBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.gold + '18', borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold + '55',
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+  },
+  selectBarTxt: { fontSize: FontSize.sm, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  selectBarBtn: { backgroundColor: Colors.gold, borderRadius: Radius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 4 },
+  selectBarBtnTxt: { fontSize: FontSize.xs, color: Colors.bg, fontWeight: FontWeight.bold },
+  btnDisabled: { opacity: 0.4 },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: Colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxChecked: { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  checkboxMark: { fontSize: 13, color: Colors.bg, fontWeight: FontWeight.bold },
 
   panel: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,
@@ -509,4 +843,26 @@ const styles = StyleSheet.create({
   },
   libBtnTxt:  { fontSize: FontSize.md },
   emptyTxt:   { color: Colors.textDim, fontStyle: 'italic', fontSize: FontSize.sm },
+
+  packMeta: { fontSize: FontSize.xs, color: Colors.textDim },
+
+  // ViewPackContentsModal
+  backdrop: { flex: 1, backgroundColor: '#000000cc', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: Colors.surfaceHigh, borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,
+    padding: Spacing.lg, maxHeight: '80%',
+  },
+  sheetTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
+  sheetSub:   { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 2 },
+  sheetRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: Spacing.xs, borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  sheetRowTxt:  { fontSize: FontSize.sm, color: Colors.textPrimary, flex: 1 },
+  sheetRowType: { fontSize: FontSize.xs, color: Colors.textDim, marginLeft: Spacing.sm },
+  sheetCloseBtn: {
+    alignItems: 'center', backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, paddingVertical: Spacing.sm, marginTop: Spacing.md,
+  },
+  sheetCloseBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold },
 });

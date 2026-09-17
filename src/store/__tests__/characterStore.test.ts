@@ -7,6 +7,7 @@
 import { useCharacterStore, makeEmptyEntity } from '../characterStore';
 import { Entity } from '../../engine/types';
 import * as timelineRepo from '../../db/timelineRepo';
+import * as entityRepo from '../../db/entityRepo';
 import { syncManager } from '../../sync/syncManager';
 
 // updateCharacter/undo/redo all call scheduleSave(), which debounces a real
@@ -200,5 +201,46 @@ describe('applyIncomingEntity — owned-character reconnect protection (architec
 
     expect(useCharacterStore.getState().characters.find(c => c.id === 'companion1')).toBeDefined();
     ownedSpy.mockRestore();
+  });
+});
+
+describe('lastPersistError — surfaces SQLite write failures instead of only logging them (PERSIST-5)', () => {
+  beforeEach(() => {
+    // Earlier describe blocks in this file exercise real (unmocked)
+    // saveEntity calls, which genuinely fail in this test environment
+    // (no initDb() call — see this file's own header comment) — that's
+    // now visible via lastPersistError too, so it must be reset here
+    // rather than assumed null at the start of each test in this block.
+    useCharacterStore.setState({ lastPersistError: null });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    useCharacterStore.setState({ lastPersistError: null });
+  });
+
+  it('sets lastPersistError when a debounced save fails, and clears it on the next successful save', async () => {
+    const saveSpy = jest.spyOn(entityRepo, 'saveEntity').mockRejectedValueOnce(new Error('disk full'));
+    reset([testCharacter('c1', 20)]);
+    expect(useCharacterStore.getState().lastPersistError).toBeNull();
+
+    useCharacterStore.getState().updateCharacter('c1', e => ({
+      ...e, resources: { ...e.resources, hp: { ...e.resources.hp, current: 5 } },
+    }));
+    jest.advanceTimersByTime(600); // fire the debounced save
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(useCharacterStore.getState().lastPersistError).not.toBeNull();
+
+    saveSpy.mockResolvedValueOnce(undefined);
+    useCharacterStore.getState().updateCharacter('c1', e => ({
+      ...e, resources: { ...e.resources, hp: { ...e.resources.hp, current: 4 } },
+    }));
+    jest.advanceTimersByTime(600);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(useCharacterStore.getState().lastPersistError).toBeNull();
   });
 });

@@ -4,9 +4,9 @@
 // auto-applied) plus baseline regression coverage for buildLayer1/2/3, which
 // had zero tests before despite every action card in the app going through
 // them.
-import { Feature, FeatureInstance, Entity, SpellSlots, Race, Subrace } from '../types';
+import { Feature, FeatureInstance, Entity, SpellSlots, Race, Subrace, Spell } from '../types';
 import {
-  buildLayer1, buildLayer2, buildLayer3, buildOutcomeLines, generateActionCard,
+  buildLayer1, buildLayer2, buildLayer3, buildOutcomeLines, generateActionCard, generateSpellCard,
   getTriggeredFeatures, isFeatureAvailable, isLargeCreature,
 } from '../actionCards';
 import { makeEmptyEntity } from '../../store/characterStore';
@@ -370,5 +370,56 @@ describe('isLargeCreature — reads Race.size/Subrace.size content instead of a 
       }],
     };
     expect(isLargeCreature(entity)).toBe(true);
+  });
+});
+
+// ADDITIONAL-SPELL-3 (regression): generateSpellCard used to look the spell
+// up in spellRepo (official content) only, with no homebrew fallback — a
+// homebrew spell sitting in entity.spellcasting.cantrips/.known/.prepared
+// (added via "+ Add Additional Spell", or any homebrew spell legitimately
+// tagged for the character's own class) would silently get no ActionCard
+// at all, so it never appeared on the character sheet despite being
+// correctly persisted in the entity's own data. Mirrors the exact
+// official-then-homebrew fallback the equipped-item-features loop already
+// uses a few lines above in the real file (itemRepo, then homebrewStore).
+describe('generateSpellCard — homebrew fallback (regression)', () => {
+  const homebrewCantrip: Spell = {
+    id: 'test_homebrew_cantrip', name: 'Test Spark', level: 0, school: 'Evocation',
+    castingTime: '1 action', range: '60 feet', components: ['V', 'S'], duration: 'Instantaneous',
+    description: 'A homebrew test cantrip.', upcast: null, ritual: false, concentration: false,
+  };
+
+  afterEach(() => {
+    useHomebrewStore.setState({ spells: [] });
+  });
+
+  it('returns null for an unknown id when no homebrew spell matches either (pre-fix behavior for anything unresolvable)', () => {
+    const e = makeEmptyEntity('e1');
+    expect(generateSpellCard('nonexistent_spell_id', e)).toBeNull();
+  });
+
+  it('falls back to homebrewStore and produces a real card when spellRepo has no match', () => {
+    useHomebrewStore.setState({ spells: [homebrewCantrip] });
+    const e = makeEmptyEntity('e1');
+    const card = generateSpellCard('test_homebrew_cantrip', e);
+    expect(card).not.toBeNull();
+    expect(card?.name).toBe('Test Spark');
+    expect(card?.featureId).toBe('test_homebrew_cantrip');
+    expect(card?.tabs).toContain('spellcasting');
+  });
+
+  it('a homebrew spell sitting in entity.spellcasting actually produces a rendered card end-to-end', () => {
+    useHomebrewStore.setState({ spells: [homebrewCantrip] });
+    const e = makeEmptyEntity('e1');
+    const entity: Entity = {
+      ...e,
+      spellcasting: {
+        ability: 'cha', slots: fullSlots(), cantrips: ['test_homebrew_cantrip'],
+        known: [], prepared: [], concentrating: null,
+      },
+    };
+    const card = generateSpellCard('test_homebrew_cantrip', entity);
+    expect(card).not.toBeNull();
+    expect(card?.name).toBe('Test Spark');
   });
 });

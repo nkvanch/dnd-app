@@ -1,5 +1,5 @@
 // src/engine/__tests__/packDiagnostics.test.ts
-import { diagnosePack, HomebrewContentSlice, bannedContentIds, contentUsedBy } from '../packDiagnostics';
+import { diagnosePack, HomebrewContentSlice, bannedContentIds, contentUsedBy, removedPackItemRefs, stillReferencedRefs } from '../packDiagnostics';
 import { InstalledPack } from '../../db/packRegistryRepo';
 import { makeEmptyEntity } from '../../store/characterStore';
 import { Entity } from '../types';
@@ -122,6 +122,31 @@ describe('diagnosePack', () => {
     const issues = diagnosePack(pack, [pack], homebrew, [character]);
     expect(issues).toContainEqual(expect.objectContaining({ code: 'pack_content_in_use', affectedId: 'char1' }));
   });
+
+  // HOMEBREW-PACKAGE-1 item 17: uninstall diagnostics must also catch OTHER
+  // homebrew definitions (not just saved characters) that structurally
+  // depend on this pack's content — the exact "Homebrew Subclass 'Tidewater
+  // Domain' → uses Feature: 'Ocean's Wrath'" scenario from the spec.
+  it('flags another (locally-authored) homebrew Subrace that still depends on this pack\'s Race', () => {
+    const homebrew = emptyHomebrew();
+    homebrew.races.push({ id: 'tideborn', name: 'Tideborn' } as never);
+    homebrew.subraces.push({ id: 'reefborn', name: 'Reefborn', parentId: 'tideborn' } as never);
+    const pack = makePack({ itemRefs: [{ type: 'race', id: 'tideborn' }] }); // pack owns only the Race — the Subrace is local, not part of this pack
+    const issues = diagnosePack(pack, [pack], homebrew, []);
+    expect(issues).toContainEqual(expect.objectContaining({
+      code: 'pack_content_in_use', affectedId: 'reefborn',
+      message: expect.stringContaining('Reefborn'),
+    }));
+  });
+
+  it('does not flag a Subrace that belongs to the SAME pack as its parent Race', () => {
+    const homebrew = emptyHomebrew();
+    homebrew.races.push({ id: 'tideborn', name: 'Tideborn' } as never);
+    homebrew.subraces.push({ id: 'reefborn', name: 'Reefborn', parentId: 'tideborn' } as never);
+    const pack = makePack({ itemRefs: [{ type: 'race', id: 'tideborn' }, { type: 'subrace', id: 'reefborn' }] });
+    const issues = diagnosePack(pack, [pack], homebrew, []);
+    expect(issues.filter(i => i.affectedId === 'reefborn')).toHaveLength(0);
+  });
 });
 
 // Item 18 (homebrew improvements — reference usage, single item not a whole pack)
@@ -206,5 +231,59 @@ describe('bannedContentIds', () => {
     const packA = makePack({ id: 'a', itemRefs: [{ type: 'item', id: 'sword' }] });
     const packB = makePack({ id: 'b', itemRefs: [{ type: 'race', id: 'goblinkin' }] });
     expect(bannedContentIds([packA, packB], ['a', 'b'])).toEqual(new Set(['sword', 'goblinkin']));
+  });
+});
+
+// HOMEBREW-PACKAGE-1 items 33/34: pack version updates
+describe('removedPackItemRefs', () => {
+  it('returns refs present in the old set but absent from the new set', () => {
+    const oldRefs = [{ type: 'item' as const, id: 'sword' }, { type: 'race' as const, id: 'goblinkin' }];
+    const newRefs = [{ type: 'item' as const, id: 'sword' }];
+    expect(removedPackItemRefs(oldRefs, newRefs)).toEqual([{ type: 'race', id: 'goblinkin' }]);
+  });
+
+  it('returns an empty array when nothing was removed', () => {
+    const oldRefs = [{ type: 'item' as const, id: 'sword' }];
+    const newRefs = [{ type: 'item' as const, id: 'sword' }, { type: 'item' as const, id: 'shield' }];
+    expect(removedPackItemRefs(oldRefs, newRefs)).toEqual([]);
+  });
+
+  it('does not confuse two different types sharing the same id string', () => {
+    const oldRefs = [{ type: 'item' as const, id: 'iron_will' }];
+    const newRefs = [{ type: 'race' as const, id: 'iron_will' }]; // same id, different type — not a match
+    expect(removedPackItemRefs(oldRefs, newRefs)).toEqual([{ type: 'item', id: 'iron_will' }]);
+  });
+});
+
+describe('stillReferencedRefs', () => {
+  it('keeps a removed ref that a saved character still references', () => {
+    const homebrew = emptyHomebrew();
+    homebrew.races.push({ id: 'old_race' });
+    const character: Entity = { ...makeEmptyEntity('char1'), identity: { ...makeEmptyEntity('char1').identity, name: 'Thren', raceId: 'old_race' } };
+    const removed = [{ type: 'race' as const, id: 'old_race' }];
+    expect(stillReferencedRefs(removed, [], homebrew, [character])).toEqual(removed);
+  });
+
+  it('drops a removed ref nothing references', () => {
+    const homebrew = emptyHomebrew();
+    homebrew.races.push({ id: 'old_race' });
+    const removed = [{ type: 'race' as const, id: 'old_race' }];
+    expect(stillReferencedRefs(removed, [], homebrew, [])).toEqual([]);
+  });
+
+  it('keeps a removed ref still depended on by another homebrew definition', () => {
+    const homebrew = emptyHomebrew();
+    homebrew.races.push({ id: 'old_race' });
+    homebrew.subraces.push({ id: 'sub1', parentId: 'old_race' } as HomebrewContentSlice['subraces'][number]);
+    const removed = [{ type: 'race' as const, id: 'old_race' }];
+    expect(stillReferencedRefs(removed, [], homebrew, [])).toEqual(removed);
+  });
+
+  it('partitions a mixed batch correctly — some kept, some not', () => {
+    const homebrew = emptyHomebrew();
+    homebrew.races.push({ id: 'used_race' }, { id: 'unused_race' });
+    const character: Entity = { ...makeEmptyEntity('char1'), identity: { ...makeEmptyEntity('char1').identity, raceId: 'used_race' } };
+    const removed = [{ type: 'race' as const, id: 'used_race' }, { type: 'race' as const, id: 'unused_race' }];
+    expect(stillReferencedRefs(removed, [], homebrew, [character])).toEqual([{ type: 'race', id: 'used_race' }]);
   });
 });

@@ -2,12 +2,12 @@
 // Tab 1 — Combat dashboard. Players live here.
 // Includes: HP, stat row, conditions/exhaustion, resources, spell slots,
 //           death saves (when HP=0), concentration check, level-up button.
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo, memo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Modal, TextInput,
 } from 'react-native';
-import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker, ActivationOption } from '../../engine/types';
+import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker, ActivationOption, matchesRuleset } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
 import { tickDurations } from '../../engine/conditions';
@@ -22,7 +22,6 @@ import { useDiceLogStore } from '../../store/diceLogStore';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
 import { getProgressionForClass, mergeSubclassIntoProgression } from '../../content/classes/progressions';
 import { getSubclassEntryMerged } from '../../content/subclasses/subclassBrowse';
-import { globalContentDB } from '../../content/classes/library';
 import { spellRepo } from '../../content/spellRepo';
 import { spellIdsOnEntity } from '../../content/spellRepo.types';
 import { useHomebrewStore } from '../../store/homebrewStore';
@@ -90,11 +89,6 @@ interface Props {
   onEntityUpdate:    (updated: Entity) => void;
 }
 
-const KNOWN_CONDITIONS = [
-  'blinded','charmed','deafened','exhaustion','frightened',
-  'grappled','incapacitated','invisible','paralyzed','petrified',
-  'poisoned','prone','restrained','stunned','unconscious',
-];
 
 // Display labels for the four structured sense types.
 const SENSE_LABELS: Record<string, string> = {
@@ -246,8 +240,8 @@ function LevelUpSection({
 }: {
   entity: Entity; rules: CampaignRules; onEntityUpdate: (u: Entity) => void; onLeveled: (u: Entity) => void;
 }) {
-  const homebrewClasses    = useHomebrewStore(s => s.classes);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
   const [addClassOpen, setAddClassOpen] = useState(false);
   // Set once levelUp()/levelUpClass() has been simulated but not yet
   // resolved — drives LevelUpPreviewModal. confirmPendingLevelUp() below
@@ -267,7 +261,11 @@ function LevelUpSection({
     setPendingLevelUp(null);
   }
 
-  const allClasses = [...globalContentDB.classes, ...homebrewClasses] as CharClass[];
+  // getMergedContentDB() so a homebrew class sharing an official id
+  // correctly wins — feeds resolveProgression below, which governs actual
+  // level-up mechanics (audit finding CONTENT-1/2/3/4 — this previously
+  // spread official first, so .find() always returned the official entry).
+  const allClasses = getMergedContentDB().classes as CharClass[];
   const maxLevel    = rules.maxLevel ?? 20;
 
   function classLabel(id: string) {
@@ -336,7 +334,12 @@ function LevelUpSection({
   //    "+ Add a Class" to take a brand-new one. ──
   const classes = getClassLevels(entity);
   const takenIds = new Set(classes.map(c => c.classId));
-  const availableToAdd = allClasses.filter(c => !takenIds.has(asClassId(c.id)));
+  // LIVE-RULESET-2 (item 7): the "+ Add a Class" contextual picker is
+  // filtered by the character's own entity.rulesetId — a genuinely NEW
+  // pick, unlike allClasses itself (kept unfiltered above, since it's also
+  // used to resolve/label classes the character ALREADY has, which must
+  // keep working regardless of the character's current ruleset).
+  const availableToAdd = allClasses.filter(c => !takenIds.has(asClassId(c.id)) && matchesRuleset(c.rulesetId, entity.rulesetId));
 
   async function doLevelUpClass(targetClassId: string, targetClass?: CharClass) {
     const existing = classes.find(c => c.classId === targetClassId);
@@ -766,11 +769,15 @@ function MovementModal({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function TabCharacter({
+function TabCharacterInner({
   entity, rules, isDm, campaignId, deviceId,
   onDamage, onHeal, onAddCondition, onRemoveCondition,
   onResourceChange, onSpendSlot, onRestoreSlot, onEntityUpdate,
 }: Props) {
+  // Sourced from the merged content DB (not a hardcoded, official-only id
+  // list) so homebrew conditions are actually pickable here — audit
+  // finding KNOWN_CONDITIONS-1.
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
   const [hpOpen,     setHpOpen]     = useState(false);
   const [auditStat,  setAuditStat]  = useState<string | null>(null);
   const [auditLabel, setAuditLabel] = useState('');
@@ -950,10 +957,20 @@ export function TabCharacter({
 
   const exhaustion = entity.conditionMonitor.exhaustion;
 
-  const filteredConds = KNOWN_CONDITIONS.filter(c =>
-    c.includes(condSearch.toLowerCase()) &&
-    !conditions.some(ac => ac.id === c)
-  );
+  // TABCHAR-PERF-1: was recomputed (map+filter over the merged condition
+  // list) on every render, including every keystroke in condSearch and
+  // every render triggered by something unrelated to conditions at all
+  // (this is the default/most-rendered character-sheet tab). getMergedContentDB()
+  // itself is called once per render (cheap — cached at the store level as
+  // of CONTENT-REGISTRY-PERF-1, returns the same reference when nothing in
+  // the content store changed), and used as a stable useMemo dependency.
+  const mergedContentDB = getMergedContentDB();
+  const filteredConds = useMemo(() => mergedContentDB.conditions
+    .map(c => c.id)
+    .filter(c =>
+      c.includes(condSearch.toLowerCase()) &&
+      !conditions.some(ac => ac.id === c)
+    ), [mergedContentDB, condSearch, conditions]);
 
   const SLOT_TIERS = ['1','2','3','4','5','6','7','8','9'] as const;
 
@@ -1514,6 +1531,7 @@ export function TabCharacter({
                   const more = updated.choices.some(c => c.definition.kind === 'asi' && !c.resolved);
                   if (!more) setLevelUpAsiOpen(false);
                 }}
+                browseStateKey="feat:levelup"
               />
             );
           })()}
@@ -1563,6 +1581,7 @@ export function TabCharacter({
               onEntityUpdate(updated);
               setAddFeatOpen(false);
             }}
+            browseStateKey="feat:live"
           />
         </View>
       </Modal>
@@ -1570,6 +1589,12 @@ export function TabCharacter({
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: memoized so opening an unrelated sheet-level modal (Free
+// Edit, Ruleset Change, History, ...) doesn't force this tab to re-render —
+// only actually matters combined with the caller passing stable prop
+// references (see app/sheet/[id].tsx's onCombatEntityUpdate etc.).
+export const TabCharacter = memo(TabCharacterInner);
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 

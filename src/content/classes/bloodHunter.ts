@@ -63,21 +63,40 @@ const bloodHunterSkillChoice: ChoiceDefinition = {
 };
 
 const bloodHunterEquipChoices: ChoiceDefinition[] = [
-  equipmentChoice('blood_hunter_equip_a', 'Choose a weapon: (a) a martial weapon (Longsword shown) or (b) two simple weapons (Daggers shown)', [
-    { id: 'martial', label: 'Martial Weapon (Longsword)', items: ['longsword'] },
-    { id: 'simple',  label: 'Two Simple Weapons (2 Daggers)', items: ['dagger', 'dagger'] },
-  ]),
-  equipmentChoice('blood_hunter_equip_b', 'Choose: (a) a light crossbow and 20 bolts or (b) a hand crossbow and 20 bolts', [
-    { id: 'light_crossbow', label: 'Light Crossbow & 20 bolts', items: ['light_crossbow', 'bolts_20'] },
-    { id: 'hand_crossbow',  label: 'Hand Crossbow & 20 bolts',  items: ['hand_crossbow', 'bolts_20'] },
-  ]),
-  equipmentChoice('blood_hunter_equip_c', 'Choose armor: (a) studded leather or (b) scale mail', [
-    { id: 'studded_leather', label: 'Studded Leather', items: ['studded_leather'] },
-    { id: 'scale_mail',      label: 'Scale Mail',      items: ['scale_mail'] },
-  ]),
-  equipmentChoice('blood_hunter_equip_d', "You start with an explorer's pack and alchemist's supplies", [
-    { id: 'pack', label: "Explorer's Pack + Alchemist's Supplies", items: ['explorers_pack', 'alchemist_s_supplies'] },
-  ]),
+  // STARTING-EQUIPMENT-1: previously hardcoded ONE example weapon per
+  // option ("Longsword" / "2 Daggers") as if it were the only legal pick,
+  // when the actual rule is "any martial weapon" / "any two simple
+  // weapons." Rebuilt as exact_options with a nested itemFilter per
+  // option, same pattern used for Fighter's equivalent choice.
+  {
+    id: 'blood_hunter_equip_a', prompt: 'Choose a weapon: (a) a martial weapon or (b) two simple weapons',
+    kind: 'equipment', count: 1, grants: [], required: true, resolved: false,
+    equipmentStyle: 'exact_options', equipmentGroup: 'Weapons',
+    pool: [
+      { id: 'martial', label: 'A martial weapon', value: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'martial' }, quantity: 1 } },
+      { id: 'simple',  label: 'Two simple weapons', value: [], itemFilter: { constraint: { category: 'weapon', weaponClass: 'simple' }, quantity: 2 } },
+    ],
+  },
+  {
+    ...equipmentChoice('blood_hunter_equip_b', 'Choose: (a) a light crossbow and 20 bolts or (b) a hand crossbow and 20 bolts', [
+      { id: 'light_crossbow', label: 'Light Crossbow & 20 bolts', items: ['light_crossbow', 'bolts_20'] },
+      { id: 'hand_crossbow',  label: 'Hand Crossbow & 20 bolts',  items: ['hand_crossbow', 'bolts_20'] },
+    ]),
+    equipmentGroup: 'Ranged Weapon',
+  },
+  {
+    ...equipmentChoice('blood_hunter_equip_c', 'Choose armor: (a) studded leather or (b) scale mail', [
+      { id: 'studded_leather', label: 'Studded Leather', items: ['studded_leather'] },
+      { id: 'scale_mail',      label: 'Scale Mail',      items: ['scale_mail'] },
+    ]),
+    equipmentGroup: 'Armor',
+  },
+  {
+    ...equipmentChoice('blood_hunter_equip_d', "You start with an explorer's pack and alchemist's supplies", [
+      { id: 'pack', label: "Explorer's Pack + Alchemist's Supplies", items: ['explorers_pack', 'alchemist_s_supplies'] },
+    ]),
+    equipmentStyle: 'bundle_options', equipmentGroup: 'Pack',
+  },
 ];
 
 // ── Blood Maledict: Amplify (universal, applies to any curse below) ─────────

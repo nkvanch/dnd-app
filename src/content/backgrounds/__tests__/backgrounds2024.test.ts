@@ -7,7 +7,7 @@ import { bgAcolyte2024, bgAcolyte } from '../index';
 
 describe('bgAcolyte2024', () => {
   it('is tagged for the 5.5e ruleset, distinct id from classic Acolyte', () => {
-    expect(bgAcolyte2024.rulesetId).toBe('5.5e');
+    expect(bgAcolyte2024.rulesetId).toBe('dnd5e-2024');
     expect(bgAcolyte2024.id).not.toBe(bgAcolyte.id);
   });
 

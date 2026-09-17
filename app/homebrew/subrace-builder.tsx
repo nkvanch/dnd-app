@@ -12,8 +12,15 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ability, DraftTrait, Entity } from '../../src/engine/types';
+import { Ability, DraftTrait, Entity, RulesetId, RACE_CHOICE_PREFIX } from '../../src/engine/types';
+import {
+  ChoiceDefinitionListEditor, DraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
@@ -24,7 +31,7 @@ import { simulate } from '../../src/engine/simulate';
 import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
-import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 export default function SubraceBuilderScreen() {
@@ -39,16 +46,34 @@ export default function SubraceBuilderScreen() {
   // screen doesn't re-render often enough for that to matter.
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
   const allRaces = getMergedContentDB().races;
-  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  // NESTED-HOMEBREW-1: an optional `parentId` route param pre-selects the
+  // parent race when this screen is reached from race-detail.tsx's own
+  // "+ Create New Homebrew Subrace" button (which already knows exactly
+  // which race the player was looking at) — retains that context instead
+  // of making the player re-search for the race they came from. The
+  // "I want to add a subrace to X, starting from the Homebrew tab" case
+  // (no param) keeps its existing search-based picker unchanged.
+  const { editId, parentId: parentIdParam } = useLocalSearchParams<{ editId?: string; parentId?: string }>();
   const editing = editId ? homebrewSubraces.find(sr => sr.id === editId) ?? null : null;
+  // HOMEBREW-RULESET-1 (item 2): a subrace's most specific available default
+  // is its own PARENT race's ruleset (when launched with a parentId, e.g.
+  // from race-detail.tsx's "+ Create New Homebrew Subrace") — falls back to
+  // the character/campaign draft's ruleset only when no parent is known yet
+  // (the Homebrew-tab, no-param entry point). Never applied when editing.
+  const initialParentRace = parentIdParam ? allRaces.find(r => r.id === parentIdParam) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(
+    () => editing ? editing.rulesetId : (initialParentRace?.rulesetId ?? draftRulesetId),
+  );
 
   const [parentSearch, setParentSearch] = useState('');
-  const [parentId, setParentId] = useState<string | null>(null);
+  const [parentId, setParentId] = useState<string | null>(parentIdParam ?? null);
   const [name, setName] = useState('');
   const [abiBonuses, setAbiBonuses] = useState<Record<Ability, string>>({
     str: '', dex: '', con: '', int: '', wis: '', cha: '',
   });
   const [traits, setTraits] = useState<DraftTrait[]>([]);
+  const [pendingChoices, setPendingChoices] = useState<DraftChoice[]>([]);
   const [saving, setSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testRows, setTestRows] = useState<Row[]>([]);
@@ -60,10 +85,19 @@ export default function SubraceBuilderScreen() {
     if (!editing) return;
     setParentId(editing.parentId);
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     const draft = editing.homebrewDraft as Record<string, unknown> | undefined;
     if (draft) {
       if (draft.abiBonuses) setAbiBonuses(draft.abiBonuses as Record<Ability, string>);
       if (draft.traits) setTraits(draft.traits as DraftTrait[]);
+      if (draft.pendingChoices) setPendingChoices(draft.pendingChoices as DraftChoice[]);
+    }
+    // CHOICE-AUTHORING-1: see race-builder.tsx's identical fallback comment.
+    if (!draft?.pendingChoices && editing.pendingChoices) {
+      const reconstructed = editing.pendingChoices
+        .map(def => definitionToDraftChoice(def, RACE_CHOICE_PREFIX))
+        .filter((d): d is DraftChoice => d !== null);
+      if (reconstructed.length > 0) setPendingChoices(reconstructed);
     }
   }, [editing?.id]);
 
@@ -76,13 +110,22 @@ export default function SubraceBuilderScreen() {
     if (!name.trim() || !parentId || saving) return;
     setSaving(true);
     const draft = { ...newDraftSubrace(name.trim()), abiBonuses, traits };
-    const subrace = buildSubrace(draft, parentId);
+    const compiledChoices = pendingChoices.map(d => draftChoiceToDefinition(d, RACE_CHOICE_PREFIX));
+    const subrace = {
+      ...buildSubrace(draft, parentId), rulesetId,
+      pendingChoices: compiledChoices.length > 0 ? compiledChoices : undefined,
+      homebrewDraft: { abiBonuses, traits, pendingChoices },
+    };
     // A standalone subrace keeps the editId (if editing) so re-saving
     // updates the same record rather than minting a new one — buildSubrace
     // derives an id from the name, which would drift if the name changed.
     const finalSubrace = editing ? { ...subrace, id: editing.id } : subrace;
     try {
       await saveItem('subrace', finalSubrace);
+      // SAVE-AND-ADD-1: tell race-detail.tsx's subrace picker which subrace
+      // to auto-select on return. No-op for any other caller (nothing else
+      // consumes this key).
+      usePendingSelectionStore.getState().setPending('subrace_picker', finalSubrace.id);
       goBack();
     } catch (e) {
       console.error('[subrace-builder] save failed:', e);
@@ -107,10 +150,12 @@ export default function SubraceBuilderScreen() {
   // features and resource pools, so "new feature"/"new resource" rows are
   // appended the same way LevelUpPreviewModal's own builder computes them
   // (small enough not to warrant extracting into a shared helper for a
-  // two-use case). No disclosed-choice gap here: unlike Feat's
-  // abilityChoice/skillChoice, buildSubrace() never sets
-  // Subrace.pendingChoices or .flexibleAsi, so every effect a drafted
-  // subrace can carry is already fully resolved and included in the test.
+  // two-use case). CHOICE-AUTHORING-1: a drafted subrace CAN now carry
+  // Subrace.pendingChoices — deliberately NOT applied/queued here, same as
+  // race-builder.tsx's own test doesn't resolve them: a queued choice has
+  // no single "correct" test answer to pre-resolve, so it's left out of
+  // this read-only preview rather than guessed. .flexibleAsi remains
+  // unauthorable from this builder, same as before.
   function runTest() {
     if (!parentId) return;
     const draft = { ...newDraftSubrace(name.trim()), abiBonuses, traits };
@@ -187,6 +232,9 @@ export default function SubraceBuilderScreen() {
         <TextInput style={styles.input} value={name} onChangeText={setName}
           placeholder="e.g. Fire Pandafolk" placeholderTextColor={Colors.textDim} />
 
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Game / Ruleset</Text>
+        <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(initialParentRace?.rulesetId ?? draftRulesetId)} />
+
         <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Ability Score Bonuses</Text>
         <AbilityScoreGrid values={abiBonuses} onChange={(a, v) => setAbiBonuses(prev => ({ ...prev, [a]: v }))} />
 
@@ -197,6 +245,13 @@ export default function SubraceBuilderScreen() {
         </Text>
         <TraitListEditor traits={traits} onChange={setTraits} />
 
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Player Choices (optional)</Text>
+        <Text style={styles.helperNote}>
+          A real choice the player resolves when they pick this subrace — e.g. proficiency
+          in one tool of their choice, or an extra language.
+        </Text>
+        <ChoiceDefinitionListEditor choices={pendingChoices} onChange={setPendingChoices} />
+
       </ScrollView>
 
       <SafeBottomView>
@@ -204,7 +259,7 @@ export default function SubraceBuilderScreen() {
           <Pressable style={[styles.testBtn, !canTest && styles.btnDisabled]} onPress={runTest} disabled={!canTest}>
             <Text style={styles.testBtnTxt}>🧪 Test</Text>
           </Pressable>
-          <Pressable style={[styles.saveBtn, !canSave && styles.btnDisabled]} onPress={handleSave} disabled={!canSave}>
+          <Pressable style={[styles.saveBtn, !canSave && styles.btnDisabled]} onPress={() => { void handleSave(); }} disabled={!canSave}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Subrace'}</Text>
           </Pressable>
         </View>

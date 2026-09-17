@@ -54,7 +54,25 @@ export async function getUnflushedEvents(sessionId: string): Promise<SyncEvent[]
      ORDER BY timestamp ASC`,
     [sessionId]
   );
-  return rows.map(rowToEvent);
+  // A single malformed payload (e.g. a half-write from an app kill mid-
+  // queueSyncEvent) used to throw here unguarded — since this row is never
+  // marked applied, every future call permanently fails before it even
+  // reaches the healthy rows after it, stalling this device's entire
+  // outbound queue. The malformed row's own data is unrecoverable either
+  // way, so it's marked applied (removed from the pending queue) instead of
+  // being retried forever — every other event still flushes normally.
+  const events: SyncEvent[] = [];
+  for (const row of rows) {
+    try {
+      events.push(rowToEvent(row));
+    } catch (e) {
+      console.error(`[syncRepo] skipping unrecoverable sync_events row id=${row.id}, marking applied so it doesn't block the queue:`, e);
+      await markEventApplied(row.id).catch(err =>
+        console.error(`[syncRepo] failed to mark malformed row ${row.id} applied:`, err)
+      );
+    }
+  }
+  return events;
 }
 
 /** Mark a single event as applied (flushed to peers). */

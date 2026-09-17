@@ -6,7 +6,7 @@
 // engine so the pipeline respects them.
 
 import {
-  Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView,
+  Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, Dimensions,
 } from 'react-native';
 import { Entity, CampaignRules, Ability } from '../../engine/types';
 import { applyDmOverride, getActiveOverrides, cancelDmOverride } from '../../engine/dmOverride';
@@ -367,24 +367,32 @@ function DerivedRow({
 
 function fmtMod(n: number): string { return n >= 0 ? `+${n}` : `${n}`; }
 
+// FREE-EDIT-SCROLL-1: the sheet used to bound itself with a CSS percentage
+// (`maxHeight: '92%'`) and let scrollArea "fill the rest" via `flexShrink: 1`
+// alone. `flexShrink: 1` keeps `flexBasis: auto` — the ScrollView's initial
+// size comes from its OWN content, and only shrinks to fit in a later pass —
+// which on react-native-web left the ScrollView with no real measured
+// scrollable height until some other layout event (e.g. focusing a
+// TextInput) forced a relayout that resolved it correctly. Swapping to a
+// pixel `maxHeight` computed from the window (resolves in one layout pass,
+// no dependency on an ancestor's own percentage-of-percentage resolution)
+// plus `flex: 1` on the ScrollView (flexBasis: 0 — sized purely from
+// available space, not from content first) makes both computable
+// immediately on open, so the very first swipe scrolls.
+const SHEET_MAX_HEIGHT = Dimensions.get('window').height * 0.92;
+
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000000cc', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: Colors.surfaceHigh,
     borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,
-    padding: Spacing.md, gap: Spacing.sm, paddingBottom: Spacing.xl, maxHeight: '92%',
+    padding: Spacing.md, gap: Spacing.sm, paddingBottom: Spacing.xl, maxHeight: SHEET_MAX_HEIGHT,
   },
   header: { alignItems: 'center', gap: 2 },
   title:    { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
   subtitle: { fontSize: FontSize.xs, color: Colors.textDim },
 
-  // flexShrink (not a fixed pixel maxHeight) lets this fill whatever space
-  // is actually left between the fixed header and Done button, bounded by
-  // the outer sheet's maxHeight: '92%' — a hardcoded pixel value here could
-  // exceed the real available space on a shorter screen (or with the
-  // keyboard open shrinking things further), which broke the scroll gesture
-  // mapping rather than just clipping content.
-  scrollArea: { flexShrink: 1 },
+  scrollArea: { flex: 1 },
 
   section: {
     fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2,

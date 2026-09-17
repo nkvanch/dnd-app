@@ -11,11 +11,12 @@ import {
   concentrationCheck, castConcentrationSpell, dropConcentration,
   parseConcentrationDuration, tickConcentrationDuration, startEncounter,
   startTurn, markActionSlotUsed, toggleActionEconomy, endTurn, addToEncounter,
+  applyAbilityEffects,
   CombatState,
 } from '../combat';
 import { isFeatureAvailable } from '../actionCards';
 import { setRandomSource } from '../dice';
-import { Entity, SpellSlots, FeatureInstance, Spell } from '../types';
+import { Entity, SpellSlots, FeatureInstance, Spell, AbilityEffect } from '../types';
 
 /** A fresh level-1 test entity with known HP/stats, independent of any
  *  particular class/race content so these tests don't break if content
@@ -711,5 +712,49 @@ describe('addToEncounter', () => {
     const result = addToEncounter(combat, [reinforcement('new1', 0), reinforcement('new2', 5)]);
     expect(result.order).toHaveLength(3);
     expect(new Set(result.order.map(e => e.entityId))).toEqual(new Set(['a', 'new1', 'new2']));
+  });
+});
+
+// Regression for audit finding ARCH-2: apply_condition/remove_condition
+// AbilityEffects used to display correctly on an action card but produce
+// zero actual game-state change — applyAbilityEffects had no case for them
+// at all. 'grappled' is used here specifically because its real content
+// definition carries a genuine mechanical feature (speed → 0), so this
+// proves the fix all the way through to a derived-stat change, not just
+// that a chip appears in entity.conditions.
+describe('applyAbilityEffects — apply_condition / remove_condition (ARCH-2)', () => {
+  it('apply_condition actually applies the condition and its mechanical effect', () => {
+    const entity = testEntity();
+    const before = entity.derived.speed;
+    const effects: AbilityEffect[] = [
+      { type: 'apply_condition', conditionId: 'grappled', duration: { unit: 'rounds', remaining: 1 } },
+    ];
+
+    const after = applyAbilityEffects(entity, effects);
+
+    expect(after.conditions.some(c => c.id === 'grappled')).toBe(true);
+    expect(after.derived.speed).toBe(0); // the actual mechanical effect, not just the chip
+    expect(before).toBeGreaterThan(0); // sanity: it really changed something
+  });
+
+  it('remove_condition actually removes the condition and reverts its mechanical effect', () => {
+    let entity = testEntity();
+    entity = applyAbilityEffects(entity, [
+      { type: 'apply_condition', conditionId: 'grappled', duration: { unit: 'rounds', remaining: 1 } },
+    ]);
+    expect(entity.derived.speed).toBe(0);
+
+    const after = applyAbilityEffects(entity, [{ type: 'remove_condition', conditionId: 'grappled' }]);
+
+    expect(after.conditions.some(c => c.id === 'grappled')).toBe(false);
+    expect(after.derived.speed).toBeGreaterThan(0);
+  });
+
+  it('grant_speed still has no effect (explicitly deferred, not silently claimed as done)', () => {
+    const entity = testEntity();
+    const after = applyAbilityEffects(entity, [
+      { type: 'grant_speed', speedType: 'fly', amount: 30, duration: { unit: 'rounds', remaining: 1 } },
+    ]);
+    expect(after.derived.movement?.fly ?? 0).toBe(entity.derived.movement?.fly ?? 0);
   });
 });

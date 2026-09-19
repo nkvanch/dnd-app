@@ -1,12 +1,3 @@
-// src/content/classes/__tests__/classMetadata.test.ts
-// FILTER-METADATA-1: ALL_CHAR_CLASSES' savingThrows/armorProfs/weaponProfs/
-// spellcastingAbility were populated (previously always undefined for every
-// official class) so class.tsx can offer real Saving-Throw-Proficiency /
-// Armor-Proficiency / Weapon-Proficiency filters instead of reporting them
-// BLOCKED. These fields are confirmed dead for MECHANICS on official classes
-// (app/creation/class-detail.tsx's CLASS_DETAIL always wins) — this test
-// locks in that the two stay in agreement, so a future edit to one doesn't
-// silently drift from the other and mislead a filter.
 import { ALL_CHAR_CLASSES } from '../index';
 import type { Ability } from '../../../engine/types';
 
@@ -16,7 +7,7 @@ const KNOWN_CASTERS: Record<string, Ability> = {
 };
 const KNOWN_MARTIAL = ['fighter', 'rogue', 'barbarian', 'monk'];
 const VALID_ARMOR = new Set(['light', 'medium', 'heavy', 'shield']);
-const VALID_WEAPON = new Set(['simple', 'martial']);
+const VALID_WEAPON = new Set(['simple', 'martial', 'Hand Crossbow', 'Longsword', 'Rapier', 'Shortsword', 'Dagger', 'Dart', 'Sling', 'Quarterstaff', 'Light Crossbow', 'Club', 'Javelin', 'Mace', 'Scimitar', 'Sickle', 'Spear']);
 
 describe('ALL_CHAR_CLASSES filter metadata', () => {
   it('every official class has exactly 2 saving-throw proficiencies', () => {
@@ -26,7 +17,7 @@ describe('ALL_CHAR_CLASSES filter metadata', () => {
     }
   });
 
-  it('armorProfs/weaponProfs only use the documented closed vocabulary', () => {
+  it('armorProfs/weaponProfs use supported category or named-weapon proficiencies', () => {
     for (const cls of ALL_CHAR_CLASSES) {
       expect(cls.armorProfs).toBeDefined();
       expect(cls.weaponProfs).toBeDefined();
@@ -46,16 +37,15 @@ describe('ALL_CHAR_CLASSES filter metadata', () => {
   });
 
   it('known non-casters have no blanket martial-weapon access beyond their real PHB grant', () => {
-    // Fighter/Barbarian get full martial access; Rogue/Monk are simple-only
-    // (plus a short named-weapon list this metadata doesn't encode — see
-    // ALL_CHAR_CLASSES' own FILTER-METADATA-1 comment).
+    // Named exceptions do not imply blanket martial access.
     const fullMartial = new Set(['fighter', 'barbarian']);
     for (const id of KNOWN_MARTIAL) {
       const cls = ALL_CHAR_CLASSES.find(c => c.id === id)!;
       if (fullMartial.has(id)) {
         expect(cls.weaponProfs).toEqual(expect.arrayContaining(['simple', 'martial']));
       } else {
-        expect(cls.weaponProfs).toEqual(['simple']);
+        expect(cls.weaponProfs).toContain('simple');
+        expect(cls.weaponProfs).not.toContain('martial');
       }
     }
   });

@@ -48,6 +48,11 @@ export default function ConditionBuilderScreen() {
   const [name,        setName]        = useState('');
   const [description, setDescription] = useState('');
   const [traits,       setTraits]     = useState<DraftTrait[]>([]);
+  // Re-audit A05: see buildCondition's own comment — starting the traits
+  // list empty in edit mode is a real, necessary hydration limitation, but
+  // saving with it still empty must NOT be read as "the user wants zero
+  // traits" unless they actually touched the list.
+  const [traitsTouched, setTraitsTouched] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
@@ -57,14 +62,16 @@ export default function ConditionBuilderScreen() {
   // losslessly reversed back into DraftTrait[] (effects are already-compiled
   // Effect objects, not the authoring shape) — same accepted limitation
   // subclass-builder's edit-mode recovery has. Starts with an empty trait
-  // list; the original mechanical effects stay in the saved condition until
-  // traits are re-authored and the condition is saved again.
+  // list for the EDITOR UI only — buildCondition() (re-audit A05) keeps
+  // editing.features verbatim on save unless traitsTouched, so a rename-
+  // only save no longer silently strips the original mechanical effects.
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
     setRulesetId(editing.rulesetId);
     setDescription(editing.description);
     setTraits([]);
+    setTraitsTouched(false);
   }, [editing?.id]);
 
   function buildCondition(): Condition {
@@ -74,12 +81,21 @@ export default function ConditionBuilderScreen() {
       ...conditions.filter(c => c.id !== editing?.id).map(c => c.id),
     ]);
     const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_condition', takenConditionIds);
-    const features = [];
-    const usedIds = new Set<string>();
-    for (const t of traits) {
-      const { feature, extraFeatures } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'condition', sourceRefId: id, level: null, usedIds });
-      features.push(feature, ...(extraFeatures ?? []));
-      usedIds.add(feature.id);
+    // Re-audit A05: if editing an existing condition and the trait list was
+    // never touched, keep its original features verbatim instead of
+    // compiling the still-empty hydration placeholder into [] — a rename-
+    // only save must not silently strip every mechanical effect.
+    let features: Condition['features'];
+    if (editing && !traitsTouched) {
+      features = editing.features;
+    } else {
+      features = [];
+      const usedIds = new Set<string>();
+      for (const t of traits) {
+        const { feature, extraFeatures } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'condition', sourceRefId: id, level: null, usedIds });
+        features.push(feature, ...(extraFeatures ?? []));
+        usedIds.add(feature.id);
+      }
     }
     return {
       id,
@@ -176,7 +192,7 @@ export default function ConditionBuilderScreen() {
             mechanical mapping (auto-fail a check, advantage against the creature) are fine
             to leave undescribed here — put them in the description above instead.
           </Text>
-          <TraitListEditor traits={traits} onChange={setTraits} excludeKinds={['resource_ability', 'spell_grant']} />
+          <TraitListEditor traits={traits} onChange={t => { setTraits(t); setTraitsTouched(true); }} excludeKinds={['resource_ability', 'spell_grant']} />
         </View>
 
       </ScrollView>

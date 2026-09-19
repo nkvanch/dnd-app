@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
-import { levelUp, stripResolvedAsiStats } from '../../src/engine/leveling';
+import { acquireClass, levelUpClass, resetCreationClass } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { getProgressionForClass } from '../../src/content/classes/progressions';
 import {
@@ -17,7 +17,6 @@ import {
 } from '../../src/content/subclasses/subclassBrowse';
 import { sortByOption } from '../../src/content/contentQuery';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
-import { Entity } from '../../src/engine/types';
 import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
 import {
   FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips,
@@ -194,105 +193,6 @@ const CLASS_DETAIL: Record<string, ClassDetail> = {
  * class starts clean. Without this, going back and choosing a different class
  * piles up old features/choices/resources and double-counts HP.
  */
-function clearClassData(entity: Entity, hitDie: number): Entity {
-  // Revert resolved-ASI stat bumps BEFORE dropping the choices that record them.
-  const stripped = stripResolvedAsiStats(entity);
-
-  // Reset ALL skills to untrained — class skill choices set trained=true on the
-  // skill block directly (not via effects), so they survive a features/choices
-  // wipe and stack when a new class's skill choices are resolved.
-  // Background-granted skills (set at grantedAt===0 via selectBackground) also
-  // live here; we'll re-apply them below from the background features.
-  const clearedSkills: typeof stripped.skills = {
-    skills: Object.fromEntries(
-      Object.entries(stripped.skills.skills).map(([k, v]) => [
-        k,
-        { ...v, trained: false, expertise: false },
-      ])
-    ) as typeof stripped.skills.skills,
-  };
-
-  // Re-apply background skill grants so they survive the class change.
-  // Background features carry grant_proficiency effects or the background
-  // screen directly sets trained=true; we re-derive from the remaining features.
-  let retrainedSkills = clearedSkills;
-  const backgroundFeatures = stripped.features.filter(
-    f => f.source.kind === 'background'
-  );
-  for (const feature of backgroundFeatures) {
-    for (const effect of feature.effects) {
-      if (
-        effect.type === 'grant_proficiency' &&
-        effect.target.startsWith('skill:') &&
-        effect.operation === 'add'
-      ) {
-        const skillName = effect.target.slice(6) as keyof typeof retrainedSkills.skills;
-        if (retrainedSkills.skills[skillName]) {
-          retrainedSkills = {
-            skills: {
-              ...retrainedSkills.skills,
-              [skillName]: { ...retrainedSkills.skills[skillName], trained: true },
-            },
-          };
-        }
-      }
-    }
-  }
-  // Background.tsx also sets trained=true directly (not via effect) — re-apply
-  // by checking background feature proficiency lists from the content DB.
-  // This is safe because the backgroundId is stable on the entity.
-  const bgId = stripped.identity.backgroundId;
-  if (bgId) {
-    const BG_SKILL_MAP: Record<string, string[]> = {
-      acolyte:      ['insight', 'religion'],
-      charlatan:    ['deception', 'sleight_of_hand'],
-      criminal:     ['deception', 'stealth'],
-      entertainer:  ['acrobatics', 'performance'],
-      folk_hero:    ['animal_handling', 'survival'],
-      guild_artisan:['insight', 'persuasion'],
-      hermit:       ['medicine', 'religion'],
-      noble:        ['history', 'persuasion'],
-      outlander:    ['athletics', 'survival'],
-      sage:         ['arcana', 'history'],
-      sailor:       ['athletics', 'perception'],
-      soldier:      ['athletics', 'intimidation'],
-      urchin:       ['sleight_of_hand', 'stealth'],
-    };
-    const bgSkills = BG_SKILL_MAP[bgId] ?? [];
-    for (const sk of bgSkills) {
-      const skillName = sk as keyof typeof retrainedSkills.skills;
-      if (retrainedSkills.skills[skillName]) {
-        retrainedSkills = {
-          skills: {
-            ...retrainedSkills.skills,
-            [skillName]: { ...retrainedSkills.skills[skillName], trained: true },
-          },
-        };
-      }
-    }
-  }
-
-  return {
-    ...stripped,
-    skills:   retrainedSkills,
-    identity: { ...stripped.identity, level: 0, subclassId: null },
-    features: stripped.features.filter(
-      f => f.source.kind !== 'class' && f.source.kind !== 'subclass' && f.source.kind !== 'feat'
-    ),
-    choices:   stripped.choices.filter(c => c.grantedAt === 0),
-    resources: {
-      ...stripped.resources,
-      // Only drop resources the PREVIOUS class granted — a racial resource
-      // (Dragonborn's Breath Weapon, Half-Orc's Relentless Endurance, etc.)
-      // has sourceKind !== 'class' (or undefined, for characters saved
-      // before this field existed) and survives a class change untouched.
-      custom:  stripped.resources.custom.filter(r => r.sourceKind !== 'class'),
-      hp:      { current: 0, maximum: 0, temp: 0 },
-      hitDice: { die: hitDie, total: 0, remaining: 0 },
-    },
-    spellcasting: null,
-  };
-}
 
 export default function ClassDetailScreen() {
   const router = useRouter();
@@ -357,12 +257,12 @@ export default function ClassDetailScreen() {
 
   function selectClass() {
     const progression = getProgressionForClass(cls!);
-    const detail      = cls ? CLASS_DETAIL[cls.id] : null;
+
     const isReselect  = !!draft!.identity.classId && draft!.identity.classId !== cls!.id;
 
     function doSelect() {
       // Strip old class data before applying new class (also resets HP & spellcasting)
-      let updated = clearClassData(draft!, cls!.hitDie);
+      let updated = resetCreationClass(draft!, cls!.hitDie);
 
       // Clear visited flags so the equipment/spells screens re-show for the new class
       const notes = (() => {
@@ -370,20 +270,12 @@ export default function ClassDetailScreen() {
         catch { return {}; }
       })();
 
-      updated = {
-        ...updated,
-        identity:  { ...updated.identity, classId: cls!.id },
-        proficiencies: {
-          ...updated.proficiencies,
-          // For official classes: use CLASS_DETAIL saving throws.
-          // For homebrew Phase 2 classes: fall back to cls.savingThrows.
-          // For Phase 1 stub classes with no data: empty array.
-          savingThrows: detail?.savingThrowAbilities ?? cls!.savingThrows ?? [],
-        },
-        notes: JSON.stringify({ ...notes, equipmentVisited: false, spellsVisited: false }),
-      };
-
-      updated = levelUp(updated, targetLevel, progression, rules);
+      updated = { ...updated, notes: JSON.stringify({ ...notes, equipmentVisited: false, spellsVisited: false }) };
+      const definitions = getMergedContentDB().classes;
+      updated = acquireClass(updated, cls!, rules, definitions);
+      for (let level = 2; level <= targetLevel; level++) {
+        updated = levelUpClass(updated, cls!.id, progression, rules, cls!, definitions);
+      }
 
       updated = recomputeDerived(updated, rules);
       setDraft(updated);

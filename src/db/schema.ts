@@ -120,6 +120,20 @@ export const CREATE_COMBAT_STATE_TABLE = `
   );
 `;
 
+// Re-audit A09 (item 11): singleton row for the in-progress character
+// creation draft, same shape as combat_state above — a full Entity blob is
+// written on every setDraft() call so an app kill mid-creation (name
+// chosen, race/class/scores picked, etc.) doesn't lose that progress. Only
+// ever one row (id=1) since the creation flow supports exactly one active
+// draft at a time (characterStore.ts's `draft: Entity | null`).
+export const CREATE_CHARACTER_DRAFT_TABLE = `
+  CREATE TABLE IF NOT EXISTS character_draft (
+    id        INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
+    data      TEXT NOT NULL,
+    updatedAt INTEGER NOT NULL
+  );
+`;
+
 // Simple key-value store for app-level flags (e.g. one-time seeding markers).
 export const CREATE_APP_META_TABLE = `
   CREATE TABLE IF NOT EXISTS app_meta (
@@ -191,6 +205,7 @@ export const ALL_TABLES = [
   CREATE_CONTENT_CACHE_HISTORY_TABLE,
   CREATE_CHARACTER_TIMELINE_TABLE,
   CREATE_COMBAT_STATE_TABLE,
+  CREATE_CHARACTER_DRAFT_TABLE,
   CREATE_APP_META_TABLE,
   CREATE_INSTALLED_PACKS_TABLE,
   CREATE_PREPARED_ENCOUNTERS_TABLE,

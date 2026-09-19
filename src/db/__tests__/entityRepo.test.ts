@@ -12,7 +12,22 @@ describe('entityRepo', () => {
   let mockGetDb: jest.Mock;
   let getAllAsync: jest.Mock;
 
-  const goodEntity = { id: 'good', kind: 'character', identity: { name: 'Good', level: 1, classId: 'fighter' } };
+  // Re-audit A07: validateEntityShape now runs inside parseEntityRow, so
+  // these fixtures need every field it requires (stats/resources/features/
+  // inventory), not just identity — a minimal {id, identity, kind} object
+  // is exactly the "structurally invalid" shape that check now (correctly)
+  // rejects.
+  function validEntity(overrides: Record<string, unknown>) {
+    return {
+      kind: 'character',
+      stats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+      resources: { hp: { current: 10, maximum: 10 } },
+      features: [],
+      inventory: { equipped: [], carried: [] },
+      ...overrides,
+    };
+  }
+  const goodEntity = validEntity({ id: 'good', identity: { name: 'Good', level: 1, classId: 'fighter' } });
 
   beforeEach(() => {
     jest.resetModules();
@@ -47,7 +62,7 @@ describe('entityRepo', () => {
   });
 
   it('loadAllEntities returns every entity when all rows are valid', async () => {
-    const secondEntity = { id: 'second', kind: 'character', identity: { name: 'Second', level: 2, classId: 'wizard' } };
+    const secondEntity = validEntity({ id: 'second', identity: { name: 'Second', level: 2, classId: 'wizard' } });
     getAllAsync.mockResolvedValue([
       { id: 'good',   kind: 'character', data: JSON.stringify(goodEntity),   updatedAt: 2 },
       { id: 'second', kind: 'character', data: JSON.stringify(secondEntity), updatedAt: 1 },
@@ -56,5 +71,22 @@ describe('entityRepo', () => {
     const result = await repo.loadAllEntities();
 
     expect(result).toEqual([goodEntity, secondEntity]);
+  });
+
+  // Re-audit A07: a row that IS valid JSON but structurally missing required
+  // fields (the exact {id, identity.name, features} shape the re-audit
+  // named) must be quarantined the same way a JSON-syntax error is —
+  // skipped and logged, not silently returned as a "healthy" character and
+  // not allowed to take down the rest of the load.
+  it('quarantines a syntactically-valid-JSON but structurally invalid row, loading the rest normally', async () => {
+    const structurallyInvalid = { id: 'bad', identity: { name: 'Bad' }, features: [] }; // missing kind/stats/resources/inventory
+    getAllAsync.mockResolvedValue([
+      { id: 'good', kind: 'character', data: JSON.stringify(goodEntity),          updatedAt: 2 },
+      { id: 'bad',  kind: 'character', data: JSON.stringify(structurallyInvalid), updatedAt: 1 },
+    ]);
+
+    const result = await repo.loadAllEntities();
+
+    expect(result).toEqual([goodEntity]);
   });
 });

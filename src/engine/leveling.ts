@@ -1,14 +1,19 @@
 import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
-         KnownSpellsGrant, CustomResource, asSubclassId, asClassId, Background, SkillName,
-         CharClass, ItemFilterConstraint, BACKGROUND_CHOICE_PREFIX } from './types';
+         KnownSpellsGrant, asSubclassId, asClassId, Background, SkillName,
+         CharClass, ItemFilterConstraint, BACKGROUND_CHOICE_PREFIX,
+         EntitlementRecord, EntitlementSourceKind } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { getSpellSlotsForClassLevel, multiclassCasterLevel, MULTICLASS_SPELLCASTER_SLOTS,
-         pactSlotTableFor, slotsForLevel } from '../content/classes/spellSlotTables';
+         pactSlotTableFor, slotsForLevel, slotsFromCountArray } from '../content/classes/spellSlotTables';
+import { ALL_CHAR_CLASSES } from '../content/classes';
+import { getProgressionForClass } from '../content/classes/progressions';
+import { WARLOCK_SLOTS } from '../content/classes/spellSlotTables';
 import { itemMatchesConstraint } from '../content/items/itemBrowse';
 import type { ItemIndexEntry } from '../content/itemRepo.types';
 import { hpMinHalfDie, bonusFeatEveryLevel } from './houseRules';
-import { getClassLevels, isMulticlassed, syncLegacyIdentity, multiclassProficienciesFor } from './multiclass';
+import { getClassLevels, syncLegacyIdentity, multiclassProficienciesFor } from './multiclass';
+import { initializeEntitlementInputs, grantEntitlement, grantEntitlements, revokeEntitlementsFromChoice, revokeResourceSource, recomputeResourceMaximums } from './entitlements';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,9 +28,16 @@ export function applyGrant(
   /** Explicit resource source — only needed by callers granting a resource
    * OUTSIDE class-progression leveling (race/subrace resource grants), where
    * entity.identity.classId can't be trusted to reflect the class actually
-   * being applied. See the "resource" case below. */
-  source?: { kind: NonNullable<CustomResource['sourceKind']>; id?: string },
+   * being applied. See the "resource" case below. Also used (closure pass
+   * 2) to tag `proficiency`-kind grants with real entitlement provenance —
+   * `choiceId`, when set, ties the resulting entitlement(s) to the specific
+   * resolved ChoiceState that produced them (see applyToolChoiceToEntity/
+   * applyLanguageChoiceToEntity), so removing just that choice's origin
+   * doesn't touch a different grant from the same source. */
+  source?: { kind: EntitlementSourceKind; id?: string; choiceId?: string },
 ): Entity {
+  const original = entity;
+  entity = initializeEntitlementInputs(entity);
   switch (grant.kind) {
 
     case "feature": {
@@ -45,7 +57,19 @@ export function applyGrant(
       // actually add the cantrip. It initialises a spellcasting block if the
       // entity has none yet (a non-caster gaining a racial cantrip), using the
       // effect's spellcastingAbility (default CON for racial grants).
+      //
+      // Closure pass 3 (item 1): also stamps a source-owned entitlement for
+      // each granted spell/cantrip, tagged with THIS feature's own resolved
+      // source (`next.features`'s last entry, set just above) — this is
+      // what makes the grant removable when the feature is (via
+      // removeFeature's existing revokeEntitlementsFromSource(..., 'feature'
+      // | ..., ...) calls, which already work for ANY entitlement kind
+      // tagged to that source, spells included, with no further wiring).
+      // The flat spellcasting.known/cantrips arrays stay as the DERIVED
+      // output (reconciled every recompute pass, same pattern as
+      // proficiencies — see pipeline.ts).
       const spellEffects = (f.effects ?? []).filter(e => e.type === 'grant_spell');
+      const grantedFeature = next.features[next.features.length - 1];
       for (const eff of spellEffects) {
         const cantripIds = (eff as any).cantripIds as string[] | undefined;
         const spellIds   = (eff as any).spellIds   as string[] | undefined;
@@ -63,14 +87,11 @@ export function applyGrant(
             },
           };
         }
-        next = {
-          ...next,
-          spellcasting: {
-            ...next.spellcasting!,
-            cantrips: [...new Set([...next.spellcasting!.cantrips, ...(cantripIds ?? [])])],
-            known:    [...new Set([...next.spellcasting!.known,    ...(spellIds   ?? [])])],
-          },
-        };
+        next = grantEntitlements(next, [
+          ...(cantripIds ?? []).map(key => ({ kind: 'cantrip_access' as const, key, sourceKind: grantedFeature.source.kind, sourceId: grantedFeature.source.refId })),
+          ...(spellIds   ?? []).map(key => ({ kind: 'spell_access'   as const, key, sourceKind: grantedFeature.source.kind, sourceId: grantedFeature.source.refId })),
+        ]);
+
       }
 
       return next;
@@ -78,8 +99,6 @@ export function applyGrant(
 
     case "resource": {
       const r = grant.value as ResourceGrant;
-      // Don't add duplicates
-      if (entity.resources.custom.some(c => c.id === r.resourceId)) return entity;
       // No explicit source: infer 'class' from classId/entity.identity.classId,
       // same fallback the "feature" case above already uses. Safe for every
       // in-file call site (all run within class-progression leveling), but
@@ -88,11 +107,28 @@ export function applyGrant(
       // re-grant calls), since entity.identity.classId can be stale there.
       const inferredClassId = classId ?? entity.identity.classId ?? undefined;
       const resolvedSource = source ?? (inferredClassId ? { kind: 'class' as const, id: inferredClassId } : undefined);
+      // Closure pass 3 (item 3): a `resource_grant` entitlement is stamped
+      // for EVERY grant of this resource id, including a repeat one from a
+      // DIFFERENT source — that's what lets revokeResourceSource tell
+      // "source A grants R, source B also grants R, remove A -> R survives
+      // (B still wants it), remove B -> R disappears" apart from the old
+      // behavior, where a second source's grant of an already-existing
+      // resource id was a silent, untracked no-op, so removing the FIRST
+      // (only tracked) source wiped the entry even though a second source
+      // nominally also granted it. The physical resource instance
+      // (current/maximum/recharge) is created ONLY on the first grant —
+      // current/spent state is never reset by a later "also grants this"
+      // registration.
+      const withGrantEntitlement = resolvedSource
+        ? grantEntitlement(entity, { kind: 'resource_grant', key: r.resourceId, sourceKind: resolvedSource.kind,
+            sourceId: resolvedSource.id, choiceId: source?.choiceId })
+        : entity;
+      if (withGrantEntitlement.resources.custom.some(c => c.id === r.resourceId)) return withGrantEntitlement;
       return {
-        ...entity,
+        ...withGrantEntitlement,
         resources: {
-          ...entity.resources,
-          custom: [...entity.resources.custom, {
+          ...withGrantEntitlement.resources,
+          custom: [...withGrantEntitlement.resources.custom, {
             id: r.resourceId, name: r.name,
             current: r.maximum, maximum: r.maximum,
             recharge: r.recharge,
@@ -104,16 +140,43 @@ export function applyGrant(
     }
 
     case "resource_upgrade": {
+      // Closure pass 3 (item 3): used to unconditionally full-refresh
+      // `current` to the new maximum, silently discarding whatever had
+      // already been spent — an upgrade (e.g. a subclass feature raising a
+      // resource's pool size) is not a rest, and shouldn't act like one.
+      // Preserves the SPENT amount instead: newCurrent = newMaximum -
+      // spent, clamped to [0, newMaximum] so a shrinking maximum (or a
+      // pool that was already fully spent) can never go negative or exceed
+      // the new cap. sourceKind/sourceId are untouched by the `{...r, ...}`
+      // spread, same as before.
       const u = grant.value as ResourceUpgrade;
-      return {
+      const resource = entity.resources.custom.find(r => r.id === u.resourceId);
+      if (!resource) return entity;
+      const upgradeSource = source
+        ? { kind: source.kind, id: source.id, choiceId: source.choiceId }
+        : classId
+          ? { kind: 'class' as const, id: classId, choiceId: undefined }
+          : { kind: 'manual' as const, id: undefined, choiceId: undefined };
+      const withoutSameContribution = (entity.entitlements ?? []).filter(e => !(
+        e.kind === 'resource_upgrade' && e.key === u.resourceId
+        && e.sourceKind === upgradeSource.kind && e.sourceId === upgradeSource.id
+        && e.choiceId === upgradeSource.choiceId
+      ));
+      const otherAmount = withoutSameContribution
+        .filter(e => e.kind === 'resource_upgrade' && e.key === u.resourceId)
+        .reduce((sum, e) => sum + (e.amount ?? 0), 0);
+      const baseMaximum = resource.baseMaximum ?? Math.max(0, resource.maximum - otherAmount);
+      const amount = u.newMaximum - (baseMaximum + otherAmount);
+      const withBase = {
         ...entity,
-        resources: {
-          ...entity.resources,
-          custom: entity.resources.custom.map(r =>
-            r.id === u.resourceId ? { ...r, maximum: u.newMaximum, current: u.newMaximum } : r
-          )
-        }
+        resources: { ...entity.resources, custom: entity.resources.custom.map(r =>
+          r.id === u.resourceId ? { ...r, baseMaximum } : r) },
+        entitlements: withoutSameContribution,
       };
+      return recomputeResourceMaximums(grantEntitlement(withBase, {
+        kind: 'resource_upgrade', key: u.resourceId, amount,
+        sourceKind: upgradeSource.kind, sourceId: upgradeSource.id, choiceId: upgradeSource.choiceId,
+      }));
     }
 
     case "proficiency": {
@@ -121,18 +184,28 @@ export function applyGrant(
       // The grant value is a ProficiencyGrant: { armor?, weapons?, tools?, languages? }.
       // We deduplicate each list so re-applying on class change is safe.
       const g = grant.value as ProficiencyGrant;
-      const merge = (existing: string[], additions?: string[]) =>
-        additions ? [...new Set([...existing, ...additions])] : existing;
-      return {
-        ...entity,
-        proficiencies: {
-          ...entity.proficiencies,
-          armor:     merge(entity.proficiencies.armor,     g.armor),
-          weapons:   merge(entity.proficiencies.weapons,   g.weapons),
-          tools:     merge(entity.proficiencies.tools,     g.tools),
-          languages: merge(entity.proficiencies.languages, g.languages),
-        },
-      };
+      // Closure pass 2: `proficiency`-kind Grants are only ever authored on
+      // CLASS/SUBCLASS progressions (confirmed via a full content grep) —
+      // no backing Feature/Effect exists for them, so without an explicit
+      // entitlement record here they'd be untraceable the moment they're
+      // granted (exactly the reported "class/subclass grants, remove
+      // subclass, grant stays" gap). `source` (explicit, passed by
+      // race/subrace resource-grant callers) takes priority; class-
+      // progression callers pass `classId` instead, so that's the fallback;
+      // a caller with neither (shouldn't happen for this grant kind, but
+      // conservative) tags 'manual' rather than mis-attributing.
+      const entSource: { kind: EntitlementSourceKind; id?: string } = source
+        ? { kind: source.kind, id: source.id }
+        : classId
+          ? { kind: 'class', id: classId }
+          : { kind: 'manual', id: undefined };
+      const records: EntitlementRecord[] = [
+        ...(g.armor     ?? []).map(key => ({ kind: 'armor_proficiency'  as const, key, sourceKind: entSource.kind, sourceId: entSource.id, choiceId: source?.choiceId })),
+        ...(g.weapons   ?? []).map(key => ({ kind: 'weapon_proficiency' as const, key, sourceKind: entSource.kind, sourceId: entSource.id, choiceId: source?.choiceId })),
+        ...(g.tools     ?? []).map(key => ({ kind: 'tool_proficiency'   as const, key, sourceKind: entSource.kind, sourceId: entSource.id, choiceId: source?.choiceId })),
+        ...(g.languages ?? []).map(key => ({ kind: 'language'          as const, key, sourceKind: entSource.kind, sourceId: entSource.id, choiceId: source?.choiceId })),
+      ];
+      return grantEntitlements(entity, records);
     }
 
     case "subclass_unlock": {
@@ -241,7 +314,7 @@ export function applyGrant(
       const newSlots = {} as typeof entity.spellcasting.slots;
       tiers.forEach((t, i) => {
         const total = slots[i] ?? 0;
-        newSlots[t] = { total, used: Math.min(entity.spellcasting!.slots[t]?.used ?? 0, total) };
+        newSlots[t] = { total, used: Math.max(0, Math.min(entity.spellcasting!.slots[t]?.used ?? 0, total)) };
       });
       return {
         ...entity,
@@ -253,16 +326,25 @@ export function applyGrant(
       // Adds fixed known spells/cantrips to an already-initialized spellcasting
       // block. No-op if spellcasting hasn't been initialized yet — order the
       // 'init_spellcasting' grant earlier in the same level entry's grants array.
+      //
+      // Closure pass 3 (item 1): same "no backing Feature/Effect at all"
+      // gap as the old `proficiency` grant kind (closure pass 2) — this is
+      // authored directly on class/subclass progression entries. Stamps
+      // source-owned entitlements the same way, with the same source
+      // fallback chain (explicit `source` > `classId` > 'manual').
       const ks = grant.value as KnownSpellsGrant;
       if (!entity.spellcasting) return entity;
-      return {
-        ...entity,
-        spellcasting: {
-          ...entity.spellcasting,
-          known:    [...new Set([...entity.spellcasting.known,    ...(ks.spellIds   ?? [])])],
-          cantrips: [...new Set([...entity.spellcasting.cantrips, ...(ks.cantripIds ?? [])])],
-        },
-      };
+
+      const ksSource: { kind: EntitlementSourceKind; id?: string } = source
+        ? { kind: source.kind, id: source.id }
+        : classId
+          ? { kind: 'class', id: classId }
+          : { kind: 'manual', id: undefined };
+      const withEntitlements = grantEntitlements(entity, [
+        ...(ks.cantripIds ?? []).map(key => ({ kind: 'cantrip_access' as const, key, sourceKind: ksSource.kind, sourceId: ksSource.id, choiceId: source?.choiceId })),
+        ...(ks.spellIds   ?? []).map(key => ({ kind: 'spell_access'   as const, key, sourceKind: ksSource.kind, sourceId: ksSource.id, choiceId: source?.choiceId })),
+      ]);
+      return withEntitlements;
     }
 
     case "starting_item": {
@@ -281,7 +363,7 @@ export function applyGrant(
     }
 
     default:
-      return entity;
+      return original;
   }
 }
 
@@ -594,7 +676,7 @@ export function applyFeatToEntity(
     ),
   };
   for (const choice of pendingChoices ?? []) {
-    updated = queueChoice(updated, choice, grantedAt, featFeature.id);
+    updated = queueChoice(updated, choice, grantedAt, featFeature.id, { kind: 'feature', id: featFeature.id });
   }
   updated = reconcileConHp(entity, updated);
   return recomputeDerived(updated, rules);
@@ -619,12 +701,26 @@ export function applyFeatToEntity(
 export function removeFeature(entity: Entity, featureId: string): Entity {
   const removed = entity.features.find(f => f.id === featureId);
   if (!removed) return entity;
-  return {
-    ...entity,
-    features: entity.features.filter(f => f.id !== featureId),
+  // Closure pass 2 (item 4): also revoke any entitlement this feature
+  // directly owns (sourceKind:'feature', e.g. a manually-authored trait's
+  // own proficiency grant) and any entitlement produced by resolving ONE OF
+  // ITS OWN queued choices (namespaced `${featureId}:...`, see queueChoice's
+  // id composition). The resolved ChoiceState record itself is still kept
+  // below (character history, per CHOICE-AUTHORING-1) but the grant it
+  // produced must not outlive the feature that originated the choice.
+  const ownedResolvedChoiceIds = entity.choices
+    .filter(c => c.resolved && c.id.startsWith(`${featureId}:`))
+    .map(c => c.id);
+  let stripped = revokeResourceSource(entity, 'feature', featureId);
+  stripped = revokeResourceSource(stripped, 'manual', featureId);
+  for (const choiceId of ownedResolvedChoiceIds) stripped = revokeEntitlementsFromChoice(stripped, choiceId);
+  return recomputeResourceMaximums({
+    ...stripped,
+    features: stripped.features.filter(f => f.id !== featureId),
     resources: {
-      ...entity.resources,
-      custom: entity.resources.custom.filter(r => r.sourceId !== featureId),
+      ...stripped.resources,
+      custom: stripped.resources.custom.filter(r => r.sourceId !== featureId
+        || (stripped.entitlements ?? []).some(e => e.kind === 'resource_grant' && e.key === r.id)),
     },
     // CHOICE-AUTHORING-1: also best-effort strip any STILL-UNRESOLVED choice
     // namespaced to this exact feature (applyFeatToEntity queues
@@ -633,8 +729,8 @@ export function removeFeature(entity: Entity, featureId: string): Entity {
     // RESOLVED choice is left alone — it's part of the character's history,
     // same "don't silently reassign a past pick" rule invalid_expertise_target
     // validation follows.
-    choices: entity.choices.filter(c => c.resolved || !c.id.startsWith(`${featureId}:`)),
-  };
+    choices: stripped.choices.filter(c => c.resolved || !c.id.startsWith(`${featureId}:`)),
+  });
 }
 
 /** Computes one flexAsi pick's bonus amount — mirrors app/creation/
@@ -729,16 +825,22 @@ export function swapBackground(
     c.resolved || !c.definition.id.startsWith(BACKGROUND_CHOICE_PREFIX),
   );
 
-  let updated: Entity = {
+  // Closure pass 2: revoke any entitlement tagged to the OLD background id
+  // — a no-op today (no current background-originated choice stamps
+  // sourceKind:'background' yet, since queueChoice below doesn't pass an
+  // explicit source), but keeps this removal path consistent with
+  // applySubclassToEntity's own pattern and correct the moment a background
+  // choice IS stamped with real provenance.
+  let updated: Entity = revokeResourceSource({
     ...entity,
     identity: { ...entity.identity, backgroundId: newBackground.id },
     features: otherFeatures,
     skills: { skills: updatedSkills },
     choices: sweptChoices,
-  };
+  }, 'background', entity.identity.backgroundId);
 
   for (const choice of newBackground.pendingChoices ?? []) {
-    updated = queueChoice(updated, choice, 0);
+    updated = queueChoice(updated, choice, 0, undefined, { kind: 'background', id: newBackground.id });
   }
 
   for (const feature of newBackground.features) {
@@ -794,7 +896,20 @@ export function swapBackground(
     }
   }
 
-  return updated;
+  let recomputed = recomputeDerived(updated, rules);
+  let finalSkills = recomputed.skills.skills;
+  const forceUntrain = new Set<SkillName>([
+    ...[...candidateUntrain].filter(skill => skillRetrainOverrides?.[skill] !== true),
+    ...(Object.entries(skillRetrainOverrides ?? {}) as [SkillName, boolean][])
+      .filter(([, keep]) => keep === false).map(([skill]) => skill),
+  ]);
+  for (const skill of forceUntrain) {
+    if (finalSkills[skill]?.trained || finalSkills[skill]?.expertise) {
+      finalSkills = { ...finalSkills, [skill]: { ...finalSkills[skill], trained: false, expertise: false } };
+    }
+  }
+  if (finalSkills !== recomputed.skills.skills) recomputed = { ...recomputed, skills: { skills: finalSkills } };
+  return recomputed;
 }
 
 /**
@@ -862,7 +977,8 @@ function canAutoResolve(choice: ChoiceDefinition): boolean {
  * specifically so it's already shared/global across classes, not
  * per-source.
  */
-export function queueChoice(entity: Entity, choice: ChoiceDefinition, atLevel: number, originId?: string): Entity {
+export function queueChoice(entity: Entity, choice: ChoiceDefinition, atLevel: number, originId?: string,
+  source?: { kind: EntitlementSourceKind; id?: string }): Entity {
   const id = originId ? `${originId}:${choice.id}_${atLevel}` : `${choice.id}_${atLevel}`;
   return {
     ...entity,
@@ -871,7 +987,9 @@ export function queueChoice(entity: Entity, choice: ChoiceDefinition, atLevel: n
       definition:  choice,
       grantedAt:   atLevel,
       resolved:    false,
-      selections:  []
+      selections:  [],
+      sourceKind: source?.kind,
+      sourceId: source?.id,
     }]
   };
 }
@@ -907,8 +1025,15 @@ export function applySubclassToEntity(
   classId?: string,
 ): Entity {
   const classes = entity.identity.classes;
-  const ownClassLevel = classId && classes
-    ? (classes.find(c => c.classId === classId)?.level ?? entity.identity.level)
+  // Closure item 3: the class this subclass applies to — explicit `classId`
+  // when passed (multiclass callers always pass one), otherwise the entity's
+  // OWN primary class when classes[] exists (a single-class caller omits
+  // classId, per SubclassPicker.tsx's own comment, but still means "my one
+  // class"). Used consistently below so identity.classes[] and the legacy
+  // identity.subclassId scalar are never updated inconsistently.
+  const targetClassId = classId ?? classes?.[0]?.classId;
+  const ownClassLevel = targetClassId && classes
+    ? (classes.find(c => c.classId === targetClassId)?.level ?? entity.identity.level)
     : entity.identity.level;
 
   // SUBCLASS-CHANGE-1: this function used to be purely additive — safe the
@@ -924,33 +1049,38 @@ export function applySubclassToEntity(
   // an unresolved pending choice the OLD subclass itself queued (rare —
   // most subclass sub-choices auto-resolve via canAutoResolve below) is
   // not retroactively removed.
-  const previousSubclassId = classId && classes
-    ? classes.find(c => c.classId === classId)?.subclassId
+  const previousSubclassId = targetClassId && classes
+    ? classes.find(c => c.classId === targetClassId)?.subclassId
     : entity.identity.subclassId;
+  // Closure pass 3 (item 3/10): resource removal now routes through
+  // revokeResourceSource — a resource this subclass grants that ANOTHER
+  // still-active source also grants (same resourceId, both registered via
+  // a resource_grant entitlement) survives with its current/spent state
+  // untouched, instead of the old direct sourceKind/sourceId filter, which
+  // always deleted the physical entry outright regardless of any other
+  // contributor. revokeResourceSource calls revokeEntitlementsFromSource
+  // internally (covering the proficiency/spell-style entitlements too), so
+  // no separate call is needed here.
   const strippedEntity: Entity = previousSubclassId
-    ? {
+    ? revokeResourceSource({
         ...entity,
         features: entity.features.filter(f => !(f.source.kind === 'subclass' && f.source.refId === previousSubclassId)),
-        resources: {
-          ...entity.resources,
-          custom: entity.resources.custom.filter(r => !(r.sourceKind === 'subclass' && r.sourceId === previousSubclassId)),
-        },
-      }
+      }, 'subclass', previousSubclassId)
     : entity;
 
-  let updated: Entity = classId && classes
+  let updated: Entity = classes && classes.length > 0 && targetClassId
     ? {
         ...strippedEntity,
         identity: {
           ...strippedEntity.identity,
-          classes: classes.map(c => c.classId === classId ? { ...c, subclassId: asSubclassId(subclassId) } : c),
+          classes: classes.map(c => c.classId === targetClassId ? { ...c, subclassId: asSubclassId(subclassId) } : c),
         },
       }
     : {
         ...strippedEntity,
         identity: { ...strippedEntity.identity, subclassId },
       };
-  if (classId && classes) updated = syncLegacyIdentity(updated);
+  if (classes && classes.length > 0 && targetClassId) updated = syncLegacyIdentity(updated);
 
   for (const entry of subclassProgression.entries) {
     if (entry.level > ownClassLevel) continue;
@@ -974,7 +1104,7 @@ export function applySubclassToEntity(
           }
         }
       } else {
-        updated = queueChoice(updated, choice, entry.level, classId);
+        updated = queueChoice(updated, choice, entry.level, classId, { kind: 'subclass', id: subclassId });
       }
     }
   }
@@ -1042,14 +1172,25 @@ export function applySpellChoiceToEntity(
     if (getSpellLevel(id) === 0) newCantrips.push(id);
     else newKnown.push(id);
   }
-  const updated: Entity = {
-    ...entity,
-    spellcasting: {
-      ...entity.spellcasting,
-      cantrips: [...new Set([...entity.spellcasting.cantrips, ...newCantrips])],
-      known:    [...new Set([...entity.spellcasting.known,    ...newKnown])],
-    },
-    choices: entity.choices.map(c =>
+  // Closure pass 3 (item 1): the class/subclass/race grants the OPPORTUNITY
+  // to learn a spell (this queued choice); the player picks which one. That
+  // opportunity is source-owned the same way a resolved tool/language/skill
+  // choice is (closure pass 2) — losing the class/subclass that granted the
+  // choice should be able to remove the resulting known spell too, without
+  // touching a DIFFERENT source's grant of the same spell. Falls back to
+  // 'manual' when the choice carries no explicit provenance (e.g. an
+  // in-play "+Learn Spell" ad-hoc pick with no queued ChoiceState source).
+  const pending = entity.choices.find(c => c.id === choiceId);
+  const spellSource: { kind: EntitlementSourceKind; id?: string } = pending?.sourceKind
+    ? { kind: pending.sourceKind, id: pending.sourceId }
+    : { kind: 'manual', id: undefined };
+  let updated: Entity = grantEntitlements(entity, [
+    ...newCantrips.map(key => ({ kind: 'cantrip_access' as const, key, sourceKind: spellSource.kind, sourceId: spellSource.id, choiceId })),
+    ...newKnown.map(key    => ({ kind: 'spell_access'   as const, key, sourceKind: spellSource.kind, sourceId: spellSource.id, choiceId })),
+  ]);
+  updated = {
+    ...updated,
+    choices: updated.choices.map(c =>
       c.id === choiceId ? { ...c, resolved: true, selections: spellIds } : c
     ),
   };
@@ -1169,7 +1310,20 @@ export function applyToolChoiceToEntity(
   for (const id of toolIds) {
     if (entity.proficiencies.tools.includes(id)) throw new Error(`Already proficient with "${id}".`);
   }
-  let updated = applyGrant(entity, { kind: 'proficiency', value: { tools: toolIds } }, pending.grantedAt, pending.definition.forClassId);
+  // Closure pass 2: tag the resulting entitlement(s) with the choice's own
+  // explicit provenance (ChoiceState.sourceKind/sourceId, closure pass 2)
+  // when set, falling back to classId-inference the same way applyGrant's
+  // own default already does — plus choiceId, so removing just THIS
+  // choice's origin (via revokeEntitlementsFromChoice) doesn't disturb a
+  // different grant from the same source.
+  let updated = applyGrant(
+    entity, { kind: 'proficiency', value: { tools: toolIds } }, pending.grantedAt, pending.definition.forClassId,
+    pending.sourceKind
+      ? { kind: pending.sourceKind, id: pending.sourceId, choiceId }
+      : pending.definition.forClassId
+        ? { kind: 'class', id: pending.definition.forClassId, choiceId }
+        : { kind: 'manual', choiceId },
+  );
   updated = {
     ...updated,
     choices: updated.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections: toolIds } : c),
@@ -1196,7 +1350,14 @@ export function applyLanguageChoiceToEntity(
   for (const id of languageIds) {
     if (entity.proficiencies.languages.includes(id)) throw new Error(`Already knows "${id}".`);
   }
-  let updated = applyGrant(entity, { kind: 'proficiency', value: { languages: languageIds } }, pending.grantedAt, pending.definition.forClassId);
+  let updated = applyGrant(
+    entity, { kind: 'proficiency', value: { languages: languageIds } }, pending.grantedAt, pending.definition.forClassId,
+    pending.sourceKind
+      ? { kind: pending.sourceKind, id: pending.sourceId, choiceId }
+      : pending.definition.forClassId
+        ? { kind: 'class', id: pending.definition.forClassId, choiceId }
+        : { kind: 'manual', choiceId },
+  );
   updated = {
     ...updated,
     choices: updated.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections: languageIds } : c),
@@ -1214,9 +1375,22 @@ function preserveUsedSlots(prev: SpellSlots | undefined, next: SpellSlots): Spel
   const result = {} as SpellSlots;
   tiers.forEach(t => {
     const total = next[t]?.total ?? 0;
-    const used  = Math.min(prev?.[t]?.used ?? 0, total);
+    const used  = Math.max(0, Math.min(prev?.[t]?.used ?? 0, total));
     result[t] = { total, used };
   });
+  return result;
+}
+
+/** Pact magic is one pool whose tier can change; carry its spent count across tiers. */
+function preservePactUsedSlots(previous: SpellSlots | undefined, next: SpellSlots): SpellSlots {
+  const spent = Object.values(previous ?? {}).reduce((sum, slot) => sum + Math.max(0, slot.used), 0);
+  const result = { ...next };
+  let remaining = spent;
+  for (const tier of Object.keys(next) as (keyof SpellSlots)[]) {
+    const used = Math.min(remaining, next[tier].total);
+    result[tier] = { ...next[tier], used };
+    remaining -= used;
+  }
   return result;
 }
 
@@ -1238,9 +1412,11 @@ export function levelUpClass(
   targetClassId: string,
   progression: ClassProgression,
   rules: CampaignRules,
-  targetClass?: import('./types').CharClass,
+  targetClass?: CharClass,
+  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
 ): Entity {
-  const classes = getClassLevels(entity);
+  const classes = getClassLevels(entity).filter(c => c.level > 0);
+  targetClass = targetClass ?? classDefinitions.find(c => c.id === targetClassId);
   const existing = classes.find(c => c.classId === targetClassId);
   const isNewClass = !existing;
   const wasCharacterLevelZero = entity.identity.level === 0;
@@ -1266,23 +1442,30 @@ export function levelUpClass(
 
   updated = applyHP(updated, entry.hpDie, rules.hpMode, newClassLevel, rules, progression.hpAbility ?? 'con', isVeryFirstLevel);
 
+  if (isVeryFirstLevel && targetClass) {
+    updated = applyGrant(updated, { kind: "proficiency", value: { armor: targetClass.armorProfs, weapons: targetClass.weaponProfs, tools: targetClass.toolProfs } }, 1, targetClassId);
+    updated = { ...updated, proficiencies: { ...updated.proficiencies, savingThrows: targetClass.savingThrows ?? [] } };
+  }
+
   if (isReducedMulticlassEntry) {
     const mcProf = multiclassProficienciesFor(targetClass);
     if (mcProf) updated = applyGrant(updated, { kind: 'proficiency', value: mcProf }, newClassLevel, targetClassId);
   }
 
   for (const grant of entry.grants) {
-    if (isReducedMulticlassEntry && grant.kind === 'proficiency') continue; // superseded by the reduced table above
+    if (isReducedMulticlassEntry && (grant.kind === 'proficiency' || grant.kind === 'starting_item')) continue; // superseded by the reduced table above
     updated = applyGrant(updated, grant, newClassLevel, targetClassId);
   }
 
   for (const choice of entry.choices) {
+    if (isReducedMulticlassEntry && ['skill', 'tool', 'equipment'].includes(choice.kind)) continue;
     if (canAutoResolve(choice)) {
       if (Array.isArray(choice.pool) && choice.pool.length > 0) {
         for (const grant of choice.grants) updated = applyGrant(updated, grant, newClassLevel, targetClassId);
       }
     } else {
-      updated = queueChoice(updated, { ...choice, forClassId: targetClassId }, newClassLevel, targetClassId);
+      updated = queueChoice(updated, { ...choice, forClassId: targetClassId }, newClassLevel, targetClassId,
+        { kind: 'class', id: targetClassId });
     }
   }
 
@@ -1309,26 +1492,37 @@ export function levelUpClass(
   updated = { ...updated, identity: { ...updated.identity, classes: nextClasses } };
   updated = syncLegacyIdentity(updated);
 
-  // Once 2+ classes exist, per-class spell_slots grants above may have used
-  // the wrong classId (each grant only knows its own class) — recompute the
-  // combined multiclass slot pool from scratch as the authoritative result.
-  // Solo characters (still 1 class after this level-up) keep whatever their
-  // own class's grant already computed, which is already correct.
-  if (updated.spellcasting && isMulticlassed(updated)) {
+  if (updated.spellcasting) {
     const finalClasses = getClassLevels(updated);
-    const casterLevel = multiclassCasterLevel(finalClasses);
-    const nonPactSlots = casterLevel > 0
-      ? preserveUsedSlots(updated.spellcasting.slots, slotsForLevel(MULTICLASS_SPELLCASTER_SLOTS, casterLevel))
-      : preserveUsedSlots(undefined, slotsForLevel(MULTICLASS_SPELLCASTER_SLOTS, 1)); // all-zero row
-
-    let pactSlots = updated.spellcasting.pactSlots;
-    const pactClass = finalClasses.find(c => pactSlotTableFor(c.classId, c.subclassId));
-    if (pactClass) {
-      const table = pactSlotTableFor(pactClass.classId, pactClass.subclassId)!;
-      pactSlots = preserveUsedSlots(pactSlots, slotsForLevel(table, pactClass.level));
+    const definitions = finalClasses.map(c => {
+      const definition = c.classId === targetClassId ? targetClass : classDefinitions.find(d => d.id === c.classId);
+      if (!definition && finalClasses.length > 1) throw new Error('Missing class definition: ' + c.classId);
+      return { ...c, spellcastingStyle: definition?.spellcastingStyle };
+    });
+    const oldClasses = getClassLevels(entity).filter(c => c.level > 0);
+    // Compatibility with old single-pact saves whose pact pool occupied slots.
+    const oldPactOnly = oldClasses.length === 1 && !entity.spellcasting?.pactSlots &&
+      (pactSlotTableFor(oldClasses[0].classId, oldClasses[0].subclassId) ||
+       classDefinitions.find(d => d.id === oldClasses[0].classId)?.spellcastingStyle === 'pact');
+    const oldNormal = oldPactOnly ? undefined : entity.spellcasting?.slots;
+    const oldPact = entity.spellcasting?.pactSlots ?? (oldPactOnly ? entity.spellcasting?.slots : undefined);
+    const pactClass = definitions.find(c => c.spellcastingStyle === 'pact' || pactSlotTableFor(c.classId, c.subclassId));
+    const pactTable = pactClass ? pactSlotTableFor(pactClass.classId, pactClass.subclassId) ?? WARLOCK_SLOTS : null;
+    let normalMax: SpellSlots;
+    if (finalClasses.length > 1) {
+      const casterLevel = multiclassCasterLevel(definitions);
+      normalMax = casterLevel > 0 ? slotsForLevel(MULTICLASS_SPELLCASTER_SLOTS, casterLevel) : slotsFromCountArray(null);
+    } else if (pactClass) {
+      normalMax = slotsFromCountArray(null);
+    } else {
+      const counts = getSpellSlotsForClassLevel(targetClassId, newClassLevel);
+      normalMax = counts && !targetClass?.spellcastingStyle
+        ? slotsFromCountArray(counts) : updated.spellcasting.slots;
     }
-
-    updated = { ...updated, spellcasting: { ...updated.spellcasting, slots: nonPactSlots, pactSlots } };
+    updated = { ...updated, spellcasting: { ...updated.spellcasting,
+      slots: preserveUsedSlots(oldNormal, normalMax),
+      pactSlots: pactClass && pactTable ? preservePactUsedSlots(oldPact, slotsForLevel(pactTable, pactClass.level)) : undefined,
+    } };
   }
 
   return recomputeDerived(updated, rules);
@@ -1340,79 +1534,15 @@ export function levelUp(
   entity: Entity,
   targetLevel: number,
   progression: ClassProgression,
-  rules: CampaignRules
+  rules: CampaignRules,
+  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
 ): Entity {
   let updated = entity;
-  const startLevel = updated.identity.level;
-
-  for (let lvl = startLevel + 1; lvl <= targetLevel; lvl++) {
-    const entry = progression.entries.find(e => e.level === lvl);
-    if (!entry) continue;
-
-    // HP
-    updated = applyHP(updated, entry.hpDie, rules.hpMode, lvl, rules, progression.hpAbility ?? 'con');
-
-    // Grants
-    for (const grant of entry.grants) {
-      updated = applyGrant(updated, grant, lvl);
-    }
-
-    // Choices
-    for (const choice of entry.choices) {
-      if (canAutoResolve(choice)) {
-        if (Array.isArray(choice.pool) && choice.pool.length > 0) {
-          for (const grant of choice.grants) {
-            updated = applyGrant(updated, grant, lvl);
-          }
-        }
-      } else {
-        updated = queueChoice(updated, choice, lvl, progression.classId);
-      }
-    }
-
-    // Bonus feat every level (house rule). Injects an extra feat-only ASI choice
-    // at every level beyond the class's own ASI schedule.
-    if (bonusFeatEveryLevel(rules)) {
-      const bonusId = 'bonus_feat_lvl';
-      // Only add if not already queued (idempotent re-leveling safety).
-      const alreadyQueued = updated.choices.some(c => c.id === `${bonusId}_${lvl}`);
-      if (!alreadyQueued) {
-        const bonusDef: import('./types').ChoiceDefinition = {
-          id:       bonusId,
-          prompt:   `Bonus feat at level ${lvl} (house rule).`,
-          kind:     'asi',
-          count:    1,
-          pool:     'all',
-          grants:   [],
-          required: true,
-          resolved: false,
-        };
-        updated = queueChoice(updated, bonusDef, lvl);
-      }
-    }
-
-    // Spell slots: refresh from the PHB table for this level so a caster's slots
-    // grow automatically every level. Without this, progressions would each need
-    // an explicit spell_slots grant per level (only level 1 has one), so leveling
-    // a Wizard 1->5 would leave them stuck on level-1 slots. Preserves `used`.
-    if (updated.spellcasting) {
-      const slotArr = getSpellSlotsForClassLevel(updated.identity.classId, lvl);
-      if (slotArr) {
-        const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
-        const newSlots = { ...updated.spellcasting.slots };
-        tiers.forEach((t, i) => {
-          const total = slotArr[i];
-          const used  = Math.min(newSlots[t]?.used ?? 0, total);
-          newSlots[t] = { total, used };
-        });
-        updated = { ...updated, spellcasting: { ...updated.spellcasting, slots: newSlots } };
-      }
-    }
-
-    updated = { ...updated, identity: { ...updated.identity, level: lvl } };
+  const cls = classDefinitions.find(c => c.id === progression.classId);
+  for (let lvl = entity.identity.level + 1; lvl <= targetLevel; lvl++) {
+    updated = levelUpClass(updated, progression.classId, progression, rules, cls, classDefinitions);
   }
-
-  return recomputeDerived(updated, rules);
+  return updated;
 }
 
 // ── projectToLevel ────────────────────────────────────────────────────────────
@@ -1437,8 +1567,9 @@ export function projectToLevel(
   targetLevel: number,
   progression: ClassProgression,
   rules: CampaignRules,
+  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
 ): Entity {
-  return levelUp(entity, targetLevel, progression, { ...rules, hpMode: 'max' });
+  return levelUp(entity, targetLevel, progression, { ...rules, hpMode: 'max' }, classDefinitions);
 }
 
 /**
@@ -1467,10 +1598,11 @@ export function projectMulticlassSequence(
   entity: Entity,
   steps:  MulticlassPlanStep[],
   rules:  CampaignRules,
+  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
 ): Entity {
   const forcedRules: CampaignRules = { ...rules, hpMode: 'max' };
   return steps.reduce(
-    (updated, step) => levelUpClass(updated, step.classId, step.progression, forcedRules, step.targetClass),
+    (updated, step) => levelUpClass(updated, step.classId, step.progression, forcedRules, step.targetClass, classDefinitions),
     entity,
   );
 }
@@ -1490,6 +1622,11 @@ export function resolveChoice(
   }
 
   let updated = entity;
+  const choiceSource = pending.sourceKind
+    ? { kind: pending.sourceKind, id: pending.sourceId, choiceId: pending.id }
+    : pending.definition.forClassId
+      ? { kind: 'class' as const, id: pending.definition.forClassId, choiceId: pending.id }
+      : { kind: 'manual' as const, choiceId: pending.id };
 
   for (const selId of selections) {
     if (!Array.isArray(pending.definition.pool)) continue;
@@ -1497,7 +1634,7 @@ export function resolveChoice(
     if (!option) throw new Error(`Invalid selection: ${selId}`);
 
     for (const grant of pending.definition.grants) {
-      updated = applyGrant(updated, grant, pending.grantedAt);
+      updated = applyGrant(updated, grant, pending.grantedAt, pending.definition.forClassId, choiceSource);
     }
 
     // Equipment choices: the option's value is an array of item IDs.
@@ -1518,22 +1655,21 @@ export function resolveChoice(
       }
     }
 
-    // Skill choices: mark the skill as trained
+    // Skill choices: mark the skill as trained. Closure pass 2: this has no
+    // backing Feature/Effect at all (it never did — see swapBackground's own
+    // doc comment on this exact gap), so it's routed through the new
+    // entitlement system instead of a raw flat-field mutation — recompute
+    // then derives skills[x].trained from entitlements, so removing this
+    // choice's origin later correctly un-trains it (unless another source
+    // still grants it, or it's flagged sourceKind:'manual' — untraceable
+    // provenance stays permanent, same conservative rule everywhere else).
     if (pending.definition.kind === "skill") {
       const skillName = option.value as string;
       if (updated.skills.skills[skillName as keyof typeof updated.skills.skills]) {
-        updated = {
-          ...updated,
-          skills: {
-            skills: {
-              ...updated.skills.skills,
-              [skillName]: {
-                ...updated.skills.skills[skillName as keyof typeof updated.skills.skills],
-                trained: true
-              }
-            }
-          }
-        };
+        updated = grantEntitlement(updated, {
+          kind: 'skill_proficiency', key: skillName,
+          sourceKind: pending.sourceKind ?? 'manual', sourceId: pending.sourceId, choiceId: pending.id,
+        });
       }
     }
 
@@ -1643,4 +1779,49 @@ export function resolveEquipmentChoice(
   };
 
   return recomputeDerived(updated, rules);
+}
+/** Shared creation/live acquisition. Existing classes are not granted twice. */
+export function acquireClass(entity: Entity, cls: CharClass, rules: CampaignRules,
+  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES): Entity {
+  if (getClassLevels(entity).some(c => c.classId === cls.id && c.level > 0)) return entity;
+  return levelUpClass(entity, cls.id, getProgressionForClass(cls), rules, cls, classDefinitions);
+}
+
+/** Creation-only reset; historical/manual ownership survives reselection. */
+export function resetCreationClass(entity: Entity, hitDie: number): Entity {
+  // Revert resolved-ASI stat bumps BEFORE dropping the choices that record them.
+  const stripped = stripResolvedAsiStats(initializeEntitlementInputs(entity));
+
+  let clean = stripped;
+  for (const classId of new Set((stripped.entitlements ?? []).filter(e => e.sourceKind === 'class').map(e => e.sourceId))) {
+    clean = revokeResourceSource(clean, 'class', classId);
+  }
+  for (const subclassId of new Set((stripped.entitlements ?? []).filter(e => e.sourceKind === 'subclass').map(e => e.sourceId))) {
+    clean = revokeResourceSource(clean, 'subclass', subclassId);
+  }
+  for (const choice of stripped.choices.filter(c => c.grantedAt > 0)) {
+    clean = revokeEntitlementsFromChoice(clean, choice.id);
+  }
+  return {
+    ...clean,
+    identity: { ...clean.identity, classId: "", classes: [], level: 0, subclassId: null },
+    features: stripped.features.filter(
+      f => f.source.kind !== 'class' && f.source.kind !== 'subclass'
+    ),
+    choices:   stripped.choices.filter(c => c.grantedAt === 0),
+    resources: {
+      ...stripped.resources,
+      // Only drop resources the PREVIOUS class granted — a racial resource
+      // (Dragonborn's Breath Weapon, Half-Orc's Relentless Endurance, etc.)
+      // has sourceKind !== 'class' (or undefined, for characters saved
+      // before this field existed) and survives a class change untouched.
+      custom: clean.resources.custom,
+      hp:      { current: 0, maximum: 0, temp: 0 },
+      hitDice: { die: hitDie, total: 0, remaining: 0 },
+    },
+    spellcasting: clean.spellcasting && clean.entitlements?.some(e => e.kind === 'spell_access' || e.kind === 'cantrip_access')
+      ? { ...clean.spellcasting, slots: slotsFromCountArray(null), pactSlots: undefined,
+          known: [], cantrips: [], prepared: [], concentrating: null }
+      : null,
+  };
 }

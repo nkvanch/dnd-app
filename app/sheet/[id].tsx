@@ -12,10 +12,11 @@ import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
 import { useCombatTurnStore } from '../../src/store/combatTurnStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { equipItem, unequipItem, toggleAttunement } from '../../src/engine/inventory';
+import { commitSpellPayment, restoreSpellSlot, SpellPaymentOption } from '../../src/engine/spellPayment';
 import { captureLoadout, applyLoadout, deleteLoadout } from '../../src/engine/loadout';
 import { simulate } from '../../src/engine/simulate';
 import { validateEntity } from '../../src/engine/validation';
@@ -220,39 +221,24 @@ export default function CharacterSheetScreen() {
     }), `${delta > 0 ? 'Restored' : 'Spent'} ${resourceName}`, 'combat');
   }, [mutate, entity]);
 
-  const handleSpendSlot = useCallback((tier: string) => {
+  // Re-audit items 1/2 (A12): delegates to the one shared spendSpellSlot/
+  // restoreSpellSlot resolver (src/engine/spellPayment.ts) instead of
+  // hand-rolling the same used/total clamp a 4th time — that function
+  // already enforces 0 <= used <= total unconditionally and no-ops rather
+  // than ever letting a spend become a restoration or vice versa.
+  const handleSpendSlot = useCallback((tier: string, kind: SpellPaymentOption['kind'] = 'normal') => {
     mutate(e => {
       if (!e.spellcasting) return e;
-      const slot = e.spellcasting.slots[tier as keyof typeof e.spellcasting.slots];
-      if (!slot || slot.used >= slot.total) return e;
-      return {
-        ...e,
-        spellcasting: {
-          ...e.spellcasting,
-          slots: {
-            ...e.spellcasting.slots,
-            [tier]: { ...slot, used: slot.used + 1 },
-          },
-        },
-      };
+      return commitSpellPayment(e, { kind, tier: tier as import('../../src/engine/spellPayment').SlotTier });
     }, `Spent level ${tier} spell slot`, 'spells');
   }, [mutate]);
 
-  const handleRestoreSlot = useCallback((tier: string) => {
+  const handleRestoreSlot = useCallback((tier: string, kind: SpellPaymentOption['kind'] = 'normal') => {
     mutate(e => {
       if (!e.spellcasting) return e;
-      const slot = e.spellcasting.slots[tier as keyof typeof e.spellcasting.slots];
-      if (!slot || slot.used <= 0) return e;
-      return {
-        ...e,
-        spellcasting: {
-          ...e.spellcasting,
-          slots: {
-            ...e.spellcasting.slots,
-            [tier]: { ...slot, used: slot.used - 1 },
-          },
-        },
-      };
+      const slots = restoreSpellSlot(e.spellcasting, { kind, tier: tier as import('../../src/engine/spellPayment').SlotTier });
+      if (slots === e.spellcasting) return e;
+      return { ...e, spellcasting: slots };
     }, `Restored level ${tier} spell slot`, 'spells');
   }, [mutate]);
 
@@ -518,6 +504,15 @@ export default function CharacterSheetScreen() {
   const onSpellsEntityUpdate      = useCallback((updated: Entity, label?: string) => mutate(() => updated, label ?? 'Spellbook change', 'spells'), [mutate]);
   const onAbilitiesEntityUpdate   = useCallback((updated: Entity) => mutate(() => updated, 'Ability override', 'other'), [mutate]);
   const onFeaturesEntityUpdate    = useCallback((updated: Entity) => mutate(() => updated, 'Edited features', 'features'), [mutate]);
+  // Closure item 16: the ONE authoritative End Turn entry point — Character/
+  // Actions/Spells tabs all call this same handler now instead of each
+  // computing playerEndTurn() locally and routing the result through their
+  // own differently-labeled/categorized generic onEntityUpdate (which used
+  // to produce 3 different timeline labels — 'Character progression',
+  // 'Used action card', 'End Turn' — and 2 different categories for the
+  // exact same mutation). One call site means one label/category/sync/undo
+  // behavior, guaranteed identical regardless of which tab it's pressed from.
+  const handleEndTurn = useCallback(() => mutate(e => playerEndTurn(e, rules), 'End Turn', 'combat'), [mutate, rules]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -759,6 +754,7 @@ export default function CharacterSheetScreen() {
                 onSpendSlot={handleSpendSlot}
                 onRestoreSlot={handleRestoreSlot}
                 onEntityUpdate={onCombatEntityUpdate}
+                onEndTurn={handleEndTurn}
               />
             ) : (
               <TabExploration
@@ -779,6 +775,7 @@ export default function CharacterSheetScreen() {
             entity={entity}
             rules={rules}
             onEntityUpdate={onActionsEntityUpdate}
+            onEndTurn={handleEndTurn}
           />
         )}
         {activeTab === 'spells' && (
@@ -786,6 +783,7 @@ export default function CharacterSheetScreen() {
             entity={entity}
             rules={rules}
             onEntityUpdate={onSpellsEntityUpdate}
+            onEndTurn={handleEndTurn}
           />
         )}
         {activeTab === 'abilities' && (
@@ -809,9 +807,9 @@ export default function CharacterSheetScreen() {
           <TabInventory
             entity={entity}
             rules={rules}
-            onEquip={handleEquip}
-            onUnequip={handleUnequip}
-            onAddItem={handleAddItem}
+            onEquip={(...args) => { void handleEquip(...args); }}
+            onUnequip={(...args) => { void handleUnequip(...args); }}
+            onAddItem={(...args) => { void handleAddItem(...args); }}
             onRemoveItem={handleRemoveItem}
             onUpdateQuantity={handleUpdateQuantity}
             onSetQuantity={handleSetQuantity}
@@ -820,7 +818,7 @@ export default function CharacterSheetScreen() {
             onRemoveInfusion={handleRemoveInfusion}
             onToggleAttune={handleToggleAttune}
             onSaveLoadout={handleSaveLoadout}
-            onApplyLoadout={handleApplyLoadout}
+            onApplyLoadout={(...args) => { void handleApplyLoadout(...args); }}
             onDeleteLoadout={handleDeleteLoadout}
           />
         )}
@@ -931,7 +929,7 @@ export default function CharacterSheetScreen() {
         <ExportFormatSheet
           visible={exportSheetOpen}
           title={`Export "${entity.identity.name || 'Character'}"`}
-          onSelect={handleExportFormat}
+          onSelect={(...args) => { void handleExportFormat(...args); }}
           onClose={() => setExportSheetOpen(false)}
         />
       )}

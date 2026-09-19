@@ -1,5 +1,6 @@
 // src/engine/__tests__/inventory.test.ts
 import { equipItem, unequipItem, itemRequiresAttunement, attunementCap, countAttuned, toggleAttunement } from '../inventory';
+import { recomputeDerived } from '../pipeline';
 import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import { Entity, Item, ItemInstance, FeatureInstance } from '../types';
 
@@ -14,10 +15,8 @@ function withEquipped(inst: ItemInstance): Entity {
 }
 
 describe('equipItem', () => {
-  it('moves the instance from carried to equipped and hydrates its features from the definition', () => {
-    const inst: ItemInstance = { itemId: 'ring_of_protection', quantity: 1, attuned: false, features: [] };
-    const entity = withCarried(inst);
-    const def: Item = {
+  function ringOfProtectionDef(): Item {
+    return {
       id: 'ring_of_protection', name: 'Ring of Protection', weight: 0, cost: '', properties: [],
       features: [{
         id: 'ring_ac', name: 'Ring of Protection', description: '', source: { kind: 'item', refId: 'ring_of_protection' },
@@ -25,12 +24,115 @@ describe('equipItem', () => {
         actions: [], choices: [], passive: true,
       }],
     };
+  }
+
+  it('moves the instance from carried to equipped, hydrates its features and requiresAttunement from the definition', () => {
+    const inst: ItemInstance = { itemId: 'ring_of_protection', quantity: 1, attuned: false, features: [] };
+    const entity = withCarried(inst);
+    const def = ringOfProtectionDef();
 
     const after = equipItem(entity, 'ring_of_protection', def, DEFAULT_RULES);
 
     expect(after.inventory.carried).toEqual([]);
     expect(after.inventory.equipped).toHaveLength(1);
     expect(after.inventory.equipped[0].features).toEqual(def.features);
+    expect(after.inventory.equipped[0].requiresAttunement).toBe(true);
+  });
+
+  // Re-audit A17: merely equipping an attunement-required item must not
+  // contribute its effects — only attuning does. Ring of Protection is one
+  // of inventory.ts's own KNOWN_ATTUNEMENT_ITEM_IDS (the bulk-imported
+  // catalog's own "requires attunement" property text is confirmed
+  // incomplete for it — see that constant's own doc comment).
+  it('an equipped-but-unattuned attunement-required item contributes NO effect', () => {
+    const inst: ItemInstance = { itemId: 'ring_of_protection', quantity: 1, attuned: false, features: [] };
+    const entity = withCarried(inst);
+    const after = equipItem(entity, 'ring_of_protection', ringOfProtectionDef(), DEFAULT_RULES);
+    expect(after.derived.ac).toBe(entity.derived.ac); // unchanged — not attuned yet
+  });
+
+  it('attuning the same equipped item makes its effect apply; unattuning removes it again', () => {
+    const inst: ItemInstance = { itemId: 'ring_of_protection', quantity: 1, attuned: false, features: [] };
+    const entity = withCarried(inst);
+    let after = equipItem(entity, 'ring_of_protection', ringOfProtectionDef(), DEFAULT_RULES);
+    expect(after.derived.ac).toBe(entity.derived.ac); // not attuned: no bonus
+
+    after = recomputeDerived(toggleAttunement(after, 'ring_of_protection'), DEFAULT_RULES);
+    expect(after.derived.ac).toBe(entity.derived.ac + 1); // attuned: bonus appears
+
+    after = recomputeDerived(toggleAttunement(after, 'ring_of_protection'), DEFAULT_RULES);
+    expect(after.derived.ac).toBe(entity.derived.ac); // unattuned again: bonus disappears
+  });
+
+  // Re-audit A19: Bracers of Defense (and any future item using
+  // requiresNoArmorOrShield) must not apply while ANOTHER equipped item is
+  // armor or a shield.
+  it('hydrates wearsArmorOrShield for armor and shields, but not for a non-armor item', () => {
+    const armorDef: Item = { id: 'leather_armor', name: 'Leather Armor', weight: 10, cost: '10 gp', properties: ['light armor'], features: [] };
+    const shieldDef: Item = { id: 'shield', name: 'Shield', weight: 6, cost: '10 gp', properties: ['shield'], features: [] };
+    const ringDef: Item = { id: 'plain_ring', name: 'Plain Ring', weight: 0, cost: '', properties: [], features: [] };
+    for (const [def, expected] of [[armorDef, true], [shieldDef, true], [ringDef, false]] as const) {
+      const inst: ItemInstance = { itemId: def.id, quantity: 1, attuned: false, features: [] };
+      const after = equipItem(withCarried(inst), def.id, def, DEFAULT_RULES);
+      expect(after.inventory.equipped[0].wearsArmorOrShield).toBe(expected);
+    }
+  });
+
+  function bracersOfDefenseDef(): Item {
+    return {
+      id: 'bracers_of_defense', name: 'Bracers of Defense', weight: 0, cost: '', properties: [],
+      features: [{
+        id: 'bracers_bonus', name: 'Bracers of Defense', description: '', source: { kind: 'item', refId: 'bracers_of_defense' },
+        level: null, actions: [], choices: [], passive: true,
+        effects: [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 2, condition: null, requiresNoArmorOrShield: true }],
+      }],
+    };
+  }
+
+  it('Bracers of Defense applies its AC bonus once equipped AND attuned, with no armor/shield', () => {
+    // bracers_of_defense is itself attunement-required (inventory.ts's own
+    // KNOWN_ATTUNEMENT_ITEM_IDS) — A17's gate and A19's gate compose
+    // correctly here: both conditions must be satisfied.
+    const bracersInst: ItemInstance = { itemId: 'bracers_of_defense', quantity: 1, attuned: false, features: [] };
+    const entity = withCarried(bracersInst);
+    let after = equipItem(entity, 'bracers_of_defense', bracersOfDefenseDef(), DEFAULT_RULES);
+    expect(after.derived.ac).toBe(entity.derived.ac); // equipped but not attuned yet: no bonus
+    after = recomputeDerived(toggleAttunement(after, 'bracers_of_defense'), DEFAULT_RULES);
+    expect(after.derived.ac).toBe(entity.derived.ac + 2); // attuned, no armor/shield: bonus applies
+  });
+
+  it('Bracers of Defense does NOT apply while a shield is also equipped, even when attuned', () => {
+    const shieldDef: Item = {
+      id: 'shield', name: 'Shield', weight: 6, cost: '10 gp', properties: ['shield'],
+      features: [{
+        id: 'shield_ac', name: 'Shield', description: '', source: { kind: 'item', refId: 'shield' },
+        level: null, actions: [], choices: [], passive: true,
+        effects: [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 2, condition: null }],
+      }],
+    };
+    let entity = withCarried({ itemId: 'bracers_of_defense', quantity: 1, attuned: false, features: [] });
+    entity = { ...entity, inventory: { ...entity.inventory, carried: [...entity.inventory.carried, { itemId: 'shield', quantity: 1, attuned: false, features: [] }] } };
+    let updated = equipItem(entity, 'bracers_of_defense', bracersOfDefenseDef(), DEFAULT_RULES);
+    updated = recomputeDerived(toggleAttunement(updated, 'bracers_of_defense'), DEFAULT_RULES);
+    expect(updated.derived.ac).toBe(entity.derived.ac + 2); // bracers alone, attuned: +2
+
+    updated = equipItem(updated, 'shield', shieldDef, DEFAULT_RULES);
+    // shield's own +2 applies, but bracers' +2 no longer does (requiresNoArmorOrShield blocks it)
+    expect(updated.derived.ac).toBe(entity.derived.ac + 2); // net: only the shield's bonus, not both
+  });
+
+  it('an item with no attunement requirement contributes its effect immediately on equip, unaffected by this fix', () => {
+    const inst: ItemInstance = { itemId: 'plate_of_testing', quantity: 1, attuned: false, features: [] };
+    const entity = withCarried(inst);
+    const def: Item = {
+      id: 'plate_of_testing', name: 'Plate of Testing', weight: 0, cost: '', properties: [],
+      features: [{
+        id: 'plate_ac', name: 'Plate of Testing', description: '', source: { kind: 'item', refId: 'plate_of_testing' },
+        level: null, effects: [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 1, condition: null }],
+        actions: [], choices: [], passive: true,
+      }],
+    };
+    const after = equipItem(entity, 'plate_of_testing', def, DEFAULT_RULES);
     expect(after.derived.ac).toBe(entity.derived.ac + 1);
   });
 

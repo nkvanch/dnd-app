@@ -1,3 +1,4 @@
+import { setManualEntitlement } from '../../engine/entitlements';
 // app/sheet/TabAbilities.tsx
 // Tab 3 — Ability scores, saving throws, skills.
 import { useState, memo } from 'react';
@@ -48,10 +49,9 @@ function cycleSkillProficiency(entity: Entity, skill: SkillName, rules: Campaign
     : !entry.expertise
       ? { ...entry, trained: true,  expertise: true }
       : { ...entry, trained: false, expertise: false };
-  return recomputeDerived({
-    ...entity,
-    skills: { ...entity.skills, skills: { ...entity.skills.skills, [skill]: next } },
-  }, rules);
+  return recomputeDerived(setManualEntitlement(
+    setManualEntitlement(entity, 'skill_proficiency', skill, next.trained),
+    'skill_expertise', skill, next.expertise), rules);
 }
 
 function toggleSaveProficiency(entity: Entity, ability: Ability, rules: CampaignRules): Entity {
@@ -68,17 +68,13 @@ function toggleSaveProficiency(entity: Entity, ability: Ability, rules: Campaign
 function addProficiencyItem(entity: Entity, category: ProficiencyCategory, value: string, rules: CampaignRules): Entity {
   const trimmed = value.trim();
   if (!trimmed || entity.proficiencies[category].includes(trimmed)) return entity;
-  return recomputeDerived({
-    ...entity,
-    proficiencies: { ...entity.proficiencies, [category]: [...entity.proficiencies[category], trimmed] },
-  }, rules);
+  const kinds = { armor: 'armor_proficiency', weapons: 'weapon_proficiency', tools: 'tool_proficiency', languages: 'language' } as const;
+  return recomputeDerived(setManualEntitlement(entity, kinds[category], trimmed, true), rules);
 }
 
 function removeProficiencyItem(entity: Entity, category: ProficiencyCategory, value: string, rules: CampaignRules): Entity {
-  return recomputeDerived({
-    ...entity,
-    proficiencies: { ...entity.proficiencies, [category]: entity.proficiencies[category].filter(v => v !== value) },
-  }, rules);
+  const kinds = { armor: 'armor_proficiency', weapons: 'weapon_proficiency', tools: 'tool_proficiency', languages: 'language' } as const;
+  return recomputeDerived(setManualEntitlement(entity, kinds[category], value, false), rules);
 }
 
 const MANUAL_EDIT_LABEL = 'Manual edit';

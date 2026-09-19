@@ -57,27 +57,37 @@ describe('buildFeatureGrantRows — removal direction (via removeFeature)', () =
     expect(rowLabels(withResource, after)).toContain('Resource removed: Limited Ability (Uses)');
   });
 
-  // NOTE: skill (and tool/weapon/armor) proficiency granted via a
-  // grant_proficiency Effect turns out to be STICKY once recomputeDerived
-  // sets entity.skills.skills[x].trained = true — recomputeDerived only ever
-  // ADDS trained flags from active effects (pipeline.ts:151-177), it never
-  // clears one back to false when the granting effect disappears. So
-  // removeFeature cannot actually revoke a skill proficiency a feature
-  // granted, even though the row-builder itself is fully able to show that
-  // diff (proven below, against hand-constructed entities) — a real,
-  // confirmed engine characteristic, not a gap in removeFeature or in this
-  // row-builder. Same shape of blind spot the Phase 4 plan already flagged
-  // for background skill-retraining (class-choice-trained skills have no
-  // backing Effect at all) — this shows it's actually broader: even
-  // Effect-driven training is one-way once applied.
-  it('does NOT revoke skill training on removal — documents the engine\'s additive-only proficiency behavior, not a regression', () => {
+  // Re-audit A16: skill (and tool/weapon/armor) proficiency granted via a
+  // grant_proficiency Effect used to be STICKY once recomputeDerived set
+  // entity.skills.skills[x].trained = true — it only ever ADDED trained
+  // flags from active effects, never clearing one when the granting effect
+  // disappeared. Fixed via entity.effectGrantedProficiencies (see
+  // pipeline.ts's own doc comment on the reconcile logic) — an
+  // effect-granted skill IS now revoked once its granting feature is gone,
+  // while a choice/manually-trained skill (no backing Effect at all — see
+  // swapBackground's own doc comment) is correctly left untouched, since
+  // this tracking only ever concerns itself with what THIS mechanism
+  // granted, never anything set some other way.
+  it('revokes skill training on removal once no active effect still grants it', () => {
     const before = baseEntity([
       manualFeature('skill_bonus', { effects: [{ type: 'grant_proficiency', target: 'skill:athletics', operation: 'add', value: null, condition: null }] }),
     ]);
     expect(before.skills.skills.athletics.trained).toBe(true);
     const after = recomputeDerived(removeFeature(before, 'skill_bonus'), DEFAULT_RULES);
-    expect(after.skills.skills.athletics.trained).toBe(true); // still trained — not reverted
-    expect(rowLabels(before, after)).not.toContain('Athletics: no longer proficient');
+    expect(after.skills.skills.athletics.trained).toBe(false); // correctly reverted
+    expect(rowLabels(before, after)).toContain('Athletics: no longer proficient');
+  });
+
+  it('keeps skill training when a SECOND active source still grants it after the first is removed', () => {
+    const before = baseEntity([
+      manualFeature('skill_bonus_a', { effects: [{ type: 'grant_proficiency', target: 'skill:athletics', operation: 'add', value: null, condition: null }] }),
+      manualFeature('skill_bonus_b', { effects: [{ type: 'grant_proficiency', target: 'skill:athletics', operation: 'add', value: null, condition: null }] }),
+    ]);
+    expect(before.skills.skills.athletics.trained).toBe(true);
+    const afterRemovingOne = recomputeDerived(removeFeature(before, 'skill_bonus_a'), DEFAULT_RULES);
+    expect(afterRemovingOne.skills.skills.athletics.trained).toBe(true); // b still grants it
+    const afterRemovingBoth = recomputeDerived(removeFeature(afterRemovingOne, 'skill_bonus_b'), DEFAULT_RULES);
+    expect(afterRemovingBoth.skills.skills.athletics.trained).toBe(false); // now genuinely gone
   });
 });
 

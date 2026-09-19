@@ -32,8 +32,14 @@ export function takeRest(
  * - Only Warlocks (Pact Magic) recover spell slots on short rest.
  */
 function shortRest(entity: Entity): Entity {
+  // Re-audit A15: a short rest must restore ONLY 'short_rest'-tagged
+  // resources. This used to also restore 'long_rest' resources (a long_rest
+  // pool at 0/3 recovered to 3/3 on a mere short rest) — the reproduced bug.
+  // 'dawn' and any free-text homebrew recharge string are genuinely
+  // unsupported categories (this engine has no time-of-day/dawn clock) —
+  // left untouched rather than silently mapped onto either rest policy.
   const rechargedResources = entity.resources.custom.map(r => {
-    if (r.recharge === 'short_rest' || r.recharge === 'long_rest') {
+    if (r.recharge === 'short_rest') {
       return { ...r, current: r.maximum };
     }
     return r;
@@ -97,12 +103,21 @@ function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity 
     },
   };
 
-  // 2. All custom resources
+  // 2. Custom resources — re-audit A15: a long rest restores 'short_rest'
+  //    and 'long_rest' tagged resources (a long rest is a superset of a
+  //    short rest's recovery), but must NOT blindly restore every resource
+  //    regardless of its declared policy. 'never' stays spent; 'dawn' and
+  //    any free-text homebrew recharge string are genuinely unsupported by
+  //    this engine (no time-of-day clock) — left untouched rather than
+  //    silently treated as long-rest recovery, per the same "disclose, don't
+  //    fake" rule shortRest above now follows.
   updated = {
     ...updated,
     resources: {
       ...updated.resources,
-      custom: updated.resources.custom.map(r => ({ ...r, current: r.maximum })),
+      custom: updated.resources.custom.map(r =>
+        (r.recharge === 'short_rest' || r.recharge === 'long_rest') ? { ...r, current: r.maximum } : r
+      ),
     },
   };
 

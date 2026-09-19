@@ -9,6 +9,7 @@ import { Platform } from 'react-native';
 import { Entity } from '../engine/types';
 import { getDb } from './db';
 import { migrateEntity } from '../engine/multiclass';
+import { validateEntityShape } from '../engine/homebrewValidator';
 
 type EntityRow = {
   id:        string;
@@ -32,7 +33,9 @@ export async function saveEntity(entity: Entity): Promise<void> {
   );
 }
 
-/** Load a single Entity by id. Returns null if not found. */
+/** Load a single Entity by id. Returns null if not found OR structurally
+ *  invalid (re-audit A07 — same validated path parseEntityRow uses, so a
+ *  direct single-entity load can't crash on a malformed row either). */
 export async function loadEntity(id: string): Promise<Entity | null> {
   if (Platform.OS === 'web') return null;
   const db  = getDb();
@@ -41,7 +44,7 @@ export async function loadEntity(id: string): Promise<Entity | null> {
     [id]
   );
   if (!row) return null;
-  return migrateEntity(JSON.parse(row.data) as Entity);
+  return parseEntityRow(row);
 }
 
 /**
@@ -50,10 +53,26 @@ export async function loadEntity(id: string): Promise<Entity | null> {
  * corrupted row doesn't take down the entire list (audit finding
  * PERSIST-4). Mirrors the per-row try/catch loadAllEntityMeta already uses
  * below for the same reason.
+ *
+ * Re-audit A07: a syntactically-valid-JSON-but-structurally-broken row
+ * (e.g. {id, identity:{name}, features:[]}, missing stats/resources/
+ * inventory) used to parse "successfully" here — JSON.parse doesn't care
+ * that the shape is wrong — and only fail much later, outside this
+ * function's own try/catch, wherever the first consumer actually touched
+ * the missing field (recomputeDerived, a UI read, ...). validateEntityShape
+ * now catches that HERE, at the same per-row quarantine point as a JSON
+ * parse failure, so one malformed character is skipped and logged while
+ * every other row still loads normally.
  */
 function parseEntityRow(r: EntityRow): Entity | null {
   try {
-    return migrateEntity(JSON.parse(r.data) as Entity);
+    const parsed = JSON.parse(r.data) as unknown;
+    const shape = validateEntityShape(parsed);
+    if (!shape.valid) {
+      console.error(`[entityRepo] quarantining structurally invalid row id=${r.id}:`, shape.errors);
+      return null;
+    }
+    return migrateEntity(parsed as Entity);
   } catch (e) {
     console.error(`[entityRepo] skipping malformed row id=${r.id}:`, e);
     return null;

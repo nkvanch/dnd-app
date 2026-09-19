@@ -18,8 +18,10 @@ import { resolveEffectsForTarget, resolveBinary, resolveCombine } from './resolv
 import { ALL_BEAST_FORMS } from '../content/beastforms';
 import { generateAllActionCards } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
+import { isMartialWeapon } from '../content/items/itemBrowse';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { getClassEntry } from './multiclass';
+import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -120,7 +122,7 @@ export function applyStatModifiers(
  */
 export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Entity {
   // Use a mutable local reference so we can apply grant_proficiency effects
-  let entity = entityParam;
+  let entity = recomputeResourceMaximums(initializeEntitlementInputs(entityParam));
 
   const allEffects    = collectAllEffects(entity);
   let effectiveStats = applyStatModifiers(entity.stats, allEffects);
@@ -144,87 +146,75 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     };
   }
 
-  // ── Apply grant_proficiency effects to the skill block ────────────────────
-  // These come from race/class features (Elf Keen Senses → Perception, etc.)
+  // Authoritative inputs: persisted entitlements and currently active effects.
+  // Every flat grant field below is compatibility output, never an ownership oracle.
   const profEffects = allEffects.filter(ae => ae.effect.type === 'grant_proficiency');
-  if (profEffects.length > 0) {
-    let updatedSkills  = { ...entity.skills.skills };
-    let updatedTools   = [...entity.proficiencies.tools];
-    let updatedWeapons = [...entity.proficiencies.weapons];
-    let updatedArmor   = [...entity.proficiencies.armor];
-    let changed = false;
-    let toolsChanged = false;
-    let weaponsChanged = false;
-    let armorChanged = false;
-    for (const ae of profEffects) {
-      // target format: 'skill:perception', 'skill:athletics', etc.
-      if (ae.effect.target.startsWith('skill:')) {
-        const skillName = ae.effect.target.slice(6) as SkillName;
-        const existing  = updatedSkills[skillName];
-        if (existing) {
-          if (ae.effect.operation === 'add' && !existing.trained) {
-            updatedSkills = { ...updatedSkills, [skillName]: { ...existing, trained: true } };
-            changed = true;
-          } else if (ae.effect.operation === 'multiply' && !existing.expertise) {
-            // multiply = expertise (double proficiency)
-            updatedSkills = {
-              ...updatedSkills,
-              [skillName]: { ...existing, trained: true, expertise: true },
-            };
-            changed = true;
-          }
-        }
-      }
-      // target format: 'tool:thieves_tools', 'tool:herbalism_kit', etc. — same
-      // pattern as skills, previously declared in the type system (Effect.type
-      // already included 'grant_proficiency') but this branch never existed,
-      // so a trait authored with a tool: target was silently a no-op even
-      // though a builder UI could have let someone create it.
-      if (ae.effect.target.startsWith('tool:') && ae.effect.operation === 'add') {
-        const toolName = ae.effect.target.slice(5).replace(/_/g, ' ');
-        if (!updatedTools.some(t => t.toLowerCase() === toolName.toLowerCase())) {
-          updatedTools = [...updatedTools, toolName];
-          toolsChanged = true;
-        }
-      }
-      // target format: 'weapon:rapier', 'weapon:battleaxe', etc. — same
-      // pattern as tool:, for racial weapon-proficiency traits (Dwarven
-      // Combat Training, Elf Weapon Training, Drow Weapon Training, etc.),
-      // which previously had no mechanism at all (every existing one was
-      // flavor-text-only).
-      if (ae.effect.target.startsWith('weapon:') && ae.effect.operation === 'add') {
-        const weaponName = ae.effect.target.slice(7).replace(/_/g, ' ');
-        if (!updatedWeapons.some(w => w.toLowerCase() === weaponName.toLowerCase())) {
-          updatedWeapons = [...updatedWeapons, weaponName];
-          weaponsChanged = true;
-        }
-      }
-      // target format: 'armor:light', 'armor:medium', 'armor:heavy',
-      // 'armor:shields' — same pattern as weapon:/tool:, for racial armor-
-      // proficiency traits (Dwarven Armor Training, etc.).
-      if (ae.effect.target.startsWith('armor:') && ae.effect.operation === 'add') {
-        const armorName = ae.effect.target.slice(6).replace(/_/g, ' ');
-        if (!updatedArmor.some(a => a.toLowerCase() === armorName.toLowerCase())) {
-          updatedArmor = [...updatedArmor, armorName];
-          armorChanged = true;
-        }
-      }
+  const newGrantedSkills = new Set<SkillName>();
+  const newExpertiseSkills = new Set<SkillName>();
+  const newGrantedTools: string[] = [];
+  const newGrantedWeapons: string[] = [];
+  const newGrantedArmor: string[] = [];
+  const newGrantedLanguages: string[] = [];
+
+  // Entitlement-derived contribution — folded into the SAME newGranted*
+  // sets the active-effect loop below also populates. Neither reads prior output.
+  const entDerived = deriveProficienciesFromEntitlements(entity);
+  for (const s of entDerived.skills.trained)   newGrantedSkills.add(s);
+  for (const s of entDerived.skills.expertise) newExpertiseSkills.add(s);
+  for (const t of entDerived.tools)     if (!newGrantedTools.some(x => x.toLowerCase() === t.toLowerCase()))     newGrantedTools.push(t);
+  for (const w of entDerived.weapons)   if (!newGrantedWeapons.some(x => x.toLowerCase() === w.toLowerCase())) newGrantedWeapons.push(w);
+  for (const a of entDerived.armor)     if (!newGrantedArmor.some(x => x.toLowerCase() === a.toLowerCase()))   newGrantedArmor.push(a);
+  for (const l of entDerived.languages) if (!newGrantedLanguages.some(x => x.toLowerCase() === l.toLowerCase())) newGrantedLanguages.push(l);
+
+  for (const ae of profEffects) {
+    // target format: 'skill:perception', 'skill:athletics', etc.
+    if (ae.effect.target.startsWith('skill:')) {
+      const skillName = ae.effect.target.slice(6) as SkillName;
+      if (ae.effect.operation === 'add') newGrantedSkills.add(skillName);
+      else if (ae.effect.operation === 'multiply') { newGrantedSkills.add(skillName); newExpertiseSkills.add(skillName); }
     }
-    if (changed) {
-      entity = { ...entity, skills: { skills: updatedSkills } };
+    // target format: 'tool:thieves_tools', 'tool:herbalism_kit', etc.
+    if (ae.effect.target.startsWith('tool:') && ae.effect.operation === 'add') {
+      const toolName = ae.effect.target.slice(5).replace(/_/g, ' ');
+      if (!newGrantedTools.some(t => t.toLowerCase() === toolName.toLowerCase())) newGrantedTools.push(toolName);
     }
-    if (toolsChanged || weaponsChanged || armorChanged) {
-      entity = {
-        ...entity,
-        proficiencies: {
-          ...entity.proficiencies,
-          tools:   toolsChanged   ? updatedTools   : entity.proficiencies.tools,
-          weapons: weaponsChanged ? updatedWeapons : entity.proficiencies.weapons,
-          armor:   armorChanged   ? updatedArmor   : entity.proficiencies.armor,
-        },
-      };
+    // target format: 'weapon:rapier', 'weapon:battleaxe', etc.
+    if (ae.effect.target.startsWith('weapon:') && ae.effect.operation === 'add') {
+      const weaponName = ae.effect.target.slice(7).replace(/_/g, ' ');
+      if (!newGrantedWeapons.some(w => w.toLowerCase() === weaponName.toLowerCase())) newGrantedWeapons.push(weaponName);
+    }
+    // target format: 'armor:light', 'armor:medium', 'armor:heavy', 'armor:shields'
+    if (ae.effect.target.startsWith('armor:') && ae.effect.operation === 'add') {
+      const armorName = ae.effect.target.slice(6).replace(/_/g, ' ');
+      if (!newGrantedArmor.some(a => a.toLowerCase() === armorName.toLowerCase())) newGrantedArmor.push(armorName);
     }
   }
+
+  // Skills: project current authoritative grants.
+  let updatedSkills = entity.skills.skills;
+  let skillsChanged = false;
+  for (const skillName of Object.keys(updatedSkills) as SkillName[]) {
+    const existing = updatedSkills[skillName];
+    if (!existing) continue;
+    const finalTrained = newGrantedSkills.has(skillName) || newExpertiseSkills.has(skillName);
+    const finalExpertise = newExpertiseSkills.has(skillName);
+    if (finalTrained !== existing.trained || finalExpertise !== existing.expertise) {
+      if (!skillsChanged) updatedSkills = { ...updatedSkills };
+      updatedSkills[skillName] = { ...existing, trained: finalTrained, expertise: finalExpertise };
+      skillsChanged = true;
+    }
+  }
+  if (skillsChanged) {
+    entity = { ...entity, skills: { skills: updatedSkills } };
+  }
+
+  entity = {
+    ...entity,
+    proficiencies: { ...entity.proficiencies, tools: newGrantedTools,
+      weapons: newGrantedWeapons, armor: newGrantedArmor, languages: newGrantedLanguages },
+    spellcasting: entity.spellcasting ? { ...entity.spellcasting,
+      known: entDerived.spells, cantrips: entDerived.cantrips } : null,
+  };
 
   // ── Base AC resolution (priority order) ──────────────────────────────────
   // 1. base_ac_formula effects (Unarmored Defense, Mage Armor, etc.)
@@ -452,8 +442,25 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
     }
   }
 
-  // 2. Equipped items — features fire while the item is worn/wielded
+  // 2. Equipped items — features fire while the item is worn/wielded.
+  //    Re-audit A17: an item that REQUIRES attunement must not contribute
+  //    anything until actually attuned — merely equipping it used to be
+  //    enough (an unattuned Ring of Protection still gave +1 AC). Items
+  //    with no attunement requirement (requiresAttunement falsy) are
+  //    unaffected — their effects always fired on equip and still do.
+  // Re-audit A19: whether ANY equipped item is armor/a shield — computed
+  // once, outside the per-item loop, so an effect declaring
+  // requiresNoArmorOrShield can check "is something ELSE equipped that
+  // counts" without an O(n^2) rescan. Deliberately counts every equipped
+  // item, including the one this effect's own feature lives on (Bracers of
+  // Defense itself is neither armor nor a shield, so this is correct for
+  // it; a hypothetical future item that WAS both armor and had its own
+  // requiresNoArmorOrShield effect would be a contradiction in the content
+  // itself, not something this predicate needs to resolve).
+  const anyArmorOrShieldEquipped = entity.inventory.equipped.some(i => i.wearsArmorOrShield);
+
   for (const item of entity.inventory.equipped) {
+    if (item.requiresAttunement && !item.attuned) continue;
     for (const fi of item.features) {
       for (const effect of fi.effects) {
         if (effect.condition !== null) {
@@ -461,6 +468,7 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
           const conditionActive = activeConditionIds.has(effect.condition);
           if (!flagActive && !conditionActive) continue;
         }
+        if (effect.requiresNoArmorOrShield && anyArmorOrShieldEquipped) continue;
         if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
         effects.push({
           effect,
@@ -497,6 +505,28 @@ function doesSuppressTarget(
 }
 
 /**
+ * Re-audit A18: whether the entity is actually proficient with this specific
+ * weapon — either by name (a racial/feat grant naming an exact weapon, e.g.
+ * Elf Weapon Training's "longsword") or by category ('simple'/'martial',
+ * granted by class/background/race — the same entity.proficiencies.weapons
+ * array applyGrant('proficiency', ...) and the grant_proficiency Effect
+ * reconciler both write into). Reuses itemBrowse.ts's already-built
+ * isMartialWeapon() classifier (name-table lookup, falling back to
+ * property-text parsing) rather than a second one — weapon items carry no
+ * "simple weapon"/"martial weapon" property tag of their own to check
+ * directly.
+ */
+function isProficientWithWeapon(entity: Entity, def: { name: string; properties: string[] }): boolean {
+  const weaponProfs = entity.proficiencies.weapons.map(w => w.toLowerCase());
+  if (weaponProfs.includes(def.name.toLowerCase())) return true;
+  const martial = isMartialWeapon({
+    id: '', name: def.name, weight: 0, cost: '', properties: def.properties,
+    hasDamageEffect: true, weaponRange: null,
+  });
+  return weaponProfs.includes(martial ? 'martial' : 'simple');
+}
+
+/**
  * Computes to-hit and damage info for every equipped weapon. Single source
  * of truth — TabCharacter's ATTACKS section and each weapon's action card
  * both read this instead of recomputing (they used to, independently, and
@@ -513,6 +543,11 @@ function computeWeaponAttackBonuses(
   const result: AttackBonus[] = [];
 
   for (const inst of entity.inventory.equipped) {
+    // Re-audit A17: an attunement-required weapon contributes no attack
+    // bonus until actually attuned — same gate collectAllEffects applies to
+    // passive effects and actionCards.ts applies to action cards, reusing
+    // the same hydrated flag (see ItemInstance's own doc comment).
+    if (inst.requiresAttunement && !inst.attuned) continue;
     // itemRepo only ever holds the OFFICIAL catalog — a homebrew weapon's
     // definition lives in homebrewStore instead, so it needs the same
     // fallback lookup as characterStore.ts's hydrateItemFeatures, or every
@@ -536,10 +571,17 @@ function computeWeaponAttackBonuses(
 
     const props = def.properties.map(p => p.toLowerCase());
     const isFinesse = props.some(p => p.includes('finesse'));
-    // Ammunition weapons, or thrown weapons that also list a range (a
-    // plain thrown-only weapon like a handaxe used in melee is STR).
-    const isRanged = props.some(p => p.includes('ammunition'))
-      || (props.some(p => p.includes('thrown')) && props.some(p => p.includes('range')));
+    // Re-audit A18: ranged means "ammunition" ONLY — a thrown weapon's own
+    // property text always reads like "thrown (range 20/60)", which
+    // contains the substring "range" too, so the OLD second clause
+    // (`thrown && range`) was true for EVERY thrown weapon, not just true
+    // ranged ones. Per RAW, a thrown weapon uses the SAME ability modifier
+    // whether thrown or swung in melee (finesse already lets it pick DEX
+    // above; a non-finesse thrown weapon like a Handaxe is STR either way)
+    // — there is no "thrown weapon used at range" ability distinction to
+    // make here, since this app has no melee/ranged choice for thrown
+    // attacks. `type` below still reflects true ranged weapons only.
+    const isRanged = props.some(p => p.includes('ammunition'));
 
     let mod: number;
     let ability: 'str' | 'dex';
@@ -556,10 +598,18 @@ function computeWeaponAttackBonuses(
     const magicHay = [def.name, featureName, ...def.properties].join(' ');
     const magicBonus = parseInt(magicHay.match(/\+(\d)\b/)?.[1] ?? '0', 10);
 
+    // Re-audit A18: proficiency bonus only applies when the character is
+    // actually proficient with this weapon — it used to be added
+    // unconditionally. Checks the same weapon-category/named-weapon
+    // proficiency list entitlements already flow into
+    // entity.proficiencies.weapons (category tags 'simple'/'martial' plus
+    // any specific named weapons a feature/race/background grants).
+    const isProficient = isProficientWithWeapon(entity, def);
+
     result.push({
       id:          inst.itemId,
       name:        def.name,
-      bonus:       profBonus + mod + magicBonus,
+      bonus:       (isProficient ? profBonus : 0) + mod + magicBonus,
       type:        isRanged ? 'ranged' : 'melee',
       ability,
       damageBonus: mod + magicBonus,

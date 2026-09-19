@@ -1,7 +1,7 @@
 // app/(tabs)/homebrew.tsx
 // Homebrew tab — Installed Packs, Create, and Library sections.
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput, Modal } from 'react-native';
+import { View, Text, ScrollView, FlatList, Pressable, StyleSheet, ActivityIndicator, TextInput, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useCharacterStore } from '../../src/store/characterStore';
@@ -215,17 +215,24 @@ function InstalledPacksPanel() {
                 </Text>
               </Pressable>
             )}
-            <Pressable style={styles.libBtn} onPress={() => setViewingPack(pack)}>
+            <Pressable style={styles.libBtn} accessibilityLabel="View pack contents" onPress={() => setViewingPack(pack)}>
               <Text style={styles.libBtnTxt}>👁</Text>
             </Pressable>
+            {/* A whole installed pack only ever re-exports as a portable
+                .grimoire-pack (there's no single "readable" form for a
+                multi-item pack) — 📦 to match that same meaning everywhere
+                else on this screen, rather than reusing 📤 (readable export)
+                for a different action (re-audit item 16). */}
             <Pressable
               style={styles.libBtn}
+              accessibilityLabel="Export portable homebrew package"
               onPress={() => setExportingPackRefs(pack.itemRefs.map(r => ({ type: r.type, id: r.id })))}
             >
-              <Text style={styles.libBtnTxt}>📤</Text>
+              <Text style={styles.libBtnTxt}>📦</Text>
             </Pressable>
             <Pressable
               style={styles.libBtn}
+              accessibilityLabel="Remove pack"
               disabled={removingId === pack.id}
               onPress={() => confirmRemove(pack)}
             >
@@ -299,7 +306,41 @@ function CreatePanel() {
 
 // ── Library Panel ─────────────────────────────────────────────────────────────
 
-function LibraryPanel() {
+// Module-scope, not recreated per render — both are fixed mappings with no
+// dependency on any component state/props. Previously redeclared inside
+// LibraryPanel on every render, which (once renderRow became a real
+// useCallback below, item 21) would have forced it to a new identity every
+// render too, defeating the memoization.
+const EDIT_ROUTES: Partial<Record<string, string>> = {
+  race: '/homebrew/race-builder',
+  subrace: '/homebrew/subrace-builder',
+  class: '/homebrew/class-builder',
+  subclass: '/homebrew/subclass-builder',
+  item: '/homebrew/item-builder',
+  spell: '/homebrew/spell-builder',
+  background: '/homebrew/background-builder',
+  feature: '/homebrew/feature-editor',
+  feat: '/homebrew/feat-builder',
+  monster: '/homebrew/monster-builder',
+  condition: '/homebrew/condition-builder',
+};
+
+const CATEGORIES: { id: ContentCacheType | 'all'; label: string }[] = [
+  { id: 'all',        label: 'All' },
+  { id: 'race',       label: 'Races' },
+  { id: 'subrace',    label: 'Subraces' },
+  { id: 'class',      label: 'Classes' },
+  { id: 'subclass',   label: 'Subclasses' },
+  { id: 'background', label: 'Backgrounds' },
+  { id: 'item',       label: 'Items' },
+  { id: 'spell',      label: 'Spells' },
+  { id: 'feature',    label: 'Features' },
+  { id: 'feat',       label: 'Feats' },
+  { id: 'monster',    label: 'Monsters' },
+  { id: 'condition',  label: 'Conditions' },
+];
+
+function LibraryPanel({ headerContent }: { headerContent?: React.ReactNode }) {
   const router = useRouter();
   const {
     races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, deleteItem,
@@ -340,14 +381,17 @@ function LibraryPanel() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [showPackageExport, setShowPackageExport] = useState(false);
-  function toggleSelected(type: ContentCacheType, id: string) {
+  // useCallback (not a plain function) since renderRow — item 21's own
+  // memoized row renderer — depends on it; setSelectedKeys is a state
+  // setter (stable identity), so an empty dep array is correct here.
+  const toggleSelected = useCallback((type: ContentCacheType, id: string) => {
     const key = `${type}:${id}`;
     setSelectedKeys(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
-  }
+  }, []);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ContentCacheType | 'all'>('all');
   // Ruleset — real field on most content types (not Feature, which has no
@@ -413,35 +457,6 @@ function LibraryPanel() {
     ...conditions.map(c => ({ type: 'condition' as const, item: c, isOfficial: false })),
   ], [races, subraces, classes, subclasses, items, spells, backgrounds, features, feats, monsters, conditions, allRaces, allClasses]);
 
-  const EDIT_ROUTES: Partial<Record<string, string>> = {
-    race: '/homebrew/race-builder',
-    subrace: '/homebrew/subrace-builder',
-    class: '/homebrew/class-builder',
-    subclass: '/homebrew/subclass-builder',
-    item: '/homebrew/item-builder',
-    spell: '/homebrew/spell-builder',
-    background: '/homebrew/background-builder',
-    feature: '/homebrew/feature-editor',
-    feat: '/homebrew/feat-builder',
-    monster: '/homebrew/monster-builder',
-    condition: '/homebrew/condition-builder',
-  };
-
-  const CATEGORIES: { id: ContentCacheType | 'all'; label: string }[] = [
-    { id: 'all',        label: 'All' },
-    { id: 'race',       label: 'Races' },
-    { id: 'subrace',    label: 'Subraces' },
-    { id: 'class',      label: 'Classes' },
-    { id: 'subclass',   label: 'Subclasses' },
-    { id: 'background', label: 'Backgrounds' },
-    { id: 'item',       label: 'Items' },
-    { id: 'spell',      label: 'Spells' },
-    { id: 'feature',    label: 'Features' },
-    { id: 'feat',       label: 'Feats' },
-    { id: 'monster',    label: 'Monsters' },
-    { id: 'condition',  label: 'Conditions' },
-  ];
-
   const rulesetIdOf = (item: unknown): string | undefined =>
     (item && typeof item === 'object' && 'rulesetId' in item) ? (item as { rulesetId?: string }).rulesetId : undefined;
   const availableRulesets = useMemo(
@@ -478,162 +493,73 @@ function LibraryPanel() {
     return map;
   }, [filtered, characters]);
 
-  return (
-    <View style={styles.panel}>
-      <View style={styles.libraryHeaderRow}>
-        <Text style={styles.panelTitle}>📚 Library ({all.length})</Text>
-        {homebrewCount > 0 && (
-          <Pressable
-            style={styles.selectModeBtn}
-            onPress={() => { setSelectMode(v => !v); setSelectedKeys(new Set()); }}
-          >
-            <Text style={styles.selectModeBtnTxt}>{selectMode ? 'Cancel' : 'Select'}</Text>
+  // Re-audit item 21: this was a plain `.map()` over the full `filtered`
+  // array inside the outer screen ScrollView — every row (races, classes,
+  // spells, items, etc., potentially hundreds combined) mounted immediately
+  // on open, and stayed mounted while scrolling. Restructured so THIS
+  // FlatList is the screen's single scroll container (only it, not the
+  // parent, actually scrolls now — see HomebrewScreen below): it only
+  // renders rows near the viewport, and `headerContent`
+  // (InstalledPacksPanel + CreatePanel, passed in by HomebrewScreen) plus
+  // this panel's own search/filter controls ride along as
+  // ListHeaderComponent so the whole screen still scrolls as one piece,
+  // exactly as it did as a single ScrollView.
+  const renderRow = useCallback(({ item: entry }: { item: typeof filtered[number] }) => {
+    const { type, item, ...rest } = entry;
+    const editRoute = EDIT_ROUTES[type];
+    const parentName = 'parentName' in rest ? rest.parentName : undefined;
+    const isOfficial = 'isOfficial' in rest && rest.isOfficial === true;
+    // Not shown for official rows — "used by" only means anything for
+    // content the user actually owns/could change. contentUsedBy checks
+    // typed fields (race/class/subclass/background/spell/item) plus an
+    // untyped resolved-choice-selection fallback for everything else
+    // (feature/feat/monster/condition), same conservative matching
+    // diagnosePack's own pack-level check already uses. Precomputed in
+    // usedByMap above (PERF-1) rather than called fresh per row here.
+    const usedBy = usedByMap.get(`${type}:${item.id}`) ?? [];
+    const rowKey = `${type}:${item.id}`;
+    const isSelected = selectedKeys.has(rowKey);
+    return (
+      <View style={styles.libraryRow}>
+        {selectMode && !isOfficial && (
+          <Pressable style={[styles.checkbox, isSelected && styles.checkboxChecked]} onPress={() => toggleSelected(type, item.id)}>
+            {isSelected && <Text style={styles.checkboxMark}>✓</Text>}
           </Pressable>
         )}
-      </View>
-
-      {selectMode && (
-        <View style={styles.selectBar}>
-          <Text style={styles.selectBarTxt}>{selectedKeys.size} selected</Text>
-          <Pressable
-            style={[styles.selectBarBtn, selectedKeys.size === 0 && styles.btnDisabled]}
-            disabled={selectedKeys.size === 0}
-            onPress={() => setShowPackageExport(true)}
-          >
-            <Text style={styles.selectBarBtnTxt}>Export Selected →</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {homebrewCount === 0 && (
-        <Text style={styles.emptyTxt}>
-          No homebrew content saved yet — create something above. Browse official content
-          in the Compendium tab.
-        </Text>
-      )}
-
-      <TextInput
-        style={styles.search}
-        placeholder="Search your homebrew"
-        placeholderTextColor={Colors.textDim}
-        value={search}
-        onChangeText={setSearch}
-      />
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
-        {CATEGORIES.map(cat => {
-          const count = cat.id === 'all' ? all.length : all.filter(a => a.type === cat.id).length;
-          if (cat.id !== 'all' && count === 0) return null;
-          const active = categoryFilter === cat.id;
-          return (
-            <Pressable
-              key={cat.id}
-              style={[styles.categoryChip, active && styles.categoryChipActive]}
-              onPress={() => setCategoryFilter(cat.id)}
-            >
-              <Text style={[styles.categoryChipTxt, active && styles.categoryChipTxtActive]}>
-                {cat.label} ({count})
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {availableRulesets.length > 1 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
-          <Pressable
-            style={[styles.categoryChip, !rulesetFilter && styles.categoryChipActive]}
-            onPress={() => setRulesetFilter(null)}
-          >
-            <Text style={[styles.categoryChipTxt, !rulesetFilter && styles.categoryChipTxtActive]}>All rulesets</Text>
-          </Pressable>
-          {availableRulesets.map(r => (
-            <Pressable
-              key={r}
-              style={[styles.categoryChip, rulesetFilter === r && styles.categoryChipActive]}
-              onPress={() => setRulesetFilter(v => v === r ? null : r)}
-            >
-              <Text style={[styles.categoryChipTxt, rulesetFilter === r && styles.categoryChipTxtActive]}>{r}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
-
-      {packs.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
-          <Pressable
-            style={[styles.categoryChip, sourceFilter === 'all' && styles.categoryChipActive]}
-            onPress={() => setSourceFilter('all')}
-          >
-            <Text style={[styles.categoryChipTxt, sourceFilter === 'all' && styles.categoryChipTxtActive]}>All sources</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.categoryChip, sourceFilter === 'local' && styles.categoryChipActive]}
-            onPress={() => setSourceFilter(v => v === 'local' ? 'all' : 'local')}
-          >
-            <Text style={[styles.categoryChipTxt, sourceFilter === 'local' && styles.categoryChipTxtActive]}>Locally Authored</Text>
-          </Pressable>
-          {packs.map(p => (
-            <Pressable
-              key={p.id}
-              style={[styles.categoryChip, sourceFilter === p.id && styles.categoryChipActive]}
-              onPress={() => setSourceFilter(v => v === p.id ? 'all' : p.id)}
-            >
-              <Text style={[styles.categoryChipTxt, sourceFilter === p.id && styles.categoryChipTxtActive]}>{p.name}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
-
-      {filtered.length === 0 && (
-        <Text style={styles.emptyTxt}>No homebrew matches your search or filter.</Text>
-      )}
-
-      {filtered.map(({ type, item, ...rest }) => {
-        const editRoute = EDIT_ROUTES[type];
-        const parentName = 'parentName' in rest ? rest.parentName : undefined;
-        const isOfficial = 'isOfficial' in rest && rest.isOfficial === true;
-        // Not shown for official rows — "used by" only means anything for
-        // content the user actually owns/could change. contentUsedBy checks
-        // typed fields (race/class/subclass/background/spell/item) plus an
-        // untyped resolved-choice-selection fallback for everything else
-        // (feature/feat/monster/condition), same conservative matching
-        // diagnosePack's own pack-level check already uses. Precomputed in
-        // usedByMap above (PERF-1) rather than called fresh per row here.
-        const usedBy = usedByMap.get(`${type}:${item.id}`) ?? [];
-        const rowKey = `${type}:${item.id}`;
-        const isSelected = selectedKeys.has(rowKey);
-        return (
-          <View key={rowKey} style={styles.libraryRow}>
-            {selectMode && !isOfficial && (
-              <Pressable style={[styles.checkbox, isSelected && styles.checkboxChecked]} onPress={() => toggleSelected(type, item.id)}>
-                {isSelected && <Text style={styles.checkboxMark}>✓</Text>}
+        {/* Re-audit item 21 (readable rows): name and badges used to be
+            flex-row SIBLINGS competing for the same horizontal space — a
+            long name either got squeezed against the badges or wrapped
+            underneath them with visible overlap. Stacked instead: the name
+            gets its own line (up to 2, via numberOfLines + a real
+            lineHeight), badges sit on their own row below it, clearly
+            secondary — this is purely a name/badge layout fix, not the
+            list's virtualization (handled by the FlatList wrapping this). */}
+        <View style={styles.libraryInfo}>
+          <Text style={styles.libraryName} numberOfLines={2}>
+            {item.name}{parentName ? ` (${parentName})` : ''}
+          </Text>
+          <View style={styles.libraryBadgeRow}>
+            <View style={[styles.typeBadge, styles[`typeBadge_${type}`] ?? {}]}>
+              <Text style={styles.typeBadgeTxt}>{type}</Text>
+            </View>
+            {isOfficial && (
+              <View style={styles.officialBadge}>
+                <Text style={styles.officialBadgeTxt}>Official</Text>
+              </View>
+            )}
+            {usedBy.length > 0 && (
+              <Pressable
+                style={styles.usedByBadge}
+                onPress={() => Alert.alert(
+                  `Used by ${usedBy.length} character${usedBy.length === 1 ? '' : 's'}`,
+                  usedBy.map(c => c.identity.name || 'Unnamed').join('\n'),
+                )}
+              >
+                <Text style={styles.usedByBadgeTxt}>Used by {usedBy.length}</Text>
               </Pressable>
             )}
-            <View style={styles.libraryInfo}>
-              <Text style={styles.libraryName}>
-                {item.name}{parentName ? ` (${parentName})` : ''}
-              </Text>
-              <View style={[styles.typeBadge, styles[`typeBadge_${type}`] ?? {}]}>
-                <Text style={styles.typeBadgeTxt}>{type}</Text>
-              </View>
-              {isOfficial && (
-                <View style={styles.officialBadge}>
-                  <Text style={styles.officialBadgeTxt}>Official</Text>
-                </View>
-              )}
-              {usedBy.length > 0 && (
-                <Pressable
-                  style={styles.usedByBadge}
-                  onPress={() => Alert.alert(
-                    `Used by ${usedBy.length} character${usedBy.length === 1 ? '' : 's'}`,
-                    usedBy.map(c => c.identity.name || 'Unnamed').join('\n'),
-                  )}
-                >
-                  <Text style={styles.usedByBadgeTxt}>Used by {usedBy.length}</Text>
-                </Pressable>
-              )}
-            </View>
+          </View>
+        </View>
             {/* Official content is reference-only — no edit/history/export/delete,
                 same rule any homebrew-owned action already implicitly follows
                 (these buttons only ever meant anything for a user's own content).
@@ -644,6 +570,7 @@ function LibraryPanel() {
               {editRoute && (
                 <Pressable
                   style={styles.libBtn}
+                  accessibilityLabel="Edit"
                   onPress={() => router.push(`${editRoute}?editId=${item.id}` as any)}
                 >
                   <Text style={styles.libBtnTxt}>✏️</Text>
@@ -651,12 +578,20 @@ function LibraryPanel() {
               )}
               <Pressable
                 style={styles.libBtn}
+                accessibilityLabel="Version history"
                 onPress={() => setHistoryTarget({ type, item })}
               >
                 <Text style={styles.libBtnTxt}>🕐</Text>
               </Pressable>
+              {/* Re-audit item 16: these two are deliberately distinct
+                  actions — Readable Export (PDF/Markdown/Plain Text, for a
+                  person to read) vs Portable Homebrew (a re-importable
+                  .grimoire-pack, for another device/player). Distinguished
+                  via accessibilityLabel here; a fuller visual grouping with
+                  real labels is item 21's row-readability pass, not this one. */}
               <Pressable
                 style={styles.libBtn}
+                accessibilityLabel="Readable export (PDF, Markdown, Plain Text)"
                 disabled={exportingId === item.id}
                 onPress={() => setExportTarget({ type, item })}
               >
@@ -666,12 +601,14 @@ function LibraryPanel() {
               </Pressable>
               <Pressable
                 style={styles.libBtn}
+                accessibilityLabel="Export portable homebrew package"
                 onPress={() => setExportingEntryRef({ type, id: item.id })}
               >
                 <Text style={styles.libBtnTxt}>📦</Text>
               </Pressable>
               <Pressable
                 style={styles.libBtn}
+                accessibilityLabel="Delete"
                 onPress={() => {
                   Alert.alert('Delete', `Delete "${item.name}"?`, [
                     { text: 'Cancel', style: 'cancel' },
@@ -683,9 +620,133 @@ function LibraryPanel() {
               </Pressable>
             </View>
             )}
+      </View>
+    );
+  }, [usedByMap, selectedKeys, selectMode, toggleSelected, router, setHistoryTarget, exportingId, setExportTarget, setExportingEntryRef, deleteItem]);
+
+  return (
+    <View style={styles.panelWrap}>
+      <FlatList
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        data={filtered}
+        keyExtractor={({ type, item }) => `${type}:${item.id}`}
+        renderItem={renderRow}
+        initialNumToRender={12}
+        windowSize={9}
+        ListEmptyComponent={filtered.length === 0 ? <Text style={styles.emptyTxt}>No homebrew matches your search or filter.</Text> : null}
+        ListHeaderComponent={
+          <View style={styles.headerStack}>
+            {headerContent}
+            <View style={styles.panel}>
+            <View style={styles.libraryHeaderRow}>
+              <Text style={styles.panelTitle}>📚 Library ({all.length})</Text>
+              {homebrewCount > 0 && (
+                <Pressable
+                  style={styles.selectModeBtn}
+                  onPress={() => { setSelectMode(v => !v); setSelectedKeys(new Set()); }}
+                >
+                  <Text style={styles.selectModeBtnTxt}>{selectMode ? 'Cancel' : 'Select'}</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {selectMode && (
+              <View style={styles.selectBar}>
+                <Text style={styles.selectBarTxt}>{selectedKeys.size} selected</Text>
+                <Pressable
+                  style={[styles.selectBarBtn, selectedKeys.size === 0 && styles.btnDisabled]}
+                  disabled={selectedKeys.size === 0}
+                  onPress={() => setShowPackageExport(true)}
+                >
+                  <Text style={styles.selectBarBtnTxt}>Export Selected →</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {homebrewCount === 0 && (
+              <Text style={styles.emptyTxt}>
+                No homebrew content saved yet — create something above. Browse official content
+                in the Compendium tab.
+              </Text>
+            )}
+
+            <TextInput
+              style={styles.search}
+              placeholder="Search your homebrew"
+              placeholderTextColor={Colors.textDim}
+              value={search}
+              onChangeText={setSearch}
+            />
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
+              {CATEGORIES.map(cat => {
+                const count = cat.id === 'all' ? all.length : all.filter(a => a.type === cat.id).length;
+                if (cat.id !== 'all' && count === 0) return null;
+                const active = categoryFilter === cat.id;
+                return (
+                  <Pressable
+                    key={cat.id}
+                    style={[styles.categoryChip, active && styles.categoryChipActive]}
+                    onPress={() => setCategoryFilter(cat.id)}
+                  >
+                    <Text style={[styles.categoryChipTxt, active && styles.categoryChipTxtActive]}>
+                      {cat.label} ({count})
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {availableRulesets.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
+                <Pressable
+                  style={[styles.categoryChip, !rulesetFilter && styles.categoryChipActive]}
+                  onPress={() => setRulesetFilter(null)}
+                >
+                  <Text style={[styles.categoryChipTxt, !rulesetFilter && styles.categoryChipTxtActive]}>All rulesets</Text>
+                </Pressable>
+                {availableRulesets.map(r => (
+                  <Pressable
+                    key={r}
+                    style={[styles.categoryChip, rulesetFilter === r && styles.categoryChipActive]}
+                    onPress={() => setRulesetFilter(v => v === r ? null : r)}
+                  >
+                    <Text style={[styles.categoryChipTxt, rulesetFilter === r && styles.categoryChipTxtActive]}>{r}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+
+            {packs.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
+                <Pressable
+                  style={[styles.categoryChip, sourceFilter === 'all' && styles.categoryChipActive]}
+                  onPress={() => setSourceFilter('all')}
+                >
+                  <Text style={[styles.categoryChipTxt, sourceFilter === 'all' && styles.categoryChipTxtActive]}>All sources</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.categoryChip, sourceFilter === 'local' && styles.categoryChipActive]}
+                  onPress={() => setSourceFilter(v => v === 'local' ? 'all' : 'local')}
+                >
+                  <Text style={[styles.categoryChipTxt, sourceFilter === 'local' && styles.categoryChipTxtActive]}>Locally Authored</Text>
+                </Pressable>
+                {packs.map(p => (
+                  <Pressable
+                    key={p.id}
+                    style={[styles.categoryChip, sourceFilter === p.id && styles.categoryChipActive]}
+                    onPress={() => setSourceFilter(v => v === p.id ? 'all' : p.id)}
+                  >
+                    <Text style={[styles.categoryChipTxt, sourceFilter === p.id && styles.categoryChipTxtActive]}>{p.name}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+            </View>
           </View>
-        );
-      })}
+        }
+      />
 
       <ExportFormatSheet
         visible={!!exportTarget}
@@ -732,11 +793,12 @@ export default function HomebrewScreen() {
           <Text style={styles.importBtnTxt}>⬇️ Import Homebrew</Text>
         </Pressable>
       </View>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <InstalledPacksPanel />
-        <CreatePanel />
-        <LibraryPanel />
-      </ScrollView>
+      {/* Re-audit item 21: LibraryPanel's own FlatList is now the single
+          scroll container for the whole screen (see its own header comment)
+          — InstalledPacksPanel/CreatePanel ride along as its
+          ListHeaderComponent instead of both this ScrollView AND a nested
+          list fighting over which one actually scrolls. */}
+      <LibraryPanel headerContent={<><InstalledPacksPanel /><CreatePanel /></>} />
     </View>
   );
 }
@@ -758,7 +820,13 @@ const styles = StyleSheet.create({
   },
   importBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
   scroll: { flex: 1 },
-  content:{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },
+  // Re-audit item 21: no `gap` here anymore — this is now a FlatList's
+  // contentContainerStyle (LibraryPanel), and a contentContainerStyle gap
+  // would insert the same large gap between every virtualized ROW, not
+  // just between the header and the first row. headerStack (below) carries
+  // that spacing instead, scoped to just the header block.
+  content:{ padding: Spacing.md, paddingBottom: Spacing.xxl },
+  headerStack: { gap: Spacing.md, marginBottom: Spacing.md },
 
   libraryHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   selectModeBtn: {
@@ -789,6 +857,15 @@ const styles = StyleSheet.create({
   },
   panelTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   panelSub:   { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
+  // Re-audit item 21: LibraryPanel's own top-level wrapper (flex:1, so its
+  // FlatList can actually fill the screen) and the search/filter block
+  // inside its ListHeaderComponent (kept in its own `panel` card, same look
+  // as InstalledPacksPanel/CreatePanel above it — see the header comment on
+  // renderRow for why the ROWS themselves render as a plain list below that
+  // card rather than inside one continuous bordered card with the header,
+  // now that they're virtualized).
+  panelWrap:     { flex: 1 },
+  libraryHeader: { gap: Spacing.sm },
 
   createGrid: { gap: Spacing.xs },
   createBtn: {
@@ -817,8 +894,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  libraryInfo:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  libraryName:    { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold, flex: 1 },
+  // Re-audit item 21 (readable rows): name and badges stacked, not
+  // flex-row siblings — a long name gets its own line(s) (up to 2, via
+  // numberOfLines on the Text below) with a real lineHeight, instead of
+  // being squeezed against or overlapped by the type/official/used-by
+  // badges, which now sit clearly secondary on their own row underneath.
+  libraryInfo:     { flex: 1, gap: 4 },
+  libraryName:     { fontSize: FontSize.md, lineHeight: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  libraryBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, flexWrap: 'wrap' },
   typeBadge:      { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm, paddingHorizontal: 6, paddingVertical: 2 },
   typeBadgeTxt:   { fontSize: FontSize.xs, color: Colors.textDim },
   typeBadge_race:       { backgroundColor: Colors.green  + '22' },

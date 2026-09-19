@@ -1094,18 +1094,17 @@ ITEM_EFFECT_OVERRIDES['cloak_of_protection'] = {
     [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 1, condition: null }, ...allSavingThrowsBonus(1)],
   )],
 };
-// No enforcement mechanism exists anywhere in the engine for "only while not
-// wearing armor/shield" (Effect.condition is real gating logic checked
-// against conditionMonitor flags — not free text — and no flag tracks
-// "is armor worn" today). Shipping unconditional, with the real caveat
-// staying in the description only, matches the app's existing
-// disclosed-but-unenforced pattern (same as advantageStates being
-// reminder-only). Known simplification: stacks incorrectly with worn armor.
+// Re-audit A19: requiresNoArmorOrShield (Effect.ts's own doc comment) is a
+// real, enforced equipment predicate — checked in collectAllEffects against
+// every OTHER equipped item's hydrated wearsArmorOrShield flag (see
+// ItemInstance's own doc comment; set once at equip time from the same
+// armorWeight()/isShield() classifiers the Compendium/equipment filters
+// already use). No longer an unconditional, disclosed-as-unenforced bonus.
 ITEM_EFFECT_OVERRIDES['bracers_of_defense'] = {
   extraFeatures: [passiveEffectFeature(
     'bracers_of_defense_bonus', 'bracers_of_defense', 'Bracers of Defense bonus',
-    '+2 bonus to AC while not wearing armor or using a shield (not enforced — applies unconditionally).',
-    [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 2, condition: null }],
+    '+2 bonus to AC while not wearing armor or using a shield.',
+    [{ type: 'stat_modifier', target: 'ac', operation: 'add', value: 2, condition: null, requiresNoArmorOrShield: true }],
   )],
 };
 

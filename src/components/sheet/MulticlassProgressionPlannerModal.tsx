@@ -24,13 +24,14 @@ interface Props {
   entity:              Entity;
   rules:               CampaignRules;
   availableToAdd:      CharClass[];
+  classDefinitions?: readonly CharClass[];
   resolveProgression: (classId: string, subclassId: string | null) => ClassProgression | null;
   classLabel:          (id: string) => string;
   onClose:             () => void;
 }
 
 export function MulticlassProgressionPlannerModal({
-  visible, entity, rules, availableToAdd, resolveProgression, classLabel, onClose,
+  visible, entity, rules, availableToAdd, classDefinitions, resolveProgression, classLabel, onClose,
 }: Props) {
   const [sequence, setSequence] = useState<SequenceStep[]>([]);
   const maxLevel = rules.maxLevel ?? 20;
@@ -41,8 +42,8 @@ export function MulticlassProgressionPlannerModal({
   // grows while the modal is open.
   const projected = useMemo(() => {
     if (sequence.length === 0) return entity;
-    return projectMulticlassSequence(entity, sequence, rules);
-  }, [entity, sequence, rules]);
+    return projectMulticlassSequence(entity, sequence, rules, classDefinitions);
+  }, [entity, sequence, rules, classDefinitions]);
 
   const projectedClasses = useMemo(() => getClassLevels(projected), [projected]);
   const stillAddable = availableToAdd.filter(c => !projectedClasses.some(pc => pc.classId === c.id));

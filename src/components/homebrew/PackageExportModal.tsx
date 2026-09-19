@@ -86,7 +86,7 @@ export function PackageExportModal({ visible, selected, onClose }: Props) {
       <Pressable style={s.backdrop} onPress={onClose}>
         <Pressable style={s.sheet} onPress={e => e.stopPropagation()}>
           <ScrollView>
-            <Text style={s.title}>Export Package</Text>
+            <Text style={s.title}>Export Portable Homebrew</Text>
 
             <Text style={s.label}>Package Name *</Text>
             <TextInput style={s.input} value={name} onChangeText={setName} placeholder="e.g. Tideborn Collection" placeholderTextColor={Colors.textDim} />

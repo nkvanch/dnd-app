@@ -98,6 +98,22 @@ export function startTurn(entity: Entity): Entity {
   };
 }
 
+/**
+ * The authoritative solo-player "End Turn" mutation — re-audit item 18.
+ * Ticks round-based condition durations, ticks a concentration countdown
+ * (if any), and starts a fresh turn (resets action economy, refreshes
+ * start_of_turn resources) — the exact same composition
+ * TabCharacter.tsx's own End Turn button already used inline. Extracted so
+ * every entry point (Character tab, Actions tab, Spells tab) calls this
+ * ONE function rather than each re-composing the same three calls, which
+ * would risk them drifting out of sync over time. Distinct from endTurn()
+ * above, which additionally advances a DM's multi-entity initiative order —
+ * this is for a solo player with no active CombatState.
+ */
+export function playerEndTurn(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity {
+  return startTurn(tickConcentrationDuration(tickDurations(entity, rules), rules));
+}
+
 /** Marks one action-economy slot used. A no-op if turnState is null (not
  *  actively tracked — see the type's own doc comment) or already unused-
  *  irrelevant (a 'free'/'passive' actionType never calls this at all —

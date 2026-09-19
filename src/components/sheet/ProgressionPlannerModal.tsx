@@ -9,7 +9,7 @@
 // character, not a pending real mutation.
 import { useState, useMemo } from 'react';
 import { Modal, View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { Entity, CampaignRules, ClassProgression } from '../../engine/types';
+import { Entity, CampaignRules, ClassProgression, CharClass } from '../../engine/types';
 import { projectToLevel } from '../../engine/leveling';
 import { buildLevelUpSummaryRows, Row } from './LevelUpPreviewModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -38,10 +38,11 @@ interface Props {
   entity:      Entity;
   rules:       CampaignRules;
   progression: ClassProgression;
+  classDefinitions?: readonly CharClass[];
   onClose:     () => void;
 }
 
-export function ProgressionPlannerModal({ visible, entity, rules, progression, onClose }: Props) {
+export function ProgressionPlannerModal({ visible, entity, rules, progression, classDefinitions, onClose }: Props) {
   const maxLevel = rules.maxLevel ?? 20;
   const currentLevel = entity.identity.level;
   const [targetLevel, setTargetLevel] = useState(Math.min(currentLevel + 1, maxLevel));
@@ -52,9 +53,9 @@ export function ProgressionPlannerModal({ visible, entity, rules, progression, o
   // times the target level changes while the modal is open.
   const rows = useMemo(() => {
     if (!visible || targetLevel <= currentLevel) return [];
-    const after = projectToLevel(entity, targetLevel, progression, rules);
+    const after = projectToLevel(entity, targetLevel, progression, rules, classDefinitions);
     return buildProjectionRows(entity, after);
-  }, [visible, entity, targetLevel, progression, rules, currentLevel]);
+  }, [visible, entity, targetLevel, progression, rules, currentLevel, classDefinitions]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

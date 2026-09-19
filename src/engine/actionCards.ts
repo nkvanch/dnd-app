@@ -18,6 +18,7 @@ import { spellRepo } from '../content/spellRepo';
 import { itemRepo } from '../content/itemRepo';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { usesLargeCreatureWeaponDice } from './houseRules';
+import { hasLegalSpellPayment } from './spellPayment';
 import { CampaignRules } from './types';
 
 // ── Large-creature weapon dice (house rule) ──────────────────────────
@@ -437,7 +438,7 @@ const ACTION_ECONOMY_LABEL: Record<string, string> = {
  * null means "not actively tracked, don't gate anything."
  */
 export function isFeatureAvailable(
-  feature: Feature,
+  feature: Pick<Feature, 'activation'>,
   entity: Entity,
 ): { available: boolean; reason: string | null } {
   const actionType = feature.activation?.actionType;
@@ -450,6 +451,14 @@ export function isFeatureAvailable(
     }
   }
 
+  const options = feature.activation?.options;
+  if (options?.length) {
+    const available = options.some(option => isFeatureAvailable({
+      ...feature, activation: { ...feature.activation!, options: undefined,
+        resourceCost: option.resourceCost ?? feature.activation!.resourceCost },
+    }, entity).available);
+    return { available, reason: available ? null : 'No legal activation payment remaining.' };
+  }
   const cost = feature.activation?.resourceCost;
   if (!cost) return { available: true, reason: null };
 
@@ -458,26 +467,14 @@ export function isFeatureAvailable(
       return { available: false, reason: 'No spellcasting.' };
     }
     const tier = cost.spellSlotTier ?? 1;
-    // Check if any slot at or above the required tier has uses left. Also
-    // checks pactSlots — a multiclassed pact caster's Warlock slots live
-    // there entirely, separate from the combined `.slots` table (bug fix:
-    // this used to only ever check `.slots`, so a Warlock/X character with
-    // spent regular slots but full, unused pact slots had every Warlock
-    // spell wrongly marked unavailable). Spells aren't tagged by which
-    // class granted them, so this can't distinguish "a pact slot exists"
-    // from "this specific spell may spend one" any more precisely than
-    // that — same level of imprecision `spellSlotTier`'s own "minimum
-    // tier" semantics already accept elsewhere in this function.
-    for (let t = tier; t <= 9; t++) {
-      const key = t.toString() as keyof typeof entity.spellcasting.slots;
-      const slot = entity.spellcasting.slots[key];
-      if (slot && slot.total - slot.used > 0) {
-        return { available: true, reason: null };
-      }
-      const pactSlot = entity.spellcasting.pactSlots?.[key];
-      if (pactSlot && pactSlot.total - pactSlot.used > 0) {
-        return { available: true, reason: null };
-      }
+    // Re-audit items 1/2 (A12): the ONE shared resolver — legal-payment
+    // logic used to be hand-duplicated here and in applyActionCardUse's
+    // actual debit, and they disagreed (this function accepted a higher or
+    // pact slot; the debit only ever touched the exact tier). Both now call
+    // the same spellPayment.ts functions, so "available" and "what gets
+    // spent" can never diverge again.
+    if (hasLegalSpellPayment(entity.spellcasting, tier)) {
+      return { available: true, reason: null };
     }
     return { available: false, reason: `No spell slots of level ${tier}+ remaining.` };
   }
@@ -649,6 +646,12 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
   //     the official catalog, homebrewStore for anything itemRepo doesn't
   //     have (a homebrew weapon/item otherwise silently never gets a card).
   for (const inst of entity.inventory.equipped) {
+    // Re-audit A17: an item requiring attunement produces no action cards
+    // until actually attuned — same gate collectAllEffects applies to its
+    // passive effects, reusing the SAME hydrated flag rather than a second
+    // eligibility check (item.requiresAttunement is set once at equip time
+    // from the content definition — see ItemInstance's own doc comment).
+    if (inst.requiresAttunement && !inst.attuned) continue;
     const feats = (inst.features && inst.features.length > 0)
       ? inst.features
       : (itemRepo.getItemSync(inst.itemId)?.features

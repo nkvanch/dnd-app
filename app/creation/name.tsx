@@ -11,19 +11,43 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const LEVEL_OPTIONS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
 
+/** Parses the {targetLevel, campaign} JSON this screen stashes in
+ *  entity.notes (see handleContinue below) back out, for pre-filling the
+ *  form when re-entering an already-started draft. Same shape name.tsx has
+ *  always written; not a general notes parser. */
+function parseBasics(notes: string): { targetLevel: number; campaign: string } | null {
+  try {
+    const parsed = JSON.parse(notes) as { targetLevel?: unknown; campaign?: unknown };
+    if (typeof parsed.targetLevel === 'number') {
+      return { targetLevel: parsed.targetLevel, campaign: typeof parsed.campaign === 'string' ? parsed.campaign : '' };
+    }
+  } catch { /* not this screen's JSON shape (e.g. real session notes already written later) */ }
+  return null;
+}
+
 export default function NameScreen() {
   const router   = useRouter();
   const setDraft = useCharacterStore(s => s.setDraft);
+  // Re-audit A09 (item 11): read the CURRENT draft once at mount, not
+  // reactively — re-entering this screen (e.g. via Back from Hub) should
+  // pre-fill from and continue editing whatever draft already exists
+  // rather than silently starting a brand new entity with a new id, which
+  // used to orphan every step already completed on the old draft.
+  const [existingDraft] = useState(() => useCharacterStore.getState().draft);
+  const existingBasics = existingDraft ? parseBasics(existingDraft.notes) : null;
 
-  const [name,     setName]     = useState('');
-  const [level,    setLevel]    = useState(1);
-  const [campaign, setCampaign] = useState('');
+  const [name,     setName]     = useState(existingDraft?.identity.name ?? '');
+  const [level,    setLevel]    = useState(existingBasics?.targetLevel ?? 1);
+  const [campaign, setCampaign] = useState(existingBasics?.campaign ?? '');
 
   function handleContinue() {
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    let entity = makeEmptyEntity(Date.now().toString());
+    // Mutate the existing draft in place (same id) when one is already in
+    // progress, instead of always minting a fresh entity — see the
+    // existingDraft comment above.
+    let entity = existingDraft ?? makeEmptyEntity(Date.now().toString());
     entity = {
       ...entity,
       identity: { ...entity.identity, name: trimmed },

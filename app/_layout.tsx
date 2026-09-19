@@ -24,6 +24,7 @@ import { useSyncStore }      from '../src/store/syncStore';
 import { useCombatTurnStore } from '../src/store/combatTurnStore';
 import { useCombatStore }    from '../src/store/combatStore';
 import { loadCombatState, clearCombatState } from '../src/db/combatRepo';
+import { loadDraftState } from '../src/db/draftRepo';
 
 function BootScreen() {
   return (
@@ -122,6 +123,17 @@ export default function RootLayout() {
           } else if (state?.combat.active) {
             clearCombatState().catch(() => { /* non-critical */ });
           }
+        }).catch(() => { /* non-critical */ });
+
+        // 5b. Restore an in-progress character creation draft, if one was
+        // left mid-flow when the app was last killed (re-audit A09, item
+        // 11). Populating useCharacterStore's `draft` field directly here
+        // means every creation screen (hub.tsx etc.) sees it as if the
+        // player had simply navigated back into an already-started build —
+        // no special "restore" UI needed there. Non-critical: a failure to
+        // load just means creation starts fresh, same as today.
+        loadDraftState().then(draft => {
+          if (draft) useCharacterStore.setState({ draft });
         }).catch(() => { /* non-critical */ });
 
         // 6. Wire up the sync manager — must run after stores are hydrated

@@ -1,3 +1,4 @@
+import { useSpellPayment } from './SpellPaymentChooser';
 // app/sheet/TabCharacter.tsx
 // Tab 1 — Combat dashboard. Players live here.
 // Includes: HP, stat row, conditions/exhaustion, resources, spell slots,
@@ -10,8 +11,7 @@ import {
 import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker, ActivationOption, matchesRuleset } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
-import { tickDurations } from '../../engine/conditions';
-import { tickConcentrationDuration, startTurn, toggleActionEconomy } from '../../engine/combat';
+import { toggleActionEconomy } from '../../engine/combat';
 import { recomputeDerived } from '../../engine/pipeline';
 import { levelUp, levelUpClass } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
@@ -84,9 +84,13 @@ interface Props {
   onAddCondition:    (id: string, duration: DurationTracker | null) => void;
   onRemoveCondition: (id: string) => void;
   onResourceChange:  (resourceId: string, delta: number) => void;
-  onSpendSlot:       (tier: string) => void;
-  onRestoreSlot:     (tier: string) => void;
+  onSpendSlot:       (tier: string, kind?: 'normal' | 'pact') => void;
+  onRestoreSlot:     (tier: string, kind?: 'normal' | 'pact') => void;
   onEntityUpdate:    (updated: Entity) => void;
+  /** Closure item 16 — the one authoritative End Turn entry point, shared
+   *  verbatim with the Actions and Spells tabs (see app/sheet/[id].tsx's
+   *  handleEndTurn). */
+  onEndTurn:         () => void;
 }
 
 
@@ -294,7 +298,7 @@ function LevelUpSection({
     const nextLevel = entity.identity.level + 1;
 
     async function doLevelUp() {
-      const { before, after } = simulate(entity, e => levelUp(e, nextLevel, progression!, rules), rules);
+      const { before, after } = simulate(entity, e => levelUp(e, nextLevel, progression!, rules, allClasses), rules);
       // levelUp() can grant fixed cantrips/spells for this level — warm Tier 2
       // for anything new before the entity reaches the engine pipeline.
       await spellRepo.ensureLoaded(spellIdsOnEntity(after));
@@ -303,7 +307,7 @@ function LevelUpSection({
 
     return (
       <>
-        <Pressable style={styles.levelUpBtn} onPress={doLevelUp}>
+        <Pressable style={styles.levelUpBtn} onPress={() => { void doLevelUp(); }}>
           <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
         </Pressable>
         {entity.identity.level < maxLevel && (
@@ -320,6 +324,7 @@ function LevelUpSection({
           onCancel={() => setPendingLevelUp(null)}
         />
         <ProgressionPlannerModal
+          classDefinitions={allClasses}
           visible={plannerOpen}
           entity={entity}
           rules={rules}
@@ -345,7 +350,7 @@ function LevelUpSection({
     const existing = classes.find(c => c.classId === targetClassId);
     const progression = resolveProgression(targetClassId, existing?.subclassId ?? null);
     if (!progression) return;
-    const { before, after } = simulate(entity, e => levelUpClass(e, targetClassId, progression!, rules, targetClass), rules);
+    const { before, after } = simulate(entity, e => levelUpClass(e, targetClassId, progression!, rules, targetClass, allClasses), rules);
     await spellRepo.ensureLoaded(spellIdsOnEntity(after));
     const title = existing
       ? `Level Up ${classLabel(targetClassId)} (→ ${existing.level + 1})`
@@ -360,7 +365,7 @@ function LevelUpSection({
         <Pressable
           key={c.classId}
           style={styles.levelUpBtn}
-          onPress={() => doLevelUpClass(c.classId)}
+          onPress={() => { void doLevelUpClass(c.classId); }}
         >
           <Text style={styles.levelUpBtnTxt}>⬆ Level Up {classLabel(c.classId)} (→ {c.level + 1})</Text>
         </Pressable>
@@ -398,7 +403,7 @@ function LevelUpSection({
               <Pressable
                 key={c.id}
                 style={styles.addClassRow}
-                onPress={() => doLevelUpClass(c.id, c)}
+                onPress={() => { void doLevelUpClass(c.id, c); }}
               >
                 <Text style={styles.addClassRowTxt}>{c.name}</Text>
               </Pressable>
@@ -416,6 +421,7 @@ function LevelUpSection({
         onCancel={() => setPendingLevelUp(null)}
       />
       <MulticlassProgressionPlannerModal
+        classDefinitions={allClasses}
         visible={plannerOpen}
         entity={entity}
         rules={rules}
@@ -772,7 +778,7 @@ function MovementModal({
 function TabCharacterInner({
   entity, rules, isDm, campaignId, deviceId,
   onDamage, onHeal, onAddCondition, onRemoveCondition,
-  onResourceChange, onSpendSlot, onRestoreSlot, onEntityUpdate,
+  onResourceChange, onSpendSlot, onRestoreSlot, onEntityUpdate, onEndTurn,
 }: Props) {
   // Sourced from the merged content DB (not a hardcoded, official-only id
   // list) so homebrew conditions are actually pickable here — audit
@@ -823,6 +829,7 @@ function TabCharacterInner({
   // isFavoriteCard's doc comment in TabActions.tsx for why this isn't just
   // a Feature.favoriteTag lookup: spell-based and synthetic cards like
   // Unarmed Strike have no backing Feature to store a flag on).
+  const { requestPayment, paymentChooser } = useSpellPayment(entity);
   const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c.featureId));
   function handleUseFavorite(card: ActionCard) {
     // A-57 (item 10): a favorited card with discrete use-time options
@@ -837,15 +844,23 @@ function TabCharacterInner({
     // Same fix as TabActions' handleUse — always run applyActionCardUse
     // (it no-ops correctly with nothing to spend) so a cost-less
     // concentration cantrip favorited here also tracks concentration.
-    onEntityUpdate(applyActionCardUse(entity, card, rules));
-    setActiveFavCard(card);
+    requestPayment(card, undefined, payment => {
+      const updated = applyActionCardUse(entity, card, rules, undefined, payment);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveFavCard(card);
+    });
   }
   function handleChooseFavoriteOption(option: ActivationOption) {
     const card = pendingFavOptionCard;
     setPendingFavOptionCard(null);
     if (!card) return;
-    onEntityUpdate(applyActionCardUse(entity, card, rules, option));
-    setActiveFavCard(card);
+    requestPayment(card, option, payment => {
+      const updated = applyActionCardUse(entity, card, rules, option, payment);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveFavCard(card);
+    });
   }
   function rollForFavorite(crit: boolean): import('../../engine/types').DiceRoll | null {
     if (!activeFavCard) return null;
@@ -1279,16 +1294,18 @@ function TabCharacterInner({
           })}
         </View>
 
-        {/* Player-facing turn tick — ticks 'rounds' durations down and
-            resets action economy for the next turn, without needing a DM's
-            initiative tracker (app/dm/encounter.tsx), which a solo player
-            never has. Always visible now (previously hidden unless a
-            rounds-duration existed) — action-economy reset is relevant
-            every turn regardless. No preview gate: advancing a turn is
-            expected/mundane, not a surprising commit. */}
+        {/* Closure item 16: calls the ONE shared onEndTurn handler
+            (app/sheet/[id].tsx's handleEndTurn) rather than computing
+            playerEndTurn() locally and routing it through THIS tab's own
+            onEntityUpdate (which used a different label/category than the
+            other two tabs) — guarantees identical timeline/sync/undo
+            behavior regardless of which tab End Turn is pressed from.
+            Always visible (action-economy reset is relevant every turn
+            regardless). No preview gate: advancing a turn is expected/
+            mundane, not a surprising commit. */}
         <Pressable
           style={styles.endTurnBtn}
-          onPress={() => onEntityUpdate(startTurn(tickConcentrationDuration(tickDurations(entity, rules), rules)))}
+          onPress={onEndTurn}
         >
           <Text style={styles.endTurnBtnTxt}>⏭ End Turn</Text>
         </Pressable>
@@ -1356,23 +1373,43 @@ function TabCharacterInner({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SPELL SLOTS</Text>
           <View style={styles.slotGrid}>
-            {SLOT_TIERS.map(tier => {
-              const slot = spellcasting.slots[tier];
+            {(['normal', 'pact'] as const).flatMap(kind => SLOT_TIERS.map(tier => ({ kind, tier }))).map(({ kind, tier }) => {
+              const slot = (kind === 'pact' ? spellcasting.pactSlots : spellcasting.slots)?.[tier];
               if (!slot || slot.total === 0) return null;
               return (
-                <View key={tier} style={styles.slotBlock}>
-                  <Text style={styles.slotTier}>Lv {tier}</Text>
+                <View key={kind + tier} style={styles.slotBlock}>
+                  <Text style={styles.slotTier}>{kind === 'pact' ? 'Pact · ' : ''}Lv {tier}</Text>
+                  {/* Re-audit closure item 1: pips are spend-ONLY now — tapping
+                      any pip always spends one slot (a no-op once fully
+                      exhausted, since spendSpellSlot's own invariant refuses
+                      to spend past total). Restoration is a deliberate,
+                      separate action via the explicit "+" button below (same
+                      pattern the RESOURCES section above already uses for
+                      its own −/+ controls) — never triggered by an ordinary
+                      pip tap, so casually tapping an exhausted slot row can
+                      no longer silently heal a slot back. */}
                   <View style={styles.slotPips}>
                     {Array.from({ length: slot.total }).map((_, i) => (
                       <Pressable
                         key={i}
                         hitSlop={10}
                         style={[styles.pip2, i < slot.used && styles.pip2Used]}
-                        onPress={() => i < slot.used ? onRestoreSlot(tier) : onSpendSlot(tier)}
+                        onPress={() => onSpendSlot(tier, kind)}
                       />
                     ))}
                   </View>
-                  <Text style={styles.slotCount}>{slot.total - slot.used}/{slot.total}</Text>
+                  <View style={styles.slotCountRow}>
+                    <Pressable
+                      hitSlop={8}
+                      style={styles.slotRestoreBtn}
+                      disabled={slot.used === 0}
+                      onPress={() => onRestoreSlot(tier, kind)}
+                      accessibilityLabel={`Restore a level ${tier} slot`}
+                    >
+                      <Text style={[styles.slotRestoreBtnTxt, slot.used === 0 && styles.disabled]}>+</Text>
+                    </Pressable>
+                    <Text style={styles.slotCount}>{slot.total - slot.used}/{slot.total}</Text>
+                  </View>
                 </View>
               );
             })}
@@ -1556,6 +1593,7 @@ function TabCharacterInner({
         onUpdate={(u) => { onEntityUpdate(u); }}
       />
 
+      {paymentChooser}
       <UseModal
         card={activeFavCard}
         onRoll={rollForFavorite}
@@ -1563,6 +1601,7 @@ function TabCharacterInner({
       />
 
       <ActivationOptionModal
+        entity={entity}
         card={pendingFavOptionCard}
         onChoose={handleChooseFavoriteOption}
         onClose={() => setPendingFavOptionCard(null)}
@@ -1892,6 +1931,13 @@ const styles = StyleSheet.create({
   },
   pip2Used: { backgroundColor: Colors.border },
   slotCount: { fontSize: FontSize.xs, color: Colors.textDim },
+  slotCountRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  slotRestoreBtn: {
+    width: 16, height: 16, borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceHigh, borderWidth: 1, borderColor: Colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  slotRestoreBtnTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold, lineHeight: FontSize.xs },
 
   // Concentration modal
   backdrop:   { flex: 1, backgroundColor: '#000000bb', justifyContent: 'center', padding: Spacing.lg },

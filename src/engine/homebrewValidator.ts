@@ -297,3 +297,88 @@ export function validateContent(
     default:           return { valid: false, errors: [`Unknown type: ${type}`], warnings: [] };
   }
 }
+
+// ── Entity shape validator (re-audit A07) ──────────────────────────────────────
+// Structural validation for an untrusted Entity blob — a character imported
+// from a backup/sync payload, or loaded from a native SQLite row. Distinct
+// from engine/validation.ts's validateEntity(), which assumes it already has
+// a real, structurally-sound Entity and checks CONTENT-RESOLUTION issues
+// (does this raceId still exist in the content library, etc.) — this
+// function runs BEFORE that's safe to assume at all. Deliberately not an
+// exhaustive schema validator (every nested field of every sub-block) —
+// checks the specific required top-level shapes the re-audit named
+// (identity, stats, resources, features, spellcasting shape where present,
+// inventory shape, class-level representation, enum/numeric validity) so
+// `{id, identity.name, features}` — previously accepted as a healthy
+// character — is correctly rejected, while real characters (which always
+// have every one of these fields, set by makeEmptyEntity and never
+// optional) pass.
+export function validateEntityShape(raw: unknown): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!raw || typeof raw !== 'object') {
+    return { valid: false, errors: ['not an object'], warnings: [] };
+  }
+  const e = raw as Record<string, unknown>;
+
+  if (!e.id || typeof e.id !== 'string') errors.push('id: required string');
+  const VALID_KINDS = new Set(['character', 'monster', 'npc']);
+  if (typeof e.kind !== 'string' || !VALID_KINDS.has(e.kind)) errors.push(`kind: must be one of ${[...VALID_KINDS].join('/')}`);
+
+  if (!e.identity || typeof e.identity !== 'object') {
+    errors.push('identity: required object');
+  } else {
+    const idn = e.identity as Record<string, unknown>;
+    if (typeof idn.name !== 'string') errors.push('identity.name: required string');
+    if (typeof idn.level !== 'number') errors.push('identity.level: required number');
+    // Class-level representation (re-audit A11's canonical/legacy pair) —
+    // when present, classes must be an array; classId when present must be
+    // a string. Neither is required (a level-0/no-class-yet draft is valid).
+    if (idn.classes !== undefined && !Array.isArray(idn.classes)) errors.push('identity.classes: present but not an array');
+    if (idn.classId !== undefined && idn.classId !== null && typeof idn.classId !== 'string') errors.push('identity.classId: present but not a string');
+  }
+
+  if (!e.stats || typeof e.stats !== 'object') {
+    errors.push('stats: required object');
+  } else {
+    const stats = e.stats as Record<string, unknown>;
+    for (const ab of ['str', 'dex', 'con', 'int', 'wis', 'cha']) {
+      if (typeof stats[ab] !== 'number') errors.push(`stats.${ab}: required number`);
+    }
+  }
+
+  if (!e.resources || typeof e.resources !== 'object') {
+    errors.push('resources: required object');
+  } else {
+    const res = e.resources as Record<string, unknown>;
+    if (!res.hp || typeof res.hp !== 'object') errors.push('resources.hp: required object');
+    else {
+      const hp = res.hp as Record<string, unknown>;
+      if (typeof hp.current !== 'number') errors.push('resources.hp.current: required number');
+      if (typeof hp.maximum !== 'number') errors.push('resources.hp.maximum: required number');
+    }
+  }
+
+  if (!Array.isArray(e.features)) errors.push('features: required array');
+  if (!Array.isArray(e.choices)) warnings.push('choices: missing (would default to [])');
+
+  if (e.spellcasting !== undefined && e.spellcasting !== null) {
+    if (typeof e.spellcasting !== 'object') {
+      errors.push('spellcasting: present but not an object');
+    } else {
+      const sc = e.spellcasting as Record<string, unknown>;
+      if (typeof sc.ability !== 'string') errors.push('spellcasting.ability: required string when spellcasting is present');
+      if (!sc.slots || typeof sc.slots !== 'object') errors.push('spellcasting.slots: required object when spellcasting is present');
+    }
+  }
+
+  if (!e.inventory || typeof e.inventory !== 'object') {
+    errors.push('inventory: required object');
+  } else {
+    const inv = e.inventory as Record<string, unknown>;
+    if (!Array.isArray(inv.equipped)) errors.push('inventory.equipped: required array');
+    if (!Array.isArray(inv.carried)) errors.push('inventory.carried: required array');
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}

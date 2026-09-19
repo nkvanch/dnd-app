@@ -912,6 +912,8 @@ export type CustomResource = {
   name:     string;
   current:  number;
   maximum:  number;
+  /** Authoritative maximum before source-owned upgrades are applied. */
+  baseMaximum?: number;
   recharge: 'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
   /** What granted this resource — lets clearClassData (app/creation/class-
    * detail.tsx) tell a class-owned resource pool apart from a racial one and
@@ -920,8 +922,68 @@ export type CustomResource = {
    * as "not class-owned" (never auto-wiped) when absent. Reuses
    * FeatureSource['kind'], plus 'subrace' since a resource can be granted by
    * a subrace specifically (not just its parent race). */
-  sourceKind?: 'race' | 'subrace' | 'subclass' | 'class' | 'background' | 'feat' | 'manual';
+  sourceKind?: EntitlementSourceKind;
   sourceId?:   string;
+};
+
+/** Shared by CustomResource.sourceKind and EntitlementRecord.sourceKind.
+ *  A superset of FeatureSource['kind'] (adds 'subrace', since a resource/
+ *  entitlement can be granted by a subrace specifically, and 'feature' for
+ *  a manually-added custom feature's own grants — see leveling.ts's
+ *  removeFeature) — every FeatureSource.kind value is a valid
+ *  EntitlementSourceKind, so a granting Feature's own `.source.kind` can
+ *  always be used directly to tag an entitlement it produces (e.g. a
+ *  grant_spell effect's resulting spell_access/cantrip_access record). */
+export type EntitlementSourceKind =
+  'race' | 'subrace' | 'subclass' | 'class' | 'background' | 'feat' | 'feature'
+  | 'item' | 'spell' | 'condition' | 'campaign' | 'manual';
+
+export type EntitlementKind =
+  'skill_proficiency' | 'skill_expertise' | 'tool_proficiency' | 'armor_proficiency' | 'weapon_proficiency' | 'language'
+  // Closure pass 3: source-owned spell/cantrip ACCESS (not preparation —
+  // see A14, explicitly out of scope). `key` is the spell/cantrip id.
+  | 'spell_access' | 'cantrip_access'
+  // Closure pass 3 (item 3): tracks WHICH sources currently want a given
+  // CustomResource (by its `key` = CustomResource.id) to exist — lets two
+  // different sources granting a resource with the same id both register
+  // as contributors without either one's removal wiping an entry the OTHER
+  // still wants, and without resetting current/spent state on removal of
+  // just one contributor. See entitlements.ts's revokeResourceSource.
+  | 'resource_grant' | 'resource_upgrade';
+
+/**
+ * Closure pass 2 (source ownership): an explicit, typed record of WHY the
+ * entity currently has some proficiency/expertise/language — replacing the
+ * old approach of inferring provenance from the final flattened array/flag,
+ * which can't distinguish "a manual/base grant" from "an active source's
+ * grant that happens to produce the same effective value" (removing the
+ * source silently erased the manual grant too). Not a general scripting/
+ * event system — a plain typed reference, same shape as CustomResource's
+ * own sourceKind/sourceId, plus an optional choiceId when the entitlement
+ * came from resolving a specific ChoiceState (see ChoiceState.sourceKind/
+ * sourceId for how the choice itself is tagged).
+ *
+ * Effect-driven proficiency grants (grant_proficiency Effects on a Feature
+ * that has its own Feature.source) are NOT stored here — they're re-derived
+ * fresh from collectAllEffects() every recompute pass, which is already
+ * fully source-accurate and naturally self-reconciling (the effect simply
+ * stops existing once its granting feature is removed). This array is for
+ * the grants that have no backing Feature/Effect at all: raw `proficiency`-
+ * kind Grants (race/class/subclass/background/feat progression entries),
+ * resolved skill/tool/language choices, and manually-set proficiencies —
+ * see recomputeDerived's own use of deriveProficienciesFromEntitlements.
+ */
+export type EntitlementRecord = {
+  kind:       EntitlementKind;
+  /** SkillName for skill_proficiency/skill_expertise; a tool/armor/weapon
+   *  proficiency string, or a language name, matching whatever string the
+   *  existing ProficiencyBlock arrays already store for that category. */
+  key:        string;
+  sourceKind: EntitlementSourceKind;
+  sourceId?:  string;
+  choiceId?:  string;
+  /** Additive maximum contribution for resource_upgrade records. */
+  amount?:    number;
 };
 
 /**
@@ -1033,6 +1095,19 @@ export type ChoiceState = {
   // `definition.kind`, so it's polymorphic the same way FeatureSource.refId
   // is. See the Brand<> comment near the top of this file.
   selections: string[];
+  /**
+   * Closure pass 2: explicit provenance for this pending/resolved choice —
+   * which content source queued it, so resolving it can tag the resulting
+   * grant(s) with real, removable source ownership instead of the grant
+   * becoming untraceable the moment the choice resolves. Optional/undefined
+   * on choices queued before this field existed, or where the queuing call
+   * site genuinely has no better source than 'manual' — resolveChoice falls
+   * back to sourceKind:'manual' in that case (conservative, matches the
+   * migration philosophy: an untraceable grant is treated as permanent
+   * rather than guessed at).
+   */
+  sourceKind?: EntitlementSourceKind;
+  sourceId?:   string;
 };
 
 export type SlotEntry   = { total: number; used: number };
@@ -1158,6 +1233,32 @@ export type ItemInstance = {
    * both stripping that Feature back out AND clearing this field.
    */
   infusedWith?: string | null;
+  /**
+   * Re-audit A17: hydrated ONCE at equip time (see equipItem, engine/
+   * inventory.ts) from the item content definition's own
+   * itemRequiresAttunement() check — the SAME pattern `features` above
+   * already uses to get content-definition data onto a pure ItemInstance
+   * without the engine pipeline needing a live content-store lookup.
+   * undefined/false means "no attunement requirement" (every existing
+   * saved instance, and anything equipped before this field existed,
+   * parses as not-required until re-equipped — a disclosed migration
+   * gap, not a silent behavior change for anything already correct).
+   * Consumers (collectAllEffects, action-card generation) gate an
+   * equipped item's effects/actions on `!requiresAttunement || attuned`.
+   */
+  requiresAttunement?: boolean;
+  /**
+   * Re-audit A19: hydrated ONCE at equip time (see equipItem, engine/
+   * inventory.ts), from the same armorWeight()/isShield() classifiers the
+   * Compendium/equipment-picker filters already use — true when this item
+   * IS armor or a shield. Lets a effect on a DIFFERENT equipped item (e.g.
+   * Bracers of Defense) check Effect.requiresNoArmorOrShield against the
+   * rest of entity.inventory.equipped without a content-store lookup.
+   * undefined/false for every non-armor/shield item, and for anything
+   * equipped before this field existed (disclosed migration gap, same as
+   * requiresAttunement's own — re-equip refreshes it).
+   */
+  wearsArmorOrShield?: boolean;
 };
 
 export type InventoryBlock = {
@@ -1261,6 +1362,20 @@ export type Effect = {
    * genuinely distinct fact, not once per feature instance.
    */
   situational?: { id: string; question: string } | null;
+  /**
+   * Re-audit A19: gates an item-sourced effect on "no OTHER currently
+   * equipped item is armor or a shield" — the real equipment predicate
+   * Bracers of Defense's own RAW text requires ("+2 AC while you are
+   * wearing no armor and using no shield") but had no enforcement
+   * mechanism at all before this field. Checked against each OTHER
+   * equipped ItemInstance's hydrated `wearsArmorOrShield` flag (set once
+   * at equip time — see ItemInstance's own doc comment) — deliberately
+   * NOT reusing `condition` above, which gates on a REQUIRED active flag/
+   * condition, the opposite polarity from this ("requires the ABSENCE of
+   * armor/shield"). Optional; absent/false means "no such restriction",
+   * unaffected — every existing effect keeps working exactly as before.
+   */
+  requiresNoArmorOrShield?: boolean;
   formulaAbilities?: Ability[];
   /**
    * Per-ability cap applied AFTER the modifier is computed, for medium armor.
@@ -1595,6 +1710,43 @@ export type Entity = {
    * existing saved entities parse unchanged.
    */
   loadouts?: Loadout[];
+  /** Deprecated migration evidence only. New recomputations never populate it. */
+  effectGrantedProficiencies?: {
+    skills: SkillName[]; tools: string[]; weapons: string[]; armor: string[];
+    languages?: string[]; spells?: string[]; cantrips?: string[];
+  };
+  /**
+   * Re-audit A01/A29 (minimum commit-safety fix, item 14): monotonically
+   * incremented by characterStore.ts on every local edit, undo, redo, or
+   * successfully-applied inbound sync update (updateCharacter/undo/redo/
+   * applyIncomingEntity/applyIncomingPatch). Purely a conflict-detection
+   * signal — lets undo() notice "something else changed this character
+   * (most likely an inbound sync patch) since this undo entry was
+   * captured" instead of blindly restoring an obsolete snapshot over it.
+   * NOT a full command/event log or CRDT — that's explicitly out of scope
+   * for this pass. Optional/undefined on any entity created before this
+   * field existed, or never mutated through the store yet; treated as 0.
+   */
+  revision?: number;
+  /**
+   * Closure pass 2 (source ownership): explicit, source-removable
+   * proficiency/expertise/language grants — see EntitlementRecord's own doc
+   * comment for the full model and what's deliberately NOT stored here
+   * (effect-driven grants are derived from active source definitions). Authoritative for the categories it
+   * covers; entity.proficiencies.{armor,weapons,tools,languages} and
+   * entity.skills.skills[x].{trained,expertise} are DERIVED output,
+   * rewritten from this array (unioned with the effect-derived set) on
+   * every recomputeDerived pass — see deriveProficienciesFromEntitlements
+   * in entitlements.ts. Optional/undefined on any entity created before
+   * this field existed; migrateEntity() seeds it once from whatever flat
+   * proficiencies/skills the entity already has, tagged sourceKind:'manual'
+   * (a conservative migration — an untraceable historical entitlement is
+   * treated as permanent, never silently dropped or guessed at).
+   */
+  entitlements?: EntitlementRecord[];
+  /** Once initialized, entitlements and current source definitions are the
+   * authoritative grant inputs. Flat proficiency/spell arrays are output only. */
+  entitlementInputsVersion?: 1;
 };
 
 /** See Entity.loadouts' doc comment. `equippedItemIds`/`preparedSpellIds`
@@ -1849,7 +2001,7 @@ export type FeatureActivation = {
 /**
  * One entry in FeatureActivation.options (A-57). Choosing an option with a
  * `resourceCost` REPLACES the activation's own `resourceCost` for that use
- * (see applyActionCardUse's optional 4th parameter in TabActions.tsx) —
+ * (see applyActionCardUse in engine/actionUse.ts) —
  * omitting it means "same cost as the base activation, this option only
  * changes flavor" (e.g. Great Weapon Master's two attack choices cost
  * nothing extra either way).

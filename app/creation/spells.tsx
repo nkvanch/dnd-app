@@ -1,3 +1,4 @@
+import { grantEntitlements, grantEntitlement, revokeEntitlementsFromChoice } from '../../src/engine/entitlements';
 // app/creation/spells.tsx
 // Step 8: Spell selection for spellcasting classes.
 // Always renders — never auto-navigates during render.
@@ -57,7 +58,7 @@ function SpellRow({
   useEffect(() => {
     if (!open || description !== null || isHomebrew) return;
     let cancelled = false;
-    spellRepo.ensureLoaded([spell.id]).then(() => {
+    void spellRepo.ensureLoaded([spell.id]).then(() => {
       if (!cancelled) setDescription(spellRepo.getSpellSync(spell.id)?.description ?? '');
     });
     return () => { cancelled = true; };
@@ -228,11 +229,11 @@ export default function SpellsScreen() {
       const sc = currentDraft.spellcasting;
       if (spell.level === 0) {
         if (sc.cantrips.includes(newId)) return;
-        useCharacterStore.getState().setDraft({ ...currentDraft, spellcasting: { ...sc, cantrips: [...sc.cantrips, newId] } });
+        useCharacterStore.getState().setDraft(grantEntitlement(currentDraft, { kind: 'cantrip_access', key: newId, sourceKind: 'manual' }));
         setAdditionalCantripIds(prev => [...prev, newId]);
       } else {
         if (sc.known.includes(newId)) return;
-        useCharacterStore.getState().setDraft({ ...currentDraft, spellcasting: { ...sc, known: [...sc.known, newId], prepared: [...sc.prepared, newId] } });
+        useCharacterStore.getState().setDraft(grantEntitlement({ ...currentDraft, spellcasting: { ...sc, prepared: [...sc.prepared, newId] } }, { kind: 'spell_access', key: newId, sourceKind: 'manual' }));
         setAdditionalSpellIds(prev => [...prev, newId]);
       }
     }, [])
@@ -315,11 +316,11 @@ export default function SpellsScreen() {
     const sc = draft!.spellcasting;
     if (isCantrip) {
       if (sc.cantrips.includes(spellId)) return;
-      setDraft({ ...draft!, spellcasting: { ...sc, cantrips: [...sc.cantrips, spellId] } });
+      setDraft(grantEntitlement(draft!, { kind: 'cantrip_access', key: spellId, sourceKind: 'manual' }));
       setAdditionalCantripIds(prev => [...prev, spellId]);
     } else {
       if (sc.known.includes(spellId)) return;
-      setDraft({ ...draft!, spellcasting: { ...sc, known: [...sc.known, spellId], prepared: [...sc.prepared, spellId] } });
+      setDraft(grantEntitlement({ ...draft!, spellcasting: { ...sc, prepared: [...sc.prepared, spellId] } }, { kind: 'spell_access', key: spellId, sourceKind: 'manual' }));
       setAdditionalSpellIds(prev => [...prev, spellId]);
     }
   }
@@ -379,14 +380,9 @@ export default function SpellsScreen() {
   function startEditingSpellChoices() {
     let updated = draft!;
     for (const choice of resolvedSpellChoices) {
-      const chosenIds = new Set(choice.selections);
+      updated = revokeEntitlementsFromChoice(updated, choice.id);
       updated = {
         ...updated,
-        spellcasting: updated.spellcasting ? {
-          ...updated.spellcasting,
-          cantrips: updated.spellcasting.cantrips.filter(id => !chosenIds.has(id)),
-          known:    updated.spellcasting.known.filter(id => !chosenIds.has(id)),
-        } : updated.spellcasting,
         choices: updated.choices.map(c => c.id === choice.id ? { ...c, resolved: false, selections: [] } : c),
       };
       setSelections(prev => ({ ...prev, [choice.id]: [] }));
@@ -590,7 +586,7 @@ export default function SpellsScreen() {
         {renderAdditionalSpellSection()}
         <Pressable
           style={[styles.nextBtn, !canConfirm && styles.nextBtnDisabled]}
-          onPress={handleConfirmChoices}
+          onPress={() => { void handleConfirmChoices(); }}
           disabled={!canConfirm}
         >
           <Text style={styles.nextBtnText}>Confirm Spells →</Text>
@@ -655,21 +651,24 @@ export default function SpellsScreen() {
   const handleConfirm = async () => {
     try {
       await spellRepo.ensureLoaded([...pickedCantrips, ...pickedSpells]);
-      let updated: Entity = draft!;
+      let updated: Entity = revokeEntitlementsFromChoice(draft!, 'creation-spells');
+      updated = grantEntitlements(updated, [
+        ...pickedCantrips.map(key => ({ kind: 'cantrip_access' as const, key, sourceKind: 'class' as const, sourceId: classId, choiceId: 'creation-spells' })),
+        ...pickedSpells.map(key => ({ kind: 'spell_access' as const, key, sourceKind: 'class' as const, sourceId: classId, choiceId: 'creation-spells' })),
+      ]);
       if (updated.spellcasting) {
         // Merge back in whatever was already granted before this screen
         // (e.g. domain spells) plus anything added via "+ Add Additional
         // Spell" mid-visit — pickedCantrips/pickedSpells only ever held
         // what's newly chosen here, so overwriting instead of merging would
         // silently drop the rest.
-        const finalCantrips = [...new Set([...alreadyGrantedCantrips, ...additionalCantripIds, ...pickedCantrips])];
+
         const finalSpells   = [...new Set([...alreadyGrantedSpells,   ...additionalSpellIds,   ...pickedSpells])];
         updated = {
           ...updated,
           spellcasting: {
             ...updated.spellcasting,
-            cantrips: finalCantrips,
-            known:    finalSpells,
+
             // Known casters cast straight from `known`; mirror into prepared so the
             // sheet shows them as castable for prepared-style classes too.
             prepared: finalSpells,
@@ -855,7 +854,7 @@ export default function SpellsScreen() {
 
       <Pressable
         style={[styles.nextBtn, !nothingToPick && !canConfirm && styles.nextBtnDisabled]}
-        onPress={handleConfirm}
+        onPress={() => { void handleConfirm(); }}
         disabled={!nothingToPick && !canConfirm}
       >
         <Text style={styles.nextBtnText}>{nothingToPick ? 'Continue →' : 'Confirm Spells →'}</Text>

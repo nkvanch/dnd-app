@@ -9,6 +9,7 @@ import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { globalContentDB } from '../../src/content/classes/library';
 import { Background, SkillName, Ability, Feature, BACKGROUND_CHOICE_PREFIX } from '../../src/engine/types';
 import { applyGrant, queueChoice } from '../../src/engine/leveling';
+import { revokeResourceSource } from '../../src/engine/entitlements';
 import { applyStatModifiers, collectAllEffects } from '../../src/engine/pipeline';
 import { backgroundSkillGrants, backgroundSortOptions } from '../../src/content/backgrounds/backgroundBrowse';
 import { sortByOption } from '../../src/content/contentQuery';
@@ -433,6 +434,7 @@ function BackgroundDetail({ id }: { id: string }) {
         c.resolved || !c.definition.id.startsWith(BACKGROUND_CHOICE_PREFIX),
       ),
     };
+    if (prevBgId) updated = revokeResourceSource(updated, 'background', prevBgId);
 
     // Apply background features via the grant pipeline
     for (const feature of bg!.features) {
@@ -444,7 +446,7 @@ function BackgroundDetail({ id }: { id: string }) {
     // leveling system produces, just queued here, mirroring race-detail.tsx's
     // identical pendingChoices handling.
     for (const choice of bg!.pendingChoices ?? []) {
-      updated = queueChoice(updated, choice, 0);
+      updated = queueChoice(updated, choice, 0, undefined, { kind: 'background', id: bg!.id });
     }
 
     // ...and the flexible ability score choice, compiled into one generated

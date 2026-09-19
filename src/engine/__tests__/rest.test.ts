@@ -33,7 +33,11 @@ describe('takeRest — dispatcher', () => {
 });
 
 describe('short rest — custom resources', () => {
-  it('recharges resources tagged short_rest or long_rest', () => {
+  // Re-audit A15: this test previously asserted the WRONG oracle — a
+  // long_rest-tagged resource recovering on a mere short rest — which was
+  // the reproduced bug (a long_rest resource at 0/3 recharged to 3/3 on
+  // short rest). A short rest must restore ONLY short_rest resources.
+  it('recharges only short_rest-tagged resources, never long_rest ones', () => {
     const e = baseEntity({
       resources: {
         ...makeEmptyEntity('e1').resources,
@@ -45,7 +49,7 @@ describe('short rest — custom resources', () => {
     });
     const result = takeRest(e, 'short', DEFAULT_RULES);
     expect(result.resources.custom.find(r => r.id === 'ki')!.current).toBe(4);
-    expect(result.resources.custom.find(r => r.id === 'channel_divinity')!.current).toBe(1);
+    expect(result.resources.custom.find(r => r.id === 'channel_divinity')!.current).toBe(0);
   });
 
   it('does not recharge a resource with a non-rest recharge (e.g. "dawn")', () => {
@@ -57,6 +61,71 @@ describe('short rest — custom resources', () => {
     });
     const result = takeRest(e, 'short', DEFAULT_RULES);
     expect(result.resources.custom[0].current).toBe(0);
+  });
+
+  it('does not recharge a "never"-tagged resource on a short rest', () => {
+    const e = baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        custom: [{ id: 'relic', name: 'Relic Charge', current: 0, maximum: 1, recharge: 'never' }],
+      },
+    });
+    const result = takeRest(e, 'short', DEFAULT_RULES);
+    expect(result.resources.custom[0].current).toBe(0);
+  });
+
+  it('does not recharge a free-text homebrew recharge string on a short rest', () => {
+    const e = baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        custom: [{ id: 'moon', name: 'Moonlit Charge', current: 0, maximum: 1, recharge: 'full moon' }],
+      },
+    });
+    const result = takeRest(e, 'short', DEFAULT_RULES);
+    expect(result.resources.custom[0].current).toBe(0);
+  });
+});
+
+describe('long rest — custom resources (A15)', () => {
+  it('restores both short_rest- and long_rest-tagged resources', () => {
+    const e = baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        custom: [
+          { id: 'ki', name: 'Ki Points', current: 0, maximum: 4, recharge: 'short_rest' },
+          { id: 'channel_divinity', name: 'Channel Divinity', current: 0, maximum: 1, recharge: 'long_rest' },
+        ],
+      },
+    });
+    const result = takeRest(e, 'long', DEFAULT_RULES);
+    expect(result.resources.custom.find(r => r.id === 'ki')!.current).toBe(4);
+    expect(result.resources.custom.find(r => r.id === 'channel_divinity')!.current).toBe(1);
+  });
+
+  it('does NOT restore a "never"-tagged resource on a long rest', () => {
+    const e = baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        custom: [{ id: 'relic', name: 'Relic Charge', current: 0, maximum: 1, recharge: 'never' }],
+      },
+    });
+    const result = takeRest(e, 'long', DEFAULT_RULES);
+    expect(result.resources.custom[0].current).toBe(0);
+  });
+
+  it('does NOT restore a "dawn" or free-text homebrew recharge on a long rest (unsupported category, not silently mapped)', () => {
+    const e = baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        custom: [
+          { id: 'special', name: 'Special', current: 0, maximum: 1, recharge: 'dawn' },
+          { id: 'moon', name: 'Moonlit Charge', current: 0, maximum: 1, recharge: 'full moon' },
+        ],
+      },
+    });
+    const result = takeRest(e, 'long', DEFAULT_RULES);
+    expect(result.resources.custom.find(r => r.id === 'special')!.current).toBe(0);
+    expect(result.resources.custom.find(r => r.id === 'moon')!.current).toBe(0);
   });
 });
 

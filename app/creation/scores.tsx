@@ -5,7 +5,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoid
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { recalculateAllHP, reapplyResolvedAsi } from '../../src/engine/leveling';
+import { recalculateAllHP, reapplyResolvedAsi, stripResolvedAsiStats } from '../../src/engine/leveling';
 import { rollAbilityScoreSet } from '../../src/engine/dice';
 import { pointBuyConfig } from '../../src/engine/houseRules';
 import { Ability, AbilityScores } from '../../src/engine/types';
@@ -60,13 +60,25 @@ export default function ScoresScreen() {
   const raceBonuses = getRaceBonuses(draft);
 
   // Pre-populate from existing stats if returning to this screen.
-  // draft.stats IS the base score — race bonuses live in features, not in stats,
-  // so no subtraction is needed here.
+  // Re-audit A26: draft.stats is NOT the base score once an ASI has been
+  // resolved — a resolved Ability Score Improvement writes its +2/+1+1
+  // directly into stats (reapplyResolvedAsi's own doc comment: "the +2/+1+1
+  // lives in base stats"). Populating this screen straight from draft.stats
+  // meant reopening Scores after resolving an ASI, then confirming with
+  // every field UNCHANGED, fed the ALREADY-BUMPED value back in as the new
+  // "base" — and handleConfirm's own reapplyResolvedAsi call below then
+  // added the SAME ASI on top a second time. stripResolvedAsiStats (already
+  // built for the class-reselection case — same "unwind ASI stat bumps back
+  // to true base" primitive) reconstructs the true pre-ASI base here, so
+  // reapplyResolvedAsi's later re-application is the ONLY place the bonus
+  // gets added, no matter how many times this screen is reopened/confirmed.
+  // Race bonuses still need no subtraction — they live in features, not stats.
   const existingBase: AbilityScores = (() => {
     if (!draft) return DEFAULT_SCORES;
+    const trueBase = stripResolvedAsiStats(draft).stats;
     const base = {} as AbilityScores;
     for (const ab of ABILITIES) {
-      base[ab] = draft.stats[ab];
+      base[ab] = trueBase[ab];
     }
     return base;
   })();

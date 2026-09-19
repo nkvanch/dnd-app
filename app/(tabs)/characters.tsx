@@ -144,7 +144,28 @@ export default function CharactersScreen() {
     router.push(`/sheet/${id}` as any);
   }, [router]);
 
+  // Re-audit A09 (item 11): a persisted draft can exist here (restored on
+  // boot, or just never finished this session) — jumping straight to
+  // Name would silently orphan it once name.tsx starts editing THIS
+  // existing draft in place rather than minting a new one. Offer the
+  // choice instead of guessing, same confirm-dialog pattern
+  // CreationHeader.tsx's Cancel button already uses.
   const startCreation = useCallback(() => {
+    const draft = useCharacterStore.getState().draft;
+    if (draft) {
+      Alert.alert(
+        'Resume character creation?',
+        `You have an unfinished character${draft.identity.name ? ` ("${draft.identity.name}")` : ''}. Continue where you left off, or start a new one?`,
+        [
+          { text: 'Resume', onPress: () => router.push('/creation/hub') },
+          {
+            text: 'Start New', style: 'destructive',
+            onPress: () => { useCharacterStore.getState().clearDraft(); router.push('/creation/name'); },
+          },
+        ]
+      );
+      return;
+    }
     router.push('/creation/name');
   }, [router]);
 

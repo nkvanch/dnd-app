@@ -99,4 +99,29 @@ describe('validatePackContents — embedded character features', () => {
     const pack = createBackupPack([e], emptyHomebrew(), null, '1.0.0');
     expect(() => validatePackContents(pack)).not.toThrow();
   });
+
+  // Re-audit A07: a character that's syntactically fine JSON but structurally
+  // unsound (missing kind/stats/resources/inventory entirely — the exact
+  // {id, identity.name, features} shape named in the re-audit) previously
+  // passed every check this function ran, since only feature-array CONTENTS
+  // were validated, never whether the entity's own required fields exist at
+  // all. validateEntityShape now catches this first, before the per-feature
+  // checks even run.
+  it('rejects a structurally invalid character (missing stats/resources/inventory) even though its features array is well-formed', () => {
+    const structurallyInvalid = {
+      id: 'c1', identity: { name: 'Malformed', level: 1 }, features: [validFeature()],
+    } as unknown as Entity;
+    const pack = createBackupPack([structurallyInvalid], emptyHomebrew(), null, '1.0.0');
+    const problems = validatePackContents(pack);
+    expect(problems.some(p => p.includes('Malformed') && p.includes('stats'))).toBe(true);
+  });
+
+  it('one malformed character among healthy ones is reported without throwing, and doesn\'t block validation of the rest', () => {
+    const good: Entity = { ...makeEmptyEntity('good'), identity: { ...makeEmptyEntity('good').identity, name: 'Good' }, features: [validFeature()] };
+    const bad = { id: 'bad', identity: { name: 'Bad' }, features: [] } as unknown as Entity;
+    const pack = createBackupPack([good, bad], emptyHomebrew(), null, '1.0.0');
+    const problems = validatePackContents(pack);
+    expect(problems.some(p => p.includes('Bad'))).toBe(true);
+    expect(problems.some(p => p.includes('Good'))).toBe(false);
+  });
 });

@@ -1,3 +1,5 @@
+import { revokeEntitlementsFromChoice } from '../../src/engine/entitlements';
+import { recomputeDerived } from '../../src/engine/pipeline';
 // app/creation/skills.tsx
 // Skill selection. Shows already-owned proficiencies at top, then choices below.
 // Two overlap modes (set in Campaign Settings):
@@ -134,22 +136,7 @@ export default function SkillsScreen() {
     const newSelections: Record<string, string[]> = {};
 
     for (const choice of resolvedSkillChoices) {
-      const pool = basePoolFor(choice);
-      const prevSkills = choice.selections
-        .map(selId => pool.find(o => o.id === selId)?.value as SkillName | undefined)
-        .filter((v): v is SkillName => !!v);
-
-      if (prevSkills.length > 0) {
-        updated = {
-          ...updated,
-          skills: {
-            skills: {
-              ...updated.skills.skills,
-              ...Object.fromEntries(prevSkills.map(sk => [sk, { ...updated.skills.skills[sk], trained: false }])),
-            },
-          },
-        };
-      }
+      updated = revokeEntitlementsFromChoice(updated, choice.id);
       newSelections[choice.id] = [...choice.selections];
       updated = {
         ...updated,
@@ -157,7 +144,7 @@ export default function SkillsScreen() {
       };
     }
 
-    setDraft(updated);
+    setDraft(recomputeDerived(updated, rules));
     setSelections(prev => ({ ...prev, ...newSelections }));
   }
 

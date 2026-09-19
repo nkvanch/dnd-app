@@ -11,7 +11,7 @@
 // selection persist across navigation via browseStateStore (session-local,
 // not app-restart-persisted — matches every other screen this pass).
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
+import { View, Text, ScrollView, FlatList, Pressable, StyleSheet, TextInput, InteractionManager } from 'react-native';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useBrowseStateStore } from '../../src/store/browseStateStore';
 import { loadFavorites, saveFavorites, favoriteKey } from '../../src/content/favorites';
@@ -126,7 +126,21 @@ export default function CompendiumScreen() {
   // into the search box or Filters toggle immediately instead of waiting
   // for one big synchronous first render to finish.
   const [contentReady, setContentReady] = useState(false);
-  useEffect(() => { setContentReady(true); }, []);
+  // Re-audit item 20: re-measured on the current build rather than
+  // assuming the existing contentReady staging (above) had already closed
+  // this — it hadn't fully. A bare `useEffect` still fires within the same
+  // JS-thread turn React uses to finish mounting/registering touch
+  // responders, so the ~10-content-type merge+filter+sort pass it
+  // triggers (heaviest in the default "All Content" view, where every
+  // category's skip flag is false — see the `single`/`skipX` values below)
+  // could still run before the shell was genuinely touch-ready.
+  // InteractionManager.runAfterInteractions is RN's own idiom for "wait
+  // until touch/animation handling has actually settled" — a real fix for
+  // time-to-interactive specifically, not a speculative cache.
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setContentReady(true));
+    return () => task.cancel();
+  }, []);
 
   const f = saved.filters ?? {};
   const [favoritesOnly, setFavoritesOnly] = useState(false);

@@ -10,6 +10,7 @@ import {
   syncLegacyIdentity, formatClassLabel, multiclassProficienciesFor, migrateEntity,
 } from '../multiclass';
 import { Entity, ClassLevelEntry, CharClass, asClassId, asSubclassId } from '../types';
+import { grantEntitlement, revokeEntitlementsFromSource, hasEntitlement } from '../entitlements';
 
 describe('getClassLevels', () => {
   it('returns identity.classes verbatim when present', () => {
@@ -173,15 +174,23 @@ describe('migrateEntity', () => {
     expect(migrated.identity.classes).toEqual([{ classId: 'druid', subclassId: 'moon', level: 6 }]);
   });
 
-  it('is idempotent — a no-op on an already-migrated entity', () => {
+  it('is idempotent — classes[] migration is a no-op on an already-migrated entity, and re-running migrateEntity twice changes nothing further', () => {
     const e = makeEmptyEntity('e1', 'character');
     e.identity.classes = [{ classId: asClassId('druid'), subclassId: asSubclassId('moon'), level: 6 }];
-    expect(migrateEntity(e)).toBe(e);
+    const migrated = migrateEntity(e);
+    expect(migrated.identity.classes).toEqual(e.identity.classes);
+    // Closure pass 2: migrateEntity now ALSO seeds entitlements once (see
+    // its own describe block below), so it's no longer a bare reference
+    // no-op — but running it a second time on its own output is.
+    expect(migrateEntity(migrated)).toBe(migrated);
   });
 
-  it('leaves an entity with no class at all untouched', () => {
+  it('leaves an entity with no class at all untouched, other than seeding empty entitlements', () => {
     const e = makeEmptyEntity('e1', 'character');
-    expect(migrateEntity(e)).toBe(e);
+    const migrated = migrateEntity(e);
+    expect(migrated.identity).toEqual(e.identity);
+    expect(migrated.entitlements).toEqual([]);
+    expect(migrateEntity(migrated)).toBe(migrated); // idempotent on the second pass
   });
 
   it('never touches a non-character entity (monster reusing classId as a template id)', () => {
@@ -190,5 +199,67 @@ describe('migrateEntity', () => {
     e.identity.level = 1;
     expect(migrateEntity(e)).toBe(e);
     expect(migrateEntity(e).identity.classes).toBeUndefined();
+  });
+});
+
+describe('migrateEntity — entitlements migration (closure pass 2, section 11)', () => {
+  it('seeds every existing flat proficiency/skill as a sourceKind:"manual" entitlement, exactly once', () => {
+    const e = makeEmptyEntity('e1', 'character');
+    e.proficiencies = { ...e.proficiencies, tools: ['thieves_tools'], armor: ['light'], languages: ['dwarvish'] };
+    e.skills = { skills: { ...e.skills.skills, insight: { ...e.skills.skills.insight, trained: true, expertise: true } } };
+
+    const migrated = migrateEntity(e);
+    expect(migrated.entitlements).toEqual(expect.arrayContaining([
+      { kind: 'tool_proficiency', key: 'thieves_tools', sourceKind: 'manual' },
+      { kind: 'armor_proficiency', key: 'light', sourceKind: 'manual' },
+      { kind: 'language', key: 'dwarvish', sourceKind: 'manual' },
+      { kind: 'skill_proficiency', key: 'insight', sourceKind: 'manual' },
+      { kind: 'skill_expertise', key: 'insight', sourceKind: 'manual' },
+    ]));
+
+    // Preserved: current visible proficiencies/skills are untouched by migration itself.
+    expect(migrated.proficiencies.tools).toEqual(['thieves_tools']);
+    expect(migrated.skills.skills.insight.trained).toBe(true);
+
+    // Idempotent: migrating an already-migrated entity doesn't re-scan/duplicate.
+    expect(migrateEntity(migrated)).toBe(migrated);
+  });
+
+  it('after migration, a NEWLY applied source-owned grant uses proper provenance and is independently removable, while the migrated legacy entry stays manual/permanent', () => {
+    const e = makeEmptyEntity('e1', 'character');
+    e.proficiencies = { ...e.proficiencies, tools: ['navigators_tools'] }; // pre-existing, untraceable
+    const migrated = migrateEntity(e);
+
+    let updated = grantEntitlement(migrated, { kind: 'tool_proficiency', key: 'navigators_tools', sourceKind: 'feat', sourceId: 'skilled' });
+    updated = revokeEntitlementsFromSource(updated, 'feat', 'skilled');
+    // The feat's own (newly-applied, properly-sourced) grant is gone...
+    expect(updated.entitlements!.filter(r => r.sourceKind === 'feat')).toEqual([]);
+    // ...but the migrated legacy manual entry survives untouched.
+    expect(hasEntitlement(updated, 'tool_proficiency', 'navigators_tools')).toBe(true);
+  });
+
+  // Closure pass 3 (item 2): same conservative migration for spell/cantrip access.
+  it('seeds legacy known spells/cantrips as manual entitlements, preserving current visible spell access', () => {
+    const e = makeEmptyEntity('e1', 'character');
+    e.spellcasting = { ability: 'int', slots: {} as any, cantrips: ['fire_bolt'], known: ['magic_missile'], prepared: [], concentrating: null };
+    const migrated = migrateEntity(e);
+    expect(migrated.entitlements).toEqual(expect.arrayContaining([
+      { kind: 'cantrip_access', key: 'fire_bolt', sourceKind: 'manual' },
+      { kind: 'spell_access', key: 'magic_missile', sourceKind: 'manual' },
+    ]));
+    // Preserved: current visible spell access is untouched by migration.
+    expect(migrated.spellcasting!.cantrips).toEqual(['fire_bolt']);
+    expect(migrated.spellcasting!.known).toEqual(['magic_missile']);
+  });
+
+  it('after migration, a newly-sourced grant of the SAME legacy spell is independently removable while the legacy manual entry survives', () => {
+    const e = makeEmptyEntity('e1', 'character');
+    e.spellcasting = { ability: 'int', slots: {} as any, cantrips: [], known: ['magic_missile'], prepared: [], concentrating: null };
+    const migrated = migrateEntity(e);
+
+    let updated = grantEntitlement(migrated, { kind: 'spell_access', key: 'magic_missile', sourceKind: 'subclass', sourceId: 'evocation' });
+    updated = revokeEntitlementsFromSource(updated, 'subclass', 'evocation');
+    expect(updated.entitlements!.filter(r => r.sourceKind === 'subclass')).toEqual([]);
+    expect(hasEntitlement(updated, 'spell_access', 'magic_missile')).toBe(true); // legacy manual entry survives
   });
 });

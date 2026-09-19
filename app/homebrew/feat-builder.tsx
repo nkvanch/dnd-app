@@ -75,6 +75,14 @@ export default function FeatBuilderScreen() {
   const [description,  setDescription]  = useState('');
   const [trait,        setTrait]        = useState<DraftTrait>(() => newDraftTrait('Effect'));
   const [traitOpen,    setTraitOpen]    = useState(false);
+  // Re-audit A05: the compiled Feature can't be losslessly reversed into a
+  // DraftTrait (see the hydration effect's own comment), so edit mode starts
+  // the Trait Editor at a blank placeholder — buildFeat() must NOT compile
+  // that placeholder into the saved feature unless the user actually opened
+  // and used the Trait Editor. Tracks whether they did; when they didn't
+  // (e.g. a rename-only edit), the ORIGINAL feature's effects/actions/
+  // resource grants pass through unchanged instead of being silently wiped.
+  const [traitTouched, setTraitTouched] = useState(false);
 
   const [abilityChoiceOn, setAbilityChoiceOn] = useState(false);
   const [abilityOptions,  setAbilityOptions]  = useState<Ability[]>(['str']);
@@ -103,6 +111,7 @@ export default function FeatBuilderScreen() {
     // edit mode starts the effect as "Flavor only" with the saved description,
     // same accepted limitation subclass-builder.tsx's edit-mode recovery has.
     setTrait({ ...newDraftTrait('Effect'), description: editing.feature.description });
+    setTraitTouched(false);
     if (editing.abilityChoice) {
       setAbilityChoiceOn(true);
       setAbilityOptions(editing.abilityChoice.options);
@@ -146,7 +155,17 @@ export default function FeatBuilderScreen() {
       ...feats.filter(f => f.id !== editing?.id).map(f => f.id),
     ]);
     const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_feat', takenFeatIds);
-    const { feature } = buildTraitFeature(trait, { idPrefix: id, sourceKind: 'feat', sourceRefId: id, level: null });
+    // Re-audit A05: if the Trait Editor was never opened/touched this
+    // session, the current `trait` state is still the blank placeholder
+    // hydration seeded it with (see the hydration effect's own comment on
+    // why a lossless reverse-compile isn't possible) — compiling THAT would
+    // silently wipe the original feat's real effects/actions/resource
+    // grants on a rename-only save. Pass the original feature through
+    // verbatim in that case; only recompile from `trait` once the user has
+    // actually used the editor.
+    const feature = (editing && !traitTouched)
+      ? editing.feature
+      : buildTraitFeature(trait, { idPrefix: id, sourceKind: 'feat', sourceRefId: id, level: null }).feature;
     return {
       id,
       name: name.trim(),
@@ -364,9 +383,9 @@ export default function FeatBuilderScreen() {
       <TraitEditorModal
         trait={traitOpen ? trait : null}
         visible={traitOpen}
-        onChange={setTrait}
+        onChange={t => { setTrait(t); setTraitTouched(true); }}
         onDone={() => setTraitOpen(false)}
-        onDelete={() => { setTrait(newDraftTrait('Effect')); setTraitOpen(false); }}
+        onDelete={() => { setTrait(newDraftTrait('Effect')); setTraitTouched(true); setTraitOpen(false); }}
         excludeKinds={['resource_ability', 'spell_grant']}
       />
 

@@ -2,7 +2,7 @@
 // Step 9: Summary review before saving.
 // Shows the final computed character and lets the player confirm or go back.
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
@@ -30,6 +30,14 @@ export default function ReviewScreen() {
   const setDraft  = useCharacterStore(s => s.setDraft);
   const rules     = useCharacterStore(s => s.rules);
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  // Re-audit A09/A01 (item 11): saveDraft() now reports whether the
+  // durable write actually succeeded (see characterStore.ts's own doc
+  // comment) instead of always clearing the draft and navigating away
+  // optimistically. A failed save must leave the player on this screen,
+  // with the draft still intact, able to retry — not silently lose the
+  // character with no way back.
+  const [saving,    setSaving]    = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!draft) router.replace('/creation/name');
@@ -64,7 +72,9 @@ export default function ReviewScreen() {
   };
 
   async function handleSave() {
-    if (!draft) return;
+    if (!draft || saving) return;
+    setSaving(true);
+    setSaveError(null);
     // 1. Recompute all derived stats with final scores + race bonuses applied.
     // 2. Recalculate HP from scratch so creation order doesn't affect the result.
     //    (If class was chosen before scores, HP was computed with ability mod 0.)
@@ -84,8 +94,15 @@ export default function ReviewScreen() {
     // 3. Run recomputeDerived one more time so derived.ac etc. use the corrected stats.
     finalDraft     = recomputeDerived(finalDraft, rules);
     setDraft(finalDraft);
-    await saveDraft();
-    router.replace('/(tabs)/');
+    const saved = await saveDraft();
+    setSaving(false);
+    if (saved) {
+      router.replace('/(tabs)/');
+    } else {
+      // Draft (and its persisted SQLite row) are untouched by a failed
+      // save — stay here so the player can just press Save again.
+      setSaveError("Couldn't save your character — check your device storage and try again. Your progress is safe.");
+    }
   }
 
   return (
@@ -153,8 +170,14 @@ export default function ReviewScreen() {
       )}
 
       {/* Save */}
-      <Pressable style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveBtnText}>⚔️  Save Character</Text>
+      {saveError && (
+        <View style={styles.warningBox}>
+          <Text style={styles.warningTitle}>⚠️  Save failed</Text>
+          <Text style={styles.warningText}>{saveError}</Text>
+        </View>
+      )}
+      <Pressable style={[styles.saveBtn, saving && styles.saveBtnDisabled]} onPress={handleSave} disabled={saving}>
+        <Text style={styles.saveBtnText}>{saving ? 'Saving…' : '⚔️  Save Character'}</Text>
       </Pressable>
 
       <Pressable style={styles.backBtn} onPress={safeGoBack}>
@@ -248,6 +271,7 @@ const styles = StyleSheet.create({
     alignItems:      'center',
     marginBottom:    Spacing.sm,
   },
+  saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
 
   backBtn: {

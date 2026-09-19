@@ -111,9 +111,8 @@ describe('swapBackground — Background.pendingChoices (homebrew authoring end-t
 
     const swapped = swapBackground(withOld, bg('folk_hero'), DEFAULT_RULES);
     expect(swapped.choices.some(c => c.id === oldChoiceId && c.resolved)).toBe(true);
-    // The grant itself is sticky (matches the engine's documented "grants
-    // never revoke" characteristic) — proficiency remains too.
-    expect(swapped.proficiencies.tools).toContain('masons_tools');
+    // History remains, but the old background's active grant is revoked.
+    expect(swapped.proficiencies.tools).not.toContain('masons_tools');
   });
 
   it('a queued background language choice resolves through the same applyLanguageChoiceToEntity official content uses', () => {

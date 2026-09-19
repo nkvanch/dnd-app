@@ -7,6 +7,8 @@
 import { Entity, Item, ItemInstance, CampaignRules } from './types';
 import { recomputeDerived } from './pipeline';
 import { DEFAULT_RULES } from '../store/characterStore';
+import { armorWeight, isShield } from '../content/items/itemBrowse';
+import type { ItemIndexEntry } from '../content/itemRepo.types';
 
 /**
  * itemDef must already be resolved by the caller (itemRepo.ensureLoaded +
@@ -24,8 +26,19 @@ export function equipItem(
   // Hydrate features from the content definition at equip time — inventory
   // instances are created with features: [] (resolveChoice and the
   // equipment screen only store the itemId), so without this, equipping
-  // armor adds an item with zero effects and AC never changes.
-  const hydrated = itemDef ? { ...inst, features: itemDef.features } : inst;
+  // armor adds an item with zero effects and AC never changes. Re-audit
+  // A17/A19: also hydrate requiresAttunement/wearsArmorOrShield the same
+  // way, so the pure engine pipeline (collectAllEffects) can gate an
+  // item's effects on attunement/equipment-predicates without needing its
+  // own content-store lookup — see ItemInstance's own doc comments.
+  const indexEntry: ItemIndexEntry | undefined = itemDef
+    ? { id: itemDef.id, name: itemDef.name, weight: itemDef.weight, cost: itemDef.cost, properties: itemDef.properties, hasDamageEffect: false, weaponRange: null }
+    : undefined;
+  const hydrated = itemDef ? {
+    ...inst, features: itemDef.features,
+    requiresAttunement: itemRequiresAttunement(itemDef),
+    wearsArmorOrShield: !!indexEntry && (armorWeight(indexEntry) !== null || isShield(indexEntry)),
+  } : inst;
   // Merge into an existing equipped stack of the same item (matching
   // infusion state) instead of adding a second row — mirrors
   // handleAddItem's carried-side stacking (app/sheet/[id].tsx). Without

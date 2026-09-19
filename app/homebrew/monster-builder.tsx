@@ -130,6 +130,14 @@ export default function MonsterBuilderScreen() {
   const [languages,   setLanguages]   = useState('');
   const [legendaryActions, setLegendaryActions] = useState('');
   const [traits, setTraits] = useState<DraftTrait[]>([]);
+  // Re-audit A05: which trait localIds have actually been edited (content
+  // differs from what hydration seeded) — TraitListEditor reports changes
+  // as a whole replaced array via onChange, so this is computed by diffing
+  // against the previous traits state on every change, not tracked by the
+  // editor itself. A trait whose localId isn't in this set is passed through
+  // via its original compiled Feature at save time (buildMonster below)
+  // instead of being recompiled from its still-placeholder DraftTrait.
+  const [touchedTraitIds, setTouchedTraitIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testRows, setTestRows] = useState<Row[]>([]);
@@ -158,8 +166,12 @@ export default function MonsterBuilderScreen() {
     setLegendaryActions(editing.legendaryActions ? String(editing.legendaryActions) : '');
     // Same accepted limitation as race-builder/subclass-builder's edit-mode
     // recovery: already-compiled Features can't be losslessly reversed back
-    // into authoring-shape DraftTraits, so features start as flavor-only
-    // entries seeded from the saved name/description.
+    // into authoring-shape DraftTraits for RE-EDITING, so they display as
+    // flavor-only entries seeded from the saved name/description until
+    // opened. Re-audit A05: this is a display limitation only — buildMonster
+    // below passes an untouched trait's ORIGINAL compiled Feature through
+    // verbatim on save (localId 't_<original id>' correlates them), so a
+    // save that never opens this trait doesn't lose its real effects.
     setTraits(editing.features.map(f => ({
       localId: `t_${f.id}`, name: f.name, description: f.description, effectKind: 'none' as const,
       abilityTarget: 'str', abilityAmount: '1', unarmoredBase: '10', unarmoredAbilities: ['dex'], unarmoredCaps: {}, acBonusAmount: '1',
@@ -170,7 +182,21 @@ export default function MonsterBuilderScreen() {
       actionType: 'bonus_action', actionTypeOther: '', recharge: 'short_rest', rechargeOther: '', uses: '1', healDice: '1d8',
       limitedUse: false,
     })));
+    setTouchedTraitIds(new Set());
   }, [editing?.id]);
+
+  function handleTraitsChange(next: DraftTrait[]) {
+    const prevById = new Map(traits.map(t => [t.localId, t]));
+    setTouchedTraitIds(prev => {
+      const nextTouched = new Set(prev);
+      for (const t of next) {
+        const before = prevById.get(t.localId);
+        if (!before || JSON.stringify(before) !== JSON.stringify(t)) nextTouched.add(t.localId);
+      }
+      return nextTouched;
+    });
+    setTraits(next);
+  }
 
   function toggleSavingThrow(a: Ability) {
     setSavingThrows(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
@@ -192,6 +218,17 @@ export default function MonsterBuilderScreen() {
     const resources: ResourceGrant[] = [];
     const usedIds = new Set<string>();
     for (const t of traits) {
+      // Re-audit A05: an untouched trait hydrated from an existing compiled
+      // Feature (localId 't_<original id>', set at hydration above) passes
+      // through verbatim rather than being recompiled from its still-
+      // "effectKind: none" placeholder — a save that never actually opened
+      // this trait must not silently discard its real effects.
+      const originalFeature = editing?.features.find(f => `t_${f.id}` === t.localId);
+      if (originalFeature && !touchedTraitIds.has(t.localId)) {
+        features.push(originalFeature);
+        usedIds.add(originalFeature.id);
+        continue;
+      }
       const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'campaign', sourceRefId: id, level: null, usedIds });
       features.push(feature, ...(extraFeatures ?? []));
       if (resource) resources.push(resource);
@@ -377,7 +414,7 @@ export default function MonsterBuilderScreen() {
             describe them as "Flavor only" with the full stat block text (e.g. "Bite. Melee Weapon
             Attack: +4 to hit, reach 5 ft. Hit: 5 (1d6+2) piercing.").
           </Text>
-          <TraitListEditor traits={traits} onChange={setTraits} />
+          <TraitListEditor traits={traits} onChange={handleTraitsChange} />
         </Field>
 
       </ScrollView>

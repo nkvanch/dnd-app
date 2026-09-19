@@ -1210,40 +1210,16 @@ const MULTICLASS_PROFICIENCIES: Record<string, import('../../engine/types').Prof
 // EXPO_PUBLIC_SRD_ONLY-filtered build). Artificer is deliberately left
 // untagged — it's from Eberron: Rising from the Last War / Tasha's
 // Cauldron, not the core PHB, and is not part of the SRD.
-// FILTER-METADATA-1: savingThrows/armorProfs/weaponProfs/spellcastingAbility
-// below are populated from app/creation/class-detail.tsx's CLASS_DETAIL
-// table (the same hand-authored, RAW-accurate data class-detail.tsx has
-// always displayed as free text) — confirmed via a dedicated investigation
-// that these three CharClass fields are NEVER read for official classes at
-// runtime (class-detail.tsx's `savingThrowAbilities ?? cls.savingThrows`
-// always resolves via CLASS_DETAIL first, since every official class has an
-// entry there), so populating them here is purely additive display/filter
-// metadata with zero risk of disagreeing with — or changing — any existing
-// mechanical behavior. armorProfs/weaponProfs use the same closed
-// 'light'|'medium'|'heavy'|'shield' / 'simple'|'martial' category
-// vocabulary as MULTICLASS_PROFICIENCIES above; a handful of classes grant
-// a shorter NAMED weapon list instead of a full category (e.g. Wizard:
-// "daggers, darts, slings, quarterstaffs, light crossbows", Druid: a
-// fixed non-metal list) — those are left as `[]` (no blanket category
-// access) rather than fabricating a category that overstates what the
-// class actually gets; the named exceptions themselves aren't structured
-// data anywhere in this engine and aren't invented here either.
-// Separately, a genuine mechanical gap was found during this same
-// investigation and is NOT fixed here (out of scope for filter metadata):
-// none of these 13 official classes' ClassProgression actually GRANTS
-// armor/weapon proficiency via a `Grant{kind:'proficiency'}` at level 1 —
-// only CLASS_DETAIL's display text and the sheet's own equipment defaults
-// currently reflect it, so `entity.proficiencies.armor/weapons` stays
-// empty for a freshly-created single-class character today. Flagged, not
-// silently patched, since granting proficiency mechanically is a gameplay
-// change beyond this filter-metadata task's scope.
+// Authoritative initial packages. Engine acquisition grants these only for the
+// first class; later classes use MULTICLASS_PROFICIENCIES. Named weapons use
+// catalog display names, which the weapon-proficiency resolver already supports.
 export const ALL_CHAR_CLASSES = [
   { id: 'fighter',   name: 'Fighter',   hitDie: 10, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.fighter,
     savingThrows: ['str', 'con'], armorProfs: ['light', 'medium', 'heavy', 'shield'], weaponProfs: ['simple', 'martial'] },
   { id: 'rogue',     name: 'Rogue',     hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.rogue,
-    savingThrows: ['dex', 'int'], armorProfs: ['light'], weaponProfs: ['simple'] },
+    savingThrows: ['dex', 'int'], armorProfs: ['light'], weaponProfs: ['simple', 'Hand Crossbow', 'Longsword', 'Rapier', 'Shortsword'], toolProfs: ["Thieves' Tools"] },
   { id: 'wizard',    name: 'Wizard',    hitDie: 6,  features: [], srd: true,
-    savingThrows: ['int', 'wis'], armorProfs: [], weaponProfs: [], spellcastingAbility: 'int' },
+    savingThrows: ['int', 'wis'], armorProfs: [], weaponProfs: ['Dagger', 'Dart', 'Sling', 'Quarterstaff', 'Light Crossbow'], spellcastingAbility: 'int' },
   { id: 'cleric',    name: 'Cleric',    hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.cleric,
     savingThrows: ['wis', 'cha'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], spellcastingAbility: 'wis' },
   { id: 'barbarian', name: 'Barbarian', hitDie: 12, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.barbarian,
@@ -1253,15 +1229,15 @@ export const ALL_CHAR_CLASSES = [
   { id: 'paladin',   name: 'Paladin',   hitDie: 10, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.paladin,
     savingThrows: ['wis', 'cha'], armorProfs: ['light', 'medium', 'heavy', 'shield'], weaponProfs: ['simple', 'martial'], spellcastingAbility: 'cha' },
   { id: 'druid',     name: 'Druid',     hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.druid,
-    savingThrows: ['int', 'wis'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: [], spellcastingAbility: 'wis' },
+    savingThrows: ['int', 'wis'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['Club', 'Dagger', 'Dart', 'Javelin', 'Mace', 'Quarterstaff', 'Scimitar', 'Sickle', 'Sling', 'Spear'], toolProfs: ['Herbalism Kit'], spellcastingAbility: 'wis' },
   { id: 'bard',      name: 'Bard',      hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.bard,
-    savingThrows: ['dex', 'cha'], armorProfs: ['light'], weaponProfs: ['simple'], spellcastingAbility: 'cha' },
+    savingThrows: ['dex', 'cha'], armorProfs: ['light'], weaponProfs: ['simple', 'Hand Crossbow', 'Longsword', 'Rapier', 'Shortsword'], spellcastingAbility: 'cha' },
   { id: 'monk',      name: 'Monk',      hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.monk,
-    savingThrows: ['str', 'dex'], armorProfs: [], weaponProfs: ['simple'] },
+    savingThrows: ['str', 'dex'], armorProfs: [], weaponProfs: ['simple', 'Shortsword'] },
   { id: 'sorcerer',  name: 'Sorcerer',  hitDie: 6,  features: [], srd: true,
-    savingThrows: ['con', 'cha'], armorProfs: [], weaponProfs: [], spellcastingAbility: 'cha' },
+    savingThrows: ['con', 'cha'], armorProfs: [], weaponProfs: ['Dagger', 'Dart', 'Sling', 'Quarterstaff', 'Light Crossbow'], spellcastingAbility: 'cha' },
   { id: 'warlock',   name: 'Warlock',   hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.warlock,
     savingThrows: ['wis', 'cha'], armorProfs: ['light'], weaponProfs: ['simple'], spellcastingAbility: 'cha' },
   { id: 'artificer', name: 'Artificer', hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.artificer,
-    savingThrows: ['con', 'int'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], spellcastingAbility: 'int' },
+    savingThrows: ['con', 'int'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], toolProfs: ["Thieves' Tools", "Tinker's Tools"], spellcastingAbility: 'int' },
 ] as import('../../engine/types').CharClass[];

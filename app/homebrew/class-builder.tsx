@@ -339,6 +339,17 @@ export default function ClassBuilderScreen() {
       levelFeatures:           levelFeatures.length > 0 ? levelFeatures : undefined,
       levelChoices:            levelChoices.length > 0 ? levelChoices : undefined,
       rulesetId,
+      // Re-audit A39: this builder has no UI to author or edit either field
+      // (both are import-only — an imported advanced class's full hand-
+      // authored progression, or its PHB multiclass proficiency package).
+      // Previously omitted from the returned object entirely, so editing an
+      // imported class (even a rename-only save) silently deleted its real
+      // progression/multiclass rules. Passed through unconditionally from
+      // `editing` — there is nothing in this screen that could ever
+      // intentionally change either, so no touched/dirty tracking is needed
+      // here (unlike the trait-editor fields above).
+      rawProgression:           editing?.rawProgression,
+      multiclassProficiencies:  editing?.multiclassProficiencies,
     };
   }
 

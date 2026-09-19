@@ -18,9 +18,10 @@
 //                  repeatedly, modal stays open (mirrors AddItemModal's
 //                  own in-play behavior) — selections here never count
 //                  toward a required-equipment counter.
-import { useState, useMemo, useEffect } from 'react';
-import { Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView } from 'react-native';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Modal, View, Text, Pressable, TextInput, StyleSheet, FlatList } from 'react-native';
 import { ItemFilterConstraint } from '../engine/types';
+import { ItemIndexEntry } from '../content/itemRepo.types';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { useBrowseStateStore } from '../store/browseStateStore';
 import { mergeItemIndex } from '../content/contentResolution';
@@ -142,6 +143,45 @@ export function ItemPickerModal({
     onClose();
   }
 
+  // Re-audit item 19: this modal's item row list used to be a plain
+  // ScrollView + .map over the FULL merged catalog (hundreds of official
+  // items alone) — every row mounted up front, blocking both
+  // time-to-visible AND time-to-interactive (RN's touch responder wiring
+  // for an unmounted-yet screen has to walk every mounted view). FlatList
+  // only mounts what's near the visible window, virtualizing the rest.
+  const renderRow = useCallback(({ item }: { item: ItemIndexEntry }) => {
+    const count = selectedCountFor(item.id);
+    return (
+      <View style={s.row}>
+        <View style={s.rowInfo}>
+          <View style={s.rowNameLine}>
+            <Text style={s.rowName}>{item.name}</Text>
+            {!homebrewIds.has(item.id) && isNonSrd(item.srd) && <NonSrdBadge />}
+          </View>
+          {item.cost && item.cost !== '—' && <Text style={s.rowMeta}>{item.cost}</Text>}
+        </View>
+        {mode === 'required' ? (
+          count > 0 ? (
+            <View style={s.selectedControls}>
+              <Pressable style={s.stepBtn} onPress={() => removeSelection(item.id)}><Text style={s.stepBtnTxt}>−</Text></Pressable>
+              <Text style={s.selectedCount}>{count}</Text>
+              <Pressable style={[s.stepBtn, selected.length >= quantity && s.stepBtnDisabled]} onPress={() => addSelection(item.id)} disabled={selected.length >= quantity}><Text style={s.stepBtnTxt}>+</Text></Pressable>
+            </View>
+          ) : (
+            <Pressable style={[s.addBtn, selected.length >= quantity && s.addBtnDisabled]} onPress={() => addSelection(item.id)} disabled={selected.length >= quantity}>
+              <Text style={s.addBtnTxt}>Select</Text>
+            </Pressable>
+          )
+        ) : (
+          <Pressable style={s.addBtn} onPress={() => onAddAdditional?.(item.id)}>
+            <Text style={s.addBtnTxt}>+ Add</Text>
+          </Pressable>
+        )}
+      </View>
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, selected, quantity, homebrewIds, onAddAdditional]);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <Pressable style={s.backdrop} onPress={handleClose}>
@@ -189,41 +229,18 @@ export function ItemPickerModal({
             </View>
           )}
 
-          <ScrollView style={s.results}>
-            {filtered.length === 0 ? (
-              <Text style={s.empty}>No items match these filters.</Text>
-            ) : filtered.map(item => {
-              const count = selectedCountFor(item.id);
-              return (
-                <View key={item.id} style={s.row}>
-                  <View style={s.rowInfo}>
-                    <View style={s.rowNameLine}>
-                      <Text style={s.rowName}>{item.name}</Text>
-                      {!homebrewIds.has(item.id) && isNonSrd(item.srd) && <NonSrdBadge />}
-                    </View>
-                    {item.cost && item.cost !== '—' && <Text style={s.rowMeta}>{item.cost}</Text>}
-                  </View>
-                  {mode === 'required' ? (
-                    count > 0 ? (
-                      <View style={s.selectedControls}>
-                        <Pressable style={s.stepBtn} onPress={() => removeSelection(item.id)}><Text style={s.stepBtnTxt}>−</Text></Pressable>
-                        <Text style={s.selectedCount}>{count}</Text>
-                        <Pressable style={[s.stepBtn, selected.length >= quantity && s.stepBtnDisabled]} onPress={() => addSelection(item.id)} disabled={selected.length >= quantity}><Text style={s.stepBtnTxt}>+</Text></Pressable>
-                      </View>
-                    ) : (
-                      <Pressable style={[s.addBtn, selected.length >= quantity && s.addBtnDisabled]} onPress={() => addSelection(item.id)} disabled={selected.length >= quantity}>
-                        <Text style={s.addBtnTxt}>Select</Text>
-                      </Pressable>
-                    )
-                  ) : (
-                    <Pressable style={s.addBtn} onPress={() => onAddAdditional?.(item.id)}>
-                      <Text style={s.addBtnTxt}>+ Add</Text>
-                    </Pressable>
-                  )}
-                </View>
-              );
-            })}
-          </ScrollView>
+          {filtered.length === 0 ? (
+            <Text style={s.empty}>No items match these filters.</Text>
+          ) : (
+            <FlatList
+              style={s.results}
+              data={filtered}
+              keyExtractor={item => item.id}
+              renderItem={renderRow}
+              initialNumToRender={16}
+              windowSize={7}
+            />
+          )}
 
           {mode === 'required' ? (
             <>

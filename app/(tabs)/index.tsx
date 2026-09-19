@@ -13,6 +13,7 @@ import { getMeta } from '../../src/db/appMetaRepo';
 import { rollExpression } from '../../src/engine/dice';
 import { DiceRoll, Entity } from '../../src/engine/types';
 import { ManualRollInput } from '../../src/components/ManualRollInput';
+import { Alert } from '../../src/utils/alert';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Dice Roller Modal ─────────────────────────────────────────────────────────
@@ -265,7 +266,26 @@ export default function HomeScreen() {
     router.push(`/sheet/${id}` as any);
   }, [router]);
 
+  // Re-audit A09 (item 11) — see the identical comment/logic in
+  // characters.tsx's own startCreation for the reasoning; duplicated
+  // rather than extracted, matching this codebase's established style for
+  // small, stable, two-call-site UI patterns.
   const startCreation = useCallback(() => {
+    const draft = useCharacterStore.getState().draft;
+    if (draft) {
+      Alert.alert(
+        'Resume character creation?',
+        `You have an unfinished character${draft.identity.name ? ` ("${draft.identity.name}")` : ''}. Continue where you left off, or start a new one?`,
+        [
+          { text: 'Resume', onPress: () => router.push('/creation/hub') },
+          {
+            text: 'Start New', style: 'destructive',
+            onPress: () => { useCharacterStore.getState().clearDraft(); router.push('/creation/name'); },
+          },
+        ]
+      );
+      return;
+    }
     router.push('/creation/name');
   }, [router]);
 

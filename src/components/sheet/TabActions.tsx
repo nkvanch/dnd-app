@@ -3,96 +3,17 @@
 import { useState, useCallback, useEffect, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules, ActivationOption } from '../../engine/types';
-import { applyAbilityEffects, endWildShape, castConcentrationSpell, markActionSlotUsed } from '../../engine/combat';
-import { getTriggeredFeatures } from '../../engine/actionCards';
-import { recomputeDerived } from '../../engine/pipeline';
+import { endWildShape } from '../../engine/combat';
+import { getTriggeredFeatures, isFeatureAvailable } from '../../engine/actionCards';
+import { applyActionCardUse } from '../../engine/actionUse';
+import { useSpellPayment } from './SpellPaymentChooser';
 import { doubleDiceCount } from '../../engine/dice';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { DiceRoll } from '../../engine/types';
-import { spellRepo } from '../../content/spellRepo';
 import { ManualRollInput } from '../ManualRollInput';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
-/**
- * Spends a card's resource cost and applies its abilityEffects (set_flag,
- * transform, restore_resource, etc.) — the mutation half of "Use", pulled
- * out of TabActions' own handleUse so the Combat tab's FAVORITES section
- * can reuse the exact same logic instead of re-implementing resource
- * spending. Returns the entity unchanged if the cost can't be paid (caller
- * should check card.available before calling this, same as the Use button
- * already does via its disabled state).
- *
- * `chosenOption` (A-57): when the card's activation declares `options`
- * (e.g. Divine Smite's choice of spell-slot tier), the caller resolves
- * which one via a picker BEFORE calling this — see handleUse/
- * ActivationOptionModal below — and its resourceCost (falling back to the
- * card's own) is what actually gets spent. Omitted entirely (every
- * existing card, and the Favorites-star shortcut in TabCharacter.tsx,
- * which doesn't offer a picker) keeps the exact prior behavior: spend
- * card.resourceCost as-is.
- */
-export function applyActionCardUse(
-  entity: Entity, card: ActionCard, rules: CampaignRules, chosenOption?: ActivationOption,
-): Entity {
-  let updated = entity;
-  const cost = chosenOption?.resourceCost ?? card.resourceCost;
-
-  // A-25: mark the action-economy slot used, when the entity is actively
-  // tracking a turn (see TurnState's doc comment — a no-op otherwise).
-  const actionType = card.activation.actionType;
-  if (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction') {
-    updated = markActionSlotUsed(updated, actionType);
-  }
-
-  if (cost) {
-    if (cost.resourceId === 'spell_slots') {
-      if (!updated.spellcasting) return entity;
-      const tier = String(cost.spellSlotTier ?? 1) as keyof typeof updated.spellcasting.slots;
-      const slot = updated.spellcasting.slots[tier];
-      if (!slot || slot.used >= slot.total) return entity;
-      updated = {
-        ...updated,
-        spellcasting: {
-          ...updated.spellcasting,
-          slots: { ...updated.spellcasting.slots, [tier]: { ...slot, used: slot.used + 1 } },
-        },
-      };
-    } else {
-      const res = updated.resources.custom.find(r => r.id === cost.resourceId);
-      if (!res || res.current < cost.quantity) return entity;
-      updated = {
-        ...updated,
-        resources: {
-          ...updated.resources,
-          custom: updated.resources.custom.map(r =>
-            r.id === cost.resourceId ? { ...r, current: Math.max(0, r.current - cost.quantity) } : r
-          ),
-        },
-      };
-    }
-  }
-
-  // Look in both entity.features and equipped-item features since either
-  // can produce an action card.
-  const sourceFeature =
-    updated.features.find(f => f.id === card.featureId) ??
-    updated.inventory.equipped.flatMap(inst => inst.features).find(f => f.id === card.featureId);
-  if (sourceFeature?.abilityEffects && sourceFeature.abilityEffects.length > 0) {
-    updated = applyAbilityEffects(updated, sourceFeature.abilityEffects, rules);
-  }
-
-  // A spell-granted card's featureId is the spell's own id (see
-  // generateSpellCard) — this keeps Actions-tab/Favorites casts of a
-  // concentration spell consistent with TabSpells' own handleCast, rather
-  // than spending the slot but silently never tracking concentration.
-  const spell = spellRepo.getSpellSync(card.featureId);
-  if (spell?.concentration) {
-    updated = castConcentrationSpell(updated, spell, rules);
-  }
-
-  return recomputeDerived(updated, rules);
-}
-
+export { applyActionCardUse } from '../../engine/actionUse';
 /**
  * True if an action card is favorited — checks Entity.favoriteActionIds
  * first (the primary mechanism, works for ANY card: feature-backed,
@@ -235,12 +156,13 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
 // option is what triggers applyActionCardUse — see handleChooseOption above.
 
 interface ActivationOptionModalProps {
+  entity: Entity;
   card:     ActionCard | null;
   onChoose: (option: ActivationOption) => void;
   onClose:  () => void;
 }
 
-export function ActivationOptionModal({ card, onChoose, onClose }: ActivationOptionModalProps) {
+export function ActivationOptionModal({ entity, card, onChoose, onClose }: ActivationOptionModalProps) {
   if (!card || !card.activation.options || card.activation.options.length === 0) return null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -249,7 +171,10 @@ export function ActivationOptionModal({ card, onChoose, onClose }: ActivationOpt
           <Text style={styles.modalName}>{card.name}</Text>
           <Text style={styles.modalL1}>Choose how to use this:</Text>
           {card.activation.options.map(opt => (
-            <Pressable key={opt.id} style={styles.optionRow} onPress={() => onChoose(opt)}>
+            <Pressable key={opt.id} style={styles.optionRow}
+              disabled={!isFeatureAvailable({ activation: { ...card.activation, options: undefined,
+                resourceCost: opt.resourceCost ?? card.resourceCost } }, entity).available}
+              onPress={() => onChoose(opt)}>
               <Text style={styles.optionLabel}>{opt.label}</Text>
               {opt.description && <Text style={styles.optionDesc}>{opt.description}</Text>}
             </Pressable>
@@ -399,15 +324,21 @@ interface Props {
   entity:       Entity;
   rules?:       CampaignRules;
   onEntityUpdate?: (updated: Entity) => void;
+  /** Closure item 16 — the one authoritative End Turn entry point, shared
+   *  verbatim with the Character and Spells tabs (see app/sheet/[id].tsx's
+   *  handleEndTurn). Optional only so this component doesn't hard-require
+   *  it in contexts that never render the End Turn button. */
+  onEndTurn?: () => void;
 }
 
-function TabActionsInner({ entity, rules, onEntityUpdate }: Props) {
+function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
   // A-57: set instead of activeCard when a card declares activation.options
   // — the picker must resolve BEFORE spending, since handleUse below
   // otherwise spends immediately on tap.
   const [pendingOptionCard, setPendingOptionCard] = useState<ActionCard | null>(null);
 
+  const { requestPayment, paymentChooser } = useSpellPayment(entity);
   const all        = (entity.actionCards ?? []).filter(c => c.tabs.includes('actions'));
   const actions      = all.filter(c => c.activation.actionType === 'action');
   const bonusActions = all.filter(c => c.activation.actionType === 'bonus_action');
@@ -432,17 +363,26 @@ function TabActionsInner({ entity, rules, onEntityUpdate }: Props) {
     // cantrip (True Strike, etc.) still needs the concentration-tracking
     // half to run, which previously never fired because this whole call
     // was gated on resourceCost being truthy.
-    onEntityUpdate(applyActionCardUse(entity, card, rules));
-    setActiveCard(card);
-  }, [entity, rules, onEntityUpdate]);
+    requestPayment(card, undefined, payment => {
+      const updated = applyActionCardUse(entity, card, rules, undefined, payment);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveCard(card);
+    });
+  }, [entity, rules, onEntityUpdate, requestPayment]);
 
   const handleChooseOption = useCallback((option: ActivationOption) => {
     const card = pendingOptionCard;
     setPendingOptionCard(null);
     if (!card) return;
-    if (onEntityUpdate && rules) onEntityUpdate(applyActionCardUse(entity, card, rules, option));
-    setActiveCard(card);
-  }, [entity, rules, onEntityUpdate, pendingOptionCard]);
+    requestPayment(card, option, payment => {
+      if (!onEntityUpdate || !rules) return;
+      const updated = applyActionCardUse(entity, card, rules, option, payment);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveCard(card);
+    });
+  }, [entity, rules, onEntityUpdate, pendingOptionCard, requestPayment]);
 
   const favoriteIds = new Set([
     ...(entity.favoriteActionIds ?? []),
@@ -476,6 +416,21 @@ function TabActionsInner({ entity, rules, onEntityUpdate }: Props) {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      {/* Closure item 16: calls the ONE shared onEndTurn handler
+          (app/sheet/[id].tsx's handleEndTurn) instead of computing
+          playerEndTurn() locally and routing it through this tab's own
+          differently-labeled onEntityUpdate — guarantees identical
+          timeline label/category/sync/undo behavior regardless of which
+          tab End Turn is pressed from. No preview gate (advancing a turn
+          is expected/mundane, not a surprising commit). */}
+      {onEndTurn && (
+        <Pressable
+          style={styles.endTurnBtn}
+          onPress={onEndTurn}
+        >
+          <Text style={styles.endTurnBtnTxt}>⏭ End Turn</Text>
+        </Pressable>
+      )}
       {entity.wildShapeState?.active && (
         <View style={styles.wildShapeBanner}>
           <View style={{ flex: 1 }}>
@@ -503,12 +458,14 @@ function TabActionsInner({ entity, rules, onEntityUpdate }: Props) {
       <UniversalActionsSection />
       <TriggeredFeaturesSection entity={entity} />
 
+      {paymentChooser}
       <UseModal
         card={activeCard}
         onRoll={rollForCard}
         onClose={() => setActiveCard(null)}
       />
       <ActivationOptionModal
+        entity={entity}
         card={pendingOptionCard}
         onChoose={handleChooseOption}
         onClose={() => setPendingOptionCard(null)}
@@ -561,6 +518,14 @@ const styles = StyleSheet.create({
   emptyIcon:  { fontSize: 48 },
   emptyTxt:   { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textSecondary },
   emptySubTxt:{ fontSize: FontSize.sm, color: Colors.textDim },
+
+  endTurnBtn: {
+    alignSelf: 'flex-start', marginBottom: Spacing.sm,
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+  },
+  endTurnBtnTxt: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
 
   wildShapeBanner: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.md,

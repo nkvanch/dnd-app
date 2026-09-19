@@ -3,7 +3,30 @@
 // PHB spell slot progression tables.
 // Row index = level - 1. Columns = slot tiers 1-9.
 // ============================================================================
-import { SpellSlotRow } from '../../engine/types';
+import { SpellSlotRow, SpellSlots } from '../../engine/types';
+
+/**
+ * Converts a raw 9-slot count array (or null, for "no slots at all" — a
+ * genuine zero, not a table lookup miss) into a SpellSlots object, preserving
+ * `used` from a previous slots block where present (clamped to the new
+ * total, same as every other slot-refresh site in this codebase). Shared by
+ * levelUp()/levelUpClass() so both the direct and incremental leveling paths
+ * build a slots object the identical way — re-audit A10 found them diverging
+ * partly because each hand-rolled its own version of this loop.
+ */
+export function slotsFromCountArray(
+  counts:   [number,number,number,number,number,number,number,number,number] | null,
+  prevUsed?: SpellSlots,
+): SpellSlots {
+  const tiers = ['1','2','3','4','5','6','7','8','9'] as const;
+  const result = {} as SpellSlots;
+  tiers.forEach((t, i) => {
+    const total = counts ? counts[i] : 0;
+    const used  = Math.max(0, Math.min(prevUsed?.[t]?.used ?? 0, total));
+    result[t] = { total, used };
+  });
+  return result;
+}
 
 /** Full caster (Wizard, Cleric, Druid, Bard, Sorcerer). */
 export const FULL_CASTER_SLOTS: SpellSlotRow[] = [
@@ -244,16 +267,8 @@ export const MULTICLASS_SPELLCASTER_SLOTS: SpellSlotRow[] = FULL_CASTER_SLOTS;
 
 export type CasterType = 'full' | 'half' | 'third' | 'pact' | 'none';
 
-/**
- * How each class counts toward the combined multiclass spellcaster level.
- * Third casters (Eldritch Knight Fighter, Arcane Trickster Rogue) are a
- * subclass-granted caster type, not a base-class one — this app's base
- * fighter/rogue entries aren't casters, so they're omitted here rather than
- * hardcoded as 'third'. See the multiclass plan's disclosed scope cut: a
- * Fighter(EK)/other-class multiclass under-grants combined slots (treats
- * the EK levels as 0 toward the combined pool) rather than the correct 1/3,
- * until subclass-aware caster-type detection is added.
- */
+/** Official fallback for definitions without caster metadata. Structured
+ * spellcastingStyle takes precedence. Subclass-only third casters are resolved below. */
 export const CASTER_TYPE: Record<string, CasterType> = {
   wizard:   'full',
   cleric:   'full',
@@ -282,18 +297,39 @@ export function pactSlotTableFor(classId: string, subclassId: string | null): Sp
 }
 
 /**
+ * Resolves a class's caster type — the hardcoded CASTER_TYPE map first (every
+ * official class, unaffected, zero behavior change), falling back to the
+ * class's own authored `spellcastingStyle` ('full'/'half'/'pact') when the
+ * classId isn't in that map. This is real, already-existing structured
+ * metadata (CharClass.spellcastingStyle, authored by the homebrew class
+ * builder and already used to build a homebrew class's OWN single-class slot
+ * table in progressions.ts) — re-audit A13 finding was specifically that this
+ * classifier never consulted it. Third-caster ('third') has no
+ * spellcastingStyle equivalent (it's a subclass-granted type, not a base-
+ * class one — see CASTER_TYPE's own note), so it stays reachable only via
+ * the hardcoded map, same disclosed scope cut as before.
+ */
+function resolveCasterType(classId: string, spellcastingStyle?: 'full' | 'half' | 'pact'): CasterType | undefined {
+  return spellcastingStyle ?? CASTER_TYPE[classId];
+}
+
+/**
  * Combined multiclass caster level per PHB: full casters count their whole
- * level, half casters floor(level/2), third casters floor(level/3) (see
- * CASTER_TYPE's note on why third-caster subclasses aren't detected here
- * yet), pact casters (Warlock) don't contribute at all — their slots are
- * tracked separately as pact slots.
+ * level, half casters floor(level/2), third casters floor(level/3); pact casters (Warlock) don't contribute at all — their slots are
+ * tracked separately as pact slots. `spellcastingStyle` is optional per
+ * entry — see resolveCasterType's own doc comment; omitting it for every
+ * entry reproduces the exact prior (official-classes-only) behavior.
  */
 export function multiclassCasterLevel(
-  classes: { classId: string; level: number }[],
+  classes: { classId: string; level: number; spellcastingStyle?: 'full' | 'half' | 'pact'; subclassId?: string | null }[],
 ): number {
   let total = 0;
   for (const c of classes) {
-    const type = CASTER_TYPE[c.classId];
+    // Official third-caster subclasses have no CharClass caster metadata.
+    const third = (c.classId === 'fighter' && c.subclassId === 'eldritch_knight')
+      || (c.classId === 'rogue' && c.subclassId === 'arcane_trickster');
+    const type = c.spellcastingStyle ?? (third ? 'third' : resolveCasterType(c.classId));
+
     if (type === 'full')      total += c.level;
     else if (type === 'half') total += Math.floor(c.level / 2);
     else if (type === 'third') total += Math.floor(c.level / 3);

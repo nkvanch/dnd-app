@@ -14,8 +14,11 @@ import {
   applyGrant, applyHP, levelUp, resolveChoice, applySubclassToEntity,
   applyInfusionChoiceToEntity, applySpellChoiceToEntity, levelUpClass, queueChoice,
   removeFeature, swapBackground, projectToLevel, projectMulticlassSequence,
-  applyAsiToEntity, applyFeatToEntity,
+  applyAsiToEntity, applyFeatToEntity, reapplyResolvedAsi, stripResolvedAsiStats,
+  applyToolChoiceToEntity,
 } from '../leveling';
+import { revokeEntitlementsFromChoice } from '../entitlements';
+import { recomputeDerived } from '../pipeline';
 import {
   Entity, Grant, ClassProgression, LevelEntry, ChoiceDefinition, CharClass,
   asClassId, Background, FeatureInstance, SkillName, Feature,
@@ -46,6 +49,40 @@ describe('applyGrant', () => {
     const updated = applyGrant(e, grant, 1);
     expect(updated.spellcasting?.ability).toBe('con');
     expect(updated.spellcasting?.cantrips).toEqual(['chill_touch']);
+  });
+
+  // Closure pass 3 (item 1): the grant_spell effect's cantrip is now ALSO
+  // stamped as a source-owned entitlement (tagged to the granting feature),
+  // so removeFeature + recompute can actually revoke it — reproducing and
+  // closing the exact "feature grants spell, feature removed, spell
+  // remains" bug.
+  it('"feature" with a grant_spell effect is source-removable: removeFeature + recompute strips the granted cantrip', () => {
+    const e = entity();
+    // Explicit source:'feature' (same convention traitCompiler.ts's
+    // manually-authored custom features use, per removeFeature's own docs)
+    // — this is the realistic shape of the reported bug: a manually-added
+    // feature that itself grants a spell.
+    const grant: Grant = {
+      kind: 'feature',
+      value: {
+        id: 'racial_cantrip', name: 'Doomed Touch', description: '', actions: [], choices: [], passive: true,
+        source: { kind: 'feature', refId: 'racial_cantrip' },
+        effects: [{ type: 'grant_spell', target: 'spell', operation: 'add', value: null, condition: null, cantripIds: ['chill_touch'], spellcastingAbility: 'con' }],
+      },
+    };
+    const granted = applyGrant(e, grant, 1);
+    expect(granted.entitlements).toContainEqual({ kind: 'cantrip_access', key: 'chill_touch', sourceKind: 'feature', sourceId: 'racial_cantrip' });
+    // A real recompute pass happens here in every actual app mutation path
+    // (every leveling primitive that isn't itself a raw applyGrant call
+    // ends with recomputeDerived) — establishes the effectGrantedProficiencies
+    // snapshot the LATER post-removal recompute needs to tell "mechanism-
+    // granted, now gone" apart from "always was untracked base".
+    const afterGrantRecompute = recomputeDerived(granted, DEFAULT_RULES);
+    expect(afterGrantRecompute.spellcasting?.cantrips).toContain('chill_touch');
+
+    const removed = removeFeature(afterGrantRecompute, 'racial_cantrip');
+    const recomputed = recomputeDerived(removed, DEFAULT_RULES);
+    expect(recomputed.spellcasting?.cantrips ?? []).not.toContain('chill_touch');
   });
 
   it('"resource" adds a new custom resource at full, and is idempotent on re-grant', () => {
@@ -88,11 +125,29 @@ describe('applyGrant', () => {
     expect(afterClassSwitch.map(r => r.id)).toEqual(['relentless_endurance_pool']);
   });
 
-  it('"resource_upgrade" raises an existing resource\'s maximum and current', () => {
-    const e = entity({ resources: { ...makeEmptyEntity('e1').resources, custom: [{ id: 'ki', name: 'Ki', current: 1, maximum: 2, recharge: 'short_rest' }] } });
+  // Closure pass 3 (item 3): used to unconditionally full-refresh `current`
+  // to the new maximum, discarding whatever had already been spent — an
+  // upgrade is not a rest. Fixed to preserve the SPENT amount instead.
+  it('"resource_upgrade" raises maximum and PRESERVES the already-spent amount (not a full refresh)', () => {
+    const e = entity({ resources: { ...makeEmptyEntity('e1').resources, custom: [{ id: 'ki', name: 'Ki', current: 1, maximum: 2, recharge: 'short_rest' }] } }); // 1 spent
     const grant: Grant = { kind: 'resource_upgrade', value: { resourceId: 'ki', newMaximum: 5 } };
     const updated = applyGrant(e, grant, 5);
-    expect(updated.resources.custom[0]).toEqual({ id: 'ki', name: 'Ki', current: 5, maximum: 5, recharge: 'short_rest' });
+    expect(updated.resources.custom[0]).toEqual({ id: 'ki', name: 'Ki', current: 4, maximum: 5, baseMaximum: 2, recharge: 'short_rest' }); // 5 - 1 spent
+  });
+
+  it('"resource_upgrade" on a resource with nothing spent stays at the new full maximum', () => {
+    const e = entity({ resources: { ...makeEmptyEntity('e1').resources, custom: [{ id: 'ki', name: 'Ki', current: 2, maximum: 2, recharge: 'short_rest' }] } });
+    const grant: Grant = { kind: 'resource_upgrade', value: { resourceId: 'ki', newMaximum: 5 } };
+    const updated = applyGrant(e, grant, 5);
+    expect(updated.resources.custom[0]).toEqual({ id: 'ki', name: 'Ki', current: 5, maximum: 5, baseMaximum: 2, recharge: 'short_rest' });
+  });
+
+  it('"resource_upgrade" clamps if the spent amount would exceed the new (possibly shrunk) maximum', () => {
+    const e = entity({ resources: { ...makeEmptyEntity('e1').resources, custom: [{ id: 'ki', name: 'Ki', current: 0, maximum: 4, recharge: 'short_rest' }] } }); // fully spent
+    const grant: Grant = { kind: 'resource_upgrade', value: { resourceId: 'ki', newMaximum: 2 } }; // shrinks
+    const updated = applyGrant(e, grant, 5);
+    expect(updated.resources.custom[0].current).toBe(0); // never negative
+    expect(updated.resources.custom[0].maximum).toBe(2);
   });
 
   it('"proficiency" merges and deduplicates proficiency lists', () => {
@@ -306,6 +361,20 @@ describe('levelUp', () => {
     ];
     return { classId: 'wizard', entries };
   }
+
+  // Re-audit A11: levelUp() only ever wrote the legacy identity.level scalar,
+  // leaving a migrated entity's identity.classes[] stale — the two canonical-
+  // level representations (identity.level vs identity.classes[].level, see
+  // getClassLevels' own doc comment on the intended relationship) could
+  // diverge after nothing more than a normal single-class level-up.
+  it('keeps identity.classes[] synchronized with identity.level after a migrated single-class entity levels up', () => {
+    const migrated = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard', level: 1, classes: [{ classId: asClassId('wizard'), subclassId: null, level: 1 }] },
+    });
+    const updated = levelUp(migrated, 2, progression(), DEFAULT_RULES);
+    expect(updated.identity.level).toBe(2);
+    expect(updated.identity.classes).toEqual([{ classId: 'wizard', subclassId: null, level: 2 }]);
+  });
 
   it('advances level, applies HP/grants for every level crossed, and queues non-auto-resolvable choices', () => {
     const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard' } });
@@ -651,6 +720,26 @@ describe('applySubclassToEntity', () => {
     expect(updated.choices[0]).toMatchObject({ resolved: true, selections: ['champion'] });
   });
 
+  // Closure item 3: reproduces the reported bug directly — a single-class
+  // character whose identity.classes[] is ALREADY populated (the normal
+  // post-migration/creation state) used to get identity.subclassId set
+  // correctly while identity.classes[0].subclassId stayed null forever,
+  // since the old code only touched classes[] when an explicit classId was
+  // passed (multiclass callers only) — single-class callers always omit it.
+  it('single-class with identity.classes[] already populated: BOTH representations agree (closure item 3)', () => {
+    const choiceDef: ChoiceDefinition = { id: 'c1', prompt: '', kind: 'subclass', count: 1, pool: [], grants: [], required: true, resolved: false };
+    const e = entity({
+      identity: {
+        ...makeEmptyEntity('e1').identity, classId: 'fighter', level: 3,
+        classes: [{ classId: asClassId('fighter'), subclassId: null, level: 3 }],
+      },
+      choices: [{ id: 'c1', definition: choiceDef, grantedAt: 3, resolved: false, selections: [] }],
+    });
+    const updated = applySubclassToEntity(e, 'c1', 'champion', championProgression(), DEFAULT_RULES);
+    expect(updated.identity.subclassId).toBe('champion');
+    expect(updated.identity.classes![0].subclassId).toBe('champion');
+  });
+
   it('grants only subclass features unlocked at or below the character\'s current level', () => {
     const choiceDef: ChoiceDefinition = { id: 'c1', prompt: '', kind: 'subclass', count: 1, pool: [], grants: [], required: true, resolved: false };
     const e = entity({
@@ -679,6 +768,25 @@ describe('applySubclassToEntity', () => {
     // even though total character level (13) would otherwise qualify.
     expect(ids).toContain('improved_crit');
     expect(ids).not.toContain('remarkable_athlete');
+    // Closure item 3: the legacy scalar mirrors the PRIMARY class
+    // (classes[0], fighter here) via syncLegacyIdentity — must agree.
+    expect(updated.identity.subclassId).toBe('champion');
+  });
+
+  it('multiclass: choosing a subclass for the SECOND class does not overwrite the legacy scalar with it (closure item 3)', () => {
+    const choiceDef: ChoiceDefinition = { id: 'c1', prompt: '', kind: 'subclass', count: 1, pool: [], grants: [], required: true, resolved: false, forClassId: 'wizard' };
+    const e = entity({
+      identity: {
+        ...makeEmptyEntity('e1').identity,
+        classes: [{ classId: asClassId('fighter'), subclassId: 'champion' as any, level: 3 }, { classId: asClassId('wizard'), subclassId: null, level: 10 }],
+      },
+      choices: [{ id: 'c1', definition: choiceDef, grantedAt: 10, resolved: false, selections: [] }],
+    });
+    const wizardProgression: import('../types').ClassProgression = { classId: 'wizard', entries: [] };
+    const updated = applySubclassToEntity(e, 'c1', 'evocation', wizardProgression, DEFAULT_RULES, 'wizard');
+    expect(updated.identity.classes!.find(c => c.classId === 'wizard')!.subclassId).toBe('evocation');
+    expect(updated.identity.classes!.find(c => c.classId === 'fighter')!.subclassId).toBe('champion'); // untouched
+    expect(updated.identity.subclassId).toBe('champion'); // legacy scalar still mirrors the PRIMARY class
   });
 
   // SUBCLASS-CHANGE-1: regression lock for the reported bug (creation-flow
@@ -911,6 +1019,75 @@ describe('levelUpClass — multiclass', () => {
     // warlock level 2 pact table: 2 slots of tier 1
     expect(updated.spellcasting?.pactSlots?.['1'].total).toBe(2);
   });
+
+  // Re-audit A10: single-class caster slot progression must be identical
+  // whether leveled via the direct-level path (levelUp) or the class-aware
+  // incremental path (levelUpClass), even though the character never gains
+  // a second class. Uses the REAL official 'wizard' classId deliberately
+  // (unlike this file's usual synthetic-progression convention) — the bug
+  // is specifically about getSpellSlotsForClassLevel's hardcoded SLOT_TABLES
+  // lookup, so a synthetic classId wouldn't exercise it.
+  describe('A10 — single-class levelUpClass matches direct levelUp', () => {
+    function wizardProgressionThroughLevel5(): ClassProgression {
+      return {
+        classId: 'wizard',
+        entries: [1, 2, 3, 4, 5].map(level => ({
+          level, hpDie: 6,
+          grants: level === 1 ? [{ kind: 'init_spellcasting' as const, value: { ability: 'int' as const } }] : [],
+          choices: [],
+        })),
+      };
+    }
+
+    it('incremental levelUpClass calls 1→5 produce the same slots as a direct levelUp to 5 (4/3/2)', () => {
+      const direct = levelUp(
+        entity({ identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard' } }),
+        5, wizardProgressionThroughLevel5(), DEFAULT_RULES,
+      );
+      expect(direct.spellcasting?.slots['1'].total).toBe(4);
+      expect(direct.spellcasting?.slots['2'].total).toBe(3);
+      expect(direct.spellcasting?.slots['3'].total).toBe(2);
+
+      const wizardClass = { multiclassProficiencies: {} } as unknown as CharClass;
+      let incremental = makeEmptyEntity('e1');
+      for (let i = 0; i < 5; i++) {
+        incremental = levelUpClass(incremental, 'wizard', wizardProgressionThroughLevel5(), DEFAULT_RULES, i === 0 ? wizardClass : undefined);
+      }
+      expect(incremental.spellcasting?.slots['1'].total).toBe(direct.spellcasting?.slots['1'].total);
+      expect(incremental.spellcasting?.slots['2'].total).toBe(direct.spellcasting?.slots['2'].total);
+      expect(incremental.spellcasting?.slots['3'].total).toBe(direct.spellcasting?.slots['3'].total);
+    });
+  });
+
+  // Re-audit A13: a multiclass build with zero NORMAL caster contribution
+  // (e.g. two classes that are both non-casters, or only a pact caster) must
+  // get genuinely zero normal slots — not the combined table's level-1 row.
+  it('zero combined caster level produces zero normal slots, not the level-1 fallback row', () => {
+    const fighterProg2: ClassProgression = { classId: 'fighter', entries: [{ level: 2, hpDie: 10, grants: [], choices: [] }] };
+    const e = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('fighter'), subclassId: null, level: 1 }, { classId: asClassId('rogue'), subclassId: null, level: 1 }], level: 2 },
+      // spellcasting present (e.g. from a racial/feat grant) but neither class contributes to it
+      spellcasting: { ability: 'int', slots: {} as any, cantrips: [], known: [], prepared: [], concentrating: null },
+    });
+    const updated = levelUpClass(e, 'fighter', fighterProg2, DEFAULT_RULES);
+    expect(updated.spellcasting?.slots['1'].total).toBe(0);
+    expect(updated.spellcasting?.slots['2'].total).toBe(0);
+  });
+
+  // Re-audit A13: a homebrew class not in the hardcoded CASTER_TYPE map still
+  // contributes to the combined multiclass slot pool via its own authored
+  // spellcastingStyle, for the class actively being leveled this call.
+  it('a homebrew caster class contributes via its own spellcastingStyle when not in the hardcoded caster-type map', () => {
+    const homebrewCasterProg: ClassProgression = { classId: 'starweaver', entries: [{ level: 1, hpDie: 8, grants: [], choices: [] }] };
+    const homebrewCasterClass = { spellcastingStyle: 'full' } as unknown as CharClass;
+    const e = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('wizard'), subclassId: null, level: 1 }], level: 1 },
+      spellcasting: { ability: 'int', slots: {} as any, cantrips: [], known: [], prepared: [], concentrating: null },
+    });
+    const updated = levelUpClass(e, 'starweaver', homebrewCasterProg, DEFAULT_RULES, homebrewCasterClass);
+    // combined caster level = wizard(1, full) + starweaver(1, full via spellcastingStyle) = 2
+    expect(updated.spellcasting?.slots['1'].total).toBe(3); // combined-table row 2: 3× tier-1
+  });
 });
 
 // ── removeFeature ─────────────────────────────────────────────────────────────
@@ -956,6 +1133,88 @@ describe('removeFeature', () => {
   it('is a no-op (same reference) when the id does not match any feature', () => {
     const e = entityWithFeatures();
     expect(removeFeature(e, 'nonexistent')).toBe(e);
+  });
+
+  // Closure pass 2 (item 4): a resolved choice this feature queued produced
+  // a real entitlement — removing the feature must remove that grant, not
+  // just the feature/its own resource.
+  it('revokes an entitlement this feature directly owns (sourceKind:"feature")', () => {
+    let e = entityWithFeatures();
+    e = { ...e, entitlements: [{ kind: 'tool_proficiency', key: 'alchemists_supplies', sourceKind: 'feature', sourceId: 'f1' }] };
+    const updated = removeFeature(e, 'f1');
+    expect(updated.entitlements).toEqual([]);
+  });
+
+  it('revokes only the entitlement tied to a RESOLVED choice namespaced to this feature, leaving an unrelated entitlement intact', () => {
+    let e = entityWithFeatures();
+    e = {
+      ...e,
+      choices: [{
+        id: 'f1:tool_choice_0', definition: { id: 'tool_choice', prompt: '', kind: 'tool', count: 1, pool: [], grants: [], required: true, resolved: true },
+        grantedAt: 0, resolved: true, selections: ['smiths_tools'],
+      }],
+      entitlements: [
+        { kind: 'tool_proficiency', key: 'smiths_tools', sourceKind: 'feature', sourceId: 'f1', choiceId: 'f1:tool_choice_0' },
+        { kind: 'tool_proficiency', key: 'smiths_tools', sourceKind: 'background', sourceId: 'guild_artisan' },
+      ],
+    };
+    const updated = removeFeature(e, 'f1');
+    expect(updated.entitlements).toEqual([{ kind: 'tool_proficiency', key: 'smiths_tools', sourceKind: 'background', sourceId: 'guild_artisan' }]);
+    // The resolved choice record itself stays — character history, per CHOICE-AUTHORING-1.
+    expect(updated.choices).toHaveLength(1);
+  });
+});
+
+describe('applyToolChoiceToEntity — resolved-choice provenance (closure pass 2, items 2/4)', () => {
+  function withPendingToolChoice(sourceKind?: 'class' | 'background', sourceId?: string): Entity {
+    return entity({
+      choices: [{
+        id: 'c1',
+        definition: { id: 'c1', prompt: '', kind: 'tool', count: 1, pool: 'all', grants: [], required: true, resolved: false, forClassId: sourceKind === 'class' ? sourceId : undefined },
+        grantedAt: 1, resolved: false, selections: [],
+        sourceKind, sourceId,
+      }],
+    });
+  }
+
+  it('grants a real entitlement tagged with the choice id, not just a flat array entry', () => {
+    const updated = applyToolChoiceToEntity(withPendingToolChoice('class', 'artificer'), 'c1', ['tinkers_tools'], DEFAULT_RULES);
+    expect(updated.proficiencies.tools).toContain('tinkers_tools');
+    expect(updated.entitlements).toContainEqual({ kind: 'tool_proficiency', key: 'tinkers_tools', sourceKind: 'class', sourceId: 'artificer', choiceId: 'c1' });
+  });
+
+  it('falls back to sourceKind "manual" when the choice carries no explicit provenance and no forClassId', () => {
+    const updated = applyToolChoiceToEntity(withPendingToolChoice(), 'c1', ['navigators_tools'], DEFAULT_RULES);
+    expect(updated.entitlements).toContainEqual({ kind: 'tool_proficiency', key: 'navigators_tools', sourceKind: 'manual', sourceId: undefined, choiceId: 'c1' });
+  });
+
+  it('removing the choice-owning source (via revokeEntitlementsFromChoice) removes exactly this grant, not an overlapping one from another source', () => {
+    let updated = applyToolChoiceToEntity(withPendingToolChoice('class', 'artificer'), 'c1', ['tinkers_tools'], DEFAULT_RULES);
+    updated = { ...updated, entitlements: [...(updated.entitlements ?? []), { kind: 'tool_proficiency', key: 'tinkers_tools', sourceKind: 'background', sourceId: 'guild_artisan' }] };
+    updated = revokeEntitlementsFromChoice(updated, 'c1');
+    expect(updated.entitlements).toEqual([{ kind: 'tool_proficiency', key: 'tinkers_tools', sourceKind: 'background', sourceId: 'guild_artisan' }]);
+  });
+});
+
+describe('applySubclassToEntity — subclass change revokes ONLY the old subclass\'s own entitlements (closure pass 2)', () => {
+  it('a tool proficiency the old subclass granted via a resolved choice disappears on subclass change; a manual one survives', () => {
+    const choiceDef: ChoiceDefinition = { id: 'c1', prompt: '', kind: 'subclass', count: 1, pool: [], grants: [], required: true, resolved: false };
+    let e = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classId: 'artificer', level: 3 },
+      choices: [{ id: 'subclass_pick', definition: choiceDef, grantedAt: 3, resolved: false, selections: [] }],
+      entitlements: [
+        { kind: 'tool_proficiency', key: 'smiths_tools', sourceKind: 'subclass', sourceId: 'battlesmith' },
+        { kind: 'tool_proficiency', key: 'herbalism_kit', sourceKind: 'manual' },
+      ],
+    });
+    // First pick: battlesmith (matches the pre-existing entitlement's sourceId above)
+    const armorer: ClassProgression = { classId: 'artificer', entries: [] };
+    // Simulate that battlesmith was already the entity's subclass by setting identity directly,
+    // then change to a NEW subclass — applySubclassToEntity's own previousSubclassId lookup
+    // reads identity.subclassId when no classes[] array is present.
+    e = { ...e, identity: { ...e.identity, subclassId: 'battlesmith' } };
+    const updated = applySubclassToEntity(e, 'subclass_pick', 'armorer', armorer, DEFAULT_RULES);
+    expect(updated.entitlements).toEqual([{ kind: 'tool_proficiency', key: 'herbalism_kit', sourceKind: 'manual' }]);
   });
 });
 
@@ -1035,6 +1294,59 @@ describe('applyAsiToEntity', () => {
     // under the default cap of 20, even though the BASE score is only 18.
     const after = applyAsiToEntity(e, 'c1', { str: 2 }, DEFAULT_RULES);
     expect(after.stats.str).toBe(18); // base unchanged, no headroom
+  });
+});
+
+// Re-audit A26: reopening app/creation/scores.tsx and confirming unchanged
+// values used to double-apply a resolved ASI, because the screen populated
+// its inputs straight from entity.stats (already including the resolved
+// ASI's bump) and then reapplyResolvedAsi added the SAME bonus again on
+// confirm. Fixed by having the screen seed its inputs from
+// stripResolvedAsiStats(draft).stats instead — this test proves the two
+// functions compose correctly across repeated cycles, which is the exact
+// mechanism the fix relies on (scores.tsx itself can't be imported into
+// Jest — see classProficiencies.test.ts's own note on why).
+describe('stripResolvedAsiStats + reapplyResolvedAsi — Scores reconfirmation round trip (A26)', () => {
+  function entityWithResolvedAsi(): Entity {
+    let e = entity({ identity: { ...makeEmptyEntity('e1').identity, level: 4 }, stats: { str: 12, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } });
+    e = queueChoice(e, {
+      id: 'asi_lvl4', prompt: 'ASI', kind: 'asi', count: 1, pool: 'all', grants: [], required: true, resolved: false,
+    }, 4);
+    const choiceId = e.choices[0].id;
+    return applyAsiToEntity(e, choiceId, { str: 2 }, DEFAULT_RULES); // STR 12 -> 14, resolved as "str+2"
+  }
+
+  it('stripResolvedAsiStats reconstructs the true pre-ASI base from a post-ASI entity', () => {
+    const withAsi = entityWithResolvedAsi();
+    expect(withAsi.stats.str).toBe(14); // ASI already applied
+    const stripped = stripResolvedAsiStats(withAsi);
+    expect(stripped.stats.str).toBe(12); // true base, before the +2
+  });
+
+  it('simulating "reopen Scores, confirm unchanged" several times in a row never grows the score past the single correct application', () => {
+    let e = entityWithResolvedAsi();
+    expect(e.stats.str).toBe(14);
+    for (let i = 0; i < 4; i++) {
+      // Exactly scores.tsx's own sequence: derive the base for the UI
+      // (stripResolvedAsiStats), the user changes nothing, confirm writes
+      // that same base back as `stats`, then reapplyResolvedAsi re-adds the
+      // ASI on top — this is handleConfirm's real code path, not a
+      // simplification of it.
+      const base = stripResolvedAsiStats(e);
+      const withFlag: Entity = { ...e, stats: base.stats };
+      e = reapplyResolvedAsi(withFlag, DEFAULT_RULES);
+    }
+    expect(e.stats.str).toBe(14); // still exactly one +2 applied, not four
+  });
+
+  it('the OLD buggy sequence (skip the strip step) would have kept growing — proves the fix is load-bearing, not a no-op', () => {
+    let e = entityWithResolvedAsi();
+    expect(e.stats.str).toBe(14);
+    for (let i = 0; i < 3; i++) {
+      // No stripResolvedAsiStats here — this is the PRE-fix behavior.
+      e = reapplyResolvedAsi(e, DEFAULT_RULES);
+    }
+    expect(e.stats.str).toBeGreaterThan(14); // confirms this really was a bug, not already-safe
   });
 });
 

@@ -10,9 +10,10 @@ import { useCampaignStore }  from '../../../src/store/campaignStore';
 import { useSessionStore }   from '../../../src/store/sessionStore';
 import { useHomebrewStore }  from '../../../src/store/homebrewStore';
 import { recomputeDerived }  from '../../../src/engine/pipeline';
-import { applyDamage, applyHealing, applyWildShapeDamage } from '../../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn } from '../../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../../src/engine/conditions';
 import { dmFullStatVisibility } from '../../../src/engine/houseRules';
+import { commitSpellPayment, restoreSpellSlot, SlotTier } from '../../../src/engine/spellPayment';
 import { Entity } from '../../../src/engine/types';
 import { TimelineCategory } from '../../../src/db/timelineRepo';
 import { useSafeGoBack } from '../../../src/hooks/useSafeGoBack';
@@ -61,6 +62,12 @@ export default function DmCharacterView() {
     if (!id) return;
     updateCharacter(id, e => recomputeDerived(updater(e), rules), label, category);
   }, [id, updateCharacter, rules]);
+  // Closure item 16: same 'End Turn'/'combat' label/category the player's
+  // own app/sheet/[id].tsx uses for its identical handleEndTurn — the DM
+  // view renders the SAME TabCharacter/TabActions components, so pressing
+  // End Turn from here must produce identical timeline/sync/undo behavior,
+  // not a DM-prefixed variant.
+  const handleEndTurn = useCallback(() => mutate(e => playerEndTurn(e, rules), 'End Turn', 'combat'), [mutate, rules]);
 
   if (!entity) {
     return (
@@ -147,19 +154,17 @@ export default function DmCharacterView() {
                 ),
               },
             }), `DM: ${delta > 0 ? 'Restored' : 'Spent'} ${entity.resources.custom.find(r => r.id === rId)?.name ?? rId}`, 'features')}
-            onSpendSlot={tier => mutate(e => {
+            onSpendSlot={(tier, kind = 'normal') => mutate(e => {
               if (!e.spellcasting) return e;
-              const slot = e.spellcasting.slots[tier as keyof typeof e.spellcasting.slots];
-              if (!slot || slot.used >= slot.total) return e;
-              return { ...e, spellcasting: { ...e.spellcasting, slots: { ...e.spellcasting.slots, [tier]: { ...slot, used: slot.used + 1 } } } };
+              return commitSpellPayment(e, { kind, tier: tier as SlotTier });
             }, `DM: Spent level ${tier} spell slot`, 'spells')}
-            onRestoreSlot={tier => mutate(e => {
+            onRestoreSlot={(tier, kind = 'normal') => mutate(e => {
               if (!e.spellcasting) return e;
-              const slot = e.spellcasting.slots[tier as keyof typeof e.spellcasting.slots];
-              if (!slot || slot.used <= 0) return e;
-              return { ...e, spellcasting: { ...e.spellcasting, slots: { ...e.spellcasting.slots, [tier]: { ...slot, used: slot.used - 1 } } } };
+              const slots = restoreSpellSlot(e.spellcasting, { kind, tier: tier as SlotTier });
+              return slots === e.spellcasting ? e : { ...e, spellcasting: slots };
             }, `DM: Restored level ${tier} spell slot`, 'spells')}
             onEntityUpdate={updated => mutate(() => updated, 'DM: Character tab edit', 'other')}
+            onEndTurn={handleEndTurn}
           />
         )}
         {activeTab === 'actions'   && (
@@ -173,6 +178,7 @@ export default function DmCharacterView() {
             // DM-4). Same mutate() pattern app/sheet/[id].tsx already uses
             // for its own TabActions.
             onEntityUpdate={updated => mutate(() => updated, 'DM: Used action card', 'combat')}
+            onEndTurn={handleEndTurn}
           />
         )}
         {activeTab === 'abilities' && (

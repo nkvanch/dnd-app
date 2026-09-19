@@ -12,7 +12,7 @@
 import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Background, Feature, Feat, Condition, RulesetId } from './types';
 import { MonsterTemplate } from '../content/monsters/types';
 import { ContentCacheType } from '../db/contentCacheRepo';
-import { validateContent, validateFeature } from './homebrewValidator';
+import { validateContent, validateFeature, validateEntityShape } from './homebrewValidator';
 
 export const GRIMOIRE_PACK_FORMAT_VERSION = 1;
 // HOMEBREW-PACKAGE-1: the CONTENT (not envelope) schema version — bumped
@@ -282,6 +282,17 @@ export function validatePackContents(pack: GrimoirePack): string[] {
 
   for (const entity of (Array.isArray(pack.characters) ? pack.characters : [])) {
     const name = entity.identity?.name || entity.id || '(unnamed character)';
+    // Re-audit A07: reject a structurally malformed character outright — a
+    // payload like {id, identity.name, features} previously passed every
+    // check this function ran (only feature-array CONTENTS were checked,
+    // never whether identity/stats/resources/inventory/spellcasting even
+    // exist) and could reach persistence, where it would either silently
+    // misbehave or throw somewhere far from this validation boundary.
+    const shape = validateEntityShape(entity);
+    if (!shape.valid) {
+      problems.push(`character "${name}": ${shape.errors.join('; ')}`);
+      continue; // malformed structurally — checking its feature arrays below would be redundant/unsafe
+    }
     // Defensively guard against the arrays themselves being malformed (not
     // just absent) — this function's whole job is to validate untrusted
     // external data, so it can't assume even the container shapes are sound.

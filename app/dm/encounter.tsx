@@ -16,12 +16,14 @@ import { useHomebrewStore }  from '../../src/store/homebrewStore';
 import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { generateActionCard } from '../../src/engine/actionCards';
-import { applyActionCardUse } from '../../src/components/sheet/TabActions';
+import { applyActionCardUse } from '../../src/engine/actionUse';
+import { ActivationOptionModal } from '../../src/components/sheet/TabActions';
+import { useSpellPayment } from '../../src/components/sheet/SpellPaymentChooser';
 import { expireOverrides } from '../../src/engine/dmOverride';
 import { COMMON_DAMAGE_TYPES } from '../../src/content/traitCompiler';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { Entity, CampaignRules } from '../../src/engine/types';
+import { Entity, CampaignRules, ActionCard, ActivationOption } from '../../src/engine/types';
 import { deepDiff, deepMerge } from '../../src/sync/diff';
 import { InitiativeEntry } from '../../src/engine/combat';
 import { DEFAULT_RULES } from '../../src/store/characterStore';
@@ -153,6 +155,15 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
   // same generic ResourceCost mechanism spell slots already use. No preview
   // gate: matches this app's existing "direct, no-confirm" convention for
   // every other QuickPanel action (damage/heal/kill/condition).
+  const { requestPayment, paymentChooser } = useSpellPayment(entity);
+  const [pendingActivation, setPendingActivation] = useState<ActionCard | null>(null);
+  function handleUseLegendaryCard(card: ActionCard, option?: ActivationOption) {
+    if (!option && card.activation.options?.length) { setPendingActivation(card); return; }
+    requestPayment(card, option, payment => {
+      const updated = applyActionCardUse(entity, card, rules, option, payment);
+      if (updated !== entity) onUpdate(updated, entity.identity.name + ': used ' + card.name);
+    });
+  }
   const legendaryPool = entity.resources.custom.find(r => r.id === 'legendary_actions');
   const legendaryCards = legendaryPool
     ? entity.features
@@ -163,6 +174,14 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
 
   return (
     <View style={styles.quickPanel}>
+      {paymentChooser}
+      <ActivationOptionModal entity={entity} card={pendingActivation}
+        onClose={() => setPendingActivation(null)}
+        onChoose={option => {
+          const card = pendingActivation;
+          setPendingActivation(null);
+          if (card) handleUseLegendaryCard(card, option);
+        }} />
       <View style={styles.quickHeader}>
         <Text style={styles.quickName}>{entity.identity.name}</Text>
         <Text style={styles.quickHp}>
@@ -201,10 +220,7 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
               key={card.featureId}
               style={[styles.legendaryRow, !card.available && styles.btnDisabled]}
               disabled={!card.available}
-              onPress={() => {
-                const updated = applyActionCardUse(entity, card, rules);
-                onUpdate(updated, `${entity.identity.name}: used ${card.name}`);
-              }}
+              onPress={() => handleUseLegendaryCard(card)}
             >
               <Text style={styles.legendaryName}>{card.name}</Text>
               <Text style={styles.legendaryDesc}>{card.layer2}{card.layer3 ? ` · ${card.layer3}` : ''}</Text>

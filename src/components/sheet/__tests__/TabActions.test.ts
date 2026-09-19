@@ -90,15 +90,15 @@ describe('applyActionCardUse — chosenOption (A-57)', () => {
   it('spends the option\'s resourceCost tier, not the card\'s default, when a chosenOption is passed', () => {
     const e = casterEntity();
     const option: ActivationOption = smiteCard().activation.options![1]; // tier3
-    const after = applyActionCardUse(e, smiteCard(), DEFAULT_RULES, option);
+    const after = applyActionCardUse(e, smiteCard(), DEFAULT_RULES, option, { kind: 'normal', tier: '3' });
     expect(after.spellcasting!.slots['3'].used).toBe(1);
     expect(after.spellcasting!.slots['1'].used).toBe(0);
   });
 
-  it('falls back to the card\'s own resourceCost when no chosenOption is passed', () => {
+  it('requires a selected payment when the base requirement allows several pools', () => {
     const e = casterEntity();
     const after = applyActionCardUse(e, smiteCard(), DEFAULT_RULES);
-    expect(after.spellcasting!.slots['1'].used).toBe(1);
+    expect(after).toBe(e);
     expect(after.spellcasting!.slots['3'].used).toBe(0);
   });
 

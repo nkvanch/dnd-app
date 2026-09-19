@@ -11,9 +11,10 @@ import {
   concentrationCheck, castConcentrationSpell, dropConcentration,
   parseConcentrationDuration, tickConcentrationDuration, startEncounter,
   startTurn, markActionSlotUsed, toggleActionEconomy, endTurn, addToEncounter,
-  applyAbilityEffects,
+  applyAbilityEffects, playerEndTurn,
   CombatState,
 } from '../combat';
+import { applyCondition } from '../conditions';
 import { isFeatureAvailable } from '../actionCards';
 import { setRandomSource } from '../dice';
 import { Entity, SpellSlots, FeatureInstance, Spell, AbilityEffect } from '../types';
@@ -643,6 +644,38 @@ describe('tickConcentrationDuration', () => {
     const e = concentratingEntity(0); // default fixture has no concentratingDuration set
     const result = tickConcentrationDuration(e, DEFAULT_RULES);
     expect(result.spellcasting!.concentrating).toBe('bless'); // untouched, still concentrating
+  });
+});
+
+// Re-audit item 18: playerEndTurn is the single authoritative solo-player
+// End Turn mutation shared by the Character/Actions/Spells tabs' own
+// buttons — this locks in that it's really the composition of all three
+// (not a subset), so none of those three call sites can silently drift.
+describe('playerEndTurn', () => {
+  it('composes tickDurations + tickConcentrationDuration + startTurn in one call', () => {
+    let e = concentratingEntity(0, {
+      spellcasting: {
+        ability: 'wis', slots: emptySlots(), cantrips: [], known: [], prepared: [],
+        concentrating: 'bless', concentratingDuration: { unit: 'rounds', remaining: 1 },
+      },
+    });
+    e = applyCondition(e, 'blinded', 'manual', DEFAULT_RULES, undefined, { unit: 'rounds', remaining: 1 });
+    e.turnState = null;
+
+    const result = playerEndTurn(e, DEFAULT_RULES);
+
+    // tickDurations: the 1-round condition expired
+    expect(result.conditionMonitor.active).toHaveLength(0);
+    // tickConcentrationDuration: the 1-round concentration auto-dropped
+    expect(result.spellcasting!.concentrating).toBeNull();
+    // startTurn: action economy freshly reset
+    expect(result.turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: false });
+  });
+
+  it('defaults rules to DEFAULT_RULES when omitted', () => {
+    const e = testEntity(20);
+    expect(() => playerEndTurn(e)).not.toThrow();
+    expect(playerEndTurn(e).turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: false });
   });
 });
 

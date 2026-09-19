@@ -17,20 +17,26 @@ const FORMATS: { id: ExportFormat; label: string; hint: string }[] = [
   { id: 'txt', label: '📃  Plain Text', hint: 'Universal, no formatting' },
 ];
 
-const PACK_FORMAT: { id: ExportFormat; label: string; hint: string } =
-  { id: 'pack', label: '📦  Grimoire Pack', hint: 'Share with another device — fully re-importable' };
-
 interface Props {
   visible: boolean;
   title:   string;
   onSelect: (format: ExportFormat, action: ExportAction) => void;
   onClose:  () => void;
-  /** Show the "Grimoire Pack" option — homebrew exports only, not characters. */
-  showPackOption?: boolean;
 }
 
-export function ExportFormatSheet({ visible, title, onSelect, onClose, showPackOption }: Props) {
-  const formats = showPackOption ? [...FORMATS, PACK_FORMAT] : FORMATS;
+/**
+ * This sheet is the "Readable Export" half only (PDF/Markdown/Plain Text —
+ * for a person to read). Re-audit item 16: a "Grimoire Pack" row used to
+ * live in this same sheet behind an unused `showPackOption` prop (never
+ * actually passed `true` anywhere) — a second, metadata-less path to the
+ * same .grimoire-pack format PackageExportModal already produces properly
+ * (dependency closure, name/author/description). Removed rather than left
+ * dormant: a live but unreachable shortcut here would be an easy trap for
+ * a future call site to wire up instead of the real "Portable Homebrew"
+ * flow (PackageExportModal — see its own header comment for the intended
+ * Readable/Portable split).
+ */
+export function ExportFormatSheet({ visible, title, onSelect, onClose }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -40,7 +46,7 @@ export function ExportFormatSheet({ visible, title, onSelect, onClose, showPackO
             <Text style={styles.subtitle}>Tap a format to save it — or use ⤴ to share instead</Text>
           </View>
 
-          {formats.map(f => {
+          {FORMATS.map(f => {
             const disabled = f.id === 'pdf' && !PDF_AVAILABLE_HERE;
             return (
               <Pressable

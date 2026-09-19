@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/DESIGN.md",
+                "file": "docs/NEW architecture/07-specification.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "DESIGN"
+              "title": "07-specification"
             }
           }
         ]
@@ -187,25 +187,40 @@
   },
   "active": "4a8eae8187561b68",
   "lastOpenFiles": [
+    "docs/NEW architecture/08-whats-new.md",
+    "docs/NEW architecture/07-specification.md",
+    "src/components/sheet/TabCharacter.tsx.tmp.21972.a8fbe23b3e56",
+    "src/components/sheet/ProgressionPlannerModal.tsx",
+    "src/components/sheet/ProgressionPlannerModal.tsx.tmp.21972.de0fa3b55f1f",
+    "src/engine/leveling.ts.tmp.21972.31993b5c8a8c",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/UI_RULES.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/STATUS.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/ROADMAP_1.0.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/ROADMAP.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/RELEASE_AUDIT.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/QA_GUIDE.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/PROJECT_WALKTHROUGH.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/PRODUCT_PRINCIPLES.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/PRIVACY_POLICY.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/PAGE_REFERENCE.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/OVERVIEW.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/NAVIGATION_MAP.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/MULTI_SYSTEM_VISION.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/more details.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/IMPLEMENTATION.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/DESIGN.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/DATA_MODEL.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs/ABOUT.md",
+    "docs/NEW architecture/The dnd app docs/The dnd app docs",
+    "app/dm/encounter.tsx.tmp.21972.4d2acdc7c113",
+    "app/dm/encounter.tsx.tmp.21972.69e056e03283",
+    "app/dm/encounter.tsx.tmp.21972.70051870dfa8",
+    "app/dm/encounter.tsx.tmp.21972.ba5376c5d4b1",
+    "app/dm/encounter.tsx.tmp.21972.d569300eb8af",
+    "docs/NEW architecture/09-conformance-answers.md",
+    "docs/DESIGN.md",
     "docs/DATA_MODEL.md",
     "docs/ABOUT.md",
-    "docs/ROADMAP_1.0.md",
-    "docs/VISION_ASSESSMENT.md",
-    "docs/QA_GUIDE.md",
-    "docs/RELEASE_AUDIT.md",
-    "docs/UI_RULES.md",
-    "docs/IMPLEMENTATION.md",
-    "docs/MULTI_SYSTEM_VISION.md",
-    "docs/PROJECT_WALKTHROUGH.md",
-    "docs/PRIVACY_POLICY.md",
-    "docs/PRODUCT_PRINCIPLES.md",
-    "src/engine/types.ts.735fa9de4b781cc961e17a40b17c8d5c.tmp",
-    "app/about.tsx",
-    "AUDIT.md",
-    "CLAUDE.md",
-    "scripts/generate-obsidian-graph.js",
-    "AGENTS.md",
-    "docs/ROADMAP.md",
-    "src/components/sheet/TabSpells.tsx"
+    "docs/ROADMAP_1.0.md"
   ]
 }

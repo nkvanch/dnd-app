@@ -19,7 +19,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, Entity, asSubclassId, RulesetId } from '../../src/engine/types';
+import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, Entity, asSubclassId, RulesetId, Feature } from '../../src/engine/types';
 import {
   ChoiceDefinitionEditorModal, DraftChoice, newDraftChoice,
 } from '../../src/components/homebrew/ChoiceDefinitionEditor';
@@ -42,7 +42,12 @@ import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTe
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
-type LevelFeature = DraftTrait & { level: number };
+// Re-audit A05: originalFeature carries the compiled Feature this DraftTrait
+// was hydrated from (edit mode only — undefined for a freshly-added
+// feature), so buildHomebrewSubclass can pass it through verbatim if the
+// user never actually opens/edits this specific feature, instead of
+// recompiling the "effectKind: none" placeholder hydration seeds it with.
+type LevelFeature = DraftTrait & { level: number; originalFeature?: Feature };
 type LevelChoice = DraftChoice & { level: number };
 
 const EFFECT_KIND_LABELS: Record<string, string> = {
@@ -57,8 +62,8 @@ function draftFeaturesFromEntries(entries: LevelEntry[]): LevelFeature[] {
   for (const entry of entries) {
     for (const grant of entry.grants) {
       if (grant.kind !== 'feature') continue;
-      const f = grant.value as { id: string; name: string; description: string };
-      out.push({ ...newDraftTrait(f.name), level: entry.level, description: f.description, effectKind: 'none' });
+      const f = grant.value as Feature;
+      out.push({ ...newDraftTrait(f.name), level: entry.level, description: f.description, effectKind: 'none', originalFeature: f });
     }
   }
   return out;
@@ -110,6 +115,12 @@ export default function SubclassBuilderScreen() {
   const [classId, setClassId] = useState<string | null>(classIdParam ?? null);
   const [name, setName] = useState('');
   const [levelFeatures, setLevelFeatures] = useState<LevelFeature[]>([]);
+  // Re-audit A05: which feature localIds the user has actually opened and
+  // edited this session — buildHomebrewSubclass uses this to decide whether
+  // to preserve a feature's originalFeature verbatim or recompile it from
+  // the DraftTrait. A freshly-added feature (no originalFeature) is always
+  // compiled from its trait regardless of this set.
+  const [touchedFeatureIds, setTouchedFeatureIds] = useState<Set<string>>(new Set());
   const [addLevel, setAddLevel] = useState('3');
   const [addName,  setAddName]  = useState('');
   const [openFeatureId, setOpenFeatureId] = useState<string | null>(null);
@@ -123,9 +134,12 @@ export default function SubclassBuilderScreen() {
   // Edit mode: a saved HomebrewSubclass is compiled ClassProgression.entries,
   // not a raw draft (subclasses have no homebrewDraft field — their features
   // are simpler than a race's flavor fields, so recovering name/description/
-  // level from the compiled grants is lossless enough; only the mechanical
-  // effect kind itself isn't recoverable, so it resets to 'none' on reload,
-  // same disclosed tradeoff as any "edit compiled data" flow).
+  // level from the compiled grants is lossless enough for display; the
+  // mechanical effect kind itself isn't recoverable into the EDITOR UI, so
+  // it shows as 'none' until opened. Re-audit A05: this is a display/re-
+  // editing limitation only, not a data-loss one — draftFeaturesFromEntries
+  // carries the real originalFeature alongside, and buildHomebrewSubclass
+  // uses it verbatim for any feature the user never actually opens/edits.
   useEffect(() => {
     if (!editing) return;
     setClassId(editing.classId);
@@ -133,6 +147,7 @@ export default function SubclassBuilderScreen() {
     setRulesetId(editing.rulesetId);
     setLevelFeatures(draftFeaturesFromEntries(editing.entries));
     setLevelChoicesList(draftChoicesFromEntries(editing.entries, editing.id));
+    setTouchedFeatureIds(new Set());
   }, [editing?.id]);
 
   const parentClass = classId ? allClasses.find(c => c.id === classId) ?? null : null;
@@ -151,6 +166,7 @@ export default function SubclassBuilderScreen() {
   }
   function updateFeature(f: LevelFeature) {
     setLevelFeatures(prev => prev.map(x => x.localId === f.localId ? f : x));
+    setTouchedFeatureIds(prev => new Set(prev).add(f.localId));
   }
   function deleteFeature(localId: string) {
     setLevelFeatures(prev => prev.filter(x => x.localId !== localId));
@@ -204,6 +220,16 @@ export default function SubclassBuilderScreen() {
       // prefixed by level), this only guards same-level duplicate names.
       const usedIds = new Set<string>();
       for (const f of (featuresByLevel.get(level) ?? [])) {
+        // Re-audit A05: an untouched feature that was hydrated from an
+        // existing compiled Feature passes through verbatim — recompiling
+        // its still-"effectKind: none" placeholder would silently discard
+        // real effects/actions/resource grants on a save that never
+        // actually edited this particular feature.
+        if (f.originalFeature && !touchedFeatureIds.has(f.localId)) {
+          grants.push({ kind: 'feature', value: f.originalFeature });
+          usedIds.add(f.originalFeature.id);
+          continue;
+        }
         const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(f, {
           idPrefix: `${subclassId}_l${level}`, sourceKind: 'subclass', sourceRefId: subclassId, level, usedIds,
         });

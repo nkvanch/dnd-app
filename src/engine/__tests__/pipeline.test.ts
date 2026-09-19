@@ -6,7 +6,8 @@
 // target in the engine for real test coverage.
 import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import { recomputeDerived, applyStatModifiers, modifier } from '../pipeline';
-import { Entity, Effect, FeatureInstance, DmOverride } from '../types';
+import { useHomebrewStore } from '../../store/homebrewStore';
+import { Entity, Effect, FeatureInstance, DmOverride, Item } from '../types';
 
 function feature(id: string, effects: Partial<Effect>[]): FeatureInstance {
   return {
@@ -406,5 +407,135 @@ describe('recomputeDerived — DM overrides', () => {
       dmOverrides: [override({ stat: 'passivePerception', operation: 'add', value: 5 })],
     });
     expect(recomputeDerived(e, DEFAULT_RULES).derived.passivePerception).toBe(10 + modifier(14) + 5);
+  });
+});
+
+// Re-audit A18: weapon attack ability-selection and proficiency-bonus
+// gating. Weapon definitions are resolved via useHomebrewStore's fallback
+// lookup (computeWeaponAttackBonuses checks itemRepo first, then
+// homebrewStore — a homebrew-only id guarantees the homebrew path, no
+// SQLite/itemRepo warm-up needed in Jest), matching actionCards.test.ts's
+// own established pattern for seeding fake content into the real store.
+describe('computeWeaponAttackBonuses — ability selection and proficiency (A18)', () => {
+  afterEach(() => { useHomebrewStore.setState({ items: [] }); });
+
+  function weaponItem(id: string, properties: string[], dice: string, damageType = 'slashing'): Item {
+    return {
+      id, name: id, weight: 1, cost: '1 gp', properties,
+      features: [{
+        id: `${id}_attack`, name: id, description: '', source: { kind: 'item', refId: id }, level: null,
+        effects: [], actions: [], choices: [], passive: false,
+        activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+        abilityEffects: [{ type: 'damage', dice, damageType }],
+      } as unknown as FeatureInstance],
+    };
+  }
+
+  function withWeapon(item: Item, overrides: Partial<Entity> = {}): Entity {
+    useHomebrewStore.setState({ items: [item as any] });
+    const inst = { itemId: item.id, quantity: 1, attuned: false, features: [] };
+    const e = makeEmptyEntity('e1');
+    return { ...e, stats: { str: 18, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, inventory: { ...e.inventory, equipped: [inst] }, ...overrides };
+  }
+
+  it('a thrown, non-finesse weapon (handaxe) always uses STR, never DEX, despite listing a range in its own property text', () => {
+    const item = weaponItem('test_handaxe', ['light', 'thrown (range 20/60)'], '1d6');
+    const e = withWeapon(item, { proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['martial'] } });
+    const ab = recomputeDerived(e, DEFAULT_RULES).derived.attackBonuses.find(a => a.id === 'test_handaxe')!;
+    expect(ab.ability).toBe('str');
+    expect(ab.type).toBe('melee');
+  });
+
+  it('a finesse thrown weapon (dagger) uses the higher of STR/DEX', () => {
+    const item = weaponItem('test_dagger', ['finesse', 'light', 'thrown (range 20/60)'], '1d4', 'piercing');
+    const e = withWeapon(item, {
+      stats: { str: 10, dex: 18, con: 10, int: 10, wis: 10, cha: 10 },
+      proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['simple'] },
+    });
+    const ab = recomputeDerived(e, DEFAULT_RULES).derived.attackBonuses.find(a => a.id === 'test_dagger')!;
+    expect(ab.ability).toBe('dex');
+  });
+
+  it('an ammunition weapon (bow) uses DEX and is classified ranged', () => {
+    const item = weaponItem('test_bow', ['ammunition (range 80/320)', 'two-handed'], '1d8', 'piercing');
+    const e = withWeapon(item, { proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['martial'] } });
+    const ab = recomputeDerived(e, DEFAULT_RULES).derived.attackBonuses.find(a => a.id === 'test_bow')!;
+    expect(ab.ability).toBe('dex');
+    expect(ab.type).toBe('ranged');
+  });
+
+  it('proficiency bonus applies when the character has the matching weapon-category proficiency', () => {
+    const item = weaponItem('test_simple_weapon', [], '1d6'); // no recognizable name/props -> classified simple
+    const e = withWeapon(item, {
+      identity: { ...makeEmptyEntity('e1').identity, level: 5 },
+      proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['simple'] },
+    });
+    const result = recomputeDerived(e, DEFAULT_RULES);
+    const ab = result.derived.attackBonuses.find(a => a.id === 'test_simple_weapon')!;
+    expect(ab.bonus).toBe(result.derived.proficiencyBonus + modifier(18));
+  });
+
+  it('proficiency bonus is withheld when the character has NO matching weapon proficiency (untrained)', () => {
+    const item = weaponItem('test_simple_weapon_2', [], '1d6');
+    const e = withWeapon(item, {
+      identity: { ...makeEmptyEntity('e1').identity, level: 5 },
+      proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: [] },
+    });
+    const result = recomputeDerived(e, DEFAULT_RULES);
+    const ab = result.derived.attackBonuses.find(a => a.id === 'test_simple_weapon_2')!;
+    expect(ab.bonus).toBe(modifier(18)); // no proficiency bonus included
+  });
+});
+
+describe('recomputeDerived — entitlement-driven proficiencies (closure pass 2)', () => {
+  it('syncs entity.proficiencies.tools/skills from entity.entitlements, and removing an entitlement source strips it from the flat array on the next pass', () => {
+    let e: Entity = {
+      ...makeEmptyEntity('e1'),
+      entitlements: [
+        { kind: 'tool_proficiency', key: 'thieves_tools', sourceKind: 'class', sourceId: 'rogue' },
+        { kind: 'skill_proficiency', key: 'stealth', sourceKind: 'class', sourceId: 'rogue' },
+      ],
+    };
+    let result = recomputeDerived(e, DEFAULT_RULES);
+    expect(result.proficiencies.tools).toContain('thieves_tools');
+    expect(result.skills.skills.stealth.trained).toBe(true);
+
+    // Remove the class's own entitlement (e.g. a multiclass-removal or
+    // subclass-change primitive would call this) and recompute again.
+    e = { ...result, entitlements: (result.entitlements ?? []).filter(r => r.sourceId !== 'rogue') };
+    result = recomputeDerived(e, DEFAULT_RULES);
+    expect(result.proficiencies.tools).not.toContain('thieves_tools');
+    expect(result.skills.skills.stealth.trained).toBe(false);
+  });
+
+  it('a manual entitlement survives even after every source entitlement for the same key is removed', () => {
+    let e: Entity = {
+      ...makeEmptyEntity('e1'),
+      entitlements: [
+        { kind: 'armor_proficiency', key: 'heavy', sourceKind: 'manual' },
+        { kind: 'armor_proficiency', key: 'heavy', sourceKind: 'class', sourceId: 'fighter' },
+      ],
+    };
+    let result = recomputeDerived(e, DEFAULT_RULES);
+    expect(result.proficiencies.armor).toContain('heavy');
+
+    e = { ...result, entitlements: (result.entitlements ?? []).filter(r => r.sourceKind !== 'class') };
+    result = recomputeDerived(e, DEFAULT_RULES);
+    expect(result.proficiencies.armor).toContain('heavy'); // manual entry still grants it
+  });
+
+  it('recompute is idempotent: calling it twice on its own output yields the same effective proficiencies (closure item 12)', () => {
+    const e: Entity = {
+      ...makeEmptyEntity('e1'),
+      entitlements: [
+        { kind: 'tool_proficiency', key: 'smiths_tools', sourceKind: 'race', sourceId: 'dwarf' },
+        { kind: 'language', key: 'dwarvish', sourceKind: 'race', sourceId: 'dwarf' },
+      ],
+    };
+    const once  = recomputeDerived(e, DEFAULT_RULES);
+    const twice = recomputeDerived(once, DEFAULT_RULES);
+    expect(twice.proficiencies).toEqual(once.proficiencies);
+    expect(twice.skills).toEqual(once.skills);
+    expect(twice.entitlements).toEqual(once.entitlements); // no double-application/duplication
   });
 });

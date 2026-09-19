@@ -1,3 +1,6 @@
+import { useSpellPayment } from './SpellPaymentChooser';
+import { SpellPaymentOption } from '../../engine/spellPayment';
+import { grantEntitlement } from '../../engine/entitlements';
 // ============================================================================
 // FILE: src/components/sheet/TabSpells.tsx
 // Spellbook tab — spell reference + Cast for every spell a character knows.
@@ -50,11 +53,15 @@ interface Props {
   // tell them apart on its own. Each call site below now passes its own
   // specific label; the parent falls back to a generic one if omitted.
   onEntityUpdate: (updated: Entity, label?: string) => void;
+  /** Closure item 16 — the one authoritative End Turn entry point, shared
+   *  verbatim with the Character and Actions tabs (see app/sheet/[id].tsx's
+   *  handleEndTurn). */
+  onEndTurn: () => void;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
+function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
   const [pendingOptionCard, setPendingOptionCard] = useState<ActionCard | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -107,7 +114,7 @@ function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
       ? { ...block, cantrips: [...new Set([...block.cantrips, spellId])] }
       : { ...block, known:    [...new Set([...block.known,    spellId])] };
     const spellName = resolveSpellById(spellId, homebrewSpells)?.name ?? spellId;
-    onEntityUpdate({ ...current, spellcasting: next }, `Learned ${spellName}`);
+    onEntityUpdate(grantEntitlement({ ...current, spellcasting: next }, { kind: level === 0 ? 'cantrip_access' : 'spell_access', key: spellId, sourceKind: 'manual' }), `Learned ${spellName}`);
   }
 
   // Multiclass-aware: a character is a "prepared caster" for this tab's
@@ -157,7 +164,8 @@ function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
 
   // ── Cast handler (mirrors TabActions.handleUse exactly) ──────────────────
 
-  const performCast = useCallback((card: ActionCard, option?: ActivationOption) => {
+  const { requestPayment, paymentChooser } = useSpellPayment(entity);
+  const performCast = useCallback((card: ActionCard, option?: ActivationOption, payment?: SpellPaymentOption) => {
     // Bug fix (architecture review U5): this used to hand-duplicate
     // applyActionCardUse's spell-slot/resource-spend logic without ever
     // calling markActionSlotUsed — casting a spell from this tab consumed
@@ -165,7 +173,8 @@ function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
     // character could still use an Actions-tab feature that same turn.
     // Delegating to the shared implementation also picks up its
     // abilityEffects application, which this handler never had at all.
-    let updated = applyActionCardUse(entity, card, rules, option);
+    let updated = applyActionCardUse(entity, card, rules, option, payment);
+    if (updated === entity) return;
 
     // applyActionCardUse's own concentration check only looks up official
     // spellRepo content — this tab's spellMap resolves homebrew-first (see
@@ -199,15 +208,15 @@ function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
       setPendingOptionCard(card);
       return;
     }
-    performCast(card);
-  }, [performCast]);
+    requestPayment(card, undefined, payment => performCast(card, undefined, payment));
+  }, [performCast, requestPayment]);
 
   const handleChooseOption = useCallback((option: ActivationOption) => {
     const card = pendingOptionCard;
     setPendingOptionCard(null);
     if (!card) return;
-    performCast(card, option);
-  }, [performCast, pendingOptionCard]);
+    requestPayment(card, option, payment => performCast(card, option, payment));
+  }, [performCast, pendingOptionCard, requestPayment]);
 
   // ── Prepared toggle (prepared casters only) ──────────────────────────────
 
@@ -241,6 +250,20 @@ function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
       {/* Add Spell button */}
       <Pressable style={styles.addSpellBtn} onPress={() => setAddSpellOpen(true)}>
         <Text style={styles.addSpellBtnTxt}>+ Add Spell or Cantrip</Text>
+      </Pressable>
+
+      {/* Closure item 16: calls the ONE shared onEndTurn handler
+          (app/sheet/[id].tsx's handleEndTurn) instead of computing
+          playerEndTurn() locally and passing a locally-chosen label through
+          this tab's own onEntityUpdate — guarantees identical timeline
+          label/category/sync/undo behavior regardless of which tab End
+          Turn is pressed from. No preview gate, same precedent as the
+          other two tabs. */}
+      <Pressable
+        style={styles.endTurnBtn}
+        onPress={onEndTurn}
+      >
+        <Text style={styles.endTurnBtnTxt}>⏭ End Turn</Text>
       </Pressable>
 
       {/* Concentration banner */}
@@ -406,6 +429,7 @@ function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
       })}
 
       {/* Shared cast result modal */}
+      {paymentChooser}
       <UseModal
         card={activeCard}
         onRoll={rollForCard}
@@ -413,6 +437,7 @@ function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
       />
 
       <ActivationOptionModal
+        entity={entity}
         card={pendingOptionCard}
         onChoose={handleChooseOption}
         onClose={() => setPendingOptionCard(null)}
@@ -422,7 +447,7 @@ function TabSpellsInner({ entity, rules, onEntityUpdate }: Props) {
       <AddSpellModal
         visible={addSpellOpen}
         entity={entity}
-        onAdd={(spellId, isCantrip) => addSpell(spellId, isCantrip ? 0 : 1)}
+        onAdd={(spellId, isCantrip) => { void addSpell(spellId, isCantrip ? 0 : 1); }}
         onClose={() => setAddSpellOpen(false)}
       />
     </ScrollView>
@@ -452,6 +477,14 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, alignItems: 'center', marginBottom: Spacing.sm,
   },
   addSpellBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+
+  endTurnBtn: {
+    alignSelf: 'flex-start', marginBottom: Spacing.sm,
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+  },
+  endTurnBtnTxt: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
 
   modalBackdrop: { flex: 1, backgroundColor: '#000000bb', justifyContent: 'flex-end' },
   modalSheet: {

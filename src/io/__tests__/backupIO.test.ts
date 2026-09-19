@@ -5,7 +5,7 @@
 // Entity carries no timestamp of its own, so findStaleCharacterOverwrites
 // compares the pack's overall createdAt against each local character's own
 // SQLite updatedAt instead.
-import { findStaleCharacterOverwrites, findHomebrewIdCollisions } from '../backupIO';
+import { findStaleCharacterOverwrites, findHomebrewIdCollisions, prepareImportedPack } from '../backupIO';
 import { GrimoirePack, GrimoirePackHomebrew } from '../../engine/backup';
 import { EntityMeta } from '../../db/entityRepo';
 import { makeEmptyEntity } from '../../store/characterStore';
@@ -90,5 +90,31 @@ describe('findHomebrewIdCollisions', () => {
   it('returns an empty array when there is no local homebrew at all', () => {
     const incoming: GrimoirePackHomebrew = { races: [{ id: 'ironclad', name: 'Ironclad', features: [] }] };
     expect(findHomebrewIdCollisions(incoming, {})).toEqual([]);
+  });
+});
+
+
+describe('prepareImportedPack validation boundary', () => {
+  it('rejects malformed nested entity data before producing a commit-ready pack', () => {
+    const pack = packWithCharacters(Date.now(), ['unsafe']);
+    (pack.characters[0] as any).resources.custom = [{ id: 'bad', name: 'Bad', current: 2, maximum: 1 }];
+    expect(() => prepareImportedPack(pack)).toThrow(/unsafe|Character unsafe|resources\.custom/);
+  });
+
+  it('rejects malformed conditionMonitor before producing a commit-ready pack', () => {
+    const pack = packWithCharacters(Date.now(), ['unsafe-monitor']);
+    (pack.characters[0] as any).conditionMonitor.flags = [];
+    expect(() => prepareImportedPack(pack)).toThrow(/unsafe-monitor|conditionMonitor/);
+  });
+
+  it('rejects a malformed active condition entry before producing a commit-ready pack', () => {
+    const pack = packWithCharacters(Date.now(), ['unsafe-active']);
+    (pack.characters[0] as any).conditionMonitor.active = [{ id: '', sourceId: 4, duration: { unit: 'turns', remaining: -1 }, suppressedBy: [null] }];
+    expect(() => prepareImportedPack(pack)).toThrow(/unsafe-active|conditionMonitor\.active/);
+  });
+
+  it('returns migrated, deeply valid entities for the later persistence stage', () => {
+    const pack = packWithCharacters(Date.now(), ['safe']);
+    expect(prepareImportedPack(pack).characters[0].id).toBe('safe');
   });
 });

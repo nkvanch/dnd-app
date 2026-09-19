@@ -20,7 +20,7 @@ import {
 import {
   ChoiceDefinitionListEditor, DraftChoice,
 } from '../../src/components/homebrew/ChoiceDefinitionEditor';
-import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
+import { definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
@@ -29,7 +29,7 @@ import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import {
   ABILITIES, SENSE_TYPES, MOVE_TYPES, MoveType, toId, disambiguateId,
-  DraftSubrace, newDraftSubrace, buildSubrace, buildTraitFeature,
+  DraftSubrace, newDraftSubrace, buildSubrace,
   AbilityScoreGrid, TraitListEditor,
 } from '../../src/components/homebrew/TraitEditor';
 import { globalContentDB } from '../../src/content/classes/library';
@@ -38,6 +38,8 @@ import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLosslessChoices, serializeDraftTraits, serializeLosslessChoices } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const SIZES = ['Tiny', 'Small', 'Medium', 'Large'] as const;
@@ -194,7 +196,7 @@ export default function RaceBuilderScreen() {
       if (draft.movement) setMovement(draft.movement as MovementSpeeds);
       if (draft.traits) setTraits(draft.traits as DraftTrait[]);
       if (draft.subraces) setSubraces(draft.subraces as DraftSubrace[]);
-      if (draft.pendingChoices) setPendingChoices(draft.pendingChoices as DraftChoice[]);
+      if (draft.pendingChoices) setPendingChoices(hydrateLosslessChoices(editing.pendingChoices, RACE_CHOICE_PREFIX));
     }
     // CHOICE-AUTHORING-1: no draft.pendingChoices (race imported/authored
     // outside this builder, or before this field existed) — reconstruct
@@ -311,17 +313,25 @@ export default function RaceBuilderScreen() {
 
     // Seeded with the hand-authored ASI/Speed/Senses/Movement feature ids
     // above so a trait named e.g. "Speed" can't silently collide with one.
-    const usedIds = new Set(features.map(f => f.id));
-    for (const t of traits) {
-      const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'race', sourceRefId: id, level: null, usedIds });
-      features.push(feature, ...(extraFeatures ?? []));
-      if (resource) resources.push(resource);
-      resources.push(...(extraResources ?? []));
-    }
+    const generatedIds = features.map(f => f.id);
+    const originalDraft = editing?.homebrewDraft as (Record<string, unknown> & { traitOwners?: any[] }) | undefined;
+    const serializedTraits = serializeDraftTraits({
+      originalFeatures: editing?.features ?? [], originalResources: editing?.resources,
+      originalDrafts: (originalDraft?.traits as DraftTrait[] | undefined) ?? [], editedDrafts: traits,
+      idPrefix: id, sourceKind: 'race', sourceRefId: id, generatedFeatures: features, generatedResources: resources,
+      generatedIds, owners: originalDraft?.traitOwners,
+    });
+    features.splice(0, features.length, ...serializedTraits.features);
+    resources.splice(0, resources.length, ...serializedTraits.resources);
 
     const compiledSubraces: Subrace[] = subraces.map(sr => buildSubrace(sr, id));
 
-    return {
+    return mergeHomebrewDefinition(editing, {
+      // Imported definitions without an authoring draft cannot be safely
+      // reverse-compiled by this UI; preserve structured mechanics.
+      ...(editing && !editing.homebrewDraft ? {
+        features: editing.features, resources: editing.resources, pendingChoices: editing.pendingChoices,
+      } : {}),
       id, name: name.trim(), features,
       resources: resources.length > 0 ? resources : undefined,
       subraces: compiledSubraces.length > 0 ? compiledSubraces : undefined,
@@ -329,11 +339,9 @@ export default function RaceBuilderScreen() {
       size,
       languages: languages.trim() ? languages.split(',').map(l => l.trim()).filter(Boolean) : undefined,
       rulesetId,
-      pendingChoices: pendingChoices.length > 0
-        ? pendingChoices.map(d => draftChoiceToDefinition(d, RACE_CHOICE_PREFIX))
-        : undefined,
-      homebrewDraft: { speed, description, abiBonuses, senses, movement, traits, subraces, pendingChoices },
-    };
+      pendingChoices: serializeLosslessChoices(editing?.pendingChoices, pendingChoices, RACE_CHOICE_PREFIX),
+      homebrewDraft: { speed, description, abiBonuses, senses, movement, traits, subraces, pendingChoices, traitOwners: serializedTraits.owners },
+    });
   }
 
   // Read-only test: apply the draft race's OWN features/resources to a
@@ -555,7 +563,7 @@ export default function RaceBuilderScreen() {
           <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
             <Text style={styles.testBtnTxt}>🧪 Test</Text>
           </Pressable>
-          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
+          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={() => { void handleSave(); }} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Race'}</Text>
           </Pressable>
         </View>

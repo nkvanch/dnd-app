@@ -8,6 +8,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
+import { migrateEntity } from '../engine/multiclass';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { Entity } from '../engine/types';
@@ -162,6 +163,20 @@ export type ImportPreview = {
  * even in this minimal v1 form: never import silently.
  * Returns null if the user cancels the picker.
  */
+export function prepareImportedPack(data: unknown): GrimoirePack {
+  const problem = validateGrimoirePack(data);
+  if (problem) throw new Error(problem);
+  const parsedPack = data as GrimoirePack;
+  const pack: GrimoirePack = { ...parsedPack, characters: parsedPack.characters.map(migrateEntity) };
+  const contentProblems = validatePackContents(pack);
+  if (contentProblems.length > 0) {
+    const shown = contentProblems.slice(0, 5).join('\n');
+    const more = contentProblems.length > 5 ? `\n…and ${contentProblems.length - 5} more.` : '';
+    throw new Error(`This pack contains invalid content and can't be imported safely:\n${shown}${more}`);
+  }
+  return pack;
+}
+
 export async function pickAndValidateBackup(): Promise<ImportPreview | null> {
   const result = await DocumentPicker.getDocumentAsync({
     type: '*/*',   // .grimoire-pack has no registered MIME type — accept broadly
@@ -177,25 +192,8 @@ export async function pickAndValidateBackup(): Promise<ImportPreview | null> {
     throw new Error('That file isn\u2019t valid JSON \u2014 is it really a .grimoire-pack file?');
   }
 
-  const problem = validateGrimoirePack(data);
-  if (problem) throw new Error(problem);
+  const pack = prepareImportedPack(data);
 
-  const pack = data as GrimoirePack;
-
-  // Bug fix (architecture review C8): validateGrimoirePack above only
-  // checks the pack ENVELOPE — it never validated any individual homebrew
-  // content item or character feature's structure. A structurally invalid
-  // Feature previously imported silently, then crashed the app the moment
-  // any screen touching it tried to render (collectAllEffects has no guard
-  // against a malformed effects array). Never import silently — same "never
-  // import silently" rule pickAndValidateBackup's own doc comment already
-  // states for the envelope check.
-  const contentProblems = validatePackContents(pack);
-  if (contentProblems.length > 0) {
-    const shown = contentProblems.slice(0, 5).join('\n');
-    const more = contentProblems.length > 5 ? `\n…and ${contentProblems.length - 5} more.` : '';
-    throw new Error(`This pack contains invalid content and can't be imported safely:\n${shown}${more}`);
-  }
   const rawName = result.assets[0].name ?? 'Imported Pack';
   return {
     pack,

@@ -17,6 +17,7 @@ import {
 import { spellRepo } from '../content/spellRepo';
 import { itemRepo } from '../content/itemRepo';
 import { useHomebrewStore } from '../store/homebrewStore';
+import { effectiveItemFeatures, isItemMechanicallyActive, resolveItemDefinition } from './itemMechanics';
 import { usesLargeCreatureWeaponDice } from './houseRules';
 import { hasLegalSpellPayment } from './spellPayment';
 import { CampaignRules } from './types';
@@ -651,12 +652,9 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
     // passive effects, reusing the SAME hydrated flag rather than a second
     // eligibility check (item.requiresAttunement is set once at equip time
     // from the content definition — see ItemInstance's own doc comment).
-    if (inst.requiresAttunement && !inst.attuned) continue;
-    const feats = (inst.features && inst.features.length > 0)
-      ? inst.features
-      : (itemRepo.getItemSync(inst.itemId)?.features
-          ?? useHomebrewStore.getState().items.find(i => i.id === inst.itemId)?.features
-          ?? []);
+    const definition = resolveItemDefinition(inst.itemId);
+    if (!isItemMechanicallyActive(inst, definition)) continue;
+    const feats = effectiveItemFeatures(inst, definition);
     for (const fi of feats) {
       // Only features with an activation produce cards (attacks, usable items);
       // passive AC features (armor) are handled by collectAllEffects, not here.

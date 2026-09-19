@@ -23,7 +23,6 @@ import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, Entity, asSubclassId, 
 import {
   ChoiceDefinitionEditorModal, DraftChoice, newDraftChoice,
 } from '../../src/components/homebrew/ChoiceDefinitionEditor';
-import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
@@ -40,6 +39,8 @@ import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLeveledChoices, mergeSubclassEntries, LeveledLosslessDraftChoice, SubclassFeatureEdit } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Re-audit A05: originalFeature carries the compiled Feature this DraftTrait
@@ -48,7 +49,7 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 // user never actually opens/edits this specific feature, instead of
 // recompiling the "effectKind: none" placeholder hydration seeds it with.
 type LevelFeature = DraftTrait & { level: number; originalFeature?: Feature };
-type LevelChoice = DraftChoice & { level: number };
+type LevelChoice = LeveledLosslessDraftChoice;
 
 const EFFECT_KIND_LABELS: Record<string, string> = {
   none: 'Flavor only', ability_score: 'Ability score bonus', skill_proficiency: 'Skill proficiency',
@@ -64,23 +65,6 @@ function draftFeaturesFromEntries(entries: LevelEntry[]): LevelFeature[] {
       if (grant.kind !== 'feature') continue;
       const f = grant.value as Feature;
       out.push({ ...newDraftTrait(f.name), level: entry.level, description: f.description, effectKind: 'none', originalFeature: f });
-    }
-  }
-  return out;
-}
-
-// CHOICE-AUTHORING-1: unlike Feature grants (compiled Effect objects, lossy
-// to reverse), entry.choices ARE already the canonical ChoiceDefinition
-// shape this editor authors — reconstructs losslessly via
-// definitionToDraftChoice, filtering out any choice kind this editor
-// doesn't author (e.g. a hand-authored 'feature_pool' from a seeded
-// built-in homebrew subclass) rather than dropping the whole entries array.
-function draftChoicesFromEntries(entries: LevelEntry[], idPrefix: string): LevelChoice[] {
-  const out: LevelChoice[] = [];
-  for (const entry of entries) {
-    for (const def of entry.choices) {
-      const d = definitionToDraftChoice(def, `${idPrefix}_l${entry.level}_`);
-      if (d) out.push({ ...d, level: entry.level });
     }
   }
   return out;
@@ -146,7 +130,7 @@ export default function SubclassBuilderScreen() {
     setName(editing.name);
     setRulesetId(editing.rulesetId);
     setLevelFeatures(draftFeaturesFromEntries(editing.entries));
-    setLevelChoicesList(draftChoicesFromEntries(editing.entries, editing.id));
+    setLevelChoicesList(hydrateLeveledChoices(editing.entries.map(e => ({ level: e.level, choices: e.choices })), editing.id));
     setTouchedFeatureIds(new Set());
   }, [editing?.id]);
 
@@ -212,42 +196,25 @@ export default function SubclassBuilderScreen() {
     // asking the author to re-specify a value that's already determined by
     // which class they picked.
     const hpDie = parentClass.hitDie as 4 | 6 | 8 | 10 | 12;
-    const entries: LevelEntry[] = [];
+    const featureEdits: SubclassFeatureEdit[] = [];
     for (let level = 1; level <= 20; level++) {
-      const grants: Grant[] = [];
-      // Scoped per level, matching idPrefix's own per-level scope below —
-      // two traits at DIFFERENT levels already can't collide (their ids are
-      // prefixed by level), this only guards same-level duplicate names.
       const usedIds = new Set<string>();
       for (const f of (featuresByLevel.get(level) ?? [])) {
-        // Re-audit A05: an untouched feature that was hydrated from an
-        // existing compiled Feature passes through verbatim — recompiling
-        // its still-"effectKind: none" placeholder would silently discard
-        // real effects/actions/resource grants on a save that never
-        // actually edited this particular feature.
         if (f.originalFeature && !touchedFeatureIds.has(f.localId)) {
-          grants.push({ kind: 'feature', value: f.originalFeature });
+          featureEdits.push({ level, originalFeatureId: f.originalFeature.id, grants: [{ kind: 'feature', value: f.originalFeature }] });
           usedIds.add(f.originalFeature.id);
           continue;
         }
-        const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(f, {
-          idPrefix: `${subclassId}_l${level}`, sourceKind: 'subclass', sourceRefId: subclassId, level, usedIds,
-        });
-        grants.push({ kind: 'feature', value: feature });
-        if (resource) grants.push({ kind: 'resource', value: resource });
-        for (const ef of extraFeatures ?? []) grants.push({ kind: 'feature', value: ef });
-        for (const er of extraResources ?? []) grants.push({ kind: 'resource', value: er });
+        const built = buildTraitFeature(f, { idPrefix: `${subclassId}_l${level}`, sourceKind: 'subclass', sourceRefId: subclassId, level, usedIds });
+        const grants: Grant[] = [{ kind: 'feature', value: built.feature }];
+        if (built.resource) grants.push({ kind: 'resource', value: built.resource });
+        for (const feature of built.extraFeatures ?? []) grants.push({ kind: 'feature', value: feature });
+        for (const resource of built.extraResources ?? []) grants.push({ kind: 'resource', value: resource });
+        featureEdits.push({ level, originalFeatureId: f.originalFeature?.id, grants });
       }
-      // CHOICE-AUTHORING-1: authored per-level player choices (Expertise/
-      // Tool/Language), compiled straight into this level's own choices —
-      // same array class-progression choices already resolve through via
-      // queueChoice, so no separate runtime wiring is needed here.
-      const levelChoiceDefs = levelChoicesList
-        .filter(c => c.level === level)
-        .map(c => draftChoiceToDefinition(c, `${subclassId}_l${level}_`));
-      entries.push({ level, hpDie, choices: levelChoiceDefs, grants });
     }
-    return { id: asSubclassId(subclassId), name: name.trim(), classId, entries, rulesetId };
+    const entries = mergeSubclassEntries(editing?.entries, featureEdits, levelChoicesList, hpDie, subclassId);
+    return mergeHomebrewDefinition(editing, { id: asSubclassId(subclassId), name: name.trim(), classId, entries, rulesetId });
   }
 
   // Read-only test: apply EVERY authored level's grants to a disposable

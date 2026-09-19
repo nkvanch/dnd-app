@@ -7,8 +7,7 @@
 import { Entity, Item, ItemInstance, CampaignRules } from './types';
 import { recomputeDerived } from './pipeline';
 import { DEFAULT_RULES } from '../store/characterStore';
-import { armorWeight, isShield } from '../content/items/itemBrowse';
-import type { ItemIndexEntry } from '../content/itemRepo.types';
+import { hydrateItemInstanceDefinitionFacts } from './itemMechanics';
 
 /**
  * itemDef must already be resolved by the caller (itemRepo.ensureLoaded +
@@ -31,14 +30,7 @@ export function equipItem(
   // way, so the pure engine pipeline (collectAllEffects) can gate an
   // item's effects on attunement/equipment-predicates without needing its
   // own content-store lookup — see ItemInstance's own doc comments.
-  const indexEntry: ItemIndexEntry | undefined = itemDef
-    ? { id: itemDef.id, name: itemDef.name, weight: itemDef.weight, cost: itemDef.cost, properties: itemDef.properties, hasDamageEffect: false, weaponRange: null }
-    : undefined;
-  const hydrated = itemDef ? {
-    ...inst, features: itemDef.features,
-    requiresAttunement: itemRequiresAttunement(itemDef),
-    wearsArmorOrShield: !!indexEntry && (armorWeight(indexEntry) !== null || isShield(indexEntry)),
-  } : inst;
+  const hydrated = hydrateItemInstanceDefinitionFacts(inst, itemDef);
   // Merge into an existing equipped stack of the same item (matching
   // infusion state) instead of adding a second row — mirrors
   // handleAddItem's carried-side stacking (app/sheet/[id].tsx). Without
@@ -104,37 +96,7 @@ export function unequipItem(
   return recomputeDerived(updated, rules);
 }
 
-/**
- * The bulk-imported item catalog's "requires attunement" property tagging is
- * incomplete — spot-checked while building this feature: Ring of Protection
- * (a real, classic attunement item, and one of the 5 named items below that
- * ITEM_EFFECT_OVERRIDES in src/content/items/index.ts gives a real simulated
- * stat_modifier effect) carries only `properties: ["rare"]`, no attunement
- * tag at all. Rather than silently miss attunement enforcement on exactly
- * the items whose bonus is actually simulated, hardcode this small,
- * independently-verified set (all 5 require attunement per the real rules)
- * as a second signal alongside the properties-text parse below. Doesn't fix
- * the broader catalog's tagging gaps for items with no simulated effect —
- * a real, disclosed limitation, not silently claimed as complete.
- */
-const KNOWN_ATTUNEMENT_ITEM_IDS = new Set([
-  'ring_of_protection', 'cloak_of_protection', 'bracers_of_defense',
-  'amulet_of_health', 'headband_of_intellect',
-]);
-
-/**
- * True when an item requires attunement — either the bulk-imported catalog's
- * free-text properties disclose it ("requires attunement" is how every
- * SRD/imported magic item that has the tag states it), or the item is one of
- * the small curated set above whose tagging is known to be missing.
- */
-export function itemRequiresAttunement(
-  item: { id: string; properties: string[] } | undefined,
-): boolean {
-  if (!item) return false;
-  if (KNOWN_ATTUNEMENT_ITEM_IDS.has(item.id)) return true;
-  return item.properties.some(p => p.toLowerCase().includes('requires attunement'));
-}
+export { itemRequiresAttunement } from './itemMechanics';
 
 /**
  * How many items this entity can be attuned to at once. Base 3 per the

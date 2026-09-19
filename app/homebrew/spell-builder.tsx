@@ -25,6 +25,7 @@ import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTe
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { disambiguateId } from '../../src/content/traitCompiler';
 import { FULL_SPELL_LIBRARY } from '../../src/content/spells/index';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const LEVELS  = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -104,7 +105,8 @@ export default function SpellBuilderScreen() {
   function toggleComponent(c: 'V' | 'S' | 'M') {
     setComponents(prev => {
       const next = new Set(prev);
-      next.has(c) ? next.delete(c) : next.add(c);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
       return next;
     });
   }
@@ -118,7 +120,7 @@ export default function SpellBuilderScreen() {
       ...FULL_SPELL_LIBRARY.map(s => s.id),
       ...spells.filter(s => s.id !== editing?.id).map(s => s.id),
     ]);
-    return {
+    return mergeHomebrewDefinition(editing, {
       id:            editing?.id ?? disambiguateId(toId(name) || 'homebrew_spell', takenSpellIds),
       name:          name.trim(),
       level,
@@ -133,7 +135,7 @@ export default function SpellBuilderScreen() {
       concentration,
       spellType:     spellTypes.length > 0 ? spellTypes : undefined,
       rulesetId,
-    };
+    });
   }
 
   // Item 18 (homebrew improvements — expanded test bench): the last of the
@@ -169,7 +171,7 @@ export default function SpellBuilderScreen() {
     setTestOpen(true);
   }
 
-  async function handleSave() {
+  function handleSave() {
     const spell = buildSpell();
     const { valid, errors, warnings } = validateSpell(spell);
     if (!valid) {
@@ -179,11 +181,11 @@ export default function SpellBuilderScreen() {
     if (warnings.length > 0) {
       Alert.alert('Warnings', warnings.join('\n') + '\n\nSave anyway?', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Save', onPress: () => doSave(spell) },
+        { text: 'Save', onPress: () => { void doSave(spell); } },
       ]);
       return;
     }
-    doSave(spell);
+    void doSave(spell);
   }
 
   // Doesn't wait on the confirmation Alert's dismissal to navigate — saves

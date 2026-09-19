@@ -91,7 +91,7 @@ describe('validatePackContents — embedded character features', () => {
     };
     const pack = createBackupPack([e], emptyHomebrew(), null, '1.0.0');
     const problems = validatePackContents(pack);
-    expect(problems.some(p => p.includes('equipped item features'))).toBe(true);
+    expect(problems.some(p => p.includes('inventory.equipped[0].features[0]'))).toBe(true);
   });
 
   it('is defensive against a character whose own features field is malformed (not an array)', () => {

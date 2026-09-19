@@ -12,11 +12,11 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Background, Feature, Effect, SkillName, Entity, RulesetId, BACKGROUND_CHOICE_PREFIX } from '../../src/engine/types';
+import { Background, Feature, SkillName, Entity, RulesetId, BACKGROUND_CHOICE_PREFIX } from '../../src/engine/types';
 import {
   ChoiceDefinitionListEditor, DraftChoice,
 } from '../../src/components/homebrew/ChoiceDefinitionEditor';
-import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
+import { definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
@@ -31,6 +31,8 @@ import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTe
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { disambiguateId } from '../../src/content/traitCompiler';
 import { globalContentDB } from '../../src/content/classes/library';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLosslessChoices, serializeBackgroundFeatures, serializeLosslessChoices } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Same 18-skill list used in race-builder.tsx and the PDF export.
@@ -186,7 +188,7 @@ export default function BackgroundBuilderScreen() {
       setLanguages(String(draft.languages ?? ''));
       setEquipmentNote(String(draft.equipmentNote ?? ''));
       setFeatures((draft.features as DraftFeature[]) ?? []);
-      if (draft.pendingChoices) setPendingChoices(draft.pendingChoices as DraftChoice[]);
+      if (draft.pendingChoices) setPendingChoices(hydrateLosslessChoices(editing.pendingChoices, BACKGROUND_CHOICE_PREFIX));
     }
     // CHOICE-AUTHORING-1: see race-builder.tsx's identical fallback comment.
     if (!draft?.pendingChoices && editing.pendingChoices) {
@@ -277,23 +279,20 @@ export default function BackgroundBuilderScreen() {
     // "_2/_3 disambiguation" pattern already used by the trait-based
     // builders (race/monster/subclass/condition-builder) via
     // traitCompiler's disambiguateId.
-    const usedIds = new Set(bgFeatures.map(f => f.id));
-    for (const f of features) {
-      bgFeatures.push({
-        id: disambiguateId(`${id}_${toId(f.name)}`, usedIds), name: f.name,
-        description: f.description.trim() || f.name,
-        source: { kind: 'background', refId: id },
-        level: null, actions: [], choices: [], passive: true, effects: [],
-      });
-    }
+    const generatedIds = bgFeatures.map(f => f.id);
+    const originalDraft = editing?.homebrewDraft as Record<string, unknown> | undefined;
+    const serializedFeatures = serializeBackgroundFeatures(editing, (originalDraft?.features as DraftFeature[] | undefined) ?? [], features, id, bgFeatures, generatedIds);
 
-    return {
-      id, name: name.trim(), features: bgFeatures, rulesetId,
-      pendingChoices: pendingChoices.length > 0
-        ? pendingChoices.map(d => draftChoiceToDefinition(d, BACKGROUND_CHOICE_PREFIX))
-        : undefined,
-      homebrewDraft: { skills, toolProfs, languages, equipmentNote, features, pendingChoices },
-    };
+    return mergeHomebrewDefinition(editing, {
+      // Imported definitions without an authoring draft cannot be safely
+      // reverse-compiled by this UI; preserve structured mechanics.
+      ...(editing && !editing.homebrewDraft ? {
+        features: editing.features, pendingChoices: editing.pendingChoices,
+      } : {}),
+      id, name: name.trim(), features: serializedFeatures.features, rulesetId,
+      pendingChoices: serializeLosslessChoices(editing?.pendingChoices, pendingChoices, BACKGROUND_CHOICE_PREFIX),
+      homebrewDraft: { skills, toolProfs, languages, equipmentNote, features, pendingChoices, traitOwners: serializedFeatures.owners },
+    });
   }
 
   // Read-only test: apply the draft background's features to a disposable
@@ -331,7 +330,7 @@ export default function BackgroundBuilderScreen() {
     setTestOpen(true);
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!name.trim()) { Alert.alert('Name required'); return; }
     if (skills.length !== 2) {
       Alert.alert(
@@ -339,12 +338,12 @@ export default function BackgroundBuilderScreen() {
         `Standard backgrounds grant exactly 2 skill proficiencies (you have ${skills.length}). Save anyway?`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Save', onPress: doSave },
+          { text: 'Save', onPress: () => { void doSave(); } },
         ],
       );
       return;
     }
-    doSave();
+    void doSave();
   }
 
   const [saving, setSaving] = useState(false);

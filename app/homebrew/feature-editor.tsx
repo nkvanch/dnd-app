@@ -13,6 +13,7 @@ import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
 import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const EFFECT_TYPES = [
@@ -115,11 +116,11 @@ export default function FeatureEditorScreen() {
 
   function buildFeature(): Feature {
     const id = editing?.id ?? (toId(name) || 'homebrew_feature');
-    return {
+    return mergeHomebrewDefinition(editing, {
       id, name: name.trim(), description: description.trim(),
       source: editing?.source ?? { kind: 'feat', refId: id },
       level: editing?.level ?? null, effects, actions: editing?.actions ?? [], choices: editing?.choices ?? [], passive,
-    };
+    });
   }
 
   // Read-only test on a disposable level-1 scratch entity — same pattern
@@ -193,7 +194,7 @@ export default function FeatureEditorScreen() {
           <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
             <Text style={styles.testBtnTxt}>🧪 Test</Text>
           </Pressable>
-          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
+          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={() => { void handleSave(); }} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Feature'}</Text>
           </Pressable>
         </View>

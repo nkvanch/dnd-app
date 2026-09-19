@@ -35,6 +35,8 @@ import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLosslessChoices, serializeLosslessChoices, LosslessDraftChoice } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -93,7 +95,7 @@ export default function FeatBuilderScreen() {
     { id: string; label: string; mode: 'proficiency' | 'expertise'; from: 'any' | 'proficient' }[]
   >([]);
 
-  const [pendingChoices, setPendingChoices] = useState<DraftChoice[]>([]);
+  const [pendingChoices, setPendingChoices] = useState<LosslessDraftChoice[]>([]);
   const [saving, setSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testRows, setTestRows] = useState<Row[]>([]);
@@ -126,9 +128,7 @@ export default function FeatBuilderScreen() {
     // so reconstructing via definitionToDraftChoice directly is lossless —
     // no separate homebrewDraft blob needed for this field.
     if (editing.pendingChoices) {
-      const reconstructed = editing.pendingChoices
-        .map(def => definitionToDraftChoice(def, FEAT_CHOICE_PREFIX))
-        .filter((d): d is DraftChoice => d !== null);
+      const reconstructed = hydrateLosslessChoices(editing.pendingChoices, FEAT_CHOICE_PREFIX);
       if (reconstructed.length > 0) setPendingChoices(reconstructed);
     }
   }, [editing?.id]);
@@ -166,7 +166,7 @@ export default function FeatBuilderScreen() {
     const feature = (editing && !traitTouched)
       ? editing.feature
       : buildTraitFeature(trait, { idPrefix: id, sourceKind: 'feat', sourceRefId: id, level: null }).feature;
-    return {
+    return mergeHomebrewDefinition(editing, {
       id,
       name: name.trim(),
       prerequisite: prerequisite.trim() || null,
@@ -177,11 +177,9 @@ export default function FeatBuilderScreen() {
         ? { options: abilityOptions, amount: parseInt(abilityAmount, 10) || 1, grantsSaveProficiency: grantsSaveProf }
         : undefined,
       skillChoice: skillPicks.length > 0 ? { picks: skillPicks } : undefined,
-      pendingChoices: pendingChoices.length > 0
-        ? pendingChoices.map(d => draftChoiceToDefinition(d, FEAT_CHOICE_PREFIX))
-        : undefined,
+      pendingChoices: serializeLosslessChoices(editing?.pendingChoices, pendingChoices, FEAT_CHOICE_PREFIX),
       rulesetId,
-    };
+    });
   }
 
   // Read-only test on a disposable level-1 scratch entity — no save, no
@@ -206,7 +204,7 @@ export default function FeatBuilderScreen() {
     setTestOpen(true);
   }
 
-  async function handleSave() {
+  function handleSave() {
     const feat = buildFeat();
     const { valid, errors, warnings } = validateFeat(feat);
     if (!valid) {
@@ -216,11 +214,11 @@ export default function FeatBuilderScreen() {
     if (warnings.length > 0) {
       Alert.alert('Warnings', warnings.join('\n') + '\n\nSave anyway?', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Save', onPress: () => doSave(feat) },
+        { text: 'Save', onPress: () => { void doSave(feat); } },
       ]);
       return;
     }
-    doSave(feat);
+    void doSave(feat);
   }
 
   async function doSave(feat: Feat) {

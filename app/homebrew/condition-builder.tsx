@@ -34,6 +34,7 @@ import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTe
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
 import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
 import { gameIdForRuleset } from '../../src/content/rulesets';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 export default function ConditionBuilderScreen() {
@@ -97,13 +98,13 @@ export default function ConditionBuilderScreen() {
         usedIds.add(feature.id);
       }
     }
-    return {
+    return mergeHomebrewDefinition(editing, {
       id,
       name: name.trim(),
       description: description.trim(),
       features,
       rulesetId,
-    };
+    });
   }
 
   // Read-only test on a disposable level-1 scratch entity — no save, no real
@@ -119,7 +120,7 @@ export default function ConditionBuilderScreen() {
     setTestOpen(true);
   }
 
-  async function handleSave() {
+  function handleSave() {
     const cond = buildCondition();
     const { valid, errors, warnings } = validateRace(cond); // same shape: id + name + features[]
     if (!valid) {
@@ -129,11 +130,11 @@ export default function ConditionBuilderScreen() {
     if (warnings.length > 0) {
       Alert.alert('Warnings', warnings.join('\n') + '\n\nSave anyway?', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Save', onPress: () => doSave(cond) },
+        { text: 'Save', onPress: () => { void doSave(cond); } },
       ]);
       return;
     }
-    doSave(cond);
+    void doSave(cond);
   }
 
   async function doSave(cond: Condition) {

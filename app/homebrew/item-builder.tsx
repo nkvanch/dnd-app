@@ -27,6 +27,8 @@ import { equipItem } from '../../src/engine/inventory';
 import { buildEquipmentSummaryRows } from '../../src/components/sheet/EquipmentPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateItemBuilder, serializeItemBuilder } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 function toId(name: string): string {
@@ -122,6 +124,7 @@ export default function ItemBuilderScreen() {
   // TraitEditor's kinds and every armor item needs it, not just some.
   const [trait, setTrait]     = useState<DraftTrait>(() => newDraftTrait('Effect'));
   const [traitOpen, setTraitOpen] = useState(false);
+  const [mechanicsTouched, setMechanicsTouched] = useState(false);
 
   useEffect(() => {
     if (!editing) return;
@@ -130,7 +133,7 @@ export default function ItemBuilderScreen() {
     setCost(editing.cost === '-' ? '' : editing.cost);
     setWeight(editing.weight ? String(editing.weight) : '');
     setImageUri(editing.imageUri);
-    const draft = editing.homebrewDraft as Record<string, unknown> | undefined;
+    const draft = hydrateItemBuilder(editing).draft as Record<string, unknown> | null;
     if (draft) {
       setDescription(String(draft.description ?? ''));
       setCategory((draft.category as ItemCategory) ?? 'gear');
@@ -187,15 +190,19 @@ export default function ItemBuilderScreen() {
   }, []);
 
   function toggleWeaponProp(p: string) {
+    setMechanicsTouched(true);
     setWeaponProps(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
   }
   function addDamageEntry() {
+    setMechanicsTouched(true);
     setWeaponDamage(prev => [...prev, { dice: '1d6', damageType: 'slashing' }]);
   }
   function updateDamageEntry(i: number, patch: Partial<DamageEntry>) {
+    setMechanicsTouched(true);
     setWeaponDamage(prev => prev.map((d, idx) => idx === i ? { ...d, ...patch } : d));
   }
   function removeDamageEntry(i: number) {
+    setMechanicsTouched(true);
     setWeaponDamage(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev);
   }
 
@@ -299,21 +306,13 @@ export default function ItemBuilderScreen() {
   }
 
   function buildItem(id: string): Item {
-    const feature = buildFeature(id);
-    return {
-      id,
-      name: name.trim(),
-      weight: parseFloat(weight) || 0,
-      cost: cost.trim() || '-',
-      properties: buildProperties(),
-      features: feature ? [feature] : [],
-      imageUri,
-      rulesetId,
-      homebrewDraft: {
-        description, category, rarity, armorCategory, weaponProps, extraProps, weaponDamage,
-        weaponClass, weaponRangeSel, acValue, acAddsDex, trait,
-      },
-    };
+    const feature = buildFeature(id)!;
+    const originalDraft = editing ? hydrateItemBuilder(editing).draft : null;
+    const draft = { description, category, rarity, armorCategory, weaponProps, extraProps, weaponDamage, weaponClass, weaponRangeSel, acValue, acAddsDex, trait };
+    const mechanicsChanged = !editing || mechanicsTouched || (originalDraft !== null && JSON.stringify(draft) !== JSON.stringify({ ...originalDraft, editorFeatureId: undefined }));
+    const built = mergeHomebrewDefinition(editing, { id, name: name.trim(), weight: parseFloat(weight) || 0, cost: cost.trim() || '-',
+      properties: buildProperties(), features: [feature], imageUri, rulesetId, homebrewDraft: draft });
+    return serializeItemBuilder(editing, built, draft, mechanicsChanged);
   }
 
   // Read-only test: equip the draft item onto a disposable level-1 scratch
@@ -433,7 +432,7 @@ export default function ItemBuilderScreen() {
         </View>
 
         <Text style={styles.fieldLabel}>Description</Text>
-        <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription}
+        <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={value => { setMechanicsTouched(true); setDescription(value); }}
           placeholder="What does this item do?" placeholderTextColor={Colors.textDim}
           multiline textAlignVertical="top" />
 
@@ -454,7 +453,7 @@ export default function ItemBuilderScreen() {
         <Text style={styles.fieldLabel}>Category</Text>
         <View style={styles.chipWrap}>
           {CATEGORIES.map(c => (
-            <Pressable key={c.key} style={[styles.chip, category === c.key && styles.chipActive]} onPress={() => setCategory(c.key)}>
+            <Pressable key={c.key} style={[styles.chip, category === c.key && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setCategory(c.key); }}>
               <Text style={[styles.chipTxt, category === c.key && styles.chipTxtActive]}>{c.label}</Text>
             </Pressable>
           ))}
@@ -474,26 +473,26 @@ export default function ItemBuilderScreen() {
             <Text style={[styles.fieldLabel, { marginTop: Spacing.sm }]}>Weapon Class</Text>
             <Text style={styles.hint}>Used to match "Choose a Martial/Simple Weapon"-style equipment requirements. Leave unset for a weapon that doesn't need to satisfy one of those.</Text>
             <View style={styles.chipWrap}>
-              <Pressable style={[styles.chip, weaponClass === null && styles.chipActive]} onPress={() => setWeaponClass(null)}>
+              <Pressable style={[styles.chip, weaponClass === null && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setWeaponClass(null); }}>
                 <Text style={[styles.chipTxt, weaponClass === null && styles.chipTxtActive]}>Unset</Text>
               </Pressable>
-              <Pressable style={[styles.chip, weaponClass === 'simple' && styles.chipActive]} onPress={() => setWeaponClass('simple')}>
+              <Pressable style={[styles.chip, weaponClass === 'simple' && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setWeaponClass('simple'); }}>
                 <Text style={[styles.chipTxt, weaponClass === 'simple' && styles.chipTxtActive]}>Simple</Text>
               </Pressable>
-              <Pressable style={[styles.chip, weaponClass === 'martial' && styles.chipActive]} onPress={() => setWeaponClass('martial')}>
+              <Pressable style={[styles.chip, weaponClass === 'martial' && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setWeaponClass('martial'); }}>
                 <Text style={[styles.chipTxt, weaponClass === 'martial' && styles.chipTxtActive]}>Martial</Text>
               </Pressable>
             </View>
 
             <Text style={[styles.fieldLabel, { marginTop: Spacing.sm }]}>Weapon Range</Text>
             <View style={styles.chipWrap}>
-              <Pressable style={[styles.chip, weaponRangeSel === null && styles.chipActive]} onPress={() => setWeaponRangeSel(null)}>
+              <Pressable style={[styles.chip, weaponRangeSel === null && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setWeaponRangeSel(null); }}>
                 <Text style={[styles.chipTxt, weaponRangeSel === null && styles.chipTxtActive]}>Unset</Text>
               </Pressable>
-              <Pressable style={[styles.chip, weaponRangeSel === 'melee' && styles.chipActive]} onPress={() => setWeaponRangeSel('melee')}>
+              <Pressable style={[styles.chip, weaponRangeSel === 'melee' && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setWeaponRangeSel('melee'); }}>
                 <Text style={[styles.chipTxt, weaponRangeSel === 'melee' && styles.chipTxtActive]}>Melee</Text>
               </Pressable>
-              <Pressable style={[styles.chip, weaponRangeSel === 'ranged' && styles.chipActive]} onPress={() => setWeaponRangeSel('ranged')}>
+              <Pressable style={[styles.chip, weaponRangeSel === 'ranged' && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setWeaponRangeSel('ranged'); }}>
                 <Text style={[styles.chipTxt, weaponRangeSel === 'ranged' && styles.chipTxtActive]}>Ranged</Text>
               </Pressable>
             </View>
@@ -531,15 +530,15 @@ export default function ItemBuilderScreen() {
             <Text style={styles.fieldLabel}>Armor Category</Text>
             <View style={styles.chipWrap}>
               {ARMOR_CATEGORIES.map(a => (
-                <Pressable key={a} style={[styles.chip, armorCategory === a && styles.chipActive]} onPress={() => setArmorCategory(a)}>
+                <Pressable key={a} style={[styles.chip, armorCategory === a && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setArmorCategory(a); }}>
                   <Text style={[styles.chipTxt, armorCategory === a && styles.chipTxtActive]}>{a}</Text>
                 </Pressable>
               ))}
             </View>
             <Text style={[styles.fieldLabel, { marginTop: Spacing.sm }]}>Base AC</Text>
-            <TextInput style={styles.input} value={acValue} onChangeText={setAcValue}
+            <TextInput style={styles.input} value={acValue} onChangeText={value => { setMechanicsTouched(true); setAcValue(value); }}
               placeholder="e.g. 14" placeholderTextColor={Colors.textDim} keyboardType="numeric" />
-            <Pressable style={[styles.toggle, acAddsDex && styles.toggleActive]} onPress={() => setAcAddsDex(v => !v)}>
+            <Pressable style={[styles.toggle, acAddsDex && styles.toggleActive]} onPress={() => { setMechanicsTouched(true); setAcAddsDex(v => !v); }}>
               <Text style={[styles.toggleTxt, acAddsDex && styles.toggleTxtActive]}>
                 {acAddsDex ? 'Adds DEX modifier (light/medium)' : 'Flat AC (heavy)'}
               </Text>
@@ -556,11 +555,11 @@ export default function ItemBuilderScreen() {
             <Text style={styles.fieldLabel}>Rarity</Text>
             <Text style={styles.hint}>Leave on "None" for mundane gear that just happens to be in this category.</Text>
             <View style={styles.chipWrap}>
-              <Pressable style={[styles.chip, rarity === null && styles.chipActive]} onPress={() => setRarity(null)}>
+              <Pressable style={[styles.chip, rarity === null && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setRarity(null); }}>
                 <Text style={[styles.chipTxt, rarity === null && styles.chipTxtActive]}>None</Text>
               </Pressable>
               {RARITIES.map(r => (
-                <Pressable key={r} style={[styles.chip, rarity === r && styles.chipActive]} onPress={() => setRarity(r)}>
+                <Pressable key={r} style={[styles.chip, rarity === r && styles.chipActive]} onPress={() => { setMechanicsTouched(true); setRarity(r); }}>
                   <Text style={[styles.chipTxt, rarity === r && styles.chipTxtActive]}>{r}</Text>
                 </Pressable>
               ))}
@@ -569,7 +568,7 @@ export default function ItemBuilderScreen() {
         )}
 
         <Text style={styles.fieldLabel}>Additional Properties (optional, comma-separated)</Text>
-        <TextInput style={styles.input} value={extraProps} onChangeText={setExtraProps}
+        <TextInput style={styles.input} value={extraProps} onChangeText={value => { setMechanicsTouched(true); setExtraProps(value); }}
           placeholder="Anything not covered above" placeholderTextColor={Colors.textDim} />
 
         <Text style={styles.fieldLabel}>Additional Mechanical Effect (optional)</Text>
@@ -594,9 +593,9 @@ export default function ItemBuilderScreen() {
       <TraitEditorModal
         trait={traitOpen ? trait : null}
         visible={traitOpen}
-        onChange={setTrait}
+        onChange={value => { setMechanicsTouched(true); setTrait(value); }}
         onDone={() => setTraitOpen(false)}
-        onDelete={() => { setTrait(newDraftTrait('Effect')); setTraitOpen(false); }}
+        onDelete={() => { setMechanicsTouched(true); setTrait(newDraftTrait('Effect')); setTraitOpen(false); }}
         excludeKinds={['resource_ability', 'spell_grant']}
       />
 

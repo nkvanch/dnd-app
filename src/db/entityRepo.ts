@@ -67,12 +67,14 @@ export async function loadEntity(id: string): Promise<Entity | null> {
 function parseEntityRow(r: EntityRow): Entity | null {
   try {
     const parsed = JSON.parse(r.data) as unknown;
-    const shape = validateEntityShape(parsed);
+    // Supported historical shapes migrate before the canonical deep check.
+    const migrated = migrateEntity(parsed as Entity);
+    const shape = validateEntityShape(migrated);
     if (!shape.valid) {
       console.error(`[entityRepo] quarantining structurally invalid row id=${r.id}:`, shape.errors);
       return null;
     }
-    return migrateEntity(parsed as Entity);
+    return migrated;
   } catch (e) {
     console.error(`[entityRepo] skipping malformed row id=${r.id}:`, e);
     return null;

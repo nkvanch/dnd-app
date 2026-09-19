@@ -35,6 +35,7 @@ import { spawnMonster } from '../../src/engine/monsterFactory';
 import { collectAllEffects } from '../../src/engine/pipeline';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
 import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Read-only test: unlike every other homebrew builder, a monster isn't
@@ -235,7 +236,7 @@ export default function MonsterBuilderScreen() {
       resources.push(...(extraResources ?? []));
     }
 
-    return {
+    return mergeHomebrewDefinition(editing, {
       id,
       name: name.trim(),
       cr,
@@ -251,13 +252,13 @@ export default function MonsterBuilderScreen() {
       speed: parseInt(speed, 10) || 0,
       features,
       savingThrows,
-      skills: {},
+      skills: editing?.skills ?? {},
       senses: senses.trim() ? senses.split(',').map(s => s.trim()).filter(Boolean) : [],
       languages: languages.trim() ? languages.split(',').map(l => l.trim()).filter(Boolean) : [],
       legendaryActions: legendaryActions.trim() ? parseInt(legendaryActions, 10) : undefined,
-      resources: resources.length > 0 ? resources : undefined,
+      resources: resources.length > 0 ? resources : editing?.resources,
       rulesetId,
-    };
+    });
   }
 
   function runTest() {
@@ -267,7 +268,7 @@ export default function MonsterBuilderScreen() {
     setTestOpen(true);
   }
 
-  async function handleSave() {
+  function handleSave() {
     const monster = buildMonster();
     const { valid, errors, warnings } = validateMonster(monster);
     if (!valid) {
@@ -277,11 +278,11 @@ export default function MonsterBuilderScreen() {
     if (warnings.length > 0) {
       Alert.alert('Warnings', warnings.join('\n') + '\n\nSave anyway?', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Save', onPress: () => doSave(monster) },
+        { text: 'Save', onPress: () => { void doSave(monster); } },
       ]);
       return;
     }
-    doSave(monster);
+    void doSave(monster);
   }
 
   async function doSave(monster: MonsterTemplate) {

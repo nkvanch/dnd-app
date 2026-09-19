@@ -9,6 +9,7 @@
 // validators (validateSubclass, validateItem) enforce their own genuinely
 // different required-field shapes.
 import { validateContent, validateSubclass, validateItem, validateEntityShape } from '../homebrewValidator';
+import { makeEmptyEntity } from '../../store/characterStore';
 
 describe('validateContent — dispatches every content type to a real validator (audit bug #10)', () => {
   it('routes "subrace" to the same {id, name, features[]} shape check as race', () => {
@@ -103,16 +104,7 @@ describe('validateItem', () => {
 // structurally-sound Entity already.
 describe('validateEntityShape', () => {
   function validEntity(overrides: Record<string, unknown> = {}) {
-    return {
-      id: 'c1',
-      kind: 'character',
-      identity: { name: 'Thren', level: 1 },
-      stats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
-      resources: { hp: { current: 10, maximum: 10 } },
-      features: [],
-      inventory: { equipped: [], carried: [] },
-      ...overrides,
-    };
+    return { ...makeEmptyEntity('c1'), ...overrides };
   }
 
   it('accepts a well-formed minimal entity', () => {
@@ -148,27 +140,27 @@ describe('validateEntityShape', () => {
     const result = validateEntityShape(validEntity({ identity: {} }));
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual(expect.arrayContaining([
-      'identity.name: required string', 'identity.level: required number',
+      'identity.name: required string', 'identity.level: finite nonnegative number required',
     ]));
   });
 
   it('rejects an identity.classes that is present but not an array', () => {
     const result = validateEntityShape(validEntity({ identity: { name: 'X', level: 1, classes: 'not-an-array' } }));
     expect(result.valid).toBe(false);
-    expect(result.errors).toContain('identity.classes: present but not an array');
+    expect(result.errors).toContain('identity.classes: must be an array');
   });
 
   it('rejects stats missing an ability', () => {
     const result = validateEntityShape(validEntity({ stats: { str: 10, dex: 10, con: 10, int: 10, wis: 10 } })); // missing cha
     expect(result.valid).toBe(false);
-    expect(result.errors).toContain('stats.cha: required number');
+    expect(result.errors).toContain('stats.cha: finite value from 0 to 100 required');
   });
 
   it('rejects resources.hp missing current/maximum', () => {
     const result = validateEntityShape(validEntity({ resources: { hp: {} } }));
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual(expect.arrayContaining([
-      'resources.hp.current: required number', 'resources.hp.maximum: required number',
+      'resources.hp.current: invalid', 'resources.hp.maximum: invalid',
     ]));
   });
 
@@ -188,18 +180,20 @@ describe('validateEntityShape', () => {
 
   it('accepts a well-formed spellcasting block, rejects a malformed one', () => {
     const good = validateEntityShape(validEntity({
-      spellcasting: { ability: 'int', slots: { '1': { total: 2, used: 0 } } },
+      spellcasting: { ability: 'int', known: [], prepared: [], cantrips: [], slots: { '1': { total: 2, used: 0 } } },
     }));
     expect(good.valid).toBe(true);
 
     const bad = validateEntityShape(validEntity({ spellcasting: { slots: {} } })); // missing ability
     expect(bad.valid).toBe(false);
-    expect(bad.errors).toContain('spellcasting.ability: required string when spellcasting is present');
+    expect(bad.errors).toContain('spellcasting.ability: invalid');
   });
 
-  it('treats a missing choices array as a warning, not an error', () => {
-    const result = validateEntityShape(validEntity());
-    expect(result.valid).toBe(true);
-    expect(result.warnings).toContain('choices: missing (would default to [])');
+  it('rejects a missing choices array at the canonical deep boundary', () => {
+    const entity = validEntity();
+    delete (entity as { choices?: unknown }).choices;
+    const result = validateEntityShape(entity);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('choices: required array');
   });
 });

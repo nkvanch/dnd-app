@@ -29,6 +29,8 @@ import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLeveledChoices, serializeLeveledChoices, LeveledLosslessDraftChoice } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -57,7 +59,7 @@ function toId(name: string): string {
 }
 
 type LevelFeature = DraftTrait & { level: number };
-type LevelChoice = DraftChoice & { level: number };
+type LevelChoice = LeveledLosslessDraftChoice;
 
 /**
  * Classes saved before class features gained real effect kinds have
@@ -188,16 +190,7 @@ export default function ClassBuilderScreen() {
     // DraftTrait[]) — reconstruct via definitionToDraftChoice using the
     // exact idPrefix buildHomebrewClass() below composes at save time, so
     // re-saving without changes round-trips to the same ids.
-    if (editing.levelChoices) {
-      const flat: LevelChoice[] = [];
-      for (const entry of editing.levelChoices) {
-        for (const def of entry.choices) {
-          const d = definitionToDraftChoice(def, `${editing.id}_l${entry.level}_`);
-          if (d) flat.push({ ...d, level: entry.level });
-        }
-      }
-      setLevelChoicesList(flat);
-    }
+    setLevelChoicesList(hydrateLeveledChoices(editing.levelChoices, editing.id));
   }, [editing?.id]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -307,17 +300,8 @@ export default function ClassBuilderScreen() {
       ...homebrewClasses.filter(c => c.id !== editing?.id).map(c => c.id),
     ]);
     const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_class', takenClassIds);
-    // CHOICE-AUTHORING-1: compile draft choices to canonical ChoiceDefinitions
-    // here (not in progressions.ts, unlike levelFeatures) — CharClass.levelChoices
-    // stores the already-compiled shape, grouped back by level.
-    const choicesByLevel = new Map<number, ChoiceDefinition[]>();
-    for (const c of levelChoicesList) {
-      const def = draftChoiceToDefinition(c, `${id}_l${c.level}_`);
-      if (!choicesByLevel.has(c.level)) choicesByLevel.set(c.level, []);
-      choicesByLevel.get(c.level)!.push(def);
-    }
-    const levelChoices = Array.from(choicesByLevel.entries()).map(([level, choices]) => ({ level, choices }));
-    return {
+    const levelChoices = serializeLeveledChoices(editing?.levelChoices, levelChoicesList, id);
+    return mergeHomebrewDefinition(editing, {
       id,
       name:        name.trim(),
       hitDie,
@@ -337,7 +321,7 @@ export default function ClassBuilderScreen() {
       asiLevels:               JSON.stringify(asiLevels) !== JSON.stringify(DEFAULT_ASI_LEVELS)
                                  ? asiLevels : undefined,
       levelFeatures:           levelFeatures.length > 0 ? levelFeatures : undefined,
-      levelChoices:            levelChoices.length > 0 ? levelChoices : undefined,
+      levelChoices,
       rulesetId,
       // Re-audit A39: this builder has no UI to author or edit either field
       // (both are import-only — an imported advanced class's full hand-
@@ -350,7 +334,7 @@ export default function ClassBuilderScreen() {
       // here (unlike the trait-editor fields above).
       rawProgression:           editing?.rawProgression,
       multiclassProficiencies:  editing?.multiclassProficiencies,
-    };
+    });
   }
 
   // Read-only test: reuses getProgressionForClass() — the SAME compile

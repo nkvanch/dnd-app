@@ -25,6 +25,7 @@ import { itemRepo } from '../content/itemRepo';
 import { itemIdsOnEntity } from '../content/itemRepo.types';
 import { recomputeDerived } from '../engine/pipeline';
 import { useHomebrewStore } from './homebrewStore';
+import { hydrateItemInstanceDefinitionFacts, resolveItemDefinition } from '../engine/itemMechanics';
 
 export type { EntityMeta };
 
@@ -42,15 +43,8 @@ export type { EntityMeta };
  */
 function hydrateItemFeatures(entity: Entity): Entity {
   function hydrateInstance(inst: ItemInstance): ItemInstance {
-    if (inst.features.length > 0) return inst;   // already hydrated (e.g. from equip path)
-    // itemRepo only ever holds the OFFICIAL catalog — a homebrew item's
-    // definition lives in homebrewStore instead. Callers of this function
-    // must ensure loadHomebrew() has resolved first (see boot() in
-    // app/_layout.tsx) or this silently misses homebrew items, same as the
-    // itemRepo-only bug this fallback fixes.
-    const def = itemRepo.getItemSync(inst.itemId)
-      ?? useHomebrewStore.getState().items.find(i => i.id === inst.itemId);
-    return def ? { ...inst, features: def.features } : inst;
+    const def = resolveItemDefinition(inst.itemId);
+    return hydrateItemInstanceDefinitionFacts(inst, def);
   }
   const equippedHydrated = entity.inventory.equipped.map(hydrateInstance);
   const carriedHydrated  = entity.inventory.carried.map(hydrateInstance);

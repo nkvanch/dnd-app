@@ -13,6 +13,7 @@ import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Backgr
 import { MonsterTemplate } from '../content/monsters/types';
 import { ContentCacheType } from '../db/contentCacheRepo';
 import { validateContent, validateFeature, validateEntityShape } from './homebrewValidator';
+import { migrateEntity } from './multiclass';
 
 export const GRIMOIRE_PACK_FORMAT_VERSION = 1;
 // HOMEBREW-PACKAGE-1: the CONTENT (not envelope) schema version — bumped
@@ -288,7 +289,13 @@ export function validatePackContents(pack: GrimoirePack): string[] {
     // never whether identity/stats/resources/inventory/spellcasting even
     // exist) and could reach persistence, where it would either silently
     // misbehave or throw somewhere far from this validation boundary.
-    const shape = validateEntityShape(entity);
+    let migrated: Entity;
+    try { migrated = migrateEntity(entity); }
+    catch (error) {
+      problems.push(`character "${name}": migration failed: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    const shape = validateEntityShape(migrated);
     if (!shape.valid) {
       problems.push(`character "${name}": ${shape.errors.join('; ')}`);
       continue; // malformed structurally — checking its feature arrays below would be redundant/unsafe

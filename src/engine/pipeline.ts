@@ -20,6 +20,7 @@ import { generateAllActionCards } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
 import { isMartialWeapon } from '../content/items/itemBrowse';
 import { useHomebrewStore } from '../store/homebrewStore';
+import { effectiveItemFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition } from './itemMechanics';
 import { getClassEntry } from './multiclass';
 import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
 
@@ -457,11 +458,16 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
   // it; a hypothetical future item that WAS both armor and had its own
   // requiresNoArmorOrShield effect would be a contradiction in the content
   // itself, not something this predicate needs to resolve).
-  const anyArmorOrShieldEquipped = entity.inventory.equipped.some(i => i.wearsArmorOrShield);
+  const anyArmorOrShieldEquipped = entity.inventory.equipped.some(i => {
+    const definition = resolveItemDefinition(i.itemId);
+    return definition ? itemWearsArmorOrShield(definition) : i.wearsArmorOrShield === true;
+  });
 
   for (const item of entity.inventory.equipped) {
-    if (item.requiresAttunement && !item.attuned) continue;
-    for (const fi of item.features) {
+    const definition = resolveItemDefinition(item.itemId);
+    if (!isItemMechanicallyActive(item, definition)) continue;
+    const itemFeatures = effectiveItemFeatures(item, definition);
+    for (const fi of itemFeatures) {
       for (const effect of fi.effects) {
         if (effect.condition !== null) {
           const flagActive      = activeFlags[effect.condition] === true;
@@ -547,7 +553,8 @@ function computeWeaponAttackBonuses(
     // bonus until actually attuned — same gate collectAllEffects applies to
     // passive effects and actionCards.ts applies to action cards, reusing
     // the same hydrated flag (see ItemInstance's own doc comment).
-    if (inst.requiresAttunement && !inst.attuned) continue;
+    const activeDefinition = resolveItemDefinition(inst.itemId);
+    if (!isItemMechanicallyActive(inst, activeDefinition)) continue;
     // itemRepo only ever holds the OFFICIAL catalog — a homebrew weapon's
     // definition lives in homebrewStore instead, so it needs the same
     // fallback lookup as characterStore.ts's hydrateItemFeatures, or every
@@ -559,7 +566,7 @@ function computeWeaponAttackBonuses(
     // Prefer the instance's own (possibly infusion-augmented) features,
     // same fallback actionCards.ts's card generator already uses — older
     // saves may have only an itemId with no hydrated features.
-    const feats = (inst.features && inst.features.length > 0) ? inst.features : def.features;
+    const feats = effectiveItemFeatures(inst, def);
     let dice: string | null = null;
     let dmgType = '';
     let featureName = def.name;

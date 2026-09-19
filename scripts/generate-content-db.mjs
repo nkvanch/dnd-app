@@ -13,14 +13,15 @@
 // same role as convert-spells.mjs / parse_items.py.)
 //
 // Re-run this whenever spell content changes, then re-bundle the app so the
-// new assets/content.db is picked up. The `contentVersion` meta row changes
-// on every run, which is what triggers contentDb.ts to re-copy the asset
+// new assets/content.db is picked up. The `contentVersion` meta row is a deterministic hash of authoritative content
+// and changes whenever generated content changes, which is what triggers contentDb.ts to re-copy the asset
 // over a stale previously-installed database on a user's device.
 // ============================================================================
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 
 import { FULL_SPELL_LIBRARY } from '../src/content/spells/index.ts';
 import { FULL_ITEM_LIBRARY } from '../src/content/items/index.ts';
@@ -138,7 +139,9 @@ for (const item of FULL_ITEM_LIBRARY) {
   );
 }
 
-const contentVersion = String(Date.now());
+const contentVersion = createHash('sha256')
+  .update(JSON.stringify({ spells: FULL_SPELL_LIBRARY, items: FULL_ITEM_LIBRARY }))
+  .digest('hex');
 const setMeta = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');
 setMeta.run('contentVersion', contentVersion);
 setMeta.run('schemaVersion', '2');

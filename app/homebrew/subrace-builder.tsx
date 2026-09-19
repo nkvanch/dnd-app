@@ -16,7 +16,7 @@ import { Ability, DraftTrait, Entity, RulesetId, RACE_CHOICE_PREFIX } from '../.
 import {
   ChoiceDefinitionListEditor, DraftChoice,
 } from '../../src/components/homebrew/ChoiceDefinitionEditor';
-import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
+import { definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
@@ -32,6 +32,8 @@ import { applyGrant } from '../../src/engine/leveling';
 import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
 import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
 import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLosslessChoices, serializeDraftTraits, serializeLosslessChoices } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 export default function SubraceBuilderScreen() {
@@ -90,7 +92,7 @@ export default function SubraceBuilderScreen() {
     if (draft) {
       if (draft.abiBonuses) setAbiBonuses(draft.abiBonuses as Record<Ability, string>);
       if (draft.traits) setTraits(draft.traits as DraftTrait[]);
-      if (draft.pendingChoices) setPendingChoices(draft.pendingChoices as DraftChoice[]);
+      if (draft.pendingChoices) setPendingChoices(hydrateLosslessChoices(editing.pendingChoices, RACE_CHOICE_PREFIX));
     }
     // CHOICE-AUTHORING-1: see race-builder.tsx's identical fallback comment.
     if (!draft?.pendingChoices && editing.pendingChoices) {
@@ -110,16 +112,30 @@ export default function SubraceBuilderScreen() {
     if (!name.trim() || !parentId || saving) return;
     setSaving(true);
     const draft = { ...newDraftSubrace(name.trim()), abiBonuses, traits };
-    const compiledChoices = pendingChoices.map(d => draftChoiceToDefinition(d, RACE_CHOICE_PREFIX));
-    const subrace = {
-      ...buildSubrace(draft, parentId), rulesetId,
-      pendingChoices: compiledChoices.length > 0 ? compiledChoices : undefined,
-      homebrewDraft: { abiBonuses, traits, pendingChoices },
-    };
+    const compiled = buildSubrace(draft, parentId);
+    const originalDraft = editing?.homebrewDraft as (Record<string, unknown> & { traitOwners?: any[] }) | undefined;
+    const generatedIds = compiled.features.filter(f => f.id.endsWith('_asi')).map(f => f.id);
+    const generated = compiled.features.filter(f => generatedIds.includes(f.id));
+    const serializedTraits = serializeDraftTraits({ originalFeatures: editing?.features ?? [], originalResources: editing?.resources,
+      originalDrafts: (originalDraft?.traits as DraftTrait[] | undefined) ?? [], editedDrafts: traits, idPrefix: compiled.id,
+      sourceKind: 'race', sourceRefId: compiled.id, generatedFeatures: generated, generatedIds, owners: originalDraft?.traitOwners });
+    const subrace = { ...compiled, rulesetId, features: serializedTraits.features, resources: serializedTraits.resources.length ? serializedTraits.resources : undefined,
+      pendingChoices: serializeLosslessChoices(editing?.pendingChoices, pendingChoices, RACE_CHOICE_PREFIX),
+      homebrewDraft: { abiBonuses, traits, pendingChoices, traitOwners: serializedTraits.owners } };
     // A standalone subrace keeps the editId (if editing) so re-saving
     // updates the same record rather than minting a new one — buildSubrace
     // derives an id from the name, which would drift if the name changed.
-    const finalSubrace = editing ? { ...subrace, id: editing.id } : subrace;
+    const finalSubrace = editing
+      ? mergeHomebrewDefinition(editing, {
+          ...subrace, id: editing.id,
+          // Imported definitions without an authoring draft cannot be safely
+          // reverse-compiled; preserve their structured mechanics on rename.
+          ...(!editing.homebrewDraft ? {
+            features: editing.features, resources: editing.resources,
+            pendingChoices: editing.pendingChoices,
+          } : {}),
+        })
+      : subrace;
     try {
       await saveItem('subrace', finalSubrace);
       // SAVE-AND-ADD-1: tell race-detail.tsx's subrace picker which subrace

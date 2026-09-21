@@ -185,6 +185,14 @@ export const CREATE_INSTALLED_PACKS_TABLE = `
   );
 `;
 
+export const CREATE_CUSTOM_RULE_PROFILES_TABLE = `
+  CREATE TABLE IF NOT EXISTS custom_rule_profiles (
+    id TEXT PRIMARY KEY NOT NULL,
+    data TEXT NOT NULL,
+    updatedAt INTEGER NOT NULL
+  );
+`;
+
 // Indexes for common query patterns
 export const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_entities_kind     ON entities    (kind);
@@ -209,5 +217,6 @@ export const ALL_TABLES = [
   CREATE_APP_META_TABLE,
   CREATE_INSTALLED_PACKS_TABLE,
   CREATE_PREPARED_ENCOUNTERS_TABLE,
+  CREATE_CUSTOM_RULE_PROFILES_TABLE,
   CREATE_INDEXES,
 ];

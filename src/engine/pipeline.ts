@@ -20,7 +20,7 @@ import { generateAllActionCards } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
 import { isMartialWeapon } from '../content/items/itemBrowse';
 import { useHomebrewStore } from '../store/homebrewStore';
-import { effectiveItemFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition } from './itemMechanics';
+import { effectiveItemFeatures, effectiveWeaponAttackFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition } from './itemMechanics';
 import { getClassEntry } from './multiclass';
 import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
 
@@ -112,6 +112,14 @@ export function applyStatModifiers(
   return result;
 }
 
+export function effectiveAbilityScores(entity: Entity): Entity['stats'] {
+  const scores = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  for (const override of [...(entity.characterOverrides ?? []).filter(o=>o.active).sort((a,b)=>a.appliedAt-b.appliedAt), ...(entity.dmOverrides ?? []).filter(o=>o.active).sort((a,b)=>a.appliedAt-b.appliedAt)].filter(o => (['str','dex','con','int','wis','cha'] as string[]).includes(o.stat))) {
+    const ability = override.stat as Ability; scores[ability] = override.operation === 'set' ? override.value : scores[ability] + override.value;
+  }
+  return scores;
+}
+
 // ── Main pipeline ─────────────────────────────────────────────────────────────
 
 /**
@@ -145,6 +153,12 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
       dex: beastForm.stats.dex,
       con: beastForm.stats.con,
     };
+  }
+
+  // Ability-score DM replacements/additions feed every dependent derived value.
+  for (const override of [...(entity.characterOverrides ?? []), ...(entity.dmOverrides ?? [])].filter(o => o.active && (['str','dex','con','int','wis','cha'] as string[]).includes(o.stat))) {
+    const ability = override.stat as Ability;
+    effectiveStats[ability] = override.operation === 'set' ? override.value : effectiveStats[ability] + override.value;
   }
 
   // Authoritative inputs: persisted entitlements and currently active effects.
@@ -356,7 +370,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   // ── Apply DM overrides LAST ───────────────────────────────────────────────
   // Scalar numeric fields (DERIVED_NUMERIC_KEYS):
   const mutableDerived = derived as unknown as Record<string, number | null>;
-  for (const override of (entity.dmOverrides ?? []).filter(o => o.active)) {
+  for (const override of [...(entity.characterOverrides ?? []), ...(entity.dmOverrides ?? [])].filter(o => o.active)) {
     if (!DERIVED_NUMERIC_KEYS.has(override.stat)) continue;
     const current = (mutableDerived[override.stat] as number) ?? 0;
     mutableDerived[override.stat] =
@@ -364,7 +378,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   }
 
   // SIG-1: Saving throw DM overrides (e.g. "savingThrows.str")
-  for (const override of (entity.dmOverrides ?? []).filter(o => o.active)) {
+  for (const override of [...(entity.characterOverrides ?? []), ...(entity.dmOverrides ?? [])].filter(o => o.active)) {
     if (!override.stat.startsWith('savingThrows.')) continue;
     const ability = override.stat.slice('savingThrows.'.length) as Ability;
     if (!(['str','dex','con','int','wis','cha'] as string[]).includes(ability)) continue;
@@ -566,7 +580,7 @@ function computeWeaponAttackBonuses(
     // Prefer the instance's own (possibly infusion-augmented) features,
     // same fallback actionCards.ts's card generator already uses — older
     // saves may have only an itemId with no hydrated features.
-    const feats = effectiveItemFeatures(inst, def);
+    const feats = effectiveWeaponAttackFeatures(inst, def);
     let dice: string | null = null;
     let dmgType = '';
     let featureName = def.name;

@@ -98,6 +98,14 @@ const BASE_ARMORS: Record<string, ArmorWeight> = {
 const BASE_ARMOR_KEYS_BY_LENGTH = Object.keys(BASE_ARMORS).sort((a, b) => b.length - a.length);
 const ARMOR_WORD_HINTS = ['armor', 'mail', 'plate', 'cuirass', 'breastplate', 'chain'];
 
+/** Resolve the mundane base weapon id embedded in a magic weapon name. */
+export function baseWeaponIdFromName(name: string): string | null {
+  const lower = name.toLowerCase();
+  const key = BASE_WEAPON_KEYS_BY_LENGTH.find(candidate => lower.includes(candidate))
+    ?? WEAPON_WORD_FALLBACK_KEYS_BY_LENGTH.find(candidate => lower.includes(candidate));
+  return key ? key.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') : null;
+}
+
 /** Recover a weapon's { martial, ranged } class from its name, or null. */
 export function classifyWeaponByName(i: ItemIndexEntry): WeaponClass | null {
   const name = i.name.toLowerCase();

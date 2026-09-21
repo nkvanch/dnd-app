@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useCampaignStore }  from '../../src/store/campaignStore';
 import { useSyncStore }      from '../../src/store/syncStore';
-import { getMeta } from '../../src/db/appMetaRepo';
+import { useLastCharacterStore } from '../../src/store/lastCharacterStore';
 import { rollExpression } from '../../src/engine/dice';
 import { DiceRoll, Entity } from '../../src/engine/types';
 import { ManualRollInput } from '../../src/components/ManualRollInput';
@@ -206,7 +206,7 @@ function LastCharacterCard({ character, onPress }: { character: Entity; onPress:
   const hpColor = hpPercent > 0.5 ? Colors.green : hpPercent > 0.25 ? Colors.gold : Colors.red;
 
   return (
-    <Pressable style={styles.lastCharCard} onPress={onPress}>
+    <Pressable testID="home-last-character" accessibilityLabel="Continue last character" style={styles.lastCharCard} onPress={onPress}>
       <View style={styles.lastCharHeader}>
         <View>
           <Text style={styles.lastCharName}>{identity.name || 'Unnamed'}</Text>
@@ -251,10 +251,11 @@ export default function HomeScreen() {
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
   const loadCampaigns  = useCampaignStore(s => s.loadCampaigns);
   const [diceOpen, setDiceOpen] = useState(false);
-  const [lastOpenedId, setLastOpenedId] = useState<string | null>(null);
+  const lastOpenedId = useLastCharacterStore(s => s.lastCharacterId);
+  const loadLastCharacter = useLastCharacterStore(s => s.load);
 
-  useEffect(() => { loadCampaigns(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { getMeta('last_opened_character_id').then(setLastOpenedId).catch(() => {}); }, [characters.length]);
+  useEffect(() => { void loadCampaigns(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadLastCharacter(); }, [loadLastCharacter]);
 
   // Prefer the character the player actually last opened a sheet for; fall
   // back to the most recently updated one (characters[0] — loadAllEntities
@@ -290,7 +291,7 @@ export default function HomeScreen() {
   }, [router]);
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} testID="home-screen">
       <View style={styles.topBar}>
         <Text style={styles.appTitle}>Grimoire</Text>
       </View>
@@ -324,7 +325,7 @@ export default function HomeScreen() {
         {/* Quick Actions */}
         <Text style={styles.sectionLabel}>Quick Actions</Text>
         <View style={styles.quickActions}>
-          <Pressable style={styles.actionBtn} onPress={startCreation}>
+          <Pressable testID="home-create-character" accessibilityLabel="Create Character" style={styles.actionBtn} onPress={startCreation}>
             <Text style={styles.actionBtnIcon}>✨</Text>
             <Text style={styles.actionBtnText}>Create Character</Text>
           </Pressable>
@@ -347,7 +348,7 @@ export default function HomeScreen() {
             </Pressable>
           )}
 
-          <Pressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => setDiceOpen(true)}>
+          <Pressable testID="home-dice-roller" accessibilityLabel="Dice Roller" style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => setDiceOpen(true)}>
             <Text style={styles.actionBtnIcon}>🎲</Text>
             <Text style={styles.actionBtnText}>Roll Dice</Text>
           </Pressable>

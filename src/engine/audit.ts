@@ -28,7 +28,7 @@ import {
   Entity, Ability, SkillName, AuditEntry, AuditTrail, AuditSourceKind, ActiveEffect,
 } from './types';
 import {
-  modifier, collectAllEffects, applyStatModifiers,
+  modifier, collectAllEffects, applyStatModifiers, effectiveAbilityScores,
   proficiencyBonus, AC_DC_BASE, selectBestAcFormula,
 } from './pipeline';
 import { resolveCombine } from './resolver';
@@ -45,14 +45,15 @@ import { ALL_BEAST_FORMS } from '../content/beastforms';
  */
 export function explainValue(entity: Entity, stat: string): AuditTrail {
   const entries = buildEntries(entity, stat);
-  appendDmOverrides(entity, stat, entries);
+  const calculated = entries.reduce((sum, e) => sum + e.value, 0);
+  const override = appendDmOverrides(entity, stat, entries, calculated);
 
   // The total is the honest sum of the contributing entries. Using
   // entity.derived[stat] directly would hide real calculation bugs (e.g. an AC
   // double-count) behind the already-computed number.
-  const total = entries.reduce((sum, e) => sum + e.value, 0);
+  const total = override ?? entries.reduce((sum, e) => sum + e.value, 0);
 
-  return { stat, total, entries };
+  return { stat, total, entries, calculated, override, effective: total };
 }
 
 // ── Builders ──────────────────────────────────────────────────────────────────
@@ -148,7 +149,7 @@ function buildAcEntries(entity: Entity): AuditEntry[] {
 
 function buildInitiativeEntries(entity: Entity): AuditEntry[] {
   const entries: AuditEntry[] = [];
-  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const effectiveStats = effectiveAbilityScores(entity);
   entries.push(entry('DEX modifier', modifier(effectiveStats.dex), 'base', null));
 
   for (const f of entity.features) {
@@ -369,7 +370,7 @@ function buildAbilityEntries(entity: Entity, ability: Ability): AuditEntry[] {
 
 function buildSaveEntries(entity: Entity, ability: Ability): AuditEntry[] {
   const entries: AuditEntry[] = [];
-  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const effectiveStats = effectiveAbilityScores(entity);
   const mod  = modifier(effectiveStats[ability]);
   const prof = proficiencyBonus(entity.identity.level);
   const isProficient = entity.proficiencies.savingThrows.includes(ability);
@@ -403,7 +404,7 @@ function buildSkillEntries(entity: Entity, skill: SkillName): AuditEntry[] {
   const skillEntry = entity.skills.skills[skill];
   if (!skillEntry) return entries;
 
-  const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  const effectiveStats = effectiveAbilityScores(entity);
   const abilityMod = modifier(effectiveStats[skillEntry.ability]);
   const prof       = proficiencyBonus(entity.identity.level);
 
@@ -445,15 +446,14 @@ function buildSkillEntries(entity: Entity, skill: SkillName): AuditEntry[] {
  * 'set' overrides are shown as notes (value: 0) since they replace rather than add.
  * 'add' overrides show their actual value contribution.
  */
-function appendDmOverrides(entity: Entity, stat: string, entries: AuditEntry[]): void {
-  for (const ov of (entity.dmOverrides ?? []).filter(o => o.active && o.stat === stat)) {
-    entries.push({
-      label:      `DM override (${ov.operation}) — ${ov.label}`,
-      value:      ov.value,   // always show the actual value, not 0 for 'set'
-      sourceKind: 'dm_override',
-      sourceId:   ov.id,
-    });
+function appendDmOverrides(entity: Entity, stat: string, entries: AuditEntry[], calculated: number): number | null {
+  let effective = calculated; let replacement: number | null = null;
+  const layered=[...(entity.characterOverrides ?? []).map(o=>({ ...o, layer:'Character Override', kind:'character_override' as const })),...(entity.dmOverrides ?? []).map(o=>({ ...o, layer:'DM Override', kind:'dm_override' as const }))];
+  for (const ov of layered.filter(o => o.active && o.stat === stat)) {
+    if (ov.operation === 'set') { const from = effective; replacement = ov.value; effective = ov.value; entries.push({ label: ov.label ? ov.layer + ' — ' + ov.label : ov.layer, value: 0, sourceKind: ov.kind, sourceId: ov.id, replacement: { from, to: ov.value } }); }
+    else { effective += ov.value; entries.push({ label: ov.layer + ' (add) — ' + ov.label, value: ov.value, sourceKind: ov.kind, sourceId: ov.id }); }
   }
+  return replacement === null ? null : effective;
 }
 
 // ── Type guards ───────────────────────────────────────────────────────────────

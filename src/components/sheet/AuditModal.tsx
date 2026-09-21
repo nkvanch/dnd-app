@@ -105,15 +105,18 @@ export function AuditModal({
               <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
                 {entries.map((e, i) => (
                   <View key={i} style={styles.row}>
-                    <Text style={styles.rowLabel}>{e.label}</Text>
-                    <Text style={[
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowLabel}>{e.label}</Text>
+                      {e.replacement && <Text style={styles.replacement}>{e.replacement.from} → {e.replacement.to}</Text>}
+                    </View>
+                    {!e.replacement && <Text style={[
                       styles.rowValue,
                       e.value < 0 && styles.neg,
                       e.sourceKind === 'dm_override' && styles.overrideVal,
                     ]}>
                       {e.value >= 0 ? `+${e.value}` : String(e.value)}
                       {e.sourceKind === 'dm_override' && ' ✱'}
-                    </Text>
+                    </Text>}
                   </View>
                 ))}
                 {entries.length === 0 && (
@@ -214,6 +217,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   rowLabel:    { fontSize: FontSize.sm, color: Colors.textPrimary, flex: 1 },
+  replacement: { fontSize: FontSize.md, color: Colors.gold, marginTop: 2 },
   rowValue:    { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.green },
   neg:         { color: Colors.red },
   overrideVal: { color: Colors.gold },

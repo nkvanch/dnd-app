@@ -264,6 +264,7 @@ export function validateEntityDeep(raw: unknown): ValidationResult {
     if (!finite(raw.conditionMonitor.exhaustion) || raw.conditionMonitor.exhaustion < 0) errors.push('conditionMonitor.exhaustion: invalid');
     if (!object(raw.conditionMonitor.flags) || !Object.values(raw.conditionMonitor.flags).every(boolean)) errors.push('conditionMonitor.flags: boolean map required');
   }
+  if (raw.characterOverrides !== undefined && !Array.isArray(raw.characterOverrides)) errors.push('characterOverrides: must be an array');
   if (raw.dmOverrides !== undefined && !Array.isArray(raw.dmOverrides)) errors.push('dmOverrides: must be an array');
   if (raw.wildShapeState !== undefined && raw.wildShapeState !== null) {
     const ws = raw.wildShapeState;

@@ -46,3 +46,58 @@ export function itemsGrantedBy(choice: ChoiceState): string[] {
   const fixed = Array.isArray(opt?.value) ? opt.value : [];
   return [...fixed, ...filteredItemIds];
 }
+
+
+/** Starting packages only expose mundane definitions. Special/magic items remain
+ * available through Additional Items and the ordinary inventory browser. */
+export function isStartingEquipmentItem(item: { properties: string[] }): boolean {
+  return !item.properties.some(property => {
+    const value = property.toLowerCase();
+    return value.includes('magic') || value.includes('wondrous') || value.includes('artifact');
+  });
+}
+
+/** Reopen exactly one equipment choice, removing only inventory instances it granted. */
+export function reopenEquipmentChoice(entity: import('../../engine/types').Entity, choiceId: string): import('../../engine/types').Entity {
+  const choice = entity.choices.find(candidate => candidate.id === choiceId);
+  if (!choice || choice.definition.kind !== 'equipment') return entity;
+  const carried = [...entity.inventory.carried];
+  for (const itemId of itemsGrantedBy(choice)) {
+    const index = carried.findIndex(item => item.itemId === itemId);
+    if (index >= 0) carried.splice(index, 1);
+  }
+  return { ...entity, inventory: { ...entity.inventory, carried }, choices: entity.choices.map(candidate =>
+    candidate.id === choiceId ? { ...candidate, resolved: false, selections: [] } : candidate) };
+}
+
+/** Skipping is a real empty resolution and never creates a placeholder item. */
+export function skipEquipmentChoice(entity: import('../../engine/types').Entity, choiceId: string): import('../../engine/types').Entity {
+  const reopened = reopenEquipmentChoice(entity, choiceId);
+  return { ...reopened, choices: reopened.choices.map(choice => choice.id === choiceId
+    ? { ...choice, resolved: true, selections: [] } : choice) };
+}
+
+export function skipRemainingEquipment(entity: import('../../engine/types').Entity): import('../../engine/types').Entity {
+  return entity.choices.filter(choice => choice.definition.kind === 'equipment' && !choice.resolved)
+    .reduce((current, choice) => skipEquipmentChoice(current, choice.id), entity);
+}
+
+
+const ADDITIONAL_SOURCE_PREFIX = 'creation:additional:';
+
+export function additionalEquipment(entity: import('../../engine/types').Entity) {
+  return entity.inventory.carried.filter(item => item.acquisitionSourceId?.startsWith(ADDITIONAL_SOURCE_PREFIX));
+}
+
+export function addAdditionalEquipment(entity: import('../../engine/types').Entity, itemId: string): { entity: import('../../engine/types').Entity; added: boolean } {
+  if (additionalEquipment(entity).some(item => item.itemId === itemId)) return { entity, added: false };
+  const instance = { itemId, quantity: 1, attuned: false, features: [], acquisitionSourceId: ADDITIONAL_SOURCE_PREFIX + Date.now().toString(36) + ':' + Math.random().toString(36).slice(2) };
+  return { entity: { ...entity, inventory: { ...entity.inventory, carried: [...entity.inventory.carried, instance] } }, added: true };
+}
+
+export function removeAdditionalEquipment(entity: import('../../engine/types').Entity, acquisitionSourceId: string): import('../../engine/types').Entity {
+  const index = entity.inventory.carried.findIndex(item => item.acquisitionSourceId === acquisitionSourceId && item.acquisitionSourceId.startsWith(ADDITIONAL_SOURCE_PREFIX));
+  if (index < 0) return entity;
+  const carried = [...entity.inventory.carried]; carried.splice(index, 1);
+  return { ...entity, inventory: { ...entity.inventory, carried } };
+}

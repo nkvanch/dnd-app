@@ -33,6 +33,19 @@ export async function saveEntity(entity: Entity): Promise<void> {
   );
 }
 
+/** Answers only whether a persisted character row owns this exact id.
+ * This deliberately avoids parsing entity JSON and ignores drafts, metadata,
+ * profiles, content ids, and any in-memory character list. */
+export async function persistedCharacterExists(id: string): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  const db = getDb();
+  const row = await db.getFirstAsync<{ present: number }>(
+    "SELECT 1 AS present FROM entities WHERE id = ? AND kind = 'character' LIMIT 1",
+    [id]
+  );
+  return row?.present === 1;
+}
+
 /** Load a single Entity by id. Returns null if not found OR structurally
  *  invalid (re-audit A07 — same validated path parseEntityRow uses, so a
  *  direct single-entity load can't crash on a malformed row either). */

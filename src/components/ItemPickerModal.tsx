@@ -34,6 +34,8 @@ import { SortControl } from './SortControl';
 import { FilterSection, FilterChipRow, MultiSelectChipRow, OfficialHomebrewChipRow } from './FilterChipRow';
 import { NonSrdBadge, isNonSrd } from './NonSrdBadge';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
+import { isStartingEquipmentItem } from '../content/items/equipmentDisplay';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
   visible: boolean;
@@ -77,6 +79,7 @@ export function ItemPickerModal({
   selected: selectedProp, onSelectedChange, browseStateKey,
   onConfirmRequired, onAddAdditional, onCreateNewItem, onClose,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const homebrewItems = useHomebrewStore(s => s.items);
   const allItems = useMemo(() => mergeItemIndex(homebrewItems), [homebrewItems]);
   const homebrewIds = useMemo(() => new Set(homebrewItems.map(i => i.id)), [homebrewItems]);
@@ -111,7 +114,7 @@ export function ItemPickerModal({
   const filtered = useMemo(() => sortByOption(allItems.filter(i => {
     // The legal requirement is authoritative — never relaxed by the
     // player's own filters below, only narrowed further.
-    if (mode === 'required' && constraint && !itemMatchesConstraint(i, constraint)) return false;
+    if (mode === 'required' && (!isStartingEquipmentItem(i) || (constraint && !itemMatchesConstraint(i, constraint)))) return false;
     if (!matchesSearchText(i.name, [], q)) return false;
     if (officialFilter !== 'all' && (officialFilter === 'homebrew') !== homebrewIds.has(i.id)) return false;
     // Category is only offered as an optional filter when the constraint
@@ -185,7 +188,7 @@ export function ItemPickerModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <Pressable style={s.backdrop} onPress={handleClose}>
-        <Pressable style={s.sheet} onPress={e => e.stopPropagation()}>
+        <Pressable style={[s.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]} onPress={e => e.stopPropagation()}>
           <View style={s.headerRow}>
             <Text style={s.title}>{title}</Text>
             {mode === 'required' && (

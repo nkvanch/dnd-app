@@ -9,6 +9,7 @@ import { useDiceLogStore } from '../store/diceLogStore';
 import { ManualRollInput } from './ManualRollInput';
 import { rollWithAdvantage, rollWithDisadvantage } from '../engine/dice';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const QUICK_DICE = ['1d4','1d6','1d8','1d10','1d12','1d20','d100','2d6','4d6kh3'];
 
@@ -23,6 +24,8 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
   const [expr,    setExpr]    = useState('1d20');
   const [label,   setLabel]   = useState('');
   const [error,   setError]   = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const insets = useSafeAreaInsets();
   const history   = useDiceLogStore(s => s.history);
   const rollAndLog = useDiceLogStore(s => s.rollAndLog);
   const pushRoll   = useDiceLogStore(s => s.pushRoll);
@@ -68,6 +71,8 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
     <>
       {/* Floating button */}
       <Pressable
+        testID="dice-roller"
+        accessibilityLabel="Dice Roller"
         style={[styles.fab, { bottom, right }]}
         onPress={() => setOpen(true)}
       >
@@ -81,7 +86,7 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
-          <View style={styles.sheet}>
+          <ScrollView style={styles.sheet} contentContainerStyle={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]} keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>Dice Roller</Text>
 
             {/* Quick dice */}
@@ -113,7 +118,7 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
 
             {error ? <Text style={styles.errorTxt}>{error}</Text> : null}
 
-            <Pressable style={styles.rollBtn} onPress={roll}>
+            <Pressable testID="dice-roll" accessibilityLabel="Roll dice" style={styles.rollBtn} onPress={roll}>
               <Text style={styles.rollBtnTxt}>Roll</Text>
             </Pressable>
 
@@ -144,23 +149,27 @@ export function GlobalDiceRoller({ bottom = 88, right = 16 }: Props) {
               </View>
             )}
 
-            {/* Roll history */}
+            {/* Roll history stays collapsed by default and scrolls within a fixed region. */}
             {history.length > 1 && (
               <View style={styles.historySection}>
-                <Text style={styles.historyTitle}>RECENT ROLLS</Text>
-                {history.slice(1).map((r, i) => (
-                  <View key={r.id} style={styles.historyRow}>
-                    <Text style={styles.historyExpr}>{r.label ?? r.expression}</Text>
-                    <Text style={styles.historyTotal}>{r.total}</Text>
-                  </View>
-                ))}
+                <Pressable testID="recent-rolls" accessibilityLabel="Recent Rolls" onPress={() => setHistoryOpen(value => !value)}>
+                  <Text style={styles.historyTitle}>RECENT ROLLS {historyOpen ? '▲' : '▼'}</Text>
+                </Pressable>
+                {historyOpen && <ScrollView style={styles.historyList} nestedScrollEnabled>
+                  {history.slice(1).map(r => (
+                    <View key={r.id} style={styles.historyRow}>
+                      <Text style={styles.historyExpr}>{r.label ?? r.expression}</Text>
+                      <Text style={styles.historyTotal}>{r.total}</Text>
+                    </View>
+                  ))}
+                </ScrollView>}
               </View>
             )}
 
             <Pressable style={styles.closeBtn} onPress={() => setOpen(false)}>
               <Text style={styles.closeBtnTxt}>Close</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </>
@@ -187,11 +196,10 @@ const styles = StyleSheet.create({
 
   overlay:  { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: '#000000aa' },
-  sheet: {
-    backgroundColor: Colors.surfaceHigh,
+  sheet: { maxHeight: '92%', backgroundColor: Colors.surfaceHigh,
     borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,
-    padding: Spacing.lg, gap: Spacing.md,
   },
+  sheetContent: { padding: Spacing.lg, gap: Spacing.md },
   title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
 
   quickRow: { gap: Spacing.xs, paddingVertical: 2 },
@@ -240,6 +248,7 @@ const styles = StyleSheet.create({
   resultExpr:      { fontSize: FontSize.xs, color: Colors.textDim },
 
   historySection: { gap: Spacing.xs },
+  historyList: { maxHeight: 180 },
   historyTitle:   { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 2 },
   historyRow:     { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
   historyExpr:    { fontSize: FontSize.sm, color: Colors.textSecondary },

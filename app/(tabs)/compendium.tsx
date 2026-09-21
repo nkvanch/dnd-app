@@ -12,12 +12,12 @@
 // not app-restart-persisted — matches every other screen this pass).
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, FlatList, Pressable, StyleSheet, TextInput, InteractionManager } from 'react-native';
-import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { useLocalSearchParams } from 'expo-router';
 import { useBrowseStateStore } from '../../src/store/browseStateStore';
 import { loadFavorites, saveFavorites, favoriteKey } from '../../src/content/favorites';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import {
-  FilterSection, FilterChipRow, MultiSelectChipRow, OfficialHomebrewChipRow,
+  FilterSection, FilterChipRow, MultiSelectChipRow,
   ActiveFilterChips, ZeroResultsState,
 } from '../../src/components/FilterChipRow';
 import { SortControl } from '../../src/components/SortControl';
@@ -28,13 +28,14 @@ import {
   matchesSearchText,
 } from '../../src/content/contentQuery';
 import { matchesGame } from '../../src/content/rulesets';
+import { currentContentExposure, isContentExposed } from '../../src/content/contentExposure';
 import { GAMES, RULESETS, gameIdForRuleset } from '../../src/content/rulesets';
 import { GameId, RulesetId, Ability, SkillName, Feat, ContentDB, matchesRuleset } from '../../src/engine/types';
 import {
   flattenSubraces, attachParentClassNames, raceToBrowsable, subraceToBrowsable,
   classToBrowsable, subclassToBrowsable, backgroundToBrowsable, featToBrowsable,
   spellToBrowsable, itemToBrowsable, monsterToBrowsable, conditionToBrowsable,
-  summaryLine, entrySourceLabel, SubraceWithParent, SubclassEntryWithParent,
+  summaryLine, entrySourceLabel, CONTENT_TYPE_VISUALS, SubraceWithParent, SubclassEntryWithParent,
 } from '../../src/content/compendiumBrowse';
 import {
   RACE_SIZE_ORDER, RACE_MOVEMENT_TYPES, hasDarkvision, raceMovementTypes, hasSubraces, raceSortOptions,
@@ -45,7 +46,7 @@ import {
 import { CASTER_TYPE, CASTER_TYPES, classSortOptions } from '../../src/content/classes/classBrowse';
 import {
   SubclassAddition, SUBCLASS_ADDITION_LABELS, subclassAdditions,
-  subclassEntriesForClassMerged, subclassSortOptions,
+  subclassSortOptions,
 } from '../../src/content/subclasses/subclassBrowse';
 import { backgroundSkillGrants, backgroundSortOptions } from '../../src/content/backgrounds/backgroundBrowse';
 import {
@@ -63,8 +64,15 @@ import {
   monsterSortOptions,
 } from '../../src/content/monsters/monsterBrowse';
 import { conditionSortOptions } from '../../src/content/conditions/conditionBrowse';
-import { mergeSpellIndex, mergeItemIndex, mergeMonsterIndex } from '../../src/content/contentResolution';
+import {
+  officialContentDB, officialSpellIndex, officialItemIndex, officialMonsterTemplates, officialSubclassEntries,
+} from '../../src/content/officialCatalog';
 import { makeEmptyEntity } from '../../src/store/characterStore';
+import { useCompendiumModeStore } from '../../src/store/compendiumModeStore';
+import { CompendiumMode, parseCompendiumMode } from '../../src/content/compendiumModes';
+import { CompendiumModeSwitch } from '../../src/components/compendium/CompendiumModeSwitch';
+import { HomebrewLibraryView } from '../../src/components/compendium/HomebrewLibraryView';
+import { InstalledPackagesView } from '../../src/components/compendium/InstalledPackagesView';
 
 const SCREEN_KEY = 'compendium';
 const ABILITY_LABELS: Record<Ability, string> = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' };
@@ -84,22 +92,16 @@ const EMPTY_CONTENT_DB: ContentDB = {
   races: [], classes: [], backgrounds: [], spells: [], items: [], conditions: [], features: [], feats: [],
 };
 
+const CONTENT_EXPOSURE = currentContentExposure();
+/** Official mode never lists homebrew — passed wherever a sort option asks "is this entry homebrew?". */
+const notHomebrew = () => false;
+
 const CONTENT_TYPE_ORDER: ContentTypeId[] = [
   'race', 'subrace', 'class', 'subclass', 'background', 'feat', 'spell', 'item', 'monster', 'condition',
 ];
 
-export default function CompendiumScreen() {
-  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
-  const homebrewRaces      = useHomebrewStore(s => s.races);
-  const homebrewSubraces   = useHomebrewStore(s => s.subraces);
-  const homebrewClasses    = useHomebrewStore(s => s.classes);
-  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
-  const homebrewBackgrounds = useHomebrewStore(s => s.backgrounds);
-  const homebrewFeats       = useHomebrewStore(s => s.feats);
-  const homebrewSpells      = useHomebrewStore(s => s.spells);
-  const homebrewItems       = useHomebrewStore(s => s.items);
-  const homebrewMonsters    = useHomebrewStore(s => s.monsters);
-  const homebrewConditions  = useHomebrewStore(s => s.conditions);
+/** Official mode: the ordinary Compendium browser (search/filters/sort/favorites/detail, SRD exposure). Unchanged apart from the screen title/switch moving into CompendiumScreen below. */
+function OfficialCompendiumView() {
 
   // ── Restore browse state (search/filters/sort/content type) — session-
   // local, survives navigating away (e.g. into a detail expand or a
@@ -147,7 +149,6 @@ export default function CompendiumScreen() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [gameFilter, setGameFilter] = useState<GameId | null>((f.gameFilter as GameId) ?? null);
   const [rulesetFilter, setRulesetFilter] = useState<RulesetId | null>((f.rulesetFilter as RulesetId) ?? null);
-  const [officialFilter, setOfficialFilter] = useState<'all' | 'official' | 'homebrew'>((f.officialFilter as 'all' | 'official' | 'homebrew') ?? 'all');
 
   // Race
   const [raceSize, setRaceSize] = useState<string | null>((f.raceSize as string) ?? null);
@@ -222,7 +223,7 @@ export default function CompendiumScreen() {
     setBrowseState(SCREEN_KEY, {
       search, sort, contentType,
       filters: {
-        gameFilter, rulesetFilter, officialFilter,
+        gameFilter, rulesetFilter,
         raceSize, raceDarkvision, raceMovement: Array.from(raceMovement), raceHasSubracesOnly,
         subraceParent, subraceTraits: Array.from(subraceTraits),
         classCaster, classHitDie, classSave: Array.from(classSave), classArmor: Array.from(classArmor), classWeapon: Array.from(classWeapon),
@@ -239,7 +240,7 @@ export default function CompendiumScreen() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    search, sort, contentType, gameFilter, rulesetFilter, officialFilter,
+    search, sort, contentType, gameFilter, rulesetFilter,
     raceSize, raceDarkvision, raceMovement, raceHasSubracesOnly, subraceParent, subraceTraits,
     classCaster, classHitDie, classSave, classArmor, classWeapon, subclassParent, subclassAdds,
     backgroundSkill, backgroundTool, featPrereqType, featGrants,
@@ -257,9 +258,11 @@ export default function CompendiumScreen() {
   // render that paints the shell. Falls back to cheap, stable-reference
   // empty containers until the post-paint effect flips `contentReady`.
   const activeRuleset = rulesetFilter ?? undefined;
+  // Official mode reads ONLY official content (see src/content/officialCatalog.ts):
+  // nothing here depends on the homebrew store.
   const contentDB = useMemo(
-    () => contentReady ? getMergedContentDB(activeRuleset) : EMPTY_CONTENT_DB,
-    [contentReady, getMergedContentDB, homebrewRaces, homebrewClasses, homebrewBackgrounds, homebrewFeats, homebrewConditions, activeRuleset],
+    () => contentReady ? officialContentDB(activeRuleset) : EMPTY_CONTENT_DB,
+    [contentReady, activeRuleset],
   );
   const races = contentDB.races;
   const classes = contentDB.classes;
@@ -269,23 +272,11 @@ export default function CompendiumScreen() {
   const subraces: SubraceWithParent[] = useMemo(() => contentReady ? flattenSubraces(races) : EMPTY_RESULTS, [contentReady, races]);
   const subclassEntries: SubclassEntryWithParent[] = useMemo(() => {
     if (!contentReady) return EMPTY_RESULTS;
-    const merged = classes.flatMap(c => subclassEntriesForClassMerged(c.id, homebrewSubclasses));
-    return attachParentClassNames(merged, classes);
-  }, [contentReady, classes, homebrewSubclasses]);
-  const spellIndex = useMemo(() => contentReady ? mergeSpellIndex(homebrewSpells, activeRuleset) : EMPTY_RESULTS, [contentReady, homebrewSpells, activeRuleset]);
-  const itemIndex = useMemo(() => contentReady ? mergeItemIndex(homebrewItems, activeRuleset) : EMPTY_RESULTS, [contentReady, homebrewItems, activeRuleset]);
-  const monsterTemplates = useMemo(() => contentReady ? mergeMonsterIndex(homebrewMonsters, activeRuleset) : EMPTY_RESULTS, [contentReady, homebrewMonsters, activeRuleset]);
-
-  const homebrewRaceIds = useMemo(() => new Set(homebrewRaces.map(r => r.id)), [homebrewRaces]);
-  const homebrewSubraceIds = useMemo(() => new Set(homebrewSubraces.map(r => r.id)), [homebrewSubraces]);
-  const homebrewClassIds = useMemo(() => new Set(homebrewClasses.map(r => r.id)), [homebrewClasses]);
-  const homebrewSubclassIds = useMemo(() => new Set(homebrewSubclasses.map(r => r.id as string)), [homebrewSubclasses]);
-  const homebrewBackgroundIds = useMemo(() => new Set(homebrewBackgrounds.map(r => r.id)), [homebrewBackgrounds]);
-  const homebrewFeatIds = useMemo(() => new Set(homebrewFeats.map(r => r.id)), [homebrewFeats]);
-  const homebrewSpellIds = useMemo(() => new Set(homebrewSpells.map(r => r.id)), [homebrewSpells]);
-  const homebrewItemIds = useMemo(() => new Set(homebrewItems.map(r => r.id)), [homebrewItems]);
-  const homebrewMonsterIds = useMemo(() => new Set(homebrewMonsters.map(r => r.id)), [homebrewMonsters]);
-  const homebrewConditionIds = useMemo(() => new Set(homebrewConditions.map(r => r.id)), [homebrewConditions]);
+    return attachParentClassNames(officialSubclassEntries(classes), classes);
+  }, [contentReady, classes]);
+  const spellIndex = useMemo(() => contentReady ? officialSpellIndex(activeRuleset) : EMPTY_RESULTS, [contentReady, activeRuleset]);
+  const itemIndex = useMemo(() => contentReady ? officialItemIndex(activeRuleset) : EMPTY_RESULTS, [contentReady, activeRuleset]);
+  const monsterTemplates = useMemo(() => contentReady ? officialMonsterTemplates(activeRuleset) : EMPTY_RESULTS, [contentReady, activeRuleset]);
 
   const scratchEntity = useMemo(() => makeEmptyEntity('compendium'), []);
 
@@ -309,17 +300,17 @@ export default function CompendiumScreen() {
     .filter(r => !gameFilter || gameIdForRuleset(r) === gameFilter)
     .map(id => ({ id, label: RULESETS[id]?.name ?? id }));
 
-  // ── Per-type isHomebrew / sourceLabel-capable sort options ──
-  const raceSorts = raceSortOptions(r => homebrewRaceIds.has(r.id));
-  const subraceSorts = subraceSortOptions(s => homebrewSubraceIds.has(s.id));
-  const classSorts = classSortOptions(c => homebrewClassIds.has(c.id));
-  const subclassSorts = subclassSortOptions(s => homebrewSubclassIds.has(s.id));
-  const backgroundSorts = backgroundSortOptions(b => homebrewBackgroundIds.has(b.id));
-  const featSorts = featSortOptions(scratchEntity, ft => homebrewFeatIds.has(ft.id));
-  const spellSorts = spellSortOptions(s => homebrewSpellIds.has(s.id));
-  const itemSorts = itemSortOptions(i => homebrewItemIds.has(i.id));
-  const monsterSorts = monsterSortOptions(m => homebrewMonsterIds.has(m.id));
-  const conditionSorts = conditionSortOptions(c => homebrewConditionIds.has(c.id));
+  // ── Per-type sourceLabel-capable sort options (Official mode: nothing here is homebrew) ──
+  const raceSorts = raceSortOptions(notHomebrew);
+  const subraceSorts = subraceSortOptions(notHomebrew);
+  const classSorts = classSortOptions(notHomebrew);
+  const subclassSorts = subclassSortOptions(notHomebrew);
+  const backgroundSorts = backgroundSortOptions(notHomebrew);
+  const featSorts = featSortOptions(scratchEntity, notHomebrew);
+  const spellSorts = spellSortOptions(notHomebrew);
+  const itemSorts = itemSortOptions(notHomebrew);
+  const monsterSorts = monsterSortOptions(notHomebrew);
+  const conditionSorts = conditionSortOptions(notHomebrew);
   const mixedSorts: SortOption<BrowsableEntry>[] = [
     ...nameSortOptions<BrowsableEntry>(),
     contentTypeSortOption<BrowsableEntry>(),
@@ -328,12 +319,12 @@ export default function CompendiumScreen() {
 
   // ── Global predicate (Game/Ruleset/Official-Homebrew) — same for every
   // type, applied before any type-specific filter. ──
-  const matchesGlobal = useCallback((rulesetId: RulesetId | undefined, isHomebrew: boolean): boolean => {
+  const matchesGlobal = useCallback((rulesetId: RulesetId | undefined, isHomebrew: boolean, srd: boolean | undefined, type: ContentTypeId): boolean => {
+    if (!isContentExposed({ isHomebrew, srd, type }, CONTENT_EXPOSURE)) return false;
     if (!matchesGame(rulesetId, gameFilter ?? undefined)) return false;
     if (!matchesRuleset(rulesetId, rulesetFilter ?? undefined)) return false;
-    if (officialFilter !== 'all' && (officialFilter === 'homebrew') !== isHomebrew) return false;
     return true;
-  }, [gameFilter, rulesetFilter, officialFilter]);
+  }, [gameFilter, rulesetFilter]);
   const matchesFav = useCallback((type: ContentTypeId, id: string): boolean => {
     return !favoritesOnly || favorites.has(favoriteKey(type, id));
   }, [favoritesOnly, favorites]);
@@ -354,8 +345,7 @@ export default function CompendiumScreen() {
   const filteredRaces = useMemo(() => {
     if (!contentReady || skipRace) return EMPTY_RESULTS;
     return sortByOption(races.filter(r => {
-    const hb = homebrewRaceIds.has(r.id);
-    if (!matchesGlobal(r.rulesetId, hb) || !matchesFav('race', r.id)) return false;
+    if (!matchesGlobal(r.rulesetId, false, r.srd, 'race') || !matchesFav('race', r.id)) return false;
     if (!matchesSearchText(r.name, [], q)) return false;
     if (single && contentType === 'race') {
       if (raceSize && r.size !== raceSize) return false;
@@ -365,14 +355,13 @@ export default function CompendiumScreen() {
     }
     return true;
   }), raceSorts, sort);
-  }, [contentReady, skipRace, races, homebrewRaceIds, q, single, contentType, raceSize, raceDarkvision, raceMovement, raceHasSubracesOnly, sort, raceSorts, matchesGlobal, matchesFav]);
+  }, [contentReady, skipRace, races, q, single, contentType, raceSize, raceDarkvision, raceMovement, raceHasSubracesOnly, sort, raceSorts, matchesGlobal, matchesFav]);
 
   const skipSubrace = single && contentType !== 'subrace';
   const filteredSubraces = useMemo(() => {
     if (!contentReady || skipSubrace) return EMPTY_RESULTS;
     return sortByOption(subraces.filter(sr => {
-    const hb = homebrewSubraceIds.has(sr.id);
-    if (officialFilter !== 'all' && (officialFilter === 'homebrew') !== hb) return false;
+    if (!matchesGlobal(sr.rulesetId, false, sr.srd, 'subrace')) return false;
     if (!matchesFav('subrace', sr.id)) return false;
     if (!matchesSearchText(sr.name, [sr.parentRaceName], q)) return false;
     if (single && contentType === 'subrace') {
@@ -384,14 +373,13 @@ export default function CompendiumScreen() {
     }
     return true;
   }), subraceSorts, sort);
-  }, [contentReady, skipSubrace, subraces, homebrewSubraceIds, officialFilter, q, single, contentType, subraceParent, subraceTraits, sort, subraceSorts, matchesFav]);
+  }, [contentReady, skipSubrace, subraces, q, single, contentType, subraceParent, subraceTraits, sort, subraceSorts, matchesGlobal, matchesFav]);
 
   const skipClass = single && contentType !== 'class';
   const filteredClasses = useMemo(() => {
     if (!contentReady || skipClass) return EMPTY_RESULTS;
     return sortByOption(classes.filter(c => {
-    const hb = homebrewClassIds.has(c.id);
-    if (!matchesGlobal(c.rulesetId, hb) || !matchesFav('class', c.id)) return false;
+    if (!matchesGlobal(c.rulesetId, false, c.srd, 'class') || !matchesFav('class', c.id)) return false;
     if (!matchesSearchText(c.name, [], q)) return false;
     if (single && contentType === 'class') {
       if (classCaster && (CASTER_TYPE[c.id] ?? 'Martial') !== classCaster) return false;
@@ -402,14 +390,13 @@ export default function CompendiumScreen() {
     }
     return true;
   }), classSorts, sort);
-  }, [contentReady, skipClass, classes, homebrewClassIds, q, single, contentType, classCaster, classHitDie, classSave, classArmor, classWeapon, sort, classSorts, matchesGlobal, matchesFav]);
+  }, [contentReady, skipClass, classes, q, single, contentType, classCaster, classHitDie, classSave, classArmor, classWeapon, sort, classSorts, matchesGlobal, matchesFav]);
 
   const skipSubclass = single && contentType !== 'subclass';
   const filteredSubclasses = useMemo(() => {
     if (!contentReady || skipSubclass) return EMPTY_RESULTS;
     return sortByOption(subclassEntries.filter(s => {
-    const hb = homebrewSubclassIds.has(s.id);
-    if (!matchesGlobal(s.progression.rulesetId, hb) || !matchesFav('subclass', s.id)) return false;
+    if (!matchesGlobal(s.progression.rulesetId, false, s.progression.srd, 'subclass') || !matchesFav('subclass', s.id)) return false;
     if (!matchesSearchText(s.name, [s.parentClassName], q)) return false;
     if (single && contentType === 'subclass') {
       if (subclassParent && s.classId !== subclassParent) return false;
@@ -420,14 +407,13 @@ export default function CompendiumScreen() {
     }
     return true;
   }), subclassSorts, sort);
-  }, [contentReady, skipSubclass, subclassEntries, homebrewSubclassIds, q, single, contentType, subclassParent, subclassAdds, sort, subclassSorts, matchesGlobal, matchesFav]);
+  }, [contentReady, skipSubclass, subclassEntries, q, single, contentType, subclassParent, subclassAdds, sort, subclassSorts, matchesGlobal, matchesFav]);
 
   const skipBackground = single && contentType !== 'background';
   const filteredBackgrounds = useMemo(() => {
     if (!contentReady || skipBackground) return EMPTY_RESULTS;
     return sortByOption(backgrounds.filter(b => {
-    const hb = homebrewBackgroundIds.has(b.id);
-    if (!matchesGlobal(b.rulesetId, hb) || !matchesFav('background', b.id)) return false;
+    if (!matchesGlobal(b.rulesetId, false, b.srd, 'background') || !matchesFav('background', b.id)) return false;
     if (!matchesSearchText(b.name, [], q)) return false;
     if (single && contentType === 'background') {
       if (backgroundSkill.size > 0 && !Array.from(backgroundSkill).some(s => backgroundSkillGrants(b).includes(s))) return false;
@@ -435,14 +421,13 @@ export default function CompendiumScreen() {
     }
     return true;
   }), backgroundSorts, sort);
-  }, [contentReady, skipBackground, backgrounds, homebrewBackgroundIds, q, single, contentType, backgroundSkill, backgroundTool, sort, backgroundSorts, matchesGlobal, matchesFav]);
+  }, [contentReady, skipBackground, backgrounds, q, single, contentType, backgroundSkill, backgroundTool, sort, backgroundSorts, matchesGlobal, matchesFav]);
 
   const skipFeat = single && contentType !== 'feat';
   const filteredFeats = useMemo(() => {
     if (!contentReady || skipFeat) return EMPTY_RESULTS;
     return sortByOption(feats.filter(ft => {
-    const hb = homebrewFeatIds.has(ft.id);
-    if (!matchesGlobal(ft.rulesetId, hb) || !matchesFav('feat', ft.id)) return false;
+    if (!matchesGlobal(ft.rulesetId, false, ft.srd, 'feat') || !matchesFav('feat', ft.id)) return false;
     if (!matchesSearchText(ft.name, [], q)) return false;
     if (single && contentType === 'feat') {
       if (featPrereqType && primaryPrereqCategory(ft.prerequisite) !== featPrereqType) return false;
@@ -456,14 +441,13 @@ export default function CompendiumScreen() {
     }
     return true;
   }), featSorts, sort);
-  }, [contentReady, skipFeat, feats, homebrewFeatIds, q, single, contentType, featPrereqType, featGrants, sort, featSorts, matchesGlobal, matchesFav]);
+  }, [contentReady, skipFeat, feats, q, single, contentType, featPrereqType, featGrants, sort, featSorts, matchesGlobal, matchesFav]);
 
   const skipSpell = single && contentType !== 'spell';
   const filteredSpells = useMemo(() => {
     if (!contentReady || skipSpell) return EMPTY_RESULTS;
     return sortByOption(spellIndex.filter(s => {
-    const hb = homebrewSpellIds.has(s.id);
-    if (!matchesGlobal(s.rulesetId, hb) || !matchesFav('spell', s.id)) return false;
+    if (!matchesGlobal(s.rulesetId, false, s.srd, 'spell') || !matchesFav('spell', s.id)) return false;
     if (!matchesSearchText(s.name, [s.school], q)) return false;
     if (single && contentType === 'spell') {
       if (spellSchool && s.school !== spellSchool) return false;
@@ -473,14 +457,13 @@ export default function CompendiumScreen() {
     }
     return true;
   }), spellSorts, sort);
-  }, [contentReady, skipSpell, spellIndex, homebrewSpellIds, q, single, contentType, spellSchool, spellCast, spellAction, spellComponents, sort, spellSorts, matchesGlobal, matchesFav]);
+  }, [contentReady, skipSpell, spellIndex, q, single, contentType, spellSchool, spellCast, spellAction, spellComponents, sort, spellSorts, matchesGlobal, matchesFav]);
 
   const skipItem = single && contentType !== 'item';
   const filteredItems = useMemo(() => {
     if (!contentReady || skipItem) return EMPTY_RESULTS;
     return sortByOption(itemIndex.filter(i => {
-    const hb = homebrewItemIds.has(i.id);
-    if (!matchesGlobal(i.rulesetId, hb) || !matchesFav('item', i.id)) return false;
+    if (!matchesGlobal(i.rulesetId, false, i.srd, 'item') || !matchesFav('item', i.id)) return false;
     if (!matchesSearchText(i.name, [], q)) return false;
     if (single && contentType === 'item') {
       if (itemCat && itemCategory(i) !== itemCat) return false;
@@ -492,14 +475,13 @@ export default function CompendiumScreen() {
     }
     return true;
   }), itemSorts, sort);
-  }, [contentReady, skipItem, itemIndex, homebrewItemIds, q, single, contentType, itemCat, itemMagical, itemWeaponClass, itemWeaponRange, itemArmorWeightF, itemRarity, sort, itemSorts, matchesGlobal, matchesFav]);
+  }, [contentReady, skipItem, itemIndex, q, single, contentType, itemCat, itemMagical, itemWeaponClass, itemWeaponRange, itemArmorWeightF, itemRarity, sort, itemSorts, matchesGlobal, matchesFav]);
 
   const skipMonster = single && contentType !== 'monster';
   const filteredMonsters = useMemo(() => {
     if (!contentReady || skipMonster) return EMPTY_RESULTS;
     return sortByOption(monsterTemplates.filter(m => {
-    const hb = homebrewMonsterIds.has(m.id);
-    if (!matchesGlobal(m.rulesetId, hb) || !matchesFav('monster', m.id)) return false;
+    if (!matchesGlobal(m.rulesetId, false, m.srd, 'monster') || !matchesFav('monster', m.id)) return false;
     if (!matchesSearchText(m.name, [m.type], q)) return false;
     if (single && contentType === 'monster') {
       const min = parseFloat(monsterCrMin), max = parseFloat(monsterCrMax);
@@ -521,7 +503,7 @@ export default function CompendiumScreen() {
     return true;
   }), monsterSorts, sort);
   }, [
-    contentReady, skipMonster, monsterTemplates, homebrewMonsterIds, q, single, contentType,
+    contentReady, skipMonster, monsterTemplates, q, single, contentType,
     monsterCrMin, monsterCrMax, monsterType, monsterSize, monsterAlignment, monsterLegendary, monsterLair, monsterDarkvision,
     monsterSpellcaster, monsterMovement, monsterResistance, monsterImmunity, monsterCondImmunity, monsterLanguage, sort, monsterSorts,
     matchesGlobal, matchesFav,
@@ -531,12 +513,11 @@ export default function CompendiumScreen() {
   const filteredConditions = useMemo(() => {
     if (!contentReady || skipCondition) return EMPTY_RESULTS;
     return sortByOption(conditions.filter(c => {
-    const hb = homebrewConditionIds.has(c.id);
-    if (!matchesGlobal(c.rulesetId, hb) || !matchesFav('condition', c.id)) return false;
+    if (!matchesGlobal(c.rulesetId, false, undefined, 'condition') || !matchesFav('condition', c.id)) return false;
     if (!matchesSearchText(c.name, [c.description], q)) return false;
     return true;
   }), conditionSorts, sort);
-  }, [contentReady, skipCondition, conditions, homebrewConditionIds, q, sort, conditionSorts, matchesGlobal, matchesFav]);
+  }, [contentReady, skipCondition, conditions, q, sort, conditionSorts, matchesGlobal, matchesFav]);
 
   // ── Wrap into BrowsableEntry[] for rendering — single-type mode picks
   // just the active type's list; All mode concatenates every type (each
@@ -544,16 +525,16 @@ export default function CompendiumScreen() {
   // apply since contentType !== that type) and re-sorts with the mixed
   // A–Z/Content Type/Source sort options. ──
   const entriesByType: Record<ContentTypeId, BrowsableEntry[]> = {
-    race:       filteredRaces.map(r => raceToBrowsable(r, homebrewRaceIds.has(r.id))),
-    subrace:    filteredSubraces.map(s => subraceToBrowsable(s, homebrewSubraceIds.has(s.id))),
-    class:      filteredClasses.map(c => classToBrowsable(c, homebrewClassIds.has(c.id))),
-    subclass:   filteredSubclasses.map(s => subclassToBrowsable(s, homebrewSubclassIds.has(s.id))),
-    background: filteredBackgrounds.map(b => backgroundToBrowsable(b, homebrewBackgroundIds.has(b.id))),
-    feat:       filteredFeats.map(ft => featToBrowsable(ft, homebrewFeatIds.has(ft.id))),
-    spell:      filteredSpells.map(s => spellToBrowsable(s, homebrewSpellIds.has(s.id))),
-    item:       filteredItems.map(i => itemToBrowsable(i, homebrewItemIds.has(i.id))),
-    monster:    filteredMonsters.map(m => monsterToBrowsable(m, homebrewMonsterIds.has(m.id))),
-    condition:  filteredConditions.map(c => conditionToBrowsable(c, homebrewConditionIds.has(c.id))),
+    race:       filteredRaces.map(r => raceToBrowsable(r, false)),
+    subrace:    filteredSubraces.map(s => subraceToBrowsable(s, false)),
+    class:      filteredClasses.map(c => classToBrowsable(c, false)),
+    subclass:   filteredSubclasses.map(s => subclassToBrowsable(s, false)),
+    background: filteredBackgrounds.map(b => backgroundToBrowsable(b, false)),
+    feat:       filteredFeats.map(ft => featToBrowsable(ft, false)),
+    spell:      filteredSpells.map(s => spellToBrowsable(s, false)),
+    item:       filteredItems.map(i => itemToBrowsable(i, false)),
+    monster:    filteredMonsters.map(m => monsterToBrowsable(m, false)),
+    condition:  filteredConditions.map(c => conditionToBrowsable(c, false)),
   };
 
   const results: BrowsableEntry[] = contentType === 'all'
@@ -667,10 +648,9 @@ export default function CompendiumScreen() {
   const globalFilterChips = [
     ...(gameFilter ? [{ key: 'game', label: Object.values(GAMES).find(g => g.id === gameFilter)?.name ?? gameFilter, onClear: () => { setGameFilter(null); setRulesetFilter(null); } }] : []),
     ...(rulesetFilter ? [{ key: 'ruleset', label: RULESETS[rulesetFilter]?.name ?? rulesetFilter, onClear: () => setRulesetFilter(null) }] : []),
-    ...(officialFilter !== 'all' ? [{ key: 'official', label: officialFilter === 'official' ? 'Official' : 'Homebrew', onClear: () => setOfficialFilter('all') }] : []),
   ];
   function clearAllFilters() {
-    setGameFilter(null); setRulesetFilter(null); setOfficialFilter('all');
+    setGameFilter(null); setRulesetFilter(null);
     setRaceSize(null); setRaceDarkvision(false); setRaceMovement(new Set()); setRaceHasSubracesOnly(false);
     setSubraceParent(null); setSubraceTraits(new Set());
     setClassCaster(null); setClassHitDie(null); setClassSave(new Set()); setClassArmor(new Set()); setClassWeapon(new Set());
@@ -685,15 +665,16 @@ export default function CompendiumScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} testID="compendium-screen">
       <View style={styles.header}>
-        <Text style={styles.title}>Compendium</Text>
         <Text style={styles.subtitle}>{contentType === 'all' ? 'All Content' : CONTENT_TYPE_LABELS[contentType]}</Text>
       </View>
 
       <View style={styles.searchWrap}>
         <View style={styles.searchRow}>
           <TextInput
+            testID="compendium-search"
+            accessibilityLabel="Compendium search"
             style={[styles.searchInput, styles.searchInputFlex]}
             value={search}
             onChangeText={setSearch}
@@ -719,7 +700,7 @@ export default function CompendiumScreen() {
             screen has both controls, instead of Sort floating alone on its
             own left-aligned line. */}
         <View style={styles.controlsRow}>
-          <Pressable style={[styles.favToggle, filtersOpen && styles.favToggleActive]} onPress={() => setFiltersOpen(v => !v)}>
+          <Pressable testID="compendium-filters" accessibilityLabel="Compendium filters" style={[styles.favToggle, filtersOpen && styles.favToggleActive]} onPress={() => setFiltersOpen(v => !v)}>
             <Text style={[styles.favToggleTxt, filtersOpen && styles.favToggleTxtActive]}>Filters</Text>
           </Pressable>
           <SortControl options={activeSortOptions} value={sort} onChange={setSort} />
@@ -743,9 +724,9 @@ export default function CompendiumScreen() {
                 <FilterChipRow options={availableRulesets} value={rulesetFilter} onChange={setRulesetFilter} scrollable />
               </FilterSection>
             )}
-            <FilterSection label="Official / Homebrew">
-              <OfficialHomebrewChipRow value={officialFilter} onChange={setOfficialFilter} />
-            </FilterSection>
+            {contentType === 'all' && availableGames.length <= 1 && availableRulesets.length <= 1 && (
+              <Text style={styles.filterHint}>Choose a content type above to see its filters.</Text>
+            )}
 
             {contentType === 'race' && (
               <>
@@ -974,19 +955,20 @@ export default function CompendiumScreen() {
           renderItem={({ item: entry }) => {
             const isFavorite = favorites.has(favoriteKey(entry.type, entry.id));
             const expanded = expandedId === `${entry.type}:${entry.id}`;
+            const visual = CONTENT_TYPE_VISUALS[entry.type];
             const featureNames: string[] = Array.isArray((entry.raw as { features?: { name: string }[] })?.features)
               ? (entry.raw as { features: { name: string }[] }).features.map(f => f.name)
               : (entry.type === 'feat' ? [(entry.raw as { feature?: { name: string } }).feature?.name].filter((n): n is string => !!n) : []);
             return (
               <Pressable
-                style={styles.row}
+                style={[styles.row, { borderLeftColor: visual.accent }]}
                 onPress={() => setExpandedId(expanded ? null : `${entry.type}:${entry.id}`)}
               >
                 <View style={styles.rowHeader}>
                   <View style={styles.rowNameLine}>
-                    {contentType === 'all' && (
-                      <View style={styles.typeBadge}><Text style={styles.typeBadgeTxt}>{CONTENT_TYPE_LABELS[entry.type]}</Text></View>
-                    )}
+                    <View style={[styles.typeBadge, { borderColor: visual.accent + '88', backgroundColor: visual.accent + '22' }]}>
+                      <Text style={[styles.typeBadgeTxt, { color: visual.accent }]}>{visual.icon} {CONTENT_TYPE_LABELS[entry.type]}</Text>
+                    </View>
                     <Text style={styles.rowName}>{entry.name}</Text>
                     {!entry.isHomebrew && isNonSrd(entry.srd) && <NonSrdBadge />}
                   </View>
@@ -1026,13 +1008,18 @@ export default function CompendiumScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
+  // The screen title and the Official/Homebrew/Packages switch now live in CompendiumScreen (the shell).
   header: {
-    paddingTop: Spacing.xl + 8, paddingBottom: Spacing.sm,
+    paddingTop: Spacing.xs, paddingBottom: Spacing.xs,
     paddingHorizontal: Spacing.md,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  title:    { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
-  subtitle: { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 2, marginTop: 2 },
+  subtitle: { fontSize: FontSize.xs, color: Colors.textDim, letterSpacing: 2 },
+  shellHeader: {
+    paddingTop: Spacing.xl + 8, paddingBottom: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+  },
+  shellTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
 
   searchWrap: { padding: Spacing.md, paddingBottom: Spacing.sm, gap: Spacing.xs },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
@@ -1063,9 +1050,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: Radius.full,
     borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface,
   },
-  chipActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  chipActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
   chipTxt:    { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
-  chipTxtActive: { color: Colors.bg },
+  chipTxtActive: { color: Colors.gold },
 
   crRow: { flexDirection: 'row', gap: Spacing.xs, paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm },
   crInput: {
@@ -1082,13 +1069,14 @@ const styles = StyleSheet.create({
   favToggleActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
   favToggleTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
   favToggleTxtActive: { color: Colors.gold },
+  filterHint: { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
 
   scroll:  { flex: 1 },
   content: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.xxl, gap: Spacing.xs },
 
   row: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.border, padding: Spacing.sm,
+    borderWidth: 1, borderLeftWidth: 4, borderColor: Colors.border, padding: Spacing.sm,
   },
   rowHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowNameLine: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, flex: 1, flexWrap: 'wrap' },
@@ -1111,3 +1099,40 @@ const styles = StyleSheet.create({
   featureList: { gap: 2, marginTop: 2 },
   featureTxt:  { fontSize: FontSize.xs, color: Colors.textDim },
 });
+
+// ── Compendium shell ─────────────────────────────────────────────────────────
+// Official / Homebrew / Packages, switched in place (no navigation). Only the
+// active mode is mounted, so the other two never load their data. Per-mode
+// search/filter/sort state lives in browseStateStore (Official: 'compendium';
+// Homebrew/Packages: their own keys) and the selected mode in
+// compendiumModeStore, so both survive leaving and returning to this tab.
+// `?mode=` deep links (e.g. the old Homebrew-tab library/packages links,
+// redirected from app/(tabs)/homebrew.tsx) select a mode on arrival.
+export default function CompendiumScreen() {
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const mode = useCompendiumModeStore(s => s.mode);
+  const setMode = useCompendiumModeStore(s => s.setMode);
+  const closePack = useCompendiumModeStore(s => s.closePack);
+
+  const paramMode = parseCompendiumMode(params.mode);
+  useEffect(() => {
+    if (paramMode) setMode(paramMode);
+  }, [paramMode, setMode]);
+
+  const changeMode = useCallback((m: CompendiumMode) => {
+    if (m !== 'packages') closePack();
+    setMode(m);
+  }, [setMode, closePack]);
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.shellHeader}>
+        <Text style={styles.shellTitle}>Compendium</Text>
+      </View>
+      <CompendiumModeSwitch mode={mode} onChange={changeMode} />
+      {mode === 'official' && <OfficialCompendiumView />}
+      {mode === 'homebrew' && <HomebrewLibraryView />}
+      {mode === 'packages' && <InstalledPackagesView />}
+    </View>
+  );
+}

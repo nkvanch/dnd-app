@@ -2,11 +2,14 @@
 // Character sheet — 6-tab sheet with persistent rest bar.
 // All values read from entity.derived — never computed in components.
 import { useState, useCallback, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
+import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions, Modal } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { useCharacterStore } from '../../src/store/characterStore';
+import { useCustomRuleProfileStore } from '../../src/store/customRuleProfileStore';
+import { sheetRuleAccess } from '../../src/components/sheet/ruleProfileUi';
+import { freeEditUiModel } from '../../src/components/sheet/sheetUiModel';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
-import { setMeta } from '../../src/db/appMetaRepo';
+import { useLastCharacterStore } from '../../src/store/lastCharacterStore';
 import { Alert } from '../../src/utils/alert';
 import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
@@ -14,7 +17,7 @@ import { useCombatTurnStore } from '../../src/store/combatTurnStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
-import { playerFreeEditLocked, shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
+import { shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { equipItem, unequipItem, toggleAttunement } from '../../src/engine/inventory';
 import { commitSpellPayment, restoreSpellSlot, SpellPaymentOption } from '../../src/engine/spellPayment';
 import { captureLoadout, applyLoadout, deleteLoadout } from '../../src/engine/loadout';
@@ -64,12 +67,12 @@ const SPELLS_TAB: { id: TabId; label: string } = { id: 'spells', label: 'Spells'
 
 export default function CharacterSheetScreen() {
   const { id }   = useLocalSearchParams<{ id: string }>();
-  const router   = useRouter();
   // Individual selectors — never object literals, which create a new reference every render
   // and trigger React's useSyncExternalStore infinite-loop guard.
   const characters      = useCharacterStore(s => s.characters);
   const updateCharacter = useCharacterStore(s => s.updateCharacter);
-  const rules           = useCharacterStore(s => s.rules);
+  const campaignRules   = useCharacterStore(s => s.rules);
+  const customRuleProfiles = useCustomRuleProfileStore(s => s.profiles);
   const undoStack       = useCharacterStore(s => s.undoStack);
   const redoStack       = useCharacterStore(s => s.redoStack);
   const undo            = useCharacterStore(s => s.undo);
@@ -85,6 +88,9 @@ export default function CharacterSheetScreen() {
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
   const entity = characters.find(c => c.id === id);
+  const ruleAccess = entity ? sheetRuleAccess(campaignRules, entity, customRuleProfiles) : { effectiveRules: campaignRules, canFreeEdit: true };
+  const rules = ruleAccess.effectiveRules;
+  const freeEditModel = entity ? freeEditUiModel(campaignRules,entity,customRuleProfiles) : null;
   const turn = useCombatTurnStore();
   const [activeTab, setActiveTab] = useState<TabId>('character');
   const [sheetMode, setSheetMode] = useState<'combat' | 'exploration'>('combat');
@@ -95,6 +101,7 @@ export default function CharacterSheetScreen() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [exportSheetOpen, setExportSheetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const goBack = useSafeGoBack('/(tabs)');
 
   // A-54: recompute diagnostics whenever the viewed entity actually changes
@@ -127,7 +134,7 @@ export default function CharacterSheetScreen() {
   // order, not viewing order, and drifted from reality within a session
   // since local edits don't reorder that array. No-ops on web.
   useEffect(() => {
-    if (id) setMeta('last_opened_character_id', id).catch(() => { /* non-critical */ });
+    if (id) void useLastCharacterStore.getState().markOpened(id).catch(() => {});
   }, [id]);
 
   const handleExportFormat = useCallback(async (format: ExportFormat, action: ExportAction) => {
@@ -147,7 +154,8 @@ export default function CharacterSheetScreen() {
   // locked player edits via the house rule (the DM keeps the button). Being
   // nominally in a campaign no longer hides it — a player editing their own
   // sheet is normal, and the lock toggle is the real control.
-  const freeEditAllowed = !playerFreeEditLocked(rules) || isDm;
+  const freeEditAllowed = freeEditModel?.hasControls === true && !freeEditModel.locked;
+  useEffect(()=>{ if(!freeEditAllowed)setFreeEditOpen(false); },[freeEditAllowed]);
 
   // Build tab list: Spells tab is inserted after Actions for spellcasters.
   // Also show it for Skeleton characters (Doomed Touch grants chill touch) even
@@ -551,66 +559,11 @@ export default function CharacterSheetScreen() {
           <Pressable style={styles.backBtn} onPress={goBack}>
             <Text style={styles.backTxt}>← Back</Text>
           </Pressable>
-          <Text style={styles.charName} numberOfLines={1}>
-            {identity.name || 'Unnamed'}
-          </Text>
-          {/* Session-local undo/redo — see characterStore.ts's UndoEntry doc
-              comment. Scoped to THIS character: the underlying stacks are
-              global across every updateCharacter call site (this screen,
-              app/dm/encounter.tsx, app/dm/character/[id].tsx), so a button
-              here only enables when the top entry actually belongs to the
-              character being viewed — otherwise a DM undoing on this
-              screen could silently undo an unrelated character's last
-              action from the encounter panel. */}
-          <Pressable
-            style={styles.freeEditBtn}
-            disabled={undoStack[0]?.entityId !== id}
-            onPress={undo}
-          >
-            <Text style={[styles.freeEditTxt, undoStack[0]?.entityId !== id && styles.undoRedoTxtDisabled]}>↩</Text>
-          </Pressable>
-          <Pressable
-            style={styles.freeEditBtn}
-            disabled={redoStack[0]?.entityId !== id}
-            onPress={redo}
-          >
-            <Text style={[styles.freeEditTxt, redoStack[0]?.entityId !== id && styles.undoRedoTxtDisabled]}>↪</Text>
-          </Pressable>
-          <Pressable style={styles.freeEditBtn} onPress={() => setHistoryOpen(true)}>
-            <Text style={styles.freeEditTxt}>🕘</Text>
-          </Pressable>
-          {/* A-54: non-blocking diagnostics badge — only rendered when there's
-              something to show, so a clean character's header stays unchanged. */}
-          {issues.length > 0 && (
-            <Pressable style={styles.freeEditBtn} onPress={() => setIssuesOpen(true)}>
-              <Text style={styles.freeEditTxt}>
-                {issues.some(i => i.severity === 'error') ? '⛔' : '⚠️'} {issues.length}
-              </Text>
-            </Pressable>
-          )}
-          {/* LIVE-RULESET-1: same access gate as Free-Edit — a DM can lock
-              this the same way they lock other significant live edits. */}
-          {freeEditAllowed && (
-            <Pressable style={styles.freeEditBtn} onPress={() => setRulesetChangeOpen(true)}>
-              <Text style={styles.freeEditTxt}>🌐</Text>
-            </Pressable>
-          )}
-          {/* Free-edit is offered outside a campaign, unless the DM has locked it. */}
-          {freeEditAllowed && (
-            <Pressable style={styles.freeEditBtn} onPress={() => setFreeEditOpen(true)}>
-              <Text style={styles.freeEditTxt}>🔓 Edit</Text>
-            </Pressable>
-          )}
-          <Pressable
-            style={styles.freeEditBtn}
-            disabled={exporting}
-            onPress={() => setExportSheetOpen(true)}
-          >
-            {exporting
-              ? <ActivityIndicator size="small" color={Colors.gold} />
-              : <Text style={styles.freeEditTxt}>📤</Text>}
-          </Pressable>
+          <Text style={styles.charName} numberOfLines={1} ellipsizeMode="tail">{identity.name || 'Unnamed'}</Text>
           <SyncStatusDot />
+          <Pressable accessibilityRole="button" testID="character-undo" accessibilityLabel="Undo" style={styles.headerIconBtn} disabled={undoStack[0]?.entityId !== id} onPress={undo}><Text style={[styles.headerIcon,undoStack[0]?.entityId!==id&&styles.undoRedoTxtDisabled]}>↶</Text></Pressable>
+          <Pressable accessibilityRole="button" testID="character-redo" accessibilityLabel="Redo" style={styles.headerIconBtn} disabled={redoStack[0]?.entityId !== id} onPress={redo}><Text style={[styles.headerIcon,redoStack[0]?.entityId!==id&&styles.undoRedoTxtDisabled]}>↷</Text></Pressable>
+          <Pressable accessibilityRole="button" testID="character-more" accessibilityLabel="More character actions" style={styles.headerIconBtn} onPress={()=>setHeaderMenuOpen(true)}><Text style={styles.headerIcon}>⋮</Text></Pressable>
         </View>
         <View style={styles.headerStats}>
           <Text style={styles.charSub}>
@@ -647,6 +600,14 @@ export default function CharacterSheetScreen() {
           </View>
         </View>
       </View>
+
+      <Modal visible={headerMenuOpen} transparent animationType="fade" onRequestClose={()=>setHeaderMenuOpen(false)}><Pressable style={styles.menuBackdrop} onPress={()=>setHeaderMenuOpen(false)}><View style={styles.headerMenu}>
+        <MenuAction icon="🕘" label="History" onPress={()=>{setHeaderMenuOpen(false);setHistoryOpen(true)}} />
+        <MenuAction icon="🌐" label="Rules" onPress={()=>{setHeaderMenuOpen(false);setRulesetChangeOpen(true)}} />
+        <MenuAction icon={freeEditAllowed?'✎':'🔒'} label={freeEditAllowed?'Free Edit':'Free Edit locked'} disabled={!freeEditAllowed} onPress={()=>{setHeaderMenuOpen(false);setFreeEditOpen(true)}} />
+        <MenuAction icon="📤" label="Export Character" disabled={exporting} onPress={()=>{setHeaderMenuOpen(false);setExportSheetOpen(true)}} />
+        {issues.length>0&&<MenuAction icon={issues.some(i=>i.severity==='error')?'⛔':'⚠️'} label={`Diagnostics (${issues.length})`} onPress={()=>{setHeaderMenuOpen(false);setIssuesOpen(true)}} />}
+      </View></Pressable></Modal>
 
       {/* Live-play turn banner — only while the DM has an active encounter
           running and this device is a connected player (turn.active is
@@ -928,6 +889,7 @@ export default function CharacterSheetScreen() {
       {exportSheetOpen && (
         <ExportFormatSheet
           visible={exportSheetOpen}
+          kind="character"
           title={`Export "${entity.identity.name || 'Character'}"`}
           onSelect={(...args) => { void handleExportFormat(...args); }}
           onClose={() => setExportSheetOpen(false)}
@@ -937,6 +899,8 @@ export default function CharacterSheetScreen() {
     </View>
   );
 }
+
+function MenuAction({icon,label,onPress,disabled=false}:{icon:string;label:string;onPress:()=>void;disabled?:boolean}){return <Pressable testID={`character-menu-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`} accessibilityRole="menuitem" accessibilityLabel={label} disabled={disabled} style={[styles.menuItem,disabled&&styles.menuItemDisabled]} onPress={onPress}><Text style={styles.menuIcon}>{icon}</Text><Text style={styles.menuLabel}>{label}</Text></Pressable>}
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -975,6 +939,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 3, marginRight: Spacing.xs,
   },
   freeEditTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  headerIconBtn:{width:40,height:40,alignItems:'center',justifyContent:'center',borderRadius:Radius.full},
+  headerIcon:{fontSize:20,color:Colors.gold,fontWeight:FontWeight.bold},
+  menuBackdrop:{flex:1,backgroundColor:'#00000088',alignItems:'flex-end',paddingTop:56,paddingRight:Spacing.md},
+  headerMenu:{width:220,backgroundColor:Colors.surfaceHigh,borderRadius:Radius.md,borderWidth:1,borderColor:Colors.border,padding:Spacing.xs},
+  menuItem:{minHeight:44,flexDirection:'row',alignItems:'center',gap:Spacing.md,paddingHorizontal:Spacing.md,borderRadius:Radius.sm},
+  menuItemDisabled:{opacity:0.45},menuIcon:{fontSize:18,width:24,textAlign:'center'},menuLabel:{fontSize:FontSize.sm,color:Colors.textPrimary,fontWeight:FontWeight.bold},
   undoRedoTxtDisabled: { color: Colors.textDim },
   charSub:  { fontSize: FontSize.xs, color: Colors.textSecondary },
 

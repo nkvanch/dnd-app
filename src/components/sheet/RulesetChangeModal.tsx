@@ -15,8 +15,10 @@ import { Modal, View, Text, Pressable, ScrollView, StyleSheet } from 'react-nati
 import { Entity, CampaignRules, HomebrewSubclass, RulesetId } from '../../engine/types';
 import { simulateRulesetChange, canApplyRulesetChange, RulesetChangePreview, RulesetChangeContentItem } from '../../engine/rulesetChange';
 import { useHomebrewStore } from '../../store/homebrewStore';
-import { RULESETS, gameIdForRuleset, rulesetLabel } from '../../content/rulesets';
+import { RULESETS, rulesetLabel } from '../../content/rulesets';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+import { useCustomRuleProfileStore } from '../../store/customRuleProfileStore';
+import { rulesetPickerViewModel } from './ruleProfileUi';
 
 interface Props {
   visible:   boolean;
@@ -35,11 +37,14 @@ const TYPE_LABEL: Record<RulesetChangeContentItem['type'], string> = {
 export function RulesetChangeModal({ visible, entity, rules, onConfirm, onCancel }: Props) {
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
   const homebrewSubclasses: HomebrewSubclass[] = useHomebrewStore(s => s.subclasses);
+  const customProfiles = useCustomRuleProfileStore(s => s.profiles);
 
   const [targetRulesetId, setTargetRulesetId] = useState<RulesetId | undefined | null>(null); // null = picker step
+  const [targetProfileId, setTargetProfileId] = useState<string | undefined>(undefined);
 
   function reset() {
     setTargetRulesetId(null);
+    setTargetProfileId(undefined);
   }
 
   // item 33: only rulesets belonging to the SAME Game as the character's
@@ -52,18 +57,13 @@ export function RulesetChangeModal({ visible, entity, rules, onConfirm, onCancel
   // since that would hide a real data problem behind a plausible-looking
   // default. rulesetKnown is false only in that second case.
   const rulesetKnown = entity.rulesetId === undefined || RULESETS[entity.rulesetId] !== undefined;
-  const currentGameId = entity.rulesetId === undefined
-    ? gameIdForRuleset(RULESETS['dnd5e-2014'].id)!
-    : gameIdForRuleset(entity.rulesetId); // undefined here means "known-unrecognized" — see rulesetKnown
   // Degraded recovery (item 5): when the current ruleset is set but
   // unrecognized, there's no Game to narrow by — offer every registered
   // ruleset instead of guessing, with the banner below making that explicit.
-  const availableRulesets = useMemo(
-    () => currentGameId !== undefined
-      ? Object.values(RULESETS).filter(r => r.gameId === currentGameId)
-      : Object.values(RULESETS),
-    [currentGameId],
-  );
+  const picker = useMemo(() => rulesetPickerViewModel(entity, customProfiles), [entity, customProfiles]);
+  const availableRulesets = picker.official;
+  const availableProfiles = picker.custom;
+  const currentProfile = customProfiles.find(profile => profile.id === entity.customRuleProfileId);
 
   const preview: RulesetChangePreview | null = useMemo(() => {
     if (targetRulesetId === null) return null;
@@ -80,8 +80,9 @@ export function RulesetChangeModal({ visible, entity, rules, onConfirm, onCancel
   function handleConfirm() {
     if (!preview || !canApplyRulesetChange(preview)) return;
     const fromLabel = rulesetLabel(entity.rulesetId) ?? 'Untagged';
-    const toLabel = rulesetLabel(targetRulesetId ?? undefined) ?? 'Untagged';
-    onConfirm(preview.after, `Ruleset changed: ${fromLabel} → ${toLabel}`);
+    const profile = customProfiles.find(candidate => candidate.id === targetProfileId);
+    const toLabel = profile?.name ?? rulesetLabel(targetRulesetId ?? undefined) ?? 'Untagged';
+    onConfirm({ ...preview.after, customRuleProfileId: profile?.id }, `Rules changed: ${fromLabel} → ${toLabel}`);
     reset();
   }
 
@@ -100,7 +101,7 @@ export function RulesetChangeModal({ visible, entity, rules, onConfirm, onCancel
               <>
                 <Text style={styles.label}>Current Ruleset</Text>
                 <Text style={styles.currentTxt}>
-                  {rulesetKnown ? (rulesetLabel(entity.rulesetId) ?? 'Untagged (legacy)') : entity.rulesetId}
+                  {currentProfile?.name ?? (rulesetKnown ? (rulesetLabel(entity.rulesetId) ?? 'Untagged (legacy)') : entity.rulesetId)}
                 </Text>
                 {rulesetKnown && entity.rulesetId === undefined && (
                   <Text style={styles.gameNote}>
@@ -120,13 +121,21 @@ export function RulesetChangeModal({ visible, entity, rules, onConfirm, onCancel
                     the original value is preserved unless you actually confirm a switch.
                   </Text>
                 )}
-                <Text style={styles.label}>Change To</Text>
+                {currentProfile && <Text style={styles.gameNote}>Based on {rulesetLabel(currentProfile.baseRulesetId)}</Text>}
+                <Text style={styles.label}>Official</Text>
                 {availableRulesets.map(r => (
-                  <Pressable key={r.id} style={styles.rulesetRow} onPress={() => setTargetRulesetId(r.id)}>
+                  <Pressable key={r.id} style={styles.rulesetRow} onPress={() => { setTargetProfileId(undefined); setTargetRulesetId(r.id); }}>
                     <Text style={styles.rulesetRowTxt}>{r.name}</Text>
-                    {r.id === entity.rulesetId && <Text style={styles.currentBadge}>current</Text>}
+                    {!entity.customRuleProfileId && r.id === entity.rulesetId && <Text style={styles.currentBadge}>current</Text>}
                   </Pressable>
                 ))}
+                {availableProfiles.length > 0 && <>
+                  <Text style={styles.label}>Custom / Homebrew</Text>
+                  {availableProfiles.map(profile => <Pressable key={profile.id} style={styles.rulesetRow} onPress={() => { setTargetProfileId(profile.id); setTargetRulesetId(profile.baseRulesetId); }}>
+                    <View><Text style={styles.rulesetRowTxt}>{profile.name}</Text><Text style={styles.gameNote}>Based on {rulesetLabel(profile.baseRulesetId)}</Text></View>
+                    {profile.id === entity.customRuleProfileId && <Text style={styles.currentBadge}>current</Text>}
+                  </Pressable>)}
+                </>}
                 <Text style={styles.gameNote}>
                   {rulesetKnown
                     ? "Only rulesets compatible with this character's Game are shown."
@@ -136,7 +145,7 @@ export function RulesetChangeModal({ visible, entity, rules, onConfirm, onCancel
             ) : (
               <>
                 <Text style={styles.subtitle}>
-                  {rulesetLabel(entity.rulesetId) ?? 'Untagged'} → {rulesetLabel(targetRulesetId) ?? 'Untagged'}
+                  {currentProfile?.name ?? rulesetLabel(entity.rulesetId) ?? 'Untagged'} → {customProfiles.find(p => p.id === targetProfileId)?.name ?? rulesetLabel(targetRulesetId) ?? 'Untagged'}
                 </Text>
 
                 {preview?.blocked ? (

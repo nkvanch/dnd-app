@@ -23,7 +23,7 @@ import { resolveChoice, resolveEquipmentChoice, EquipmentChoiceResolution } from
 import { ChoiceOption, ChoiceState, Entity, ItemFilterConstraint } from '../../src/engine/types';
 import { mergeItemIndex } from '../../src/content/contentResolution';
 import { buildSimpleCustomItem } from '../../src/content/items/itemBrowse';
-import { describeConstraint, itemsGrantedBy } from '../../src/content/items/equipmentDisplay';
+import { describeConstraint, reopenEquipmentChoice, skipEquipmentChoice, skipRemainingEquipment, addAdditionalEquipment, additionalEquipment, removeAdditionalEquipment } from '../../src/content/items/equipmentDisplay';
 import { ItemPickerModal } from '../../src/components/ItemPickerModal';
 import { Alert } from '../../src/utils/alert';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -95,7 +95,8 @@ export default function EquipmentScreen() {
   const [scName, setScName] = useState('');
   const [scProps, setScProps] = useState('');
   const [scDesc, setScDesc] = useState('');
-  const [manualItemIds, setManualItemIds] = useState<string[]>([]);
+  const [editingContext, setEditingContext] = useState<{ choiceId: string; label: string; current: string } | null>(null);
+  const [additionalFeedback, setAdditionalFeedback] = useState<string | null>(null);
 
   // ADDITIONAL-ITEM-1: auto-add a homebrew item saved via "Create New
   // Homebrew Item" while this screen was backgrounded. A plain effect (not
@@ -165,8 +166,15 @@ export default function EquipmentScreen() {
   const entity = draft;
 
   function addManualItem(itemId: string) {
-    setDraft({ ...entity, inventory: { ...entity.inventory, carried: [...entity.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }] } });
-    setManualItemIds(prev => [...prev, itemId]);
+    const result = addAdditionalEquipment(entity, itemId);
+    setDraft(result.entity);
+    setAdditionalFeedback(result.added ? `Added ${itemName(itemId)}` : `${itemName(itemId)} is already added`);
+    setAddFlow('closed');
+  }
+
+  function removeManualItem(sourceId: string) {
+    setDraft(removeAdditionalEquipment(entity, sourceId));
+    setAdditionalFeedback(null);
   }
 
   function resolveLegacy(choiceId: string, selections: string[]) {
@@ -246,41 +254,15 @@ export default function EquipmentScreen() {
     }
   }
 
-  // STARTING-EQUIPMENT-2: "+ Create New Homebrew Item" from inside a
-  // constrained required picker. Stashes everything needed to resume
-  // (choiceId/title/constraint/quantity/optionId/current partial
-  // selection) into the durable requiredItemContextStore, then navigates —
-  // never through the global Homebrew tab (item-builder.tsx pushes
-  // directly, same as every other nested-homebrew entry point this
-  // session built).
-  function handleCreateItemFromRequired() {
-    if (!activePicker) return;
-    useRequiredItemContextStore.getState().setContext({
-      originContext: 'requiredEquipmentChoice',
-      requiredChoiceId: activePicker.choiceId,
-      title: activePicker.title,
-      constraint: activePicker.constraint,
-      quantity: activePicker.quantity,
-      optionId: activePicker.optionId,
-      alreadySelectedItemIds: activePicker.selected,
-    });
-    setActivePicker(null);
-    router.push('/homebrew/item-builder');
+  function editEquipmentChoice(choiceId: string) {
+    const choice = entity.choices.find(candidate => candidate.id === choiceId);
+    if (choice) setEditingContext({ choiceId, label: choice.definition.equipmentGroup ?? choice.definition.prompt ?? 'Equipment', current: describeResolvedChoice(choice) || 'No item' });
+    setDraft(reopenEquipmentChoice(entity, choiceId));
+    setLegacySelections(prev => { const next = { ...prev }; delete next[choiceId]; return next; });
   }
 
-  function startEditingEquipment() {
-    let updated = entity;
-    for (const choice of resolvedChoices) {
-      let carried = [...updated.inventory.carried];
-      for (const itemId of itemsGrantedBy(choice)) {
-        const idx = carried.findIndex(i => i.itemId === itemId);
-        if (idx !== -1) carried = [...carried.slice(0, idx), ...carried.slice(idx + 1)];
-      }
-      updated = { ...updated, inventory: { ...updated.inventory, carried } };
-      updated = { ...updated, choices: updated.choices.map(c => c.id === choice.id ? { ...c, resolved: false, selections: [] } : c) };
-    }
-    setDraft(updated);
-    setLegacySelections({});
+  function removeEquipmentChoice(choiceId: string) {
+    setDraft(skipEquipmentChoice(entity, choiceId));
   }
 
   function describeResolvedChoice(choice: ChoiceState): string {
@@ -308,7 +290,7 @@ export default function EquipmentScreen() {
   }
 
   function handleConfirm() {
-    setDraft(markVisited(entity));
+    setDraft(markVisited(skipRemainingEquipment(entity)));
     router.push('/creation/spells');
   }
 
@@ -322,7 +304,7 @@ export default function EquipmentScreen() {
   }
   const totalRequired     = allEquipChoices.length;
   const completedRequired = resolvedChoices.length;
-  const canProceed = equipChoices.length === 0;
+  const canProceed = true;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -361,12 +343,23 @@ export default function EquipmentScreen() {
       {resolvedChoices.length > 0 && (
         <View style={styles.resolvedBlock}>
           <Text style={styles.sub}>Equipment chosen:</Text>
-          {resolvedChoices.map(choice => (
-            <Text key={choice.id} style={styles.ownedItem}>✓ {describeResolvedChoice(choice)}</Text>
+{resolvedChoices.map(choice => (
+            <View key={choice.id} testID={`equipment-choice-${choice.id}`} style={styles.resolvedChoiceRow}>
+              <Text style={styles.ownedItem}>✓ {describeResolvedChoice(choice) || 'No item'}</Text>
+              <View style={styles.resolvedActions}>
+                <Pressable testID={`equipment-change-${choice.id}`} accessibilityLabel="Change equipment choice" style={styles.changeBtn} onPress={() => editEquipmentChoice(choice.id)}><Text style={styles.changeBtnTxt}>Change</Text></Pressable>
+                <Pressable testID={`equipment-remove-${choice.id}`} accessibilityLabel="Remove equipment choice" style={styles.removeBtn} onPress={() => removeEquipmentChoice(choice.id)}><Text style={styles.removeBtnTxt}>Remove</Text></Pressable>
+              </View>
+            </View>
           ))}
-          <Pressable style={styles.changeBtn} onPress={startEditingEquipment}>
-            <Text style={styles.changeBtnTxt}>✎ Change Equipment</Text>
-          </Pressable>
+        </View>
+      )}
+
+      {editingContext && equipChoices.some(choice => choice.id === editingContext.choiceId) && (
+        <View style={styles.changeContext}>
+          <Text style={styles.changeContextTitle}>Change {editingContext.label}</Text>
+          <Text style={styles.changeContextCurrent}>Current: {editingContext.current}</Text>
+          <Text style={styles.changeContextHint}>Your replacement changes only this equipment choice.</Text>
         </View>
       )}
 
@@ -382,6 +375,7 @@ export default function EquipmentScreen() {
               <Pressable style={styles.filteredBtn} onPress={() => openFilteredItemPicker(choice)}>
                 <Text style={styles.filteredBtnTxt}>Choose {choice.definition.count} {describeConstraint(constraint)} →</Text>
               </Pressable>
+              <Pressable style={styles.skipChoiceBtn} onPress={() => removeEquipmentChoice(choice.id)}><Text style={styles.skipChoiceTxt}>No item / Skip this choice</Text></Pressable>
             </View>
           );
         }
@@ -394,6 +388,7 @@ export default function EquipmentScreen() {
             {max > 1 && (
               <Text style={styles.multiHint}>Selected {chosen.length}/{max}, Remaining {max - chosen.length}</Text>
             )}
+            <Pressable style={styles.skipChoiceBtn} onPress={() => removeEquipmentChoice(choice.id)}><Text style={styles.skipChoiceTxt}>No item / Skip this choice</Text></Pressable>
             {pool.map(opt => {
               const isSelected = chosen.includes(opt.id);
               return (
@@ -416,13 +411,19 @@ export default function EquipmentScreen() {
 
       <View style={styles.additionalSection}>
         <Text style={styles.sectionHeading}>Additional Equipment</Text>
-        {manualItemIds.map((id, i) => (
-          <Text key={id + i} style={styles.ownedItem}>• {itemName(id)}</Text>
+        {additionalFeedback && <Text style={styles.addedFeedback}>✓ {additionalFeedback}</Text>}
+        {additionalEquipment(entity).map(item => (
+          <View key={item.acquisitionSourceId} style={styles.additionalItemRow}>
+            <Text style={styles.ownedItem}>• {itemName(item.itemId)}</Text>
+            <Pressable style={styles.choiceActionBtn} onPress={() => removeManualItem(item.acquisitionSourceId!)}><Text style={styles.removeBtnTxt}>Remove</Text></Pressable>
+          </View>
         ))}
-        <Pressable style={styles.addItemBtn} onPress={() => setAddFlow('menu')}>
+        <Pressable testID="equipment-additional-item" accessibilityLabel="Add Additional Item" style={styles.addItemBtn} onPress={() => setAddFlow('menu')}>
           <Text style={styles.addItemBtnTxt}>+ Add Additional Item</Text>
         </Pressable>
       </View>
+
+      {equipChoices.length > 0 && <Pressable testID="equipment-skip-remaining" accessibilityLabel="Skip remaining equipment" style={styles.skipRemainingBtn} onPress={() => setDraft(skipRemainingEquipment(entity))}><Text style={styles.skipChoiceTxt}>Skip remaining equipment</Text></Pressable>}
 
       <Pressable
         style={[styles.nextBtn, !canProceed && styles.nextBtnDisabled]}
@@ -443,7 +444,6 @@ export default function EquipmentScreen() {
           onSelectedChange={next => setActivePicker(p => p ? { ...p, selected: next } : p)}
           browseStateKey={`equipment_required:${activePicker.choiceId}`}
           onConfirmRequired={handlePickerConfirm}
-          onCreateNewItem={handleCreateItemFromRequired}
           onClose={() => setActivePicker(null)}
         />
       )}
@@ -558,6 +558,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
     paddingVertical: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm,
   },
+  changeContext: { backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold, padding: Spacing.md, marginBottom: Spacing.md },
+  changeContextTitle: { color: Colors.gold, fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+  changeContextCurrent: { color: Colors.textPrimary, fontSize: FontSize.md, marginTop: Spacing.xs },
+  changeContextHint: { color: Colors.textDim, fontSize: FontSize.sm, marginTop: Spacing.xs },
+  additionalItemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm, marginBottom: Spacing.xs },
+  addedFeedback: { color: Colors.green, fontWeight: FontWeight.bold, marginBottom: Spacing.sm },
   addItemBtnTxt: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   nextBtn: {
     backgroundColor: Colors.gold, borderRadius: Radius.md,
@@ -566,10 +572,15 @@ const styles = StyleSheet.create({
   nextBtnDisabled: { backgroundColor: Colors.goldDim },
   nextBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.bg },
   ownedItem: { fontSize: FontSize.md, color: Colors.textPrimary, marginBottom: Spacing.xs },
-  changeBtn: {
-    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold,
-    paddingVertical: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm, marginBottom: Spacing.sm,
-  },
+  resolvedChoiceRow: { gap: Spacing.xs, marginBottom: Spacing.sm },
+  resolvedActions: { flexDirection: 'row', alignItems: 'stretch', gap: Spacing.sm },
+  choiceActionBtn: { minWidth: 96, minHeight: 44, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
+  removeBtn: { minWidth: 96, minHeight: 44, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.red, alignItems: 'center', justifyContent: 'center' },
+  removeBtnTxt: { color: Colors.red, fontWeight: FontWeight.bold },
+  skipChoiceBtn: { padding: Spacing.sm, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, marginBottom: Spacing.xs },
+  skipRemainingBtn: { padding: Spacing.md, alignItems: 'center' },
+  skipChoiceTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  changeBtn: { minWidth: 96, minHeight: 44, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, alignItems: 'center', justifyContent: 'center' },
   changeBtnTxt: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.gold },
   backdrop: { flex: 1, backgroundColor: '#000000cc', justifyContent: 'flex-end' },
   menuSheet: {

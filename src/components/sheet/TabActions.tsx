@@ -1,6 +1,7 @@
 // app/sheet/TabActions.tsx
 // Tab 2 — Action Cards. [Use] consumes resources and shows a dice result modal.
 import { useState, useCallback, useEffect, memo } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules, ActivationOption } from '../../engine/types';
 import { endWildShape } from '../../engine/combat';
@@ -81,6 +82,7 @@ export interface UseModalProps {
 }
 
 export function UseModal({ card, onRoll, onClose }: UseModalProps) {
+  const insets = useSafeAreaInsets();
   const [result, setResult] = useState<DiceRoll | null>(null);
   const [crit, setCrit] = useState(false);
 
@@ -106,7 +108,7 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
+        <Pressable style={[styles.modalSheet, { paddingBottom: Math.max(Spacing.lg, insets.bottom + Spacing.md) }]} onPress={e => e.stopPropagation()}>
           <View style={[styles.modalColorBar, { backgroundColor: CARD_COLORS[card.color] }]} />
 
           <Text style={styles.modalName}>{card.name}</Text>

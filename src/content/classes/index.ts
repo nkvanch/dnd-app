@@ -1213,7 +1213,7 @@ const MULTICLASS_PROFICIENCIES: Record<string, import('../../engine/types').Prof
 // Authoritative initial packages. Engine acquisition grants these only for the
 // first class; later classes use MULTICLASS_PROFICIENCIES. Named weapons use
 // catalog display names, which the weapon-proficiency resolver already supports.
-export const ALL_CHAR_CLASSES = [
+export const ALL_CHAR_CLASSES_CATALOG = [
   { id: 'fighter',   name: 'Fighter',   hitDie: 10, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.fighter,
     savingThrows: ['str', 'con'], armorProfs: ['light', 'medium', 'heavy', 'shield'], weaponProfs: ['simple', 'martial'] },
   { id: 'rogue',     name: 'Rogue',     hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.rogue,
@@ -1241,3 +1241,16 @@ export const ALL_CHAR_CLASSES = [
   { id: 'artificer', name: 'Artificer', hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.artificer,
     savingThrows: ['con', 'int'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], toolProfs: ["Thieves' Tools", "Tinker's Tools"], spellcastingAbility: 'int' },
 ] as import('../../engine/types').CharClass[];
+
+/** Exposure policy for public SRD builds. The full catalog remains bundled. */
+export function filterClassesForExposure(
+  classes: readonly import('../../engine/types').CharClass[],
+  srdOnly: boolean,
+): import('../../engine/types').CharClass[] {
+  return classes.filter(cls => !srdOnly || cls.srd === true);
+}
+
+export const ALL_CHAR_CLASSES = filterClassesForExposure(
+  ALL_CHAR_CLASSES_CATALOG,
+  process.env.EXPO_PUBLIC_SRD_ONLY === 'true',
+);

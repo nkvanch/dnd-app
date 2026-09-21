@@ -91,7 +91,7 @@ export default function CharactersScreen() {
   // it, only the lightweight meta table does (native only; empty on web,
   // see loadAllEntityMeta's Platform guard — date sort silently no-ops
   // there rather than crashing).
-  useEffect(() => { loadCharactersMeta(); }, [loadCharactersMeta]);
+  useEffect(() => { void loadCharactersMeta(); }, [loadCharactersMeta]);
   const updatedAtById = useMemo(
     () => new Map(characterMeta.map(m => [m.id, m.updatedAt])),
     [characterMeta],
@@ -184,17 +184,22 @@ export default function CharactersScreen() {
     );
   }, [deleteCharacter]);
 
+
+
   if (isLoading) return <LoadingScreen message="Loading characters…" />;
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} testID="characters-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Characters</Text>
         <View style={styles.headerActions}>
           <Pressable style={styles.settingsBtn} onPress={() => router.push('/settings' as any)}>
             <Text style={styles.settingsBtnText}>⚙️</Text>
           </Pressable>
-          <Pressable style={styles.newBtn} onPress={startCreation}>
+          <Pressable testID="import-character" accessibilityRole="button" accessibilityLabel="Import Character" style={styles.importBtn} onPress={() => router.push('/import-character')}>
+            <Text style={styles.importBtnText}>⇩ Import</Text>
+          </Pressable>
+          <Pressable testID="create-character" accessibilityRole="button" accessibilityLabel="Create Character" style={styles.newBtn} onPress={startCreation}>
             <Text style={styles.newBtnText}>+ New</Text>
           </Pressable>
         </View>
@@ -321,6 +326,8 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   settingsBtn:     { padding: Spacing.sm },
   settingsBtnText: { fontSize: 20 },
+  importBtn: { borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm },
+  importBtnText: { color: Colors.gold, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
   newBtn: {
     backgroundColor: Colors.gold,
     paddingHorizontal: Spacing.md,

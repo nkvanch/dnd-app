@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSpellPayment } from './SpellPaymentChooser';
 // app/sheet/TabCharacter.tsx
 // Tab 1 — Combat dashboard. Players live here.
@@ -447,6 +448,7 @@ function NumberPromptModal({
   onClose: () => void;
 }) {
   const [text, setText] = useState('');
+  const insets = useSafeAreaInsets();
   const n = parseInt(text, 10);
   const valid = !isNaN(n) && n >= 0;
 
@@ -460,7 +462,7 @@ function NumberPromptModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.concSheet} onPress={e => e.stopPropagation()}>
+        <Pressable style={[styles.concSheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]} onPress={e => e.stopPropagation()}>
           <Text style={styles.concTitle}>{title}</Text>
           <Text style={styles.concSpell}>{label}</Text>
           <TextInput

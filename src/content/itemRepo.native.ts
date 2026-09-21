@@ -11,6 +11,7 @@
 import { Item, asRulesetId } from '../engine/types';
 import { getContentDb } from '../db/contentDb';
 import type { ItemIndexEntry, ItemRepo } from './itemRepo.types';
+import { baseWeaponIdFromName } from './items/itemBrowse';
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 
@@ -65,7 +66,13 @@ function getIndex(): ItemIndexEntry[] {
 }
 
 async function ensureLoaded(ids: string[]): Promise<void> {
-  const missing = Array.from(new Set(ids)).filter(id => !fullCache.has(id));
+  const requested = new Set(ids);
+  for (const id of ids) {
+    const entry = index.find(item => item.id === id);
+    const baseId = entry ? baseWeaponIdFromName(entry.name) : null;
+    if (baseId && baseId !== id) requested.add(baseId);
+  }
+  const missing = Array.from(requested).filter(id => !fullCache.has(id));
   if (missing.length === 0) return;
   try {
     const db = getContentDb();

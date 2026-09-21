@@ -6,7 +6,7 @@
 // commit. Never mutates the library before the user explicitly confirms —
 // same rule app/backup.tsx's own pickAndValidateBackup()/preview flow
 // already established for personal backups.
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useCharacterStore } from '../../src/store/characterStore';
@@ -14,6 +14,7 @@ import { makeHomebrewLookup } from '../../src/store/homebrewLookup';
 import { pickAndValidatePackage, PackageImportPreview } from '../../src/io/packageIO';
 import { planPackageImport, ConflictResolution, PackageConflict, flattenPackageContents } from '../../src/engine/packageConflicts';
 import { removedPackItemRefs, stillReferencedRefs } from '../../src/engine/packDiagnostics';
+import { groupPackContents, PACKAGE_TYPE_LABELS } from '../../src/engine/packageBuilder';
 import { recordInstalledPack, loadInstalledPacks, InstalledPack, PackItemRef } from '../../src/db/packRegistryRepo';
 import { loadAllEncounters } from '../../src/db/encounterRepo';
 import { PreparedEncounter } from '../../src/engine/types';
@@ -161,7 +162,13 @@ export default function ImportPackageScreen() {
         }
       }
 
-      const itemRefs: PackItemRef[] = toSave.map(entry => ({ type: entry.type, id: entry.finalId }));
+      // Remember which entries the author picked and which were included automatically (from the manifest),
+      // so the Packages view can keep telling them apart. Copies carry their original id's role.
+      const roleByOriginal = new Map((preview.pack.contents ?? []).map(c => [`${c.type}:${c.id}`, c.included]));
+      const itemRefs: PackItemRef[] = toSave.map(entry => {
+        const included = roleByOriginal.get(`${entry.type}:${entry.originalId}`);
+        return included ? { type: entry.type, id: entry.finalId, included } : { type: entry.type, id: entry.finalId };
+      });
       await recordInstalledPack(packId, packName, itemRefs, packMeta);
       const copiedCount = toSave.filter(e => e.resolution === 'copy').length;
       const replacedCount = toSave.filter(e => e.resolution === 'replace').length;
@@ -197,6 +204,7 @@ export default function ImportPackageScreen() {
     setUpdateChoice(null);
   }
 
+  const previewGroups = useMemo(() => groupPackContents(preview?.pack ?? {}), [preview]);
   const unsupportedRulesetIssues = preview?.validation.issues.filter(i => i.code === 'package_unsupported_ruleset') ?? [];
   const missingDependencyIssues = preview?.validation.issues.filter(i => i.code === 'package_missing_dependency') ?? [];
   const allResolved = preview ? preview.conflicts.every(c => resolutions.has(`${c.type}:${c.id}`)) : true;
@@ -262,14 +270,28 @@ export default function ImportPackageScreen() {
             )}
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>CONTENTS</Text>
-            {(preview.pack.contents ?? []).length === 0 ? (
+          <View style={styles.section} testID="import-preview-contents">
+            <Text style={styles.sectionTitle}>CONTENT ({previewGroups.counts.content})</Text>
+            {previewGroups.counts.total === 0 ? (
               <Text style={styles.body}>{countTotal(preview)} homebrew item{countTotal(preview) === 1 ? '' : 's'}.</Text>
             ) : (
-              Object.entries(groupByType(preview.pack.contents!)).map(([type, count]) => (
-                <Text key={type} style={styles.body}>• {count} {type}{count === 1 ? '' : 's'}</Text>
+              previewGroups.content.map(g => (
+                <View key={g.type}>
+                  <Text style={styles.groupTitle}>{PACKAGE_TYPE_LABELS[g.type][g.entries.length === 1 ? 0 : 1]}</Text>
+                  {g.entries.map(e => <Text key={`${e.type}:${e.id}`} style={styles.body}>• {e.name}</Text>)}
+                </View>
               ))
+            )}
+            {previewGroups.counts.dependencies > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { marginTop: Spacing.sm }]}>DEPENDENCIES ({previewGroups.counts.dependencies}) · INCLUDED AUTOMATICALLY</Text>
+                {previewGroups.dependencies.map(g => (
+                  <View key={g.type}>
+                    <Text style={styles.groupTitle}>{PACKAGE_TYPE_LABELS[g.type][g.entries.length === 1 ? 0 : 1]}</Text>
+                    {g.entries.map(e => <Text key={`${e.type}:${e.id}`} style={styles.body}>🔗 {e.name}</Text>)}
+                  </View>
+                ))}
+              </>
             )}
           </View>
 
@@ -345,7 +367,7 @@ export default function ImportPackageScreen() {
               disabled={!allResolved || committing}
               onPress={() => { void handleConfirmImport(); }}
             >
-              {committing ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.confirmTxt}>{updateChoice === 'update' ? 'Update' : 'Import'}</Text>}
+              {committing ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.confirmTxt} testID="import-confirm">{updateChoice === 'update' ? 'Update' : previewGroups.counts.total > 1 ? 'Import All' : 'Import'}</Text>}
             </Pressable>
           </View>
         </>
@@ -359,12 +381,6 @@ function countTotal(preview: PackageImportPreview): number {
   if (!hb) return 0;
   return Object.values(hb).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
 }
-function groupByType(contents: NonNullable<import('../../src/engine/backup').GrimoirePack['contents']>): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const c of contents) out[c.type] = (out[c.type] ?? 0) + 1;
-  return out;
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   content: { padding: Spacing.lg, paddingBottom: Spacing.xxl, gap: Spacing.lg },
@@ -377,6 +393,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md, gap: Spacing.xs,
   },
   sectionTitle: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textSecondary, letterSpacing: 1 },
+  groupTitle: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textDim, marginTop: Spacing.xs },
   body: { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 20 },
 
   pkgName: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },

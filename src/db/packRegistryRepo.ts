@@ -12,7 +12,11 @@ import { Platform } from 'react-native';
 import { ContentCacheType } from './contentCacheRepo';
 import { getDb } from './db';
 
-export type PackItemRef = { type: ContentCacheType; id: string };
+/** `included` records whether the package's author picked the entry ('selected') or it was pulled in
+ *  automatically because something requires it ('dependency'). Optional: older registrations and packages
+ *  without a manifest simply don't know, and are treated as selected. Stored inside the itemRefs JSON, so it
+ *  needs no schema change and never affects content identity. */
+export type PackItemRef = { type: ContentCacheType; id: string; included?: 'selected' | 'dependency' };
 
 export type InstalledPack = {
   id:         string;
@@ -100,7 +104,7 @@ export function buildPackOwnershipIndex(packs: InstalledPack[]): Map<string, { p
 /** Removes a pack's registry row only — does NOT delete the content items
  *  themselves. Callers that want a full "uninstall" must separately call
  *  useHomebrewStore's deleteItem for each of the pack's itemRefs first
- *  (see app/(tabs)/homebrew.tsx's InstalledPacksPanel). Kept as two
+ *  (see src/components/compendium/InstalledPackagesView.tsx). Kept as two
  *  explicit steps rather than one so a user can un-track a pack (e.g. it
  *  turned out to be a mistake) without losing content they've since
  *  edited and want to keep. */

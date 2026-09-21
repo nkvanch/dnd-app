@@ -12,8 +12,9 @@
 import { create } from 'zustand';
 import { AppState } from 'react-native';
 import { Entity, CampaignRules, SkillName, SkillEntry, AbilityScores, ItemInstance } from '../engine/types';
+import { useLastCharacterStore } from './lastCharacterStore';
 import {
-  saveEntity, loadAllEntities, deleteEntity, loadAllEntityMeta, EntityMeta,
+  saveEntity, loadAllEntities, deleteEntity, loadAllEntityMeta, persistedCharacterExists, EntityMeta,
 } from '../db/entityRepo';
 import { recordTimelineEntry, TimelineCategory } from '../db/timelineRepo';
 import { saveDraftState, clearDraftState } from '../db/draftRepo';
@@ -197,6 +198,7 @@ export const DEFAULT_RULES: CampaignRules = {
   hpMode:          'fixed',
   allowMulticlass: false,
   customRules:     {},
+  abilityGenerationMode: 'standard',
 };
 
 // ── Default skill block ───────────────────────────────────────────────────────
@@ -297,6 +299,7 @@ export function makeEmptyEntity(id: string, kind: Entity['kind'] = 'character'):
     conditionMonitor: { active: [], exhaustion: 0, flags: {} },
     features:         [],
     choices:          [],
+    characterOverrides: [],
     dmOverrides:      [],
     wildShapeState:   null,
     notes:            '',
@@ -425,6 +428,7 @@ type CharacterStore = {
    */
   updateCharacter: (id: string, updater: (e: Entity) => Entity, label?: string, category?: TimelineCategory) => void;
   deleteCharacter: (id: string) => void;
+  importCharacter: (entity: Entity) => Promise<boolean>;
 
   /** Steps back one entry in undoStack, pushing the replaced state onto
    *  redoStack (a true inverse of redo()). No-op if undoStack is empty. */
@@ -825,6 +829,19 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     // silently doing nothing is the safe behavior rather than guessing.
   },
 
+  importCharacter: async (entity) => {
+    try {
+      if (await persistedCharacterExists(entity.id)) return false;
+      await saveEntity(entity);
+      set(state => ({ characters: [entity, ...state.characters.filter(c => c.id !== entity.id)] }));
+      reportPersistOutcome('importCharacter', null);
+      return true;
+    } catch (error) {
+      reportPersistOutcome('importCharacter', error);
+      return false;
+    }
+  },
+
   deleteCharacter: (id) => {
     set(state => ({
       characters: state.characters.filter(c => c.id !== id),
@@ -837,6 +854,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     saveTimers.delete(id);
     pendingSaveIds.delete(id);
 
+    void useLastCharacterStore.getState().clearIfDeleted(id).catch(() => {});
     deleteEntity(id).then(
       () => reportPersistOutcome('deleteCharacter', null),
       e  => reportPersistOutcome('deleteCharacter', e)

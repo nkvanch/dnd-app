@@ -24,6 +24,7 @@ import { validatePackageForImport, PackageValidationResult } from '../engine/pac
 import { detectConflictsDetailed, PackageConflict } from '../engine/packageConflicts';
 import { DependencyRef } from '../engine/contentDependencies';
 import { HomebrewContent } from '../db/contentCacheRepo';
+import { identifyGrimoireImport, WRONG_HOMEBREW_IMPORTER_MESSAGE } from './importEnvelope';
 
 function sanitize(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'package';
@@ -39,7 +40,8 @@ function sanitize(name: string): string {
 export const MAX_PACKAGE_FILE_BYTES = 25 * 1024 * 1024;
 
 /**
- * Builds and shares (or SAF-saves) a dependency-aware homebrew package.
+ * Builds and shares (or SAF-saves) a dependency-aware homebrew package. Used by both Export Homebrew
+ * (one entry + its requirements) and Export Package (many entries + their requirements).
  * `homebrew`/`contents` are already the FULL closure (selection + any
  * required dependencies) — computed by the caller via
  * contentDependencies.ts's buildDependencyClosure BEFORE calling this,
@@ -52,10 +54,12 @@ export async function exportPackage(
   meta:       PackageMeta,
   deviceId:   string | null,
   action:     ExportAction = 'share',
+  /** Optional file-name stem; defaults to the package name. */
+  filenameHint?: string,
 ): Promise<void> {
   const pack = createPackageContentPack(homebrew, contents, meta, deviceId, Constants.expoConfig?.version ?? '1.0.0');
   const json = JSON.stringify(pack, null, 2);
-  const filename = `${sanitize(meta.name)}.grimoire-pack`;
+  const filename = `${sanitize(filenameHint ?? meta.name)}.grimoire-pack`;
 
   if (action === 'save' && Platform.OS === 'android') {
     await saveTextViaSAF(json, filename, 'application/json', FileSystem.EncodingType.UTF8);
@@ -106,6 +110,8 @@ export async function pickAndValidatePackage(
   } catch {
     throw new Error('That file isn’t valid JSON — is it really a .grimoire-pack file?');
   }
+
+  if (identifyGrimoireImport(data) === 'character') throw new Error(WRONG_HOMEBREW_IMPORTER_MESSAGE);
 
   const validation = validatePackageForImport(data, knownRulesetIds, localLookup);
   if (validation.blocking.length > 0) {

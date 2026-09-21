@@ -1,15 +1,14 @@
 // src/components/sheet/FreeEditModal.tsx
-// Free-Edit mode — manual override of any stat, available only when the
-// character is NOT in an active campaign (solo / prep). Base data (ability
-// scores, hit dice, speed, base AC, spell slots) is edited directly on the
-// entity; derived display stats (initiative, perception) use the DM-override
-// engine so the pipeline respects them.
+// Free-Edit mode — character-owned editing and overrides, available when permissions allow. The
+// character. Character overrides are canonical entity state and apply before
+// campaign/DM overrides. Other explicit base/resource editors remain direct.
 
 import {
   Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, Dimensions,
 } from 'react-native';
 import { Entity, CampaignRules, Ability } from '../../engine/types';
-import { applyDmOverride, getActiveOverrides, cancelDmOverride } from '../../engine/dmOverride';
+import { activeCharacterOverrides, applyCharacterOverride, removeCharacterOverride } from '../../engine/characterOverride';
+import { effectiveAbilityScores, recomputeDerived } from '../../engine/pipeline';
 import { reconcileConHp } from '../../engine/leveling';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
@@ -71,19 +70,7 @@ function NumRow({
 export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Props) {
   // ── Base-data editors (direct entity mutation) ──────────────────────────────
 
-  function setAbility(ab: Ability, n: number) {
-    const clamped = Math.max(1, Math.min(30, n));
-    let updated: Entity = { ...entity, stats: { ...entity.stats, [ab]: clamped } };
-    // Constitution changes ripple to HP maximum: PHB grants +1 HP per level per
-    // point of CON modifier gained (and the reverse when it drops). Use the
-    // surgical reconcile so manually-set / rolled HP isn't recomputed from
-    // scratch — only the CON delta is applied. No-op for non-CON abilities and
-    // for level-0 drafts (reconcileConHp guards both).
-    if (ab === 'con') {
-      updated = reconcileConHp(entity, updated);
-    }
-    onApply(updated);
-  }
+  function setBaseAbility(ab:Ability,n:number){const next={...entity,stats:{...entity.stats,[ab]:Math.max(1,Math.min(30,n))}};onApply(ab==='con'?reconcileConHp(entity,next):next);}
 
   // Both setters clear `pools` (rather than spreading it through) — a
   // manual override collapses a mixed multiclass hit-dice pool back to one
@@ -113,10 +100,6 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
     });
   }
 
-  function setSpeed(n: number) {
-    onApply({ ...entity, resources: { ...entity.resources, speed: Math.max(0, n) } });
-  }
-
   function setBaseAc(n: number) {
     // resources.ac: 0 = no armor (pipeline falls back to 10 + DEX). A manual
     // value here forces a fixed base AC.
@@ -140,52 +123,17 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
     });
   }
 
-  // ── Derived-stat editors (DM-override engine) ───────────────────────────────
-
-  function overrideDerived(stat: string, value: number) {
-    const updated = applyDmOverride(entity, {
-      campaignId: '',
-      entityId:   entity.id,
-      dmDeviceId: 'free-edit',
-      stat,
-      operation:  'set',
-      value,
-      label:      'Free edit',
-      expiry:     'manual',
-    }, rules);
-    onApply(updated);
-  }
-
+  // ── Character override layer ─────────────────────────────────────────────
+  function overrideDerived(stat: string, value: number) { onApply(applyCharacterOverride(entity,{stat,value},rules)); }
   function clearDerived(stat: string) {
-    const active = getActiveOverrides(entity).filter(o => o.stat === stat && o.label === 'Free edit');
-    let e = entity;
-    for (const o of active) e = cancelDmOverride(e, o.id, rules);
-    onApply(e);
+    const active=activeCharacterOverrides(entity).filter(o=>o.stat===stat); let e=entity;
+    for(const o of active)e=removeCharacterOverride(e,o.id,rules); onApply(e);
   }
 
-  // AC Bonus: a separate, ADDITIVE override on the same 'ac' stat as
-  // "AC (final)" below — DmOverride explicitly supports stacking 'set' and
-  // 'add' operations on one stat (applied in order), so this is a genuine
-  // stacking bonus (a Shield spell, a temporary buff) rather than replacing
-  // whatever "AC (final)" set. Re-entering a new value replaces the old
-  // Free-Edit 'add' override rather than stacking with itself.
-  function setAcBonus(delta: number) {
-    const existingAdds = getActiveOverrides(entity).filter(o => o.stat === 'ac' && o.label === 'Free edit' && o.operation === 'add');
-    let e = entity;
-    for (const o of existingAdds) e = cancelDmOverride(e, o.id, rules);
-    if (delta !== 0) {
-      e = applyDmOverride(e, {
-        campaignId: '', entityId: entity.id, dmDeviceId: 'free-edit',
-        stat: 'ac', operation: 'add', value: delta, label: 'Free edit', expiry: 'manual',
-      }, rules);
-    }
-    onApply(e);
-  }
-
-  const freeEditOverrides = getActiveOverrides(entity).filter(o => o.label === 'Free edit');
-  const currentAcBonus = freeEditOverrides
-    .filter(o => o.stat === 'ac' && o.operation === 'add')
-    .reduce((sum, o) => sum + o.value, 0);
+  const freeEditOverrides = activeCharacterOverrides(entity);
+  const calculatedEntity=recomputeDerived({...entity,characterOverrides:[],dmOverrides:[]},rules);
+  const characterEntity=recomputeDerived({...entity,dmOverrides:[]},rules);
+  const calculatedScores=effectiveAbilityScores(calculatedEntity),effectiveScores=effectiveAbilityScores(entity);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -193,22 +141,16 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
         <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
           <View style={styles.header}>
             <Text style={styles.title}>🔓 Free Edit</Text>
-            <Text style={styles.subtitle}>Manual overrides — not in a campaign</Text>
+            <Text style={styles.subtitle}>Character editing & manual overrides</Text>
           </View>
 
-          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
             {/* Ability Scores */}
-            <Text style={styles.section}>ABILITY SCORES</Text>
-            {ABILITIES.map(ab => (
-              <NumRow
-                key={ab}
-                label={ab.toUpperCase()}
-                value={entity.stats[ab]}
-                onChange={n => setAbility(ab, n)}
-                hint={`modifier ${fmtMod(Math.floor((entity.stats[ab] - 10) / 2))}`}
-              />
-            ))}
+            <Text style={styles.section}>CHARACTER VALUES — BASE</Text>
+            {ABILITIES.map(ab=><NumRow key={ab+'-base'} label={ab.toUpperCase()+' base'} value={entity.stats[ab]} onChange={n=>setBaseAbility(ab,n)} hint="Changes underlying character data" />)}
+            <Text style={styles.section}>MANUAL OVERRIDES — ABILITIES</Text>
+            {ABILITIES.map(ab=><DerivedRow key={ab+'-override'} label={ab.toUpperCase()} calculated={calculatedScores[ab]} characterValue={characterEntity.stats[ab]} current={effectiveScores[ab]} stat={ab} onSet={overrideDerived} onClear={clearDerived} overridden={freeEditOverrides.some(o=>o.stat===ab)} dmValue={(entity.dmOverrides??[]).filter(o=>o.active&&o.stat===ab).at(-1)?.value} />)}
 
             {/* Hit Dice */}
             <Text style={styles.section}>HIT DICE</Text>
@@ -237,7 +179,8 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
 
             {/* Movement & Defense */}
             <Text style={styles.section}>MOVEMENT & DEFENSE</Text>
-            <NumRow label="Speed (ft)" value={entity.resources.speed} onChange={setSpeed} />
+            <NumRow label="Base speed (ft)" value={entity.resources.speed} onChange={n=>onApply({...entity,resources:{...entity.resources,speed:Math.max(0,n)}})} hint="Changes underlying character data" />
+            <DerivedRow label="Speed override" calculated={calculatedEntity.derived.speed} characterValue={characterEntity.derived.speed} current={entity.derived.speed} stat="speed" onSet={overrideDerived} onClear={clearDerived} overridden={freeEditOverrides.some(o=>o.stat==='speed')} />
             <NumRow
               label="Base AC"
               value={entity.resources.ac}
@@ -249,6 +192,9 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
             <Text style={styles.section}>DERIVED (DISPLAY)</Text>
             <DerivedRow
               label="Initiative"
+              calculated={calculatedEntity.derived.initiative}
+              characterValue={characterEntity.derived.initiative}
+              dmValue={(entity.dmOverrides??[]).filter(o=>o.active&&o.stat==='initiative').at(-1)?.value}
               current={entity.derived.initiative}
               stat="initiative"
               onSet={overrideDerived}
@@ -257,6 +203,9 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
             />
             <DerivedRow
               label="Passive Perception"
+              calculated={calculatedEntity.derived.passivePerception}
+              characterValue={characterEntity.derived.passivePerception}
+              dmValue={(entity.dmOverrides??[]).filter(o=>o.active&&o.stat==='passivePerception').at(-1)?.value}
               current={entity.derived.passivePerception}
               stat="passivePerception"
               onSet={overrideDerived}
@@ -265,18 +214,19 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
             />
             <DerivedRow
               label="AC (final)"
+              calculated={calculatedEntity.derived.ac}
+              characterValue={characterEntity.derived.ac}
+              dmValue={(entity.dmOverrides??[]).filter(o=>o.active&&o.stat==='ac').at(-1)?.value}
               current={entity.derived.ac}
               stat="ac"
               onSet={overrideDerived}
               onClear={clearDerived}
               overridden={freeEditOverrides.some(o => o.stat === 'ac')}
             />
-            <NumRow
-              label="AC Bonus (add)"
-              value={currentAcBonus}
-              onChange={setAcBonus}
-              hint="stacks on top of AC (final) above -- for a Shield spell, temporary buff, etc."
-            />
+
+
+            <Text style={styles.section}>SAVING THROW OVERRIDES</Text>
+            {ABILITIES.map(ab=>{const stat='savingThrows.'+ab;return <DerivedRow key={stat} label={ab.toUpperCase()+' save'} calculated={calculatedEntity.derived.savingThrows[ab]} characterValue={characterEntity.derived.savingThrows[ab]} dmValue={(entity.dmOverrides??[]).filter(o=>o.active&&o.stat===stat).at(-1)?.value} current={entity.derived.savingThrows[ab]} stat={stat} onSet={overrideDerived} onClear={clearDerived} overridden={freeEditOverrides.some(o=>o.stat===stat)} />})}
 
             {/* Spell Slots */}
             {entity.spellcasting && (
@@ -300,7 +250,7 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
             {/* Active free-edit overrides summary */}
             {freeEditOverrides.length > 0 && (
               <View style={styles.activeBox}>
-                <Text style={styles.activeTitle}>ACTIVE FREE EDITS</Text>
+                <Text style={styles.activeTitle}>ACTIVE CHARACTER OVERRIDES</Text>
                 {freeEditOverrides.map(o => (
                   <View key={o.id} style={styles.activeRow}>
                     <Text style={styles.activeTxt}>{o.stat} = {o.value}</Text>
@@ -324,9 +274,9 @@ export function FreeEditModal({ visible, entity, rules, onApply, onClose }: Prop
 }
 
 function DerivedRow({
-  label, current, stat, onSet, onClear, overridden,
+  label, calculated, characterValue, dmValue, current, stat, onSet, onClear, overridden,
 }: {
-  label: string; current: number; stat: string;
+  label: string; calculated: number; characterValue: number; dmValue?:number; current: number; stat: string;
   onSet: (stat: string, v: number) => void;
   onClear: (stat: string) => void;
   overridden: boolean;
@@ -335,7 +285,7 @@ function DerivedRow({
     <View style={styles.row}>
       <View style={{ flex: 1 }}>
         <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowHint}>current {current}{overridden ? ' · edited' : ''}</Text>
+        <Text style={styles.rowHint}>Calculated {calculated} · Character {overridden?characterValue:'None'} · DM {dmValue??'None'} · Effective {current}</Text>
       </View>
       <View style={styles.stepper}>
         <TextInput
@@ -365,8 +315,6 @@ function DerivedRow({
   );
 }
 
-function fmtMod(n: number): string { return n >= 0 ? `+${n}` : `${n}`; }
-
 // FREE-EDIT-SCROLL-1: the sheet used to bound itself with a CSS percentage
 // (`maxHeight: '92%'`) and let scrollArea "fill the rest" via `flexShrink: 1`
 // alone. `flexShrink: 1` keeps `flexBasis: auto` — the ScrollView's initial
@@ -386,13 +334,14 @@ const styles = StyleSheet.create({
   sheet: {
     backgroundColor: Colors.surfaceHigh,
     borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,
-    padding: Spacing.md, gap: Spacing.sm, paddingBottom: Spacing.xl, maxHeight: SHEET_MAX_HEIGHT,
+    padding: Spacing.md, gap: Spacing.sm, paddingBottom: Spacing.xl, height: SHEET_MAX_HEIGHT, maxHeight: SHEET_MAX_HEIGHT,
   },
   header: { alignItems: 'center', gap: 2 },
   title:    { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
   subtitle: { fontSize: FontSize.xs, color: Colors.textDim },
 
-  scrollArea: { flex: 1 },
+  scrollArea: { flex: 1, minHeight: 1 },
+  scrollContent:{paddingBottom:Spacing.md},
 
   section: {
     fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 2,

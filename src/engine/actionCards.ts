@@ -11,13 +11,14 @@
 
 import {
   Feature, Entity, ActionCard, ActionCardType, ActionCardColor,
-  ActionCardTag, AbilityEffect, FeatureActivation, Spell, OutcomeKey,
+  AbilityEffect, FeatureActivation, Spell, OutcomeKey,
   FeatureInstance,
 } from './types';
 import { spellRepo } from '../content/spellRepo';
-import { itemRepo } from '../content/itemRepo';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { effectiveItemFeatures, isItemMechanicallyActive, resolveItemDefinition } from './itemMechanics';
+import { isWeapon } from '../content/items/itemBrowse';
+import { toItemIndexEntry } from '../content/itemRepo.types';
 import { usesLargeCreatureWeaponDice } from './houseRules';
 import { hasLegalSpellPayment } from './spellPayment';
 import { CampaignRules } from './types';
@@ -655,12 +656,29 @@ export function generateAllActionCards(entity: Entity, rules?: CampaignRules): A
     const definition = resolveItemDefinition(inst.itemId);
     if (!isItemMechanicallyActive(inst, definition)) continue;
     const feats = effectiveItemFeatures(inst, definition);
+    let hasAuthoredAttack = false;
     for (const fi of feats) {
-      // Only features with an activation produce cards (attacks, usable items);
-      // passive AC features (armor) are handled by collectAllEffects, not here.
       if (!fi.activation) continue;
       const card = generateActionCard(fi, entity, opts);
-      if (card) cards.push(card);
+      if (card) {
+        cards.push(card);
+        if (fi.abilityEffects?.some(effect => effect.type === 'damage')) hasAuthoredAttack = true;
+      }
+    }
+    if (definition && isWeapon(toItemIndexEntry(definition)) && !hasAuthoredAttack) {
+      const attack = entity.derived.attackBonuses.find(candidate => candidate.id === inst.itemId);
+      if (attack) {
+        const activation: FeatureActivation = { actionType: 'action', resourceCost: null, range: attack.type === 'ranged' ? 'weapon range' : '5 feet', target: 'single', requiresSave: null };
+        const availability = isFeatureAvailable({ activation, effects: [], abilityEffects: [] } as unknown as Feature, entity);
+        const dice = doubleWeaponDice ? doubleDice(attack.damageDice) : attack.damageDice;
+        cards.push({
+          featureId: `${inst.itemId}_basic_weapon_attack`, name: definition.name,
+          cardType: 'damage', color: 'red', layer1: `Action • ${capitalize(attack.type)} Weapon Attack`,
+          layer2: `${fmtBonus(attack.bonus)} to hit • ${dice}${attack.damageBonus !== 0 ? fmtBonus(attack.damageBonus) : ''} ${capitalize(attack.damageType)}`,
+          layer3: null, outcomes: [], triggerNote: null, activation, resourceCost: null,
+          tabs: ['actions', 'features'], available: availability.available, unavailableReason: availability.reason,
+        });
+      }
     }
   }
 

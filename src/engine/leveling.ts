@@ -3,7 +3,7 @@ import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, Proficie
          KnownSpellsGrant, asSubclassId, asClassId, Background, SkillName,
          CharClass, ItemFilterConstraint, BACKGROUND_CHOICE_PREFIX,
          EntitlementRecord, EntitlementSourceKind } from './types';
-import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
+import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers, effectiveAbilityScores } from './pipeline';
 import { getSpellSlotsForClassLevel, multiclassCasterLevel, MULTICLASS_SPELLCASTER_SLOTS,
          pactSlotTableFor, slotsForLevel, slotsFromCountArray } from '../content/classes/spellSlotTables';
 import { ALL_CHAR_CLASSES } from '../content/classes';
@@ -390,9 +390,7 @@ export function applyHP(
   // into HP. Defaults to CON (standard 5e RAW) — every existing class passes
   // no explicit ability and is completely unaffected. hpAbility lets a
   // homebrew class reflavor HP around a different score (e.g. CHA).
-  const allEffects    = collectAllEffects(entity);
-  const effectiveStats = applyStatModifiers(entity.stats, allEffects);
-  const abilityMod    = modifier(effectiveStats[hpAbility]);
+  const abilityMod = modifier(effectiveAbilityScores(entity)[hpAbility]);
 
   let rolled = isVeryFirstLevel
     ? die                                           // Very first level: always max die
@@ -469,9 +467,7 @@ export function recalculateAllHP(entity: Entity, rules: CampaignRules, hpAbility
   const die  = entity.resources.hitDice.die;
 
   // Use effectiveStats so race bonuses count
-  const allEffects     = collectAllEffects(entity);
-  const effectiveStats = applyStatModifiers(entity.stats, allEffects);
-  const abilityMod     = modifier(effectiveStats[hpAbility]);
+  const abilityMod = modifier(effectiveAbilityScores(entity)[hpAbility]);
 
   // Level 1: always max die
   let totalHP = Math.max(1, die + abilityMod);
@@ -510,8 +506,8 @@ export function reconcileConHp(prev: Entity, next: Entity): Entity {
   const level = next.identity.level;
   if (level <= 0) return next;
 
-  const prevCon = applyStatModifiers(prev.stats, collectAllEffects(prev)).con;
-  const nextCon = applyStatModifiers(next.stats, collectAllEffects(next)).con;
+  const prevCon = effectiveAbilityScores(prev).con;
+  const nextCon = effectiveAbilityScores(next).con;
   const delta   = modifier(nextCon) - modifier(prevCon);
   if (delta === 0) return next;
 

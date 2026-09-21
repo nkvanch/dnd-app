@@ -158,6 +158,9 @@ export type GrantResult = {
   value:    unknown;
 };
 
+export type AbilityGenerationMode = 'standard' | 'pointbuy' | 'manual' | 'roll';
+export type PointBuyConfig = { budget:number; minimum:number; maximum:number; costs:Record<number,number> };
+
 export type CampaignRules = {
   maxAbilityScore: number | null;
   maxLevel:        number | null;
@@ -165,6 +168,20 @@ export type CampaignRules = {
   hpMode:          'fixed' | 'rolled' | 'max';
   allowMulticlass: boolean;
   customRules:     Record<string, unknown>;
+  abilityGenerationMode?: AbilityGenerationMode;
+  pointBuy?: PointBuyConfig;
+};
+
+/** Named, persisted overrides for rule values the current engine already understands. */
+export type CustomRuleProfile = {
+  id: string;
+  name: string;
+  gameId: GameId;
+  baseRulesetId: RulesetId;
+  rules: Partial<CampaignRules> & { customRules?: Record<string, unknown> };
+  source: { kind: 'local' | 'imported'; label?: string };
+  createdAt: number;
+  updatedAt: number;
 };
 
 // ── 2. Static content schemas ────────────────────────────────────────────────
@@ -1222,6 +1239,8 @@ export type BeastForm = {
 export type ItemInstance = {
   itemId:   string;
   quantity: number;
+  /** Stable owner for creation-time additional items. */
+  acquisitionSourceId?: string;
   attuned:  boolean;
   features: Feature[];
   /**
@@ -1620,6 +1639,7 @@ export type Entity = {
   conditionMonitor: ConditionMonitor;
   features:         FeatureInstance[];
   choices:          ChoiceState[];
+  characterOverrides?: CharacterOverride[]; // character-owned replacements, before DM overrides
   dmOverrides:      DmOverride[];     // always [] for new entities
   wildShapeState:   WildShapeState | null;
   notes:            string;
@@ -1680,6 +1700,10 @@ export type Entity = {
    * comment near the top of this file.
    */
   rulesetId?: RulesetId;
+  /** Optional named rule-profile overlay; rulesetId remains the base official ruleset. */
+  customRuleProfileId?: string;
+  /** Creation-only provenance persisted with drafts; totals derive from stats + active rules. */
+  creationAbilityMode?: AbilityGenerationMode;
   /**
    * Action/bonus-action/reaction usage for the entity's current turn. Null
    * when not actively tracked (outside combat, or before the first
@@ -1894,6 +1918,11 @@ export type DmOverrideTarget =
   | `savingThrows.${Ability}`   // e.g. "savingThrows.str"
   | string;                     // custom homebrew stats
 
+export type CharacterOverride = {
+  id:string; entityId:string; stat:DmOverrideTarget; operation:'set'|'add'; value:number;
+  label:string; active:boolean; appliedAt:number; cancelledAt:number|null;
+};
+
 export type DmOverride = {
   id:          string;
   campaignId:  string;
@@ -1943,7 +1972,8 @@ export type AuditSourceKind =
   | 'condition'
   | 'campaign'
   | 'manual'
-  | 'dm_override';
+  | 'dm_override'
+  | 'character_override';
 
 /** One contribution to a derived value. */
 export type AuditEntry = {
@@ -1951,13 +1981,13 @@ export type AuditEntry = {
   value:      number;           // the contribution (positive, negative, or zero for notes)
   sourceKind: AuditSourceKind;
   sourceId:   string | null;    // feature/item/override ID, or null for base values
+  replacement?: { from: number; to: number }; // set override, not an additive +0
 };
 
 /** The full breakdown of how a derived value was computed. */
 export type AuditTrail = {
-  stat:    string;
-  total:   number;
-  entries: AuditEntry[];
+  stat: string; total: number; entries: AuditEntry[];
+  calculated?: number; override?: number | null; effective?: number;
 };
 
 // ── 10. Action card system ───────────────────────────────────────────────────

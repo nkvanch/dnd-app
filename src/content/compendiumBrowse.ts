@@ -14,7 +14,8 @@ import type { SpellIndexEntry } from './spellRepo.types';
 import type { ItemIndexEntry } from './itemRepo.types';
 import type { MonsterTemplate } from './monsters/types';
 import type { SubclassEntry } from './subclasses/subclassBrowse';
-import { BrowsableEntry } from './contentQuery';
+import { BrowsableEntry, ContentTypeId } from './contentQuery';
+import { Colors } from '../theme';
 import { CASTER_TYPE } from './classes/classBrowse';
 import { itemCategory, ITEM_CATEGORY_LABELS } from './items/itemBrowse';
 import { crLabel } from './monsters/monsterBrowse';
@@ -36,11 +37,20 @@ import { conditionSourceLabel } from './conditions/conditionBrowse';
  *  needs the parent's NAME too, both for the row summary and for the
  *  Parent Race filter the spec explicitly allows here (and only here —
  *  contextual creation pickers already fix the parent, so they omit it). */
-export type SubraceWithParent = Subrace & { parentRaceId: string; parentRaceName: string };
+export type SubraceWithParent = Subrace & { parentRaceId: string; parentRaceName: string; rulesetId?: Race['rulesetId']; srd?: boolean };
 
 export function flattenSubraces(races: Race[]): SubraceWithParent[] {
-  return races.flatMap(r => (r.subraces ?? []).map(sr => ({ ...sr, parentRaceId: r.id, parentRaceName: r.name })));
+  return races.flatMap(r => (r.subraces ?? []).map(sr => ({ ...sr, parentRaceId: r.id, parentRaceName: r.name, rulesetId: r.rulesetId, srd: r.srd })));
 }
+
+export type ContentTypeVisual = { accent: string; icon: string };
+export const CONTENT_TYPE_VISUALS: Record<ContentTypeId, ContentTypeVisual> = {
+  race: { accent: Colors.green, icon: '◈' }, subrace: { accent: Colors.green, icon: '◇' },
+  class: { accent: Colors.gold, icon: '◆' }, subclass: { accent: Colors.goldDim, icon: '◇' },
+  background: { accent: Colors.textSecondary, icon: '▣' }, feat: { accent: Colors.red, icon: '✦' },
+  spell: { accent: Colors.blue, icon: '✧' }, item: { accent: Colors.gold, icon: '▰' },
+  monster: { accent: Colors.red, icon: '▲' }, condition: { accent: Colors.purple, icon: '●' },
+};
 
 const SIZE_LABEL: Record<string, string> = {
   tiny: 'Tiny', small: 'Small', medium: 'Medium', large: 'Large', huge: 'Huge', gargantuan: 'Gargantuan',
@@ -50,9 +60,7 @@ export function raceToBrowsable(r: Race, isHomebrew: boolean): BrowsableEntry<Ra
   return { id: r.id, name: r.name, type: 'race', rulesetId: r.rulesetId, srd: r.srd, isHomebrew, raw: r };
 }
 export function subraceToBrowsable(sr: SubraceWithParent, isHomebrew: boolean): BrowsableEntry<SubraceWithParent> {
-  // Subrace carries no srd/rulesetId field at all (confirmed against its
-  // type) — disclosed, not fabricated.
-  return { id: sr.id, name: sr.name, type: 'subrace', isHomebrew, raw: sr };
+  return { id: sr.id, name: sr.name, type: 'subrace', rulesetId: sr.rulesetId, srd: sr.srd, isHomebrew, raw: sr };
 }
 export function classToBrowsable(c: CharClass, isHomebrew: boolean): BrowsableEntry<CharClass> {
   return { id: c.id, name: c.name, type: 'class', rulesetId: c.rulesetId, srd: c.srd, isHomebrew, raw: c };

@@ -23,6 +23,7 @@ import { syncManager }       from '../src/sync/syncManager';
 import { useSyncStore }      from '../src/store/syncStore';
 import { useCombatTurnStore } from '../src/store/combatTurnStore';
 import { useCombatStore }    from '../src/store/combatStore';
+import { useCustomRuleProfileStore } from '../src/store/customRuleProfileStore';
 import { loadCombatState, clearCombatState } from '../src/db/combatRepo';
 import { loadDraftState } from '../src/db/draftRepo';
 
@@ -136,6 +137,10 @@ export default function RootLayout() {
           if (draft) useCharacterStore.setState({ draft });
         }).catch(() => { /* non-critical */ });
 
+        // 5b. Named custom rule profiles are independent local configuration.
+        try { await useCustomRuleProfileStore.getState().load(); }
+        catch (e) { console.error('[_layout] Custom rule profiles failed to load:', e); }
+
         // 6. Wire up the sync manager — must run after stores are hydrated
         try {
           const { applyIncomingEntity, applyIncomingPatch } = useCharacterStore.getState();
@@ -148,16 +153,16 @@ export default function RootLayout() {
               setStatus(status);
             },
             onEntityReceived: (entity) => {
-              applyIncomingEntity(entity);
+              void applyIncomingEntity(entity);
             },
             onEntityPatchReceived: (entityId, patch) => {
-              applyIncomingPatch(entityId, patch);
+              void applyIncomingPatch(entityId, patch);
             },
             onCampaignReceived: (campaign) => {
-              applyIncomingCampaign(campaign);
+              void applyIncomingCampaign(campaign);
             },
             onCampaignPatchReceived: (campaignId, patch) => {
-              applyIncomingCampaignPatch(campaignId, patch);
+              void applyIncomingCampaignPatch(campaignId, patch);
             },
             onCombatTurnReceived: (turn) => {
               setTurn(turn);
@@ -220,7 +225,7 @@ export default function RootLayout() {
         setDbReady(true);
       }
     }
-    boot();
+    void boot();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -283,6 +288,7 @@ export default function RootLayout() {
             comment (audit finding ROUTE-GUARD-1). */}
         <Stack.Screen name="dm"                  options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/import-review"      options={{ headerShown: false }} />
+        <Stack.Screen name="homebrew/package-builder"    options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/spell-builder"      options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/class-builder"      options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/race-builder"       options={{ headerShown: false }} />

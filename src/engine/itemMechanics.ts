@@ -1,7 +1,7 @@
 import { Entity, Item, ItemInstance } from './types';
 import { itemRepo } from '../content/itemRepo';
 import { useHomebrewStore } from '../store/homebrewStore';
-import { armorWeight, isShield } from '../content/items/itemBrowse';
+import { armorWeight, baseWeaponIdFromName, isShield, isWeapon } from '../content/items/itemBrowse';
 import { toItemIndexEntry } from '../content/itemRepo.types';
 
 const KNOWN_ATTUNEMENT_ITEM_IDS = new Set([
@@ -35,6 +35,21 @@ export function effectiveItemFeatures(instance: ItemInstance, definition: Item |
   const instanceOnly = infusionId ? instance.features.filter(feature => feature.id === infusionId) : [];
   const definitionIds = new Set(definition.features.map(feature => feature.id));
   return [...definition.features, ...instanceOnly.filter(feature => !definitionIds.has(feature.id))];
+}
+
+/** Resolve attack features for weapons whose magic-item record only describes
+ * the special property. Base weapon dice remain catalog data; this composes
+ * them at runtime without inventing an activation for the passive feature. */
+export function effectiveWeaponAttackFeatures(instance: ItemInstance, definition: Item | undefined) {
+  const own = effectiveItemFeatures(instance, definition);
+  if (!definition || own.some(feature => feature.abilityEffects?.some(effect => effect.type === 'damage'))) return own;
+  if (!isWeapon(toItemIndexEntry(definition))) return own;
+  const baseId = baseWeaponIdFromName(definition.name);
+  const baseDefinition = baseId && baseId !== definition.id
+    ? itemRepo.getItemSync(baseId) ?? useHomebrewStore.getState().items.find(item => item.id === baseId)
+    : undefined;
+  const attacks = baseDefinition?.features.filter(feature => feature.abilityEffects?.some(effect => effect.type === 'damage')) ?? [];
+  return [...own, ...attacks];
 }
 
 /** Refresh immutable definition facts without overwriting mutable instance state. */

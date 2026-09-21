@@ -4,10 +4,11 @@ import { setManualEntitlement } from '../../engine/entitlements';
 import { useState, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import { Entity, Ability, SkillName, CampaignRules } from '../../engine/types';
-import { modifier, collectAllEffects, applyStatModifiers, recomputeDerived } from '../../engine/pipeline';
+import { modifier, effectiveAbilityScores, recomputeDerived } from '../../engine/pipeline';
 import { applyDmOverride, getActiveOverrides, cancelDmOverride } from '../../engine/dmOverride';
 import { AuditModal } from './AuditModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ABILITIES: { key: Ability; label: string }[] = [
   { key: 'str', label: 'STR' },
@@ -158,6 +159,7 @@ function ProficienciesModal({ visible, entity, rules, onUpdate, onClose }: {
   const [category, setCategory] = useState<ProficiencyCategory>('tools');
   const [text, setText] = useState('');
   const [bonusesOpen, setBonusesOpen] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const CATEGORY_TABS: { key: ProficiencyCategory; label: string }[] = [
     { key: 'tools',     label: 'Tools' },
@@ -175,7 +177,7 @@ function ProficienciesModal({ visible, entity, rules, onUpdate, onClose }: {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={pStyles.backdrop} onPress={onClose}>
-        <Pressable style={pStyles.sheet} onPress={e => e.stopPropagation()}>
+        <Pressable style={[pStyles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]} onPress={e => e.stopPropagation()}>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={pStyles.title}>Proficiencies</Text>
 
@@ -378,10 +380,10 @@ function TabAbilitiesInner({ entity, rules, isDm, campaignId, deviceId, onEntity
     setAuditLabel(label);
   }
 
-  const { stats, derived, proficiencies, skills } = entity;
+  const { derived, proficiencies, skills } = entity;
 
   // Effective stats include race/feature bonuses — matches the engine's derived values.
-  const effectiveStats = applyStatModifiers(stats, collectAllEffects(entity));
+  const effectiveStats = effectiveAbilityScores(entity);
 
   // Bug fix (architecture review U6): this used to hand-recompute the
   // passive-score formula independently of entity.derived, so it had no way

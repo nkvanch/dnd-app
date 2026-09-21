@@ -1,0 +1,18 @@
+appId: com.nkvanch.grimoire
+name: Point Buy controls and refund
+# Precondition: an active creation draft is already at Ability Scores.
+tags:
+  - requires-creation-draft
+---
+- launchApp
+- assertVisible:
+    id: pointbuy-remaining
+- tapOn:
+    id: pointbuy-str-plus
+- assertVisible:
+    id: pointbuy-remaining
+- tapOn:
+    id: pointbuy-str-minus
+- assertVisible:
+    id: pointbuy-remaining
+- takeScreenshot: "D:/Documents/dnd-app/builds/maestro-artifacts/point-buy"

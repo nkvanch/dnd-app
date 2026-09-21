@@ -1,0 +1,17 @@
+appId: com.nkvanch.grimoire
+name: Free Edit content and persistence
+# Precondition: Continue Last Character exists and its profile permits Free Edit.
+tags:
+  - requires-character
+---
+- launchApp
+- tapOn: "Continue Last Character"
+- tapOn:
+    id: character-more
+- tapOn:
+    id: character-menu-free-edit
+- assertVisible: "Free Edit"
+- assertVisible: "Ability Scores"
+- assertVisible: "Manual Overrides"
+- takeScreenshot: "D:/Documents/dnd-app/builds/maestro-artifacts/free-edit"
+- tapOn: "Done"

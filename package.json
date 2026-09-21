@@ -53,7 +53,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
-    "postinstall": "node scripts/fix-android-manifests.js"
+    "postinstall": "node scripts/fix-android-manifests.js && patch-package",
+    "build:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-apk-local.ps1"
   },
   "expo": {
     "name": "dnd-app",

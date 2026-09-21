@@ -1,0 +1,20 @@
+appId: com.nkvanch.grimoire
+name: Dice roller and recent rolls
+tags:
+  - smoke
+  - dice
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: home-dice-roller
+- assertVisible: "Dice Roller"
+- tapOn: "Roll"
+- tapOn: "Roll"
+- assertVisible: "RECENT ROLLS"
+- tapOn: "RECENT ROLLS"
+- assertVisible:
+    id: recent-rolls
+- tapOn:
+    id: recent-rolls
+- assertVisible: "Roll"

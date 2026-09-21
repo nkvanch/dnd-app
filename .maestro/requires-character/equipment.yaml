@@ -1,0 +1,14 @@
+appId: com.nkvanch.grimoire
+name: Equipment editing controls
+# Precondition: an active creation draft is already at Equipment with a resolved choice.
+tags:
+  - requires-creation-draft
+---
+- launchApp
+- assertVisible: "Equipment chosen:"
+- assertVisible: "Change"
+- assertVisible: "Remove"
+- assertVisible:
+    id: equipment-additional-item
+- assertVisible:
+    id: equipment-skip-remaining

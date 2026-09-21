@@ -1,0 +1,32 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - Free Edit lock state
+tags: [preserve-state, optional-character]
+---
+- launchApp
+- tapOn: { id: tab-home }
+- runFlow:
+    when:
+      visible: { id: home-last-character }
+    commands:
+      - tapOn: { id: home-last-character }
+      - tapOn: { id: character-more }
+      - runFlow:
+          when:
+            visible: { id: "character-menu-free-edit-locked$" }
+          commands:
+            - assertVisible: { id: "character-menu-free-edit-locked$" }
+      - runFlow:
+          when:
+            visible: { id: "character-menu-free-edit$" }
+          commands:
+            - tapOn: { id: "character-menu-free-edit$" }
+            - assertVisible: ".*Free Edit.*"
+            - assertVisible: "CHARACTER VALUES.*BASE"
+            - assertVisible: "MANUAL OVERRIDES.*ABILITIES"
+            - tapOn: "Done"
+      - back
+- assertVisible: { id: home-screen }
+
+
+
+

@@ -1,0 +1,22 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - disposable dice history
+tags: [preserve-state, dice, optional-character]
+---
+- launchApp
+- tapOn: { id: tab-home }
+- runFlow:
+    when:
+      visible: { id: home-last-character }
+    commands:
+      - tapOn: { id: home-last-character }
+      - tapOn: { id: dice-roller }
+      - tapOn: { id: dice-roll }
+      - tapOn: { id: dice-roll }
+      - assertVisible: { id: recent-rolls }
+      - tapOn: { id: recent-rolls }
+      - assertVisible: "RECENT ROLLS.*"
+      - tapOn: { id: recent-rolls }
+      - assertVisible: { id: dice-roll }
+      - tapOn: "Close"
+      - back
+- assertVisible: { id: home-screen }

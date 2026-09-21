@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/NEW architecture/07-specification.md",
+                "file": "outreach/README.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "07-specification"
+              "title": "README"
             }
           }
         ]
@@ -187,8 +187,15 @@
   },
   "active": "4a8eae8187561b68",
   "lastOpenFiles": [
-    "docs/NEW architecture/08-whats-new.md",
+    "outreach/PRE_SEND_CHECKLIST.md",
+    "outreach/to-send/05_Lee_This_Crits.md",
+    "outreach/to-send/04_Nathan_Amethyst_Dragon.md",
+    "outreach/to-send/03_Jonoman3000.md",
+    "outreach/to-send/02_Zellorea.md",
+    "outreach/to-send/01_DM_V.md",
+    "builds/grimoire alpha 0.1.58.apk",
     "docs/NEW architecture/07-specification.md",
+    "docs/NEW architecture/08-whats-new.md",
     "src/components/sheet/TabCharacter.tsx.tmp.21972.a8fbe23b3e56",
     "src/components/sheet/ProgressionPlannerModal.tsx",
     "src/components/sheet/ProgressionPlannerModal.tsx.tmp.21972.de0fa3b55f1f",
@@ -215,12 +222,6 @@
     "app/dm/encounter.tsx.tmp.21972.4d2acdc7c113",
     "app/dm/encounter.tsx.tmp.21972.69e056e03283",
     "app/dm/encounter.tsx.tmp.21972.70051870dfa8",
-    "app/dm/encounter.tsx.tmp.21972.ba5376c5d4b1",
-    "app/dm/encounter.tsx.tmp.21972.d569300eb8af",
-    "docs/NEW architecture/09-conformance-answers.md",
-    "docs/DESIGN.md",
-    "docs/DATA_MODEL.md",
-    "docs/ABOUT.md",
-    "docs/ROADMAP_1.0.md"
+    "app/dm/encounter.tsx.tmp.21972.ba5376c5d4b1"
   ]
 }

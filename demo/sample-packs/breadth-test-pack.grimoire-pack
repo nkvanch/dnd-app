@@ -1,0 +1,459 @@
+{
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "packType": "content-pack",
+  "createdAt": 1789986948523,
+  "modifiedAt": 1789986948523,
+  "appVersion": "1.0.0",
+  "deviceId": null,
+  "characters": [],
+  "homebrew": {
+    "races": [
+      {
+        "id": "tidewalker_demo",
+        "name": "Tidewalker (Demo)",
+        "features": [
+          {
+            "id": "tidewalker_demo_quick_current",
+            "name": "Quick Current",
+            "description": "+1 Dexterity.",
+            "source": {
+              "kind": "race",
+              "refId": "tidewalker_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "stat_modifier",
+                "target": "dex",
+                "operation": "add",
+                "value": 1,
+                "condition": null
+              }
+            ]
+          },
+          {
+            "id": "tidewalker_demo_deepwater_blood",
+            "name": "Deepwater Blood",
+            "description": "Resistance to cold damage.",
+            "source": {
+              "kind": "race",
+              "refId": "tidewalker_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "grant_resistance",
+                "target": "cold",
+                "operation": "resistance",
+                "value": null,
+                "condition": null
+              }
+            ]
+          },
+          {
+            "id": "tidewalker_demo_tidal_gift",
+            "name": "Tidal Gift",
+            "description": "Cast Tide Pull (Demo) once per long rest.",
+            "source": {
+              "kind": "race",
+              "refId": "tidewalker_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": []
+          },
+          {
+            "id": "tidewalker_demo_tidal_gift_grant_tide_pull_demo",
+            "name": "Tide Pull (Demo)",
+            "description": "Granted by Tidal Gift.",
+            "source": {
+              "kind": "race",
+              "refId": "tidewalker_demo"
+            },
+            "level": 1,
+            "actions": [],
+            "choices": [],
+            "passive": false,
+            "effects": [],
+            "activation": {
+              "actionType": "action",
+              "resourceCost": {
+                "resourceId": "tidewalker_demo_tidal_gift_grant_tide_pull_demo_pool",
+                "quantity": 1
+              },
+              "range": "self",
+              "target": "single",
+              "requiresSave": null
+            },
+            "abilityEffects": [
+              {
+                "type": "cast_spell",
+                "spellId": "tide_pull_demo"
+              }
+            ]
+          }
+        ],
+        "resources": [
+          {
+            "resourceId": "tidewalker_demo_tidal_gift_grant_tide_pull_demo_pool",
+            "name": "Tidal Gift: Tide Pull (Demo)",
+            "maximum": 1,
+            "recharge": "long_rest"
+          }
+        ],
+        "size": "Medium",
+        "speed": 30,
+        "languages": [
+          "Common"
+        ]
+      }
+    ],
+    "subclasses": [
+      {
+        "id": "undertow_vanguard_demo",
+        "name": "Undertow Vanguard (Demo)",
+        "classId": "fighter",
+        "entries": [
+          {
+            "level": 3,
+            "grants": [
+              {
+                "kind": "feature",
+                "value": {
+                  "id": "undertow_vanguard_demo_l3_undertow_stance",
+                  "name": "Undertow Stance",
+                  "description": "+1 AC.",
+                  "source": {
+                    "kind": "subclass",
+                    "refId": "undertow_vanguard_demo"
+                  },
+                  "level": 3,
+                  "actions": [],
+                  "choices": [],
+                  "passive": true,
+                  "effects": [
+                    {
+                      "type": "stat_modifier",
+                      "target": "ac",
+                      "operation": "add",
+                      "value": 1,
+                      "condition": null
+                    }
+                  ]
+                }
+              }
+            ],
+            "choices": [],
+            "hpDie": 10
+          },
+          {
+            "level": 7,
+            "grants": [
+              {
+                "kind": "feature",
+                "value": {
+                  "id": "undertow_vanguard_demo_l7_brine_ward_gift",
+                  "name": "Brine Ward Gift",
+                  "description": "Cast Brine Ward (Demo) once per long rest.",
+                  "source": {
+                    "kind": "subclass",
+                    "refId": "undertow_vanguard_demo"
+                  },
+                  "level": 7,
+                  "actions": [],
+                  "choices": [],
+                  "passive": true,
+                  "effects": []
+                }
+              },
+              {
+                "kind": "feature",
+                "value": {
+                  "id": "undertow_vanguard_demo_l7_brine_ward_gift_grant_brine_ward_demo",
+                  "name": "Brine Ward (Demo)",
+                  "description": "Granted by Brine Ward Gift.",
+                  "source": {
+                    "kind": "subclass",
+                    "refId": "undertow_vanguard_demo"
+                  },
+                  "level": 7,
+                  "actions": [],
+                  "choices": [],
+                  "passive": false,
+                  "effects": [],
+                  "activation": {
+                    "actionType": "reaction",
+                    "resourceCost": {
+                      "resourceId": "undertow_vanguard_demo_l7_brine_ward_gift_grant_brine_ward_demo_pool",
+                      "quantity": 1
+                    },
+                    "range": "self",
+                    "target": "single",
+                    "requiresSave": null
+                  },
+                  "abilityEffects": [
+                    {
+                      "type": "cast_spell",
+                      "spellId": "brine_ward_demo"
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "resource",
+                "value": {
+                  "resourceId": "undertow_vanguard_demo_l7_brine_ward_gift_grant_brine_ward_demo_pool",
+                  "name": "Brine Ward Gift: Brine Ward (Demo)",
+                  "maximum": 1,
+                  "recharge": "long_rest"
+                }
+              }
+            ],
+            "choices": [],
+            "hpDie": 10
+          }
+        ]
+      }
+    ],
+    "feats": [
+      {
+        "id": "tide_reader_demo",
+        "name": "Tide Reader (Demo)",
+        "prerequisite": null,
+        "source": "Breadth Test Pack (demo)",
+        "description": "TEST/DEMO CONTENT, part of the Breadth Test Pack. Not for play. Increase Wisdom or Constitution by 1 (your choice) and gain Survival proficiency.",
+        "abilityChoice": {
+          "options": [
+            "wis",
+            "con"
+          ],
+          "amount": 1
+        },
+        "feature": {
+          "id": "tide_reader_demo_tide_study",
+          "name": "Tide Study",
+          "description": "Proficiency in Survival.",
+          "source": {
+            "kind": "feat",
+            "refId": "tide_reader_demo"
+          },
+          "level": null,
+          "actions": [],
+          "choices": [],
+          "passive": true,
+          "effects": [
+            {
+              "type": "grant_proficiency",
+              "target": "skill:survival",
+              "operation": "add",
+              "value": null,
+              "condition": null
+            }
+          ]
+        }
+      }
+    ],
+    "items": [
+      {
+        "id": "tidecaller_buckle_demo",
+        "name": "Tidecaller Buckle (Demo)",
+        "weight": 1,
+        "cost": "-",
+        "properties": [
+          "wondrous item",
+          "requires attunement",
+          "TEST/DEMO CONTENT, part of the Breadth Test Pack. Not for play."
+        ],
+        "features": [
+          {
+            "id": "tidecaller_buckle_ward",
+            "name": "Salt Ward",
+            "description": "Resistance to fire damage while attuned.",
+            "source": {
+              "kind": "item",
+              "refId": "tidecaller_buckle_demo"
+            },
+            "level": null,
+            "passive": true,
+            "actions": [],
+            "choices": [],
+            "effects": [
+              {
+                "type": "grant_resistance",
+                "target": "fire",
+                "operation": "resistance",
+                "value": null,
+                "condition": null
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "monsters": [
+      {
+        "id": "tide_thrall_demo",
+        "name": "Tide Thrall (Demo)",
+        "cr": 1,
+        "size": "medium",
+        "type": "elemental",
+        "alignment": "neutral",
+        "stats": {
+          "str": 14,
+          "dex": 12,
+          "con": 14,
+          "int": 6,
+          "wis": 10,
+          "cha": 6
+        },
+        "hp": {
+          "dice": "4d8+8",
+          "average": 26
+        },
+        "ac": {
+          "value": 12,
+          "source": "natural"
+        },
+        "speed": 30,
+        "features": [
+          {
+            "id": "tide_thrall_demo_waterlogged",
+            "name": "Waterlogged",
+            "description": "Resistance to cold damage.",
+            "source": {
+              "kind": "campaign",
+              "refId": "tide_thrall_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "grant_resistance",
+                "target": "cold",
+                "operation": "resistance",
+                "value": null,
+                "condition": null
+              }
+            ]
+          }
+        ],
+        "savingThrows": [],
+        "skills": {},
+        "senses": [],
+        "languages": []
+      }
+    ],
+    "spells": [
+      {
+        "id": "tide_pull_demo",
+        "name": "Tide Pull (Demo)",
+        "level": 1,
+        "school": "Transmutation",
+        "castingTime": "1 action",
+        "range": "30 feet",
+        "components": [
+          "V",
+          "S"
+        ],
+        "duration": "Instantaneous",
+        "description": "TEST/DEMO CONTENT, part of the Breadth Test Pack. Not for play. Water drags a creature you can see 10 feet toward you unless it succeeds on a Strength save.",
+        "upcast": "",
+        "ritual": false,
+        "concentration": false,
+        "classes": [
+          "wizard",
+          "druid"
+        ],
+        "spellType": [
+          "control"
+        ]
+      },
+      {
+        "id": "brine_ward_demo",
+        "name": "Brine Ward (Demo)",
+        "level": 2,
+        "school": "Abjuration",
+        "castingTime": "1 reaction",
+        "range": "Self",
+        "components": [
+          "V",
+          "S"
+        ],
+        "duration": "1 round",
+        "description": "TEST/DEMO CONTENT, part of the Breadth Test Pack. Not for play. A shell of brine reduces the damage you take from one attack.",
+        "upcast": "",
+        "ritual": false,
+        "concentration": false,
+        "classes": [
+          "wizard",
+          "cleric"
+        ],
+        "spellType": [
+          "defense"
+        ]
+      }
+    ]
+  },
+  "packageId": "pkg_1789986948523_zzg9m91u",
+  "name": "Breadth Test Pack",
+  "author": "Grimoire (original demo content)",
+  "description": "TEST/DEMO ONLY. One species, one subclass, one feat, two spells, one item and one monster, all original, with two spell dependencies, to show the package workflow across content types.",
+  "packageVersion": "1.0",
+  "compatibleRulesets": [],
+  "contents": [
+    {
+      "type": "race",
+      "id": "tidewalker_demo",
+      "name": "Tidewalker (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "subclass",
+      "id": "undertow_vanguard_demo",
+      "name": "Undertow Vanguard (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "feat",
+      "id": "tide_reader_demo",
+      "name": "Tide Reader (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "item",
+      "id": "tidecaller_buckle_demo",
+      "name": "Tidecaller Buckle (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "monster",
+      "id": "tide_thrall_demo",
+      "name": "Tide Thrall (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "spell",
+      "id": "tide_pull_demo",
+      "name": "Tide Pull (Demo)",
+      "included": "dependency"
+    },
+    {
+      "type": "spell",
+      "id": "brine_ward_demo",
+      "name": "Brine Ward (Demo)",
+      "included": "dependency"
+    }
+  ],
+  "media": []
+}

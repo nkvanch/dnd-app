@@ -1,0 +1,23 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - export option visibility
+tags: [preserve-state, optional-character]
+---
+- launchApp
+- tapOn: { id: tab-home }
+- runFlow:
+    when:
+      visible: { id: home-last-character }
+    commands:
+      - tapOn: { id: home-last-character }
+      - tapOn: { id: character-more }
+      - tapOn: { id: character-menu-export-character }
+      - scrollUntilVisible:
+          element: { text: ".*Export Character.*" }
+          direction: DOWN
+      - assertVisible: ".*Export Character.*"
+      - tapOn: "Cancel"
+      - back
+- assertVisible: { id: home-screen }
+
+
+

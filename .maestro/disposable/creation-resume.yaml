@@ -1,0 +1,22 @@
+appId: com.nkvanch.grimoire
+name: Creation draft resume prompt
+tags:
+  - creation
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: tab-characters
+- tapOn:
+    id: create-character
+- assertVisible: "Character Name"
+- tapOn: "Character name"
+- inputText: "Maestro Hero"
+- back
+- tapOn:
+    id: create-character
+- assertVisible: "Resume character creation?"
+- assertVisible: "Resume"
+- assertVisible: "Start New"
+- tapOn: "Resume"
+- assertVisible: "Character Creation"

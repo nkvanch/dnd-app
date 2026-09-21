@@ -1,0 +1,65 @@
+appId: com.nkvanch.grimoire
+name: Package builder - multi-select, review, reach export (no file save)
+# DISPOSABLE: starts from cleared state. Uses the built-in Homebrew entries every fresh
+# install seeds (Abyss Knight, Blood Hunter, Skeleton). Stops at the Export Package
+# buttons: the Android Storage Access Framework save dialog is checked by hand.
+tags:
+  - package-builder
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: tab-compendium
+- tapOn:
+    id: compendium-mode-packages
+- assertVisible:
+    id: packages-create
+- tapOn:
+    id: packages-create
+- assertVisible:
+    id: package-builder-screen
+- assertVisible:
+    id: package-builder-selected-count
+    text: "Selected 0"
+# Review is unavailable with nothing selected
+- assertVisible: "Review Package \(0\)"
+# Select several entries of different types, using search and the type filter in between
+- tapOn:
+    id: package-builder-search
+- inputText: "Abyss"
+- tapOn:
+    id: "package-select-row-class:abyss_knight"
+- eraseText
+- tapOn:
+    id: "package-select-row-race:skeleton"
+- tapOn:
+    id: "package-builder-type-class"
+- tapOn:
+    id: "package-select-row-class:blood_hunter"
+# Selection persisted across the search and filter changes
+- assertVisible:
+    id: package-builder-selected-count
+    text: "Selected 3"
+- tapOn:
+    id: package-builder-review
+- assertVisible:
+    id: package-builder-review-screen
+- assertVisible:
+    id: package-count-selected
+    text: "3"
+- assertVisible: "SELECTED BY YOU \(3\)"
+# Removing one selected entry updates the counts
+- tapOn:
+    id: "package-remove-race:skeleton"
+- assertVisible:
+    id: package-count-selected
+    text: "2"
+# The export actions stay disabled until the package has a name
+- tapOn:
+    id: package-builder-name
+- inputText: "Maestro Test Package"
+- assertVisible:
+    id: package-export-share
+- assertVisible:
+    id: package-export-save
+- takeScreenshot: "D:/Documents/dnd-app/builds/maestro-artifacts/package-builder-review"

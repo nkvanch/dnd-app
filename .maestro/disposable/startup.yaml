@@ -1,0 +1,17 @@
+appId: com.nkvanch.grimoire
+name: Basic startup and tab navigation
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: home-screen
+- tapOn:
+    id: tab-characters
+- assertVisible:
+    id: characters-screen
+- tapOn:
+    id: tab-home
+- assertVisible:
+    id: home-screen

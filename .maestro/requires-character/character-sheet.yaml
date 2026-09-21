@@ -1,0 +1,34 @@
+appId: com.nkvanch.grimoire
+name: Character header, menu, export, and sheet tabs
+# Precondition: at least one character exists and is the Continue Last Character card.
+tags:
+  - requires-character
+---
+- launchApp
+- tapOn: "Continue Last Character"
+- assertVisible:
+    id: character-more
+- assertVisible:
+    id: character-undo
+- assertVisible:
+    id: character-redo
+- tapOn:
+    id: character-more
+- tapOn:
+    id: character-menu-history
+- assertVisible: "History"
+- back
+- tapOn:
+    id: character-more
+- tapOn:
+    id: character-menu-rules
+- assertVisible: "Rules"
+- back
+- tapOn:
+    id: character-more
+- assertVisible: "Free Edit"
+- assertVisible: "Export"
+- tapOn:
+    id: character-menu-export-character
+- assertVisible: "Export Character"
+- assertVisible: "Actions"

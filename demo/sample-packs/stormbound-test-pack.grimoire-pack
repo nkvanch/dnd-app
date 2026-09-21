@@ -1,0 +1,293 @@
+{
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "packType": "content-pack",
+  "createdAt": 1789986948524,
+  "modifiedAt": 1789986948524,
+  "appVersion": "1.0.0",
+  "deviceId": null,
+  "characters": [],
+  "homebrew": {
+    "feats": [
+      {
+        "id": "stormbound_feat_demo",
+        "name": "Stormbound (Demo)",
+        "prerequisite": null,
+        "source": "Stormbound Test Pack (demo)",
+        "description": "TEST/DEMO CONTENT, part of the Stormbound Test Pack. Not for play. Gain resistance to lightning damage.",
+        "feature": {
+          "id": "stormbound_feat_demo_stormward",
+          "name": "Stormward",
+          "description": "Resistance to lightning damage.",
+          "source": {
+            "kind": "feat",
+            "refId": "stormbound_feat_demo"
+          },
+          "level": null,
+          "actions": [],
+          "choices": [],
+          "passive": true,
+          "effects": [
+            {
+              "type": "grant_resistance",
+              "target": "lightning",
+              "operation": "resistance",
+              "value": null,
+              "condition": null
+            }
+          ]
+        }
+      }
+    ],
+    "spells": [
+      {
+        "id": "stormbound_bolt_demo",
+        "name": "Stormbound Bolt (Demo)",
+        "level": 1,
+        "school": "Evocation",
+        "castingTime": "1 action",
+        "range": "90 feet",
+        "components": [
+          "V",
+          "S"
+        ],
+        "duration": "Instantaneous",
+        "description": "TEST/DEMO CONTENT, part of the Stormbound Test Pack. Not for play. A bolt strikes a creature you can see: Dexterity save or 3d6 lightning damage (half on a success).",
+        "upcast": "Damage increases by 1d6 for each slot level above 1st.",
+        "ritual": false,
+        "concentration": false,
+        "classes": [
+          "sorcerer",
+          "wizard"
+        ],
+        "spellType": [
+          "damage"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "id": "stormbound_spear_demo",
+        "name": "Stormbound Spear (Demo)",
+        "weight": 3,
+        "cost": "-",
+        "properties": [
+          "martial",
+          "melee",
+          "thrown",
+          "versatile",
+          "TEST/DEMO CONTENT, part of the Stormbound Test Pack. Not for play."
+        ],
+        "features": [
+          {
+            "id": "stormbound_spear_strike",
+            "name": "Stormbound Strike",
+            "description": "Weapon attack; on a hit the target becomes Static-Charged for 2 rounds.",
+            "source": {
+              "kind": "item",
+              "refId": "stormbound_spear_demo"
+            },
+            "level": null,
+            "passive": false,
+            "actions": [],
+            "choices": [],
+            "effects": [],
+            "activation": {
+              "actionType": "action",
+              "resourceCost": null,
+              "range": "5 feet",
+              "target": "single",
+              "requiresSave": null
+            },
+            "abilityEffects": [
+              {
+                "type": "damage",
+                "dice": "1d8",
+                "damageType": "piercing"
+              },
+              {
+                "type": "damage",
+                "dice": "1d6",
+                "damageType": "lightning"
+              },
+              {
+                "type": "apply_condition",
+                "conditionId": "static_charged_demo",
+                "duration": {
+                  "unit": "rounds",
+                  "remaining": 2
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "monsters": [
+      {
+        "id": "stormbound_hound_demo",
+        "name": "Stormbound Hound (Demo)",
+        "cr": 1,
+        "size": "medium",
+        "type": "monstrosity",
+        "alignment": "unaligned",
+        "stats": {
+          "str": 14,
+          "dex": 14,
+          "con": 12,
+          "int": 3,
+          "wis": 12,
+          "cha": 6
+        },
+        "hp": {
+          "dice": "4d8+4",
+          "average": 22
+        },
+        "ac": {
+          "value": 13,
+          "source": "natural"
+        },
+        "speed": 40,
+        "features": [
+          {
+            "id": "stormbound_hound_demo_storm_hide",
+            "name": "Storm Hide",
+            "description": "Immune to lightning damage.",
+            "source": {
+              "kind": "campaign",
+              "refId": "stormbound_hound_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "grant_immunity",
+                "target": "lightning",
+                "operation": "immunity",
+                "value": null,
+                "condition": null
+              }
+            ]
+          },
+          {
+            "id": "stormbound_hound_bite",
+            "name": "Charged Bite",
+            "description": "Action: bite; the target becomes Static-Charged for 2 rounds (Con save DC 12).",
+            "source": {
+              "kind": "campaign",
+              "refId": "stormbound_hound_demo"
+            },
+            "level": null,
+            "passive": false,
+            "actions": [],
+            "choices": [],
+            "effects": [],
+            "activation": {
+              "actionType": "action",
+              "resourceCost": null,
+              "range": "5 feet",
+              "target": "single",
+              "requiresSave": {
+                "ability": "con",
+                "dc": 12
+              }
+            },
+            "abilityEffects": [
+              {
+                "type": "damage",
+                "dice": "1d8",
+                "damageType": "lightning"
+              },
+              {
+                "type": "apply_condition",
+                "conditionId": "static_charged_demo",
+                "duration": {
+                  "unit": "rounds",
+                  "remaining": 2
+                }
+              }
+            ]
+          }
+        ],
+        "savingThrows": [],
+        "skills": {},
+        "senses": [
+          "darkvision 60 ft"
+        ],
+        "languages": []
+      }
+    ],
+    "conditions": [
+      {
+        "id": "static_charged_demo",
+        "name": "Static-Charged (Demo)",
+        "description": "TEST/DEMO CONTENT, part of the Stormbound Test Pack. Not for play. Your skin crackles: you are vulnerable to lightning damage.",
+        "features": [
+          {
+            "id": "static_charged_demo_crackling_skin",
+            "name": "Crackling Skin",
+            "description": "Vulnerable to lightning damage while charged.",
+            "source": {
+              "kind": "condition",
+              "refId": "static_charged_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "grant_resistance",
+                "target": "lightning",
+                "operation": "vulnerability",
+                "value": null,
+                "condition": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "packageId": "pkg_1789986948524_zz2albdu",
+  "name": "Stormbound Test Pack",
+  "author": "Grimoire (original demo content)",
+  "description": "TEST/DEMO ONLY. A feat, a spell, a weapon, a creature and a condition sharing one storm theme, where the weapon and creature both depend on the condition, to show several content types working in one ecosystem.",
+  "packageVersion": "1.0",
+  "compatibleRulesets": [],
+  "contents": [
+    {
+      "type": "feat",
+      "id": "stormbound_feat_demo",
+      "name": "Stormbound (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "spell",
+      "id": "stormbound_bolt_demo",
+      "name": "Stormbound Bolt (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "item",
+      "id": "stormbound_spear_demo",
+      "name": "Stormbound Spear (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "monster",
+      "id": "stormbound_hound_demo",
+      "name": "Stormbound Hound (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "condition",
+      "id": "static_charged_demo",
+      "name": "Static-Charged (Demo)",
+      "included": "dependency"
+    }
+  ],
+  "media": []
+}

@@ -1,0 +1,12 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - characters navigation
+tags: [preserve-state]
+---
+- launchApp
+- tapOn: { id: tab-home }
+- tapOn: { id: tab-characters }
+- assertVisible: { id: characters-screen }
+- assertVisible: { id: create-character }
+- assertVisible: { id: import-character }
+- tapOn: { id: tab-home }
+- assertVisible: { id: home-screen }

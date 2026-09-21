@@ -1,0 +1,20 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - rules read only
+tags: [preserve-state, optional-character]
+---
+- launchApp
+- tapOn: { id: tab-home }
+- runFlow:
+    when:
+      visible: { id: home-last-character }
+    commands:
+      - tapOn: { id: home-last-character }
+      - tapOn: { id: character-more }
+      - tapOn: { id: character-menu-rules }
+      - assertVisible: "Change Ruleset"
+      - assertVisible: "Current Ruleset"
+      - back
+      - back
+- assertVisible: { id: home-screen }
+
+

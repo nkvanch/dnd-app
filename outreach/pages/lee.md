@@ -6,8 +6,8 @@
 [DEMO LINK, 60 seconds: one small themed pack across five content types]
 
 ## 2. Try it
-Android build, free and open source, works offline and needs no account or external server: [DOWNLOAD LINK]
-Install steps: [INSTALL LINK]
+Android build, free and open source, works offline and needs no account or external server: https://github.com/nkvanch/Grimoire/releases/tag/v0.1.0-alpha
+Install steps: https://nkvanch.github.io/Grimoire/documentation.html#install
 
 ## 3. What I would like you to test
 You work across spells, creatures, items, feats, subclasses and classes, so you are a good test of whether Grimoire stays consistent across content types. Pick whichever piece of your own content is most likely to cause trouble and build it. I am not asking whether it worked, I am asking:

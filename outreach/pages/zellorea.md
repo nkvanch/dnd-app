@@ -8,8 +8,8 @@ The table decides what is possible. The character sheet software should not.
 [DEMO LINK, 60 seconds: the builders, the test button, and a pack with dependencies]
 
 ## 2. Try it
-Android build, free and open source, works offline and needs no account or external server: [DOWNLOAD LINK]
-Install steps: [INSTALL LINK]
+Android build, free and open source, works offline and needs no account or external server: https://github.com/nkvanch/Grimoire/releases/tag/v0.1.0-alpha
+Install steps: https://nkvanch.github.io/Grimoire/documentation.html#install
 
 ## 3. What I would like you to test
 Please read "What Grimoire currently understands mechanically" (zellorea-mechanics.md, one page). Then find something on that page that you have designed and that Grimoire cannot express correctly.

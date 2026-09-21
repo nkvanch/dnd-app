@@ -8,8 +8,8 @@ Homebrew should not be a second-class version of normal content.
 [DEMO LINK, 60 seconds: importing a multi-content pack, seeing its dependencies, and using it on a character]
 
 ## 2. Try it
-Android build, free and open source, works offline and needs no account or external server: [DOWNLOAD LINK]
-Install steps: [INSTALL LINK]
+Android build, free and open source, works offline and needs no account or external server: https://github.com/nkvanch/Grimoire/releases/tag/v0.1.0-alpha
+Install steps: https://nkvanch.github.io/Grimoire/documentation.html#install
 
 ## 3. What I would like you to test
 Custom classes, subclasses, species, backgrounds, feats, spells, features, items, monsters and conditions use the same systems as the built-in content. That is what I think I have built. Where does that claim stop being true?

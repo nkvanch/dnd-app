@@ -8,8 +8,8 @@ Three things, with the source as a footnote.
 [DEMO LINK, 60 seconds]
 
 ## 2. Try Grimoire
-Android build, free and open source, works offline and needs no account or external server: [DOWNLOAD LINK]
-Install steps: [INSTALL LINK]
+Android build, free and open source, works offline and needs no account or external server: https://github.com/nkvanch/Grimoire/releases/tag/v0.1.0-alpha
+Install steps: https://nkvanch.github.io/Grimoire/documentation.html#install
 
 ## 3. Why I built it
 I built Grimoire because I wanted to create my character, not the character an app allowed me to create.

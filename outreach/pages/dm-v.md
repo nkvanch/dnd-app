@@ -8,8 +8,8 @@ Your character should not be limited by your character sheet app.
 [DEMO LINK, 60 seconds: an unusual concept, a custom subclass and feature, testing it, and the resulting sheet]
 
 ## 2. Try it
-Android build, free and open source, works offline and needs no account or external server: [DOWNLOAD LINK]
-Install steps, about two minutes: [INSTALL LINK]
+Android build, free and open source, works offline and needs no account or external server: https://github.com/nkvanch/Grimoire/releases/tag/v0.1.0-alpha
+Install steps, about two minutes: https://nkvanch.github.io/Grimoire/documentation.html#install
 
 ## 3. What I would like you to test
 One question: can Grimoire represent the character you intended, instead of making you redesign it around the software?

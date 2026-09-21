@@ -6,8 +6,8 @@
 [DEMO LINK, 60 seconds]
 
 ## 2. Try it
-Android build, free and open source, works offline and needs no account or external server: [DOWNLOAD LINK]
-Install steps: [INSTALL LINK]
+Android build, free and open source, works offline and needs no account or external server: https://github.com/nkvanch/Grimoire/releases/tag/v0.1.0-alpha
+Install steps: https://nkvanch.github.io/Grimoire/documentation.html#install
 
 ## 3. What I am trying to achieve
 The table decides what is valid. Grimoire tracks and calculates. Homebrew is not second-class content. Rules should be configurable when possible. Manual intervention should stay possible when the software cannot anticipate the table.

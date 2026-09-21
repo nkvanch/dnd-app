@@ -38,4 +38,4 @@ Short answers are fine.
 understudy-test-pack.grimoire-pack is a small, original, deliberately awkward character concept: a limited "Borrowed Roles" resource, a three stage custom progression, a passive AC modifier, an active ability that applies a condition, and that condition. It is there so you can see what a pack feels like before building your own. Import it from the Homebrew tab. Everything in it is labelled (Demo).
 
 ## 5. Source
-[SOURCE LINK], GPL-3.0-or-later.
+https://github.com/nkvanch/Grimoire, GPL-3.0-or-later.

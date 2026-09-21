@@ -36,4 +36,4 @@ Short answers are fine.
 None. Your own design is a better test than mine.
 
 ## 5. Source
-[SOURCE LINK], GPL-3.0-or-later. The rules engine is in src/engine/.
+https://github.com/nkvanch/Grimoire, GPL-3.0-or-later. The rules engine is in src/engine/.

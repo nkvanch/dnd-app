@@ -1,8 +1,8 @@
 # GitHub Release, draft copy
 
-Hosting: creators need a link that opens for them, and a GitHub Draft release is only visible to repository collaborators, so a Draft cannot be the download link. Use a published Pre-release on nkvanch/dnd-app (marked "pre-release", not "latest"), or another host creators can open, for example the Restricted itch.io page in ITCH_PAGE.md.
+Hosting: creators need a link that opens for them, and a GitHub Draft release is only visible to repository collaborators, so a Draft cannot be the download link. Use a published Pre-release on nkvanch/Grimoire (marked "pre-release", not "latest"), or another host creators can open, for example the Restricted itch.io page in ITCH_PAGE.md.
 
-A published GitHub release is public to anyone with the repository URL, so publish it only after PRE_SEND_CHECKLIST.md passes, including the decision about what the APK contains. You can prepare it as a Draft while you work, but it must be published before any link is sent. Nothing has been created.
+A published GitHub release is public to anyone with the repository URL, so publish it only after PRE_SEND_CHECKLIST.md passes, including the scan of the built APK. The repository is SRD-only, so a public release is appropriate. You can prepare it as a Draft while you work, but it must be published before any link is sent. Nothing has been created.
 
 Tag: v1.0.0-alpha.1 (proposed, app.json says 1.0.0, pick your own)
 Title: Grimoire alpha 1, Android
@@ -14,7 +14,7 @@ Body:
 >
 > Install: download grimoire-1.0.0-alpha.1.apk and see INSTALL.md. It is not from the Play Store, so Android will ask you to allow installing from your browser, and Play Protect may show a warning. That is expected for a sideloaded alpha.
 >
-> What is in the build: the rules engine and the homebrew builders. This build runs in SRD-only mode, so only SRD 5.1 (CC-BY-4.0) and original content is shown in the app.
+> What is in the build: the rules engine and the homebrew builders. This build contains only SRD 5.1 (CC-BY-4.0) and original content.
 >
 > Sample packs, all original, labelled "(Demo)", imported from the Homebrew tab: Aster Test Pack, Breadth Test Pack, Stormbound Test Pack, Understudy Test Pack.
 >
@@ -26,4 +26,4 @@ Body:
 
 Assets to attach: the signed APK, the four .grimoire-pack files, and a SHA256SUMS.txt.
 
-Before publishing: rebuild the APK from the final commit with npm run build:apk (SRD-only by default, do not pass -FullContent), sign it with your own release key (see outreach/README.md), install it on a clean device, import each pack, and confirm the README Releases link works.
+Before publishing: rebuild the APK from a clean checkout of nkvanch/Grimoire with npm run build:apk, sign it with your own release key (see outreach/README.md), install it on a clean device, import each pack, and confirm the README Releases link works.

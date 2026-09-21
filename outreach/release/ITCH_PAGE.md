@@ -20,7 +20,7 @@ Page body:
 >
 > Feedback wanted: where does it get in your way?
 >
-> Runs in SRD-only mode, so only SRD 5.1 (CC-BY-4.0) and original content is shown. Not affiliated with or endorsed by Wizards of the Coast.
+> Contains only SRD 5.1 (CC-BY-4.0) and original content. Not affiliated with or endorsed by Wizards of the Coast.
 
 Uploads: the signed APK (flag it as Android), the four .grimoire-pack files as separate downloads, and the install steps pasted into the page.
 Media: 3 to 5 phone screenshots showing only "(Demo)" content, and the unlisted 60 second video.

@@ -31,4 +31,4 @@ Short answers are fine.
 breadth-test-pack.grimoire-pack is original and deliberately small, one of each: 1 species, 1 subclass (on an official class), 1 feat, 2 spells, 1 item and 1 monster, with two spell dependencies. Import it from the Homebrew tab and the import preview will list what it pulls in and let you resolve conflicts before anything touches your library. That way you can judge the workflow without building six things first. Everything in it is labelled (Demo).
 
 ## 5. Source
-[SOURCE LINK], GPL-3.0-or-later.
+https://github.com/nkvanch/Grimoire, GPL-3.0-or-later.

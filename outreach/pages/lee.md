@@ -32,4 +32,4 @@ Short answers are fine.
 stormbound-test-pack.grimoire-pack is a small original pack: a feat, a spell, a weapon, a creature and a condition that share one storm theme. The weapon and the creature both apply the condition. It is not meant to impress, only to show how several content types behave together. Import it, try it, then replace pieces with your own ideas. Everything in it is labelled (Demo).
 
 ## 5. Source
-[SOURCE LINK]. I am not expecting any public mention.
+https://github.com/nkvanch/Grimoire. I am not expecting any public mention.

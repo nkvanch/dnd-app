@@ -32,4 +32,4 @@ Short answers are fine.
 3. What did Grimoire model differently from how you naturally think about the mechanic?
 4. What took much longer to build than it should have?
 
-Source, if you want it: [SOURCE LINK]
+Source, if you want it: https://github.com/nkvanch/Grimoire

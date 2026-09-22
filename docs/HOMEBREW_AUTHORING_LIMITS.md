@@ -42,9 +42,19 @@ Every homebrew entry is built one field at a time through its builder screen; th
 
 ## Transformation exists, but only into a closed set of official forms
 
-Correcting an earlier gap in this document: a real, class-agnostic transformation mechanism already exists — the `transform` effect (`src/engine/types.ts:2072`), resolved identically for any class (`src/engine/combat.ts:617`, rendered generically in `src/engine/actionCards.ts:380`), swapping the whole stat block for a `BeastForm`'s and reverting cleanly. This is not hardcoded to Druid.
+Correcting an earlier gap in this document: a real, class-agnostic transformation mechanism already exists — the `transform` effect (`src/engine/types.ts:2072`), resolved identically for any class (`src/engine/combat.ts:617`, rendered generically in `src/engine/actionCards.ts:380`), swapping the whole stat block for a `BeastForm`'s and reverting cleanly. This is not hardcoded to Druid — and not hardcoded to player characters either: encounter monsters are spawned as real `Entity` instances by `instantiatePreparedEncounter()` (`src/engine/preparedEncounter.ts`), going through the exact same pipeline, so a monster feature granting `transform` works exactly as it does for a Druid.
 
-What's still missing: `ALL_BEAST_FORMS` (`src/content/beastforms/index.ts`) is a fixed 7-entry official list, with no homebrew builder and no merge point in `homebrewStore.ts`. A design that needs to transform into something not on that list — LaserLlama's Shifter Ranger ("shift into whatever beast you touched") is the case that surfaced this — has the switching mechanism available but nothing new to switch into. Same closed-content shape as the missing companion builder, one level over.
+What's still missing: `ALL_BEAST_FORMS` (`src/content/beastforms/index.ts`) is a fixed 7-entry official list, with no homebrew builder and no merge point in `homebrewStore.ts`. A design that needs to transform into something not on that list — LaserLlama's Shifter Ranger ("shift into whatever beast you touched") is the case that surfaced this — has the switching mechanism available but nothing new to switch into. Same closed-content shape as the missing companion builder, one level over. This also means a monster with a bespoke second form (a boss's phase 2, not a reused animal shape) is blocked the same way, even though the switching mechanism itself works fine on monsters — see [THIRD_PARTY_REFERENCE_CONTENT.md](THIRD_PARTY_REFERENCE_CONTENT.md)'s Skinchanger entry.
+
+## No HP-threshold trigger, no swarm/unit abstraction, no real die-roll recharge
+
+Three monster-specific gaps, none previously documented, found checking `MonsterTemplate` (`src/content/monsters/types.ts`) directly:
+
+- **HP-threshold triggers** ("at 50% HP, switch phases") don't exist. "Bloodied" is real, but only as a *display* house rule controlling how HP is shown to players (`src/engine/houseRules.ts:196-205`) — never something that fires an effect when a creature crosses it.
+- **Swarm/unit abstraction** ("one stat block represents forty creatures, one initiative, one HP pool") is completely absent — searched the whole engine and monster type for "swarm," zero matches. A swarm-flavored monster today is an ordinary `MonsterTemplate` with descriptive text; nothing computes or enforces anything different about it.
+- **Conditional die-roll recharge** ("Recharge 5-6") isn't real. `recharge` only supports `'short_rest' | 'long_rest' | 'dawn' | 'never'` or a freeform string for display — a homebrew author can type "Recharge 5-6" but nothing rolls a d6 or evaluates it. Same shape as the app's disclosed no-attack-auto-resolution limit elsewhere.
+
+See [THIRD_PARTY_REFERENCE_CONTENT.md](THIRD_PARTY_REFERENCE_CONTENT.md)'s Ash Tyrant and Bone Legion entries for the cases that surfaced these.
 
 ## No level-gated racial features — spells or otherwise — beyond character level 1
 
@@ -68,11 +78,13 @@ This isn't limited to spells or class features. Even Versatile — the single mo
 
 A narrower, cheaper-to-fix gap than it first looks. `Item` has no dedicated charges field at all — but an item's `Feature.activation.resourceCost` uses the exact same shared `resourceId` mechanism already proven working for Rage, so the underlying data model has no problem with an item having its own resource pool, or several item powers sharing one at different costs. The actual block is narrower: the homebrew item builder hardcodes `resourceCost: null` when building a feature's activation (`app/homebrew/item-builder.tsx:279`) and never exposes it as an editable field. A charge-based magic item (a wand, a returning weapon with a shared-charge alternate use) can't be authored today, but the fix is "expose an existing field in one screen," not "design a new resource system."
 
-## Corrections: three things that looked like gaps but are not
+## Corrections: things that looked like gaps but are not
 
 - **Shared resource pools with different per-ability costs** (e.g. a 6-point pool where one ability costs 1 and another costs 2) need no new engine work. `resourceId` is already a plain shared string key — Rage (`resourceId: 'rage_pool'`, `src/content/classes/index.ts:409,413`) is spent by one activation and later upgraded in place by a `resource_upgrade` grant at level 6. Two homebrew activations referencing the same `resourceId` with different `quantity` values already share one pool correctly.
 - **Armor that replaces the AC formula instead of adding a bonus** already exists for homebrew: `base_ac_formula` is a real `StrategyKind` (`src/engine/types.ts:134`) and is wired into the homebrew item builder (`app/homebrew/item-builder.tsx:261`), not just official content.
 - **A conditional effect gated on a yes/no fact** (a resistance that only applies "while in sunlight," an ability that changes "while underwater") already works: `Effect.situational?: { id, question }` (`src/engine/types.ts:1383`) is answered per-entity via `Entity.situationalAnswers` and genuinely consumed to gate the effect (`src/engine/pipeline.ts:432`). The limit is that it always needs a player answer — it never automatically infers a fact (such as "this attacker is a fiend") from game state.
+- **Legendary action pools with differentiated per-action costs, and their correct recharge timing** already work, checked on the actual SRD Lich: each legendary action is its own `Feature` with `activation.resourceCost: { resourceId: 'legendary_actions', quantity: N }` against one shared pool, the same mechanism as Rage, and `recharge: 'start_of_turn'` is genuinely processed (`src/engine/combat.ts:91`), not decorative. Mythic actions would use the identical pattern with their own pool once the phase-gating problem above is solved.
+- **Lair actions** are a real, structured field — `lairActions?: Feature[]` on `MonsterTemplate` — not text-only, not a gap.
 
 ## No attack/save/damage auto-resolution (existing, disclosed limit)
 

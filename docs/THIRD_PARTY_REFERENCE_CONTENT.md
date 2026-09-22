@@ -127,6 +127,42 @@ User-authored generic equivalents, not reproductions of any specific published i
 | **Modular Wand** | One charge pool, several powers at different costs | Same finding as Returning Grapple Axe's charge half: the engine's shared-`resourceId` mechanism already works (proven by Rage), the homebrew item builder just doesn't expose `resourceCost` for authoring. Not a new gap, the same one. |
 | **Bound Weapon** | Modifies an existing attack/action rather than granting a duplicate | **Confirmed absent**, same as Eldritch Blast's range or a known spell's damage type elsewhere in this document — [no primitive for modifying an existing granted thing](HOMEBREW_AUTHORING_LIMITS.md). Applies identically whether the modified thing came from a class, a race, or (as here) another item. |
 
+## Generic monster stress set
+
+User-authored generic monsters, not reproductions of any specific published boss or swarm — same reasoning as the item set. Read `MonsterTemplate` (`src/content/monsters/types.ts`) and how a monster actually enters combat (`src/engine/preparedEncounter.ts`) to answer these, rather than guessing.
+
+**One thing worth knowing before the three entries below:** a monster in an encounter isn't a lightweight separate structure — `instantiatePreparedEncounter()` spawns real `Entity` instances, the exact same type player characters use, through the exact same effect-resolution pipeline. That matters a lot for Test Monster C.
+
+### Test Monster A — Ash Tyrant (two-phase boss)
+
+| Stress | Finding |
+|---|---|
+| **Legendary action pools** | **Already well-supported, contrary to how it might read on the checklist.** Checked a real example (the SRD Lich): each legendary action is its own `Feature` with `activation.resourceCost: { resourceId: 'legendary_actions', quantity: N }`, drawing from one shared pool — the same mechanism already proven by Rage. `recharge: 'start_of_turn'` isn't decorative either: `combat.ts:91` genuinely checks for it and refreshes the pool at the right moment. Differentiated-cost legendary actions work today. |
+| **Mythic actions specifically** | Not a distinct field, but mechanically identical to legendary actions — a second resource pool (e.g. `mythic_actions`) unlocked only in phase 2 would use the exact same proven pattern, *if* the phase-gating problem below is solved first. |
+| **Phase switching, HP-threshold triggered** | **Confirmed absent**, two ways. `MonsterTemplate` has exactly one `stats`, one `ac`, one `speed`, one `features` list — no concept of a second phase at all. And there's no HP-threshold *trigger* anywhere: "bloodied" only exists as a **display** house rule (how HP is shown to players, `houseRules.ts:196-205`), never as something that fires an effect when a creature crosses it. |
+| **Action replacement (old actions gone, new ones appear)** | The mechanism that does exactly this — swap the whole feature list for a different one — is real, proven, and not hardcoded to player Wild Shape (see the `transform` finding elsewhere in this document). It's just gated by the same closed-form-list problem, and semantically the wrong tool here anyway: `BeastForm` entries are meant to be small, reusable animal shapes shared across every Druid, not a one-off bespoke second half of a single boss. |
+| **Partial manual workaround exists** | `DmOverride` (`src/engine/types.ts`) really can numerically set a live monster's AC, speed, saving throws, etc. mid-combat — a DM could manually drop Ash Tyrant's AC from 18 to 15 at the right moment. It cannot swap a feature/action list, so the "sword actions disappear, breath actions appear" half still has no path, manual or automatic. |
+
+### Test Monster B — Bone Legion (swarm/unit)
+
+| Stress | Finding |
+|---|---|
+| **One stat block representing many creatures, one initiative, HP-threshold damage change, movement through allied spaces** | **Confirmed completely absent.** Searched the entire monster type and engine for "swarm" — zero matches anywhere. There is no concept of a unit abstraction, narrative-vs-mechanical creature count, or "move through allied spaces" as a distinct trait. A swarm-style monster today is just an ordinary `MonsterTemplate` with flavor text claiming to represent many creatures — nothing enforces or computes anything different about it. |
+
+### Test Monster C — Skinchanger (transforming monster)
+
+| Stress | Finding |
+|---|---|
+| **Mode Groups on a monster specifically** | **A genuinely positive finding.** Because encounter monsters are real `Entity` instances going through the same pipeline as player characters, the class-agnostic `transform` effect works on them exactly as it does for a Druid — not a PC-only mechanism. A monster feature granting `{ type: 'transform', formId }` would correctly swap the whole stat block, on a monster, today. |
+| **Base-state preservation, stat/sense/action replacement** | Same mechanism, same answer — proven to work for the single binary shaped-or-not case. |
+| **The catch, same as everywhere else `transform` comes up** | `ALL_BEAST_FORMS` is still a fixed, non-homebrew-authorable list. A generic "humanoid or beast" Skinchanger built from two *official* forms would work today; a bespoke Skinchanger with its own original beast form would not, for the same closed-content reason as Shifter Ranger and Hengeyokai above. |
+
+### The other checklist items
+
+- **Conditional recharge** ("Recharge 5–6", roll a d6 at the start of each turn) — **confirmed absent as a real mechanic.** `recharge` only supports `'short_rest' | 'long_rest' | 'dawn' | 'never'` or a freeform string; a homebrew author could type "Recharge 5-6" into that string, but it's displayed as-is, never rolled or evaluated. Same shape as the disclosed no-attack-auto-resolution limit elsewhere in the app. |
+- **Linked minions / owner-controller relationships** — same underlying gap as the missing companion builder, one level further: nothing links one monster entity's presence, state or actions to another's. A boss that summons or commands weaker creatures has no more support than a PC's companion does.
+- **Lair actions** — already real and structured (`lairActions?: Feature[]` on `MonsterTemplate`), not a gap at all.
+
 ## Scope note shared by classes and race-systems above
 
 Inventor, Alternate Artificer and the three Ranger subclasses are each written against their creator's own rewritten base chassis (not the SRD class). Testing any of them meaningfully needs that base chassis modeled first — not a new engine gap, just a "not standalone" scope note. The race entries (Kitsune, Custom Race System, Elfriche Aasimar, Hengeyokai, Tlakah) don't have this problem — races compose onto the SRD race-creation flow directly.
@@ -158,4 +194,8 @@ Inventor, Alternate Artificer and the three Ranger subclasses are each written a
 | Living/Material Armor | Bonus/resistance automatically vs. a creature category | Confirmed absent — official Dragon Slayer weapons already ship with empty effects |
 | Awakened Relic | One-way, paced state progression | The mode gap, but the honest manual-tracking workaround is genuinely viable here (not just a fallback), unless the trigger is meant to be character level |
 | Bound Weapon | Modifying an existing attack/action | Confirmed absent, same gap as everywhere else in this document |
+| Ash Tyrant | Legendary action pools with differentiated costs | Already well-supported — same shared-resource pattern as Rage, proven on the SRD Lich |
+| Ash Tyrant | HP-threshold-triggered phase switch, dual stat/action packages | Confirmed absent — `MonsterTemplate` has exactly one of everything, and "bloodied" is display-only, never a trigger |
+| Bone Legion | Swarm/unit abstraction (one entity, many creatures) | Confirmed completely absent — zero matches for "swarm" anywhere |
+| Skinchanger | Mode Groups / `transform` on a monster, not just a PC | Already works — monsters are real `Entity` instances through the same pipeline, only the closed-form-list problem remains |
 | Bounty Hunter Ranger | Repeat-choice resource pool (Exploits) | Already supported |

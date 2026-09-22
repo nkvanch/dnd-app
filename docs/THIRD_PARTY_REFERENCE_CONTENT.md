@@ -163,6 +163,41 @@ User-authored generic monsters, not reproductions of any specific published boss
 - **Linked minions / owner-controller relationships** — same underlying gap as the missing companion builder, one level further: nothing links one monster entity's presence, state or actions to another's. A boss that summons or commands weaker creatures has no more support than a PC's companion does.
 - **Lair actions** — already real and structured (`lairActions?: Feature[]` on `MonsterTemplate`), not a gap at all.
 
+## Full character build stress tests
+
+Different in kind from everything above: not one piece of content, but combinations, checking provenance, precedence, resource ownership and cross-feature interaction rather than isolated content gaps. This needed reading the actual resolution pipeline (`src/engine/pipeline.ts`), not just individual content types, and it surfaced the single most concrete finding in this whole document.
+
+### Build A — Modular Psychic Engineer (choices/resources/companions)
+
+Mostly a composite of gaps already documented elsewhere in this file — modular lineage's point-budget choice, Inventor's specialization pattern, item charges blocked by the item builder UI, a companion's stats deriving from its owner. That last one is worth re-confirming directly rather than assumed: the actual code comment on the Steel Defender's own AC feature says *"the engine has no formula path yet for adding an owner's proficiency bonus"* (`src/content/companions/index.ts:26`) — first-party, disclosed, not a guess. "Powers modifying other powers" is the same confirmed-absent modify-existing-grant gap.
+
+What's new here: **the things Build A's own list called out — race choices surviving class progression, overlapping proficiency grants, level-up editing without destroying previous selections — check out as architecturally sound.** `recomputeDerived` (`src/engine/pipeline.ts:132`) recomputes every derived stat from scratch on every call, starting from `collectAllEffects`, which gathers active features and equipped items fresh each time, not by mutating a running total. A proficiency granted by two independent sources is naturally still granted if only one source is removed, because the other source's grant is still there to collect on the next pass — this isn't a guess, it's what the architecture does by construction. Genuinely good news for anything stacking multiple choice sources.
+
+### Build B — Transforming Hunter (simultaneous modes)
+
+**The most concrete, specific finding in this document.** Checked exactly how `wildShapeState` sits in the resolution pipeline: it's a single optional field on `Entity` (`wildShapeState: WildShapeState | null`), applied as its own separate layer right after `collectAllEffects`, structurally identical in spirit to how `DmOverride` is layered on top — see the code's own comment, *"Same non-mutating 'apply on top' philosophy as DmOverride."* That means it is a **singleton slot, not a keyed collection.** Two things that both want "replace my whole stat block" — a racial Fox form and an active transformation spell, exactly Build B's own combination — cannot both be active, because they would both need to write to that one field.
+
+But not all four of Build B's "mode groups" actually need that slot:
+
+| Mode group | Real mechanism it would use | Collides with the others? |
+|---|---|---|
+| Species Form (Fox) | `transform` / `wildShapeState` | **Yes** — competes for the one slot |
+| Transformation Spell | `transform` / `wildShapeState` | **Yes** — same slot as Species Form |
+| Combat Stance | `apply_condition` (a real, working, already-shipped mechanism) | **No** — `entity.conditions` is a list, multiple conditions are already independently active today |
+| Weapon Configuration | Nothing — no item-mode mechanism exists at all (see the magic-item stress set above) | N/A, not built yet either way |
+
+So the honest answer isn't "the app assumes one global mode" in the abstract — it's sharper than that: **any two designs that both want full stat-block replacement collide on one specific field**, while a condition-based stance genuinely coexists with either one today, already proven by the fact conditions are list-based. This is exactly the evidence the mode-transformation proposal's "general N-way case" needed — not just "unsolved," but *why*, mechanically.
+
+### Build C — Provenance Torture Test (overlapping grants and precedence)
+
+**Strong, specific, positive finding**, read directly from the resolution code rather than run as a live scenario (per the "no need to build" instruction, this is architecture-level confidence, not an executed test). `recomputeDerived`'s own comment states plainly: *"DM overrides are applied LAST and win over everything else. They never modify entity.stats or entity.features."* (`src/engine/pipeline.ts:127`). The actual order, confirmed in code: base stats → `collectAllEffects` (race/class/background/feat/spell features, then equipped items, each individually gated by `isActive`/attunement/conditions) → Wild Shape's non-mutating override layer if active → character overrides (sorted by `appliedAt`) → DM overrides, applied last, winning.
+
+Walking Build C's own scenario against this: **Race + Class B both granting longbow proficiency, then removing Class B, should correctly leave the proficiency**, because `collectAllEffects` re-gathers from every currently-held source on each recompute — Race's grant was never "the one that mattered," both were always independently collected. **Unequipping an item while a form is active should correctly drop only the item's effects**, since items are gathered from `entity.inventory.equipped` specifically, a separate list from the form's own override layer. **Ending a form should correctly fall through to the character's manual override**, since the override layer sits *after* the form layer, unconditionally. **A DM override should win over all of it**, exactly as the code comment states outright.
+
+### Build D — L1→20 Mutation Test (persistence/progression/round-trip)
+
+Different in kind from the other three: this isn't a missing primitive, it's a testing-coverage question, and should be named as such rather than filed next to genuine engine gaps. Undo/redo and a persistent timeline are real, shipped features (not this pass's finding — already complete, tracked separately). A dedicated `homebrewRoundTrip.test.ts` exists for homebrew content specifically. What wasn't found: one single integration test that walks a character from level 1 to 20, checkpointing with save/close/reopen/export/import/undo/redo at several points along the way, the way Build D describes. That's a real, worthwhile gap to close — but it belongs on a QA/testing to-do list, not in this document's "confirmed absent primitive" framing, since the underlying pieces (undo/redo, export/import, leveling) already exist and are each independently tested; what's unconfirmed is only their combination under one long-running scenario.
+
 ## Scope note shared by classes and race-systems above
 
 Inventor, Alternate Artificer and the three Ranger subclasses are each written against their creator's own rewritten base chassis (not the SRD class). Testing any of them meaningfully needs that base chassis modeled first — not a new engine gap, just a "not standalone" scope note. The race entries (Kitsune, Custom Race System, Elfriche Aasimar, Hengeyokai, Tlakah) don't have this problem — races compose onto the SRD race-creation flow directly.
@@ -198,4 +233,9 @@ Inventor, Alternate Artificer and the three Ranger subclasses are each written a
 | Ash Tyrant | HP-threshold-triggered phase switch, dual stat/action packages | Confirmed absent — `MonsterTemplate` has exactly one of everything, and "bloodied" is display-only, never a trigger |
 | Bone Legion | Swarm/unit abstraction (one entity, many creatures) | Confirmed completely absent — zero matches for "swarm" anywhere |
 | Skinchanger | Mode Groups / `transform` on a monster, not just a PC | Already works — monsters are real `Entity` instances through the same pipeline, only the closed-form-list problem remains |
+| Modular Psychic Engineer | Overlapping proficiency grants, choices surviving progression | Already sound — `recomputeDerived` recollects from every live source each time, by construction |
+| Transforming Hunter | Two full stat-replacement modes active at once | Confirmed absent, precisely — `wildShapeState` is one singleton field, not a keyed collection |
+| Transforming Hunter | A condition-based mode (stance) alongside a full-replacement mode | Already works — `entity.conditions` is a list, independent of `wildShapeState` |
+| Provenance Torture Test | Multi-source grants, override precedence, DM override wins | Already sound, confirmed in the actual resolution code and its own comments |
+| L1→20 Mutation Test | Full progression + round-trip as one combined scenario | Not a primitive gap — a testing-coverage gap; the underlying pieces are each already shipped and tested separately |
 | Bounty Hunter Ranger | Repeat-choice resource pool (Exploits) | Already supported |

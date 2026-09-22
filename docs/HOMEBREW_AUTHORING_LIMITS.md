@@ -1,6 +1,6 @@
 # Homebrew authoring: current limits
 
-A living list of what homebrew creators cannot do in Grimoire today, found while checking whether Emperor Warlock (see [homebrew/EMPEROR_WARLOCK.md](homebrew/EMPEROR_WARLOCK.md)) could be built as designed. Most of these are exactly what [MODE_TRANSFORMATION_LAYER_PROPOSAL.md](MODE_TRANSFORMATION_LAYER_PROPOSAL.md) is trying to close; this file is the evidence for that proposal, kept separate so it stays useful on its own for judging any future homebrew design against the app as it actually is. [THIRD_PARTY_REFERENCE_CLASSES.md](THIRD_PARTY_REFERENCE_CLASSES.md) applies the same checks to five published third-party classes and updates two of the entries below.
+A living list of what homebrew creators cannot do in Grimoire today, found while checking whether Emperor Warlock (see [homebrew/EMPEROR_WARLOCK.md](homebrew/EMPEROR_WARLOCK.md)) could be built as designed. Most of these are exactly what [MODE_TRANSFORMATION_LAYER_PROPOSAL.md](MODE_TRANSFORMATION_LAYER_PROPOSAL.md) is trying to close; this file is the evidence for that proposal, kept separate so it stays useful on its own for judging any future homebrew design against the app as it actually is. [THIRD_PARTY_REFERENCE_CONTENT.md](THIRD_PARTY_REFERENCE_CONTENT.md) applies the same checks to five published third-party classes and updates two of the entries below.
 
 Each entry names the gap, why it matters, and what was checked to confirm it.
 
@@ -34,13 +34,21 @@ Every homebrew entry is built one field at a time through its builder screen; th
 
 `targetId` exists in the codebase (`src/engine/types.ts:157` on `GrantResult`, `:2381` on a combat-log event) but both are one-shot — recording what a grant or a logged action pointed at, not a durable reference a character sheet keeps to another entity. A design like "choose a Rival, get a bonus against them until you choose a new one" or "maintain a curse on up to three creatures" has nothing to attach that state to.
 
-**Update, 22 September 2026:** originally flagged as a future primitive, explicitly out of scope for the mode-transformation proposal's first three phases. It has since failed three unrelated designs — Emperor Warlock's Rival, Napoleon's Chosen Rival, and LaserLlama's Ranger's Quarry (a base-class feature three published subclasses build on, see [THIRD_PARTY_REFERENCE_CLASSES.md](THIRD_PARTY_REFERENCE_CLASSES.md)). By the project's own "three unrelated failures" rule this should be re-scoped earlier than originally planned, not left parked. The sketch is still `TargetedEffect { source, target, effect, manual end }`.
+**Update, 22 September 2026:** originally flagged as a future primitive, explicitly out of scope for the mode-transformation proposal's first three phases. It has since failed three unrelated designs — Emperor Warlock's Rival, Napoleon's Chosen Rival, and LaserLlama's Ranger's Quarry (a base-class feature three published subclasses build on, see [THIRD_PARTY_REFERENCE_CONTENT.md](THIRD_PARTY_REFERENCE_CONTENT.md)). By the project's own "three unrelated failures" rule this should be re-scoped earlier than originally planned, not left parked. The sketch is still `TargetedEffect { source, target, effect, manual end }`.
 
 ## Transformation exists, but only into a closed set of official forms
 
 Correcting an earlier gap in this document: a real, class-agnostic transformation mechanism already exists — the `transform` effect (`src/engine/types.ts:2072`), resolved identically for any class (`src/engine/combat.ts:617`, rendered generically in `src/engine/actionCards.ts:380`), swapping the whole stat block for a `BeastForm`'s and reverting cleanly. This is not hardcoded to Druid.
 
 What's still missing: `ALL_BEAST_FORMS` (`src/content/beastforms/index.ts`) is a fixed 7-entry official list, with no homebrew builder and no merge point in `homebrewStore.ts`. A design that needs to transform into something not on that list — LaserLlama's Shifter Ranger ("shift into whatever beast you touched") is the case that surfaced this — has the switching mechanism available but nothing new to switch into. Same closed-content shape as the missing companion builder, one level over.
+
+## No level-gated racial spellcasting beyond the initial cantrip
+
+Not a suspicion — this is already disclosed, repeatedly, in the app's own shipped official content. Over a dozen races (Tiefling bloodlines, Air/Fire/Water Genasi, Drow, Duergar, Eladrin's seasonal Fey Step, and more) grant a cantrip at 1st level with a comment stating the follow-up spell at 3rd or 5th level doesn't actually activate, because "this app doesn't yet support level-gated racial features" (`src/content/races/index.ts`, e.g. line 32, line 1012, line 1553, and a dozen more matches for the same phrase). Any homebrew race using the common cantrip-at-1/spell-at-3/spell-at-5 shape — most published kitsune races, among many others — inherits this exact gap. See [THIRD_PARTY_REFERENCE_CONTENT.md](THIRD_PARTY_REFERENCE_CONTENT.md) for the Kitsune case this surfaced.
+
+## No point-budget choice, only fixed-count choices
+
+`ChoiceDefinition.count` (`src/engine/types.ts:1064`) is always a fixed number of picks from a pool — there is no way to spend a shared point budget across options of different costs ("2 cheap traits or 1 expensive one"). The only point-budget mechanism in the engine at all is `PointBuyConfig`, hardcoded to ability-score generation (`src/engine/pointBuy.ts`), not a general-purpose choice type. A "build your own lineage from a costed trait menu" design — the modular-lineage/Custom Race System pattern — can't express its central mechanic as one choice; it would have to be flattened into a fixed set of pre-costed bundles instead, which works but loses the actual point-buy flexibility.
 
 ## No primitive for modifying an existing granted thing
 

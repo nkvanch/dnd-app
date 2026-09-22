@@ -62,10 +62,17 @@ Any homebrew race using the common cantrip-at-1/spell-at-3/spell-at-5 shape, or 
 
 Every grant type adds something (a feature, a spell, a proficiency, a resource) — none of them change something already granted. "Your Eldritch Blast range becomes 300 ft," "one spell you know now deals psychic instead of fire," "your longsword attacks gain reach" all need to locate an existing grant and alter one typed property of it, which nothing in `src/engine/types.ts`'s grant/effect union supports today. The mode-transformation proposal calls for starting with a small typed set (change range, add damage, replace damage type, add tag, change action cost, add use limit) rather than an open formula system, specifically to avoid this becoming a rules DSL.
 
-## Corrections: two things that looked like gaps but are not
+This isn't limited to spells or class features. Even Versatile — the single most common weapon-mode mechanic in core 5e — is stored as a plain string (`properties: ['versatile (1d8)']`, `src/content/items/index.ts:80` and several more), not a real switchable damage die. And official Dragon Slayer weapons, which should deal bonus damage against a creature category, ship with `effects: []`, empty — the flavor text says it, nothing computes it. See [THIRD_PARTY_REFERENCE_CONTENT.md](THIRD_PARTY_REFERENCE_CONTENT.md)'s magic-item stress set for both.
+
+## The item builder UI doesn't expose charges, even though the engine could carry them
+
+A narrower, cheaper-to-fix gap than it first looks. `Item` has no dedicated charges field at all — but an item's `Feature.activation.resourceCost` uses the exact same shared `resourceId` mechanism already proven working for Rage, so the underlying data model has no problem with an item having its own resource pool, or several item powers sharing one at different costs. The actual block is narrower: the homebrew item builder hardcodes `resourceCost: null` when building a feature's activation (`app/homebrew/item-builder.tsx:279`) and never exposes it as an editable field. A charge-based magic item (a wand, a returning weapon with a shared-charge alternate use) can't be authored today, but the fix is "expose an existing field in one screen," not "design a new resource system."
+
+## Corrections: three things that looked like gaps but are not
 
 - **Shared resource pools with different per-ability costs** (e.g. a 6-point pool where one ability costs 1 and another costs 2) need no new engine work. `resourceId` is already a plain shared string key — Rage (`resourceId: 'rage_pool'`, `src/content/classes/index.ts:409,413`) is spent by one activation and later upgraded in place by a `resource_upgrade` grant at level 6. Two homebrew activations referencing the same `resourceId` with different `quantity` values already share one pool correctly.
 - **Armor that replaces the AC formula instead of adding a bonus** already exists for homebrew: `base_ac_formula` is a real `StrategyKind` (`src/engine/types.ts:134`) and is wired into the homebrew item builder (`app/homebrew/item-builder.tsx:261`), not just official content.
+- **A conditional effect gated on a yes/no fact** (a resistance that only applies "while in sunlight," an ability that changes "while underwater") already works: `Effect.situational?: { id, question }` (`src/engine/types.ts:1383`) is answered per-entity via `Entity.situationalAnswers` and genuinely consumed to gate the effect (`src/engine/pipeline.ts:432`). The limit is that it always needs a player answer — it never automatically infers a fact (such as "this attacker is a fiend") from game state.
 
 ## No attack/save/damage auto-resolution (existing, disclosed limit)
 

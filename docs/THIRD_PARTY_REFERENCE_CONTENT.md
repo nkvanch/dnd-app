@@ -100,6 +100,20 @@ A real, Aztec-inspired homebrew race, found only as a passing Pinterest referenc
 | **Confirmed absent** | "Delayed spell progression" is the same already-extensively-confirmed gap — a racial spell that unlocks past the 1st-level cantrip (see the Kitsune entry above and the limits doc; now doubly confirmed by the Aasimar finding, which shows the gap isn't spell-specific, it's level-gating in general). |
 | **Confirmed working** | "Distinct subrace grants" — each subrace authoring its own `features` list, separate from or overriding the base race's, is the same ordinary, already-proven pattern as Hengeyokai's base/subrace half above. |
 
+## KibblesTasty — Expanded Summoning Spells
+
+Extends WotC's own Tasha's-style "Summon X" spell family (Summon Beast, Summon Fey, Summon Elemental, etc. — cast the spell, get one temporary creature under your control for the duration, its stats scale with the slot level used) by completing the remaining creature types (Summon Slime among them). ([Facebook post](https://www.facebook.com/KibblesTasty/posts/expanded-summoning-spells-completing-the-rest-of-the-creature-types-summon-slime/382437786777287/), [Kibbles' Summoner, GM Binder](https://www.gmbinder.com/share/-NuA6U0rlIzE6OjPqqtS))
+
+**Needed no research to answer — the official version already fails.** Checked the actual official spell content: `summon_fey`, `summon_beast`, `summon_undead` and the rest of the 12 official Tasha's-style summon spells already in `src/content/spells/generated.ts` are every one of them pure placeholder text — literally `"description": "Description not available (not OGL).\n\nBut here is a summary: Summon 1 fey spirit... friendly (stat block/your lvl)."` No effect data, no link to any stat block, nothing that creates, scales or hands control of a creature to the player. Searched the entire `Effect`/`Grant` type union for anything resembling a spell-cast summon: nothing exists.
+
+| | |
+|---|---|
+| **Confirmed absent, complete, not partial** | Any spell that creates a temporary, player-controlled, slot-scaling summoned creature. This is a stricter absence than the companion-builder gap — companions at least have three real, working, hardcoded examples (Steel Defender, Eldritch Cannon, Ranger's Companion); spell-based summons have *zero*, official or otherwise. Extending the official family to more creature types, or authoring a wholly new homebrew set, both need the same missing mechanism first. |
+
+## Spaghetti0 — summoning spell set
+
+Could not identify this creator or spell set from search — noted honestly, same as Elfriche and Tlakah. Analyzed as the general "summon spell" category, which needed no guessing about specifics: see the finding above. Whatever the exact spells are, if they follow the standard 5e summon-spell shape (temporary creature, scaling by slot level, player-controlled for the duration), they fail identically and completely, for the same reason.
+
 ## Scope note shared by classes and race-systems above
 
 Inventor, Alternate Artificer and the three Ranger subclasses are each written against their creator's own rewritten base chassis (not the SRD class). Testing any of them meaningfully needs that base chassis modeled first — not a new engine gap, just a "not standalone" scope note. The race entries (Kitsune, Custom Race System, Elfriche Aasimar, Hengeyokai, Tlakah) don't have this problem — races compose onto the SRD race-creation flow directly.
@@ -122,4 +136,6 @@ Inventor, Alternate Artificer and the three Ranger subclasses are each written a
 | Hengeyokai | Homebrew-authorable forms to switch into | Confirmed absent — same closed `BeastForm` list as Shifter Ranger |
 | Tlakah | Delayed racial spell | Confirmed absent — same gap as Kitsune, now confirmed by three unrelated race designs |
 | Tlakah | Per-subrace distinct grants | Already supported — ordinary subrace authoring |
+| Expanded Summoning Spells | Spell-cast, slot-scaling, player-controlled temporary creature | Confirmed absent, completely — even the 12 official Tasha's-style summon spells already in the app are placeholder text with zero effect data |
+| Spaghetti0 summon spells | Same as above | Same as above, category-level finding, not creator-specific |
 | Bounty Hunter Ranger | Repeat-choice resource pool (Exploits) | Already supported |

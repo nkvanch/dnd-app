@@ -42,9 +42,13 @@ Correcting an earlier gap in this document: a real, class-agnostic transformatio
 
 What's still missing: `ALL_BEAST_FORMS` (`src/content/beastforms/index.ts`) is a fixed 7-entry official list, with no homebrew builder and no merge point in `homebrewStore.ts`. A design that needs to transform into something not on that list — LaserLlama's Shifter Ranger ("shift into whatever beast you touched") is the case that surfaced this — has the switching mechanism available but nothing new to switch into. Same closed-content shape as the missing companion builder, one level over.
 
-## No level-gated racial spellcasting beyond the initial cantrip
+## No level-gated racial features — spells or otherwise — beyond character level 1
 
-Not a suspicion — this is already disclosed, repeatedly, in the app's own shipped official content. Over a dozen races (Tiefling bloodlines, Air/Fire/Water Genasi, Drow, Duergar, Eladrin's seasonal Fey Step, and more) grant a cantrip at 1st level with a comment stating the follow-up spell at 3rd or 5th level doesn't actually activate, because "this app doesn't yet support level-gated racial features" (`src/content/races/index.ts`, e.g. line 32, line 1012, line 1553, and a dozen more matches for the same phrase). Any homebrew race using the common cantrip-at-1/spell-at-3/spell-at-5 shape — most published kitsune races, among many others — inherits this exact gap. See [THIRD_PARTY_REFERENCE_CONTENT.md](THIRD_PARTY_REFERENCE_CONTENT.md) for the Kitsune case this surfaced.
+Not a suspicion — this is already disclosed, repeatedly, in the app's own shipped official content, and it's broader than just spells. Over a dozen races (Tiefling bloodlines, Air/Fire/Water Genasi, Drow, Duergar, Eladrin's seasonal Fey Step, and more) grant a cantrip at 1st level with a comment stating the follow-up spell at 3rd or 5th level doesn't actually activate, because "this app doesn't yet support level-gated racial features" (`src/content/races/index.ts`, e.g. line 32, line 1012, line 1553, and a dozen more matches for the same phrase).
+
+It isn't limited to spells: official Aasimar's own signature feature — the level-3, bonus-action Celestial Revelation transformation (Radiant Soul / Radiant Consumption / Necrotic Shroud) — is shipped the same way. Checked the code (`src/content/races/index.ts:2443-2470`): the prompt literally says *"unlocks at 3rd level — reference only, see below"*, and every one of the three features has an empty `effects: []`. The gap is level-gating in general, not a spell-specific one.
+
+Any homebrew race using the common cantrip-at-1/spell-at-3/spell-at-5 shape, or a level-gated self-transformation like Aasimar's, inherits this exact gap. See [THIRD_PARTY_REFERENCE_CONTENT.md](THIRD_PARTY_REFERENCE_CONTENT.md) for the Kitsune, Elfriche Aasimar and Tlakah cases this surfaced — three unrelated race designs now, past this project's own "three unrelated failures" threshold.
 
 ## No point-budget choice, only fixed-count choices
 

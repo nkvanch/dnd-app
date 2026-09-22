@@ -71,9 +71,38 @@ Could not find one specific canonical post under this name. Analyzed as the gene
 | **Confirmed absent** | A generic *point-budget* choice — spend a shared pool across options of different costs, choose however many that budget allows. Checked `ChoiceDefinition` (`src/engine/types.ts:1064`): `count` is a fixed number of picks, full stop. The only point-budget mechanism anywhere in the engine is `PointBuyConfig`, hardcoded to ability-score generation specifically (`src/engine/pointBuy.ts`), not a general-purpose choice type. A design where a player picks "2 cheap traits or 1 expensive one" from a shared budget can't be expressed as one choice — it would have to be flattened into a fixed menu of pre-costed bundles (which is itself a real, if less elegant, workaround, not a dead end). |
 | **Buildable** | Everything about the trait *options themselves* — an ability-score package, a resistance, a proficiency, a movement type, a minor spell-like ability — are all ordinary grants once picked. The gap is specifically the budget-spending mechanic, not the traits it offers. |
 
-## Scope note shared by all seven
+## Elfriche Aasimar — transformation + level-gated subrace mechanics
 
-Every one of these is written against its creator's own rewritten base class or system (Inventor's own chassis; LaserLlama's Alternate Ranger with Quarry/Knacks, not the SRD Ranger; a modular lineage system that isn't the SRD race-creation flow at all). Testing any of them meaningfully needs that base chassis modeled first — not a new engine gap, the same "not standalone" situation throughout.
+Could not identify this specific homebrew ("Elfriche") from search — noted honestly rather than guessed at. But the two mechanical categories given map directly onto a case that needed no external research at all: **official Aasimar already has exactly this shape**, and it's already broken in Grimoire's own shipped content.
+
+Aasimar's three subrace options (Protector/Scourge/Fallen-equivalent: Radiant Soul, Radiant Consumption, Necrotic Shroud) are each a level-3, bonus-action self-transformation. Checked the actual code (`src/content/races/index.ts:2443-2470`): the prompt reads *"unlocks at 3rd level — reference only, see below"*, and each feature's `effects` array is empty — `[]`. This isn't a guess about how Aasimar would behave, it's what's already shipping: the flagship Aasimar transformation is pure descriptive text today, tracked by the player, not the app.
+
+| | |
+|---|---|
+| **Confirmed absent, first-party evidence, no research needed** | Any race whose signature mechanic is "transformation that unlocks at a level past character creation" fails exactly like official Aasimar already does — not a new gap, the same one, just showing up in a self-buff feature rather than a granted spell. |
+
+## Hengeyokai variant/subrace — form switching + base/subrace/mode interaction
+
+Real, multiple published versions exist (GM Binder v1.0–v1.2, several forum drafts). Shared shape across them: an action-based "Nature's Mask"-style switch between Human, Hybrid and Tiny Animal forms (three-way, not the binary shaped-or-not of Wild Shape), six animal subraces (carp, cat, dog, fox, tanuki, sparrow), each with its own ability-score bump and form-specific features. ([GM Binder v1.2](https://www.gmbinder.com/share/-MtP8vG0YoNhF-QOqq6T), [D&D Wiki](https://www.dandwiki.com/wiki/Hengeyokai_(5e_Race)))
+
+| | |
+|---|---|
+| **Confirmed working — base/subrace half** | A subrace overriding specific base-race features is real and consumed, not just declared: `replacesBaseFeatureIds` (`src/engine/types.ts:259`) is read by character creation itself (`app/creation/race-detail.tsx:311-314`, the same mechanism Variant Human already uses) to filter out replaced base features when a subrace is chosen. Six animal subraces each granting their own features alongside/instead of the base race's is ordinary, working authoring. |
+| **Confirmed absent — mode half** | The three-way, repeatable, at-will form switch. `transform` only models one binary state (shaped or not); nothing supports switching among three or more named states each with an independent feature/proficiency/stat set, at will, back and forth. This is exactly the general N-way case flagged as unsolved in the mode-transformation proposal. |
+| **Confirmed absent — content half** | Even if the switching mechanism existed, the hybrid and animal forms themselves (six of them, all original to this race) would need homebrew-authorable `BeastForm`s, which don't exist — same closed-content gap as Shifter Ranger. |
+
+## Tlakah subrace — delayed spell progression + distinct subrace grants
+
+A real, Aztec-inspired homebrew race, found only as a passing Pinterest reference to a since-hard-to-locate original post — sourcing here is thin, flagged rather than papered over.
+
+| | |
+|---|---|
+| **Confirmed absent** | "Delayed spell progression" is the same already-extensively-confirmed gap — a racial spell that unlocks past the 1st-level cantrip (see the Kitsune entry above and the limits doc; now doubly confirmed by the Aasimar finding, which shows the gap isn't spell-specific, it's level-gating in general). |
+| **Confirmed working** | "Distinct subrace grants" — each subrace authoring its own `features` list, separate from or overriding the base race's, is the same ordinary, already-proven pattern as Hengeyokai's base/subrace half above. |
+
+## Scope note shared by classes and race-systems above
+
+Inventor, Alternate Artificer and the three Ranger subclasses are each written against their creator's own rewritten base chassis (not the SRD class). Testing any of them meaningfully needs that base chassis modeled first — not a new engine gap, just a "not standalone" scope note. The race entries (Kitsune, Custom Race System, Elfriche Aasimar, Hengeyokai, Tlakah) don't have this problem — races compose onto the SRD race-creation flow directly.
 
 ## Summary table
 
@@ -87,4 +116,10 @@ Every one of these is written against its creator's own rewritten base class or 
 | Wrangler Ranger | Persistent per-target/marked-creature state | Confirmed absent, now a 3-for-3 case |
 | Kitsune (archetype) | Spells unlocking at a later character level, beyond the 1st-level cantrip | Confirmed absent — disclosed in 15+ places in shipped official content already |
 | Custom Race System | Point-budget choice (spend a shared pool across variable-cost options) | Confirmed absent — only fixed-count choices and ability-score-specific point buy exist |
+| Elfriche Aasimar | Level-gated transformation feature | Confirmed absent — official Aasimar's own Celestial Revelation is shipped as "reference only", `effects: []` |
+| Hengeyokai | Base race + subrace override | Already supported — `replacesBaseFeatureIds`, consumed at character creation |
+| Hengeyokai | Three-way (or more) at-will form switch with independent state per form | Confirmed absent — only binary Wild-Shape-style transform exists |
+| Hengeyokai | Homebrew-authorable forms to switch into | Confirmed absent — same closed `BeastForm` list as Shifter Ranger |
+| Tlakah | Delayed racial spell | Confirmed absent — same gap as Kitsune, now confirmed by three unrelated race designs |
+| Tlakah | Per-subrace distinct grants | Already supported — ordinary subrace authoring |
 | Bounty Hunter Ranger | Repeat-choice resource pool (Exploits) | Already supported |

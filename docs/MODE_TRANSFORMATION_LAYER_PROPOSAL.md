@@ -8,6 +8,31 @@ Related: [[project-grimoire-new-architecture-vault]] (a separate, earlier extern
 
 Several class concepts need "the character has one active alternate state, chosen from a set, that swaps a block of features in and out": Druid Wild Shape, a shapeshifter's current form, an elementalist's stance, and Emperor Warlock's bound spirit. Today each of these would need its own hand-built, special-cased subsystem. The proposal is to build one generic primitive instead, so any of them — including homebrew ones — can be authored without new code per class.
 
+## Design rule for deciding what becomes a primitive
+
+The user's own stated rule, and the one to apply before adding anything from this document to the engine:
+
+> When one weird creation fails, don't immediately add a primitive. When three unrelated creations fail for the same reason, that reason probably deserves a primitive.
+
+Mode Groups already clears that bar on its own: Emperor Warlock's bound spirit, Wild Shape-style forms, and a transforming weapon's states are three unrelated content types failing for the same reason. See [STRESS_TEST_CONTENT_MATRIX.md](STRESS_TEST_CONTENT_MATRIX.md) for the fuller set of test creations this rule should be checked against before any other item on this list gets built.
+
+## Ten categories the stress-test pass surfaced (22 September 2026)
+
+A second pass, testing the same question across races, subclasses, feats, spells, items, backgrounds and monsters/companions (not just classes), sharpened the 13 systems below into ten named categories of missing capability. They aren't a different proposal — each maps onto one or more of the 13 systems — but they're the right level to check new homebrew designs against, and worth keeping as the primary index:
+
+1. **Modes / forms / states** — the core problem above. Maps to systems 1–6, 8–9 below.
+2. **Replacement effects** (`add | replace | minimum | maximum` on a stat, one shared resolution order) — system 7.
+3. **Dynamic grants that clean up after themselves** (spell/action/proficiency/resource/feature/sense/movement/attack/numeric-modifier, added and removed as a unit) — system 6.
+4. **Choice dependencies** (a choice's available options depend on an earlier choice's result, e.g. draconic ancestry color gating which breath/resistance options appear) — **confirmed absent**, see [HOMEBREW_AUTHORING_LIMITS.md](HOMEBREW_AUTHORING_LIMITS.md). Typed prerequisites (class level, has-feature, has-spell, ability score, manual) should be enough; no expression language.
+5. **Modifying an existing granted thing**, not just adding a new one (Eldritch Blast's range changes, a known spell's damage type changes, a weapon gains reach, an ability now also triggers under a new condition) — **confirmed absent**, and the user is explicitly wary here: start with typed modifications (change range, add damage, replace damage type, add tag, change action cost, add use limit), not arbitrary formulas, or this becomes a rules DSL.
+6. **Shared resource pools, multiple costs** — **already supported**, not a gap. `resourceId` is a plain shared string key (see Rage: `resourceId: 'rage_pool'`, referenced by both the activation's `resourceCost` and by `resource_upgrade` grants at later levels). A "6-point psionic pool, telepathy costs 1, mind blast costs 2" design needs no new engine work, only two activations authored against the same `resourceId` with different `quantity`.
+7. **Scaling** — explicit level-keyed tables (`L1: 1d6, L5: 2d6, …`) are worth a first-class primitive; typed scaling sources (character level, class level, proficiency bonus, ability modifier, spell level) with simple operations are enough, avoid arbitrary expressions. **Not yet verified** whether today's pattern is "one Feature per threshold" (which risks a stale duplicate lingering after the new one grants) or something cleaner — check before assuming this needs new work, not after.
+8. **Summons / linked entities** — system 10. Confirmed absent for homebrew (see limits doc): no companion builder exists, and the fixed official list (Steel Defender, Eldritch Cannon, Ranger's Companion) isn't extensible by content.
+9. **Per-target / marked-creature state** ("choose a Rival," "maintain a curse on up to three creatures") — **confirmed absent**. `targetId` exists in the codebase but only as a one-shot field on a grant result or a combat-log event, not as persistent state referencing another entity. Flagged explicitly as a *future* primitive, not part of Phase 1–3 — a `TargetedEffect { source, target, effect, manual end }` shape is sketched for later, not scoped now.
+10. **Features that alter other features, without a duplicate lingering** ("Firing Squad's damage becomes 8d6 at level 10" should update one feature's scaling table, not silently coexist with an old 4d6 version; "Wild Shape gets more uses" should be a `resource_upgrade` on the existing pool, which the engine already does for Rage and Bardic Inspiration). This is really category 7 and the existing `resource_upgrade` pattern, named separately here because it's the most common way homebrew creators will get it wrong by hand.
+
+**Corrections to two assumptions in the original write-up**, found while checking: a homebrew **armor item replacing the AC formula outright** (not just adding a bonus) is already available — `base_ac_formula` is wired into the homebrew item builder today (`app/homebrew/item-builder.tsx`). And a subclass where **a one-time choice (a Cleric's domain) grants a static list of always-prepared spells** is an existing, working official-content pattern (`src/content/subclasses/cleric.ts`), not a gap — it only becomes a real gap if the domain is expected to change *after* creation, which is category 1/4's problem, not a new one.
+
 ## The 13 systems, in the user's stated priority order
 
 1. **Mode Groups.** One active option at a time, from a named set (`ModeGroup { id, name, displayLabel, options, requireActiveOption, selector, switchRule }`).

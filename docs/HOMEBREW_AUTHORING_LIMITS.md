@@ -26,6 +26,23 @@ Searched for any mechanism to give or transfer a resource, use, or die to anothe
 
 Every homebrew entry is built one field at a time through its builder screen; there is no path that accepts a pasted or imported JSON definition to create new homebrew content (JSON only appears on the *export/import* side of already-built content, via `.grimoire-pack` and character files). A large design (Emperor Warlock is roughly 120 features across twelve spirits plus 60 spirit-granted spells) has to be built by hand through the UI, entry by entry — there is no shortcut for size.
 
+## No choice dependency graph
+
+`ChoiceDefinition` (`src/engine/types.ts:1064`) has no field for "this choice's options depend on how an earlier choice resolved." Checked every field on the type; nothing like `dependsOn` or a prerequisite-choice-id exists. A design like "choose Draconic Ancestry color, then a color-specific breath/resistance choice appears" cannot be expressed as data today — it would have to be flattened into one long choice list covering every combination, or left as descriptive text the player follows by hand. This is the confirmed gap behind the "Branching Background" and "Modular Species" stress-test entries in [STRESS_TEST_CONTENT_MATRIX.md](STRESS_TEST_CONTENT_MATRIX.md).
+
+## No persistent per-target (marked-creature) state
+
+`targetId` exists in the codebase (`src/engine/types.ts:157` on `GrantResult`, `:2381` on a combat-log event) but both are one-shot — recording what a grant or a logged action pointed at, not a durable reference a character sheet keeps to another entity. A design like "choose a Rival, get a bonus against them until you choose a new one" or "maintain a curse on up to three creatures" has nothing to attach that state to. Flagged in the mode-transformation proposal as a future primitive (`TargetedEffect { source, target, effect, manual end }`), explicitly out of scope for its first three phases.
+
+## No primitive for modifying an existing granted thing
+
+Every grant type adds something (a feature, a spell, a proficiency, a resource) — none of them change something already granted. "Your Eldritch Blast range becomes 300 ft," "one spell you know now deals psychic instead of fire," "your longsword attacks gain reach" all need to locate an existing grant and alter one typed property of it, which nothing in `src/engine/types.ts`'s grant/effect union supports today. The mode-transformation proposal calls for starting with a small typed set (change range, add damage, replace damage type, add tag, change action cost, add use limit) rather than an open formula system, specifically to avoid this becoming a rules DSL.
+
+## Corrections: two things that looked like gaps but are not
+
+- **Shared resource pools with different per-ability costs** (e.g. a 6-point pool where one ability costs 1 and another costs 2) need no new engine work. `resourceId` is already a plain shared string key — Rage (`resourceId: 'rage_pool'`, `src/content/classes/index.ts:409,413`) is spent by one activation and later upgraded in place by a `resource_upgrade` grant at level 6. Two homebrew activations referencing the same `resourceId` with different `quantity` values already share one pool correctly.
+- **Armor that replaces the AC formula instead of adding a bonus** already exists for homebrew: `base_ac_formula` is a real `StrategyKind` (`src/engine/types.ts:134`) and is wired into the homebrew item builder (`app/homebrew/item-builder.tsx:261`), not just official content.
+
 ## No attack/save/damage auto-resolution (existing, disclosed limit)
 
 Not new, but worth restating here because it bears on every "does X" question: Grimoire computes the numbers a feature produces (attack bonus, save DC, damage dice) but does not roll dice or resolve outcomes for the player. This is already disclosed for Artificer magic items and elsewhere in the codebase; it applies equally to any new homebrew class.

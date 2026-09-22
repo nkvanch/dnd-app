@@ -69,6 +69,16 @@ The user is explicit that Emperor Warlock must **not** be the first thing built 
 2. **Phase 2 — transformations.** Item 7 (numeric effect semantics), item 8 (switching costs), item 9 (manual recovery) fully wired. Acceptance test: a Wild-Shape-like transformation.
 3. **Phase 3 — complex class support.** Items 10–13 (summons/units, content-defined Pact Magic, Arcanum, repeat-choice pools with prerequisites). Only after Phase 1 survives a sequence like `A → B → A → C → A → B` with resources, provenance, actions, spells and derived values all correct, build Emperor Warlock as the real-world test case.
 
+## Coverage check: does building this close the stress-test set?
+
+Checked against the generic magic-item stress set in [THIRD_PARTY_REFERENCE_CONTENT.md](THIRD_PARTY_REFERENCE_CONTENT.md), 22 September 2026. Mostly yes, but three things would survive a full, faithful build of everything above:
+
+1. **The homebrew item builder's own UI.** `app/homebrew/item-builder.tsx` hardcodes `resourceCost: null` when authoring a feature's activation — the engine mechanism (shared `resourceId`, proven by Rage) already works, this proposal is entirely about engine/content-model work, and doesn't touch builder screens. A charge-based item (Modular Wand, Returning Grapple Axe) needs someone to separately go expose that field, after this proposal, not as part of it.
+2. **Forced movement toward a point or object** (a returning weapon that pulls its wielder to it). Not covered by any of the 13 systems above — checked the `Effect` union again specifically for this. Only failed once so far (this document's Returning Grapple Axe), so it doesn't clear this project's own three-unrelated-failures bar yet either.
+3. **Automatically detecting a fact about a target** (bonus damage or resistance against a creature category — Dragon Slayer weapons, anti-fiend armor), as opposed to `Effect.situational`'s player-answered yes/no. Also outside all 13 systems, also only failed once so far.
+
+One genuine uncertainty, not a clean yes or no: whether building item 5 (level-gated mode progression) also happens to fix the already-disclosed level-gated-racial-feature bug (Tiefling, Aasimar, a dozen others) depends on whether it's implemented generally or scoped narrowly to "mode option," as its own wording above currently says. Same underlying shape, not the same thing unless deliberately generalized.
+
 ## Before starting
 
 This is a scoped, not-started proposal, same status as the platform backlog and the new-architecture vault. Standing project rules from prior sessions: do not touch A44, do not start a general RulesModule, and large architecture work needs an explicit go-ahead before Phase 1 begins — this document alone is not that go-ahead. If and when work starts, treat the flag above (points 11 and 13 vs. "no RulesModule") as a question to settle first, not a detail to resolve while building.

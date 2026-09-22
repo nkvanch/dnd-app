@@ -1,6 +1,6 @@
 # Generic mode / player-state transformation layer — proposal
 
-Status: **PROPOSED, NOT STARTED.** Captured 22 September 2026 from the user's own architecture write-up, triggered by asking whether Emperor Warlock (see [homebrew/EMPEROR_WARLOCK.md](homebrew/EMPEROR_WARLOCK.md)) could be built in Grimoire today. Do not begin implementation from this document alone — see "Before starting" below.
+Status: **PROPOSED, NOT STARTED.** Captured 22 September 2026 from the user's own architecture write-up, triggered by asking whether Emperor Warlock (see [homebrew/EMPEROR_WARLOCK.md](homebrew/EMPEROR_WARLOCK.md)) could be built in Grimoire today. Do not begin implementation from this document alone — see "Before starting" below. [CANONICAL_STRESS_SUITE.md](CANONICAL_STRESS_SUITE.md) is the closing index for this whole investigation, with a proposed unified resolution pipeline and 24 cross-referenced stress cases.
 
 Related: [[project-grimoire-new-architecture-vault]] (a separate, earlier external design-review vault, different scope — ruleset migration, not mode-switching) and [[project-grimoire-platform-backlog]] (the user's other large not-started architecture proposal). This is a third, independent proposal in the same family: verified gaps, not yet approved for build.
 

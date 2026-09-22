@@ -1,6 +1,6 @@
 # Third-party reference content — feasibility findings
 
-Status: **ANALYSIS ONLY. Nothing built.** All findings below came from checking public mechanical summaries of other creators' published homebrew against Grimoire's actual engine code, never from building or importing their content. See [MODE_TRANSFORMATION_LAYER_PROPOSAL.md](MODE_TRANSFORMATION_LAYER_PROPOSAL.md) and [HOMEBREW_AUTHORING_LIMITS.md](HOMEBREW_AUTHORING_LIMITS.md) for the underlying gap list this draws on and updates.
+Status: **ANALYSIS ONLY. Nothing built.** All findings below came from checking public mechanical summaries of other creators' published homebrew against Grimoire's actual engine code, never from building or importing their content. See [MODE_TRANSFORMATION_LAYER_PROPOSAL.md](MODE_TRANSFORMATION_LAYER_PROPOSAL.md) and [HOMEBREW_AUTHORING_LIMITS.md](HOMEBREW_AUTHORING_LIMITS.md) for the underlying gap list this draws on and updates, and [CANONICAL_STRESS_SUITE.md](CANONICAL_STRESS_SUITE.md) for the closing index.
 
 **Why analysis-only, on purpose.** These are other people's published, sold homebrew (KibblesTasty, LaserLlama). Unlike [homebrew/EMPEROR_WARLOCK.md](homebrew/EMPEROR_WARLOCK.md), which is the user's own original design and kept as a full reference copy, this file describes only mechanical *categories* — never their written feature text, flavor, or exact numbers. That's enough to answer "can the engine represent this shape," which is the actual question, without reproducing anyone's copyrighted homebrew, even privately.
 

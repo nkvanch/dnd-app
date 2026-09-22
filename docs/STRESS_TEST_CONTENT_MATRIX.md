@@ -1,6 +1,6 @@
 # Homebrew stress-test content matrix
 
-Status: **PLANNING ARTIFACT, NOT STARTED.** The user's full list of deliberately difficult homebrew creations across every content type, captured 22 September 2026, for checking [MODE_TRANSFORMATION_LAYER_PROPOSAL.md](MODE_TRANSFORMATION_LAYER_PROPOSAL.md) and [HOMEBREW_AUTHORING_LIMITS.md](HOMEBREW_AUTHORING_LIMITS.md) against, before and after any of that proposal is built. None of these are built. This is not the creator-outreach stress test (see `outreach/private/HOMEBREW_GUIDE.md` in the working tree for that, much smaller by design) — this list is for hardening the engine itself.
+Status: **PLANNING ARTIFACT, NOT STARTED.** The user's full list of deliberately difficult homebrew creations across every content type, captured 22 September 2026, for checking [MODE_TRANSFORMATION_LAYER_PROPOSAL.md](MODE_TRANSFORMATION_LAYER_PROPOSAL.md) and [HOMEBREW_AUTHORING_LIMITS.md](HOMEBREW_AUTHORING_LIMITS.md) against, before and after any of that proposal is built. None of these are built. This is not the creator-outreach stress test (see `outreach/private/HOMEBREW_GUIDE.md` in the working tree for that, much smaller by design) — this list is for hardening the engine itself. [CANONICAL_STRESS_SUITE.md](CANONICAL_STRESS_SUITE.md) is the closing 24-test index that supersedes this as the canonical list to work from, kept cross-referenced here rather than duplicated.
 
 ## Why these, specifically
 

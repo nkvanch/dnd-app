@@ -22,9 +22,8 @@ import { useHomebrewStore }  from '../src/store/homebrewStore';
 import { syncManager }       from '../src/sync/syncManager';
 import { useSyncStore }      from '../src/store/syncStore';
 import { useCombatTurnStore } from '../src/store/combatTurnStore';
-import { useCombatStore }    from '../src/store/combatStore';
+import { hydrateCombatStateOnBoot } from '../src/store/combatStore';
 import { useCustomRuleProfileStore } from '../src/store/customRuleProfileStore';
-import { loadCombatState, clearCombatState } from '../src/db/combatRepo';
 import { loadDraftState } from '../src/db/draftRepo';
 
 function BootScreen() {
@@ -110,21 +109,25 @@ export default function RootLayout() {
           console.error('[_layout] loadCharacters/initSession failed:', e);
         }
 
-        // 5. Restore combat state if a combat was active before the app was killed.
-        // An active combat restored with no entities (either an old,
-        // pre-migration save that never persisted entities at all, or a
-        // genuinely interrupted encounter — see combatRepo.ts's migration
-        // note) can't be resumed: the DM's screen would show ghost
-        // initiative rows with no HP/condition data and no way to act on
-        // them. Clear it instead of restoring a broken-looking "active"
-        // screen (audit finding PERSIST-2).
-        loadCombatState().then(state => {
-          if (state?.combat.active && state.entities.length > 0) {
-            useCombatStore.setState({ combat: state.combat, entities: state.entities });
-          } else if (state?.combat.active) {
-            clearCombatState().catch(() => { /* non-critical */ });
-          }
-        }).catch(() => { /* non-critical */ });
+        // 5. Restore combat state (an active encounter, or a pre-combat
+        // setup roster — Closure 2E) if one existed before the app was
+        // killed. See hydrateCombatStateOnBoot's own doc comment
+        // (combatStore.ts) for the full restore rules.
+        //
+        // Closure fix (active-combat hydration race): this used to be a
+        // fire-and-forget `.then(...)` — `setDbReady(true)` (in `finally`,
+        // below) could run BEFORE it resolved, releasing the boot screen
+        // and letting app/dm/encounter.tsx mount and read useCombatStore's
+        // still-default (inactive, empty) state. Its own `setupMode` local
+        // state is captured ONCE from `combat.active` at mount (see its own
+        // doc comment) — a late-arriving hydration after that point left
+        // the screen stuck showing Setup even though a real active
+        // encounter had just been restored underneath it. Awaiting here
+        // guarantees useCombatStore already reflects the persisted combat
+        // state before the boot screen ever releases, so every screen —
+        // not just encounter.tsx — mounts with the real state already in
+        // place.
+        await hydrateCombatStateOnBoot();
 
         // 5b. Restore an in-progress character creation draft, if one was
         // left mid-flow when the app was last killed (re-audit A09, item

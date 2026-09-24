@@ -206,23 +206,28 @@ function restoreHitDice(hitDice: HitDiceBlock, count: number): HitDiceBlock {
   };
 }
 
-/**
- * Player spends one hit die during a short rest.
- * Rolls the die, adds CON modifier, heals the entity.
- * Minimum heal: 1. Cannot exceed maximum HP.
- */
-export function spendHitDie(
-  entity: Entity,
-  rules:  CampaignRules = DEFAULT_RULES
-): Entity {
-  if (entity.resources.hitDice.remaining <= 0) return entity;
+/** Which die size the NEXT spendHitDie/spendHitDieManual call will spend —
+ *  same largest-first selection spendFromHitDicePools uses, without
+ *  actually spending. Lets the UI show "Hit Die: d8" and validate a
+ *  manually-entered table roll against the right range (1 to this value)
+ *  before the die is actually spent. */
+export function currentHitDieSize(entity: Entity): number {
+  const { pools, die } = entity.resources.hitDice;
+  if (!pools) return die;
+  const spendable = [...pools].filter(p => p.remaining > 0).sort((a, b) => b.die - a.die);
+  return spendable[0]?.die ?? die;
+}
 
-  const { die, hitDice } = spendFromHitDicePools(entity.resources.hitDice);
-  const roll     = Math.floor(Math.random() * die) + 1;
+/** Shared final mutation for both hit-die paths below — spend one die
+ *  (already removed from `hitDice`), add CON modifier to `roll`, heal,
+ *  cap at max HP, persist. Table-first: the manual path supplies the
+ *  physically-rolled `roll`; spendHitDie's in-app convenience supplies a
+ *  random one. Neither path owns a separate consequence path. */
+function healFromSpentHitDie(entity: Entity, roll: number, hitDice: Entity['resources']['hitDice'], rules: CampaignRules): Entity {
   // Use effective CON (race/feat bonuses included), consistent with HP calc.
   const effectiveStats = applyStatModifiers(entity.stats, collectAllEffects(entity));
-  const conMod   = modifier(effectiveStats.con);
-  const heal     = Math.max(1, roll + conMod);
+  const conMod = modifier(effectiveStats.con);
+  const heal   = Math.max(1, roll + conMod);
 
   const newCurrent = Math.min(
     entity.resources.hp.maximum,
@@ -239,6 +244,39 @@ export function spendHitDie(
   };
 
   return recomputeDerived(updated, rules);
+}
+
+/**
+ * Player spends one hit die during a short rest — in-app roll convenience.
+ * Rolls the die, adds CON modifier, heals the entity.
+ * Minimum heal: 1. Cannot exceed maximum HP.
+ */
+export function spendHitDie(
+  entity: Entity,
+  rules:  CampaignRules = DEFAULT_RULES
+): Entity {
+  if (entity.resources.hitDice.remaining <= 0) return entity;
+  const { die, hitDice } = spendFromHitDicePools(entity.resources.hitDice);
+  const roll = Math.floor(Math.random() * die) + 1;
+  return healFromSpentHitDie(entity, roll, hitDice, rules);
+}
+
+/**
+ * Player spends one hit die during a short rest, table-first: `tableRoll`
+ * is the physical die result already rolled at the table (validated by the
+ * caller against currentHitDieSize(entity) before this is called). Spends
+ * the die, adds CON modifier, heals, caps at max HP — the exact same
+ * healFromSpentHitDie mutation spendHitDie's in-app roll uses, so both
+ * paths always agree on the final HP/hit-dice bookkeeping.
+ */
+export function spendHitDieManual(
+  entity:     Entity,
+  tableRoll:  number,
+  rules:      CampaignRules = DEFAULT_RULES
+): Entity {
+  if (entity.resources.hitDice.remaining <= 0) return entity;
+  const { hitDice } = spendFromHitDicePools(entity.resources.hitDice);
+  return healFromSpentHitDie(entity, tableRoll, hitDice, rules);
 }
 
 /**

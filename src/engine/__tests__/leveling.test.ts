@@ -15,7 +15,7 @@ import {
   applyInfusionChoiceToEntity, applySpellChoiceToEntity, levelUpClass, queueChoice,
   removeFeature, swapBackground, projectToLevel, projectMulticlassSequence,
   applyAsiToEntity, applyFeatToEntity, reapplyResolvedAsi, stripResolvedAsiStats,
-  applyToolChoiceToEntity,
+  applyToolChoiceToEntity, calculateLevelUpHpGain, isValidHpRoll,
 } from '../leveling';
 import { revokeEntitlementsFromChoice } from '../entitlements';
 import { recomputeDerived } from '../pipeline';
@@ -331,6 +331,147 @@ describe('applyHP', () => {
       expect(updated.resources.hitDice.total).toBe(5);
     });
   });
+
+  // ── Table-first HP: manual table roll vs. app roll, same applyHP mutation ──
+  describe('manualRoll (table-first resolution)', () => {
+    it('uses the supplied manualRoll instead of calling rollDie, in "rolled" mode beyond level 1', () => {
+      const rollDieSpy = jest.spyOn(Math, 'random').mockReturnValue(0.99); // would roll near-max if consulted
+      const e = entity({ resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 10, temp: 0 }, hitDice: { die: 10, total: 1, remaining: 1 } } });
+      const updated = applyHP(e, 10, 'rolled', 2, DEFAULT_RULES, 'con', false, 4);
+      expect(updated.resources.hp.maximum).toBe(10 + 4); // exactly the manual value, not the near-max random roll
+      rollDieSpy.mockRestore();
+    });
+
+    it('is ignored on the very first level — max die always applies regardless of manualRoll', () => {
+      const e = entity();
+      const updated = applyHP(e, 10, 'rolled', 1, DEFAULT_RULES, 'con', true, 2);
+      expect(updated.resources.hp.maximum).toBe(10); // max die, not the manual 2
+    });
+
+    it('is ignored in "fixed" mode', () => {
+      const e = entity({ resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 10, temp: 0 }, hitDice: { die: 10, total: 1, remaining: 1 } } });
+      const updated = applyHP(e, 10, 'fixed', 2, DEFAULT_RULES, 'con', false, 99);
+      expect(updated.resources.hp.maximum).toBe(10 + 6); // floor(10/2)+1=6, manualRoll not consulted
+    });
+
+    it('is ignored in "max" mode', () => {
+      const e = entity({ resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 10, temp: 0 }, hitDice: { die: 10, total: 1, remaining: 1 } } });
+      const updated = applyHP(e, 10, 'max', 2, DEFAULT_RULES, 'con', false, 1);
+      expect(updated.resources.hp.maximum).toBe(20); // full die, manualRoll not consulted
+    });
+
+    it('the hpMinHalfDie house rule still floors a low manual entry, same as a low random roll', () => {
+      const rules = { ...DEFAULT_RULES, customRules: { hpMinHalfDie: true } };
+      const e = entity({ resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 10, temp: 0 }, hitDice: { die: 10, total: 1, remaining: 1 } } });
+      const updated = applyHP(e, 10, 'rolled', 2, rules, 'con', false, 1); // manually entered a 1
+      expect(updated.resources.hp.maximum).toBe(10 + 5); // bumped to ceil(10/2)=5
+    });
+
+    it('undefined manualRoll (every pre-existing caller) reproduces the prior rollDie(die) behavior', () => {
+      const rollDieSpy = jest.spyOn(Math, 'random').mockReturnValue(0); // rollDie(10) → 1
+      const e = entity({ resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 10, temp: 0 }, hitDice: { die: 10, total: 1, remaining: 1 } } });
+      const updated = applyHP(e, 10, 'rolled', 2, DEFAULT_RULES, 'con', false);
+      expect(updated.resources.hp.maximum).toBe(10 + 1);
+      rollDieSpy.mockRestore();
+    });
+  });
+});
+
+// ── Closure 4: level-up HP preview must equal the real applied gain ────────
+// calculateLevelUpHpGain is the exact same pure calculation applyHP itself
+// now delegates to (see its own extraction doc comment) — these tests lock
+// in "preview and final agree" both directly (identical output for
+// identical inputs) and via applyHP's own behavior, so the two can never
+// silently drift apart again the way the old duplicated-in-the-component
+// formula did (missing the hpMinHalfDie floor entirely).
+
+describe('calculateLevelUpHpGain', () => {
+  it('produces the exact same value applyHP itself applies, for a given manual roll', () => {
+    const e = entity({ resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 10, temp: 0 }, hitDice: { die: 10, total: 1, remaining: 1 } } });
+    const gain = calculateLevelUpHpGain(e, 10, 'rolled', DEFAULT_RULES, 'con', false, 6);
+    const applied = applyHP(e, 10, 'rolled', 2, DEFAULT_RULES, 'con', false, 6);
+    expect(applied.resources.hp.maximum).toBe(10 + gain);
+  });
+
+  it('reflects the hpMinHalfDie house-rule floor — the exact bug this closure fixes (was missing from the old inline preview)', () => {
+    const rules = { ...DEFAULT_RULES, customRules: { hpMinHalfDie: true } };
+    const e = entity();
+    // A manually-entered 1 on a d10, with the house rule on, must be bumped
+    // to ceil(10/2)=5 before the CON modifier — a naive "roll + mod" preview
+    // (the old TabCharacter.tsx inline formula) would show 1, not 5.
+    const gain = calculateLevelUpHpGain(e, 10, 'rolled', rules, 'con', false, 1);
+    expect(gain).toBe(5);
+  });
+
+  it('preview and applyHP agree exactly when the house-rule floor is actually triggered (roll of 1 on a d10)', () => {
+    const rules = { ...DEFAULT_RULES, customRules: { hpMinHalfDie: true } };
+    const e = entity({ resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 10, temp: 0 }, hitDice: { die: 10, total: 1, remaining: 1 } } });
+    const previewGain = calculateLevelUpHpGain(e, 10, 'rolled', rules, 'con', false, 1);
+    const applied = applyHP(e, 10, 'rolled', 2, rules, 'con', false, 1);
+    expect(applied.resources.hp.maximum - e.resources.hp.maximum).toBe(previewGain);
+    expect(previewGain).toBe(5); // sanity: the floor genuinely fired, not a coincidental match
+  });
+
+  it('is pure — the same manualRoll (e.g. from a prior "Roll in App" tap) produces the identical result on repeated calls, never a hidden second roll', () => {
+    const e = entity();
+    const first  = calculateLevelUpHpGain(e, 8, 'rolled', DEFAULT_RULES, 'con', false, 4);
+    const second = calculateLevelUpHpGain(e, 8, 'rolled', DEFAULT_RULES, 'con', false, 4);
+    expect(first).toBe(second);
+  });
+
+  it('includes the CON (or reflavored) ability modifier exactly once', () => {
+    const e = entity({ stats: { str: 10, dex: 10, con: 16, int: 10, wis: 10, cha: 10 } }); // +3 con
+    expect(calculateLevelUpHpGain(e, 8, 'rolled', DEFAULT_RULES, 'con', false, 5)).toBe(8); // 5 + 3
+  });
+
+  it('the very first level always returns the max die, ignoring manualRoll entirely', () => {
+    const e = entity();
+    expect(calculateLevelUpHpGain(e, 10, 'rolled', DEFAULT_RULES, 'con', true, 1)).toBe(10);
+  });
+
+  it('"fixed" and "max" modes are unaffected by manualRoll', () => {
+    const e = entity();
+    expect(calculateLevelUpHpGain(e, 10, 'fixed', DEFAULT_RULES, 'con', false, 999)).toBe(6); // floor(10/2)+1
+    expect(calculateLevelUpHpGain(e, 10, 'max', DEFAULT_RULES, 'con', false, 999)).toBe(10);
+  });
+
+  it('never returns below 1 even with a very negative ability modifier', () => {
+    const e = entity({ stats: { str: 10, dex: 10, con: 1, int: 10, wis: 10, cha: 10 } }); // -5 con
+    expect(calculateLevelUpHpGain(e, 6, 'rolled', DEFAULT_RULES, 'con', false, 1)).toBe(1);
+  });
+});
+
+describe('isValidHpRoll (closure 4C: strict manual/app-rolled HP die input)', () => {
+  it('accepts a valid integer within [1, dieSize]', () => {
+    expect(isValidHpRoll('7', 10)).toBe(true);
+    expect(isValidHpRoll('1', 10)).toBe(true);
+    expect(isValidHpRoll('10', 10)).toBe(true);
+    expect(isValidHpRoll('  4  ', 10)).toBe(true); // surrounding whitespace tolerated
+  });
+
+  it('rejects a partial parse like "5abc"', () => {
+    expect(isValidHpRoll('5abc', 10)).toBe(false);
+  });
+
+  it('rejects a decimal like "5.5"', () => {
+    expect(isValidHpRoll('5.5', 10)).toBe(false);
+  });
+
+  it('rejects 0', () => {
+    expect(isValidHpRoll('0', 10)).toBe(false);
+  });
+
+  it('rejects a value above the die size', () => {
+    expect(isValidHpRoll('11', 10)).toBe(false);
+  });
+
+  it('rejects empty input', () => {
+    expect(isValidHpRoll('', 10)).toBe(false);
+  });
+
+  it('rejects negative numbers', () => {
+    expect(isValidHpRoll('-3', 10)).toBe(false);
+  });
 });
 
 describe('levelUp', () => {
@@ -415,6 +556,18 @@ describe('levelUp', () => {
     const e = entity({ identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard', level: 2 } });
     const updated = levelUp(e, 1, progression(), DEFAULT_RULES);
     expect(updated.identity.level).toBe(2); // unchanged — loop never runs backward
+  });
+
+  it('threads manualHpRoll through to the single levelUpClass call for a one-level jump under "rolled" mode', () => {
+    const rolledRules = { ...DEFAULT_RULES, hpMode: 'rolled' as const };
+    const rollDieSpy = jest.spyOn(Math, 'random').mockReturnValue(0.99); // would roll near-max if consulted
+    const e = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard', level: 1 },
+      resources: { ...makeEmptyEntity('e1').resources, hp: { current: 6, maximum: 6, temp: 0 }, hitDice: { die: 6, total: 1, remaining: 1 } },
+    });
+    const updated = levelUp(e, 2, progression(), rolledRules, undefined, 2);
+    expect(updated.resources.hp.maximum).toBe(8); // 6 + manual 2, not the near-max random roll
+    rollDieSpy.mockRestore();
   });
 
   it('grows spell slots automatically from the real class table as the caster levels up', () => {
@@ -947,6 +1100,18 @@ describe('levelUpClass — multiclass', () => {
     const updated = levelUpClass(e, 'fighter', fighterProgression(), DEFAULT_RULES, fighterClass);
     // fixed mode, d10, con mod 0: floor(10/2)+1 = 6, NOT max-die 10
     expect(updated.resources.hp.maximum).toBe(26);
+  });
+
+  it('threads manualHpRoll through to applyHP for a second class\'s level-up under "rolled" mode', () => {
+    const rolledRules = { ...DEFAULT_RULES, hpMode: 'rolled' as const };
+    const rollDieSpy = jest.spyOn(Math, 'random').mockReturnValue(0.99); // would roll near-max if consulted
+    const e = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classes: [{ classId: asClassId('wizard'), subclassId: null, level: 3 }], level: 3 },
+      resources: { ...makeEmptyEntity('e1').resources, hp: { current: 20, maximum: 20, temp: 0 }, hitDice: { die: 6, total: 3, remaining: 3 } },
+    });
+    const updated = levelUpClass(e, 'fighter', fighterProgression(), rolledRules, fighterClass, undefined, 3);
+    expect(updated.resources.hp.maximum).toBe(23); // 20 + manual 3, not the near-max random roll
+    rollDieSpy.mockRestore();
   });
 
   it('adds a brand-new class at level 1 to identity.classes and syncs the legacy scalar mirror', () => {

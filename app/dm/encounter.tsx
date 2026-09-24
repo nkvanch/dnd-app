@@ -1,6 +1,6 @@
 // app/dm/encounter.tsx
 // Initiative tracker + combat encounter manager (DM only).
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
   TextInput, Modal,
@@ -25,11 +25,11 @@ import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { Entity, CampaignRules, ActionCard, ActivationOption } from '../../src/engine/types';
 import { deepDiff, deepMerge } from '../../src/sync/diff';
-import { InitiativeEntry } from '../../src/engine/combat';
+import { InitiativeEntry, rollInitiativeValue, rollRecharge, findRechargeableFeatures } from '../../src/engine/combat';
 import { DEFAULT_RULES } from '../../src/store/characterStore';
 import { ConcentrationModal } from '../../src/components/sheet/ConcentrationModal';
 import { DmRulingModal } from '../../src/components/sheet/DmRulingModal';
-import { instantiatePreparedEncounter, instantiateWave, startingCombatantCount } from '../../src/engine/preparedEncounter';
+import { instantiatePreparedEncounter, instantiateWave, startingCombatantCount, hasInvalidManualHp, invalidManualHpCombatants, combatantsWithInvalidManualHp } from '../../src/engine/preparedEncounter';
 import { mergeMonsterIndex } from '../../src/content/contentResolution';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -157,7 +157,20 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
   // every other QuickPanel action (damage/heal/kill/condition).
   const { requestPayment, paymentChooser } = useSpellPayment(entity);
   const [pendingActivation, setPendingActivation] = useState<ActionCard | null>(null);
-  function handleUseLegendaryCard(card: ActionCard, option?: ActivationOption) {
+  // Closure 2 (rechargeable monster ability live use): shared by Legendary
+  // Actions AND the new Rechargeable Abilities section below — both are
+  // just "a Feature whose resourceCost is a generic CustomResource," so
+  // both use it the exact same way applyActionCardUse already handles for
+  // every player action card. Reusing this ONE path (rather than a second,
+  // narrower "just spend the resource" mutation) means a rechargeable
+  // ability's deterministic self-effects (spend a resource, mark a use,
+  // activate a self-buff) still apply on Use exactly as they would from
+  // any other card, while a target-contingent effect (e.g. Ghost's
+  // Possession, or Chimera's Fire Breath save) is correctly left for the
+  // DM to resolve manually — applyAbilityEffects' own isSelfAndUnconditional
+  // gate (combat.ts) already prevents it from self-applying to the monster,
+  // and nothing here bypasses that gate.
+  function handleUseCard(card: ActionCard, option?: ActivationOption) {
     if (!option && card.activation.options?.length) { setPendingActivation(card); return; }
     requestPayment(card, option, payment => {
       const updated = applyActionCardUse(entity, card, rules, option, payment);
@@ -172,6 +185,40 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
         .filter((c): c is NonNullable<typeof c> => c !== null)
     : [];
 
+  // Closure 2 (rechargeable monster ability live use): a monster's Recharge
+  // N[-6] feature (e.g. Chimera's Fire Breath, Ghost's Possession) is
+  // synthesized at spawn time (monsterFactory.ts) into an ordinary
+  // CustomResource with a matching resourceCost — this finds every such
+  // feature (by walking entity.features and checking whether its OWN
+  // resourceCost resolves to a resource whose recharge string
+  // parseRechargeThreshold recognizes) and gives it a full live-use loop:
+  // Available → [Use] (via handleUseCard above, spends this SAME resource)
+  // → Spent → [Recharge] (primary, full one-tap restore) or
+  // [🎲 Roll Recharge] (secondary, 1d6, success calls the exact same
+  // restore mutation, failure changes nothing) → Available again.
+  // parseRechargeThreshold's strict/anchored match naturally excludes
+  // 'start_of_turn' (Legendary Actions' own pool, already shown above with
+  // its own auto-refresh) and every rest-based/freeform resource, so
+  // nothing here duplicates another control — the SAME resource that gates
+  // availability is the one Use spends and Recharge restores (no second,
+  // parallel "spent" state).
+  const rechargeableFeatures = findRechargeableFeatures(entity);
+
+  function manualRecharge(resourceId: string, label: string) {
+    onUpdate({
+      ...entity,
+      resources: {
+        ...entity.resources,
+        custom: entity.resources.custom.map(r => r.id === resourceId ? { ...r, current: r.maximum } : r),
+      },
+    }, `${entity.identity.name}: ${label} manually recharged`);
+  }
+  function rollRechargeFor(resourceId: string, threshold: number, name: string) {
+    const { roll, success } = rollRecharge(threshold);
+    if (success) manualRecharge(resourceId, `${name} (rolled ${roll})`);
+    Alert.alert('Recharge Roll', `${name}: rolled ${roll} — ${success ? 'recharged!' : 'no charge'}`);
+  }
+
   return (
     <View style={styles.quickPanel}>
       {paymentChooser}
@@ -180,7 +227,7 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
         onChoose={option => {
           const card = pendingActivation;
           setPendingActivation(null);
-          if (card) handleUseLegendaryCard(card, option);
+          if (card) handleUseCard(card, option);
         }} />
       <View style={styles.quickHeader}>
         <Text style={styles.quickName}>{entity.identity.name}</Text>
@@ -220,7 +267,7 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
               key={card.featureId}
               style={[styles.legendaryRow, !card.available && styles.btnDisabled]}
               disabled={!card.available}
-              onPress={() => handleUseLegendaryCard(card)}
+              onPress={() => handleUseCard(card)}
             >
               <Text style={styles.legendaryName}>{card.name}</Text>
               <Text style={styles.legendaryDesc}>{card.layer2}{card.layer3 ? ` · ${card.layer3}` : ''}</Text>
@@ -229,6 +276,50 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
               )}
             </Pressable>
           ))}
+        </View>
+      )}
+
+      {/* Rechargeable Abilities (closure 2): the full Available → Use →
+          Spent → Recharge/Roll Recharge → Available loop for any monster
+          feature whose own resourceCost points at a "Recharge N[-6]"
+          resource — e.g. Chimera's Fire Breath, Ghost's Possession. */}
+      {rechargeableFeatures.length > 0 && (
+        <View style={styles.legendaryWrap}>
+          <Text style={styles.legendaryHeader}>🔄 Rechargeable Abilities</Text>
+          {rechargeableFeatures.map(({ feature, resource, threshold }) => {
+            const spent = resource.current <= 0;
+            const card = spent ? null : generateActionCard(feature, entity);
+            if (spent) {
+              return (
+                <View key={feature.id} style={styles.rechargeRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.legendaryName}>{feature.name}</Text>
+                    <Text style={styles.legendaryDesc}>⚫ Spent · {resource.recharge}</Text>
+                  </View>
+                  <Pressable style={styles.rechargeManualBtn} onPress={() => manualRecharge(resource.id, feature.name)}>
+                    <Text style={styles.rechargeManualBtnTxt}>Recharge</Text>
+                  </Pressable>
+                  <Pressable style={styles.rechargeRollBtn} onPress={() => rollRechargeFor(resource.id, threshold, feature.name)}>
+                    <Text style={styles.rechargeRollBtnTxt}>🎲</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            return (
+              <Pressable
+                key={feature.id}
+                style={[styles.legendaryRow, !card?.available && styles.btnDisabled]}
+                disabled={!card?.available}
+                onPress={() => card && handleUseCard(card)}
+              >
+                <Text style={styles.legendaryName}>{feature.name}</Text>
+                <Text style={styles.legendaryDesc}>⚪ Available{card?.layer2 ? ` · ${card.layer2}` : ''}</Text>
+                {!card?.available && card?.unavailableReason && (
+                  <Text style={styles.legendaryReason}>{card.unavailableReason}</Text>
+                )}
+              </Pressable>
+            );
+          })}
         </View>
       )}
 
@@ -498,9 +589,19 @@ interface CombatantRowProps {
    *  swap with) hides that direction's button instead of disabling it. */
   onMoveUp?:   () => void;
   onMoveDown?: () => void;
+  /** Table-first initiative: tapping the number opens an inline editor that
+   *  calls setInitiative directly — this row's own primary path for
+   *  entering a table-rolled result. Both are always supplied by the
+   *  active-combat view (undefined only if a future caller reuses this row
+   *  read-only). */
+  onSetInitiative?:  (value: number) => void;
+  /** Secondary convenience — rolls just this one combatant's initiative
+   *  in app, then calls onSetInitiative with the result so both paths
+   *  funnel through the exact same store mutation. */
+  onRollInitiative?: () => void;
 }
 
-function CombatantRow({ entry, entity, isCurrent, isSelected, onPress, onMoveUp, onMoveDown }: CombatantRowProps) {
+function CombatantRow({ entry, entity, isCurrent, isSelected, onPress, onMoveUp, onMoveDown, onSetInitiative, onRollInitiative }: CombatantRowProps) {
   const hp     = entity?.resources.hp;
   const hpPct  = hp && hp.maximum > 0 ? hp.current / hp.maximum : 0;
 
@@ -515,14 +616,54 @@ function CombatantRow({ entry, entity, isCurrent, isSelected, onPress, onMoveUp,
 
   const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
 
+  // Table-first initiative entry: tap the number to open a small inline
+  // input (same shape as QuickPanel's damage/heal numeric input), submit to
+  // call setInitiative directly. This is the PRIMARY path — entering a
+  // table-rolled result. The 🎲 button next to it is the secondary in-app
+  // convenience, and calls the exact same onSetInitiative with its result,
+  // so both paths share one mutation (setInitiative), never two.
+  const [editing, setEditing] = useState(false);
+  const [draft,   setDraft]   = useState(String(entry.initiative));
+
+  function submitEdit() {
+    const value = parseInt(draft, 10);
+    if (!isNaN(value) && onSetInitiative) onSetInitiative(value);
+    setEditing(false);
+  }
+
   return (
     <Pressable
       style={[styles.combatantRow, isCurrent && styles.combatantRowActive, isSelected && styles.combatantRowSelected]}
       onPress={onPress}
     >
-      <View style={styles.initBox}>
-        <Text style={styles.initNum}>{entry.initiative}</Text>
-      </View>
+      {editing ? (
+        <View style={styles.initEditBox}>
+          <TextInput
+            style={styles.initEditInput}
+            value={draft}
+            onChangeText={setDraft}
+            keyboardType="number-pad"
+            autoFocus
+            selectTextOnFocus
+            onBlur={submitEdit}
+            onSubmitEditing={submitEdit}
+          />
+        </View>
+      ) : (
+        <Pressable
+          style={styles.initBox}
+          disabled={!onSetInitiative}
+          onPress={() => { setDraft(String(entry.initiative)); setEditing(true); }}
+        >
+          <Text style={styles.initNum}>{entry.initiative}</Text>
+        </Pressable>
+      )}
+
+      {onRollInitiative && !editing && (
+        <Pressable hitSlop={8} style={styles.initRollBtn} onPress={onRollInitiative}>
+          <Text style={styles.initRollBtnTxt}>🎲</Text>
+        </Pressable>
+      )}
 
       <View style={styles.combatantInfo}>
         <Text style={styles.combatantName}>
@@ -594,11 +735,28 @@ export default function EncounterScreen() {
   const allMonsterTemplates = useMemo(() => mergeMonsterIndex(homebrewMonsters), [homebrewMonsters]);
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
-  const { combat, entities, startCombat, advanceTurn, endCombat, updateEntity, setInitiative, setOrder, addEntities, removeFromEncounter, lastPersistError } =
+  const { combat, entities, startCombat, advanceTurn, endCombat, updateEntity, setInitiative, setOrder, addEntities, removeFromEncounter, rollAllInitiative, lastPersistError } =
     useCombatStore();
 
   const [selectedId, setSelectedId]  = useState<string | null>(null);
   const [setupMode,  setSetupMode]   = useState(!combat.active);
+
+  // Closure fix (active-combat hydration race, defensive backstop): the
+  // line above only reads combat.active ONCE, at mount — app/_layout.tsx
+  // now awaits combat-state restore before releasing the boot screen (so
+  // this store value is already current by the time this component can
+  // possibly mount), but this stays as a defensive sync against any other
+  // path that could land here before hydration (a future navigation
+  // change, fast refresh in dev, etc.). Only syncs FORWARD, false→true's
+  // local setupMode never re-derives backward: nothing in this screen ever
+  // sets setupMode back to true once it's false (there's no "return to
+  // setup while combat is active" UI action — setSetupMode(false) is the
+  // only call site besides this one), so a real active encounter restored
+  // late can never leave the DM stuck looking at a stale Setup screen, and
+  // this can never undo any deliberate user navigation.
+  useEffect(() => {
+    if (combat.active && setupMode) setSetupMode(false);
+  }, [combat.active, setupMode]);
 
   // Multi-target selection — separate from selectedId's single-select flow,
   // active only while multiMode is on. Toggling multiMode off clears the
@@ -777,6 +935,33 @@ export default function EncounterScreen() {
   // encounter, but not disallowed) come along too.
   function handleStartFromPrepared() {
     if (!previewSource) return;
+    // Closure 1 (final runtime Start boundary): this is the ONE place every
+    // route that can start a prepared encounter converges on — the
+    // Encounter Library's "▶ Start" action and Builder's "Review & Start"
+    // button both just navigate here (?preparedId=...) and this screen's
+    // own "Start This Encounter" button is what actually calls this
+    // function. Builder-level validation (Closure 3) only protects
+    // encounters edited there — a LEGACY saved encounter (or one that
+    // predates that validation) can still carry hpMode:'manual' with an
+    // invalid/missing manualHp, and instantiatePreparedEncounter would
+    // otherwise silently spawn it at the printed average with no
+    // indication anything was wrong. Reuses the exact same
+    // hasInvalidManualHp/invalidManualHpCombatants guard Builder's own
+    // Save/Start actions already use (preparedEncounter.ts) — one
+    // authoritative validity check, not a second implementation here.
+    // Deliberately does NOT auto-fix or fall back to Average: the user is
+    // told exactly which combatant(s) need attention and left to fix them
+    // in the builder, same as Builder's own gate already does.
+    if (hasInvalidManualHp(previewSource)) {
+      const names = invalidManualHpCombatants(previewSource)
+        .map(c => c.displayName?.trim() || allMonsterTemplates.find(t => t.id === c.monsterId)?.name || c.monsterId)
+        .join(', ');
+      Alert.alert(
+        'Fix manual HP before starting',
+        `"${previewSource.name}" can't be started: ${names} ${invalidManualHpCombatants(previewSource).length === 1 ? 'has' : 'have'} Manual/Table-Rolled HP selected with no valid HP entered. Edit the encounter and enter a whole number greater than 0, or choose a different HP method.`,
+      );
+      return;
+    }
     const spawned = instantiatePreparedEncounter(previewSource, rules, homebrewMonsters);
     if (spawned.length === 0 && entities.length === 0) {
       Alert.alert('No combatants', 'This encounter has no combatants present at the start (check waves — they deploy later).');
@@ -791,6 +976,31 @@ export default function EncounterScreen() {
   function handleDeployWave(waveId: string) {
     if (!activeSource) return;
     const wave = activeSource.waves.find(w => w.id === waveId);
+    // Final runtime boundary, wave-deploy case: the exact same guard
+    // handleStartFromPrepared applies before an initial start must also
+    // apply here — a mid-combat wave deploy is just as capable of
+    // instantiating a legacy/invalid combatant, and instantiateWave would
+    // otherwise silently spawn it at the printed average with no
+    // indication anything was wrong. Scoped to just THIS wave's own
+    // combatants (not the whole encounter) via combatantsWithInvalidManualHp
+    // — the shared array-based primitive invalidManualHpCombatants/
+    // hasInvalidManualHp already delegate to, so this is the same one
+    // validation rule, not a second implementation. Deliberately checked
+    // BEFORE instantiateWave runs: the deploy is all-or-nothing from the
+    // DM's perspective — no partial deployment of only the valid members,
+    // no RNG consumed, no average substituted.
+    const waveCombatants = activeSource.combatants.filter(c => c.waveId === waveId);
+    const invalid = combatantsWithInvalidManualHp(waveCombatants);
+    if (invalid.length > 0) {
+      const names = invalid
+        .map(c => c.displayName?.trim() || allMonsterTemplates.find(t => t.id === c.monsterId)?.name || c.monsterId)
+        .join(', ');
+      Alert.alert(
+        'Cannot deploy wave',
+        `Manual HP is missing or invalid for: ${names}. Edit the prepared encounter and enter a whole number greater than 0, or choose a different HP method, before deploying "${wave?.name ?? 'this wave'}."`,
+      );
+      return;
+    }
     const spawned = instantiateWave(activeSource, waveId, rules, homebrewMonsters);
     if (spawned.length === 0) {
       Alert.alert('Nothing to deploy', 'No combatants are assigned to this wave.');
@@ -800,11 +1010,13 @@ export default function EncounterScreen() {
     Alert.alert('Reinforcements deployed', `${wave?.name ?? 'Wave'}: ${spawned.length} combatant${spawned.length !== 1 ? 's' : ''} added to initiative.`);
   }
 
+  // Closure 2E: adds to the pre-combat setup roster via combatStore's own
+  // addToRoster action, which persists immediately (see its doc comment) —
+  // this used to be a raw, unsaved setState (plus a redundant updateEntity
+  // call that was always a no-op here, since the entity isn't in `entities`
+  // yet for it to update).
   function addPartyMember(c: Entity) {
-    updateEntity(c.id, () => c); // Add to combat entities
-    useCombatStore.setState(s => ({
-      entities: s.entities.some(e => e.id === c.id) ? s.entities : [...s.entities, c],
-    }));
+    useCombatStore.getState().addToRoster(c);
   }
 
   function handleEndEncounter() {
@@ -1017,6 +1229,15 @@ export default function EncounterScreen() {
               <Text style={styles.multiToggleTxt}>🌍 Ruling for Everyone</Text>
             </Pressable>
           )}
+          {/* Table-first: manual entry/reorder (per-row, above) is the
+              primary way to set initiative. This is the secondary app-roll
+              convenience for the whole order in one tap — never fired
+              automatically, only on this explicit press. */}
+          {combat.order.length > 0 && (
+            <Pressable style={styles.multiToggleBtn} onPress={rollAllInitiative}>
+              <Text style={styles.multiToggleTxt}>🎲 Roll All Initiative</Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Group quick-select — first runtime consumer of PreparedEncounter's
@@ -1073,6 +1294,8 @@ export default function EncounterScreen() {
               }
               onMoveUp={idx > 0 ? () => swap(idx, idx - 1) : undefined}
               onMoveDown={idx < combat.order.length - 1 ? () => swap(idx, idx + 1) : undefined}
+              onSetInitiative={value => setInitiative(entry.entityId, value)}
+              onRollInitiative={ent ? () => setInitiative(entry.entityId, rollInitiativeValue(ent)) : undefined}
             />
           );
         })}
@@ -1176,6 +1399,16 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
   },
   initNum:        { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
+  initEditBox: {
+    width: 56, height: 44, borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceHigh, borderWidth: 1, borderColor: Colors.gold,
+  },
+  initEditInput: {
+    flex: 1, textAlign: 'center', fontSize: FontSize.lg, fontWeight: FontWeight.bold,
+    color: Colors.textPrimary, padding: 0,
+  },
+  initRollBtn:    { width: 32, height: 32, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  initRollBtnTxt: { fontSize: FontSize.md },
   combatantInfo:  { flex: 1, gap: 4 },
   combatantName:  { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   combatantNotesTxt: { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
@@ -1275,6 +1508,22 @@ const styles = StyleSheet.create({
   legendaryName:   { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   legendaryDesc:   { fontSize: FontSize.xs, color: Colors.textDim },
   legendaryReason: { fontSize: FontSize.xs, color: Colors.red },
+
+  rechargeRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.xs,
+  },
+  rechargeManualBtn: {
+    backgroundColor: Colors.gold, borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+  },
+  rechargeManualBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.xs },
+  rechargeRollBtn: {
+    width: 32, height: 32, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceHigh,
+  },
+  rechargeRollBtnTxt: { fontSize: FontSize.md },
 
   // Setup mode
   setupRow: {

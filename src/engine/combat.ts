@@ -2,7 +2,7 @@
 // FILE: src/engine/combat.ts
 // PROJECT: Initiative Tracker, Concentration Gate & Combat Clock
 // ============================================================================
-import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect, DurationTracker } from './types';
+import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect, DurationTracker, FeatureActivation, CustomResource } from './types';
 import { recomputeDerived, collectAllEffects } from './pipeline';
 import { resolveResistance } from './resolver';
 import { tickDurations, applyCondition, removeCondition } from './conditions';
@@ -37,34 +37,91 @@ export type CombatState = {
   sourcePreparedEncounterId?: string;
 };
 
+/** Rolls one entity's initiative — the app-roll convenience, shared by
+ *  startEncounter/addToEncounter's roll:true path and by any UI (a per-row
+ *  "🎲 Roll" button, "Roll All") that wants the exact same d20 + effective-
+ *  DEX-and-bonus math rather than reimplementing it. Entity.derived.initiative
+ *  already accounts for effective (not raw) DEX plus any flat initiative
+ *  bonus effects (e.g. Alert) — a local reimplementation would silently miss
+ *  both. */
+export function rollInitiativeValue(entity: Entity): number {
+  return rollD20Dice(entity.derived.initiative).total;
+}
+
+function initiativeEntryFor(entity: Entity, roll: boolean): InitiativeEntry {
+  return {
+    entityId:     entity.id,
+    name:         entity.identity.name,
+    // Table-first (see docs/... table-first resolution): starting combat or
+    // adding reinforcements no longer forces an app-generated roll. roll:false
+    // (the default a DM reaches by pressing the primary "Start Combat"/"Deploy"
+    // button) seeds every entry at 0, stable-sorted by tiebreak alone, so the
+    // DM can enter table-rolled results or just reorder rows directly — see
+    // CombatantRow's inline initiative editor and setOrder's up/down swap.
+    // roll:true (the secondary "🎲 Roll All" convenience) reproduces the
+    // exact previous auto-roll-on-start behavior via rollInitiativeValue.
+    initiative:   roll ? rollInitiativeValue(entity) : 0,
+    tiebreak:     entity.derived.initiative,
+    isPlayer:     entity.kind === 'character',
+    hasTakenTurn: false,
+  };
+}
+
+/** Exported (not just used internally) so combatStore's own setInitiative
+ *  can share the exact same comparator rather than re-implementing it —
+ *  closure fix: the two had drifted into two copies of the identical sort,
+ *  a real risk for silent divergence if either one were tweaked later. */
+export function sortInitiative(order: InitiativeEntry[]): InitiativeEntry[] {
+  return [...order].sort((a, b) =>
+    b.initiative - a.initiative ||
+    b.tiebreak   - a.tiebreak
+  );
+}
+
 /**
- * Starts a combat encounter. Rolls initiative for all entities,
- * sorts descending by roll then by initiative bonus as tiebreaker.
+ * Closure fix (initiative persistence + active-actor stability): every
+ * mutation that can re-sort or reorder `combat.order` — a numeric
+ * initiative edit, an explicit manual reorder, "Roll All Initiative", or a
+ * reinforcement merge — used to leave `turnIndex` as a bare array position.
+ * That silently reassigned "whose turn it is" to whichever entity happened
+ * to land at that same numeric slot after the mutation, rather than
+ * following the entity that actually had the turn. Every one of those call
+ * sites now captures `combat.order[combat.turnIndex]?.entityId` BEFORE
+ * mutating, then calls this to find that same entity's new position
+ * afterward. Falls back to the previous index (clamped to the new order's
+ * bounds) only if that entity is no longer present at all — a pure
+ * reorder/resort/roll never removes anyone, so that branch is defensive
+ * only; a real removal (removeFromEncounter) has its own dedicated
+ * re-anchoring logic already, unaffected by this helper.
+ */
+export function reanchorTurnIndex(
+  order: InitiativeEntry[],
+  currentEntityId: string | undefined,
+  previousIndex: number,
+): number {
+  if (currentEntityId) {
+    const found = order.findIndex(e => e.entityId === currentEntityId);
+    if (found >= 0) return found;
+  }
+  return Math.min(previousIndex, Math.max(0, order.length - 1));
+}
+
+/**
+ * Starts a combat encounter. `roll` (default true, matching this function's
+ * pre-existing behavior for any caller/test that doesn't pass it) controls
+ * whether initiative is app-rolled for every entity or left at 0 for
+ * manual/table entry. The UI's primary "Start Combat" path explicitly
+ * passes `roll: false` — table-first resolution: the DM enters results or
+ * reorders rows directly by default — and its secondary "🎲 Roll All
+ * Initiative" convenience explicitly passes `roll: true`.
  */
 export function startEncounter(
   entities:    Entity[],
   encounterId: string,
   sourcePreparedEncounterId?: string,
+  roll = true,
 ): CombatState {
-  const order: InitiativeEntry[] = entities
-    .map(e => ({
-      entityId:     e.id,
-      name:         e.identity.name,
-      // entity.derived.initiative already accounts for effective (not raw)
-      // DEX plus any flat initiative-bonus effects (e.g. Alert) — a local
-      // reimplementation here (previously Math.floor((entity.stats.dex -
-      // 10) / 2), the RAW score) silently missed both, giving the wrong
-      // initiative roll for any entity with an effective DEX bonus from
-      // race/items or an initiative-boosting feature.
-      initiative:   rollD20Dice(e.derived.initiative).total,
-      tiebreak:     e.derived.initiative,
-      isPlayer:     e.kind === 'character',
-      hasTakenTurn: false,
-    }))
-    .sort((a, b) =>
-      b.initiative - a.initiative ||
-      b.tiebreak   - a.tiebreak
-    );
+  const order = sortInitiative(entities.map(e => initiativeEntryFor(e, roll)));
 
   return {
     active:      true,
@@ -214,30 +271,45 @@ export function endEncounter(combat: CombatState): CombatState {
  * the DM is always the one pressing the button), not an attempt to fully
  * model RAW's "you can act on your normal turn if it hasn't passed yet."
  */
-export function addToEncounter(combat: CombatState, newEntities: Entity[]): CombatState {
+/**
+ * `roll` (default true, matching this function's pre-existing behavior)
+ * controls whether the new entities' initiative is app-rolled or left at 0
+ * for manual/table entry — same table-first default as startEncounter; the
+ * UI's primary "Deploy" path passes `roll: false`.
+ */
+export function addToEncounter(combat: CombatState, newEntities: Entity[], roll = true): CombatState {
   if (!combat.active || newEntities.length === 0) return combat;
 
-  const newEntries: InitiativeEntry[] = newEntities.map(e => ({
-    entityId:     e.id,
-    name:         e.identity.name,
-    initiative:   rollD20Dice(e.derived.initiative).total,
-    tiebreak:     e.derived.initiative,
-    isPlayer:     e.kind === 'character',
-    hasTakenTurn: false,
-  }));
+  const newEntries = newEntities.map(e => initiativeEntryFor(e, roll));
 
   const currentEntityId = combat.order[combat.turnIndex]?.entityId;
-  const merged = [...combat.order, ...newEntries].sort((a, b) =>
-    b.initiative - a.initiative ||
-    b.tiebreak   - a.tiebreak
-  );
-  const newTurnIndex = currentEntityId ? merged.findIndex(e => e.entityId === currentEntityId) : combat.turnIndex;
+  const merged = sortInitiative([...combat.order, ...newEntries]);
 
   return {
     ...combat,
     order:     merged,
-    turnIndex: newTurnIndex >= 0 ? newTurnIndex : combat.turnIndex,
+    turnIndex: reanchorTurnIndex(merged, currentEntityId, combat.turnIndex),
   };
+}
+
+/**
+ * Rolls (or re-rolls) initiative for every entity currently in the order —
+ * the "🎲 Roll All Initiative" secondary convenience, callable both before
+ * anyone has entered a manual value and after (a DM changing their mind).
+ * Re-sorts afterward; does not otherwise touch turnIndex/round/hasTakenTurn,
+ * matching setOrder's existing "manual DM correction" semantics rather than
+ * addToEncounter's turn-pointer-preserving merge (there's no new entity
+ * being inserted here, so nothing needs preserving across the resort beyond
+ * what setOrder callers already accept).
+ */
+export function rollAllInitiative(combat: CombatState, entities: Entity[]): CombatState {
+  const currentEntityId = combat.order[combat.turnIndex]?.entityId;
+  const byId = new Map(entities.map(e => [e.id, e]));
+  const order = sortInitiative(combat.order.map(entry => {
+    const entity = byId.get(entry.entityId);
+    return entity ? { ...entry, initiative: rollInitiativeValue(entity), tiebreak: entity.derived.initiative } : entry;
+  }));
+  return { ...combat, order, turnIndex: reanchorTurnIndex(order, currentEntityId, combat.turnIndex) };
 }
 
 // ── Concentration ─────────────────────────────────────────────────────────────
@@ -391,18 +463,17 @@ export function tickConcentrationDuration(
 // ── Concentration check (on damage) ──────────────────────────────────────────
 
 /**
- * Called when a concentrating entity takes damage.
- * DC = max(10, damage / 2). Rolls CON save.
- * Supports War Caster advantage via the entity's feature flags.
- * If the save fails, concentration is dropped.
+ * Computes DC + rolls the CON save for a concentration check, WITHOUT
+ * applying any consequence — the pure "app roll" half of the table-first
+ * split. Supports War Caster advantage. Callers pass the `passed` result to
+ * resolveConcentrationOutcome, the exact same deterministic path a DM/player
+ * tapping the manual Success/Failure buttons calls directly — so the two
+ * resolution paths (roll in app vs. record a table result) never diverge.
  */
-export function concentrationCheck(
+export function rollConcentrationSave(
   entity:      Entity,
   damageTaken: number,
-  rules:       CampaignRules = DEFAULT_RULES
-): Entity {
-  if (!entity.spellcasting?.concentrating) return entity;
-
+): { passed: boolean; dc: number; roll: number } {
   const dc = Math.max(10, Math.floor(damageTaken / 2));
 
   // Use the pipeline-computed CON saving throw, which already accounts for the
@@ -424,11 +495,37 @@ export function concentrationCheck(
     ? Math.max(baseRoll(), baseRoll())   // Advantage: roll twice, keep higher
     : baseRoll();
 
-  if (roll < dc) {
-    return dropConcentration(entity);
-  }
+  return { passed: roll >= dc, dc, roll };
+}
 
-  return entity;
+/**
+ * Deterministic bookkeeping once a concentration save's outcome is known —
+ * table-first: the primary Success/Failure buttons call this directly with
+ * a human-supplied result, and rollConcentrationSave's app-roll convenience
+ * calls it too, with its own computed `passed`. No-op if not concentrating.
+ */
+export function resolveConcentrationOutcome(entity: Entity, passed: boolean): Entity {
+  if (!entity.spellcasting?.concentrating) return entity;
+  return passed ? entity : dropConcentration(entity);
+}
+
+/**
+ * Called when a concentrating entity takes damage.
+ * DC = max(10, damage / 2). Rolls CON save (app-roll convenience).
+ * Supports War Caster advantage via the entity's feature flags.
+ * If the save fails, concentration is dropped.
+ * Composes rollConcentrationSave + resolveConcentrationOutcome — kept as its
+ * own function since it's already the tested, documented entry point for
+ * "roll and resolve in one call" (e.g. non-UI callers, existing tests).
+ */
+export function concentrationCheck(
+  entity:      Entity,
+  damageTaken: number,
+  rules:       CampaignRules = DEFAULT_RULES
+): Entity {
+  if (!entity.spellcasting?.concentrating) return entity;
+  const { passed } = rollConcentrationSave(entity, damageTaken);
+  return resolveConcentrationOutcome(entity, passed);
 }
 
 // ── HP damage with temp HP absorption ────────────────────────────────────────
@@ -597,13 +694,37 @@ export function recordDeathSave(
  * entity.conditionMonitor.active/.conditions), which is real new
  * architecture, not a contained fix; deferred rather than bolted on as a
  * parallel state system.
+ *
+ * TABLE-FIRST CORRECTION: apply_condition/remove_condition are gated by
+ * `activation` (when the caller passes it — every real call site does).
+ * The ARCH-2 fix above made these two effect types apply for real, which
+ * was correct for a genuinely self-directed, unconditional ability (Rage-
+ * style — target:'self', no save required). It did NOT distinguish that
+ * case from a target-contingent one ("target makes a CON save; on failure,
+ * becomes Paralyzed" — target:'single'/'area'/'multiple', or gated behind
+ * requiresSave): those were applying the condition to the ENTITY USING THE
+ * ABILITY, immediately on "Use", regardless of whether a save was ever
+ * made or who it was actually meant to affect — e.g. a monster's own
+ * Paralyzing Touch would paralyze the monster itself the instant the DM
+ * tapped Use. `isSelfAndUnconditional` below is that distinction: only a
+ * self-targeting, no-save activation still applies apply_condition/
+ * remove_condition immediately. Everything else is left for the human to
+ * resolve at the table and apply via the app's existing manual condition
+ * picker (QuickPanel/TabCharacter) once the save/hit is actually known —
+ * the ability's own description text (always shown on its action card)
+ * already states the contingency in prose. Resource spend and action-
+ * economy marking (both handled by applyActionCardUse, not here) are
+ * unaffected either way — RAW abilities that spend on use regardless of
+ * outcome keep doing so.
  */
 export function applyAbilityEffects(
-  entity:  Entity,
-  effects: AbilityEffect[],
-  rules:   CampaignRules = DEFAULT_RULES,
+  entity:     Entity,
+  effects:    AbilityEffect[],
+  rules:      CampaignRules = DEFAULT_RULES,
+  activation?: FeatureActivation,
 ): Entity {
   let updated = entity;
+  const isSelfAndUnconditional = !activation || (activation.target === 'self' && activation.requiresSave === null);
 
   for (const effect of effects) {
     if (effect.type === 'set_flag') {
@@ -618,14 +739,17 @@ export function applyAbilityEffects(
       updated = startWildShape(updated, effect.formId, rules);
     } else if (effect.type === 'restore_resource') {
       updated = restoreResource(updated, effect.resourceId, effect.amount);
-    } else if (effect.type === 'apply_condition') {
+    } else if (effect.type === 'apply_condition' && isSelfAndUnconditional) {
       const features = CONDITIONS_BY_ID[effect.conditionId]?.features;
       updated = applyCondition(updated, effect.conditionId, 'ability', rules, features, effect.duration);
-    } else if (effect.type === 'remove_condition') {
+    } else if (effect.type === 'remove_condition' && isSelfAndUnconditional) {
       updated = removeCondition(updated, effect.conditionId, rules);
     }
     // 'damage' / 'heal': intentionally left to the manual roll+HP-modal flow.
     // 'grant_speed' / 'spend_resource': not yet wired — see the doc comment above.
+    // A target-contingent apply_condition/remove_condition (not
+    // isSelfAndUnconditional) is intentionally skipped here — see the
+    // TABLE-FIRST CORRECTION note above this function.
   }
 
   return recomputeDerived(updated, rules);
@@ -766,4 +890,139 @@ export function applyTempHP(
     },
   };
   return recomputeDerived(updated, rules);
+}
+
+// ── Recharge (e.g. "Recharge 5-6") ───────────────────────────────────────────
+
+/**
+ * Parses a "Recharge X-6" / "Recharge X" style recharge TAG (the exact,
+ * short canonical form — CustomResource.recharge's open `| string` case,
+ * see its own doc comment) into the minimum d6 face needed to succeed.
+ * Callers use the null/non-null result to decide whether an app-roll
+ * convenience even makes sense to offer for this resource. Table-first:
+ * this only ever computes whether a roll WOULD succeed: the primary path
+ * (manually marking a resource recharged) already exists via the
+ * resource's own +/- controls / a dedicated [Recharge] button and never
+ * goes through this function.
+ *
+ * Closure 3E: strict, ANCHORED parsing — the entire (trimmed) string must
+ * be exactly "Recharge N" or "Recharge N-6" (case-insensitive, hyphen or
+ * en-dash), N in 2-6. This used to be a loose, unanchored `.match()` that
+ * accepted a match found anywhere inside a longer string (so "Recharge 5-6
+ * extra junk," or any text merely containing the word "recharge" near a
+ * digit, silently parsed) and treated "Recharge 4-5" as threshold 4 by
+ * simply ignoring the non-matching "-5" suffix — a pattern this app's
+ * engine has no "X-5" semantics for at all (5e recharge abilities are
+ * always "Recharge N" or "Recharge N-6," nothing else). Returns null for
+ * anything that isn't an exact match: rest-based recharge
+ * ('short_rest'/'long_rest'/'dawn'/'never'/'start_of_turn'), freeform
+ * homebrew text, or a malformed/partial recharge string.
+ */
+export function parseRechargeThreshold(recharge: string): number | null {
+  const match = recharge.trim().match(/^recharge\s+(\d)(?:\s*[-–]\s*6)?$/i);
+  if (!match) return null;
+  const threshold = parseInt(match[1], 10);
+  return threshold >= 2 && threshold <= 6 ? threshold : null;
+}
+
+/**
+ * Closure 3A: extracts a monster feature's own "Recharge N[-6]." clause
+ * from the START of its printed description — the standard SRD stat-block
+ * convention (e.g. "Recharge 5-6. The dragon exhales fire in a..."). Used
+ * ONLY at spawn time (monsterFactory.ts) to synthesize a matching
+ * CustomResource + resourceCost for a feature that has neither today, so
+ * using/recharging it flows through the SAME generic resource-spend/
+ * availability machinery every other resource-gated feature (spell slots,
+ * Legendary Actions) already uses — no new subsystem. Deliberately
+ * anchored to the START of the description, not "found anywhere in it" —
+ * the recharge notice is always the opening clause in real stat-block
+ * text, and scraping a recharge-shaped substring out of the middle of
+ * unrelated prose is exactly the over-permissive behavior closure 3E
+ * disallows. Returns the canonical short tag (e.g. "Recharge 5-6", no
+ * trailing period) — parseRechargeThreshold above accepts exactly this
+ * format back, so the two functions share one definition of "valid."
+ */
+export function extractRechargeTag(description: string): string | null {
+  const match = description.trim().match(/^recharge\s+(\d)(?:\s*[-–]\s*6)?\s*\./i);
+  if (!match) return null;
+  const threshold = parseInt(match[1], 10);
+  if (threshold < 2 || threshold > 6) return null;
+  return match[0].slice(0, -1).trim(); // drop the trailing "."
+}
+
+/**
+ * Closure 2C: extracts a monster feature's "Recharge N[-6]" clause from a
+ * canonical `"(Recharge N[-6])"` SUFFIX on its own NAME — real content,
+ * e.g. the Ghost's `"Possession (Recharge 6)"`, has no recharge clause at
+ * the start of its description at all; the notice is only in the name.
+ * Anchored to the END of the (trimmed) name, requiring the exact
+ * parenthesized form — controlled parsing, not a substring scan: a name
+ * like `"Leadership (Recharges After a Short/Long Rest)"` (real content on
+ * a different monster) does NOT match, since "Recharges" (plural) isn't
+ * followed by whitespace+digit the way "Recharge 6)" is. Returns the same
+ * canonical short tag format extractRechargeTag/parseRechargeThreshold
+ * already use (e.g. "Recharge 6"), so all three functions agree on one
+ * definition of "valid."
+ */
+export function extractRechargeTagFromName(name: string): string | null {
+  const match = name.trim().match(/\(recharge\s+(\d)(?:\s*[-–]\s*6)?\)$/i);
+  if (!match) return null;
+  const threshold = parseInt(match[1], 10);
+  if (threshold < 2 || threshold > 6) return null;
+  return match[0].slice(1, -1).trim(); // drop the surrounding "(" / ")"
+}
+
+/**
+ * Closure 2C: the single entry point monsterFactory.ts calls to resolve a
+ * feature's recharge tag — combines extractRechargeTagFromName and
+ * extractRechargeTag under one controlled priority order (the canonical
+ * name-suffix form wins over a leading description clause when a feature
+ * somehow carries both, so exactly one tag — and therefore exactly one
+ * synthesized resource — is ever produced for a single feature). Real
+ * content only ever has one or the other (Chimera's Fire Breath: leading
+ * description only; Ghost's Possession: name suffix only), so this
+ * ordering is defensive rather than something any current content
+ * actually exercises both branches of.
+ */
+export function resolveFeatureRechargeTag(name: string, description: string): string | null {
+  return extractRechargeTagFromName(name) ?? extractRechargeTag(description);
+}
+
+/**
+ * Rolls 1d6 against a "Recharge X-6" threshold — the secondary app-roll
+ * convenience. Does NOT restore the resource itself: callers apply the
+ * SAME resource-restore mutation (e.g. onResourceChange in the UI, already
+ * the resource's own manual "mark recharged" path) only when `success` is
+ * true, so both paths always agree on how a resource actually gets
+ * restored.
+ */
+export function rollRecharge(threshold: number): { roll: number; success: boolean } {
+  const roll = Math.floor(Math.random() * 6) + 1;
+  return { roll, success: roll >= threshold };
+}
+
+/**
+ * Closure 2 (rechargeable monster ability live use): finds every feature
+ * on `entity` whose OWN `activation.resourceCost` resolves to a
+ * CustomResource whose `recharge` string parseRechargeThreshold
+ * recognizes as a genuine "Recharge N[-6]" pool — e.g. a spawned Chimera's
+ * Fire Breath or a spawned Ghost's Possession, both synthesized this way
+ * by monsterFactory.ts's spawnMonster. This is the ONE shared discovery
+ * used by app/dm/encounter.tsx's QuickPanel to build its "🔄 Rechargeable
+ * Abilities" list — extracted here (rather than left as component-local
+ * JSX logic) so it's independently testable with real spawned content,
+ * proving the actual UI-facing path works, not just a hand-mutated
+ * resource. Naturally excludes Legendary Actions' own pool
+ * (recharge:'start_of_turn' never matches) and every rest-based/freeform
+ * resource — nothing here duplicates another control.
+ */
+export function findRechargeableFeatures(entity: Entity): { feature: FeatureInstance; resource: CustomResource; threshold: number }[] {
+  return entity.features
+    .map(f => {
+      const resourceId = f.activation?.resourceCost?.resourceId;
+      const resource = resourceId ? entity.resources.custom.find(r => r.id === resourceId) : undefined;
+      const threshold = resource ? parseRechargeThreshold(resource.recharge) : null;
+      return resource && threshold !== null ? { feature: f, resource, threshold } : null;
+    })
+    .filter((x): x is { feature: FeatureInstance; resource: CustomResource; threshold: number } => x !== null);
 }

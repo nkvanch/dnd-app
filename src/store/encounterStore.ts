@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { PreparedEncounter } from '../engine/types';
 import { saveEncounter, loadAllEncounters, deleteEncounter } from '../db/encounterRepo';
-import { newPreparedEncounter } from '../engine/preparedEncounter';
+import { newPreparedEncounter, hasInvalidManualHp } from '../engine/preparedEncounter';
 
 type EncounterStore = {
   encounters: PreparedEncounter[];
@@ -104,3 +104,36 @@ export const useEncounterStore = create<EncounterStore>((set, get) => ({
     set(state => ({ encounters: state.encounters.filter(e => e.id !== id) }));
   },
 }));
+
+/**
+ * Closure (Review/Start save race): the ONE shared "is this draft safe to
+ * persist, and did persistence actually succeed" check. Used by
+ * app/dm/encounter-builder.tsx's Save AND Review/Start actions so there is
+ * exactly one persistence implementation and one error-surfacing behavior
+ * — not two separately-written async blocks that can drift apart, which is
+ * literally how Review/Start ended up navigating without ever awaiting a
+ * successful save in the first place. Reuses hasInvalidManualHp
+ * (preparedEncounter.ts) rather than reimplementing manual-HP validation;
+ * never calls saveEncounterDraft at all when the draft itself is invalid.
+ * Never throws — a caller can always safely `await` this with no try/catch
+ * of its own and just branch on `ok`.
+ *
+ * {ok:true} is returned ONLY once useEncounterStore's own `encounters`
+ * already reflects the just-saved version: saveEncounterDraft updates the
+ * store synchronously as part of the same async function, BEFORE its
+ * returned promise resolves (see its own implementation above) — so a
+ * caller that navigates immediately after a true result can never have the
+ * next screen read a stale, previously-saved copy of this encounter.
+ */
+export async function trySavePreparedEncounter(
+  prepared: PreparedEncounter,
+): Promise<{ ok: true } | { ok: false; reason: 'invalid' | 'save-failed' }> {
+  if (hasInvalidManualHp(prepared)) return { ok: false, reason: 'invalid' };
+  try {
+    await useEncounterStore.getState().saveEncounterDraft(prepared);
+    return { ok: true };
+  } catch (e) {
+    console.error('[encounterStore] trySavePreparedEncounter failed:', e);
+    return { ok: false, reason: 'save-failed' };
+  }
+}

@@ -369,6 +369,66 @@ export function applyGrant(
 
 // ── HP per level ──────────────────────────────────────────────────────────────
 
+/**
+ * Closure 4A: the pure HP-gain calculation, extracted out of applyHP so a
+ * level-up PREVIEW (HpRollGate, TabCharacter.tsx) can show the EXACT number
+ * that will actually be applied — one source of truth instead of a second,
+ * separately maintained copy of this formula that could (and did: the
+ * hpMinHalfDie house-rule floor was previously missing from the preview
+ * entirely) silently drift out of sync with what applyHP itself computes.
+ * Never rolls on its own behalf for 'rolled' mode: a caller previewing a
+ * value always already has a concrete candidate (the manually-entered or
+ * app-rolled die result) to pass as `manualRoll` — this function only ever
+ * turns a KNOWN roll (or a deterministic mode) into a final HP gain.
+ */
+export function calculateLevelUpHpGain(
+  entity: Entity,
+  die: number,
+  mode: CampaignRules["hpMode"],
+  rules: CampaignRules | undefined,
+  hpAbility: Ability,
+  isVeryFirstLevel: boolean,
+  manualRoll?: number,
+): number {
+  // Use effectiveStats[hpAbility] so race bonuses (e.g. Dwarf +2 CON) feed
+  // into HP. Defaults to CON (standard 5e RAW) — every existing class passes
+  // no explicit ability and is completely unaffected. hpAbility lets a
+  // homebrew class reflavor HP around a different score (e.g. CHA).
+  const abilityMod = modifier(effectiveAbilityScores(entity)[hpAbility]);
+
+  let rolled = isVeryFirstLevel
+    ? die                                           // Very first level: always max die
+    : mode === "max"    ? die
+    : mode === "fixed"  ? Math.floor(die / 2) + 1
+    : manualRoll !== undefined ? manualRoll
+    : rollDie(die);
+
+  // House rule: HP minimum half-die. A rolled value below half the die is bumped
+  // up to half (rounded up), e.g. d10 → minimum 5. Only affects rolled mode
+  // beyond level 1 (fixed/max already meet or exceed this).
+  if (rules && mode === 'rolled' && !isVeryFirstLevel && hpMinHalfDie(rules)) {
+    const halfDie = Math.ceil(die / 2);
+    if (rolled < halfDie) rolled = halfDie;
+  }
+
+  return Math.max(1, rolled + abilityMod);
+}
+
+/**
+ * Closure 4C: strict validation for a manually-entered/rolled level-up HP
+ * die result — a complete positive integer within [1, dieSize]. Same
+ * "reject a partial parse" reasoning as monsterFactory.ts's
+ * isValidManualHp: JS's own parseInt silently accepts "5abc" as 5 and
+ * treats "5.5" as 5, dropping everything after the leading digits — this
+ * requires the ENTIRE trimmed string to be exactly one valid integer.
+ */
+export function isValidHpRoll(draft: string, dieSize: number): boolean {
+  const trimmed = draft.trim();
+  if (!/^[1-9][0-9]*$/.test(trimmed)) return false;
+  const n = parseInt(trimmed, 10);
+  return n >= 1 && n <= dieSize;
+}
+
 export function applyHP(
   entity: Entity,
   die: number,
@@ -385,28 +445,17 @@ export function applyHP(
    * true first level does.
    */
   isVeryFirstLevel: boolean = atLevel === 1,
+  /**
+   * Table-first resolution: when mode === 'rolled', a caller that already
+   * has the physically-rolled die result passes it here instead of letting
+   * this function call rollDie(die) itself. Ignored for every other mode
+   * (isVeryFirstLevel/'max'/'fixed' are already deterministic and must stay
+   * exactly as they were). undefined (every existing caller) reproduces the
+   * previous rollDie(die) behavior exactly — this parameter is additive.
+   */
+  manualRoll?: number,
 ): Entity {
-  // Use effectiveStats[hpAbility] so race bonuses (e.g. Dwarf +2 CON) feed
-  // into HP. Defaults to CON (standard 5e RAW) — every existing class passes
-  // no explicit ability and is completely unaffected. hpAbility lets a
-  // homebrew class reflavor HP around a different score (e.g. CHA).
-  const abilityMod = modifier(effectiveAbilityScores(entity)[hpAbility]);
-
-  let rolled = isVeryFirstLevel
-    ? die                                           // Very first level: always max die
-    : mode === "max"    ? die
-    : mode === "fixed"  ? Math.floor(die / 2) + 1
-    : rollDie(die);
-
-  // House rule: HP minimum half-die. A rolled value below half the die is bumped
-  // up to half (rounded up), e.g. d10 → minimum 5. Only affects rolled mode
-  // beyond level 1 (fixed/max already meet or exceed this).
-  if (rules && mode === 'rolled' && !isVeryFirstLevel && hpMinHalfDie(rules)) {
-    const halfDie = Math.ceil(die / 2);
-    if (rolled < halfDie) rolled = halfDie;
-  }
-
-  const gain = Math.max(1, rolled + abilityMod);
+  const gain = calculateLevelUpHpGain(entity, die, mode, rules, hpAbility, isVeryFirstLevel, manualRoll);
 
   return {
     ...entity,
@@ -1410,6 +1459,12 @@ export function levelUpClass(
   rules: CampaignRules,
   targetClass?: CharClass,
   classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
+  /** Table-first resolution: the physically-rolled HP die result, when
+   *  rules.hpMode === 'rolled' and the UI collected it (manually entered or
+   *  via its own "Roll in App" convenience) before calling this — see
+   *  applyHP's own doc comment. undefined (every existing caller) is
+   *  unaffected. */
+  manualHpRoll?: number,
 ): Entity {
   const classes = getClassLevels(entity).filter(c => c.level > 0);
   targetClass = targetClass ?? classDefinitions.find(c => c.id === targetClassId);
@@ -1436,7 +1491,7 @@ export function levelUpClass(
   // ability away from whichever caster class the character took first.
   const abilityBefore = updated.spellcasting?.ability;
 
-  updated = applyHP(updated, entry.hpDie, rules.hpMode, newClassLevel, rules, progression.hpAbility ?? 'con', isVeryFirstLevel);
+  updated = applyHP(updated, entry.hpDie, rules.hpMode, newClassLevel, rules, progression.hpAbility ?? 'con', isVeryFirstLevel, manualHpRoll);
 
   if (isVeryFirstLevel && targetClass) {
     updated = applyGrant(updated, { kind: "proficiency", value: { armor: targetClass.armorProfs, weapons: targetClass.weaponProfs, tools: targetClass.toolProfs } }, 1, targetClassId);
@@ -1532,11 +1587,18 @@ export function levelUp(
   progression: ClassProgression,
   rules: CampaignRules,
   classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
+  /** Table-first resolution — see levelUpClass's own doc comment. Only
+   *  meaningful (and only ever passed) when going up exactly one level, the
+   *  single "Level Up" button's own usage; a multi-level jump (the
+   *  progression planner) has no single roll to attribute, so this is
+   *  simply threaded to whichever levelUpClass call actually runs — at most
+   *  one, in that case. */
+  manualHpRoll?: number,
 ): Entity {
   let updated = entity;
   const cls = classDefinitions.find(c => c.id === progression.classId);
   for (let lvl = entity.identity.level + 1; lvl <= targetLevel; lvl++) {
-    updated = levelUpClass(updated, progression.classId, progression, rules, cls, classDefinitions);
+    updated = levelUpClass(updated, progression.classId, progression, rules, cls, classDefinitions, manualHpRoll);
   }
   return updated;
 }

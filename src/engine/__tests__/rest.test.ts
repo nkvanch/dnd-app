@@ -4,7 +4,7 @@
 // wrong pool, or recharging both when only one should refresh), so it gets
 // dedicated coverage rather than relying on manual device testing.
 import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
-import { takeRest, spendHitDie, discardHitDie } from '../rest';
+import { takeRest, spendHitDie, discardHitDie, spendHitDieManual, currentHitDieSize } from '../rest';
 import { Entity, SpellSlots, CampaignRules, asClassId } from '../types';
 
 function emptySlots(overrides: Partial<Record<keyof SpellSlots, { total: number; used: number }>> = {}): SpellSlots {
@@ -404,6 +404,110 @@ describe('spendHitDie / discardHitDie with a mixed pool', () => {
       { die: 6, total: 1, remaining: 1 },
     ]);
     expect(result.resources.hitDice.remaining).toBe(3);
+  });
+});
+
+// ── Table-first hit-die healing: manual table roll vs. app roll, one mutation ──
+
+describe('currentHitDieSize', () => {
+  it('returns the size of the largest available pool without spending it', () => {
+    const e = baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        hitDice: {
+          die: 6, total: 4, remaining: 4,
+          pools: [{ die: 10, total: 3, remaining: 3 }, { die: 6, total: 1, remaining: 1 }],
+        },
+      },
+    });
+    expect(currentHitDieSize(e)).toBe(10);
+    expect(e.resources.hitDice.pools![0].remaining).toBe(3); // unspent — pure peek
+  });
+
+  it('falls back to the legacy single `die` field when there are no pools', () => {
+    const e = baseEntity({
+      resources: { ...makeEmptyEntity('e1').resources, hitDice: { die: 8, total: 3, remaining: 3 } },
+    });
+    expect(currentHitDieSize(e)).toBe(8);
+  });
+
+  it('falls back to the legacy `die` field even with none remaining (no pools to check availability against)', () => {
+    const e = baseEntity({
+      resources: { ...makeEmptyEntity('e1').resources, hitDice: { die: 8, total: 3, remaining: 0 } },
+    });
+    expect(currentHitDieSize(e)).toBe(8); // callers gate on `remaining > 0` separately, same as spendHitDie's own guard
+  });
+
+  it('with pools, skips an exhausted pool and returns the largest pool that still has dice remaining', () => {
+    const e = baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        hitDice: {
+          die: 6, total: 4, remaining: 1,
+          pools: [{ die: 10, total: 3, remaining: 0 }, { die: 6, total: 1, remaining: 1 }],
+        },
+      },
+    });
+    expect(currentHitDieSize(e)).toBe(6); // the exhausted d10 pool is skipped
+  });
+});
+
+describe('spendHitDieManual', () => {
+  it('heals using the table-supplied roll (not Math.random) plus CON modifier, and decrements remaining', () => {
+    const e = baseEntity({
+      stats: { str: 10, dex: 10, con: 14, int: 10, wis: 10, cha: 10 }, // +2 CON mod
+      resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 30, temp: 0 }, hitDice: { die: 8, total: 3, remaining: 3 } },
+    });
+    const result = spendHitDieManual(e, 6, DEFAULT_RULES);
+    expect(result.resources.hp.current).toBe(10 + 6 + 2);
+    expect(result.resources.hitDice.remaining).toBe(2);
+  });
+
+  it('never heals above maximum HP even on a high manual entry', () => {
+    const e = baseEntity({
+      resources: { ...makeEmptyEntity('e1').resources, hp: { current: 28, maximum: 30, temp: 0 }, hitDice: { die: 8, total: 3, remaining: 3 } },
+    });
+    const result = spendHitDieManual(e, 8, DEFAULT_RULES);
+    expect(result.resources.hp.current).toBe(30);
+  });
+
+  it('is a no-op when no hit dice remain, same guard as spendHitDie', () => {
+    const e = baseEntity({ resources: { ...makeEmptyEntity('e1').resources, hitDice: { die: 8, total: 3, remaining: 0 } } });
+    const result = spendHitDieManual(e, 5, DEFAULT_RULES);
+    expect(result).toBe(e);
+  });
+
+  it('spends exactly one die from the largest pool, same as spendHitDie, for a mixed pool', () => {
+    const e = baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        hp: { current: 10, maximum: 50, temp: 0 },
+        hitDice: {
+          die: 6, total: 4, remaining: 4,
+          pools: [{ die: 10, total: 3, remaining: 3 }, { die: 6, total: 1, remaining: 1 }],
+        },
+      },
+    });
+    const result = spendHitDieManual(e, 7, DEFAULT_RULES);
+    expect(result.resources.hp.current).toBe(10 + 7);
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 3, remaining: 2 },
+      { die: 6, total: 1, remaining: 1 },
+    ]);
+  });
+
+  it('agrees with spendHitDie: same shared mutation for a given roll value', () => {
+    const originalRandom = Math.random;
+    Math.random = () => 0.5; // d8 → floor(0.5*8)+1 = 5
+    const auto = spendHitDie(baseEntity({
+      resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 30, temp: 0 }, hitDice: { die: 8, total: 3, remaining: 3 } },
+    }), DEFAULT_RULES);
+    Math.random = originalRandom;
+    const manual = spendHitDieManual(baseEntity({
+      resources: { ...makeEmptyEntity('e1').resources, hp: { current: 10, maximum: 30, temp: 0 }, hitDice: { die: 8, total: 3, remaining: 3 } },
+    }), 5, DEFAULT_RULES);
+    expect(manual.resources.hp.current).toBe(auto.resources.hp.current);
+    expect(manual.resources.hitDice.remaining).toBe(auto.resources.hitDice.remaining);
   });
 });
 

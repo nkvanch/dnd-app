@@ -9,15 +9,16 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Modal, TextInput,
 } from 'react-native';
-import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker, ActivationOption, matchesRuleset } from '../../engine/types';
+import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker, ActivationOption, matchesRuleset, Ability } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
-import { toggleActionEconomy } from '../../engine/combat';
-import { recomputeDerived } from '../../engine/pipeline';
-import { levelUp, levelUpClass } from '../../engine/leveling';
+import { toggleActionEconomy, parseRechargeThreshold, rollRecharge } from '../../engine/combat';
+import { recomputeDerived, modifier, effectiveAbilityScores } from '../../engine/pipeline';
+import { rollDie } from '../../engine/leveling';
+import { levelUp, levelUpClass, calculateLevelUpHpGain, isValidHpRoll } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
 import { getClassLevels } from '../../engine/multiclass';
-import { spendHitDie, discardHitDie } from '../../engine/rest';
+import { spendHitDie, spendHitDieManual, currentHitDieSize } from '../../engine/rest';
 import { rollExpression, doubleDiceCount } from '../../engine/dice';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
@@ -238,6 +239,90 @@ function DeathSavesSection({
   );
 }
 
+// ── Table-first rolled-HP gate ────────────────────────────────────────────────
+// Shared by both the single-class and multiclass branches of LevelUpSection
+// below. Primary: enter the physically-rolled die result. Secondary: "Roll
+// in App" rolls the same die via rollDie and resolves through the exact
+// same onResolve callback — never a separate consequence path. Renders
+// nothing (returns null) when `pending` is null, so mounting it
+// unconditionally in both branches is cheap and safe.
+function HpRollGate({
+  pending, draft, onDraftChange, entity, rules, onCancel, onResolve,
+}: {
+  pending: { hpDie: number; hpAbility: Ability } | null;
+  draft: string;
+  onDraftChange: (s: string) => void;
+  entity: Entity;
+  rules: CampaignRules;
+  onCancel: () => void;
+  onResolve: (roll: number) => void;
+}) {
+  if (!pending) return null;
+  const abilityMod = modifier(effectiveAbilityScores(entity)[pending.hpAbility]);
+  // Closure 4C: strict, complete-integer validation (rejects "5abc", "5.5",
+  // "0", and anything above the die size) — replaces a bare parseInt(draft)
+  // check, which silently accepted a partial parse.
+  const validRoll = isValidHpRoll(draft, pending.hpDie);
+  const parsed = validRoll ? parseInt(draft.trim(), 10) : NaN;
+  // Closure 4A/4B: the SAME pure calculation applyHP itself uses — this
+  // preview can never disagree with what Confirm actually applies, and
+  // correctly reflects the hpMinHalfDie house-rule floor (previously
+  // missing from this preview entirely). HpRollGate only ever opens for
+  // rules.hpMode === 'rolled' at a level that isn't the character's very
+  // first (see pressLevelUp/pressLevelUpClass's own gating), so those are
+  // fixed here rather than threaded through `pending`.
+  const previewGain = validRoll
+    ? calculateLevelUpHpGain(entity, pending.hpDie, 'rolled', rules, pending.hpAbility, false, parsed)
+    : null;
+
+  function submit() {
+    if (validRoll) onResolve(parsed);
+  }
+  function rollInApp() {
+    onResolve(rollDie(pending!.hpDie));
+  }
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
+      <Pressable style={styles.hpRollBackdrop} onPress={onCancel}>
+        <Pressable style={styles.hpRollSheet} onPress={e => e.stopPropagation()}>
+          <Text style={styles.hpRollTitle}>Hit Points for This Level</Text>
+          <Text style={styles.hpRollLine}>Hit Die: d{pending.hpDie}</Text>
+          <Text style={styles.hpRollLine}>{pending.hpAbility.toUpperCase()} modifier: {abilityMod >= 0 ? '+' : ''}{abilityMod}</Text>
+
+          <View style={styles.hpRollInputRow}>
+            <Text style={styles.hpRollInputLabel}>Rolled result</Text>
+            <TextInput
+              style={styles.hpRollInput}
+              value={draft}
+              onChangeText={onDraftChange}
+              keyboardType="number-pad"
+              placeholder={`1–${pending.hpDie}`}
+              placeholderTextColor={Colors.textDim}
+              autoFocus
+              onSubmitEditing={submit}
+            />
+          </View>
+          {previewGain !== null && (
+            <Text style={styles.hpRollPreview}>HP increase: {previewGain}</Text>
+          )}
+
+          <Pressable style={[styles.hpRollSubmit, !validRoll && styles.btnDisabled]} disabled={!validRoll} onPress={submit}>
+            <Text style={styles.hpRollSubmitTxt}>Confirm</Text>
+          </Pressable>
+          {/* Secondary convenience — same onResolve path as the manual entry above. */}
+          <Pressable style={styles.hpRollAppBtn} onPress={rollInApp}>
+            <Text style={styles.hpRollAppBtnTxt}>🎲 Roll in App</Text>
+          </Pressable>
+          <Pressable style={styles.closeBtnSm} onPress={onCancel}>
+            <Text style={styles.closeBtnSmTxt}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── Level Up Button ───────────────────────────────────────────────────────────
 
 function LevelUpSection({
@@ -258,6 +343,20 @@ function LevelUpSection({
     title: string; before: Entity; after: Entity;
   } | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
+
+  // Table-first rolled HP: when rules.hpMode === 'rolled', pressing Level Up
+  // (or Add/Level a class) opens this inline gate instead of immediately
+  // rolling — the DM/player enters the physically-rolled die result (or
+  // uses the secondary "Roll in App" convenience), and ONLY THEN does the
+  // real level-up call run, with that exact result threaded through
+  // levelUp/levelUpClass's manualHpRoll parameter. average/fixed/max modes
+  // are entirely unaffected — this gate never opens for them.
+  const [hpRollFor, setHpRollFor] = useState<
+    | { kind: 'single'; hpDie: number; hpAbility: Ability }
+    | { kind: 'class'; targetClassId: string; targetClass?: CharClass; hpDie: number; hpAbility: Ability }
+    | null
+  >(null);
+  const [hpRollDraft, setHpRollDraft] = useState('');
 
   function confirmPendingLevelUp() {
     if (!pendingLevelUp) return;
@@ -297,20 +396,43 @@ function LevelUpSection({
     const progression = resolveProgression(classId, entity.identity.subclassId);
     if (!progression) return null;
     const nextLevel = entity.identity.level + 1;
+    const nextEntry = progression.entries.find(e => e.level === nextLevel);
 
-    async function doLevelUp() {
-      const { before, after } = simulate(entity, e => levelUp(e, nextLevel, progression!, rules, allClasses), rules);
+    async function doLevelUp(manualHpRoll?: number) {
+      const { before, after } = simulate(entity, e => levelUp(e, nextLevel, progression!, rules, allClasses, manualHpRoll), rules);
       // levelUp() can grant fixed cantrips/spells for this level — warm Tier 2
       // for anything new before the entity reaches the engine pipeline.
       await spellRepo.ensureLoaded(spellIdsOnEntity(after));
       setPendingLevelUp({ title: `Level Up (→ ${nextLevel})`, before, after });
     }
 
+    function pressLevelUp() {
+      // Table-first: only rolled mode past the very first level needs a
+      // result at all — max/fixed/average are already deterministic
+      // (applyHP's own isVeryFirstLevel/mode branches), and gating those
+      // would just be an extra tap for no reason.
+      if (rules.hpMode === 'rolled' && entity.identity.level > 0 && nextEntry) {
+        setHpRollDraft('');
+        setHpRollFor({ kind: 'single', hpDie: nextEntry.hpDie, hpAbility: progression!.hpAbility ?? 'con' });
+      } else {
+        void doLevelUp();
+      }
+    }
+
     return (
       <>
-        <Pressable style={styles.levelUpBtn} onPress={() => { void doLevelUp(); }}>
+        <Pressable style={styles.levelUpBtn} onPress={pressLevelUp}>
           <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
         </Pressable>
+        <HpRollGate
+          pending={hpRollFor?.kind === 'single' ? hpRollFor : null}
+          draft={hpRollDraft}
+          onDraftChange={setHpRollDraft}
+          entity={entity}
+          rules={rules}
+          onCancel={() => setHpRollFor(null)}
+          onResolve={roll => { setHpRollFor(null); void doLevelUp(roll); }}
+        />
         {entity.identity.level < maxLevel && (
           <Pressable style={styles.plannerBtn} onPress={() => setPlannerOpen(true)}>
             <Text style={styles.plannerBtnTxt}>🔭 Progression Planner</Text>
@@ -347,11 +469,11 @@ function LevelUpSection({
   // keep working regardless of the character's current ruleset).
   const availableToAdd = allClasses.filter(c => !takenIds.has(asClassId(c.id)) && matchesRuleset(c.rulesetId, entity.rulesetId));
 
-  async function doLevelUpClass(targetClassId: string, targetClass?: CharClass) {
+  async function doLevelUpClass(targetClassId: string, targetClass?: CharClass, manualHpRoll?: number) {
     const existing = classes.find(c => c.classId === targetClassId);
     const progression = resolveProgression(targetClassId, existing?.subclassId ?? null);
     if (!progression) return;
-    const { before, after } = simulate(entity, e => levelUpClass(e, targetClassId, progression!, rules, targetClass, allClasses), rules);
+    const { before, after } = simulate(entity, e => levelUpClass(e, targetClassId, progression!, rules, targetClass, allClasses, manualHpRoll), rules);
     await spellRepo.ensureLoaded(spellIdsOnEntity(after));
     const title = existing
       ? `Level Up ${classLabel(targetClassId)} (→ ${existing.level + 1})`
@@ -360,13 +482,40 @@ function LevelUpSection({
     setAddClassOpen(false); // close the "Add a Class" list modal now — preview takes over
   }
 
+  // Table-first gate, multiclass version of pressLevelUp above — same
+  // reasoning (only rolled mode needs a result; deterministic modes skip
+  // straight to doLevelUpClass).
+  function pressLevelUpClass(targetClassId: string, targetClass?: CharClass) {
+    const existing = classes.find(c => c.classId === targetClassId);
+    const progression = resolveProgression(targetClassId, existing?.subclassId ?? null);
+    const newClassLevel = (existing?.level ?? 0) + 1;
+    const entry = progression?.entries.find(e => e.level === newClassLevel);
+    // Closure 4B: the character's TRUE very first level ever (a from-
+    // scratch, level-0 character taking their first class) always gets max
+    // die regardless of hpMode (see levelUpClass's own isVeryFirstLevel) —
+    // HpRollGate's preview assumes isVeryFirstLevel:false (see its own doc
+    // comment), so this must skip the gate entirely in that case, same as
+    // the single-class path's pre-existing `entity.identity.level > 0`
+    // guard above. Previously this gate DID open here, let the player enter
+    // a value, and then silently discarded it (applyHP ignores manualRoll
+    // when isVeryFirstLevel is true) — a real, if narrow, instance of the
+    // "preview disagrees with what actually happens" bug this closure fixes.
+    const isVeryFirstLevel = entity.identity.level === 0 && newClassLevel === 1;
+    if (rules.hpMode === 'rolled' && entry && !isVeryFirstLevel) {
+      setHpRollDraft('');
+      setHpRollFor({ kind: 'class', targetClassId, targetClass, hpDie: entry.hpDie, hpAbility: progression!.hpAbility ?? 'con' });
+    } else {
+      void doLevelUpClass(targetClassId, targetClass);
+    }
+  }
+
   return (
     <View style={styles.levelUpMcWrap}>
       {classes.map(c => (
         <Pressable
           key={c.classId}
           style={styles.levelUpBtn}
-          onPress={() => { void doLevelUpClass(c.classId); }}
+          onPress={() => pressLevelUpClass(c.classId)}
         >
           <Text style={styles.levelUpBtnTxt}>⬆ Level Up {classLabel(c.classId)} (→ {c.level + 1})</Text>
         </Pressable>
@@ -375,6 +524,20 @@ function LevelUpSection({
       <Pressable style={styles.addClassBtn} onPress={() => setAddClassOpen(true)}>
         <Text style={styles.addClassBtnTxt}>+ Add a Class</Text>
       </Pressable>
+
+      <HpRollGate
+        pending={hpRollFor?.kind === 'class' ? hpRollFor : null}
+        draft={hpRollDraft}
+        onDraftChange={setHpRollDraft}
+        entity={entity}
+        rules={rules}
+        onCancel={() => setHpRollFor(null)}
+        onResolve={roll => {
+          const pending = hpRollFor;
+          setHpRollFor(null);
+          if (pending?.kind === 'class') void doLevelUpClass(pending.targetClassId, pending.targetClass, roll);
+        }}
+      />
 
       {entity.identity.level < maxLevel && (
         <Pressable style={styles.plannerBtn} onPress={() => setPlannerOpen(true)}>
@@ -404,7 +567,7 @@ function LevelUpSection({
               <Pressable
                 key={c.id}
                 style={styles.addClassRow}
-                onPress={() => { void doLevelUpClass(c.id, c); }}
+                onPress={() => pressLevelUpClass(c.id, c)}
               >
                 <Text style={styles.addClassRowTxt}>{c.name}</Text>
               </Pressable>
@@ -817,6 +980,10 @@ function TabCharacterInner({
   // Inline hit-die result — shown for 3s then cleared, no Alert needed
   const [hitDieResult, setHitDieResult] = useState<string | null>(null);
   const hitDieTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Table-first: "Use Hit Die" opens this inline entry instead of an Alert —
+  // same compact pattern as the death-save/initiative inline controls.
+  const [hitDieEntry, setHitDieEntry] = useState(false);
+  const [hitDieDraft, setHitDieDraft] = useState('');
 
   function showHitDieResult(msg: string) {
     setHitDieResult(msg);
@@ -942,10 +1109,25 @@ function TabCharacterInner({
     const healed = updated.resources.hp.current - before;
     showHitDieResult(`+${healed} HP restored`);
   }
-  function handleDiscardHitDie() {
+  // Table-first primary path: the die was already rolled physically —
+  // enter that result, spend the die and heal in one action via the exact
+  // same final mutation (healFromSpentHitDie, inside spendHitDieManual)
+  // handleRollHitDie's in-app convenience uses.
+  function openHitDieEntry() {
     if (resources.hitDice.remaining <= 0) return;
-    onEntityUpdate(discardHitDie(entity, rules));
-    showHitDieResult('Hit die spent — roll your die and heal');
+    setHitDieDraft('');
+    setHitDieEntry(true);
+  }
+  function submitHitDieEntry() {
+    const dieSize = currentHitDieSize(entity);
+    const roll = parseInt(hitDieDraft, 10);
+    if (isNaN(roll) || roll < 1 || roll > dieSize) return;
+    const before  = resources.hp.current;
+    const updated = spendHitDieManual(entity, roll, rules);
+    onEntityUpdate(updated);
+    const healed = updated.resources.hp.current - before;
+    showHitDieResult(`+${healed} HP restored`);
+    setHitDieEntry(false);
   }
 
   function openAudit(stat: string, label: string) {
@@ -1207,23 +1389,47 @@ function TabCharacterInner({
             }
           </Text>
         </View>
-        <View style={styles.hitDieRow}>
-          <Pressable
-            style={[styles.hitDieBtn, styles.hitDieRoll, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
-            onPress={handleRollHitDie}
-            disabled={resources.hitDice.remaining <= 0}
-          >
-            <Text style={styles.useHitDieTxt}>🎲 Roll Hit Die</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.hitDieBtn, styles.hitDieUse, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
-            onPress={handleDiscardHitDie}
-            disabled={resources.hitDice.remaining <= 0}
-          >
-            <Text style={styles.hitDieUseTxt}>Use Hit Die</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.hitDieHint}>Roll: app rolls the die + heals you.  Use: spend one and roll your own.</Text>
+        {hitDieEntry ? (
+          <View style={styles.hitDieEntryRow}>
+            <Text style={styles.hitDieEntryLabel}>Rolled (1–d{currentHitDieSize(entity)}):</Text>
+            <TextInput
+              style={styles.hitDieEntryInput}
+              value={hitDieDraft}
+              onChangeText={setHitDieDraft}
+              keyboardType="number-pad"
+              placeholder="e.g. 6"
+              placeholderTextColor={Colors.textDim}
+              autoFocus
+              onSubmitEditing={submitHitDieEntry}
+            />
+            <Pressable style={styles.hitDieEntrySubmit} onPress={submitHitDieEntry}>
+              <Text style={styles.hitDieEntrySubmitTxt}>Heal</Text>
+            </Pressable>
+            <Pressable style={styles.hitDieEntryCancel} onPress={() => setHitDieEntry(false)}>
+              <Text style={styles.hitDieEntryCancelTxt}>✕</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.hitDieRow}>
+            {/* Primary — table-first: the die was already rolled physically. */}
+            <Pressable
+              style={[styles.hitDieBtn, styles.hitDieUse, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
+              onPress={openHitDieEntry}
+              disabled={resources.hitDice.remaining <= 0}
+            >
+              <Text style={styles.hitDieUseTxt}>Use Hit Die</Text>
+            </Pressable>
+            {/* Secondary convenience — rolls, then the exact same mutation. */}
+            <Pressable
+              style={[styles.hitDieBtn, styles.hitDieRoll, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
+              onPress={handleRollHitDie}
+              disabled={resources.hitDice.remaining <= 0}
+            >
+              <Text style={styles.useHitDieTxt}>🎲 Roll in App</Text>
+            </Pressable>
+          </View>
+        )}
+        <Text style={styles.hitDieHint}>Use: enter your table roll and heal.  Roll: app rolls and heals for you.</Text>
         {hitDieResult && (
           <Text style={styles.dieResultTxt}>{hitDieResult}</Text>
         )}
@@ -1348,7 +1554,19 @@ function TabCharacterInner({
       {resources.custom.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>RESOURCES</Text>
-          {resources.custom.map(r => (
+          {resources.custom.map(r => {
+            // Table-first recharge: the +/- controls below are already the
+            // PRIMARY "mark recharged" path (a DM/player just taps + after
+            // rolling physically). This adds only the secondary "Roll
+            // Recharge" convenience for a resource whose recharge string
+            // parses as "Recharge X-6" — rolls 1d6 in app and, on success,
+            // restores via the exact same onResourceChange the + button
+            // uses (to full, matching the real rule: a recharge success
+            // restores the whole ability, not one charge). Resources that
+            // don't parse this way (rest-based, start_of_turn, freeform
+            // homebrew text) show no roll button — nothing invented for them.
+            const rechargeThreshold = parseRechargeThreshold(r.recharge);
+            return (
             <View key={r.id} style={styles.resourceRow}>
               <View style={styles.resourceInfo}>
                 <Text style={styles.resourceName}>{r.name}</Text>
@@ -1364,9 +1582,22 @@ function TabCharacterInner({
                 <Pressable style={styles.resBtn} onPress={() => onResourceChange(r.id, 1)} disabled={r.current >= r.maximum}>
                   <Text style={[styles.resBtnTxt, r.current >= r.maximum && styles.disabled]}>+</Text>
                 </Pressable>
+                {rechargeThreshold !== null && r.current < r.maximum && (
+                  <Pressable
+                    style={styles.rechargeBtn}
+                    onPress={() => {
+                      const { roll, success } = rollRecharge(rechargeThreshold);
+                      if (success) onResourceChange(r.id, r.maximum - r.current);
+                      showHitDieResult(`${r.name}: rolled ${roll} — ${success ? 'recharged!' : 'no charge'}`);
+                    }}
+                  >
+                    <Text style={styles.rechargeBtnTxt}>🎲</Text>
+                  </Pressable>
+                )}
               </View>
             </View>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -1679,7 +1910,7 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, alignItems: 'center',
   },
   useHitDieBtnDisabled: { opacity: 0.4 },
-  useHitDieTxt: { color: Colors.green, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  useHitDieTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 
   // Weapon attacks
   weaponRow: {
@@ -1922,6 +2153,11 @@ const styles = StyleSheet.create({
   resourceCount: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, minWidth: 40, textAlign: 'center' },
   resourceMax:   { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.normal },
   disabled:      { opacity: 0.3 },
+  rechargeBtn: {
+    width: 28, height: 28, borderRadius: Radius.full,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  rechargeBtnTxt: { fontSize: FontSize.md },
 
   slotGrid:  { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   slotBlock: { alignItems: 'center', gap: 4, minWidth: 50 },
@@ -1954,6 +2190,28 @@ const styles = StyleSheet.create({
   rollBtnTxt:       { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   closeBtnSm:       { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center' },
   closeBtnSmTxt:    { color: Colors.textSecondary, fontSize: FontSize.md },
+  btnDisabled:      { opacity: 0.4 },
+  // Table-first rolled-HP gate (HpRollGate)
+  hpRollBackdrop: { flex: 1, backgroundColor: '#000000bb', justifyContent: 'center', padding: Spacing.lg },
+  hpRollSheet: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.gold + '44',
+    padding: Spacing.lg, gap: Spacing.sm,
+  },
+  hpRollTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold, textAlign: 'center' },
+  hpRollLine:  { fontSize: FontSize.md, color: Colors.textPrimary, textAlign: 'center' },
+  hpRollInputRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, justifyContent: 'center' },
+  hpRollInputLabel: { color: Colors.textSecondary, fontSize: FontSize.sm },
+  hpRollInput: {
+    width: 80, backgroundColor: Colors.surface, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.gold, color: Colors.textPrimary,
+    textAlign: 'center', paddingVertical: 6, fontSize: FontSize.md,
+  },
+  hpRollPreview: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.green, textAlign: 'center' },
+  hpRollSubmit:    { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  hpRollSubmitTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  hpRollAppBtn:    { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
+  hpRollAppBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   // Condition picker
   condPickerSheet: {
@@ -1977,9 +2235,22 @@ const styles = StyleSheet.create({
   // Hit dice buttons
   hitDieRow:    { flexDirection: 'row', gap: Spacing.sm },
   hitDieBtn:    { flex: 1, borderRadius: Radius.md, borderWidth: 1, padding: Spacing.sm, alignItems: 'center' },
-  hitDieRoll:   { backgroundColor: Colors.green + '22', borderColor: Colors.green + '66' },
-  hitDieUse:    { backgroundColor: Colors.surfaceHigh, borderColor: Colors.border },
-  hitDieUseTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  // Table-first: Use Hit Die (manual entry) is the visually primary action;
+  // Roll in App (useHitDieTxt below) is the secondary convenience.
+  hitDieRoll:   { backgroundColor: Colors.surfaceHigh, borderColor: Colors.border },
+  hitDieUse:    { backgroundColor: Colors.green + '22', borderColor: Colors.green + '66' },
+  hitDieUseTxt: { color: Colors.green, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  hitDieEntryRow:       { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
+  hitDieEntryLabel:     { color: Colors.textSecondary, fontSize: FontSize.sm },
+  hitDieEntryInput: {
+    flex: 1, backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.green, color: Colors.textPrimary,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4, fontSize: FontSize.md,
+  },
+  hitDieEntrySubmit:    { backgroundColor: Colors.green, borderRadius: Radius.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  hitDieEntrySubmitTxt: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  hitDieEntryCancel:    { padding: Spacing.sm },
+  hitDieEntryCancelTxt: { color: Colors.textDim, fontSize: FontSize.md },
   hitDieHint:   { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic', marginTop: 4 },
   // Inline result text (hit die + death saves)
   dieResultTxt: {

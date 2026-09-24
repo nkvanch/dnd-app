@@ -63,17 +63,25 @@ describe('Lich legendary actions — real content, real pipeline', () => {
     expect(lich.turnState).toEqual({ actionUsed: false, bonusActionUsed: false, reactionUsed: false });
   });
 
-  it('a mechanical legendary action (Frightening Gaze) spends its resource cost AND applies its condition (ARCH-2 fix — damage stays a manual roll, but apply_condition is no longer disclosed-only)', () => {
+  it('a target-contingent legendary action (Frightening Gaze) spends its resource cost but does NOT self-apply its condition (table-first correction)', () => {
     let lich = spawnMonster(monsterLich, DEFAULT_RULES);
     const frighten = lich.features.find(f => f.id === 'lich_legendary_frightening_gaze')!;
     lich = applyActionCardUse(lich, generateActionCard(frighten, lich)!, DEFAULT_RULES);
-    expect(lich.resources.custom.find(r => r.id === 'legendary_actions')?.current).toBe(1); // costs 2 of 3
-    // Previously asserted toHaveLength(0) — apply_condition was a no-op
-    // before ARCH-2's fix. applyAbilityEffects now actually applies it,
-    // proven here through the real content pipeline, not a synthetic
-    // fixture (matching this file's own stated purpose).
-    expect(lich.conditions).toHaveLength(1);
-    expect(lich.conditions[0].id).toBe('frightened');
+    expect(lich.resources.custom.find(r => r.id === 'legendary_actions')?.current).toBe(1); // costs 2 of 3 — spends regardless of the save's outcome, correctly unaffected by this change
+    // Frightening Gaze's own activation is target:'single', requiresSave
+    // (DC 18 WIS) — "one creature it can see... DC 18 WIS save or
+    // frightened". The ARCH-2 fix (this test's previous version) made
+    // apply_condition actually apply, but applied it to the LICH ITSELF
+    // (lich.conditions), since applyAbilityEffects had no way to know this
+    // effect was meant for a target the lich chooses, contingent on a save
+    // it doesn't even make — a real bug, not a lesser evil than the no-op
+    // it replaced. Table-first correction: applyAbilityEffects now only
+    // auto-applies apply_condition for a self-targeting, unconditional
+    // activation (Rage-style). A target-contingent one like this is left
+    // for the DM to resolve at the table and apply to whichever creature
+    // actually failed its save, via the app's existing manual condition
+    // picker — see combat.ts's applyAbilityEffects doc comment.
+    expect(lich.conditions).toHaveLength(0);
   });
 
   it("startTurn refreshes the pool back to full at the start of the lich's own turn", () => {

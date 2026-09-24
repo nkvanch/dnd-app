@@ -12,12 +12,17 @@ import {
   parseConcentrationDuration, tickConcentrationDuration, startEncounter,
   startTurn, markActionSlotUsed, toggleActionEconomy, endTurn, addToEncounter,
   applyAbilityEffects, playerEndTurn,
-  CombatState,
+  rollInitiativeValue, rollAllInitiative,
+  rollConcentrationSave, resolveConcentrationOutcome,
+  parseRechargeThreshold, rollRecharge, extractRechargeTag,
+  extractRechargeTagFromName, resolveFeatureRechargeTag, findRechargeableFeatures,
+  sortInitiative, reanchorTurnIndex,
+  CombatState, InitiativeEntry,
 } from '../combat';
 import { applyCondition } from '../conditions';
 import { isFeatureAvailable } from '../actionCards';
 import { setRandomSource } from '../dice';
-import { Entity, SpellSlots, FeatureInstance, Spell, AbilityEffect } from '../types';
+import { Entity, SpellSlots, FeatureInstance, Spell, AbilityEffect, FeatureActivation } from '../types';
 
 /** A fresh level-1 test entity with known HP/stats, independent of any
  *  particular class/race content so these tests don't break if content
@@ -789,5 +794,408 @@ describe('applyAbilityEffects — apply_condition / remove_condition (ARCH-2)', 
       { type: 'grant_speed', speedType: 'fly', amount: 30, duration: { unit: 'rounds', remaining: 1 } },
     ]);
     expect(after.derived.movement?.fly ?? 0).toBe(entity.derived.movement?.fly ?? 0);
+  });
+
+  // Table-first correction, on top of ARCH-2 above: apply_condition/
+  // remove_condition now only auto-apply for a self-targeting, unconditional
+  // activation. A target-contingent one (not target:'self', or requiresSave
+  // set — e.g. a monster's "target makes a save or becomes X" attack) is
+  // left for manual/table resolution instead of silently applying to
+  // whichever entity used the ability. See legendaryActions.test.ts's Lich
+  // Frightening Gaze test for the same fix proven through real content.
+  const selfActivation: FeatureActivation = { actionType: 'free', resourceCost: null, range: 'self', target: 'self', requiresSave: null };
+  const targetActivation: FeatureActivation = { actionType: 'action', resourceCost: null, range: '10 feet', target: 'single', requiresSave: { ability: 'wis', dc: 15 } };
+
+  it('a self-targeting, unconditional activation (no `activation` arg — every pre-existing caller) still applies apply_condition immediately', () => {
+    const entity = testEntity();
+    const after = applyAbilityEffects(entity, [
+      { type: 'apply_condition', conditionId: 'grappled', duration: { unit: 'rounds', remaining: 1 } },
+    ]);
+    expect(after.conditions.some(c => c.id === 'grappled')).toBe(true);
+  });
+
+  it('an explicit self-targeting, unconditional activation still applies apply_condition immediately', () => {
+    const entity = testEntity();
+    const after = applyAbilityEffects(entity, [
+      { type: 'apply_condition', conditionId: 'grappled', duration: { unit: 'rounds', remaining: 1 } },
+    ], DEFAULT_RULES, selfActivation);
+    expect(after.conditions.some(c => c.id === 'grappled')).toBe(true);
+  });
+
+  it('a target-contingent activation (target:"single" + requiresSave) does NOT apply apply_condition to the entity using the ability', () => {
+    const entity = testEntity();
+    const after = applyAbilityEffects(entity, [
+      { type: 'apply_condition', conditionId: 'frightened', duration: { unit: 'minutes', remaining: 1 } },
+    ], DEFAULT_RULES, targetActivation);
+    expect(after.conditions).toHaveLength(0);
+    expect(after).not.toBe(entity); // still a real (if identical-in-conditions) recomputed entity, not a bypass
+  });
+
+  it('a target-contingent activation does NOT apply remove_condition either', () => {
+    let entity = testEntity();
+    entity = applyAbilityEffects(entity, [
+      { type: 'apply_condition', conditionId: 'grappled', duration: { unit: 'rounds', remaining: 1 } },
+    ]); // self/unconditional call — establishes the condition to try to remove
+    expect(entity.conditions.some(c => c.id === 'grappled')).toBe(true);
+
+    const after = applyAbilityEffects(entity, [
+      { type: 'remove_condition', conditionId: 'grappled' },
+    ], DEFAULT_RULES, targetActivation);
+    expect(after.conditions.some(c => c.id === 'grappled')).toBe(true); // untouched
+  });
+
+  it('deterministic self effects (set_flag, restore_resource) still apply immediately regardless of activation contingency', () => {
+    const entity = { ...testEntity(), resources: { ...testEntity().resources, custom: [{ id: 'r1', name: 'R', current: 0, maximum: 3, recharge: 'long_rest' }] } };
+    const after = applyAbilityEffects(entity, [
+      { type: 'set_flag', flag: 'rage_active', value: true },
+      { type: 'restore_resource', resourceId: 'r1', amount: 1 },
+    ], DEFAULT_RULES, targetActivation); // even under a target-contingent activation
+    expect(after.conditionMonitor.flags.rage_active).toBe(true);
+    expect(after.resources.custom.find(r => r.id === 'r1')?.current).toBe(1);
+  });
+});
+
+// ── Table-first initiative: manual by default, roll is opt-in ───────────────
+
+describe('startEncounter — roll parameter (table-first)', () => {
+  afterEach(() => setRandomSource(Math.random));
+
+  it('roll:false seeds every entry at initiative 0, sorted by tiebreak alone', () => {
+    const low  = { ...testEntity(10), id: 'low',  identity: { ...testEntity(10).identity, name: 'Low' },  derived: { ...testEntity(10).derived, initiative: 1 } };
+    const high = { ...testEntity(10), id: 'high', identity: { ...testEntity(10).identity, name: 'High' }, derived: { ...testEntity(10).derived, initiative: 5 } };
+    const result = startEncounter([low, high], 'enc1', undefined, false);
+    expect(result.order.map(e => e.initiative)).toEqual([0, 0]);
+    expect(result.order.map(e => e.entityId)).toEqual(['high', 'low']); // tiebreak still orders them
+  });
+
+  it('roll:true (and the default, for backward compatibility) still rolls', () => {
+    setRandomSource(() => 0.5); // d20 roll of 11
+    const e = testEntity(10);
+    const result = startEncounter([e], 'enc1', undefined, true);
+    expect(result.order[0].initiative).not.toBe(0);
+  });
+
+  it('omitting roll entirely defaults to true — no existing caller/test is affected', () => {
+    setRandomSource(() => 0.5);
+    const e = testEntity(10);
+    const result = startEncounter([e], 'enc1');
+    expect(result.order[0].initiative).not.toBe(0);
+  });
+});
+
+describe('addToEncounter — roll parameter (table-first)', () => {
+  afterEach(() => setRandomSource(Math.random));
+
+  it('roll:false seeds reinforcements at 0 instead of rolling', () => {
+    const combat: CombatState = {
+      active: true, round: 1, turnIndex: 0,
+      order: [{ entityId: 'a', name: 'A', initiative: 10, tiebreak: 0, isPlayer: true, hasTakenTurn: false }],
+      encounterId: 'e1',
+    };
+    const reinforcement = { ...testEntity(10), id: 'new1', identity: { ...testEntity(10).identity, name: 'new1' } };
+    const result = addToEncounter(combat, [reinforcement], false);
+    expect(result.order.find(e => e.entityId === 'new1')?.initiative).toBe(0);
+  });
+});
+
+describe('rollInitiativeValue', () => {
+  afterEach(() => setRandomSource(Math.random));
+
+  it('rolls a d20 against entity.derived.initiative', () => {
+    setRandomSource(() => 0); // d20 roll of 1
+    const e = { ...testEntity(10), derived: { ...testEntity(10).derived, initiative: 4 } };
+    expect(rollInitiativeValue(e)).toBe(5);
+  });
+});
+
+describe('rollAllInitiative', () => {
+  afterEach(() => setRandomSource(Math.random));
+
+  it('rolls and re-sorts every entry currently in the order, using each live entity\'s own initiative modifier', () => {
+    // entity.derived.initiative doubles as both the d20 roll's modifier and
+    // the sort tiebreak (see rollAllInitiative's own implementation) — give
+    // a and b different modifiers so the re-roll visibly changes the order.
+    const a = { ...testEntity(10), id: 'a', identity: { ...testEntity(10).identity, name: 'a' }, derived: { ...testEntity(10).derived, initiative: 0 } };
+    const b = { ...testEntity(10), id: 'b', identity: { ...testEntity(10).identity, name: 'b' }, derived: { ...testEntity(10).derived, initiative: 5 } };
+    const combat: CombatState = {
+      active: true, round: 1, turnIndex: 0,
+      order: [
+        { entityId: 'a', name: 'a', initiative: 99, tiebreak: 0, isPlayer: true, hasTakenTurn: false }, // stale value from a prior roll
+        { entityId: 'b', name: 'b', initiative: 1,  tiebreak: 0, isPlayer: true, hasTakenTurn: false },
+      ],
+      encounterId: 'e1',
+    };
+    setRandomSource(() => 0); // both roll a 1 on the die itself
+    const result = rollAllInitiative(combat, [a, b]);
+    expect(result.order.map(e => ({ id: e.entityId, initiative: e.initiative }))).toEqual([
+      { id: 'b', initiative: 6 }, // 1 + modifier 5 — now correctly ahead of a despite a's stale 99
+      { id: 'a', initiative: 1 }, // 1 + modifier 0
+    ]);
+  });
+
+  it('leaves an entry alone if its entity is no longer present', () => {
+    const combat: CombatState = {
+      active: true, round: 1, turnIndex: 0,
+      order: [{ entityId: 'ghost', name: 'ghost', initiative: 5, tiebreak: 0, isPlayer: false, hasTakenTurn: false }],
+      encounterId: 'e1',
+    };
+    const result = rollAllInitiative(combat, []);
+    expect(result.order[0].initiative).toBe(5); // unchanged, no crash
+  });
+
+  // Closure 1 (active-actor stability): re-rolling the whole order must not
+  // silently hand the turn to whoever else lands at the previous position.
+  it("re-anchors turnIndex to the currently-acting entity's new position after Roll All Initiative", () => {
+    const a = { ...testEntity(10), id: 'a', identity: { ...testEntity(10).identity, name: 'a' }, derived: { ...testEntity(10).derived, initiative: 0 } };
+    const b = { ...testEntity(10), id: 'b', identity: { ...testEntity(10).identity, name: 'b' }, derived: { ...testEntity(10).derived, initiative: 20 } };
+    const c = { ...testEntity(10), id: 'c', identity: { ...testEntity(10).identity, name: 'c' }, derived: { ...testEntity(10).derived, initiative: 0 } };
+    const combat: CombatState = {
+      active: true, round: 1, turnIndex: 1, // 'b' currently has the turn, sitting in the middle
+      order: [
+        { entityId: 'a', name: 'a', initiative: 20, tiebreak: 0,  isPlayer: true, hasTakenTurn: true },
+        { entityId: 'b', name: 'b', initiative: 10, tiebreak: 20, isPlayer: true, hasTakenTurn: false },
+        { entityId: 'c', name: 'c', initiative: 5,  tiebreak: 0,  isPlayer: true, hasTakenTurn: false },
+      ],
+      encounterId: 'e1',
+    };
+    setRandomSource(() => 0.99); // near-max roll — b's +20 modifier now puts it comfortably first
+    const result = rollAllInitiative(combat, [a, b, c]);
+    expect(result.order[result.turnIndex].entityId).toBe('b'); // still 'b', regardless of where the re-roll placed it
+  });
+});
+
+// ── reanchorTurnIndex (shared active-actor stability helper) ────────────────
+
+describe('reanchorTurnIndex', () => {
+  function entry(id: string): InitiativeEntry {
+    return { entityId: id, name: id, initiative: 0, tiebreak: 0, isPlayer: true, hasTakenTurn: false };
+  }
+
+  it('finds the current entity at its new position after a reorder', () => {
+    const order = [entry('c'), entry('b'), entry('a')]; // reordered from [a,b,c]
+    expect(reanchorTurnIndex(order, 'b', 1)).toBe(1); // b stayed at index 1, coincidentally
+    expect(reanchorTurnIndex(order, 'a', 0)).toBe(2); // a moved from 0 to 2 — followed, not left stale
+  });
+
+  it('falls back to the previous index, clamped, when the entity is no longer present', () => {
+    const order = [entry('x'), entry('y')];
+    expect(reanchorTurnIndex(order, 'gone', 5)).toBe(1); // clamped to the last valid index
+    expect(reanchorTurnIndex(order, undefined, 0)).toBe(0);
+  });
+
+  it('clamps to 0 for an empty order', () => {
+    expect(reanchorTurnIndex([], 'anyone', 3)).toBe(0);
+  });
+});
+
+// ── Table-first concentration: manual result vs. app roll, one resolution path ──
+
+describe('rollConcentrationSave + resolveConcentrationOutcome (table-first split of concentrationCheck)', () => {
+  afterEach(() => setRandomSource(Math.random));
+
+  function concentratingEntity(conBonus: number, overrides: Partial<Entity> = {}): Entity {
+    const e = testEntity();
+    return {
+      ...e,
+      ...overrides,
+      derived: { ...e.derived, savingThrows: { ...e.derived.savingThrows, con: conBonus } },
+      spellcasting: {
+        ability: 'int', known: [], cantrips: [], prepared: [], slots: {} as SpellSlots,
+        concentrating: 'bless',
+        concentratingDuration: undefined,
+      },
+      features: [
+        ...(overrides.features ?? []),
+        {
+          id: 'spell_effect_1', name: 'Bless Effect', description: '', level: null,
+          effects: [], actions: [], choices: [], passive: true, isActive: true,
+          source: { kind: 'spell', refId: 'bless' },
+        },
+      ],
+    };
+  }
+
+  it('rollConcentrationSave computes DC/roll/passed without mutating anything', () => {
+    const e = concentratingEntity(5);
+    setRandomSource(() => 0.9); // d20 roll of 19, +5 = 24
+    const result = rollConcentrationSave(e, 10); // DC 10
+    expect(result).toEqual({ passed: true, dc: 10, roll: 24 });
+    expect(e.spellcasting!.concentrating).toBe('bless'); // untouched — pure computation
+  });
+
+  it('resolveConcentrationOutcome(entity, true) keeps concentration', () => {
+    const e = concentratingEntity(0);
+    const after = resolveConcentrationOutcome(e, true);
+    expect(after.spellcasting!.concentrating).toBe('bless');
+    expect(after.features.some(f => f.id === 'spell_effect_1')).toBe(true);
+  });
+
+  it('resolveConcentrationOutcome(entity, false) drops concentration — same cleanup as concentrationCheck', () => {
+    const e = concentratingEntity(0);
+    const after = resolveConcentrationOutcome(e, false);
+    expect(after.spellcasting!.concentrating).toBeNull();
+    expect(after.features.some(f => f.id === 'spell_effect_1')).toBe(false);
+    expect(after.conditionMonitor.flags.concentrating).toBe(false);
+  });
+
+  it('resolveConcentrationOutcome is a no-op when not concentrating, for either outcome', () => {
+    const e = testEntity();
+    expect(resolveConcentrationOutcome(e, true)).toBe(e);
+    expect(resolveConcentrationOutcome(e, false)).toBe(e);
+  });
+
+  it('manual buttons and the app-roll convenience agree: concentrationCheck itself composes the exact same two split functions', () => {
+    const e = concentratingEntity(0);
+    setRandomSource(() => 0); // fails any DC >= 10
+    const viaConcentrationCheck = concentrationCheck(e, 10, DEFAULT_RULES);
+    const { passed } = rollConcentrationSave(e, 10);
+    const viaSplit = resolveConcentrationOutcome(e, passed);
+    expect(viaConcentrationCheck.spellcasting!.concentrating).toBe(viaSplit.spellcasting!.concentrating);
+  });
+});
+
+// ── Table-first recharge (e.g. "Recharge 5-6") ───────────────────────────────
+
+describe('parseRechargeThreshold', () => {
+  it('parses "Recharge 5-6" (and the en-dash variant) to the minimum face', () => {
+    expect(parseRechargeThreshold('Recharge 5-6')).toBe(5);
+    expect(parseRechargeThreshold('Recharge 5–6')).toBe(5);
+  });
+
+  it('parses a bare single-value "Recharge 6"', () => {
+    expect(parseRechargeThreshold('Recharge 6')).toBe(6);
+  });
+
+  it('is case-insensitive', () => {
+    expect(parseRechargeThreshold('recharge 4-6')).toBe(4);
+  });
+
+  it('returns null for rest-based, start_of_turn, and freeform text that is not a recharge pattern', () => {
+    expect(parseRechargeThreshold('short_rest')).toBeNull();
+    expect(parseRechargeThreshold('long_rest')).toBeNull();
+    expect(parseRechargeThreshold('start_of_turn')).toBeNull();
+    expect(parseRechargeThreshold('dawn')).toBeNull();
+    expect(parseRechargeThreshold('never')).toBeNull();
+    expect(parseRechargeThreshold('once per short or long rest')).toBeNull();
+  });
+
+  // Closure 3E: anchored parsing — the whole trimmed string must be exactly
+  // "Recharge N" or "Recharge N-6", nothing more, nothing less.
+  it('rejects "Recharge 4-5" — the engine only models X-6 semantics, never X-5', () => {
+    expect(parseRechargeThreshold('Recharge 4-5')).toBeNull();
+  });
+
+  it('rejects trailing junk after an otherwise-valid pattern', () => {
+    expect(parseRechargeThreshold('Recharge 5-6 extra junk')).toBeNull();
+  });
+
+  it('rejects a recharge-shaped substring embedded in a longer sentence', () => {
+    expect(parseRechargeThreshold('This ability has a Recharge 5-6 that only triggers sometimes')).toBeNull();
+  });
+
+  it('tolerates surrounding whitespace on an otherwise exact match', () => {
+    expect(parseRechargeThreshold('  Recharge 5-6  ')).toBe(5);
+  });
+
+  it('rejects a threshold outside 2-6', () => {
+    expect(parseRechargeThreshold('Recharge 1')).toBeNull();
+  });
+});
+
+describe('extractRechargeTag (closure 3A: pulling a recharge clause out of a real stat-block description)', () => {
+  it('extracts "Recharge 5-6" from the start of a real description, dropping the trailing period and the rest of the sentence', () => {
+    expect(extractRechargeTag('Recharge 5-6. The dragon head exhales fire in a 15-foot cone.')).toBe('Recharge 5-6');
+  });
+
+  it('extracts a bare "Recharge 6" form', () => {
+    expect(extractRechargeTag('Recharge 6. A 15-ft.-radius cloud of toxic spores extends from the vrock.')).toBe('Recharge 6');
+  });
+
+  it('extracts "Recharge 4-6" (a real non-5 threshold seen in this content)', () => {
+    expect(extractRechargeTag("Recharge 4-6. Each creature in the elemental's space makes a DC 15 STR save.")).toBe('Recharge 4-6');
+  });
+
+  it('is case-insensitive and tolerates the en-dash variant', () => {
+    expect(extractRechargeTag('recharge 5–6. Some effect.')).toBe('recharge 5–6');
+  });
+
+  it('returns null when the description has no leading Recharge clause at all', () => {
+    expect(extractRechargeTag('Melee Weapon Attack: +7 to hit, reach 5 ft., one target.')).toBeNull();
+  });
+
+  it('returns null for a malformed "Recharge 4-5" clause (not X-6)', () => {
+    expect(extractRechargeTag('Recharge 4-5. Some effect.')).toBeNull();
+  });
+
+  it('returns null when the recharge clause is NOT at the very start of the description', () => {
+    expect(extractRechargeTag('This creature has a Recharge 5-6. effect somewhere in the middle.')).toBeNull();
+  });
+
+  it('returns null when there is no terminating period at all', () => {
+    expect(extractRechargeTag('Recharge 5-6 with no period')).toBeNull();
+  });
+});
+
+describe('extractRechargeTagFromName (closure 2C: name-suffix recharge form)', () => {
+  it('extracts "Recharge 6" from a real name suffix — the Ghost\'s "Possession (Recharge 6)"', () => {
+    expect(extractRechargeTagFromName('Possession (Recharge 6)')).toBe('Recharge 6');
+  });
+
+  it('supports the hyphen and en-dash "(Recharge 5-6)" / "(Recharge 5–6)" forms', () => {
+    expect(extractRechargeTagFromName('Fire Breath (Recharge 5-6)')).toBe('Recharge 5-6');
+    expect(extractRechargeTagFromName('Fire Breath (Recharge 5–6)')).toBe('Recharge 5–6');
+  });
+
+  it('is anchored to the END of the name — trailing junk after the parenthesized form is rejected', () => {
+    expect(extractRechargeTagFromName('Fire Breath (Recharge 5-6) extra')).toBeNull();
+  });
+
+  it('rejects a real other-monster name that merely contains the word "Recharge" pluralized — "Leadership (Recharges After a Short/Long Rest)"', () => {
+    expect(extractRechargeTagFromName('Leadership (Recharges After a Short/Long Rest)')).toBeNull();
+    expect(extractRechargeTagFromName('Animate Chains (Recharges After a Short/Long Rest)')).toBeNull();
+  });
+
+  it('rejects a malformed "(Recharge 4-5)" suffix (not X-6)', () => {
+    expect(extractRechargeTagFromName('Something (Recharge 4-5)')).toBeNull();
+  });
+
+  it('returns null for a name with no parenthesized recharge suffix at all', () => {
+    expect(extractRechargeTagFromName('Multiattack')).toBeNull();
+  });
+});
+
+describe('resolveFeatureRechargeTag (closure 2C: combined name/description resolution)', () => {
+  it('uses the leading description clause when only the description has one', () => {
+    expect(resolveFeatureRechargeTag('Fire Breath', 'Recharge 5-6. Exhales fire.')).toBe('Recharge 5-6');
+  });
+
+  it('uses the name suffix when only the name has one', () => {
+    expect(resolveFeatureRechargeTag('Possession (Recharge 6)', 'One humanoid makes a save.')).toBe('Recharge 6');
+  });
+
+  it('the name suffix wins when BOTH the name and description carry recharge metadata — resolves to exactly one tag, never two', () => {
+    expect(resolveFeatureRechargeTag('Doom Blast (Recharge 5-6)', 'Recharge 6. Devastating blast.')).toBe('Recharge 5-6');
+  });
+
+  it('returns null when neither the name nor the description has a recognizable clause', () => {
+    expect(resolveFeatureRechargeTag('Multiattack', 'The creature makes two attacks.')).toBeNull();
+  });
+});
+
+describe('rollRecharge', () => {
+  // rollRecharge uses Math.random() directly (not dice.ts's shared
+  // randomSource), so it's seeded via jest.spyOn(Math, 'random') here rather
+  // than setRandomSource — matching leveling.test.ts's rollDie precedent.
+  const originalRandom = Math.random;
+  afterEach(() => { Math.random = originalRandom; });
+
+  it('succeeds when the roll meets or beats the threshold', () => {
+    Math.random = () => 0.99; // d6 roll of 6
+    expect(rollRecharge(5)).toEqual({ roll: 6, success: true });
+  });
+
+  it('fails when the roll is below the threshold', () => {
+    Math.random = () => 0; // d6 roll of 1
+    expect(rollRecharge(5)).toEqual({ roll: 1, success: false });
   });
 });

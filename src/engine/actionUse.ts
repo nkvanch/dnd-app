@@ -51,7 +51,11 @@ export function applyActionCardUse(
     updated.features.find(f => f.id === card.featureId) ??
     updated.inventory.equipped.flatMap(inst => inst.features).find(f => f.id === card.featureId);
   if (sourceFeature?.abilityEffects && sourceFeature.abilityEffects.length > 0) {
-    updated = applyAbilityEffects(updated, sourceFeature.abilityEffects, rules);
+    // Table-first: passing the source feature's own activation lets
+    // applyAbilityEffects tell a self-directed, unconditional effect
+    // (applies immediately) apart from a target-contingent one (left for
+    // manual/table resolution) — see its own doc comment.
+    updated = applyAbilityEffects(updated, sourceFeature.abilityEffects, rules, sourceFeature.activation);
   }
 
   // A spell-granted card's featureId is the spell's own id (see

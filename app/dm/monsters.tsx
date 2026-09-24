@@ -9,8 +9,9 @@ import { useRouter } from 'expo-router';
 import { useCombatStore }   from '../../src/store/combatStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
-import { spawnMonster }     from '../../src/engine/monsterFactory';
+import { spawnMonster, isValidManualHp } from '../../src/engine/monsterFactory';
 import { MonsterTemplate }  from '../../src/content/monsters/types';
+import { PreparedCombatantHpMode } from '../../src/engine/types';
 import { mergeMonsterIndex } from '../../src/content/contentResolution';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
@@ -39,7 +40,7 @@ const MOVEMENT_TYPES = MONSTER_MOVEMENT_TYPES;
 function MonsterPreview({ template, isHomebrew, onSpawn, onClose }: {
   template: MonsterTemplate;
   isHomebrew: boolean;
-  onSpawn: () => void;
+  onSpawn: (hpMode: PreparedCombatantHpMode, manualHp?: number) => void;
   onClose: () => void;
 }) {
   const ABILITIES = ['str','dex','con','int','wis','cha'] as const;
@@ -47,6 +48,34 @@ function MonsterPreview({ template, isHomebrew, onSpawn, onClose }: {
     const m = Math.floor((score - 10) / 2);
     return `${score} (${m >= 0 ? '+' : ''}${m})`;
   };
+
+  // Table-first HP: Average is the default (matches the printed stat block,
+  // deterministic, no roll) — Manual and Roll are explicit opt-ins, not the
+  // other way around. Spawning never silently rolls unless the DM picks
+  // Roll here. See resolveMonsterHp (monsterFactory.ts) for the shared
+  // computation — this screen and PreparedEncounter's own per-combatant
+  // hpMode both resolve to the same four methods, just via two small entry
+  // points rather than one refactored call path (see final report).
+  const [hpMode, setHpMode] = useState<PreparedCombatantHpMode>('average');
+  const [manualHpDraft, setManualHpDraft] = useState(String(template.hp.average));
+
+  // Closure 2C: manual/table-rolled HP must be a complete positive integer —
+  // this used to run manualHpDraft through parseInt, which happily accepts
+  // a partial parse ("12abc" → 12, silently dropping the junk) and turns
+  // empty/invalid input into NaN, which resolveMonsterHp's own `manualHp &&
+  // manualHp > 0` check then silently swallows into the printed average
+  // with no indication to the DM that their entry was rejected. A full-
+  // string regex (only digits, no decimal point, no trailing garbage)
+  // replaces parseInt here; an entry that fails it disables Spawn and shows
+  // a validation message instead of ever reaching onSpawn/resolveMonsterHp.
+  const manualHpValid = isValidManualHp(manualHpDraft);
+  const manualHpBlocksSpawn = hpMode === 'manual' && !manualHpValid;
+
+  function spawn() {
+    if (manualHpBlocksSpawn) return;
+    const manualHp = hpMode === 'manual' ? parseInt(manualHpDraft, 10) : undefined;
+    onSpawn(hpMode, manualHp);
+  }
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -67,6 +96,35 @@ function MonsterPreview({ template, isHomebrew, onSpawn, onClose }: {
             {/* Core stats */}
             <Text style={styles.statLine}><Text style={styles.statKey}>AC:</Text> {template.ac.value} ({template.ac.source})</Text>
             <Text style={styles.statLine}><Text style={styles.statKey}>HP:</Text> {template.hp.average} ({template.hp.dice})</Text>
+            <View style={styles.hpModeRow}>
+              {(['average', 'manual', 'roll'] as const).map(m => (
+                <Pressable
+                  key={m}
+                  style={[styles.hpModeChip, hpMode === m && styles.hpModeChipActive]}
+                  onPress={() => setHpMode(m)}
+                >
+                  <Text style={[styles.hpModeChipTxt, hpMode === m && styles.hpModeChipTxtActive]}>
+                    {m === 'average' ? 'Average' : m === 'manual' ? 'Table-Rolled' : '🎲 Roll in App'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            {hpMode === 'manual' && (
+              <View style={styles.hpManualRow}>
+                <Text style={styles.hpManualLabel}>HP total:</Text>
+                <TextInput
+                  style={[styles.hpManualInput, !manualHpValid && styles.hpManualInputInvalid]}
+                  value={manualHpDraft}
+                  onChangeText={setManualHpDraft}
+                  keyboardType="number-pad"
+                  placeholder={String(template.hp.average)}
+                  placeholderTextColor={Colors.textDim}
+                />
+                {!manualHpValid && (
+                  <Text style={styles.hpManualError}>Enter a whole number greater than 0</Text>
+                )}
+              </View>
+            )}
             <Text style={styles.statLine}><Text style={styles.statKey}>Speed:</Text> {template.speed} ft</Text>
             <Text style={styles.statLine}><Text style={styles.statKey}>CR:</Text> {crLabel(template.cr)}</Text>
 
@@ -107,7 +165,11 @@ function MonsterPreview({ template, isHomebrew, onSpawn, onClose }: {
             )}
           </ScrollView>
 
-          <Pressable style={styles.spawnBtn} onPress={onSpawn}>
+          <Pressable
+            style={[styles.spawnBtn, manualHpBlocksSpawn && styles.spawnBtnDisabled]}
+            onPress={spawn}
+            disabled={manualHpBlocksSpawn}
+          >
             <Text style={styles.spawnBtnTxt}>⚔️ Spawn in Encounter</Text>
           </Pressable>
           <Pressable style={styles.closeBtn} onPress={onClose}>
@@ -291,8 +353,8 @@ export default function MonstersScreen() {
     setCondImmunityFilter(new Set()); setLanguageFilter(new Set());
   }
 
-  function handleSpawn(template: MonsterTemplate) {
-    const monster = spawnMonster(template, rules);
+  function handleSpawn(template: MonsterTemplate, hpMode: PreparedCombatantHpMode, manualHp?: number) {
+    const monster = spawnMonster(template, rules, { mode: hpMode, manualHp });
     if (inCombat) {
       // Route through the store's own addEntities action (not a raw
       // setState) — it's the one thing that also gives the monster a real
@@ -304,16 +366,12 @@ export default function MonstersScreen() {
       setPreview(null);
       safeGoBack();
     } else {
-      // Outside an active encounter, combatStore.entities is inert — it's
-      // fully replaced (not merged) by startCombat() the next time an
-      // encounter actually starts (app/dm/encounter.tsx), so there's no
-      // existing "pre-combat roster" mechanism to wire this into here.
-      // Preserve that pre-existing (already-inert) behavior rather than
-      // inventing new pre-combat roster architecture — out of this
-      // finding's scope.
-      useCombatStore.setState(s => ({
-        entities: s.entities.some(e => e.id === monster.id) ? s.entities : [...s.entities, monster],
-      }));
+      // Closure 2E: outside an active encounter this is the pre-combat
+      // setup roster, which now persists immediately (see combatStore's
+      // addToRoster doc comment) instead of the raw, unsaved setState this
+      // used to be — an app kill before "Start Combat" no longer silently
+      // drops a monster the DM already spawned into the roster.
+      useCombatStore.getState().addToRoster(monster);
       setPreview(null);
     }
   }
@@ -492,7 +550,7 @@ export default function MonstersScreen() {
         <MonsterPreview
           template={preview}
           isHomebrew={homebrewIds.has(preview.id)}
-          onSpawn={() => handleSpawn(preview)}
+          onSpawn={(hpMode, manualHp) => handleSpawn(preview, hpMode, manualHp)}
           onClose={() => setPreview(null)}
         />
       )}
@@ -596,6 +654,23 @@ const styles = StyleSheet.create({
   monsterType: { fontSize: FontSize.sm, color: Colors.textSecondary, fontStyle: 'italic' },
   divider:     { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.sm },
   statLine:    { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: 2 },
+  hpModeRow:   { flexDirection: 'row', gap: Spacing.xs, marginTop: 4, marginBottom: 4 },
+  hpModeChip: {
+    paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface,
+  },
+  hpModeChipActive:   { backgroundColor: Colors.gold + '33', borderColor: Colors.gold },
+  hpModeChipTxt:      { fontSize: FontSize.xs, color: Colors.textSecondary },
+  hpModeChipTxtActive:{ color: Colors.gold, fontWeight: FontWeight.bold },
+  hpManualRow:   { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: 4, flexWrap: 'wrap' },
+  hpManualLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  hpManualInput: {
+    width: 80, backgroundColor: Colors.surface, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.gold, color: Colors.textPrimary,
+    textAlign: 'center', paddingVertical: 4, fontSize: FontSize.sm,
+  },
+  hpManualInputInvalid: { borderColor: Colors.red },
+  hpManualError: { fontSize: FontSize.xs, color: Colors.red },
   statKey:     { fontWeight: FontWeight.bold, color: Colors.textPrimary },
   abilityRow:  { flexDirection: 'row', justifyContent: 'space-around' },
   abilityBox:  { alignItems: 'center' },
@@ -609,6 +684,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.red, borderRadius: Radius.md,
     padding: Spacing.md, alignItems: 'center', marginTop: Spacing.md,
   },
+  spawnBtnDisabled: { opacity: 0.4 },
   spawnBtnTxt: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   closeBtn:    { alignItems: 'center', padding: Spacing.sm },
   closeTxt:    { color: Colors.textSecondary, fontSize: FontSize.md },

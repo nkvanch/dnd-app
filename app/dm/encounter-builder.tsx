@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert } from '../../src/utils/alert';
-import { useEncounterStore } from '../../src/store/encounterStore';
+import { useEncounterStore, trySavePreparedEncounter } from '../../src/store/encounterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { mergeMonsterIndex } from '../../src/content/contentResolution';
 import { ALL_CONDITIONS } from '../../src/content/conditions/index';
@@ -19,6 +19,7 @@ import {
 import {
   newPreparedCombatant, newEncounterGroup, newEncounterWave, newEnvironmentEntry, newReward,
 } from '../../src/engine/preparedEncounter';
+import { isValidManualHp } from '../../src/engine/monsterFactory';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
@@ -32,6 +33,7 @@ function crLabel(cr: number): string {
   if (cr === 0.5)   return '1/2';
   return String(cr);
 }
+
 
 // ── Section shell ────────────────────────────────────────────────────────────
 
@@ -105,6 +107,17 @@ function CombatantRow({ combatant, monsterName, monsterCr, groups, waves, onChan
   onDuplicate: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // Closure 3: a local raw-text draft, decoupled from combatant.manualHp
+  // itself — lets the DM type freely (including a momentarily-invalid
+  // in-progress entry like "12a") without the box fighting them, while the
+  // committed domain value (combatant.manualHp) only ever becomes a valid
+  // positive integer or undefined — never "12" silently truncated from
+  // "12abc". Seeded once at mount, which is exactly when this needs to
+  // reflect a real persisted/duplicated value (requirement C — a valid
+  // value survives closing and reopening the builder, since reopening
+  // remounts this row fresh from the saved draft).
+  const [manualHpDraft, setManualHpDraft] = useState(combatant.manualHp ? String(combatant.manualHp) : '');
+  const manualHpValid = isValidManualHp(manualHpDraft);
   return (
     <View style={styles.combatantCard}>
       <Pressable style={styles.combatantTop} onPress={() => setExpanded(x => !x)}>
@@ -158,14 +171,28 @@ function CombatantRow({ combatant, monsterName, monsterCr, groups, waves, onChan
             ))}
           </View>
           {combatant.hpMode === 'manual' && (
-            <TextInput
-              style={styles.input}
-              value={combatant.manualHp ? String(combatant.manualHp) : ''}
-              onChangeText={t => onChange({ manualHp: parseInt(t, 10) || undefined })}
-              keyboardType="number-pad"
-              placeholder="HP amount"
-              placeholderTextColor={Colors.textDim}
-            />
+            <>
+              <TextInput
+                style={[styles.input, manualHpDraft.length > 0 && !manualHpValid && styles.inputInvalid]}
+                value={manualHpDraft}
+                onChangeText={t => {
+                  setManualHpDraft(t);
+                  // Closure 3: only a complete positive integer ever reaches
+                  // the domain model — a partial parse ("12abc" → 12) or an
+                  // empty/invalid entry commits `undefined`, never a wrong
+                  // number, so Save/Start's hasInvalidManualHp gate (and
+                  // spawnPreparedCombatant downstream) can never see stale
+                  // junk left over from a still-being-typed value.
+                  onChange({ manualHp: isValidManualHp(t) ? parseInt(t.trim(), 10) : undefined });
+                }}
+                keyboardType="number-pad"
+                placeholder="HP amount"
+                placeholderTextColor={Colors.textDim}
+              />
+              {manualHpDraft.length > 0 && !manualHpValid && (
+                <Text style={styles.fieldError}>Enter a whole number greater than 0</Text>
+              )}
+            </>
           )}
 
           {groups.length > 0 && (
@@ -256,7 +283,6 @@ export default function EncounterBuilderScreen() {
   const safeGoBack = useSafeGoBack('/dm/encounters');
   const { id } = useLocalSearchParams<{ id: string }>();
   const encounters = useEncounterStore(s => s.encounters);
-  const saveDraft = useEncounterStore(s => s.saveEncounterDraft);
   const setStatus = useEncounterStore(s => s.setEncounterStatus);
   const homebrewMonsters = useHomebrewStore(s => s.monsters);
   const allTemplates = useMemo(() => mergeMonsterIndex(homebrewMonsters), [homebrewMonsters]);
@@ -286,15 +312,60 @@ export default function EncounterBuilderScreen() {
     setDraft(d => d ? { ...d, combatants: d.combatants.map(c => c.id === cid ? { ...c, ...p } : c) } : d);
   }
 
-  async function handleSave() {
-    if (!draft) return;
+  // Closure 2 (Review/Start save race): the ONE shared save path — both
+  // the Save button and Review/Start funnel through this, so there is
+  // exactly one persistence implementation and one error-surfacing
+  // behavior (not two async blocks that could drift apart, which is
+  // exactly how Review/Start ended up navigating without awaiting a
+  // successful save in the first place). Delegates the actual validate-
+  // then-save decision to trySavePreparedEncounter (encounterStore.ts) —
+  // a plain, Jest-testable function independent of this route file —
+  // rather than reimplementing that logic here; this wrapper only owns the
+  // UI concerns (the `saving` flag and which alert to show). Returns true
+  // only when the save GENUINELY resolved — every caller must treat false
+  // as "do not proceed," never navigate/confirm on a failed/blocked save.
+  async function trySave(): Promise<boolean> {
+    if (!draft) return false;
+    if (saving) return false; // reentrancy guard — a save is already in flight
     setSaving(true);
     try {
-      await saveDraft(draft);
-      Alert.alert('Saved', `"${draft.name}" saved.`);
+      const result = await trySavePreparedEncounter(draft);
+      if (!result.ok) {
+        if (result.reason === 'invalid') {
+          Alert.alert('Fix HP before saving', 'One or more combatants have Manual/Table-Rolled HP selected with no valid HP entered. Enter a whole number greater than 0, or choose a different HP method.');
+        } else {
+          Alert.alert('Save failed', "Couldn't save this encounter — check storage and try again. Your edits are still here.");
+        }
+        return false;
+      }
+      return true;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSave() {
+    const ok = await trySave();
+    if (ok) Alert.alert('Saved', `"${draft?.name}" saved.`);
+  }
+
+  // Closure 2: this used to fire handleSave() and navigate in the same
+  // breath, unconditionally — a save that hadn't resolved yet (or had
+  // failed) still sent the DM straight to Start, which could go on to
+  // read the PREVIOUSLY saved encounter (stale HP/state) rather than the
+  // just-edited draft. Now: validate → await the save → only on a
+  // genuinely successful save does navigation happen. trySavePreparedEncounter
+  // (encounterStore.ts) updates useEncounterStore's own state synchronously
+  // before its promise resolves (see saveEncounterDraft's own
+  // implementation), so by the time `trySave()` returns true, the store
+  // already holds the just-saved version — the live encounter screen reads
+  // its own `previewSource` from that same store, so it can never see the
+  // stale copy.
+  async function handleReviewAndStart() {
+    if (!draft || saving) return; // reentrancy guard — ignore a second tap while a save is in flight
+    const ok = await trySave();
+    if (!ok) return; // trySave already showed the right alert (validation failure or save failure)
+    router.push({ pathname: '/dm/encounter', params: { preparedId: draft.id } } as any);
   }
 
   function addMonster(monsterId: string) {
@@ -525,13 +596,11 @@ export default function EncounterBuilderScreen() {
         </Section>
 
         <Pressable
-          style={styles.startBtn}
-          onPress={() => {
-            void handleSave();
-            router.push({ pathname: '/dm/encounter', params: { preparedId: draft.id } } as any);
-          }}
+          style={[styles.startBtn, saving && styles.btnDisabled]}
+          onPress={() => { void handleReviewAndStart(); }}
+          disabled={saving}
         >
-          <Text style={styles.startBtnTxt}>▶ Review & Start Encounter</Text>
+          <Text style={styles.startBtnTxt}>{saving ? 'Saving…' : '▶ Review & Start Encounter'}</Text>
         </Pressable>
       </ScrollView>
 
@@ -574,6 +643,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
     padding: Spacing.sm, color: Colors.textPrimary, fontSize: FontSize.sm,
   },
+  inputInvalid: { borderColor: Colors.red },
+  fieldError: { fontSize: FontSize.xs, color: Colors.red, marginTop: 2 },
   textArea: { minHeight: 60, textAlignVertical: 'top' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   chip: { paddingHorizontal: Spacing.sm, paddingVertical: 6, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg },
@@ -624,4 +695,5 @@ const styles = StyleSheet.create({
   pickerCloseTxt: { color: Colors.textDim },
   startBtn: { backgroundColor: Colors.gold, borderRadius: Radius.lg, padding: Spacing.md, alignItems: 'center', marginTop: Spacing.sm },
   startBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  btnDisabled: { opacity: 0.5 },
 });

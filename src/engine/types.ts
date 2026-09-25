@@ -435,6 +435,35 @@ export type CharClass  = {
    */
   spellcastingAbilityOptions?: Ability[];
   spellcastingStyle?:     'full' | 'half' | 'pact'; // slot table to use
+  /**
+   * Rules-engine blocker closure (prepared-spell legality, re-audit): which
+   * preparation model this class uses for its LEVELED spells (cantrips are
+   * never gated by this — see isSpellPreparationLegal's own doc comment,
+   * actionCards.ts). Replaces a former hardcoded classId allowlist
+   * (PREPARED_CASTER_CLASS_IDS used to be a fixed Set of class ids —
+   * actionCards.ts now derives it FROM this field instead) so preparation
+   * legality is driven by real per-class content metadata, ruleset-capable
+   * by construction: a homebrew or alternate-ruleset variant of a class is
+   * just another CharClass content entry (see rulesetId below) with its own
+   * value here, no code change required.
+   *   - 'known':              a fixed list of known spells, always castable
+   *                           (Sorcerer, Bard, Ranger, Warlock's Pact Magic).
+   *   - 'spellbook_prepared': maintains a spellbook (.known) and prepares a
+   *                           subset each long rest (.prepared) — Wizard.
+   *   - 'full_list_prepared': no separate "known" step; prepares directly
+   *                           from the full class spell list each long rest
+   *                           (Cleric, Druid, Paladin, Artificer).
+   *   - 'always_available':  never gated by preparation at all (rare as a
+   *                           base-class policy; mainly used internally for
+   *                           non-class sources — subclass/race/feat/item
+   *                           grants — which never require class-style prep).
+   * Undefined (every class authored before this field existed, and any
+   * homebrew class that hasn't set it) falls back to 'known' — fail-open,
+   * matching this app's existing "an unrecognized source is never wrongly
+   * blocked" conservatism, same as isSpellPreparationLegal's own fail-open
+   * default for an untracked entitlement.
+   */
+  spellPreparationPolicy?: SpellPreparationPolicy;
   spellcastingStartLevel?: number;       // first level that gets spell slots (default 1)
   asiLevels?:             number[];      // defaults to [4,8,12,16,19]
   /**
@@ -1001,7 +1030,80 @@ export type EntitlementRecord = {
   choiceId?:  string;
   /** Additive maximum contribution for resource_upgrade records. */
   amount?:    number;
+  /**
+   * Rules-engine blocker closure (1F — ambiguous legacy/migrated
+   * provenance): set ONLY on a sourceKind:'manual' spell_access/
+   * cantrip_access record produced by legacy migration
+   * (reclassifyManualSpellSources, entitlements.ts) when the spell/cantrip
+   * matches 2+ of the character's OWN classes' spell lists — genuine,
+   * unresolved ambiguity (e.g. a Wizard/Sorcerer character's legacy
+   * Fireball), not an ordinary "no plausible class" manual grant. A plain
+   * `manual` record with this field absent/empty means exactly what it
+   * always has — an unrestricted, non-gated grant. Runtime (actionCards.ts's
+   * resolveSpellCastingContexts) must NOT treat an ambiguous record as
+   * automatically legal-with-no-ability-opinion the way a true manual grant
+   * is — it instead builds one real casting context PER candidate class id
+   * here, each with that class's own actual preparation policy/ability, so
+   * the player is offered an explicit source choice rather than the spell
+   * silently behaving as globally unrestricted. Never silently collapsed
+   * back to a single resolved class — see 1G for the one case that DOES
+   * safely auto-resolve (exactly one candidate, handled directly by
+   * reclassifyManualSpellSources instead of via this field at all).
+   */
+  ambiguousClassIds?: string[];
 };
+
+/**
+ * Rules-engine blocker closure (re-audit, Closure 1 — explicit spell
+ * casting context): the ONE unit both preparation legality and casting
+ * ability resolve from (see actionCards.ts's resolveSpellCastingContexts/
+ * selectSpellCastingContext), and — new this closure — the unit an
+ * ActionCard PRESERVES so the exact same context that was shown to the
+ * player is the one validated and executed, never silently re-resolved to
+ * a different source. Pure runtime/derived data: never persisted as its
+ * own authoritative record (see EntitlementRecord for the real ownership
+ * data this is derived FROM), and never stores a calculated DC/attack
+ * number — those stay recomputed from `castingAbility` at display time
+ * (see resolveSpellSaveDC/resolveSpellAttackBonus).
+ */
+export type SpellCastingContext = {
+  /**
+   * Stable identity for this EXACT context — deterministic function of
+   * sourceKind/sourceId/classId, so the same real-world source always
+   * produces the same key across candidate generation, card display, and
+   * execution-time revalidation (resolveSpellCastingContexts is re-run
+   * fresh at execution; matching by this key, not object identity or array
+   * position, is what lets applyActionCardUse detect "this exact source
+   * still exists" vs "it disappeared since the card was generated").
+   */
+  contextKey:        string;
+  sourceKind:        EntitlementSourceKind;
+  sourceId?:         string;
+  /** The owning class, when resolvable — direct 'class' source, an
+   *  ambiguous-legacy candidate (see EntitlementRecord.ambiguousClassIds),
+   *  or a 'subclass' source resolved to its parent class via the
+   *  character's own ClassLevelEntry.subclassId. Undefined for race/feat/
+   *  item/genuine-manual/etc sources, which have no class to prepare from. */
+  classId?:          string;
+  preparationPolicy: SpellPreparationPolicy;
+  castingAbility:    Ability;
+  /** Preparation-only legality for THIS source. */
+  legal:             boolean;
+  /** True only for a context built from a grant_spell EFFECT's own
+   *  authored spellcastingAbility — the single most specific signal
+   *  content can author, so selectSpellCastingContext always prefers it. */
+  explicitAbility?:  boolean;
+  /** True for a candidate generated from an unresolved-ambiguous legacy
+   *  manual entitlement (EntitlementRecord.ambiguousClassIds) — signals
+   *  the UI that this context was never confirmed by the player and a
+   *  source choice should be offered rather than silently assumed. */
+  unresolvedLegacy?: boolean;
+};
+
+/** See CharClass.spellPreparationPolicy's own doc comment for the full
+ *  meaning of each value — this is the shared type, referenced both there
+ *  and by SpellCastingContext.preparationPolicy (actionCards.ts). */
+export type SpellPreparationPolicy = 'known' | 'spellbook_prepared' | 'full_list_prepared' | 'always_available';
 
 /**
  * Death save tracking. Only meaningful while hp.current === 0 and the
@@ -1234,6 +1336,47 @@ export type BeastForm = {
   attacks:         { name: string; effect: AbilityEffect }[];
   /** Free-text trait summaries (e.g. "Keen Smell", "Pack Tactics") — display-only in v1, not mechanically enforced. */
   traits?:         string[];
+  /**
+   * Rules-engine blocker RE-AUDIT closure (Closure 3 — native BeastForm
+   * defenses): plain damage-type strings (the SAME taxonomy
+   * grant_resistance's own `target` field already uses everywhere else in
+   * the app — 'fire', 'lightning', 'acid', ... — no second damage-type
+   * taxonomy). Only unconditional, always-on resistances/immunities/
+   * vulnerabilities belong here — a qualified one (e.g. 5e's "bludgeoning/
+   * piercing/slashing from NONMAGICAL attacks") has no representation in
+   * this engine (resolveResistance has no "was this attack magical" input)
+   * and is deliberately left undeclared rather than represented incorrectly
+   * as an unconditional resistance; see beastforms/index.ts's own per-form
+   * comment for exactly what's included/excluded for each shipped form.
+   * Read by pipeline.ts's collectAllEffects while `wildShapeState.active`
+   * is true — never copied onto the base entity, so a plain revert
+   * (wildShapeState -> null) makes these vanish with zero cleanup.
+   */
+  damageResistances?:    string[];
+  damageImmunities?:     string[];
+  damageVulnerabilities?: string[];
+  /**
+   * Rules-engine blocker RE-AUDIT closure (3B): the standard 5e elemental
+   * innate resistance to bludgeoning/piercing/slashing damage from
+   * NONMAGICAL attacks/weapons — a real, RAW-significant defense every
+   * shipped elemental form has, but one this engine cannot infer on its
+   * own (it has no concept of an attack being magical/nonmagical).
+   * Deliberately NOT folded into `damageResistances` above: that list
+   * means "always resisted, unconditionally," which this qualified
+   * resistance is not. Investigated reusing Effect.situational/
+   * Entity.situationalAnswers (the app's existing manual yes/no mechanism)
+   * first, per this closure's own instruction — rejected because that
+   * mechanism is PERSISTENT entity state meant for slow-changing facts
+   * ("an ally within 5 feet"), and this fact can change every single hit;
+   * forcing the DM to toggle persistent state before/after every attack
+   * would be poor table-first UX. Instead consulted via a small, explicit,
+   * PER-HIT parameter at the point damage is entered — see
+   * applyWildShapeDamage's own `isNonmagicalAttack` parameter (combat.ts)
+   * and the DM/player damage-entry UI's "Nonmagical attack" checkbox.
+   * Bounded to exactly this one 5e distinction — not a general magical/
+   * nonmagical attack-qualifier system.
+   */
+  nonmagicalPhysicalResistance?: boolean;
 };
 
 export type ItemInstance = {
@@ -2142,6 +2285,41 @@ export type ActionCard = {
   available:         boolean;
   /** e.g. "No 3rd-level spell slots remaining", "Already concentrating" */
   unavailableReason: string | null;
+  /**
+   * Rules-engine blocker fix (prepared-spell eligibility): true ONLY for a
+   * leveled spell card whose entire unavailability is that it isn't
+   * prepared — every other legality/cost check (slot availability, action
+   * economy, resource cost) already passed. The UI uses this to offer a
+   * table-first "Cast Anyway" Quick Override on top of the normal disabled
+   * state, instead of requiring Free Edit to force a one-off exception.
+   * false/undefined for every non-spell card, every cantrip, and a spell
+   * blocked by anything else (or nothing) — see isSpellPreparationLegal's
+   * own doc comment (actionCards.ts) for the exact source-aware policy.
+   * Optional so the many non-spell ActionCard literals throughout this file
+   * don't all need to set it explicitly.
+   */
+  preparationOverridable?: boolean;
+  /**
+   * Rules-engine blocker closure (1B — ActionCard must preserve context):
+   * the SpellCastingContext this card was generated to represent — the
+   * default/primary one when several exist (see spellCastingContexts
+   * below). Undefined for every non-spell card. applyActionCardUse
+   * revalidates THIS EXACT context (by contextKey) fresh at execution time
+   * rather than silently re-resolving a possibly-different source — if the
+   * selected context no longer exists among the entity's current sources,
+   * execution fails safely rather than switching source.
+   */
+  spellCastingContext?: SpellCastingContext;
+  /**
+   * Every MECHANICALLY DISTINCT candidate context for this spell (collapsed
+   * — two contexts with the same ability/policy/legality count as one),
+   * only populated (length > 1) when the player actually has a real choice
+   * to make (e.g. a Wizard/Sorcerer character's shared spell). The UI shows
+   * a "Cast as..." chooser when this has more than one entry; a single-
+   * entry or absent array means there's nothing to choose between, so the
+   * normal single-tap Cast/Cast-Anyway flow applies unchanged.
+   */
+  spellCastingContexts?: SpellCastingContext[];
 };
 
 // ── 11. Sync & campaign system ───────────────────────────────────────────────

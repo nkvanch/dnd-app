@@ -372,7 +372,10 @@ export default function RaceDetailScreen() {
     for (const choice of [...(race!.pendingChoices ?? []), ...(chosenSubrace?.pendingChoices ?? [])]) {
       updated = queueChoice(updated, choice, 0);
     }
-    updated = recomputeDerived(updated, rules);
+    const contentDB = getMergedContentDB(updated.rulesetId);
+    updated = recomputeDerived(updated, rules, {
+      classDefs: contentDB.classes, homebrewSpells: contentDB.spells, races: contentDB.races, items: contentDB.items,
+    });
     setDraft(updated);
     router.push('/creation/hub');
   }

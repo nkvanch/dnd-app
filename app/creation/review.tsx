@@ -87,12 +87,14 @@ export default function ReviewScreen() {
     // directly into the character's persisted starting HP below, so the
     // previous official-wins bypass was real data corruption, not just a
     // display bug (audit finding CONTENT-1/2/3/4).
-    const cls = getMergedContentDB().classes.find(c => c.id === draft.identity.classId);
+    const contentDB = getMergedContentDB(draft.rulesetId);
+    const cardContent = { classDefs: contentDB.classes, homebrewSpells: contentDB.spells, races: contentDB.races, items: contentDB.items };
+    const cls = contentDB.classes.find(c => c.id === draft.identity.classId);
     const hpAbility: Ability = (cls ? getProgressionForClass(cls).hpAbility : undefined) ?? 'con';
-    let finalDraft = recomputeDerived(draft, rules);
+    let finalDraft = recomputeDerived(draft, rules, cardContent);
     finalDraft     = recalculateAllHP(finalDraft, rules, hpAbility);
     // 3. Run recomputeDerived one more time so derived.ac etc. use the corrected stats.
-    finalDraft     = recomputeDerived(finalDraft, rules);
+    finalDraft     = recomputeDerived(finalDraft, rules, cardContent);
     setDraft(finalDraft);
     const saved = await saveDraft();
     setSaving(false);

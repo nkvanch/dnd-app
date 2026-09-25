@@ -526,7 +526,18 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       // ever triggers a recompute. The comment above already described this
       // as the intent; the actual call was missing.
       const rules = get().rules;
-      const recomputed = characters.map(c => recomputeDerived(c, rules));
+      // Rules-engine blocker RE-AUDIT closure (dependency inversion, 1D):
+      // recomputeDerived's action-card/spell-context generation needs the
+      // real merged official+homebrew+ruleset content to reflect a
+      // homebrew class's own casting policy — resolved HERE (the
+      // application/store layer), passed down explicitly; the engine
+      // itself never reads useHomebrewStore. Each character resolves its
+      // OWN ruleset (getMergedContentDB is internally memoized per input
+      // set, so this is cheap even across many characters on one ruleset).
+      const recomputed = characters.map(c => {
+        const contentDB = useHomebrewStore.getState().getMergedContentDB(c.rulesetId);
+        return recomputeDerived(c, rules, { classDefs: contentDB.classes, homebrewSpells: contentDB.spells, races: contentDB.races, items: contentDB.items });
+      });
 
       set({ characters: recomputed, isLoading: false });
     } catch (e) {

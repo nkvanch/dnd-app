@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { recalculateAllHP, reapplyResolvedAsi, stripResolvedAsiStats } from '../../src/engine/leveling';
 import { rollAbilityScoreSet } from '../../src/engine/dice';
@@ -52,6 +53,7 @@ export default function ScoresScreen() {
   const campaignRules = useCharacterStore(s => s.rules);
   const profiles = useCustomRuleProfileStore(s=>s.profiles);
   const rules = draft ? resolveEffectiveCampaignRules(campaignRules,draft,profiles) : campaignRules;
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
   // All hooks must be called before any conditional return
   const raceBonuses = getRaceBonuses(draft);
@@ -202,15 +204,17 @@ export default function ScoresScreen() {
     // Setting base stats wholesale would erase any ASI already resolved during
     // creation (the +2/+1+1 lives in base stats). Re-apply resolved ASIs on top
     // so re-confirming scores never silently loses an Ability Score Improvement.
+    const contentDB = getMergedContentDB(withFlag.rulesetId);
+    const cardContent = { classDefs: contentDB.classes, homebrewSpells: contentDB.spells, races: contentDB.races, items: contentDB.items };
     let updated = reapplyResolvedAsi(withFlag, rules);
-    updated = recomputeDerived(updated, rules);
+    updated = recomputeDerived(updated, rules, cardContent);
     // Recompute HP now that final CON is known, so the sheet/hub don't show a
     // stale value computed at class-selection time (e.g. HP 13 instead of 16
     // when CON was raised to 18 after choosing the class). Only meaningful once
     // a class (hit die) has been chosen.
     if (updated.identity.classId && updated.resources.hitDice.die > 0) {
       updated = recalculateAllHP(updated, rules);
-      updated = recomputeDerived(updated, rules);
+      updated = recomputeDerived(updated, rules, cardContent);
     }
     setDraft(updated);
     router.push('/creation/hub');

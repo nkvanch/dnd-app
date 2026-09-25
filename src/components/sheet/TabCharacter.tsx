@@ -26,13 +26,14 @@ import { getProgressionForClass, mergeSubclassIntoProgression } from '../../cont
 import { getSubclassEntryMerged } from '../../content/subclasses/subclassBrowse';
 import { spellRepo } from '../../content/spellRepo';
 import { spellIdsOnEntity } from '../../content/spellRepo.types';
+import { ALL_BEAST_FORMS } from '../../content/beastforms';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
 import { ConcentrationModal } from './ConcentrationModal';
 import { CompanionSection } from './CompanionSection';
-import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard, ActivationOptionModal } from './TabActions';
+import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard, ActivationOptionModal, useCardContent } from './TabActions';
 import { LevelUpPreviewModal } from './LevelUpPreviewModal';
 import { ProgressionPlannerModal } from './ProgressionPlannerModal';
 import { MulticlassProgressionPlannerModal } from './MulticlassProgressionPlannerModal';
@@ -81,7 +82,7 @@ interface Props {
   isDm:         boolean;
   campaignId:   string;
   deviceId:     string;
-  onDamage:     (amount: number, damageType?: string) => void;
+  onDamage:     (amount: number, damageType?: string, isNonmagicalAttack?: boolean) => void;
   onHeal:       (amount: number) => void;
   onAddCondition:    (id: string, duration: DurationTracker | null) => void;
   onRemoveCondition: (id: string) => void;
@@ -972,7 +973,16 @@ function TabCharacterInner({
   const [maxHpOpen,    setMaxHpOpen]    = useState(false);
   const [tempHpOpen,   setTempHpOpen]   = useState(false);
   const [activeFavCard, setActiveFavCard] = useState<ActionCard | null>(null);
-  const [pendingFavOptionCard, setPendingFavOptionCard] = useState<ActionCard | null>(null);
+  // Rules-engine blocker RE-AUDIT closure (2F): carries the bypass/context
+  // decision ALONGSIDE the card, not just the card alone — see
+  // TabActions.tsx's PendingActionUse for the same fix and its own doc
+  // comment on why this was a real bug (a chosen source/Cast-Anyway
+  // decision used to be silently discarded by the activation-option picker).
+  const [pendingFavUse, setPendingFavUse] = useState<{
+    card: ActionCard;
+    bypassSpellPreparation?: boolean;
+    selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext;
+  } | null>(null);
   const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
   const [sensesOpen, setSensesOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
@@ -999,33 +1009,40 @@ function TabCharacterInner({
   // a Feature.favoriteTag lookup: spell-based and synthetic cards like
   // Unarmed Strike have no backing Feature to store a flag on).
   const { requestPayment, paymentChooser } = useSpellPayment(entity);
+  const favoriteCardContent = useCardContent(entity);
   const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c.featureId));
-  function handleUseFavorite(card: ActionCard) {
+  function handleUseFavorite(card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext) {
     // A-57 (item 10): a favorited card with discrete use-time options
     // (e.g. Divine Smite's spell-slot tier) must resolve the picker BEFORE
     // spending anything, same as TabActions' own handleUse — this call
     // site used to always pass chosenOption undefined, silently falling
     // back to the card's default cost/tier instead of asking.
     if (card.activation.options && card.activation.options.length > 0) {
-      setPendingFavOptionCard(card);
+      // Rules-engine blocker RE-AUDIT closure 2F: preserve the bypass/
+      // context decision ActionCardRow already made, not just the card.
+      setPendingFavUse({ card, bypassSpellPreparation, selectedSpellCastingContext });
       return;
     }
     // Same fix as TabActions' handleUse — always run applyActionCardUse
     // (it no-ops correctly with nothing to spend) so a cost-less
     // concentration cantrip favorited here also tracks concentration.
+    // bypassSpellPreparation threads the Quick Override "Cast Anyway"
+    // choice from ActionCardRow (rules-engine blocker closure 1F) through
+    // to the same shared applyActionCardUse every other cast surface uses.
     requestPayment(card, undefined, payment => {
-      const updated = applyActionCardUse(entity, card, rules, undefined, payment);
+      const updated = applyActionCardUse(entity, card, rules, undefined, payment, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent);
       if (updated === entity) return;
       onEntityUpdate(updated);
       setActiveFavCard(card);
     });
   }
   function handleChooseFavoriteOption(option: ActivationOption) {
-    const card = pendingFavOptionCard;
-    setPendingFavOptionCard(null);
-    if (!card) return;
+    const pending = pendingFavUse;
+    setPendingFavUse(null);
+    if (!pending) return;
+    const { card, bypassSpellPreparation, selectedSpellCastingContext } = pending;
     requestPayment(card, option, payment => {
-      const updated = applyActionCardUse(entity, card, rules, option, payment);
+      const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent);
       if (updated === entity) return;
       onEntityUpdate(updated);
       setActiveFavCard(card);
@@ -1138,8 +1155,8 @@ function TabCharacterInner({
   // Damage handler — triggers concentration check modal if needed.
   // Reads fresh entity state AFTER onDamage (Zustand is synchronous)
   // so the modal gets the correct entity, not the stale prop.
-  const handleDamage = useCallback((amount: number, damageType?: string) => {
-    onDamage(amount, damageType);
+  const handleDamage = useCallback((amount: number, damageType?: string, isNonmagicalAttack?: boolean) => {
+    onDamage(amount, damageType, isNonmagicalAttack);
     const { characters } = useCharacterStore.getState();
     const fresh = characters.find(c => c.id === entity.id);
     if (fresh?.spellcasting?.concentrating) {
@@ -1147,6 +1164,15 @@ function TabCharacterInner({
       setConcOpen(true);
     }
   }, [onDamage, entity.id]);
+
+  // Rules-engine blocker RE-AUDIT closure (3A): visible only while
+  // transformed into a form that actually declares
+  // nonmagicalPhysicalResistance — HpModal itself further gates on the
+  // selected damage type being bludgeoning/piercing/slashing.
+  const activeBeastForm = entity.wildShapeState?.active
+    ? ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId)
+    : undefined;
+  const showNonmagicalOption = !!activeBeastForm?.nonmagicalPhysicalResistance;
 
   const hpPct = resources.hp.maximum > 0
     ? Math.max(0, Math.min(1, resources.hp.current / resources.hp.maximum))
@@ -1262,6 +1288,7 @@ function TabCharacterInner({
             <ActionCardRow
               key={c.featureId}
               card={c}
+              entity={entity}
               onUse={handleUseFavorite}
               isFavorite
               onToggleFavorite={c => onEntityUpdate(toggleFavoriteTag(entity, c.featureId))}
@@ -1670,6 +1697,7 @@ function TabCharacterInner({
         onDamage={handleDamage}
         onHeal={onHeal}
         onClose={() => setHpOpen(false)}
+        showNonmagicalOption={showNonmagicalOption}
       />
 
       <NumberPromptModal
@@ -1835,9 +1863,9 @@ function TabCharacterInner({
 
       <ActivationOptionModal
         entity={entity}
-        card={pendingFavOptionCard}
+        card={pendingFavUse?.card ?? null}
         onChoose={handleChooseFavoriteOption}
-        onClose={() => setPendingFavOptionCard(null)}
+        onClose={() => setPendingFavUse(null)}
       />
 
       {/* Add a feat ad-hoc from the sheet */}

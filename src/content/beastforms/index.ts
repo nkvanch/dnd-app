@@ -75,6 +75,24 @@ export const formAirElemental: BeastForm = {
   attacks: [
     { name: 'Slam', effect: { type: 'damage', dice: '2d8+5', damageType: 'bludgeoning' } },
   ],
+  // Rules-engine blocker RE-AUDIT closure (2A/2B, corrected): the real SRD/MM
+  // Air Elemental stat block lists BOTH "Damage Immunities: poison" AND
+  // (separately) "Condition Immunities: ... poisoned ...". This engine's
+  // Round 3 comment claimed only the CONDITION was real and that the
+  // DAMAGE immunity didn't exist — that was a genuine mistake, not a
+  // deliberate correct call; every SRD 5.1 elemental (Air/Earth/Fire/Water)
+  // carries the same "Damage Immunities: poison" line (Fire's block adds
+  // fire on top of it), independent of the shared "poisoned" condition
+  // immunity every elemental also has. damageImmunities only models damage
+  // TYPES; condition immunity has no representation in this engine and
+  // remains out of scope. The shared elemental resistance to bludgeoning/
+  // piercing/slashing from NONMAGICAL attacks is real and RAW-significant
+  // but qualified — see nonmagicalPhysicalResistance's own doc comment
+  // (types.ts) for why it's a separate flag, resolved per-hit, not folded
+  // into damageResistances (which means "always, unconditionally").
+  damageResistances: ['lightning', 'thunder'],
+  damageImmunities: ['poison'],
+  nonmagicalPhysicalResistance: true,
 };
 
 export const formEarthElemental: BeastForm = {
@@ -89,6 +107,14 @@ export const formEarthElemental: BeastForm = {
   attacks: [
     { name: 'Slam', effect: { type: 'damage', dice: '2d8+5', damageType: 'bludgeoning' } },
   ],
+  // Poison damage immunity: same correction as Air Elemental above — the
+  // real SRD/MM stat block gives Earth Elemental its own "Damage
+  // Immunities: poison" line, distinct from the shared "poisoned" condition
+  // immunity. Nonmagical B/P/S: see nonmagicalPhysicalResistance's own doc
+  // comment.
+  damageVulnerabilities: ['thunder'],
+  damageImmunities: ['poison'],
+  nonmagicalPhysicalResistance: true,
 };
 
 export const formFireElemental: BeastForm = {
@@ -103,6 +129,15 @@ export const formFireElemental: BeastForm = {
   attacks: [
     { name: 'Touch', effect: { type: 'damage', dice: '2d6+3', damageType: 'fire' } },
   ],
+  // Fire Elemental's Damage Immunities entry is fire + poison — every SRD
+  // elemental (Air/Earth/Fire/Water) has poison damage immunity; Fire's is
+  // the only one that ALSO adds fire on top of it, unchanged by this
+  // closure; re-verified, not duplicated.
+  // Water Susceptibility above is a conditional (submerged/splashed) rider,
+  // not an unconditional vulnerability — deliberately NOT represented as
+  // damageVulnerabilities, which would incorrectly apply it to every hit.
+  damageImmunities: ['fire', 'poison'],
+  nonmagicalPhysicalResistance: true,
 };
 
 export const formWaterElemental: BeastForm = {
@@ -116,6 +151,14 @@ export const formWaterElemental: BeastForm = {
   attacks: [
     { name: 'Slam', effect: { type: 'damage', dice: '2d8+4', damageType: 'bludgeoning' } },
   ],
+  // Poison damage immunity: same correction as Air Elemental above — the
+  // real SRD/MM stat block gives Water Elemental its own "Damage
+  // Immunities: poison" line, distinct from the shared "poisoned" condition
+  // immunity. Nonmagical B/P/S: see nonmagicalPhysicalResistance's own doc
+  // comment.
+  damageResistances: ['acid', 'fire'],
+  damageImmunities: ['poison'],
+  nonmagicalPhysicalResistance: true,
 };
 
 export const ALL_BEAST_FORMS: BeastForm[] = [

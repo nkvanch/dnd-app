@@ -1,6 +1,5 @@
 import { Entity, Item, ItemInstance } from './types';
 import { itemRepo } from '../content/itemRepo';
-import { useHomebrewStore } from '../store/homebrewStore';
 import { armorWeight, baseWeaponIdFromName, isShield, isWeapon } from '../content/items/itemBrowse';
 import { toItemIndexEntry } from '../content/itemRepo.types';
 
@@ -9,9 +8,21 @@ const KNOWN_ATTUNEMENT_ITEM_IDS = new Set([
   'amulet_of_health', 'headband_of_intellect',
 ]);
 
-export function resolveItemDefinition(itemId: string): Item | undefined {
+/**
+ * Rules-engine blocker RE-AUDIT closure (dependency inversion, 1D):
+ * `homebrewItems` used to be resolved by reaching into
+ * useHomebrewStore.getState() directly from inside this pure engine
+ * function — a rules-core file must never read application/store state
+ * implicitly. The APPLICATION layer now resolves the correct merged/
+ * ruleset-filtered item list (getMergedContentDB(entity.rulesetId).items)
+ * and passes it in explicitly; omitting it falls back to official-only
+ * itemRepo content (a deterministic, static default) — correct for every
+ * test and any caller that hasn't been updated to pass homebrew-aware
+ * content, though it won't resolve a homebrew item in that case.
+ */
+export function resolveItemDefinition(itemId: string, homebrewItems: readonly Item[] = []): Item | undefined {
   return itemRepo.getItemSync(itemId)
-    ?? useHomebrewStore.getState().items.find(item => item.id === itemId);
+    ?? homebrewItems.find(item => item.id === itemId);
 }
 
 export function itemRequiresAttunement(item: Pick<Item, 'id' | 'properties'> | undefined): boolean {
@@ -40,13 +51,13 @@ export function effectiveItemFeatures(instance: ItemInstance, definition: Item |
 /** Resolve attack features for weapons whose magic-item record only describes
  * the special property. Base weapon dice remain catalog data; this composes
  * them at runtime without inventing an activation for the passive feature. */
-export function effectiveWeaponAttackFeatures(instance: ItemInstance, definition: Item | undefined) {
+export function effectiveWeaponAttackFeatures(instance: ItemInstance, definition: Item | undefined, homebrewItems: readonly Item[] = []) {
   const own = effectiveItemFeatures(instance, definition);
   if (!definition || own.some(feature => feature.abilityEffects?.some(effect => effect.type === 'damage'))) return own;
   if (!isWeapon(toItemIndexEntry(definition))) return own;
   const baseId = baseWeaponIdFromName(definition.name);
   const baseDefinition = baseId && baseId !== definition.id
-    ? itemRepo.getItemSync(baseId) ?? useHomebrewStore.getState().items.find(item => item.id === baseId)
+    ? itemRepo.getItemSync(baseId) ?? homebrewItems.find(item => item.id === baseId)
     : undefined;
   const attacks = baseDefinition?.features.filter(feature => feature.abilityEffects?.some(effect => effect.type === 'damage')) ?? [];
   return [...own, ...attacks];

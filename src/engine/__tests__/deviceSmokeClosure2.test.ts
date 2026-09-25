@@ -9,7 +9,6 @@ import { generateAllActionCards } from '../actionCards';
 
 import { serializePortableCharacter, parsePortableCharacter } from '../../io/characterPortable';
 import { useLastCharacterStore } from '../../store/lastCharacterStore';
-import { useHomebrewStore } from '../../store/homebrewStore';
 import { IMPORTED_ITEMS } from '../../content/items/importedItems';
 import { migrateEntity } from '../multiclass';
 import { itemMace } from '../../content/items';
@@ -64,17 +63,17 @@ describe('device smoke closure pass 2', () => {
     const mace = IMPORTED_ITEMS.find(item => item.id === 'mace_of_disruption')!;
     const plusOne = IMPORTED_ITEMS.find(item => item.id === 'mace_1')!;
     const bracers = IMPORTED_ITEMS.find(item => item.id === 'bracers_of_defense')!;
-    useHomebrewStore.setState({ items: [mace, plusOne, bracers, itemMace] });
+    const content = { items: [mace, plusOne, bracers, itemMace] };
     const entity = makeEmptyEntity('weapons'); entity.stats.str = 16; entity.proficiencies.weapons = ['simple'];
     entity.inventory.equipped = [{ itemId: mace.id, quantity: 1, attuned: true, features: mace.features, requiresAttunement: true }];
-    const derived = recomputeDerived(entity, DEFAULT_RULES);
-    const card = generateAllActionCards(derived).find(c => c.featureId === 'mace_of_disruption_basic_weapon_attack');
+    const derived = recomputeDerived(entity, DEFAULT_RULES, content);
+    const card = generateAllActionCards(derived, DEFAULT_RULES, content).find(c => c.featureId === 'mace_of_disruption_basic_weapon_attack');
     expect(card?.layer2).toContain('1d6+3 Bludgeoning');
-    expect(generateAllActionCards({ ...derived, inventory: { ...derived.inventory, equipped: [], carried: derived.inventory.equipped } }).some(c => c.name === mace.name)).toBe(false);
+    expect(generateAllActionCards({ ...derived, inventory: { ...derived.inventory, equipped: [], carried: derived.inventory.equipped } }, DEFAULT_RULES, content).some(c => c.name === mace.name)).toBe(false);
     const passive = bracers;
-    const passiveEntity = recomputeDerived({ ...entity, inventory: { ...entity.inventory, carried: [], equipped: [{ itemId: passive.id, quantity: 1, attuned: true, features: passive.features, requiresAttunement: true }] } }, DEFAULT_RULES);
-    expect(generateAllActionCards(passiveEntity).some(c => c.name === passive.name)).toBe(false);
-    const magicEntity = recomputeDerived({ ...entity, inventory: { ...entity.inventory, carried: [], equipped: [{ itemId: plusOne.id, quantity: 1, attuned: false, features: plusOne.features }] } }, DEFAULT_RULES);
+    const passiveEntity = recomputeDerived({ ...entity, inventory: { ...entity.inventory, carried: [], equipped: [{ itemId: passive.id, quantity: 1, attuned: true, features: passive.features, requiresAttunement: true }] } }, DEFAULT_RULES, content);
+    expect(generateAllActionCards(passiveEntity, DEFAULT_RULES, content).some(c => c.name === passive.name)).toBe(false);
+    const magicEntity = recomputeDerived({ ...entity, inventory: { ...entity.inventory, carried: [], equipped: [{ itemId: plusOne.id, quantity: 1, attuned: false, features: plusOne.features }] } }, DEFAULT_RULES, content);
     expect(magicEntity.derived.attackBonuses.find(a => a.id === plusOne.id)).toMatchObject({ bonus: 5, damageBonus: 4, damageDice: '1d6' });
   });
 

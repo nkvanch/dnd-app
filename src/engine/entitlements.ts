@@ -9,7 +9,9 @@
 // add/remove primitive in leveling.ts; the caller's simulate()/mutate()
 // recomputes.
 // ============================================================================
-import { Entity, EntitlementRecord, EntitlementKind, EntitlementSourceKind, SkillName } from './types';
+import { Entity, EntitlementRecord, EntitlementKind, EntitlementSourceKind, SkillName, Spell } from './types';
+import { spellRepo } from '../content/spellRepo';
+import { getClassLevels } from './multiclass';
 
 function sameEntitlement(a: EntitlementRecord, b: EntitlementRecord): boolean {
   return a.kind === b.kind && a.key === b.key
@@ -179,11 +181,93 @@ export function revokeResourceSource(
   return revokeEntitlementsFromSource(entity, sourceKind, sourceId);
 }
 
-/** One-time compatibility boundary. Historical unowned grants remain manual.
+/**
+ * Rules-engine blocker closure (prepared-spell legality, 1D — legacy/
+ * migrated characters): a spell_access/cantrip_access entitlement stamped
+ * sourceKind:'manual' — either by the one-time migration below (a save
+ * predating the entitlement system, see the `add()` calls at the bottom of
+ * initializeEntitlementInputs) or by TabSpells' addSpell BEFORE its own
+ * closure-1C fix — makes isSpellPreparationLegal treat that spell as
+ * permanently exempt from preparation, even when it's actually a real
+ * Wizard/Cleric/Druid/Paladin/Artificer spell that should require prep.
+ *
+ * Reclassifies a manual spell/cantrip entitlement to sourceKind:'class' when
+ * EXACTLY ONE of the character's own current classes has that spell on its
+ * class spell list (Spell.classes) — the same single-candidate rule
+ * addSpell now uses going forward (TabSpells.tsx); see closure 1G. Zero
+ * candidates is a genuinely untraceable grant (no class list contains it at
+ * all — e.g. a scroll/item grant) and is left as an ordinary, unrestricted
+ * manual entry, unchanged.
+ *
+ * Rules-engine blocker RE-AUDIT closure (1F): 2+ candidates — a spell shared
+ * by two of the character's OWN classes, where which one "owns" it can't be
+ * recovered — is genuine, UNRESOLVED ambiguity, not an ordinary manual
+ * grant. This is now tagged explicitly via `ambiguousClassIds` (ordinary
+ * `manual` with this field absent still means exactly what it always has:
+ * unrestricted, no class opinion) rather than left silently
+ * indistinguishable from a true manual grant — actionCards.ts's
+ * resolveSpellCastingContexts reads this field to build one REAL casting
+ * context per candidate class instead of a single always-legal blanket one,
+ * so the player is offered an explicit source choice instead of the spell
+ * silently behaving as globally unrestricted forever.
+ *
+ * Not gated by entitlementInputsVersion: runs every recompute, but is
+ * naturally idempotent and cheap — once a key is reclassified to
+ * sourceKind:'class' it no longer matches sourceKind==='manual' on the next
+ * pass; an already-correctly-ambiguousClassIds-tagged record is left
+ * untouched (same-set comparison) rather than re-written every pass.
+ */
+function sameStringSet(a: string[] | undefined, b: string[]): boolean {
+  if (!a || a.length !== b.length) return false;
+  return a.every(x => b.includes(x));
+}
+
+/**
+ * `homebrewSpells` (rules-engine blocker RE-AUDIT closure — dependency
+ * inversion, 1A/1B): explicit, application-resolved homebrew spell list —
+ * this function never reaches into a store for it. Omitting it (the
+ * default) means "no homebrew spell fallback, official spellRepo content
+ * only" (a deterministic static default: candidates simply resolve to
+ * fewer/no matches for a homebrew-only spell, never a crash or a guess).
+ */
+function reclassifyManualSpellSources(entity: Entity, homebrewSpells: readonly Spell[] = []): Entity {
+  const records = entity.entitlements;
+  if (!records || records.length === 0) return entity;
+  if (!records.some(r => (r.kind === 'spell_access' || r.kind === 'cantrip_access') && r.sourceKind === 'manual')) {
+    return entity;
+  }
+  const ownedClassIds = getClassLevels(entity).map(c => c.classId as string);
+  if (ownedClassIds.length === 0) return entity;
+
+  let changed = false;
+  const next = records.map(r => {
+    if (r.sourceKind !== 'manual' || (r.kind !== 'spell_access' && r.kind !== 'cantrip_access')) return r;
+    const spell = spellRepo.getSpellSync(r.key) ?? homebrewSpells.find(s => s.id === r.key);
+    const candidates = (spell?.classes ?? []).filter(id => ownedClassIds.includes(id));
+    if (candidates.length === 1) {
+      changed = true;
+      return { ...r, sourceKind: 'class' as const, sourceId: candidates[0], ambiguousClassIds: undefined };
+    }
+    if (candidates.length >= 2) {
+      if (sameStringSet(r.ambiguousClassIds, candidates)) return r; // already correctly flagged
+      changed = true;
+      return { ...r, ambiguousClassIds: candidates };
+    }
+    return r; // 0 candidates — genuinely untraceable, left as an ordinary manual grant
+  });
+  if (!changed) return entity;
+  return { ...entity, entitlements: next };
+}
+
+/**
+ * One-time compatibility boundary. Historical unowned grants remain manual.
  * Previous derived snapshots are migration evidence only, never runtime ownership.
- * Run BEFORE a source mutation, so grant/remove needs no intervening recompute. */
-export function initializeEntitlementInputs(entity: Entity): Entity {
-  if (entity.entitlementInputsVersion === 1) return entity;
+ * Run BEFORE a source mutation, so grant/remove needs no intervening recompute.
+ * `homebrewSpells` — see reclassifyManualSpellSources' own doc comment;
+ * threaded straight through, same explicit/no-store contract.
+ */
+export function initializeEntitlementInputs(entity: Entity, homebrewSpells: readonly Spell[] = []): Entity {
+  if (entity.entitlementInputsVersion === 1) return reclassifyManualSpellSources(entity, homebrewSpells);
   const records = [...(entity.entitlements ?? [])];
   const previous = entity.effectGrantedProficiencies;
   const add = (kind: EntitlementKind, keys: string[], derived: string[] = []) => {
@@ -203,8 +287,8 @@ export function initializeEntitlementInputs(entity: Entity): Entity {
   }
   add('spell_access', entity.spellcasting?.known ?? [], previous?.spells);
   add('cantrip_access', entity.spellcasting?.cantrips ?? [], previous?.cantrips);
-  return { ...entity, entitlements: records, entitlementInputsVersion: 1,
-    effectGrantedProficiencies: undefined };
+  return reclassifyManualSpellSources({ ...entity, entitlements: records, entitlementInputsVersion: 1,
+    effectGrantedProficiencies: undefined }, homebrewSpells);
 }
 
 /** Manual editing owns only manual grants; it cannot revoke a class/race source. */

@@ -32,6 +32,52 @@ describe('canonical deep Entity validation', () => {
   it.each([NaN, Infinity, -Infinity, 'ten'])('rejects ability %p', value => expect(resultAfter(e => { e.stats.str = value; }).valid).toBe(false));
   it('rejects malformed classes', () => expect(resultAfter(e => { e.identity.classes = [{ level: 'one' }]; }).valid).toBe(false));
   it('rejects malformed entitlements', () => expect(resultAfter(e => { e.entitlements = [{ kind: 'unknown', key: 'x', sourceKind: 'class' }]; }).valid).toBe(false));
+
+  // Rules-engine blocker RE-AUDIT closure (2G): EntitlementRecord.
+  // ambiguousClassIds is a persisted/imported field (written by
+  // entitlements.ts's reclassifyManualSpellSources) that previously had no
+  // structural validation at all — anything malformed loaded straight
+  // through to the engine.
+  describe('ambiguousClassIds validation (closure 2G)', () => {
+    const validAmbiguous = { kind: 'spell_access', key: 'fireball', sourceKind: 'manual', ambiguousClassIds: ['wizard', 'sorcerer'] };
+
+    it('accepts a well-formed ambiguousClassIds entry', () => {
+      expect(resultAfter(e => { e.entitlements = [validAmbiguous]; }).valid).toBe(true);
+    });
+
+    it('accepts an ordinary entitlement with the field entirely absent (the overwhelming majority)', () => {
+      expect(resultAfter(e => { e.entitlements = [{ kind: 'spell_access', key: 'fireball', sourceKind: 'manual' }]; }).valid).toBe(true);
+    });
+
+    it.each([
+      ['a bare string instead of an array', 'wizard'],
+      ['an array of numbers', [1, 2]],
+      ['a mixed string/number array', ['wizard', 3]],
+      ['a plain object', {}],
+      ['an empty array', []],
+      ['a duplicate candidate listed twice', ['wizard', 'wizard']],
+    ])('rejects %s', (_label, malformed) => {
+      expect(resultAfter(e => {
+        e.entitlements = [{ ...validAmbiguous, ambiguousClassIds: malformed }];
+      }).valid).toBe(false);
+    });
+
+    it('rejects ambiguousClassIds on a kind other than spell_access/cantrip_access — it has no meaning there', () => {
+      expect(resultAfter(e => {
+        e.entitlements = [{ kind: 'tool_proficiency', key: 'thieves_tools', sourceKind: 'manual', ambiguousClassIds: ['wizard', 'sorcerer'] }];
+      }).valid).toBe(false);
+    });
+
+    it('accepts ambiguousClassIds on a cantrip_access entry too', () => {
+      expect(resultAfter(e => {
+        e.entitlements = [{ kind: 'cantrip_access', key: 'fire_bolt', sourceKind: 'manual', ambiguousClassIds: ['wizard', 'sorcerer'] }];
+      }).valid).toBe(true);
+    });
+
+    it('a malformed ambiguousClassIds is quarantined (rejected), never thrown, matching this app\'s existing import-validation convention', () => {
+      expect(() => resultAfter(e => { e.entitlements = [{ ...validAmbiguous, ambiguousClassIds: 'wizard' }]; })).not.toThrow();
+    });
+  });
   it('rejects invalid normal and pact pools', () => {
     expect(resultAfter(e => { e.spellcasting = { ability: 'int', known: [], prepared: [], cantrips: [], slots: { '1': { total: 1, used: 2 } } }; }).valid).toBe(false);
     expect(resultAfter(e => { e.spellcasting = { ability: 'cha', known: [], prepared: [], cantrips: [], slots: {}, pactSlots: { '10': { total: 1, used: 2 } } }; }).valid).toBe(false);

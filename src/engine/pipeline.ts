@@ -16,10 +16,9 @@ import {
 } from './types';
 import { resolveEffectsForTarget, resolveBinary, resolveCombine } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
-import { generateAllActionCards } from './actionCards';
+import { generateAllActionCards, CardGenOptions } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
 import { isMartialWeapon } from '../content/items/itemBrowse';
-import { useHomebrewStore } from '../store/homebrewStore';
 import { effectiveItemFeatures, effectiveWeaponAttackFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition } from './itemMechanics';
 import { getClassEntry } from './multiclass';
 import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
@@ -128,12 +127,26 @@ export function effectiveAbilityScores(entity: Entity): Entity['stats'] {
  *
  * DM overrides are applied LAST and win over everything else.
  * They never modify entity.stats or entity.features.
+ *
+ * `content` (rules-engine blocker RE-AUDIT closure — dependency inversion,
+ * 1B): explicit, application-resolved classes/races/spells/items — the ONE
+ * merged content snapshot (getMergedContentDB(entity.rulesetId)) — threaded
+ * straight through to initializeEntitlementInputs (spell reclassification),
+ * item-mechanics resolution (equipped-item effects, weapon attack bonuses),
+ * and generateAllActionCards (spell-card/context generation) — this file
+ * never reaches into a store for any of it. Optional so every pre-existing
+ * call site (this function has ~50 across the engine) keeps working
+ * unchanged, falling back to the deterministic official-only catalogs each
+ * of those functions already defaults to.
  */
-export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Entity {
+export function recomputeDerived(
+  entityParam: Entity, rules: CampaignRules,
+  content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
+): Entity {
   // Use a mutable local reference so we can apply grant_proficiency effects
-  let entity = recomputeResourceMaximums(initializeEntitlementInputs(entityParam));
+  let entity = recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells));
 
-  const allEffects    = collectAllEffects(entity);
+  const allEffects    = collectAllEffects(entity, content.items);
   let effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const profBonus     = proficiencyBonus(entity.identity.level);
 
@@ -331,7 +344,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     senses,
     movement,
     savingThrows:     resolveSavingThrows(effectiveStats, entity.proficiencies.savingThrows, profBonus, allEffects, rules),
-    attackBonuses:    computeWeaponAttackBonuses(entity, effectiveStats, profBonus),
+    attackBonuses:    computeWeaponAttackBonuses(entity, effectiveStats, profBonus, content.items),
     advantageStates,
     spellSaveDC:  entity.spellcasting
       ? abilityDC(profBonus, modifier(effectiveStats[entity.spellcasting.ability]))
@@ -398,7 +411,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   // — see the SQLite/render-loop plan). Safe to call synchronously:
   // spellRepo/itemRepo's Tier-2 caches are guaranteed warm for every id
   // this entity references by the time any mutation reaches here.
-  return { ...withDerived, actionCards: generateAllActionCards(withDerived, rules) };
+  return { ...withDerived, actionCards: generateAllActionCards(withDerived, rules, content) };
 }
 
 // ── Effect collection ─────────────────────────────────────────────────────────
@@ -411,8 +424,16 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
  * or in the active condition list (e.g. Rage effects skip when rage is not active).
  * Skips effects from conditions whose suppressedBy list includes a relevant suppressor
  * (e.g. Blindsight silences Blinded's attack penalties without removing the condition).
+ *
+ * `homebrewItems` (rules-engine blocker RE-AUDIT closure — dependency
+ * inversion, 1D): explicit, application-resolved homebrew items, threaded
+ * to resolveItemDefinition for the equipped-item effects below — this
+ * function never reaches into a store for it. Optional so every
+ * pre-existing caller (audit.ts, combat.ts, featPrereq.ts, leveling.ts,
+ * rest.ts — none of which currently pass homebrew-aware content) keeps
+ * working unchanged, falling back to official-only item resolution.
  */
-export function collectAllEffects(entity: Entity): ActiveEffect[] {
+export function collectAllEffects(entity: Entity, homebrewItems: readonly import('./types').Item[] = []): ActiveEffect[] {
   const effects: ActiveEffect[]       = [];
   const activeFlags                   = entity.conditionMonitor.flags;
   const activeConditionIds            = new Set(entity.conditions.map(c => c.id));
@@ -473,12 +494,12 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
   // requiresNoArmorOrShield effect would be a contradiction in the content
   // itself, not something this predicate needs to resolve).
   const anyArmorOrShieldEquipped = entity.inventory.equipped.some(i => {
-    const definition = resolveItemDefinition(i.itemId);
+    const definition = resolveItemDefinition(i.itemId, homebrewItems);
     return definition ? itemWearsArmorOrShield(definition) : i.wearsArmorOrShield === true;
   });
 
   for (const item of entity.inventory.equipped) {
-    const definition = resolveItemDefinition(item.itemId);
+    const definition = resolveItemDefinition(item.itemId, homebrewItems);
     if (!isItemMechanicallyActive(item, definition)) continue;
     const itemFeatures = effectiveItemFeatures(item, definition);
     for (const fi of itemFeatures) {
@@ -498,6 +519,30 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
           sourceKind: 'item',
         });
       }
+    }
+  }
+
+  // 3. Rules-engine blocker RE-AUDIT closure (Closure 3C — native BeastForm
+  //    defenses): while transformed, the active beast form's OWN typed
+  //    damage resistances/immunities/vulnerabilities participate in the
+  //    SAME damage-resolution path as every other active effect (used by
+  //    resolveResistance via collectAllEffects — see applyWildShapeDamage,
+  //    combat.ts, which calls collectAllEffects(entity) BEFORE reverting).
+  //    Purely derived from wildShapeState.formId, never copied onto the
+  //    entity — reverting (wildShapeState -> null) makes these vanish with
+  //    no cleanup mutation, since this block simply stops firing.
+  if (entity.wildShapeState?.active) {
+    const form = ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId);
+    if (form) {
+      const pushDefense = (damageType: string, operation: 'resistance' | 'immunity' | 'vulnerability') => {
+        effects.push({
+          effect: { type: 'grant_resistance', target: damageType, operation, value: null, condition: null },
+          sourceName: form.name, sourceId: form.id, appliedAt: 0, sourceKind: 'condition',
+        });
+      };
+      for (const t of form.damageResistances ?? [])    pushDefense(t, 'resistance');
+      for (const t of form.damageImmunities ?? [])      pushDefense(t, 'immunity');
+      for (const t of form.damageVulnerabilities ?? []) pushDefense(t, 'vulnerability');
     }
   }
 
@@ -557,6 +602,11 @@ function computeWeaponAttackBonuses(
   entity:         Entity,
   effectiveStats: Entity['stats'],
   profBonus:      number,
+  /** Rules-engine blocker RE-AUDIT closure (dependency inversion, 1D):
+   *  explicit, application-resolved homebrew items — this function never
+   *  reaches into a store for it. See resolveItemDefinition's own doc
+   *  comment (itemMechanics.ts) for the same contract. */
+  homebrewItems:  readonly import('./types').Item[] = [],
 ): AttackBonus[] {
   const strMod = modifier(effectiveStats.str);
   const dexMod = modifier(effectiveStats.dex);
@@ -567,20 +617,21 @@ function computeWeaponAttackBonuses(
     // bonus until actually attuned — same gate collectAllEffects applies to
     // passive effects and actionCards.ts applies to action cards, reusing
     // the same hydrated flag (see ItemInstance's own doc comment).
-    const activeDefinition = resolveItemDefinition(inst.itemId);
+    const activeDefinition = resolveItemDefinition(inst.itemId, homebrewItems);
     if (!isItemMechanicallyActive(inst, activeDefinition)) continue;
     // itemRepo only ever holds the OFFICIAL catalog — a homebrew weapon's
-    // definition lives in homebrewStore instead, so it needs the same
-    // fallback lookup as characterStore.ts's hydrateItemFeatures, or every
-    // homebrew weapon silently gets no to-hit bonus computed for it here.
+    // definition lives in the explicit content snapshot instead, so it
+    // needs the same fallback lookup as characterStore.ts's
+    // hydrateItemFeatures, or every homebrew weapon silently gets no
+    // to-hit bonus computed for it here.
     const def = itemRepo.getItemSync(inst.itemId)
-      ?? useHomebrewStore.getState().items.find(i => i.id === inst.itemId);
+      ?? homebrewItems.find(i => i.id === inst.itemId);
     if (!def) continue;
 
     // Prefer the instance's own (possibly infusion-augmented) features,
     // same fallback actionCards.ts's card generator already uses — older
     // saves may have only an itemId with no hydrated features.
-    const feats = effectiveWeaponAttackFeatures(inst, def);
+    const feats = effectiveWeaponAttackFeatures(inst, def, homebrewItems);
     let dice: string | null = null;
     let dmgType = '';
     let featureName = def.name;

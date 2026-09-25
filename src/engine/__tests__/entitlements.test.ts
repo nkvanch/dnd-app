@@ -8,13 +8,175 @@
 import { makeEmptyEntity } from '../../store/characterStore';
 import {
   grantEntitlement, grantEntitlements, revokeEntitlementsFromSource, revokeEntitlementsFromChoice,
-  hasEntitlement, deriveProficienciesFromEntitlements, revokeResourceSource,
+  hasEntitlement, deriveProficienciesFromEntitlements, revokeResourceSource, initializeEntitlementInputs,
 } from '../entitlements';
 import { applyGrant } from '../leveling';
+import { isSpellPreparationLegal } from '../actionCards';
+import { Entity, ClassLevelEntry, SpellSlots, Spell, asClassId } from '../types';
+import { useHomebrewStore } from '../../store/homebrewStore';
 
 function entity() {
   return makeEmptyEntity('e1', 'character');
 }
+
+function emptySlots(): SpellSlots {
+  const tiers = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+  const slots = {} as SpellSlots;
+  for (const t of tiers) slots[t] = { total: 0, used: 0 };
+  return slots;
+}
+
+/** Registers a fixture spell via homebrewStore's fallback lookup — the same
+ *  workaround actionCards.test.ts uses, since spellRepo's native Tier-2
+ *  cache starts empty in tests (getSpellSync needs an explicit
+ *  ensureLoaded() warm-up this synchronous migration path never performs
+ *  by design — see initializeEntitlementInputs's own doc comment). */
+function fixtureSpell(id: string, classes: string[]): Spell {
+  return {
+    id, name: id, level: 3, school: 'Evocation', castingTime: '1 action', range: '150 feet',
+    components: ['V', 'S', 'M'], duration: 'Instantaneous', description: 'Test spell.',
+    upcast: null, ritual: false, concentration: false, classes,
+  };
+}
+
+// ── Rules-engine blocker closure (1D — legacy/migrated characters) ──────────
+// A save predating the entitlement system (entitlementInputsVersion
+// undefined) migrates every flat spellcasting.known/.cantrips id into a
+// spell_access/cantrip_access entitlement — previously always stamped
+// sourceKind:'manual', which isSpellPreparationLegal then treated as
+// permanently exempt from preparation, letting a real Wizard/Cleric spell
+// silently bypass prep forever purely because its provenance predates
+// entitlement tracking. initializeEntitlementInputs now attempts to recover
+// the real class source when it's unambiguous.
+
+describe('initializeEntitlementInputs — legacy spell/cantrip migration (closure 1D)', () => {
+  // Rules-engine blocker RE-AUDIT closure (dependency inversion, 1A/1B):
+  // initializeEntitlementInputs no longer reads useHomebrewStore itself —
+  // this fixture spell is passed explicitly to every call below instead,
+  // the same way the application layer resolves it (getMergedContentDB)
+  // before calling into the engine.
+  const homebrewSpells = [fixtureSpell('fireball', ['wizard', 'sorcerer'])];
+
+  function legacyWizard(spellId: string): Entity {
+    const classes: ClassLevelEntry[] = [{ classId: asClassId('wizard'), subclassId: null, level: 5 }];
+    return {
+      ...entity(),
+      identity: { ...entity().identity, classes },
+      entitlements: undefined, // predates the entitlement system entirely
+      entitlementInputsVersion: undefined,
+      spellcasting: { ability: 'int', slots: emptySlots(), cantrips: [], known: [spellId], prepared: [], concentrating: null },
+    };
+  }
+
+  it('a known Wizard spell that\'s on ONLY the Wizard spell list resolves to sourceKind:class (not manual) — real preparation now applies', () => {
+    const migrated = initializeEntitlementInputs(legacyWizard('fireball'), homebrewSpells); // Fireball: wizard + sorcerer, but this character is Wizard-only
+    const record = migrated.entitlements!.find(r => r.kind === 'spell_access' && r.key === 'fireball');
+    expect(record?.sourceKind).toBe('class');
+    expect(record?.sourceId).toBe('wizard');
+    // Consequence that actually matters: an unprepared migrated Wizard
+    // spell is now correctly gated, not silently exempt forever.
+    expect(isSpellPreparationLegal(migrated, 'fireball')).toBe(false);
+  });
+
+  it('a spell shared by two of the character\'s OWN classes is genuine ambiguity — stays manual, tagged with BOTH candidates, never guesses a single winner', () => {
+    const classes: ClassLevelEntry[] = [
+      { classId: asClassId('wizard'), subclassId: null, level: 3 },
+      { classId: asClassId('sorcerer'), subclassId: null, level: 2 },
+    ];
+    const legacy: Entity = {
+      ...entity(),
+      identity: { ...entity().identity, classes },
+      entitlements: undefined,
+      entitlementInputsVersion: undefined,
+      spellcasting: { ability: 'int', slots: emptySlots(), cantrips: [], known: ['fireball'], prepared: [], concentrating: null },
+    };
+    const migrated = initializeEntitlementInputs(legacy, homebrewSpells); // Fireball is on BOTH Wizard's and Sorcerer's lists
+    const record = migrated.entitlements!.find(r => r.kind === 'spell_access' && r.key === 'fireball');
+    expect(record?.sourceKind).toBe('manual'); // genuinely ambiguous — not guessed
+    // Rules-engine blocker RE-AUDIT closure (1F): unlike a true unrestricted
+    // manual grant, this now carries an explicit signal distinguishing
+    // "unresolved" from "genuinely unrestricted" — see resolveSpellCastingContexts
+    // (actionCards.test.ts) for how this turns into TWO real per-class
+    // contexts (Wizard/INT/prepared-required, Sorcerer/CHA/known) instead
+    // of one blanket always-legal context.
+    expect(record?.ambiguousClassIds).toEqual(expect.arrayContaining(['wizard', 'sorcerer']));
+    expect(record?.ambiguousClassIds).toHaveLength(2);
+    // Legal overall because the Sorcerer candidate context is a known
+    // caster (always legal) — NOT because "manual" itself is unrestricted;
+    // see the dedicated resolveSpellCastingContexts test for the real
+    // per-context breakdown this now produces.
+    expect(isSpellPreparationLegal(migrated, 'fireball')).toBe(true);
+  });
+
+  it('reclassifying an ambiguous entry twice is idempotent — no churn, same candidates', () => {
+    const classes: ClassLevelEntry[] = [
+      { classId: asClassId('wizard'), subclassId: null, level: 3 },
+      { classId: asClassId('sorcerer'), subclassId: null, level: 2 },
+    ];
+    const legacy: Entity = {
+      ...entity(),
+      identity: { ...entity().identity, classes },
+      entitlements: undefined,
+      entitlementInputsVersion: undefined,
+      spellcasting: { ability: 'int', slots: emptySlots(), cantrips: [], known: ['fireball'], prepared: [], concentrating: null },
+    };
+    const once = initializeEntitlementInputs(legacy, homebrewSpells);
+    const twice = initializeEntitlementInputs(once, homebrewSpells);
+    expect(twice.entitlements).toEqual(once.entitlements);
+  });
+
+  it('a spell on no class list at all (untraceable — e.g. a scroll/item grant) stays manual', () => {
+    const migrated = initializeEntitlementInputs(legacyWizard('completely_unknown_homebrew_spell_id'), homebrewSpells);
+    const record = migrated.entitlements!.find(r => r.kind === 'spell_access' && r.key === 'completely_unknown_homebrew_spell_id');
+    expect(record?.sourceKind).toBe('manual');
+  });
+
+  it('an ALREADY-migrated entity (entitlementInputsVersion 1) with a stale manual-tagged real class spell still gets reclassified on the next pass', () => {
+    // Simulates a character migrated by an OLDER version of this migration
+    // (before this fix existed) — already has entitlementInputsVersion: 1
+    // with fireball incorrectly stamped manual.
+    const classes: ClassLevelEntry[] = [{ classId: asClassId('wizard'), subclassId: null, level: 5 }];
+    const staleEntity: Entity = {
+      ...entity(),
+      identity: { ...entity().identity, classes },
+      entitlementInputsVersion: 1,
+      entitlements: [{ kind: 'spell_access', key: 'fireball', sourceKind: 'manual' }],
+      spellcasting: { ability: 'int', slots: emptySlots(), cantrips: [], known: ['fireball'], prepared: [], concentrating: null },
+    };
+    expect(isSpellPreparationLegal(staleEntity, 'fireball')).toBe(true); // stale bug: wrongly exempt
+    const fixed = initializeEntitlementInputs(staleEntity, homebrewSpells);
+    const record = fixed.entitlements!.find(r => r.kind === 'spell_access' && r.key === 'fireball');
+    expect(record?.sourceKind).toBe('class');
+    expect(record?.sourceId).toBe('wizard');
+    expect(isSpellPreparationLegal(fixed, 'fireball')).toBe(false); // now correctly gated
+  });
+
+  it('is idempotent: reclassifying twice produces the same result and does not fight itself', () => {
+    const classes: ClassLevelEntry[] = [{ classId: asClassId('wizard'), subclassId: null, level: 5 }];
+    const staleEntity: Entity = {
+      ...entity(),
+      identity: { ...entity().identity, classes },
+      entitlementInputsVersion: 1,
+      entitlements: [{ kind: 'spell_access', key: 'fireball', sourceKind: 'manual' }],
+      spellcasting: { ability: 'int', slots: emptySlots(), cantrips: [], known: ['fireball'], prepared: [], concentrating: null },
+    };
+    const once = initializeEntitlementInputs(staleEntity, homebrewSpells);
+    const twice = initializeEntitlementInputs(once, homebrewSpells);
+    expect(twice.entitlements).toEqual(once.entitlements);
+  });
+
+  it('a deliberately manual entry the player/DM added for a spell not on any of their own classes\' lists is left alone', () => {
+    const classes: ClassLevelEntry[] = [{ classId: asClassId('fighter'), subclassId: null, level: 5 }];
+    const e: Entity = {
+      ...entity(),
+      identity: { ...entity().identity, classes },
+      entitlementInputsVersion: 1,
+      entitlements: [{ kind: 'spell_access', key: 'fireball', sourceKind: 'manual' }], // Fighter has no spellcasting; this is a scroll/DM grant
+    };
+    const result = initializeEntitlementInputs(e, homebrewSpells);
+    expect(result.entitlements).toEqual(e.entitlements); // untouched — Fighter isn't on Fireball's class list
+  });
+});
 
 describe('grantEntitlement', () => {
   it('appends a new record', () => {

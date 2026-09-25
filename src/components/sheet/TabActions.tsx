@@ -3,16 +3,33 @@
 import { useState, useCallback, useEffect, memo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
-import { Entity, ActionCard, CampaignRules, ActivationOption } from '../../engine/types';
+import { Entity, ActionCard, CampaignRules, ActivationOption, SpellCastingContext } from '../../engine/types';
 import { endWildShape } from '../../engine/combat';
-import { getTriggeredFeatures, isFeatureAvailable } from '../../engine/actionCards';
+import { getTriggeredFeatures, isFeatureAvailable, formatCastingContextLabel, CardGenOptions } from '../../engine/actionCards';
 import { applyActionCardUse } from '../../engine/actionUse';
 import { useSpellPayment } from './SpellPaymentChooser';
 import { doubleDiceCount } from '../../engine/dice';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { DiceRoll } from '../../engine/types';
 import { ManualRollInput } from '../ManualRollInput';
+import { Alert } from '../../utils/alert';
+import { useHomebrewStore } from '../../store/homebrewStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+
+/**
+ * Rules-engine blocker RE-AUDIT closure (dependency inversion, 1B/1D): the
+ * ONE place this file resolves the authoritative merged official + homebrew
+ * + active-ruleset content — the engine (actionCards.ts/actionUse.ts) never
+ * reads useHomebrewStore itself; it's computed here, in the UI layer, and
+ * passed down explicitly to every engine call that needs it. Called from
+ * both ActionCardRow (the chooser's labels) and TabActionsInner (the actual
+ * cast) — getMergedContentDB is internally memoized by its own inputs, so
+ * this is one resolution, not two merge implementations.
+ */
+export function useCardContent(entity: Entity): Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> {
+  const mergedContentDB = useHomebrewStore(s => s.getMergedContentDB(entity.rulesetId));
+  return { classDefs: mergedContentDB.classes, homebrewSpells: mergedContentDB.spells, races: mergedContentDB.races, items: mergedContentDB.items };
+}
 
 export { applyActionCardUse } from '../../engine/actionUse';
 /**
@@ -66,6 +83,24 @@ const CARD_COLORS: Record<ActionCard['color'], string> = {
   blue:   Colors.blue,
   purple: Colors.purple,
   gray:   Colors.textDim,
+};
+
+/**
+ * Rules-engine blocker RE-AUDIT closure (2F — activation-option context
+ * preservation): the transient UI/application state for a cast that's
+ * paused waiting on an activation-option choice. Codex found that choosing
+ * a casting source (and/or a preparation Cast Anyway decision) BEFORE the
+ * option picker opened was silently discarded — the old flow only
+ * remembered the bare `card`, so `handleChooseOption` always executed with
+ * bypassSpellPreparation/selectedSpellCastingContext both undefined,
+ * re-prompting or wrongly blocking a cast the player had already resolved.
+ * This is deliberately local component state, not persisted anywhere on
+ * the character.
+ */
+type PendingActionUse = {
+  card: ActionCard;
+  bypassSpellPreparation?: boolean;
+  selectedSpellCastingContext?: SpellCastingContext;
 };
 
 // ── Use Result Modal ──────────────────────────────────────────────────────────
@@ -194,14 +229,101 @@ export function ActivationOptionModal({ entity, card, onChoose, onClose }: Activ
 
 interface CardRowProps {
   card:    ActionCard;
-  onUse:   (card: ActionCard) => void;
+  /** Rules-engine blocker RE-AUDIT closure (1C) — needed to resolve the
+   *  merged/ruleset-aware class list for the "Cast as..." chooser's labels
+   *  (formatCastingContextLabel). */
+  entity:  Entity;
+  /**
+   * Rules-engine blocker closure (1F — Quick Override on all normal cast
+   * surfaces): the second param is the SAME `bypassSpellPreparation` flag
+   * applyActionCardUse already accepts (actionUse.ts). The third param
+   * (closure 1B/1D) is the EXACT SpellCastingContext the player is casting
+   * through — passed straight to applyActionCardUse's own matching param.
+   * Both optional so every existing non-spell caller (a plain feature
+   * card's [Use]) is unaffected.
+   */
+  onUse:   (card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext) => void;
   /** Omit to hide the star entirely (not offered everywhere a card might render). */
   isFavorite?:       boolean;
   onToggleFavorite?: (card: ActionCard) => void;
 }
 
-export function ActionCardRow({ card, onUse, isFavorite, onToggleFavorite }: CardRowProps) {
+/**
+ * Rules-engine blocker closure (1F): Codex found an unprepared spell's card
+ * on the Actions tab and on Favorites showed a hard-disabled "N/A" with no
+ * Quick Override — table-first "Cast Anyway" (see TabSpells.tsx's own
+ * identical prompt) only existed on the Spells tab. ActionCardRow is the
+ * ONE component both of those surfaces already render through (TabActions'
+ * own Section, and TabCharacter.tsx's Favorites section) — fixing it here
+ * once covers every normal cast surface without a second/third
+ * implementation, per the task's own "create/reuse one shared action-use
+ * attempt path" requirement.
+ *
+ * `card.preparationOverridable` (see its own doc comment, types.ts) is true
+ * ONLY when preparation is the entire reason a card is blocked — the button
+ * stays enabled and labeled "Use" in that case (never "N/A"), and tapping
+ * it prompts Cancel/Cast Anyway instead of calling onUse directly. Any
+ * OTHER unavailability (no slot, action economy spent, ...) is unaffected:
+ * still a hard-disabled "N/A", exactly as before.
+ *
+ * Rules-engine blocker RE-AUDIT closure (1C) — when the card carries 2+
+ * MECHANICALLY DISTINCT casting sources (card.spellCastingContexts), tapping
+ * Use shows a "Cast as..." chooser instead of silently picking one; a
+ * deliberately-selected prep-blocked source still offers its own Cast
+ * Anyway. Single-source spells (the overwhelming majority) and every
+ * non-spell card skip this entirely.
+ */
+export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorite }: CardRowProps) {
   const borderColor = CARD_COLORS[card.color];
+  const blockedOnlyByPreparation = card.preparationOverridable === true;
+  const genuinelyUnavailable = !card.available && !blockedOnlyByPreparation;
+  const cardContent = useCardContent(entity);
+
+  function castViaContext(context: SpellCastingContext) {
+    if (!context.legal) {
+      Alert.alert(
+        `${card.name} is not prepared.`,
+        'Cast it anyway as a one-off? This does not add it to your prepared list.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cast Anyway', onPress: () => onUse(card, true, context) },
+        ],
+      );
+      return;
+    }
+    onUse(card, false, context);
+  }
+
+  function handlePress() {
+    if (card.spellCastingContexts && card.spellCastingContexts.length > 1) {
+      const classDefs = cardContent.classDefs;
+      Alert.alert(
+        `Cast ${card.name} as...`,
+        undefined,
+        [
+          ...card.spellCastingContexts.map(ctx => ({
+            text: formatCastingContextLabel(entity, ctx, classDefs),
+            onPress: () => castViaContext(ctx),
+          })),
+          { text: 'Cancel', style: 'cancel' as const },
+        ],
+      );
+      return;
+    }
+    if (blockedOnlyByPreparation) {
+      Alert.alert(
+        `${card.name} is not prepared.`,
+        'Cast it anyway as a one-off? This does not add it to your prepared list.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cast Anyway', onPress: () => onUse(card, true, card.spellCastingContext) },
+        ],
+      );
+      return;
+    }
+    onUse(card, false, card.spellCastingContext);
+  }
+
   return (
     <View style={[styles.card, { borderLeftColor: borderColor }]}>
       {onToggleFavorite && (
@@ -223,12 +345,12 @@ export function ActionCardRow({ card, onUse, isFavorite, onToggleFavorite }: Car
         )}
       </View>
       <Pressable
-        style={[styles.useBtn, !card.available && styles.useBtnDisabled]}
-        disabled={!card.available}
-        onPress={() => onUse(card)}
+        style={[styles.useBtn, genuinelyUnavailable && styles.useBtnDisabled]}
+        disabled={genuinelyUnavailable}
+        onPress={handlePress}
       >
-        <Text style={[styles.useBtnTxt, !card.available && styles.useBtnTxtDisabled]}>
-          {card.available ? 'Use' : 'N/A'}
+        <Text style={[styles.useBtnTxt, genuinelyUnavailable && styles.useBtnTxtDisabled]}>
+          {card.available || blockedOnlyByPreparation ? 'Use' : 'N/A'}
         </Text>
       </Pressable>
     </View>
@@ -237,8 +359,9 @@ export function ActionCardRow({ card, onUse, isFavorite, onToggleFavorite }: Car
 
 // ── Section ───────────────────────────────────────────────────────────────────
 
-function Section({ title, cards, onUse, favoriteIds, onToggleFavorite }: {
-  title: string; cards: ActionCard[]; onUse: (c: ActionCard) => void;
+function Section({ title, cards, entity, onUse, favoriteIds, onToggleFavorite }: {
+  title: string; cards: ActionCard[]; entity: Entity;
+  onUse: (c: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext) => void;
   favoriteIds?: Set<string>; onToggleFavorite?: (c: ActionCard) => void;
 }) {
   if (cards.length === 0) return null;
@@ -249,6 +372,7 @@ function Section({ title, cards, onUse, favoriteIds, onToggleFavorite }: {
         <ActionCardRow
           key={c.featureId}
           card={c}
+          entity={entity}
           onUse={onUse}
           isFavorite={favoriteIds?.has(c.featureId)}
           onToggleFavorite={onToggleFavorite}
@@ -337,10 +461,13 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
   // A-57: set instead of activeCard when a card declares activation.options
   // — the picker must resolve BEFORE spending, since handleUse below
-  // otherwise spends immediately on tap.
-  const [pendingOptionCard, setPendingOptionCard] = useState<ActionCard | null>(null);
+  // otherwise spends immediately on tap. Rules-engine blocker RE-AUDIT
+  // closure 2F: carries the bypass/context decision ALONGSIDE the card, not
+  // just the card alone — see PendingActionUse's own doc comment.
+  const [pendingUse, setPendingUse] = useState<PendingActionUse | null>(null);
 
   const { requestPayment, paymentChooser } = useSpellPayment(entity);
+  const cardContent = useCardContent(entity);
   const all        = (entity.actionCards ?? []).filter(c => c.tabs.includes('actions'));
   const actions      = all.filter(c => c.activation.actionType === 'action');
   const bonusActions = all.filter(c => c.activation.actionType === 'bonus_action');
@@ -349,9 +476,13 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   // attack) rather than costing its own action/bonus action/reaction.
   const freeActions  = all.filter(c => c.activation.actionType === 'free');
 
-  const handleUse = useCallback((card: ActionCard) => {
+  const handleUse = useCallback((card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext) => {
     if (card.activation.options && card.activation.options.length > 0) {
-      setPendingOptionCard(card);
+      // Rules-engine blocker RE-AUDIT closure 2F: preserve whatever source/
+      // Cast-Anyway decision ActionCardRow already made (bypassSpellPreparation/
+      // selectedSpellCastingContext), not just the bare card — handleChooseOption
+      // below reads these back out once the option is picked.
+      setPendingUse({ card, bypassSpellPreparation, selectedSpellCastingContext });
       return;
     }
     if (!onEntityUpdate || !rules) {
@@ -366,25 +497,26 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     // half to run, which previously never fired because this whole call
     // was gated on resourceCost being truthy.
     requestPayment(card, undefined, payment => {
-      const updated = applyActionCardUse(entity, card, rules, undefined, payment);
+      const updated = applyActionCardUse(entity, card, rules, undefined, payment, bypassSpellPreparation, selectedSpellCastingContext, cardContent);
       if (updated === entity) return;
       onEntityUpdate(updated);
       setActiveCard(card);
     });
-  }, [entity, rules, onEntityUpdate, requestPayment]);
+  }, [entity, rules, onEntityUpdate, requestPayment, cardContent]);
 
   const handleChooseOption = useCallback((option: ActivationOption) => {
-    const card = pendingOptionCard;
-    setPendingOptionCard(null);
-    if (!card) return;
+    const pending = pendingUse;
+    setPendingUse(null);
+    if (!pending) return;
+    const { card, bypassSpellPreparation, selectedSpellCastingContext } = pending;
     requestPayment(card, option, payment => {
       if (!onEntityUpdate || !rules) return;
-      const updated = applyActionCardUse(entity, card, rules, option, payment);
+      const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, cardContent);
       if (updated === entity) return;
       onEntityUpdate(updated);
       setActiveCard(card);
     });
-  }, [entity, rules, onEntityUpdate, pendingOptionCard, requestPayment]);
+  }, [entity, rules, onEntityUpdate, pendingUse, requestPayment, cardContent]);
 
   const favoriteIds = new Set([
     ...(entity.favoriteActionIds ?? []),
@@ -453,10 +585,10 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
           <Text style={styles.emptySubTxt}>Level up or learn spells to unlock abilities.</Text>
         </View>
       )}
-      <Section title="ACTIONS"       cards={actions}      onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
-      <Section title="BONUS ACTIONS" cards={bonusActions} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
-      <Section title="REACTIONS"     cards={reactions}    onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
-      <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
+      <Section title="ACTIONS"       cards={actions}      entity={entity} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
+      <Section title="BONUS ACTIONS" cards={bonusActions} entity={entity} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
+      <Section title="REACTIONS"     cards={reactions}    entity={entity} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
+      <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} entity={entity} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
       <UniversalActionsSection />
       <TriggeredFeaturesSection entity={entity} />
 
@@ -468,9 +600,9 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
       />
       <ActivationOptionModal
         entity={entity}
-        card={pendingOptionCard}
+        card={pendingUse?.card ?? null}
         onChoose={handleChooseOption}
-        onClose={() => setPendingOptionCard(null)}
+        onClose={() => setPendingUse(null)}
       />
     </ScrollView>
   );

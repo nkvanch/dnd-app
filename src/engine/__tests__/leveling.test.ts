@@ -23,6 +23,7 @@ import {
   Entity, Grant, ClassProgression, LevelEntry, ChoiceDefinition, CharClass,
   asClassId, Background, FeatureInstance, SkillName, Feature,
 } from '../types';
+import { resolveSpellAbility, resolveSpellSaveDC, resolveSpellAttackBonus } from '../actionCards';
 
 function entity(overrides: Partial<Entity> = {}): Entity {
   return { ...makeEmptyEntity('e1'), ...overrides };
@@ -1702,5 +1703,117 @@ describe('swapBackground', () => {
     before = { ...before, features: [...before.features, racialInsight] };
     const after = swapBackground(before, soldier, DEFAULT_RULES, undefined, { insight: false });
     expect(after.skills.skills.insight.trained).toBe(false); // forced untrain despite the race grant
+  });
+});
+
+// ── Rules-engine blocker B integration: multiclass spellcasting ability ────
+// Unlike actionCards.test.ts's resolveSpellAbility unit tests (which
+// hand-construct entitlements directly), this drives the REAL
+// levelUpClass -> queueChoice -> applySpellChoiceToEntity pipeline end to
+// end for a genuine Wizard/Cleric multiclass, proving the actual grant-
+// tagging code (not a synthetic fixture) produces spell_access entitlements
+// with the correct sourceKind:'class'/sourceId per class, which
+// resolveSpellAbility then correctly resolves into two DIFFERENT abilities
+// for the two classes' own spells on the SAME character.
+describe('multiclass spellcasting ability — end-to-end via levelUpClass (rules-engine blocker B)', () => {
+  function wizardProgressionWithSpellChoice(): ClassProgression {
+    return {
+      classId: 'wizard',
+      entries: [{
+        level: 1, hpDie: 6,
+        grants: [{ kind: 'init_spellcasting', value: { ability: 'int' } }],
+        choices: [{
+          id: 'wizard_spell_pick', prompt: 'Choose a spell', kind: 'spell', count: 1,
+          pool: 'all', grants: [], required: true, resolved: false,
+        }],
+      }],
+    };
+  }
+  function clericProgressionWithSpellChoice(): ClassProgression {
+    return {
+      classId: 'cleric',
+      entries: [{
+        level: 1, hpDie: 8,
+        grants: [{ kind: 'init_spellcasting', value: { ability: 'wis' } }],
+        choices: [{
+          id: 'cleric_spell_pick', prompt: 'Choose a spell', kind: 'spell', count: 1,
+          pool: 'all', grants: [], required: true, resolved: false,
+        }],
+      }],
+    };
+  }
+  const wizardClass: CharClass = { id: 'wizard', name: 'Wizard', hitDie: 6, features: [], spellcastingAbility: 'int' };
+  const clericClass: CharClass = { id: 'cleric', name: 'Cleric', hitDie: 8, features: [], spellcastingAbility: 'wis' };
+  const getSpellLevel = (id: string) => ({ fireball: 3, bless: 1 }[id]);
+
+  it('a real Wizard 1 / Cleric 1 multiclass resolves each class\'s own chosen spell to that class\'s own ability, even though spellcasting.ability itself stays pinned to the first class', () => {
+    let e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [], level: 0 } });
+
+    // Take Wizard 1, then pick "fireball" as the Wizard's own known spell.
+    e = levelUpClass(e, 'wizard', wizardProgressionWithSpellChoice(), DEFAULT_RULES, wizardClass);
+    const wizardChoiceId = e.choices.find(c => c.id.startsWith('wizard:wizard_spell_pick'))!.id;
+    e = applySpellChoiceToEntity(e, wizardChoiceId, ['fireball'], getSpellLevel, DEFAULT_RULES);
+
+    // Take Cleric 1 (multiclass), then pick "bless" as the Cleric's own known spell.
+    e = levelUpClass(e, 'cleric', clericProgressionWithSpellChoice(), DEFAULT_RULES, clericClass);
+    const clericChoiceId = e.choices.find(c => c.id.startsWith('cleric:cleric_spell_pick'))!.id;
+    e = applySpellChoiceToEntity(e, clericChoiceId, ['bless'], getSpellLevel, DEFAULT_RULES);
+
+    // Both spells are on the same flattened known list...
+    expect(e.spellcasting?.known).toEqual(expect.arrayContaining(['fireball', 'bless']));
+    // ...but each resolves to its OWN class's ability, not one global value.
+    expect(resolveSpellAbility(e, 'fireball', [wizardClass, clericClass])).toBe('int');
+    expect(resolveSpellAbility(e, 'bless', [wizardClass, clericClass])).toBe('wis');
+    // The headline scalar stays pinned to Wizard's (the first class taken) —
+    // see levelUpClass's own doc comment for why that's fine now that
+    // per-spell resolution never reads it for a class-sourced spell.
+    expect(e.spellcasting?.ability).toBe('int');
+  });
+
+  it('production numeric DC/attack: the same real levelUpClass pipeline produces the exact Wizard DC 15 / Cleric DC 13 example (INT 18, WIS 14, PB +3), not just a resolved ability string', () => {
+    let e = entity({
+      identity: { ...makeEmptyEntity('e1').identity, classes: [], level: 0 },
+      stats: { ...makeEmptyEntity('e1').stats, int: 18, wis: 14 },
+    });
+
+    e = levelUpClass(e, 'wizard', wizardProgressionWithSpellChoice(), DEFAULT_RULES, wizardClass);
+    let choiceId = e.choices.find(c => c.id.startsWith('wizard:wizard_spell_pick'))!.id;
+    e = applySpellChoiceToEntity(e, choiceId, ['fireball'], getSpellLevel, DEFAULT_RULES);
+    e = { ...e, identity: { ...e.identity, level: 5 } };
+    for (let lvl = 2; lvl <= 5; lvl++) e = levelUpClass(e, 'wizard', wizardProgressionWithSpellChoice(), DEFAULT_RULES, wizardClass);
+
+    e = levelUpClass(e, 'cleric', clericProgressionWithSpellChoice(), DEFAULT_RULES, clericClass);
+    choiceId = e.choices.find(c => c.id.startsWith('cleric:cleric_spell_pick'))!.id;
+    e = applySpellChoiceToEntity(e, choiceId, ['bless'], getSpellLevel, DEFAULT_RULES);
+    e = { ...e, identity: { ...e.identity, level: 8 } };
+    for (let lvl = 2; lvl <= 3; lvl++) e = levelUpClass(e, 'cleric', clericProgressionWithSpellChoice(), DEFAULT_RULES, clericClass);
+
+    // Wizard/Cleric spells must be preparable-and-prepared for this
+    // class-pair (both full/spellbook-prepared under the REAL official
+    // catalog) — prepare both so the DC/attack numbers are legally castable.
+    e = { ...e, spellcasting: { ...e.spellcasting!, prepared: ['fireball', 'bless'] } };
+    e = recomputeDerived(e, DEFAULT_RULES);
+
+    expect(e.derived.proficiencyBonus).toBe(3); // total level 8
+    expect(resolveSpellSaveDC(e, 'fireball', [wizardClass, clericClass])).toBe(15);
+    expect(resolveSpellAttackBonus(e, 'fireball', [wizardClass, clericClass])).toBe(7);
+    expect(resolveSpellSaveDC(e, 'bless', [wizardClass, clericClass])).toBe(13);
+    expect(resolveSpellAttackBonus(e, 'bless', [wizardClass, clericClass])).toBe(5);
+  });
+
+  it('restart/import: source context reconstructs correctly from persisted provenance alone (no stale calculated values need to persist)', () => {
+    let e = entity({ identity: { ...makeEmptyEntity('e1').identity, classes: [], level: 0 } });
+    e = levelUpClass(e, 'wizard', wizardProgressionWithSpellChoice(), DEFAULT_RULES, wizardClass);
+    let choiceId = e.choices.find(c => c.id.startsWith('wizard:wizard_spell_pick'))!.id;
+    e = applySpellChoiceToEntity(e, choiceId, ['fireball'], getSpellLevel, DEFAULT_RULES);
+    e = levelUpClass(e, 'cleric', clericProgressionWithSpellChoice(), DEFAULT_RULES, clericClass);
+    choiceId = e.choices.find(c => c.id.startsWith('cleric:cleric_spell_pick'))!.id;
+    e = applySpellChoiceToEntity(e, choiceId, ['bless'], getSpellLevel, DEFAULT_RULES);
+
+    // Simulate a persist + reload — a fresh object with the exact same
+    // persisted provenance (entitlements/identity.classes), nothing cached.
+    const reloaded: Entity = JSON.parse(JSON.stringify(e));
+    expect(resolveSpellAbility(reloaded, 'fireball', [wizardClass, clericClass])).toBe('int');
+    expect(resolveSpellAbility(reloaded, 'bless', [wizardClass, clericClass])).toBe('wis');
   });
 });

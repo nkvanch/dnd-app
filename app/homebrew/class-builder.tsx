@@ -51,6 +51,21 @@ const SPELL_STYLES = [
   { key: 'half', label: 'Half Caster', sub: 'Paladin/Ranger slots' },
   { key: 'pact', label: 'Pact Magic',  sub: 'Warlock-style slots' },
 ] as const;
+/**
+ * Rules-engine blocker closure (2C — homebrew class preparation policy):
+ * production spell-card generation now reads CharClass.spellPreparationPolicy
+ * for real legality/DC — see actionCards.ts's isSpellPreparationLegal/
+ * resolveSpellCastingContexts — so a homebrew caster needs a way to author
+ * it. Slot Table (SPELL_STYLES above) can't stand in for this: it's a
+ * completely separate axis (Sorcerer and Wizard are both 'full' Slot Table
+ * but opposite preparation policies), so this is a genuinely new field, not
+ * a relabeled existing one.
+ */
+const SPELL_PREP_POLICIES = [
+  { key: 'known', label: 'Known Spells', sub: "Fixed list, always castable — Sorcerer/Bard/Warlock-style" },
+  { key: 'spellbook_prepared', label: 'Spellbook + Prepared', sub: 'Owns a spellbook, prepares a subset daily — Wizard-style' },
+  { key: 'full_list_prepared', label: 'Full-List Prepared', sub: 'Prepares directly from the whole class list daily — Cleric/Druid-style' },
+] as const;
 
 const DEFAULT_ASI_LEVELS = [4, 8, 12, 16, 19];
 
@@ -132,6 +147,7 @@ export default function ClassBuilderScreen() {
   // selected = the player picks at creation (spellcastingAbilityOptions).
   const [spellAbilities,  setSpellAbilities]  = useState<Ability[]>(['cha']);
   const [spellStyle,      setSpellStyle]      = useState<'full'|'half'|'pact'>('full');
+  const [spellPrepPolicy, setSpellPrepPolicy] = useState<'known'|'spellbook_prepared'|'full_list_prepared'>('known');
   const [spellStartLevel, setSpellStartLevel] = useState('1');
 
   // ── Per-level features
@@ -182,6 +198,10 @@ export default function ClassBuilderScreen() {
       : ['cha']
     );
     setSpellStyle(editing.spellcastingStyle ?? 'full');
+    setSpellPrepPolicy(
+      editing.spellPreparationPolicy === 'spellbook_prepared' || editing.spellPreparationPolicy === 'full_list_prepared'
+        ? editing.spellPreparationPolicy : 'known'
+    );
     setSpellStartLevel(String(editing.spellcastingStartLevel ?? 1));
     setLevelFeatures((editing.levelFeatures ?? []).map(normalizeLevelFeature));
     setAsiLevels(editing.asiLevels ?? [...DEFAULT_ASI_LEVELS]);
@@ -317,6 +337,7 @@ export default function ClassBuilderScreen() {
       spellcastingAbility:     isCaster && spellAbilities.length === 1 ? spellAbilities[0] : undefined,
       spellcastingAbilityOptions: isCaster && spellAbilities.length >= 2 ? spellAbilities : undefined,
       spellcastingStyle:       isCaster ? spellStyle   : undefined,
+      spellPreparationPolicy:  isCaster && spellPrepPolicy !== 'known' ? spellPrepPolicy : undefined,
       spellcastingStartLevel:  isCaster && startLvl > 1 ? startLvl : undefined,
       asiLevels:               JSON.stringify(asiLevels) !== JSON.stringify(DEFAULT_ASI_LEVELS)
                                  ? asiLevels : undefined,
@@ -699,6 +720,32 @@ export default function ClassBuilderScreen() {
                       {s.label}
                     </Text>
                     <Text style={styles.styleSub}>{s.sub}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+
+            <Text style={styles.fieldLabel}>Preparation Model</Text>
+            <Text style={styles.hint}>
+              How this class's LEVELED spells (not cantrips) become castable —
+              independent of Slot Table above (Wizard and Sorcerer are both
+              Full Caster but opposite preparation models).
+            </Text>
+            {SPELL_PREP_POLICIES.map(p => {
+              const active = spellPrepPolicy === p.key;
+              return (
+                <Pressable key={p.key}
+                  style={[styles.styleRow, active && styles.styleRowActive]}
+                  onPress={() => setSpellPrepPolicy(p.key)}
+                >
+                  <View style={[styles.styleRadio, active && styles.styleRadioActive]}>
+                    {active && <View style={styles.styleRadioDot} />}
+                  </View>
+                  <View>
+                    <Text style={[styles.styleLabel, active && styles.styleLabelActive]}>
+                      {p.label}
+                    </Text>
+                    <Text style={styles.styleSub}>{p.sub}</Text>
                   </View>
                 </Pressable>
               );

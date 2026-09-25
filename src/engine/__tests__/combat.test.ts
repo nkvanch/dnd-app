@@ -385,13 +385,462 @@ describe('Wild Shape', () => {
     expect(shaped.resources.hp.current).toBe(20); // real HP still untouched
   });
 
-  it('auto-reverts when beast HP hits 0, with no carryover damage to real HP', () => {
-    const e = testEntity(20);
-    let shaped = startWildShape(e, 'wolf', DEFAULT_RULES);
-    const beastMaxHp = shaped.wildShapeState!.beastHpMax;
-    shaped = applyWildShapeDamage(shaped, beastMaxHp + 50, DEFAULT_RULES); // massive overkill
-    expect(shaped.wildShapeState).toBeNull();       // reverted
-    expect(shaped.resources.hp.current).toBe(20);    // no carryover — still full real HP
+  // Rules-engine blocker fix (C): damage exceeding the beast form's
+  // remaining HP used to just discard the excess outright ("form dies, 0
+  // hp gained/lost beyond what was already on the sheet") — real damage
+  // that had genuinely landed silently vanished. The form now absorbs up
+  // to its own remaining HP, reverts, and any OVERFLOW carries into the
+  // player's real HP via the existing, unmodified applyDamage() — see
+  // applyWildShapeDamage's own doc comment for the exact D-vs-F boundary
+  // rules and why this can't double-apply resistance.
+  describe('Wild Shape overflow damage (rules-engine blocker C)', () => {
+    // Wolf's beast form HP is a fixed 11 (src/content/beastforms).
+    function wolfShaped(baseHp = 30): Entity {
+      const e = testEntity(baseHp);
+      return startWildShape(e, 'wolf', DEFAULT_RULES);
+    }
+
+    it('D < F: remains transformed, form HP reduced, real HP untouched (unchanged from before this fix)', () => {
+      let shaped = wolfShaped(30);
+      shaped = applyWildShapeDamage(shaped, 6, DEFAULT_RULES); // 6 < 11
+      expect(shaped.wildShapeState?.active).toBe(true);
+      expect(shaped.wildShapeState?.beastHp).toBe(5); // 11 - 6
+      expect(shaped.resources.hp.current).toBe(30); // untouched
+    });
+
+    it('D === F: reverts, zero overflow, real HP unchanged', () => {
+      let shaped = wolfShaped(30);
+      shaped = applyWildShapeDamage(shaped, 11, DEFAULT_RULES); // exactly the form's full HP
+      expect(shaped.wildShapeState).toBeNull(); // reverted
+      expect(shaped.resources.hp.current).toBe(30); // 0 overflow — unchanged
+    });
+
+    it('D > F: reverts, overflow carries into real HP exactly', () => {
+      let shaped = wolfShaped(30);
+      shaped = applyWildShapeDamage(shaped, 20, DEFAULT_RULES); // form HP 1 less than this — 9 overflow
+      expect(shaped.wildShapeState).toBeNull();
+      expect(shaped.resources.hp.current).toBe(21); // 30 - (20 - 11) = 21, matching the task's own worked example
+    });
+
+    it('does not incorrectly reduce a form already damaged this session (D compares against CURRENT beast HP, not max)', () => {
+      let shaped = wolfShaped(30);
+      shaped = applyWildShapeDamage(shaped, 6, DEFAULT_RULES); // beastHp now 5, still transformed
+      shaped = applyWildShapeDamage(shaped, 10, DEFAULT_RULES); // 10 > 5 remaining — 5 overflow
+      expect(shaped.wildShapeState).toBeNull();
+      expect(shaped.resources.hp.current).toBe(25); // 30 - 5
+    });
+
+    it('very large overflow is never silently clamped or discarded, even against a small base HP', () => {
+      let shaped = wolfShaped(5); // small base HP, wolf form HP is 11
+      shaped = applyWildShapeDamage(shaped, 100, DEFAULT_RULES); // massive overkill — overflow = 100 - 11 = 89
+      expect(shaped.wildShapeState).toBeNull();
+      // 5 base HP against an 89 overflow — HP floors at 0 rather than going
+      // negative, same floor applyDamage always enforces; the overflow
+      // itself was never clamped or discarded before reaching that floor.
+      expect(shaped.resources.hp.current).toBe(0);
+    });
+
+    it('zero damage is a no-op', () => {
+      const shaped = wolfShaped(30);
+      const result = applyWildShapeDamage(shaped, 0, DEFAULT_RULES);
+      expect(result).toBe(shaped);
+    });
+
+    it('reversion on overflow restores base stats, same as a manual/normal reversion', () => {
+      const e = testEntity(30);
+      let shaped = startWildShape(e, 'wolf', DEFAULT_RULES);
+      shaped = applyWildShapeDamage(shaped, 50, DEFAULT_RULES); // big overkill, forces revert
+      expect(shaped.wildShapeState).toBeNull();
+      expect(shaped.derived.ac).toBe(e.derived.ac); // back to the player's own AC, not the wolf's
+    });
+
+    it('is a no-op when not currently transformed (real HP untouched)', () => {
+      const e = testEntity(30);
+      const result = applyWildShapeDamage(e, 15, DEFAULT_RULES);
+      expect(result).toBe(e);
+    });
+
+    // Rules-engine blocker CLOSURE (re-audit): resistance/immunity/
+    // vulnerability must resolve ONCE, against the FULL raw hit, BEFORE the
+    // form-HP split — not against just the leftover overflow portion after
+    // splitting (the previous implementation's bug: it split raw damage
+    // against the beast pool first, then only resolved resistance on
+    // whatever was left, discounting the wrong slice of the hit).
+    it('resistance resolves once against the FULL raw hit, before the form-HP split — not just the overflow', () => {
+      const resistantEntity: Entity = {
+        ...testEntity(30),
+        features: [
+          ...testEntity(30).features,
+          {
+            id: 'test_fire_resistance', name: 'Fire Resistance', description: '',
+            source: { kind: 'feat', refId: 'test' }, level: null, passive: true, isActive: true,
+            effects: [{ type: 'grant_resistance', target: 'fire', operation: 'resistance', value: null, condition: null }],
+            actions: [], choices: [],
+          },
+        ],
+      };
+      let shaped = startWildShape(resistantEntity, 'wolf', DEFAULT_RULES);
+      // Wolf form HP is 11. Raw fire hit of 31, fire-resistant throughout.
+      // Correct: resistance applies ONCE to the full 31 -> effective 15.
+      // 15 >= beastHp(11) -> reverts with overflow 15-11=4 (already-resolved
+      // HP damage) -> base loses 4, unresisted a second time -> 30-4=26.
+      // The PREVIOUS (buggy) order gave 20: raw overflow 31-11=20,
+      // resistance applied only to THAT afterward -> floor(20/2)=10 ->
+      // 30-10=20 — the wrong slice of the hit got the discount.
+      shaped = applyWildShapeDamage(shaped, 31, DEFAULT_RULES, 'fire');
+      expect(shaped.wildShapeState).toBeNull();
+      expect(shaped.resources.hp.current).toBe(26);
+    });
+
+    it('resistance is NOT re-applied a second time to the overflow after reversion (no double-processing)', () => {
+      const resistantEntity: Entity = {
+        ...testEntity(30),
+        features: [
+          ...testEntity(30).features,
+          {
+            id: 'test_fire_resistance', name: 'Fire Resistance', description: '',
+            source: { kind: 'feat', refId: 'test' }, level: null, passive: true, isActive: true,
+            effects: [{ type: 'grant_resistance', target: 'fire', operation: 'resistance', value: null, condition: null }],
+            actions: [], choices: [],
+          },
+        ],
+      };
+      let shaped = startWildShape(resistantEntity, 'wolf', DEFAULT_RULES);
+      shaped = applyWildShapeDamage(shaped, 31, DEFAULT_RULES, 'fire');
+      // If resistance were (incorrectly) applied a SECOND time to the 4
+      // overflow after reversion, base HP would be 30 - floor(4/2) = 28,
+      // not 26 — this pins the "exactly once" invariant directly.
+      expect(shaped.resources.hp.current).not.toBe(28);
+      expect(shaped.resources.hp.current).toBe(26);
+    });
+
+    it('temp HP participates in the SAME hit before the form-HP split (not only on overflow)', () => {
+      const e = { ...testEntity(30), resources: { ...testEntity(30).resources, hp: { current: 30, maximum: 30, temp: 4 } } };
+      let shaped = startWildShape(e, 'wolf', DEFAULT_RULES); // wolf form HP 11
+      shaped = applyWildShapeDamage(shaped, 6, DEFAULT_RULES);
+      // temp absorbs 4, 2 HP damage remains -> form 11-2=9, still transformed.
+      expect(shaped.wildShapeState?.active).toBe(true);
+      expect(shaped.wildShapeState?.beastHp).toBe(9);
+      expect(shaped.resources.hp.temp).toBe(0);
+      expect(shaped.resources.hp.current).toBe(30); // real HP untouched
+    });
+
+    it('temp HP + overflow in one hit: temp absorbs first, remaining HP damage overflows into base, no second temp absorption', () => {
+      const e = { ...testEntity(30), resources: { ...testEntity(30).resources, hp: { current: 30, maximum: 30, temp: 4 } } };
+      let shaped = startWildShape(e, 'wolf', DEFAULT_RULES); // wolf form HP 11
+      shaped = applyWildShapeDamage(shaped, 20, DEFAULT_RULES);
+      // temp absorbs 4 of the 20 -> hpDamage 16. beastHp 11 -> 16 >= 11 ->
+      // reverts with overflow 16-11=5 -> base loses 5 -> 30-5=25. If temp
+      // were (incorrectly) absorbed a second time on the post-revert
+      // applyDamage call, base would lose less than 5.
+      expect(shaped.wildShapeState).toBeNull();
+      expect(shaped.resources.hp.temp).toBe(0);
+      expect(shaped.resources.hp.current).toBe(25);
+    });
+
+    it('immunity: zero HP damage, no form HP loss, no state change at all', () => {
+      const immuneEntity: Entity = {
+        ...testEntity(30),
+        features: [
+          ...testEntity(30).features,
+          {
+            id: 'test_fire_immunity', name: 'Fire Immunity', description: '',
+            source: { kind: 'feat', refId: 'test' }, level: null, passive: true, isActive: true,
+            effects: [{ type: 'grant_resistance', target: 'fire', operation: 'immunity', value: null, condition: null }],
+            actions: [], choices: [],
+          },
+        ],
+      };
+      const shaped = startWildShape(immuneEntity, 'wolf', DEFAULT_RULES);
+      const result = applyWildShapeDamage(shaped, 100, DEFAULT_RULES, 'fire'); // massive hit, fully immune
+      expect(result).toBe(shaped); // no-op, same as applyDamage's own immunity early-return
+      expect(result.wildShapeState?.active).toBe(true);
+      expect(result.wildShapeState?.beastHp).toBe(11); // unchanged
+      expect(result.resources.hp.current).toBe(30); // unchanged
+    });
+
+    it('vulnerability: damage doubled ONCE against the full raw hit, then split — never doubled again after reversion', () => {
+      const vulnerableEntity: Entity = {
+        ...testEntity(30),
+        features: [
+          ...testEntity(30).features,
+          {
+            id: 'test_fire_vulnerability', name: 'Fire Vulnerability', description: '',
+            source: { kind: 'feat', refId: 'test' }, level: null, passive: true, isActive: true,
+            effects: [{ type: 'grant_resistance', target: 'fire', operation: 'vulnerability', value: null, condition: null }],
+            actions: [], choices: [],
+          },
+        ],
+      };
+      let shaped = startWildShape(vulnerableEntity, 'wolf', DEFAULT_RULES); // form HP 11
+      // Raw 10 fire -> doubled once to 20 -> 20 >= 11 -> reverts, overflow 9
+      // -> base loses 9 (unresisted/undoubled a second time) -> 30-9=21.
+      // If vulnerability were (incorrectly) applied a second time to the
+      // overflow, base would instead lose 18 -> 12.
+      shaped = applyWildShapeDamage(shaped, 10, DEFAULT_RULES, 'fire');
+      expect(shaped.wildShapeState).toBeNull();
+      expect(shaped.resources.hp.current).toBe(21);
+    });
+  });
+
+  // ── DM Kill regression (rules-engine blocker closure 3I) ──────────────────
+  // The DM "Kill" control (app/dm/encounter.tsx) used to route a
+  // transformed entity through applyWildShapeDamage(entity,
+  // wildShapeState.beastHpMax, ...) — harmless before the overflow fix
+  // above (excess was silently discarded), but a genuine bug now that
+  // overflow correctly carries into real HP: an already-damaged form
+  // (beastHp < beastHpMax) would compute fake overflow damage into the
+  // player's real HP purely from the GAP between current and max beast HP,
+  // never a real hit. The fix calls endWildShape() directly instead — the
+  // same "just zero out the currently active HP pool" semantics the
+  // non-transformed Kill branch already uses (a direct HP-to-0 set, no
+  // damage pipeline at all). This pins the invariant the fix relies on:
+  // ending Wild Shape NEVER touches real HP, regardless of how damaged the
+  // form currently is.
+  describe('DM Kill regression — ending Wild Shape must never manufacture overflow damage', () => {
+    it('endWildShape on an ALREADY-DAMAGED form (beastHp well below beastHpMax) leaves real HP completely untouched', () => {
+      const e = testEntity(30);
+      let shaped = startWildShape(e, 'wolf', DEFAULT_RULES); // beastHp 11 = beastHpMax
+      shaped = applyWildShapeDamage(shaped, 7, DEFAULT_RULES); // beastHp now 4, well below max 11
+      expect(shaped.wildShapeState?.beastHp).toBe(4);
+      expect(shaped.wildShapeState?.beastHpMax).toBe(11);
+
+      const killed = endWildShape(shaped, DEFAULT_RULES);
+      expect(killed.wildShapeState).toBeNull();
+      expect(killed.resources.hp.current).toBe(30); // unchanged — not beastHpMax(11) - beastHp(4) = 7 "fake overflow"
+    });
+
+    it('bulk-equivalent: endWildShape on any damaged transformed entity never touches real HP, regardless of how much beast HP remains', () => {
+      const e = testEntity(50);
+      let shaped = startWildShape(e, 'fire_elemental', DEFAULT_RULES); // beastHpMax 102
+      shaped = applyWildShapeDamage(shaped, 90, DEFAULT_RULES); // beastHp now 12, far below max
+      const killed = endWildShape(shaped, DEFAULT_RULES);
+      expect(killed.resources.hp.current).toBe(50); // unchanged regardless of the 90-point gap to beastHpMax
+    });
+  });
+
+  // ── Native BeastForm defenses (rules-engine blocker RE-AUDIT closure 3) ──
+  // Real shipped elemental forms now carry structured damage resistances/
+  // immunities/vulnerabilities (src/content/beastforms/index.ts) — these
+  // participate in the SAME collectAllEffects/resolveResistance path as
+  // every other active effect (pipeline.ts), so applyWildShapeDamage picks
+  // them up automatically with no combat.ts changes of its own.
+  describe('native BeastForm defenses (rules-engine blocker RE-AUDIT closure 3)', () => {
+    it('Fire Elemental: immune to fire — zero damage, no form HP loss', () => {
+      const e = testEntity(50);
+      const shaped = startWildShape(e, 'fire_elemental', DEFAULT_RULES);
+      const result = applyWildShapeDamage(shaped, 500, DEFAULT_RULES, 'fire');
+      expect(result).toBe(shaped); // no-op, matching applyDamage's own immunity behavior
+    });
+
+    it('Fire Elemental: NOT immune to a different damage type — cold applies normally', () => {
+      const e = testEntity(50);
+      const shaped = startWildShape(e, 'fire_elemental', DEFAULT_RULES); // beastHpMax 102
+      const result = applyWildShapeDamage(shaped, 50, DEFAULT_RULES, 'cold');
+      expect(result.wildShapeState?.active).toBe(true);
+      expect(result.wildShapeState?.beastHp).toBe(52); // 102 - 50, unresisted
+    });
+
+    it('Air Elemental: resists lightning — the form-native resistance applies while transformed', () => {
+      const e = testEntity(50);
+      let shaped = startWildShape(e, 'air_elemental', DEFAULT_RULES); // beastHpMax 90
+      shaped = applyWildShapeDamage(shaped, 40, DEFAULT_RULES, 'lightning');
+      expect(shaped.wildShapeState?.active).toBe(true);
+      expect(shaped.wildShapeState?.beastHp).toBe(70); // 90 - floor(40/2)=20 -> 70
+    });
+
+    it('Earth Elemental: vulnerable to thunder — damage doubled once, split correctly, never doubled again on overflow', () => {
+      const e = testEntity(50);
+      let shaped = startWildShape(e, 'earth_elemental', DEFAULT_RULES); // beastHpMax 126
+      // Raw 70 thunder -> doubled once to 140 -> 140 >= 126 -> reverts,
+      // overflow 140-126=14 (already-resolved) -> base loses 14 -> 50-14=36.
+      shaped = applyWildShapeDamage(shaped, 70, DEFAULT_RULES, 'thunder');
+      expect(shaped.wildShapeState).toBeNull();
+      expect(shaped.resources.hp.current).toBe(36);
+    });
+
+    it('Water Elemental: resists acid and fire (two native resistances on one form)', () => {
+      const e = testEntity(50);
+      let acidShaped = startWildShape(e, 'water_elemental', DEFAULT_RULES); // beastHpMax 114
+      acidShaped = applyWildShapeDamage(acidShaped, 60, DEFAULT_RULES, 'acid');
+      expect(acidShaped.wildShapeState?.beastHp).toBe(84); // 114 - floor(60/2)=30
+
+      let fireShaped = startWildShape(e, 'water_elemental', DEFAULT_RULES);
+      fireShaped = applyWildShapeDamage(fireShaped, 60, DEFAULT_RULES, 'fire');
+      expect(fireShaped.wildShapeState?.beastHp).toBe(84); // same discount for the second native resistance
+    });
+
+    it('the native form defense disappears entirely after reversion — the base entity has no such resistance', () => {
+      const e = testEntity(50);
+      let shaped = startWildShape(e, 'air_elemental', DEFAULT_RULES); // beastHpMax 90
+      shaped = applyWildShapeDamage(shaped, 200, DEFAULT_RULES, 'lightning'); // overkill, forces revert; overflow already resistance-discounted
+      expect(shaped.wildShapeState).toBeNull();
+      // Post-revert, apply the SAME damage type directly via applyDamage
+      // (simulating a normal hit against the now-reverted base character) —
+      // it must NOT be resisted, since the base entity has no lightning
+      // resistance of its own; only the form did, and the form is gone.
+      const before = shaped.resources.hp.current;
+      const after = applyDamage(shaped, 10, DEFAULT_RULES, 'lightning');
+      expect(before - after.resources.hp.current).toBe(10); // full, unresisted damage
+    });
+
+    it('no double-processing: a native form resistance applies to the FULL raw hit exactly once, not re-applied to the overflow', () => {
+      const e = testEntity(50);
+      let shaped = startWildShape(e, 'water_elemental', DEFAULT_RULES); // beastHpMax 114, resists acid
+      // Raw 250 acid -> resisted once to 125 -> 125 >= 114 -> reverts,
+      // overflow 125-114=11 -> base loses 11 (NOT re-resisted) -> 50-11=39.
+      // If double-processed, base would instead lose floor(11/2)=5 -> 45.
+      shaped = applyWildShapeDamage(shaped, 250, DEFAULT_RULES, 'acid');
+      expect(shaped.wildShapeState).toBeNull();
+      expect(shaped.resources.hp.current).toBe(39);
+    });
+
+    it('temp HP + native form defense: temp HP absorbs the ALREADY-RESISTED damage, not the raw amount', () => {
+      const e = { ...testEntity(50), resources: { ...testEntity(50).resources, hp: { current: 50, maximum: 50, temp: 10 } } };
+      let shaped = startWildShape(e, 'air_elemental', DEFAULT_RULES); // beastHpMax 90, resists lightning
+      // Raw 40 lightning -> resisted to 20 -> temp absorbs 10 -> hpDamage 10
+      // -> form 90-10=80, still transformed, temp now 0.
+      shaped = applyWildShapeDamage(shaped, 40, DEFAULT_RULES, 'lightning');
+      expect(shaped.wildShapeState?.active).toBe(true);
+      expect(shaped.wildShapeState?.beastHp).toBe(80);
+      expect(shaped.resources.hp.temp).toBe(0);
+    });
+
+    it('Wolf (a non-elemental, no native defenses) is completely unaffected — no accidental leakage', () => {
+      const e = testEntity(30);
+      let shaped = startWildShape(e, 'wolf', DEFAULT_RULES); // beastHpMax 11
+      shaped = applyWildShapeDamage(shaped, 6, DEFAULT_RULES, 'fire'); // no fire resistance on Wolf
+      expect(shaped.wildShapeState?.beastHp).toBe(5); // 11-6, unresisted
+    });
+
+    // Rules-engine blocker RE-AUDIT closure (2A/2B, corrected): the real
+    // SRD/MM stat block gives EVERY elemental (Air/Earth/Fire/Water) its own
+    // "Damage Immunities: poison" line, separate from the shared "poisoned"
+    // CONDITION immunity every elemental also has (which this engine has no
+    // representation for at all — out of scope). Round 3's assumption that
+    // only Fire Elemental had poison DAMAGE immunity was a genuine mistake;
+    // see beastforms/index.ts's own per-form comment for the corrected
+    // reasoning. Exercises the real transform -> hit -> revert pipeline
+    // (not just a bare damageImmunities field check), including a repeated
+    // transform/revert cycle to prove the native immunity never leaks onto
+    // the base character and reliably re-applies on a second transformation.
+    it.each(['air_elemental', 'earth_elemental', 'fire_elemental', 'water_elemental'])(
+      '%s is immune to poison DAMAGE — zero form/temp/base HP loss, immunity gone after reverting, and it reliably reapplies on a second transform',
+      formId => {
+        const e = testEntity(50);
+        let shaped = startWildShape(e, formId, DEFAULT_RULES);
+        const beastHpBefore = shaped.wildShapeState!.beastHp;
+        let result = applyWildShapeDamage(shaped, 500, DEFAULT_RULES, 'poison');
+        expect(result).toBe(shaped); // no-op, matching Fire Elemental's own fire-immunity assertion above
+        expect(result.wildShapeState?.beastHp).toBe(beastHpBefore);
+        expect(result.resources.hp.current).toBe(50);
+
+        const reverted = endWildShape(result, DEFAULT_RULES);
+        expect(reverted.wildShapeState).toBeNull();
+        expect(reverted.resources.hp.current).toBe(50); // unaffected by the no-op damage
+        // Post-revert, the base character has no native poison immunity of
+        // its own — a poison hit against the now-reverted entity applies in full.
+        const hitAfterRevert = applyDamage(reverted, 10, DEFAULT_RULES, 'poison');
+        expect(hitAfterRevert.resources.hp.current).toBe(40);
+
+        // Repeated transform/revert cycle — no leakage either direction.
+        let reshaped = startWildShape(hitAfterRevert, formId, DEFAULT_RULES);
+        const beastHpBefore2 = reshaped.wildShapeState!.beastHp;
+        result = applyWildShapeDamage(reshaped, 500, DEFAULT_RULES, 'poison');
+        expect(result).toBe(reshaped); // immunity reliably reapplies on the second transformation
+        expect(result.wildShapeState?.beastHp).toBe(beastHpBefore2);
+      },
+    );
+
+    it('Fire Elemental (the one real exception) remains immune to poison damage — unaffected by this closure', () => {
+      const e = testEntity(50);
+      const shaped = startWildShape(e, 'fire_elemental', DEFAULT_RULES);
+      const result = applyWildShapeDamage(shaped, 999, DEFAULT_RULES, 'poison');
+      expect(result).toBe(shaped); // no-op, immune
+    });
+
+    // Rules-engine blocker RE-AUDIT closure (3B): the shared elemental
+    // resistance to bludgeoning/piercing/slashing from NONMAGICAL attacks —
+    // a table-first, PER-HIT fact (isNonmagicalAttack), never inferred.
+    describe('conditional nonmagical B/P/S resistance (closure 3B)', () => {
+      it('marked nonmagical -> resisted (halved)', () => {
+        const e = testEntity(50);
+        let shaped = startWildShape(e, 'air_elemental', DEFAULT_RULES); // beastHpMax 90
+        shaped = applyWildShapeDamage(shaped, 30, DEFAULT_RULES, 'bludgeoning', true);
+        expect(shaped.wildShapeState?.active).toBe(true);
+        expect(shaped.wildShapeState?.beastHp).toBe(75); // 90 - floor(30/2)=15
+      });
+
+      it('marked magical (the default) -> NOT resisted, same hit dealt in full', () => {
+        const e = testEntity(50);
+        let shaped = startWildShape(e, 'air_elemental', DEFAULT_RULES); // beastHpMax 90
+        shaped = applyWildShapeDamage(shaped, 30, DEFAULT_RULES, 'bludgeoning'); // isNonmagicalAttack omitted -> false
+        expect(shaped.wildShapeState?.beastHp).toBe(60); // 90-30, full damage
+      });
+
+      it('explicitly marked magical (false) -> NOT resisted, same as the default', () => {
+        const e = testEntity(50);
+        let shaped = startWildShape(e, 'air_elemental', DEFAULT_RULES);
+        shaped = applyWildShapeDamage(shaped, 30, DEFAULT_RULES, 'bludgeoning', false);
+        expect(shaped.wildShapeState?.beastHp).toBe(60);
+      });
+
+      it('only applies to bludgeoning/piercing/slashing — a nonmagical-marked FIRE hit is unaffected by this specific resistance', () => {
+        const e = testEntity(50);
+        let shaped = startWildShape(e, 'air_elemental', DEFAULT_RULES); // no fire resistance on Air Elemental
+        shaped = applyWildShapeDamage(shaped, 30, DEFAULT_RULES, 'fire', true);
+        expect(shaped.wildShapeState?.beastHp).toBe(60); // full damage — nonmagical flag is irrelevant to non-B/P/S types
+      });
+
+      it('does not double-halve when the SAME hit is ALSO covered by an unrelated type-based resistance (5e RAW: multiple resistance reasons never stack)', () => {
+        const e = testEntity(50);
+        let shaped = startWildShape(e, 'air_elemental', DEFAULT_RULES); // resists lightning AND nonmagical B/P/S
+        // lightning isn't B/P/S, so nonmagicalBPSApplies is false here regardless —
+        // this proves the type-based resistance path alone still only halves once.
+        shaped = applyWildShapeDamage(shaped, 40, DEFAULT_RULES, 'lightning', true);
+        expect(shaped.wildShapeState?.beastHp).toBe(70); // 90 - floor(40/2)=20, NOT floor(floor(40/2)/2)
+      });
+
+      it('a form with no nonmagicalPhysicalResistance flag is never discounted even when marked nonmagical', () => {
+        const e = testEntity(30);
+        let shaped = startWildShape(e, 'wolf', DEFAULT_RULES); // Wolf has no such flag
+        shaped = applyWildShapeDamage(shaped, 6, DEFAULT_RULES, 'bludgeoning', true);
+        expect(shaped.wildShapeState?.beastHp).toBe(5); // 11-6, unresisted
+      });
+
+      it('disappears after reversion: overflow from a nonmagical B/P/S hit is resolved once, never re-discounted post-revert', () => {
+        const e = testEntity(50);
+        let shaped = startWildShape(e, 'earth_elemental', DEFAULT_RULES); // beastHpMax 126
+        // Raw 200 nonmagical bludgeoning -> resisted once to 100 -> 100 < 126
+        // -> stays transformed (not the overflow case) — verify the discount
+        // applies correctly first, then force overflow with a second hit.
+        shaped = applyWildShapeDamage(shaped, 200, DEFAULT_RULES, 'bludgeoning', true);
+        expect(shaped.wildShapeState?.active).toBe(true);
+        expect(shaped.wildShapeState?.beastHp).toBe(26); // 126 - floor(200/2)=100
+        // Now overkill it — overflow must be the ALREADY-resisted remainder,
+        // never re-resisted against the reverted base entity.
+        shaped = applyWildShapeDamage(shaped, 100, DEFAULT_RULES, 'bludgeoning', true);
+        expect(shaped.wildShapeState).toBeNull();
+        // resolved 100 -> floor(100/2)=50; beastHp was 26 -> overflow 50-26=24 -> base 50-24=26.
+        expect(shaped.resources.hp.current).toBe(26);
+      });
+    });
+
+    it('repeated transformations never duplicate/accumulate native defenses — elemental -> revert -> elemental again behaves identically both times', () => {
+      const e = testEntity(50);
+      let shaped = startWildShape(e, 'air_elemental', DEFAULT_RULES);
+      shaped = applyWildShapeDamage(shaped, 40, DEFAULT_RULES, 'lightning');
+      expect(shaped.wildShapeState?.beastHp).toBe(70); // 90 - floor(40/2)=20, same as the single-transformation test above
+
+      const reverted = endWildShape(shaped, DEFAULT_RULES);
+      expect(reverted.wildShapeState).toBeNull();
+
+      let shapedAgain = startWildShape(reverted, 'air_elemental', DEFAULT_RULES);
+      shapedAgain = applyWildShapeDamage(shapedAgain, 40, DEFAULT_RULES, 'lightning');
+      // IDENTICAL result the second time — no accumulated/doubled resistance
+      // from the first transformation leaking into the second.
+      expect(shapedAgain.wildShapeState?.beastHp).toBe(70);
+    });
   });
 
   it('endWildShape reverts and restores the player\'s own stats', () => {

@@ -17,6 +17,7 @@ import {
   Entity, Ability, SkillName, CampaignRules, SenseType, Sense, ItemInstance, Spell, DurationTracker,
 } from '../../engine/types';
 import { modifier, collectAllEffects, applyStatModifiers, recomputeDerived } from '../../engine/pipeline';
+import { ALL_BEAST_FORMS } from '../../content/beastforms';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { HpModal } from './HpModal';
 import { ConcentrationModal } from './ConcentrationModal';
@@ -108,7 +109,7 @@ interface Props {
   entity: Entity;
   rules: CampaignRules;
   onEntityUpdate: (updated: Entity) => void;
-  onDamage: (amount: number, damageType?: string) => void;
+  onDamage: (amount: number, damageType?: string, isNonmagicalAttack?: boolean) => void;
   onHeal: (amount: number) => void;
   onAddCondition: (condId: string, duration: DurationTracker | null) => void;
   onRemoveCondition: (condId: string) => void;
@@ -197,14 +198,21 @@ function TabExplorationInner({
   // onDamage, since Zustand updates synchronously" pattern as TabCharacter.
   const [concOpen, setConcOpen] = useState(false);
   const [concDamage, setConcDamage] = useState(0);
-  function handleDamage(amount: number, damageType?: string) {
-    onDamage(amount, damageType);
+  function handleDamage(amount: number, damageType?: string, isNonmagicalAttack?: boolean) {
+    onDamage(amount, damageType, isNonmagicalAttack);
     const fresh = useCharacterStore.getState().characters.find(c => c.id === entity.id);
     if (fresh?.spellcasting?.concentrating) {
       setConcDamage(amount);
       setConcOpen(true);
     }
   }
+  // Rules-engine blocker RE-AUDIT closure (3A): same visibility rule as
+  // TabCharacter.tsx's HpModal — shown only while transformed into a form
+  // that actually declares nonmagicalPhysicalResistance.
+  const activeBeastForm = entity.wildShapeState?.active
+    ? ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId)
+    : undefined;
+  const showNonmagicalOption = !!activeBeastForm?.nonmagicalPhysicalResistance;
   const [condOpen, setCondOpen] = useState(false);
   const [customCond, setCustomCond] = useState('');
   const [spellDetail, setSpellDetail] = useState<Spell | null>(null);
@@ -425,6 +433,7 @@ function TabExplorationInner({
         onDamage={handleDamage}
         onHeal={(n) => { onHeal(n); }}
         onClose={() => setHpOpen(false)}
+        showNonmagicalOption={showNonmagicalOption}
       />
 
       <ConcentrationModal

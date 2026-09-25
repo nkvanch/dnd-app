@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { resolveChoice } from '../../src/engine/leveling';
 import { skillOverlapMode } from '../../src/engine/houseRules';
 import { ChoiceOption, SkillName } from '../../src/engine/types';
@@ -30,6 +31,7 @@ export default function SkillsScreen() {
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
   const allSkillChoices      = draft ? draft.choices.filter(c => c.definition.kind === 'skill') : [];
   const pendingSkillChoices  = allSkillChoices.filter(c => !c.resolved);
@@ -144,7 +146,10 @@ export default function SkillsScreen() {
       };
     }
 
-    setDraft(recomputeDerived(updated, rules));
+    const contentDB = getMergedContentDB(updated.rulesetId);
+    setDraft(recomputeDerived(updated, rules, {
+      classDefs: contentDB.classes, homebrewSpells: contentDB.spells, races: contentDB.races, items: contentDB.items,
+    }));
     setSelections(prev => ({ ...prev, ...newSelections }));
   }
 

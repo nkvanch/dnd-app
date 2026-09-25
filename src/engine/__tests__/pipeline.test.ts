@@ -411,14 +411,12 @@ describe('recomputeDerived — DM overrides', () => {
 });
 
 // Re-audit A18: weapon attack ability-selection and proficiency-bonus
-// gating. Weapon definitions are resolved via useHomebrewStore's fallback
-// lookup (computeWeaponAttackBonuses checks itemRepo first, then
-// homebrewStore — a homebrew-only id guarantees the homebrew path, no
-// SQLite/itemRepo warm-up needed in Jest), matching actionCards.test.ts's
-// own established pattern for seeding fake content into the real store.
+// gating. Rules-engine blocker RE-AUDIT closure (dependency inversion, 1D):
+// weapon definitions are now resolved via recomputeDerived's own explicit
+// `content.items` parameter (a homebrew-only id proves the homebrew path
+// resolves correctly, no SQLite/itemRepo warm-up needed in Jest) — the
+// engine no longer reaches into useHomebrewStore for this at all.
 describe('computeWeaponAttackBonuses — ability selection and proficiency (A18)', () => {
-  afterEach(() => { useHomebrewStore.setState({ items: [] }); });
-
   function weaponItem(id: string, properties: string[], dice: string, damageType = 'slashing'): Item {
     return {
       id, name: id, weight: 1, cost: '1 gp', properties,
@@ -432,16 +430,17 @@ describe('computeWeaponAttackBonuses — ability selection and proficiency (A18)
   }
 
   function withWeapon(item: Item, overrides: Partial<Entity> = {}): Entity {
-    useHomebrewStore.setState({ items: [item as any] });
     const inst = { itemId: item.id, quantity: 1, attuned: false, features: [] };
     const e = makeEmptyEntity('e1');
     return { ...e, stats: { str: 18, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, inventory: { ...e.inventory, equipped: [inst] }, ...overrides };
   }
 
+  const items = (item: Item) => ({ items: [item as any] });
+
   it('a thrown, non-finesse weapon (handaxe) always uses STR, never DEX, despite listing a range in its own property text', () => {
     const item = weaponItem('test_handaxe', ['light', 'thrown (range 20/60)'], '1d6');
     const e = withWeapon(item, { proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['martial'] } });
-    const ab = recomputeDerived(e, DEFAULT_RULES).derived.attackBonuses.find(a => a.id === 'test_handaxe')!;
+    const ab = recomputeDerived(e, DEFAULT_RULES, items(item)).derived.attackBonuses.find(a => a.id === 'test_handaxe')!;
     expect(ab.ability).toBe('str');
     expect(ab.type).toBe('melee');
   });
@@ -452,14 +451,14 @@ describe('computeWeaponAttackBonuses — ability selection and proficiency (A18)
       stats: { str: 10, dex: 18, con: 10, int: 10, wis: 10, cha: 10 },
       proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['simple'] },
     });
-    const ab = recomputeDerived(e, DEFAULT_RULES).derived.attackBonuses.find(a => a.id === 'test_dagger')!;
+    const ab = recomputeDerived(e, DEFAULT_RULES, items(item)).derived.attackBonuses.find(a => a.id === 'test_dagger')!;
     expect(ab.ability).toBe('dex');
   });
 
   it('an ammunition weapon (bow) uses DEX and is classified ranged', () => {
     const item = weaponItem('test_bow', ['ammunition (range 80/320)', 'two-handed'], '1d8', 'piercing');
     const e = withWeapon(item, { proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['martial'] } });
-    const ab = recomputeDerived(e, DEFAULT_RULES).derived.attackBonuses.find(a => a.id === 'test_bow')!;
+    const ab = recomputeDerived(e, DEFAULT_RULES, items(item)).derived.attackBonuses.find(a => a.id === 'test_bow')!;
     expect(ab.ability).toBe('dex');
     expect(ab.type).toBe('ranged');
   });
@@ -470,7 +469,7 @@ describe('computeWeaponAttackBonuses — ability selection and proficiency (A18)
       identity: { ...makeEmptyEntity('e1').identity, level: 5 },
       proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['simple'] },
     });
-    const result = recomputeDerived(e, DEFAULT_RULES);
+    const result = recomputeDerived(e, DEFAULT_RULES, items(item));
     const ab = result.derived.attackBonuses.find(a => a.id === 'test_simple_weapon')!;
     expect(ab.bonus).toBe(result.derived.proficiencyBonus + modifier(18));
   });
@@ -481,9 +480,40 @@ describe('computeWeaponAttackBonuses — ability selection and proficiency (A18)
       identity: { ...makeEmptyEntity('e1').identity, level: 5 },
       proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: [] },
     });
-    const result = recomputeDerived(e, DEFAULT_RULES);
+    const result = recomputeDerived(e, DEFAULT_RULES, items(item));
     const ab = result.derived.attackBonuses.find(a => a.id === 'test_simple_weapon_2')!;
     expect(ab.bonus).toBe(modifier(18)); // no proficiency bonus included
+  });
+
+  it('WITHOUT the explicit content param, a homebrew-only weapon correctly falls back to official-only resolution (no crash, no bonus computed)', () => {
+    const item = weaponItem('test_handaxe_2', ['light'], '1d6');
+    const e = withWeapon(item, { proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['martial'] } });
+    const ab = recomputeDerived(e, DEFAULT_RULES).derived.attackBonuses.find(a => a.id === 'test_handaxe_2');
+    expect(ab).toBeUndefined(); // deterministic official-only fallback, not a crash
+  });
+
+  // Rules-engine blocker RE-AUDIT closure — architecture purity (1J): the
+  // REAL recomputeDerived path (item resolution + attack-bonus computation),
+  // not a trivial resolver, proving determinism from explicit inputs alone.
+  it('same entity + rules + explicit content -> same result, REGARDLESS of useHomebrewStore mutations in between', () => {
+    const item = weaponItem('test_purity_weapon', ['light'], '1d6');
+    const e = withWeapon(item, { proficiencies: { ...makeEmptyEntity('e1').proficiencies, weapons: ['martial'] } });
+    const explicitContent = { items: [item] };
+
+    useHomebrewStore.setState({ items: [] }); // baseline: store has NOTHING registered
+    const before = recomputeDerived(e, DEFAULT_RULES, explicitContent);
+
+    // Mutate the store with CONFLICTING content — a real store read would
+    // change the result; an explicit-content-snapshot call must be
+    // completely unaffected.
+    useHomebrewStore.setState({ items: [{ ...item, name: 'DIFFERENT NAME', features: [] }] });
+    const after = recomputeDerived(e, DEFAULT_RULES, explicitContent);
+
+    expect(after.derived.attackBonuses.find(a => a.id === 'test_purity_weapon'))
+      .toEqual(before.derived.attackBonuses.find(a => a.id === 'test_purity_weapon'));
+    expect(after.derived.attackBonuses.find(a => a.id === 'test_purity_weapon')).toBeDefined();
+
+    useHomebrewStore.setState({ items: [] }); // cleanup
   });
 });
 

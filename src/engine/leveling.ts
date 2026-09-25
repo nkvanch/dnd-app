@@ -1486,9 +1486,22 @@ export function levelUpClass(
 
   let updated = entity;
 
-  // Capture the spellcasting ability before this level's grants apply, so a
-  // later class's init_spellcasting can't silently steal the spell-save-DC
-  // ability away from whichever caster class the character took first.
+  // Capture the spellcasting ability before this level's grants apply.
+  // entity.spellcasting.ability is a SINGLE scalar — it can only ever agree
+  // with one class's casting ability at a time, so for a genuine multiclass
+  // caster (Wizard/Cleric, etc.) it's kept pinned to whichever class first
+  // initialized spellcasting, rather than being silently reset by a LATER
+  // class's own init_spellcasting grant every time that class levels up.
+  // This is correct for a single-class caster (the only class there is)
+  // and a reasonable, STABLE "primary/headline" value for a multiclass one
+  // (shown as the one "Spellcasting" summary stat — TabFeatures.tsx). It is
+  // NOT what determines an individual spell's actual casting ability or
+  // save DC any more — rules-engine blocker B fix: that's resolved fresh,
+  // per spell, from the spell's own granting source (its class/subclass/
+  // racial/item entitlement) via resolveSpellAbility (actionCards.ts),
+  // which never reads this scalar for a class-sourced spell at all. A
+  // Wizard/Cleric multiclass's Cleric spells correctly use WIS via that
+  // path even while this headline scalar stays pinned to Wizard's INT.
   const abilityBefore = updated.spellcasting?.ability;
 
   updated = applyHP(updated, entry.hpDie, rules.hpMode, newClassLevel, rules, progression.hpAbility ?? 'con', isVeryFirstLevel, manualHpRoll);

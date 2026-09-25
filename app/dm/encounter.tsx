@@ -13,7 +13,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { useSessionStore }   from '../../src/store/sessionStore';
 import { useEncounterStore } from '../../src/store/encounterStore';
 import { useHomebrewStore }  from '../../src/store/homebrewStore';
-import { applyDamage, applyHealing, applyWildShapeDamage } from '../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage, endWildShape } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { generateActionCard } from '../../src/engine/actionCards';
 import { applyActionCardUse } from '../../src/engine/actionUse';
@@ -79,6 +79,11 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
   const [mode,     setMode]     = useState<'damage'|'heal'|'condition'|null>(null);
   const [valueStr, setValueStr] = useState('');
   const [damageType, setDamageType] = useState('');
+  // Rules-engine blocker RE-AUDIT closure (3B): table-first, per-hit fact —
+  // only meaningful for a bludgeoning/piercing/slashing hit against a
+  // transformed elemental form with nonmagicalPhysicalResistance; a no-op
+  // otherwise. See applyWildShapeDamage's own doc comment (combat.ts).
+  const [nonmagicalAttack, setNonmagicalAttack] = useState(false);
   const [condSearch, setCondSearch] = useState('');
   const [concOpen,   setConcOpen]   = useState(false);
   const [concEntity, setConcEntity] = useState<Entity | null>(null);
@@ -105,7 +110,12 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
     const dt = damageType.trim() || undefined;
     const label = `${entity.identity.name}: took ${amount}${dt ? ` ${dt}` : ''} damage`;
     if (entity.wildShapeState?.active) {
-      onUpdate(applyWildShapeDamage(entity, amount, rules), label);
+      // Rules-engine blocker fix: damage type now threads through so
+      // overflow damage that carries into the player's real HP (see
+      // applyWildShapeDamage's own doc comment) still resolves the
+      // player's own resistance/vulnerability correctly — the beast-pool
+      // absorption step itself still never resolves type at all.
+      onUpdate(applyWildShapeDamage(entity, amount, rules, dt, nonmagicalAttack), label);
     } else {
       const updated = applyDamage(entity, amount, rules, dt);
       onUpdate(updated, label);
@@ -115,7 +125,7 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
         setConcOpen(true);
       }
     }
-    setMode(null); setValueStr(''); setDamageType('');
+    setMode(null); setValueStr(''); setDamageType(''); setNonmagicalAttack(false);
   }
 
   function submitHeal() {
@@ -131,7 +141,18 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
       { text: 'Kill', style: 'destructive', onPress: () => {
         const label = `${entity.identity.name}: set HP to 0 (Kill)`;
         if (entity.wildShapeState?.active) {
-          onUpdate(applyWildShapeDamage(entity, entity.wildShapeState.beastHpMax, rules), label);
+          // Rules-engine blocker fix (closure 3I): this used to send
+          // beastHpMax as "damage" through applyWildShapeDamage — harmless
+          // before the overflow fix above (excess damage was discarded),
+          // but a REAL bug now that overflow correctly carries into real
+          // HP: an already-damaged form (e.g. beastHp 4 of beastHpMax 20)
+          // would compute 16 points of fake overflow into the player's real
+          // HP. "Kill" means exactly what the non-transformed branch below
+          // does — zero out the CURRENTLY ACTIVE HP pool, nothing else — so
+          // for a transformed entity that's ending the transformation
+          // (beast HP effectively hits 0), never a damage roll against real
+          // HP.
+          onUpdate(endWildShape(entity, rules), label);
           return;
         }
         const updated = { ...entity, resources: { ...entity.resources, hp: { ...entity.resources.hp, current: 0 } } };
@@ -355,6 +376,19 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
           ))}
         </View>
       )}
+      {/* Rules-engine blocker RE-AUDIT closure (3B): only meaningful for a
+          transformed entity taking bludgeoning/piercing/slashing damage —
+          hidden otherwise so this doesn't clutter every ordinary hit. */}
+      {mode === 'damage' && entity.wildShapeState?.active
+        && (damageType === 'bludgeoning' || damageType === 'piercing' || damageType === 'slashing') && (
+        <Pressable style={styles.dmgTypeWrap} onPress={() => setNonmagicalAttack(v => !v)}>
+          <View style={[styles.dmgTypeChip, nonmagicalAttack && styles.dmgTypeChipActive]}>
+            <Text style={[styles.dmgTypeChipTxt, nonmagicalAttack && styles.dmgTypeChipTxtActive]}>
+              {nonmagicalAttack ? '☑' : '☐'} Nonmagical attack
+            </Text>
+          </View>
+        </Pressable>
+      )}
 
       {/* Condition picker */}
       {mode === 'condition' && (
@@ -416,7 +450,7 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
 
 interface MultiTargetPanelProps {
   entities: Entity[];
-  onDamage: (amount: number, damageType?: string) => void;
+  onDamage: (amount: number, damageType?: string, nonmagicalAttack?: boolean) => void;
   onHeal:   (amount: number) => void;
   onKill:   () => void;
   onAddCondition:    (conditionId: string) => void;
@@ -429,6 +463,10 @@ function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, 
   const [mode,        setMode]        = useState<'damage'|'heal'|'condition'|null>(null);
   const [valueStr,    setValueStr]    = useState('');
   const [damageType,  setDamageType]  = useState('');
+  // Rules-engine blocker RE-AUDIT closure (3B) — see QuickPanel's own
+  // identical state/comment above; applies per-entity in bulkDamage (a
+  // no-op for any selected entity it isn't relevant to).
+  const [nonmagicalAttack, setNonmagicalAttack] = useState(false);
   const [condSearch,  setCondSearch]  = useState('');
   // Bulk damage skips the per-entity concentration-check modal QuickPanel's
   // single-target damage has (a real, disclosed limitation — building a
@@ -446,8 +484,8 @@ function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, 
     if (!validNum) return;
     const concentrating = entities.filter(e => e.spellcasting?.concentrating).map(e => e.identity.name);
     setConcWarning(concentrating.length > 0 ? concentrating : null);
-    onDamage(amount, damageType.trim() || undefined);
-    setMode(null); setValueStr(''); setDamageType('');
+    onDamage(amount, damageType.trim() || undefined, nonmagicalAttack);
+    setMode(null); setValueStr(''); setDamageType(''); setNonmagicalAttack(false);
   }
   function submitHeal() {
     if (!validNum) return;
@@ -542,6 +580,17 @@ function MultiTargetPanel({ entities, onDamage, onHeal, onKill, onAddCondition, 
             </Pressable>
           ))}
         </View>
+      )}
+      {/* Rules-engine blocker RE-AUDIT closure (3B) — see QuickPanel's own
+          identical block/comment above. */}
+      {mode === 'damage' && (damageType === 'bludgeoning' || damageType === 'piercing' || damageType === 'slashing') && (
+        <Pressable style={styles.dmgTypeWrap} onPress={() => setNonmagicalAttack(v => !v)}>
+          <View style={[styles.dmgTypeChip, nonmagicalAttack && styles.dmgTypeChipActive]}>
+            <Text style={[styles.dmgTypeChipTxt, nonmagicalAttack && styles.dmgTypeChipTxtActive]}>
+              {nonmagicalAttack ? '☑' : '☐'} Nonmagical attack
+            </Text>
+          </View>
+        </Pressable>
       )}
 
       {mode === 'condition' && (
@@ -807,6 +856,22 @@ export default function EncounterScreen() {
   // QuickPanel path and the multi-target path (which has its own `before`
   // per entity, not the single globally-selected one) share it.
   function applyEntityUpdate(before: Entity | undefined, updated: Entity, label?: string) {
+    // Rules-engine blocker RE-AUDIT closure (1D/1E/1F): re-resolve derived
+    // state against the SAME explicit merged content snapshot every other
+    // application mutation boundary in this app uses (app/sheet/[id].tsx,
+    // app/dm/character/[id].tsx) — QuickPanel/MultiTargetPanel call engine
+    // mutators (applyDamage/applyWildShapeDamage/recomputeDerived) directly
+    // and don't have this snapshot in scope themselves, so a homebrew
+    // character mutated from this screen's DM tools could otherwise fall
+    // back to official-only content. recomputeDerived is a pure, idempotent
+    // full overwrite of .derived/.actionCards, so re-running it here — this
+    // is the true choke point both the single-select and multi-target paths
+    // funnel through — is always safe regardless of what already ran
+    // upstream.
+    const content = getMergedContentDB(updated.rulesetId);
+    updated = recomputeDerived(updated, rules, {
+      classDefs: content.classes, homebrewSpells: content.spells, races: content.races, items: content.items,
+    });
     // If it's a player character, persist to characterStore too — the REAL
     // synced source of truth, not just this DM device's own combatStore
     // copy of it.
@@ -880,10 +945,10 @@ export default function EncounterScreen() {
     }
   }
 
-  function bulkDamage(amount: number, damageType?: string) {
+  function bulkDamage(amount: number, damageType?: string, nonmagicalAttack?: boolean) {
     const dt = damageType?.trim() || undefined;
     handleBulkUpdate(
-      e => e.wildShapeState?.active ? applyWildShapeDamage(e, amount, rules) : applyDamage(e, amount, rules, dt),
+      e => e.wildShapeState?.active ? applyWildShapeDamage(e, amount, rules, dt, nonmagicalAttack) : applyDamage(e, amount, rules, dt),
       e => `${e.identity.name}: took ${amount}${dt ? ` ${dt}` : ''} damage`,
     );
   }
@@ -894,9 +959,11 @@ export default function EncounterScreen() {
     );
   }
   function bulkKill() {
+    // Rules-engine blocker fix (closure 3I) — same beastHpMax-as-damage bug
+    // as the single-target Kill above, fixed the same way.
     handleBulkUpdate(
       e => e.wildShapeState?.active
-        ? applyWildShapeDamage(e, e.wildShapeState.beastHpMax, rules)
+        ? endWildShape(e, rules)
         : recomputeDerived({ ...e, resources: { ...e.resources, hp: { ...e.resources.hp, current: 0 } } }, rules),
       e => `${e.identity.name}: set HP to 0 (Kill)`,
     );

@@ -6,7 +6,6 @@ import { explainValue } from '../audit';
 import { generateAllActionCards } from '../actionCards';
 import { IMPORTED_ITEMS } from '../../content/items/importedItems';
 import type { ChoiceState, DmOverride } from '../types';
-import { useHomebrewStore } from '../../store/homebrewStore';
 import { itemMace } from '../../content/items';
 
 const equipmentChoice=(id:string,itemId:string):ChoiceState=>({id,grantedAt:1,resolved:true,selections:['option'],definition:{id,prompt:id,kind:'equipment',count:1,pool:[{id:'option',label:itemId,value:[itemId]}],grants:[],required:false,resolved:true}});
@@ -39,9 +38,8 @@ describe('device smoke closure',()=>{
  });
  it('Mace of Disruption keeps its passive descriptive while receiving one basic weapon attack',()=>{
   const item=IMPORTED_ITEMS.find(i=>i.id==='mace_of_disruption')!; expect(item.features.every(f=>!f.activation)).toBe(true);
-  useHomebrewStore.setState({ items: [item, itemMace] });
   const e=makeEmptyEntity('mace'); e.inventory.equipped=[{itemId:item.id,quantity:1,attuned:true,features:item.features,requiresAttunement:true}];
-  const cards=generateAllActionCards(recomputeDerived(e,DEFAULT_RULES)).filter(card=>card.name==='Mace of Disruption');
+  const cards=generateAllActionCards(recomputeDerived(e,DEFAULT_RULES,{items:[item,itemMace]}),DEFAULT_RULES,{items:[item,itemMace]}).filter(card=>card.name==='Mace of Disruption');
   expect(cards).toHaveLength(1); expect(cards[0].featureId).toBe('mace_of_disruption_basic_weapon_attack');
  });
 });

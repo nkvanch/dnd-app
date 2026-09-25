@@ -1,7 +1,7 @@
 // app/sheet/[id].tsx
 // Character sheet — 6-tab sheet with persistent rest bar.
 // All values read from entity.derived — never computed in components.
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions, Modal } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
@@ -173,24 +173,42 @@ export default function CharacterSheetScreen() {
   // Tab min-width: fills screen for 6 tabs, scrollable for 7.
   const TAB_MIN_W = Math.floor(Dimensions.get('window').width / 6);
 
+  // Rules-engine blocker RE-AUDIT closure (1D/1E/1F): the ONE explicit
+  // merged content snapshot every ordinary player mutation recomputes
+  // against — resolved once here at the application mutation boundary
+  // (mutate) rather than re-derived per handler, so an unrelated HP/
+  // resource/action mutation can never silently fall back to official-only
+  // content for a homebrew character.
+  const cardContent = useMemo(() => {
+    if (!entity) return {};
+    const db = getMergedContentDB(entity.rulesetId);
+    return { classDefs: db.classes, homebrewSpells: db.spells, races: db.races, items: db.items };
+  }, [entity?.rulesetId, getMergedContentDB]);
+
   const mutate = useCallback((updater: (e: Entity) => Entity, label?: string, category?: TimelineCategory) => {
     if (!id) return;
     updateCharacter(id, e => {
       const updated = updater(e);
-      return recomputeDerived(updated, rules);
+      return recomputeDerived(updated, rules, cardContent);
     }, label, category);
-  }, [id, updateCharacter, rules]);
+  }, [id, updateCharacter, rules, cardContent]);
 
   // ── Handlers (all pure engine calls → mutate) ─────────────────────────────
 
-  const handleDamage = useCallback((amount: number, damageType?: string) => {
+  const handleDamage = useCallback((amount: number, damageType?: string, isNonmagicalAttack?: boolean) => {
     // While Wild Shaped, damage hits the BEAST's hp pool, not the player's
-    // real HP underneath (which is untouched and resumes exactly where it
-    // was on revert, per the book rule). See combat.ts's applyWildShapeDamage.
-    // Wild Shape beast HP has no resistance concept, so damageType only
-    // applies to the real-HP path.
+    // real HP underneath first. See combat.ts's applyWildShapeDamage: the
+    // beast-pool absorption step still has no resistance concept and
+    // ignores damageType, but any OVERFLOW that carries into real HP once
+    // the form reverts (rules-engine blocker fix) DOES resolve the
+    // player's own resistance/vulnerability — so damageType is threaded
+    // through either way, applyWildShapeDamage itself decides when it's
+    // actually consulted. isNonmagicalAttack (rules-engine blocker RE-AUDIT
+    // closure 3B) is the same table-first, per-hit fact the DM's Wild Shape
+    // damage controls already expose, now threaded from the player's own
+    // HpModal (TabCharacter.tsx) — never stored persistently on the entity.
     mutate(e => e.wildShapeState?.active
-      ? applyWildShapeDamage(e, amount, rules)
+      ? applyWildShapeDamage(e, amount, rules, damageType, isNonmagicalAttack)
       : applyDamage(e, amount, rules, damageType), `Took ${amount}${damageType ? ` ${damageType}` : ''} damage`, 'combat');
   }, [mutate, rules]);
 

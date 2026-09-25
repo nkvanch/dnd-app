@@ -16,7 +16,7 @@ import { grantEntitlement } from '../../engine/entitlements';
 // ============================================================================
 import { useState, useCallback, useMemo, useRef, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
-import { Entity, CampaignRules, ActionCard, Spell, ActivationOption } from '../../engine/types';
+import { Entity, CampaignRules, ActionCard, Spell, ActivationOption, SpellCastingContext } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
 import { resolveSpellById } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
@@ -26,16 +26,11 @@ import { doubleDiceCount } from '../../engine/dice';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { UseModal, applyActionCardUse, ActivationOptionModal } from './TabActions';
 import { AddSpellModal } from './AddSpellModal';
+import { PREPARED_CASTER_CLASS_IDS, formatCastingContextLabel, CardGenOptions } from '../../engine/actionCards';
+import { Alert } from '../../utils/alert';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-/**
- * Classes that use the daily-preparation model: the entity maintains a
- * spellbook (.known) and prepares a subset each long rest (.prepared).
- * All other casters are spontaneous: .known is the full castable list.
- */
-const PREPARED_CASTERS = new Set(['wizard', 'cleric', 'druid', 'paladin']);
 
 const SLOT_ORDINALS: Record<number, string> = {
   1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th',
@@ -63,11 +58,32 @@ interface Props {
 
 function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
-  const [pendingOptionCard, setPendingOptionCard] = useState<ActionCard | null>(null);
+  // Rules-engine blocker RE-AUDIT closure (2F): carries the bypass/context
+  // decision ALONGSIDE the card, not just the card alone — see
+  // TabActions.tsx's PendingActionUse for the identical fix and its own doc
+  // comment on why the old bare-card version was a real bug (a chosen
+  // source/Cast-Anyway decision was silently discarded by the option picker).
+  const [pendingUse, setPendingUse] = useState<{
+    card: ActionCard;
+    bypassSpellPreparation?: boolean;
+    selectedSpellCastingContext?: SpellCastingContext;
+  } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const homebrewSpells = useHomebrewStore(s => s.spells);
   const [addSpellOpen, setAddSpellOpen] = useState(false);
+
+  // Rules-engine blocker RE-AUDIT closure (dependency inversion, 1B/1D):
+  // the ONE place this tab resolves the authoritative merged official +
+  // homebrew + active-ruleset content — the engine (actionCards.ts/
+  // actionUse.ts/entitlements.ts) never reads useHomebrewStore itself
+  // anymore; it's computed here, in the application/UI layer, and passed
+  // down explicitly to every engine call that needs it.
+  const mergedContentDB = useHomebrewStore(s => s.getMergedContentDB(entity.rulesetId));
+  const cardContent: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells'> = useMemo(
+    () => ({ classDefs: mergedContentDB.classes, homebrewSpells: mergedContentDB.spells }),
+    [mergedContentDB],
+  );
 
   // Mirrors the latest `entity` prop for handlers that span an async gap —
   // bug fix: addSpell (below) used to read the `entity` closed over at the
@@ -113,14 +129,37 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     const next = level === 0
       ? { ...block, cantrips: [...new Set([...block.cantrips, spellId])] }
       : { ...block, known:    [...new Set([...block.known,    spellId])] };
-    const spellName = resolveSpellById(spellId, homebrewSpells)?.name ?? spellId;
-    onEntityUpdate(grantEntitlement({ ...current, spellcasting: next }, { kind: level === 0 ? 'cantrip_access' : 'spell_access', key: spellId, sourceKind: 'manual' }), `Learned ${spellName}`);
+    const addedSpell = resolveSpellById(spellId, homebrewSpells);
+    const spellName = addedSpell?.name ?? spellId;
+    // Rules-engine blocker fix (closure 1C, re-audit 1F): this used to
+    // always stamp sourceKind:'manual', even for a spell that's actually on
+    // one of the character's OWN classes' spell lists — isSpellPreparationLegal
+    // then treated it as permanently exempt from preparation (manual sources
+    // never require prep), letting a "+ Add Additional Spell" Wizard/Cleric
+    // pick silently bypass preparation forever. Tags the real class source
+    // when EXACTLY ONE of the character's classes has this spell on its
+    // list (Spell.classes) — the same single-candidate rule the migration
+    // path (entitlements.ts's reclassifyManualSpellSources) uses. Zero
+    // candidates (not on any of their classes' lists at all) stays an
+    // ordinary manual grant. 2+ candidates is genuine unresolved ambiguity
+    // (the player didn't say which class they're adding it as) — tagged via
+    // ambiguousClassIds rather than a silent guess, so Cast later offers an
+    // explicit source choice instead of behaving as globally unrestricted.
+    const candidateClassIds = getClassLevels(current)
+      .map(c => c.classId as string)
+      .filter(classId => (addedSpell?.classes ?? []).includes(classId));
+    const source = candidateClassIds.length === 1
+      ? { sourceKind: 'class' as const, sourceId: candidateClassIds[0] }
+      : candidateClassIds.length >= 2
+        ? { sourceKind: 'manual' as const, ambiguousClassIds: candidateClassIds }
+        : { sourceKind: 'manual' as const };
+    onEntityUpdate(grantEntitlement({ ...current, spellcasting: next }, { kind: level === 0 ? 'cantrip_access' : 'spell_access', key: spellId, ...source }), `Learned ${spellName}`);
   }
 
   // Multiclass-aware: a character is a "prepared caster" for this tab's
   // purposes if ANY of their classes prepares spells — matches identity.classId
   // for single-class characters (getClassLevels' legacy fallback).
-  const isPreparedCaster = getClassLevels(entity).some(c => PREPARED_CASTERS.has(c.classId));
+  const isPreparedCaster = getClassLevels(entity).some(c => PREPARED_CASTER_CLASS_IDS.has(c.classId));
   const preparedSet      = new Set(spellcasting.prepared);
 
   // ── Spell cards ───────────────────────────────────────────────────────────
@@ -165,7 +204,7 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   // ── Cast handler (mirrors TabActions.handleUse exactly) ──────────────────
 
   const { requestPayment, paymentChooser } = useSpellPayment(entity);
-  const performCast = useCallback((card: ActionCard, option?: ActivationOption, payment?: SpellPaymentOption) => {
+  const performCast = useCallback((card: ActionCard, option?: ActivationOption, payment?: SpellPaymentOption, bypassPreparation?: boolean, selectedContext?: SpellCastingContext) => {
     // Bug fix (architecture review U5): this used to hand-duplicate
     // applyActionCardUse's spell-slot/resource-spend logic without ever
     // calling markActionSlotUsed — casting a spell from this tab consumed
@@ -173,7 +212,11 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     // character could still use an Actions-tab feature that same turn.
     // Delegating to the shared implementation also picks up its
     // abilityEffects application, which this handler never had at all.
-    let updated = applyActionCardUse(entity, card, rules, option, payment);
+    // `bypassPreparation` is the table-first Quick Override ("Cast
+    // Anyway") — see applyActionCardUse's own doc comment. A normal legal
+    // cast and a Quick Override cast both converge on this exact same
+    // call; there is no separate cast implementation for either.
+    let updated = applyActionCardUse(entity, card, rules, option, payment, bypassPreparation, selectedContext, cardContent);
     if (updated === entity) return;
 
     // applyActionCardUse's own concentration check only looks up official
@@ -194,29 +237,93 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
 
     onEntityUpdate(updated, `Cast ${card.name}`);
     setActiveCard(card);
-  }, [entity, onEntityUpdate, spellMap, rules]);
+  }, [entity, onEntityUpdate, spellMap, rules, cardContent]);
 
-  const handleCast = useCallback((card: ActionCard) => {
-    // A-57 (item 10): a spell with discrete use-time options (e.g. a
-    // homebrew spell authored with an ActivationOption tier choice) must
-    // resolve the picker BEFORE spending — this call site used to always
-    // cast with chosenOption undefined, silently falling back to the
-    // card's default cost. No official spell content uses `options` today
-    // (only Divine Smite, a class feature, does), so this is currently a
-    // dormant-but-correct path, not yet exercised by real content.
+  // Rules-engine blocker RE-AUDIT closure (2F): the LAST step of every cast
+  // path below — after a casting source (if any choice existed) and a
+  // preparation Cast Anyway decision (if any) are both already resolved.
+  // An activation-option card (e.g. Divine Smite's spell-slot tier) defers
+  // to the option picker, preserving that already-decided bypass/context
+  // instead of discarding it — see pendingUse's own doc comment for why
+  // this matters (the old flow silently lost it here).
+  const proceedToPaymentOrOptions = useCallback((card: ActionCard, bypassSpellPreparation: boolean, selectedContext?: SpellCastingContext) => {
     if (card.activation.options && card.activation.options.length > 0) {
-      setPendingOptionCard(card);
+      setPendingUse({ card, bypassSpellPreparation, selectedSpellCastingContext: selectedContext });
       return;
     }
-    requestPayment(card, undefined, payment => performCast(card, undefined, payment));
+    requestPayment(card, undefined, payment => performCast(card, undefined, payment, bypassSpellPreparation, selectedContext));
   }, [performCast, requestPayment]);
 
+  // Rules-engine blocker RE-AUDIT closure (1C/1E) — when a spell has 2+
+  // MECHANICALLY DISTINCT casting sources (e.g. a Wizard/Sorcerer character
+  // sharing a spell), casting proceeds via a SPECIFIC chosen context, never
+  // a silent tie-break. A prep-blocked context selected intentionally still
+  // offers Cast Anyway for THAT context; a legal one casts directly. Single-
+  // context spells (the overwhelming majority) skip this entirely and fall
+  // through to the unchanged flow below.
+  const castViaContext = useCallback((card: ActionCard, context: SpellCastingContext) => {
+    if (!context.legal) {
+      Alert.alert(
+        `${card.name} is not prepared.`,
+        'You can cast it anyway for this one time — it will not be added to your prepared spells, and everything else (slot, concentration, etc.) still applies normally.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cast Anyway', onPress: () => proceedToPaymentOrOptions(card, true, context) },
+        ],
+      );
+      return;
+    }
+    proceedToPaymentOrOptions(card, false, context);
+  }, [proceedToPaymentOrOptions]);
+
+  const handleCast = useCallback((card: ActionCard) => {
+    if (card.spellCastingContexts && card.spellCastingContexts.length > 1) {
+      Alert.alert(
+        `Cast ${card.name} as...`,
+        undefined,
+        [
+          ...card.spellCastingContexts.map(ctx => ({
+            text: formatCastingContextLabel(entity, ctx, cardContent.classDefs),
+            onPress: () => castViaContext(card, ctx),
+          })),
+          { text: 'Cancel', style: 'cancel' as const },
+        ],
+      );
+      return;
+    }
+
+    // Table-first Quick Override (rules-engine blocker A): a leveled spell
+    // blocked ONLY by preparation (card.preparationOverridable — see
+    // generateSpellCard's own doc comment) offers a compact, explicit,
+    // local, non-destructive "Cast Anyway" instead of just sitting
+    // disabled. Choosing it never touches entity.spellcasting.prepared —
+    // it's a one-off exception for THIS cast, not a permanent rules
+    // change; the normal slot/payment/resource/action-economy bookkeeping
+    // below still runs exactly as it would for a legal cast. If the spell
+    // has ANY other independent blocker (no usable slot, etc.),
+    // preparationOverridable is false and this offer never appears —
+    // existing payment/resource rules still apply unconditionally.
+    if (card.preparationOverridable) {
+      Alert.alert(
+        `${card.name} is not prepared.`,
+        'You can cast it anyway for this one time — it will not be added to your prepared spells, and everything else (slot, concentration, etc.) still applies normally.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cast Anyway', onPress: () => proceedToPaymentOrOptions(card, true, card.spellCastingContext) },
+        ],
+      );
+      return;
+    }
+    proceedToPaymentOrOptions(card, false, card.spellCastingContext);
+  }, [entity, castViaContext, cardContent, proceedToPaymentOrOptions]);
+
   const handleChooseOption = useCallback((option: ActivationOption) => {
-    const card = pendingOptionCard;
-    setPendingOptionCard(null);
-    if (!card) return;
-    requestPayment(card, option, payment => performCast(card, option, payment));
-  }, [performCast, pendingOptionCard, requestPayment]);
+    const pending = pendingUse;
+    setPendingUse(null);
+    if (!pending) return;
+    const { card, bypassSpellPreparation, selectedSpellCastingContext } = pending;
+    requestPayment(card, option, payment => performCast(card, option, payment, bypassSpellPreparation, selectedSpellCastingContext));
+  }, [performCast, pendingUse, requestPayment]);
 
   // ── Prepared toggle (prepared casters only) ──────────────────────────────
 
@@ -323,10 +430,19 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
               const isExpanded = expandedId === card.featureId;
               const isPrepared = preparedSet.has(card.featureId);
 
+              // Table-first Quick Override (rules-engine blocker A): a
+              // spell blocked ONLY by preparation stays fully discoverable
+              // and actionable — not dimmed/hidden like a genuinely
+              // unavailable card (no slot, action already used, etc.).
+              // Tapping Cast opens the "Cast Anyway" prompt (handleCast);
+              // the button is never disabled for this reason alone.
+              const blockedOnlyByPreparation = card.preparationOverridable === true;
+              const genuinelyUnavailable = !card.available && !blockedOnlyByPreparation;
+
               return (
                 <View key={card.featureId} style={[
                   styles.spellCard,
-                  !card.available && styles.spellCardUnavail,
+                  genuinelyUnavailable && styles.spellCardUnavail,
                 ]}>
                   <View style={styles.spellRow}>
                     {/* Left — tap to expand */}
@@ -335,10 +451,15 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
                       onPress={() => setExpandedId(isExpanded ? null : card.featureId)}
                     >
                       <View style={styles.spellNameLine}>
-                        <Text style={[styles.spellName, !card.available && styles.spellNameDim]}>
+                        <Text style={[styles.spellName, genuinelyUnavailable && styles.spellNameDim]}>
                           {card.name}
                         </Text>
                         <View style={styles.spellTags}>
+                          {blockedOnlyByPreparation && (
+                            <View style={styles.tagUnprepared}>
+                              <Text style={styles.tagUnpreparedTxt}>Not Prepared</Text>
+                            </View>
+                          )}
                           {spell?.concentration && (
                             <View style={styles.tagConc}>
                               <Text style={styles.tagConcTxt}>Conc</Text>
@@ -373,12 +494,12 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
                         </Pressable>
                       )}
                       <Pressable
-                        style={[styles.castBtn, !card.available && styles.castBtnDisabled]}
+                        style={[styles.castBtn, genuinelyUnavailable && styles.castBtnDisabled]}
                         onPress={() => handleCast(card)}
-                        disabled={!card.available}
+                        disabled={genuinelyUnavailable}
                       >
-                        <Text style={[styles.castBtnTxt, !card.available && styles.castBtnTxtDisabled]}>
-                          {card.available ? 'Cast' : 'N/A'}
+                        <Text style={[styles.castBtnTxt, genuinelyUnavailable && styles.castBtnTxtDisabled]}>
+                          {card.available || blockedOnlyByPreparation ? 'Cast' : 'N/A'}
                         </Text>
                       </Pressable>
                     </View>
@@ -438,9 +559,9 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
 
       <ActivationOptionModal
         entity={entity}
-        card={pendingOptionCard}
+        card={pendingUse?.card ?? null}
         onChoose={handleChooseOption}
-        onClose={() => setPendingOptionCard(null)}
+        onClose={() => setPendingUse(null)}
       />
 
       {/* Add Spell picker modal — rich multi-axis filtering */}
@@ -623,6 +744,15 @@ const styles = StyleSheet.create({
     paddingVertical:   1,
   },
   tagRitualTxt:{ fontSize: 9, color: Colors.gold, fontWeight: FontWeight.bold },
+  tagUnprepared: {
+    backgroundColor: Colors.textDim + '22',
+    borderRadius:    Radius.sm,
+    borderWidth:     1,
+    borderColor:     Colors.textDim + '66',
+    paddingHorizontal: 5,
+    paddingVertical:   1,
+  },
+  tagUnpreparedTxt: { fontSize: 9, color: Colors.textDim, fontWeight: FontWeight.bold },
   expandCaret: { fontSize: 9, color: Colors.textDim, marginLeft: 'auto' },
   spellMeta:   { fontSize: FontSize.xs, color: Colors.textSecondary },
 

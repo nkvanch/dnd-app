@@ -277,7 +277,10 @@ export default function ClassDetailScreen() {
         updated = levelUpClass(updated, cls!.id, progression, rules, cls!, definitions);
       }
 
-      updated = recomputeDerived(updated, rules);
+      const contentDB = getMergedContentDB(updated.rulesetId);
+      updated = recomputeDerived(updated, rules, {
+        classDefs: contentDB.classes, homebrewSpells: contentDB.spells, races: contentDB.races, items: contentDB.items,
+      });
       setDraft(updated);
       router.push('/creation/hub');
     }

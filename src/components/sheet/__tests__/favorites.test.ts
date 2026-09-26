@@ -8,7 +8,7 @@
 // favorite state to Entity.favoriteActionIds, keyed by featureId directly,
 // independent of whatever (if anything) backs the card.
 import { makeEmptyEntity } from '../../../store/characterStore';
-import { toggleFavoriteTag, isFavoriteCard } from '../TabActions';
+import { actionCardIdentity, toggleFavoriteTag, isFavoriteCard } from '../TabActions';
 import { Feature } from '../../../engine/types';
 
 function feature(id: string): Feature {
@@ -58,5 +58,30 @@ describe('toggleFavoriteTag / isFavoriteCard', () => {
     const updated = toggleFavoriteTag(e, 'rage');
     expect(isFavoriteCard(updated, 'rage')).toBe(false);
     expect(updated.features.find(f => f.id === 'rage')?.favoriteTag).toBe(false);
+  });
+
+  it('uses exact instance-aware identities for identical authored item features', () => {
+    const e = makeEmptyEntity('e1');
+    const cardA = { featureId: 'wand_zap', sourceKind: 'item' as const, sourceId: 'wand-a' };
+    const cardB = { featureId: 'wand_zap', sourceKind: 'item' as const, sourceId: 'wand-b' };
+
+    expect(actionCardIdentity(cardA)).not.toBe(actionCardIdentity(cardB));
+    const favoritedA = toggleFavoriteTag(e, cardA);
+    expect(isFavoriteCard(favoritedA, cardA)).toBe(true);
+    expect(isFavoriteCard(favoritedA, cardB)).toBe(false);
+
+    // Removing A's card never transfers its exact modern favorite to B.
+    expect(favoritedA.favoriteActionIds).toEqual([actionCardIdentity(cardA)]);
+  });
+
+  it('continues to honor a legacy bare item-feature favorite until the user resolves it by toggling', () => {
+    const cardA = { featureId: 'wand_zap', sourceKind: 'item' as const, sourceId: 'wand-a' };
+    const cardB = { featureId: 'wand_zap', sourceKind: 'item' as const, sourceId: 'wand-b' };
+    const legacy = { ...makeEmptyEntity('e1'), favoriteActionIds: ['wand_zap'] };
+
+    expect(isFavoriteCard(legacy, cardA)).toBe(true);
+    expect(isFavoriteCard(legacy, cardB)).toBe(true);
+    const resolved = toggleFavoriteTag(legacy, cardA);
+    expect(resolved.favoriteActionIds).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { CustomRuleProfile, Entity } from '../engine/types';
 import { migrateEntity } from '../engine/multiclass';
+import { hydrateLegacyItemInstanceIds } from '../engine/itemMechanics';
 import { validateEntityShape } from '../engine/homebrewValidator';
 import { persistedCharacterExists } from '../db/entityRepo';
 import { identifyGrimoireImport, WRONG_CHARACTER_IMPORTER_MESSAGE } from './importEnvelope';
@@ -21,9 +22,18 @@ export function parsePortableCharacter(text: string, existingIds: ReadonlySet<st
   const envelope = raw as Partial<PortableCharacter>;
   if (envelope.format !== 'grimoire-character' || envelope.version !== 1 || !envelope.entity) throw new Error('Unsupported Grimoire Character format or version.');
   const migrated = migrateEntity(envelope.entity);
-  const validation = validateEntityShape(migrated);
+  // Item-identity closure (pass 2, finding A/A3): a legacy portable export
+  // predating ItemInstance.id must not enter runtime identity-less —
+  // hydrate BEFORE validating, using the same shared, pure hydrator boot
+  // load uses (no content-definition resolution, no Zustand read). Without
+  // this, an imported legacy character could be equipped/unequipped/
+  // attuned/infused immediately after import using first-itemId-match
+  // fallback semantics until the next app restart happened to run the
+  // normal load hydration.
+  const hydrated = hydrateLegacyItemInstanceIds(migrated);
+  const validation = validateEntityShape(hydrated);
   if (!validation.valid) throw new Error('Character validation failed: ' + validation.errors.join('; '));
-  const entity = migrated; let profileToImport: CustomRuleProfile | undefined;
+  const entity = hydrated; let profileToImport: CustomRuleProfile | undefined;
   if (entity.customRuleProfileId) {
     const local = localProfiles.find(profile => profile.id === entity.customRuleProfileId);
     const embedded = envelope.customRuleProfile?.id === entity.customRuleProfileId ? envelope.customRuleProfile : undefined;

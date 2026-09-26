@@ -68,6 +68,7 @@ db.exec(`
     cost            TEXT NOT NULL,
     properties      TEXT NOT NULL,
     hasDamageEffect INTEGER NOT NULL,
+    hasFeatures     INTEGER NOT NULL,
     weaponRange     TEXT,
     srd             INTEGER,
     rulesetId       TEXT,
@@ -86,8 +87,8 @@ const insertSpell = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const insertItem = db.prepare(`
-  INSERT INTO items (id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd, rulesetId, data)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO items (id, name, weight, cost, properties, hasDamageEffect, hasFeatures, weaponRange, srd, rulesetId, data)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const seenIds = new Set();
@@ -132,6 +133,7 @@ for (const item of FULL_ITEM_LIBRARY) {
     item.cost,
     JSON.stringify(item.properties),
     entry.hasDamageEffect ? 1 : 0,
+    entry.hasFeatures ? 1 : 0,
     entry.weaponRange,
     item.srd === undefined ? null : (item.srd ? 1 : 0),
     item.rulesetId ?? null,
@@ -139,12 +141,17 @@ for (const item of FULL_ITEM_LIBRARY) {
   );
 }
 
+// The bundled DB version gates native re-imports.  Include the schema shape
+// as well as content: adding the Tier-1 `hasFeatures` column must replace an
+// older installed DB even when the authored spell/item records themselves
+// did not change.
+const CONTENT_SCHEMA_VERSION = 3;
 const contentVersion = createHash('sha256')
-  .update(JSON.stringify({ spells: FULL_SPELL_LIBRARY, items: FULL_ITEM_LIBRARY }))
+  .update(JSON.stringify({ schemaVersion: CONTENT_SCHEMA_VERSION, spells: FULL_SPELL_LIBRARY, items: FULL_ITEM_LIBRARY }))
   .digest('hex');
 const setMeta = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');
 setMeta.run('contentVersion', contentVersion);
-setMeta.run('schemaVersion', '2');
+setMeta.run('schemaVersion', String(CONTENT_SCHEMA_VERSION));
 
 db.close();
 

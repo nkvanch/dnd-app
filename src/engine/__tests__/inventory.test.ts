@@ -150,19 +150,22 @@ describe('equipItem', () => {
     expect(after.inventory.equipped[0].features).toEqual([]);
   });
 
-  it('merges into an existing equipped stack of the same item instead of creating a second row', () => {
-    // Regression for INV-1: two daggers acquired in two separate pickup+equip
-    // cycles used to end up as two independent equipped rows sharing one
-    // itemId, which unequipItem could not safely tell apart.
-    const equippedDagger: ItemInstance = { itemId: 'dagger', quantity: 1, attuned: false, features: [] };
-    const carriedDagger:  ItemInstance = { itemId: 'dagger', quantity: 1, attuned: false, features: [] };
+  it('item-identity closure: equipping a second copy of the same item keeps it as its OWN row, never merged into the existing equipped row', () => {
+    // Superseded INV-1 regression: two daggers used to merge into one
+    // equipped row with quantity 2 — that's now wrong, since it silently
+    // combines two independently-tracked instances (and their action
+    // cards) into one shared row. Real per-instance identity (this
+    // closure) is the correct fix, not merging.
+    const equippedDagger: ItemInstance = { id: 'inst-a', itemId: 'dagger', quantity: 1, attuned: false, features: [] };
+    const carriedDagger:  ItemInstance = { id: 'inst-b', itemId: 'dagger', quantity: 1, attuned: false, features: [] };
     let entity = withEquipped(equippedDagger);
     entity = { ...entity, inventory: { ...entity.inventory, carried: [carriedDagger] } };
 
-    const after = equipItem(entity, 'dagger', undefined, DEFAULT_RULES);
+    const after = equipItem(entity, 'dagger', undefined, DEFAULT_RULES, 'inst-b');
 
-    expect(after.inventory.equipped).toHaveLength(1);
-    expect(after.inventory.equipped[0].quantity).toBe(2);
+    expect(after.inventory.equipped).toHaveLength(2);
+    expect(after.inventory.equipped.map(i => i.id).sort()).toEqual(['inst-a', 'inst-b']);
+    expect(after.inventory.equipped.every(i => i.quantity === 1)).toBe(true);
     expect(after.inventory.carried).toEqual([]);
   });
 });
@@ -217,17 +220,17 @@ describe('unequipItem', () => {
     expect(after.inventory.carried).toHaveLength(1);
   });
 
-  it('merges into an existing carried stack of the same item instead of creating a second row', () => {
-    const equippedRing: ItemInstance = { itemId: 'ring', quantity: 1, attuned: false, features: [] };
-    const carriedRing:  ItemInstance = { itemId: 'ring', quantity: 2, attuned: false, features: [] };
+  it('item-identity closure: unequipping keeps the instance as its OWN carried row, never merged into an existing carried stack', () => {
+    const equippedRing: ItemInstance = { id: 'ring-a', itemId: 'ring', quantity: 1, attuned: false, features: [] };
+    const carriedRing:  ItemInstance = { id: 'ring-b', itemId: 'ring', quantity: 2, attuned: false, features: [] };
     const e = makeEmptyEntity('inv-test');
     const entity: Entity = { ...e, inventory: { ...e.inventory, equipped: [equippedRing], carried: [carriedRing] } };
 
-    const after = unequipItem(entity, 'ring', DEFAULT_RULES);
+    const after = unequipItem(entity, 'ring', DEFAULT_RULES, 'ring-a');
 
     expect(after.inventory.equipped).toEqual([]);
-    expect(after.inventory.carried).toHaveLength(1);
-    expect(after.inventory.carried[0].quantity).toBe(3);
+    expect(after.inventory.carried).toHaveLength(2);
+    expect(after.inventory.carried.map(i => i.id).sort()).toEqual(['ring-a', 'ring-b']);
   });
 });
 

@@ -732,23 +732,40 @@ function InfuseItemModal({
   visible:  boolean;
   entity:   Entity;
   allItems: Item[];
-  onApply:  (itemId: string, infusionId: string, damageType?: string) => void;
+  /** `instanceId` (item-identity closure, pass 2 finding B) — the EXACT
+   *  owned copy selected below, since two eligible rows can share `itemId`.
+   *  `itemId` is still passed alongside for display/definition-lookup
+   *  convenience at the handler (unchanged contract there). */
+  onApply:  (itemId: string, infusionId: string, damageType: string | undefined, instanceId: string) => void;
   onClose:  () => void;
 }) {
   const known = entity.knownInfusionIds ?? [];
   const knownInfusions = ALL_INFUSIONS.filter(i => known.includes(i.id));
   const [selectedInfusion, setSelectedInfusion] = useState<string | null>(null);
-  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  // Item-identity closure: selects the OWNED INSTANCE, not the definition —
+  // storing `inst.itemId` here made two eligible same-definition rows
+  // impossible to tell apart (both highlighted together, and Infuse always
+  // targeted whichever instance a plain `.find(itemId)` happened to hit
+  // first at the handler).
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [damageType, setDamageType] = useState<string>('fire');
 
   const cap = maxInfusedItems(entity.identity.level);
   const infusedInstances = [...entity.inventory.equipped, ...entity.inventory.carried].filter(i => i.infusedWith);
   const atCap = infusedInstances.length >= cap;
-  const ownedInstances = [...entity.inventory.equipped, ...entity.inventory.carried].filter(i => !i.infusedWith);
+  // Item-identity closure: tag each candidate with WHICH side it's on so
+  // two identical-definition rows (one equipped, one carried) at least
+  // show a small disambiguator, per this app's "tiny label is enough,
+  // independent row selection is the real requirement" UI convention.
+  const ownedInstances = [
+    ...entity.inventory.equipped.map(i => ({ inst: i, equippedLabel: true })),
+    ...entity.inventory.carried.map(i => ({ inst: i, equippedLabel: false })),
+  ].filter(({ inst }) => !inst.infusedWith);
+  const selectedInstance = ownedInstances.find(({ inst }) => (inst.id ?? inst.itemId) === selectedInstanceId)?.inst;
 
   function reset() {
     setSelectedInfusion(null);
-    setSelectedItem(null);
+    setSelectedInstanceId(null);
     setDamageType('fire');
   }
 
@@ -758,8 +775,9 @@ function InfuseItemModal({
   }
 
   function handleApply() {
-    if (!selectedInfusion || !selectedItem || atCap) return;
-    onApply(selectedItem, selectedInfusion, selectedInfusion === 'resistant_armor' ? damageType : undefined);
+    if (!selectedInfusion || !selectedInstance || atCap) return;
+    const instanceId = selectedInstance.id ?? selectedInstance.itemId;
+    onApply(selectedInstance.itemId, selectedInfusion, selectedInfusion === 'resistant_armor' ? damageType : undefined, instanceId);
     reset();
     onClose();
   }
@@ -805,15 +823,16 @@ function InfuseItemModal({
 
           <Text style={infuseStyles.stepLabel}>2. Choose item</Text>
           <ScrollView style={infuseStyles.pickList}>
-            {ownedInstances.map((inst, idx) => {
+            {ownedInstances.map(({ inst, equippedLabel }, idx) => {
               const def = allItems.find(i => i.id === inst.itemId);
+              const instanceKey = inst.id ?? inst.itemId;
               return (
                 <Pressable
-                  key={`${inst.itemId}_${idx}`}
-                  style={[infuseStyles.row, selectedItem === inst.itemId && infuseStyles.rowSelected]}
-                  onPress={() => setSelectedItem(inst.itemId)}
+                  key={inst.id ?? `${inst.itemId}_${idx}`}
+                  style={[infuseStyles.row, selectedInstanceId === instanceKey && infuseStyles.rowSelected]}
+                  onPress={() => setSelectedInstanceId(instanceKey)}
                 >
-                  <Text style={infuseStyles.rowTxt}>{def?.name ?? inst.itemId}</Text>
+                  <Text style={infuseStyles.rowTxt}>{def?.name ?? inst.itemId} {equippedLabel ? '(equipped)' : '(carried)'}</Text>
                 </Pressable>
               );
             })}
@@ -821,8 +840,8 @@ function InfuseItemModal({
           </ScrollView>
 
           <Pressable
-            style={[addStyles.quickAddBtn, (!selectedInfusion || !selectedItem || atCap) && addStyles.quickAddBtnDisabled]}
-            disabled={!selectedInfusion || !selectedItem || atCap}
+            style={[addStyles.quickAddBtn, (!selectedInfusion || !selectedInstance || atCap) && addStyles.quickAddBtnDisabled]}
+            disabled={!selectedInfusion || !selectedInstance || atCap}
             onPress={handleApply}
           >
             <Text style={addStyles.quickAddBtnTxt}>Infuse Item</Text>
@@ -980,23 +999,28 @@ function ItemRow({
 
 interface Props {
   entity:            Entity;
-  onEquip:           (itemId: string) => void;
-  onUnequip:         (itemId: string) => void;
+  /** `instanceId` (item-identity closure) — the EXACT owned copy this row
+   *  represents (ItemInstance.id), since two rows can share `itemId`.
+   *  Always passed from this file's own row callbacks below. */
+  onEquip:           (itemId: string, instanceId?: string) => void;
+  onUnequip:         (itemId: string, instanceId?: string) => void;
   onAddItem:         (itemId: string) => void;
-  onRemoveItem:      (itemId: string) => void;
+  onRemoveItem:      (itemId: string, instanceId?: string) => void;
   /** +/- stepper on a carried stack — delta is +1 or -1. Not offered for
    * equipped items (stacking multiple of a worn/wielded item doesn't mean
    * anything the sheet tracks). */
-  onUpdateQuantity:  (itemId: string, delta: number) => void;
+  onUpdateQuantity:  (itemId: string, delta: number, instanceId?: string) => void;
   /** Jump straight to an exact carried-stack count (typed, not tapped). */
-  onSetQuantity:     (itemId: string, quantity: number) => void;
+  onSetQuantity:     (itemId: string, quantity: number, instanceId?: string) => void;
   onUpdateCurrency:  (currency: Currency) => void;
   /** Active campaign rules — used to honour homebrew toggles (e.g. large-creature dice). */
   rules?:            CampaignRules;
-  /** Present only for classes with Infuse Item (Artificer) — omitted elsewhere. */
-  onApplyInfusion?:  (itemId: string, infusionId: string, damageType?: string) => void;
-  onRemoveInfusion?: (itemId: string) => void;
-  onToggleAttune?:   (itemId: string) => void;
+  /** Present only for classes with Infuse Item (Artificer) — omitted elsewhere.
+   *  `instanceId` (item-identity closure) — the EXACT owned copy to
+   *  infuse/de-infuse, since two eligible rows can share `itemId`. */
+  onApplyInfusion?:  (itemId: string, infusionId: string, damageType: string | undefined, instanceId: string) => void;
+  onRemoveInfusion?: (itemId: string, instanceId?: string) => void;
+  onToggleAttune?:   (itemId: string, instanceId?: string) => void;
   /** Item 13 (loadouts) — save/apply/delete a named (equipped items,
    *  prepared spells) snapshot. Omitted entirely hides the section (same
    *  optional-prop pattern as onApplyInfusion). */
@@ -1058,14 +1082,14 @@ function TabInventoryInner({
       Alert.alert('Attunement Full', `You're already attuned to ${attuneCap} item${attuneCap === 1 ? '' : 's'} — un-attune from one first.`);
       return;
     }
-    onToggleAttune(inst.itemId);
+    onToggleAttune(inst.itemId, inst.id);
   }
 
-  function confirmRemove(itemId: string) {
-    const item = allItems.find(i => i.id === itemId);
-    Alert.alert('Remove Item', `Remove ${item?.name ?? itemId} from your inventory?`, [
+  function confirmRemove(inst: ItemInstance) {
+    const item = allItems.find(i => i.id === inst.itemId);
+    Alert.alert('Remove Item', `Remove ${item?.name ?? inst.itemId} from your inventory?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => onRemoveItem(itemId) },
+      { text: 'Remove', style: 'destructive', onPress: () => onRemoveItem(inst.itemId, inst.id) },
     ]);
   }
 
@@ -1200,13 +1224,13 @@ function TabInventoryInner({
         ) : (
           inventory.equipped.map((inst, idx) => (
             <ItemRow
-              key={`eq_${inst.itemId}_${idx}`}
+              key={inst.id ?? `eq_${inst.itemId}_${idx}`}
               instance={inst}
               equipped
               allItems={allItems}
-              onToggle={() => onUnequip(inst.itemId)}
-              onRemove={() => confirmRemove(inst.itemId)}
-              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId) : undefined}
+              onToggle={() => onUnequip(inst.itemId, inst.id)}
+              onRemove={() => confirmRemove(inst)}
+              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId, inst.id) : undefined}
               onToggleAttune={onToggleAttune ? () => handleAttuneToggle(inst) : undefined}
             />
           ))
@@ -1228,15 +1252,15 @@ function TabInventoryInner({
         ) : (
           inventory.carried.map((inst, idx) => (
             <ItemRow
-              key={`ca_${inst.itemId}_${idx}`}
+              key={inst.id ?? `ca_${inst.itemId}_${idx}`}
               instance={inst}
               equipped={false}
               allItems={allItems}
-              onToggle={() => onEquip(inst.itemId)}
-              onRemove={() => confirmRemove(inst.itemId)}
-              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId) : undefined}
-              onQuantityChange={delta => onUpdateQuantity(inst.itemId, delta)}
-              onSetQuantity={qty => onSetQuantity(inst.itemId, qty)}
+              onToggle={() => onEquip(inst.itemId, inst.id)}
+              onRemove={() => confirmRemove(inst)}
+              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId, inst.id) : undefined}
+              onQuantityChange={delta => onUpdateQuantity(inst.itemId, delta, inst.id)}
+              onSetQuantity={qty => onSetQuantity(inst.itemId, qty, inst.id)}
               onToggleAttune={onToggleAttune ? () => handleAttuneToggle(inst) : undefined}
             />
           ))

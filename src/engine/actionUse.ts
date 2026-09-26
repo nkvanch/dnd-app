@@ -70,6 +70,21 @@ export function applyActionCardUse(
   if (!isFeatureAvailable({ activation: { ...card.activation, options: undefined, resourceCost: cost } }, entity, bypassIncapacitated).available) return entity;
   const classDefs = content.classDefs ?? ALL_CHAR_CLASSES;
 
+  // Item-identity closure (pass 2, finding D3/D4): a card generated from a
+  // SPECIFIC equipped ItemInstance (card.sourceKind === 'item') must
+  // revalidate that EXACT instance is still equipped BEFORE any economy/
+  // resource side effect below runs — checked early, like every other
+  // legality gate in this function, so a stale card (its instance was
+  // removed/unequipped since the card was shown) is rejected with zero
+  // partial mutation, never silently falls through to spend a resource
+  // and then retarget an identical remaining copy's feature. A card with
+  // no sourceId (a non-item card, or one generated before this fix) is
+  // unaffected — see the flat-search fallback further below.
+  if (card.sourceKind === 'item' && card.sourceId
+      && !entity.inventory.equipped.some(inst => inst.id === card.sourceId)) {
+    return entity;
+  }
+
   if (card.spellCastingContext) {
     // A spell card — revalidate the SPECIFIC selected context, not "does
     // any source happen to be legal" (that would let a cast that showed
@@ -120,11 +135,18 @@ export function applyActionCardUse(
     }
   }
 
-  // Look in both entity.features and equipped-item features since either
-  // can produce an action card.
-  const sourceFeature =
-    updated.features.find(f => f.id === card.featureId) ??
-    updated.inventory.equipped.flatMap(inst => inst.features).find(f => f.id === card.featureId);
+  // Item-identity closure (pass 2, finding D1/D3): when this card came from
+  // a specific ItemInstance, resolve the feature from THAT instance alone
+  // (already revalidated as still-equipped above) — never a flat search
+  // across every equipped instance's features, which would silently
+  // resolve to whichever identical copy happens to appear first. A card
+  // with no sourceId falls back to the original "entity.features, then any
+  // equipped item's features" search, unchanged for non-item cards and any
+  // legacy card generated before this fix.
+  const sourceFeature = card.sourceKind === 'item' && card.sourceId
+    ? updated.inventory.equipped.find(inst => inst.id === card.sourceId)?.features.find(f => f.id === card.featureId)
+    : updated.features.find(f => f.id === card.featureId) ??
+      updated.inventory.equipped.flatMap(inst => inst.features).find(f => f.id === card.featureId);
   if (sourceFeature?.abilityEffects && sourceFeature.abilityEffects.length > 0) {
     // Table-first: passing the source feature's own activation lets
     // applyAbilityEffects tell a self-directed, unconditional effect

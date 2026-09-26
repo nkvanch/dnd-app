@@ -31,14 +31,22 @@ function genId(): string {
 
 /** Snapshots the entity's CURRENT equipped items + prepared spells into a
  *  new named Loadout. Does not mutate the entity or save it anywhere —
- *  the caller appends the result to entity.loadouts. */
+ *  the caller appends the result to entity.loadouts.
+ *
+ *  Item-identity closure (pass 2, finding E1): captures BOTH the
+ *  definition ids (`equippedItemIds` — kept for display/ensureLoaded) AND
+ *  the owned instance ids (`equippedItemInstanceIds` — the real targeting
+ *  key applyLoadout now uses). Two identical equipped items each keep
+ *  their own entry in the instance-id list; a bare `itemId` array alone
+ *  would collapse them if ever de-duplicated through a Set. */
 export function captureLoadout(entity: Entity, name: string): Loadout {
   return {
-    id:               genId(),
-    name:             name.trim() || 'Loadout',
-    equippedItemIds:  entity.inventory.equipped.map(i => i.itemId),
-    preparedSpellIds: entity.spellcasting?.prepared ?? [],
-    createdAt:        Date.now(),
+    id:                      genId(),
+    name:                    name.trim() || 'Loadout',
+    equippedItemIds:         entity.inventory.equipped.map(i => i.itemId),
+    equippedItemInstanceIds: entity.inventory.equipped.map(i => i.id ?? i.itemId),
+    preparedSpellIds:        entity.spellcasting?.prepared ?? [],
+    createdAt:               Date.now(),
   };
 }
 
@@ -74,16 +82,42 @@ export function applyLoadout(
   rules:    CampaignRules = DEFAULT_RULES,
 ): Entity {
   let updated = entity;
-  const wantEquipped = new Set(loadout.equippedItemIds);
 
-  for (const inst of entity.inventory.equipped) {
-    if (!wantEquipped.has(inst.itemId)) {
-      updated = unequipItem(updated, inst.itemId, rules);
+  // Item-identity closure (pass 2, finding E2/E4): a MODERN loadout
+  // (equippedItemInstanceIds present) targets exact owned copies — two
+  // identical swords stay distinguishable, and applying Loadout 1 vs
+  // Loadout 2 equips the SPECIFIC instance each one saved, never
+  // whichever same-definition copy happens to be first. A LEGACY loadout
+  // (saved before this field existed) has no way to know WHICH historical
+  // duplicate it meant, so it falls back to the original itemId-only
+  // matching — equipItem/unequipItem's own established "first eligible
+  // match" semantics for a caller that omits instanceId — a documented,
+  // least-destructive compromise, not a claim that legacy data secretly
+  // encodes per-copy intent it never captured.
+  if (loadout.equippedItemInstanceIds) {
+    const wantInstanceIds = new Set(loadout.equippedItemInstanceIds);
+    for (const inst of entity.inventory.equipped) {
+      if (!wantInstanceIds.has(inst.id ?? inst.itemId)) {
+        updated = unequipItem(updated, inst.itemId, rules, inst.id);
+      }
     }
-  }
-  for (const itemId of loadout.equippedItemIds) {
-    if (!updated.inventory.equipped.some(i => i.itemId === itemId)) {
-      updated = equipItem(updated, itemId, itemDefs[itemId], rules);
+    for (const instanceId of loadout.equippedItemInstanceIds) {
+      if (updated.inventory.equipped.some(i => (i.id ?? i.itemId) === instanceId)) continue;
+      const carriedInst = updated.inventory.carried.find(i => (i.id ?? i.itemId) === instanceId);
+      if (!carriedInst) continue; // no longer owned — skip, same "resolve against current state" rule as prepared spells below
+      updated = equipItem(updated, carriedInst.itemId, itemDefs[carriedInst.itemId], rules, carriedInst.id);
+    }
+  } else {
+    const wantEquipped = new Set(loadout.equippedItemIds);
+    for (const inst of entity.inventory.equipped) {
+      if (!wantEquipped.has(inst.itemId)) {
+        updated = unequipItem(updated, inst.itemId, rules);
+      }
+    }
+    for (const itemId of loadout.equippedItemIds) {
+      if (!updated.inventory.equipped.some(i => i.itemId === itemId)) {
+        updated = equipItem(updated, itemId, itemDefs[itemId], rules);
+      }
     }
   }
 

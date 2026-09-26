@@ -32,17 +32,49 @@ export function useCardContent(entity: Entity): Pick<CardGenOptions, 'classDefs'
 }
 
 export { applyActionCardUse } from '../../engine/actionUse';
+
+type CardLike = Pick<ActionCard, 'featureId' | 'sourceKind' | 'sourceId'>;
+
+/**
+ * Item-identity closure (pass 3, finding G): the ONE canonical identity for
+ * an ActionCard, used for React keys AND favorite matching/storage alike —
+ * `featureId` alone collides whenever two owned instances of the same item
+ * (or an item and Additional Equipment/another grant of it) both author the
+ * same feature, since sourceKind/sourceId (see actionUse.ts's own
+ * stale-card-rejection fix) are the only things that actually distinguish
+ * them. Non-item cards (class/spell/race/synthetic) have no instance to
+ * disambiguate, so their identity stays exactly `featureId` — unchanged
+ * from every card's identity before this closure.
+ */
+export function actionCardIdentity(card: CardLike): string {
+  return card.sourceKind === 'item' && card.sourceId ? `item:${card.sourceId}:${card.featureId}` : card.featureId;
+}
+
 /**
  * True if an action card is favorited — checks Entity.favoriteActionIds
- * first (the primary mechanism, works for ANY card: feature-backed,
- * weapon-attack, spell-based, or synthetic like Unarmed Strike), falling
- * back to a legacy true Feature.favoriteTag for characters saved before
- * favoriteActionIds existed (that field only ever got set on Feature-backed
- * cards, since spell/synthetic cards had no way to be favorited before this
- * fix — see favoriteActionIds' doc comment in types.ts).
+ * first, for the card's exact modern identity (the primary mechanism,
+ * works for ANY card: feature-backed, weapon-attack, spell-based, or
+ * synthetic like Unarmed Strike). Item-identity closure (pass 3, finding
+ * G): also accepts a bare `featureId` string (used by every pre-existing
+ * caller and test that predates per-instance identity — a non-item card's
+ * identity IS its featureId, so this is lossless for them) alongside the
+ * narrow legacy-compatibility fallback below.
+ *
+ * For an ITEM card specifically, a bare `featureId` entry in
+ * favoriteActionIds (written by toggleFavoriteTag before this closure, when
+ * no instance-aware identity existed yet) is also honored — deliberately
+ * BROADER matching than the modern identity, since that old entry can't
+ * know which instance the player meant. This is intentional, documented
+ * legacy compatibility, not a second source of truth: toggleFavoriteTag
+ * below converts it away the first time ANY instance of that card is
+ * toggled, so the ambiguity never persists past one interaction.
  */
-export function isFavoriteCard(entity: Entity, featureId: string): boolean {
-  if ((entity.favoriteActionIds ?? []).includes(featureId)) return true;
+export function isFavoriteCard(entity: Entity, card: string | CardLike): boolean {
+  const featureId = typeof card === 'string' ? card : card.featureId;
+  const identity   = typeof card === 'string' ? card : actionCardIdentity(card);
+  const favorites = entity.favoriteActionIds ?? [];
+  if (favorites.includes(identity)) return true;
+  if (identity !== featureId && favorites.includes(featureId)) return true; // legacy item-card fallback
   const f = entity.features.find(x => x.id === featureId)
     ?? entity.inventory.equipped.flatMap(inst => inst.features).find(x => x.id === featureId);
   return f?.favoriteTag === true;
@@ -57,13 +89,26 @@ export function isFavoriteCard(entity: Entity, featureId: string): boolean {
  * Feature at all). Toggling off also clears a legacy Feature.favoriteTag if
  * present, so switching off a pre-migration favorite actually turns it off
  * rather than isFavoriteCard's fallback keeping it lit.
+ *
+ * Item-identity closure (pass 3, finding G): stores/removes the card's
+ * exact modern identity (see actionCardIdentity), never a bare featureId
+ * for an item card — favoriting instance A must never implicitly favorite
+ * instance B merely because they share featureId. When turning OFF an item
+ * card that's currently favorited via the legacy bare-featureId fallback
+ * (isFavoriteCard's own doc comment), this also removes that bare entry —
+ * the player just told this app "this is off," and leaving the shared
+ * legacy entry in place would keep every OTHER same-feature instance lit
+ * with no way to turn it off independently. This is the one place that
+ * ambiguous legacy state gets resolved into the modern per-instance model.
  */
-export function toggleFavoriteTag(entity: Entity, featureId: string): Entity {
+export function toggleFavoriteTag(entity: Entity, card: string | CardLike): Entity {
+  const featureId = typeof card === 'string' ? card : card.featureId;
+  const identity   = typeof card === 'string' ? card : actionCardIdentity(card);
   const current = entity.favoriteActionIds ?? [];
-  if (isFavoriteCard(entity, featureId)) {
+  if (isFavoriteCard(entity, card)) {
     return {
       ...entity,
-      favoriteActionIds: current.filter(id => id !== featureId),
+      favoriteActionIds: current.filter(id => id !== identity && id !== featureId),
       features: entity.features.map(f => f.id === featureId ? { ...f, favoriteTag: false } : f),
       inventory: {
         ...entity.inventory,
@@ -74,7 +119,7 @@ export function toggleFavoriteTag(entity: Entity, featureId: string): Entity {
       },
     };
   }
-  return { ...entity, favoriteActionIds: [...current, featureId] };
+  return { ...entity, favoriteActionIds: [...current, identity] };
 }
 
 const CARD_COLORS: Record<ActionCard['color'], string> = {
@@ -134,7 +179,7 @@ export function UseModal({ card, onRoll, onClose }: UseModalProps) {
   // closes). Without this, the previous spell's result lingers: the modal shows
   // a stale number and the `!result` guard hides the fresh Roll button, so a
   // different spell appears to "reuse" the last roll instead of rolling anew.
-  const cardKey = card?.featureId ?? null;
+  const cardKey = card ? actionCardIdentity(card) : null;
   useEffect(() => {
     setResult(null);
     setCrit(false);
@@ -411,10 +456,10 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
 
 // ── Section ───────────────────────────────────────────────────────────────────
 
-function Section({ title, cards, entity, onUse, favoriteIds, onToggleFavorite }: {
+function Section({ title, cards, entity, onUse, onToggleFavorite }: {
   title: string; cards: ActionCard[]; entity: Entity;
   onUse: (c: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean) => void;
-  favoriteIds?: Set<string>; onToggleFavorite?: (c: ActionCard) => void;
+  onToggleFavorite?: (c: ActionCard) => void;
 }) {
   if (cards.length === 0) return null;
   return (
@@ -422,11 +467,11 @@ function Section({ title, cards, entity, onUse, favoriteIds, onToggleFavorite }:
       <Text style={styles.sectionTitle}>{title}</Text>
       {cards.map(c => (
         <ActionCardRow
-          key={c.featureId}
+          key={actionCardIdentity(c)}
           card={c}
           entity={entity}
           onUse={onUse}
-          isFavorite={favoriteIds?.has(c.featureId)}
+          isFavorite={isFavoriteCard(entity, c)}
           onToggleFavorite={onToggleFavorite}
         />
       ))}
@@ -572,15 +617,8 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     });
   }, [entity, rules, onEntityUpdate, pendingUse, requestPayment, cardContent]);
 
-  const favoriteIds = new Set([
-    ...(entity.favoriteActionIds ?? []),
-    // Legacy fallback for characters saved before favoriteActionIds existed
-    // — see isFavoriteCard's doc comment.
-    ...entity.features.filter(f => f.favoriteTag).map(f => f.id),
-    ...entity.inventory.equipped.flatMap(inst => inst.features).filter(f => f.favoriteTag).map(f => f.id),
-  ]);
   const handleToggleFavorite = useCallback((card: ActionCard) => {
-    if (onEntityUpdate) onEntityUpdate(toggleFavoriteTag(entity, card.featureId));
+    if (onEntityUpdate) onEntityUpdate(toggleFavoriteTag(entity, card));
   }, [entity, onEntityUpdate]);
 
   function rollForCard(crit: boolean): DiceRoll | null {
@@ -639,10 +677,10 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
           <Text style={styles.emptySubTxt}>Level up or learn spells to unlock abilities.</Text>
         </View>
       )}
-      <Section title="ACTIONS"       cards={actions}      entity={entity} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
-      <Section title="BONUS ACTIONS" cards={bonusActions} entity={entity} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
-      <Section title="REACTIONS"     cards={reactions}    entity={entity} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
-      <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} entity={entity} onUse={handleUse} favoriteIds={favoriteIds} onToggleFavorite={handleToggleFavorite} />
+      <Section title="ACTIONS"       cards={actions}      entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
+      <Section title="BONUS ACTIONS" cards={bonusActions} entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
+      <Section title="REACTIONS"     cards={reactions}    entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
+      <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
       <UniversalActionsSection />
       <TriggeredFeaturesSection entity={entity} />
 

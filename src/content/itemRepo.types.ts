@@ -29,6 +29,14 @@ export type ItemIndexEntry = {
    * for this one check.
    */
   hasDamageEffect: boolean;
+  /**
+   * Whether the full definition declares any Feature.  This is deliberately
+   * a compact, authoritative Tier-1 fact rather than the features payload:
+   * creation-time acquisition must know whether an item is stateful even on
+   * native, where the Tier-2 definition cache has not necessarily been
+   * warmed yet.
+   */
+  hasFeatures?: boolean;
   weaponRange:     string | null;
   srd?:       boolean;
   /**
@@ -73,6 +81,7 @@ export function toItemIndexEntry(item: Item): ItemIndexEntry {
     cost:            item.cost,
     properties:      item.properties,
     hasDamageEffect: !!damageFeature,
+    hasFeatures:     item.features.length > 0,
     weaponRange:     damageFeature?.activation?.range ?? null,
     srd:             item.srd,
     rulesetId:       item.rulesetId,

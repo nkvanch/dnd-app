@@ -538,7 +538,17 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
         effects.push({
           effect,
           sourceName: fi.name,
-          sourceId:   item.itemId,
+          // Item-identity closure (pass 2, finding C): CONTRIBUTOR identity
+          // is the owned INSTANCE (item.id) — distinct from the definition
+          // lookup just above (resolveItemDefinition still keys on
+          // item.itemId, unchanged). Two identical equipped items each push
+          // their own ActiveEffect entry already (this loop iterates the
+          // real array, never deduped by itemId), so their contributions
+          // were always independently removable at the array level; this
+          // only makes their PROVENANCE (audit-trail identity) distinct
+          // too, rather than both reporting the same itemId as their
+          // source. Falls back to itemId for a still-unmigrated instance.
+          sourceId:   item.id ?? item.itemId,
           appliedAt:  0,
           sourceKind: 'item',
         });
@@ -704,6 +714,7 @@ function computeWeaponAttackBonuses(
 
     result.push({
       id:          inst.itemId,
+      instanceId:  inst.id,
       name:        def.name,
       bonus:       (isProficient ? profBonus : 0) + mod + magicBonus,
       type:        isRanged ? 'ranged' : 'melee',

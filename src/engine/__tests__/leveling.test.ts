@@ -216,10 +216,10 @@ describe('applyGrant', () => {
     expect(updated.spellcasting?.cantrips).toEqual(['fire_bolt']);
   });
 
-  it('"starting_item" adds one carried ItemInstance', () => {
+  it('"starting_item" adds one carried ItemInstance with a stable instance id (item-identity closure)', () => {
     const e = entity();
     const updated = applyGrant(e, { kind: 'starting_item', value: 'longsword' }, 1);
-    expect(updated.inventory.carried).toEqual([{ itemId: 'longsword', quantity: 1, attuned: false, features: [] }]);
+    expect(updated.inventory.carried).toEqual([{ id: expect.any(String), itemId: 'longsword', quantity: 1, attuned: false, features: [] }]);
   });
 
   it('an unrecognized grant kind is a safe no-op', () => {

@@ -1053,11 +1053,20 @@ export function isFeatureAvailable(
 /**
  * Generates an ActionCard for a single feature.
  * Returns null for passive features (no activation).
+ *
+ * `itemInstanceId` (item-identity closure, pass 2 finding D) — pass the
+ * owning ItemInstance's `id` when `feature` lives on an equipped item's own
+ * features array (never for an entity.features-sourced class/race/feat
+ * feature). Stamps `sourceKind:'item'`/`sourceId` on the returned card so
+ * two identical equipped items' authored-feature cards don't collide in
+ * identity, and so applyActionCardUse (actionUse.ts) can revalidate the
+ * EXACT instance at execution time instead of a flat cross-instance search.
  */
 export function generateActionCard(
   feature: Feature,
   entity: Entity,
   opts: CardGenOptions = {},
+  itemInstanceId?: string,
 ): ActionCard | null {
   if (!feature.activation) return null;
 
@@ -1092,6 +1101,7 @@ export function generateActionCard(
     available,
     unavailableReason: reason,
     incapacitatedOverridable,
+    ...(itemInstanceId ? { sourceKind: 'item' as const, sourceId: itemInstanceId } : {}),
   };
 }
 
@@ -1287,25 +1297,48 @@ export function generateAllActionCards(
     let hasAuthoredAttack = false;
     for (const fi of feats) {
       if (!fi.activation) continue;
-      const card = generateActionCard(fi, entity, opts);
+      // Item-identity closure: stamps sourceKind:'item'/sourceId = THIS
+      // instance's own id, so two identical equipped items' authored-
+      // feature cards carry distinct, revalidatable identity (see
+      // generateActionCard's own doc comment).
+      const card = generateActionCard(fi, entity, opts, inst.id);
       if (card) {
         cards.push(card);
         if (fi.abilityEffects?.some(effect => effect.type === 'damage')) hasAuthoredAttack = true;
       }
     }
     if (definition && isWeapon(toItemIndexEntry(definition)) && !hasAuthoredAttack) {
-      const attack = entity.derived.attackBonuses.find(candidate => candidate.id === inst.itemId);
+      // Item-identity closure: prefer the EXACT matching AttackBonus by
+      // instance id when this instance has one — `.find(a => a.id ===
+      // itemId)` alone always returns the FIRST equipped weapon sharing
+      // that itemId, silently generating an identical (wrong) attack card
+      // for every OTHER identical copy. Falls back to the old itemId-only
+      // match for an instance with no id yet (pre-migration/test fixture).
+      const attack = inst.id
+        ? entity.derived.attackBonuses.find(candidate => candidate.instanceId === inst.id)
+        : entity.derived.attackBonuses.find(candidate => candidate.id === inst.itemId);
       if (attack) {
         const activation: FeatureActivation = { actionType: 'action', resourceCost: null, range: attack.type === 'ranged' ? 'weapon range' : '5 feet', target: 'single', requiresSave: null };
         const availability = isFeatureAvailable({ activation, effects: [], abilityEffects: [] } as unknown as Feature, entity);
         const dice = doubleWeaponDice ? doubleDice(attack.damageDice) : attack.damageDice;
         cards.push({
-          featureId: `${inst.itemId}_basic_weapon_attack`, name: definition.name,
+          // Item-identity closure: keyed by instance id when present, so
+          // two identical equipped weapons produce two DISTINCT cards
+          // instead of colliding on one shared featureId (falls back to
+          // the original itemId-based scheme for an un-migrated instance,
+          // preserving every existing single-copy featureId exactly).
+          featureId: `${inst.id ?? inst.itemId}_basic_weapon_attack`, name: definition.name,
           cardType: 'damage', color: 'red', layer1: `Action • ${capitalize(attack.type)} Weapon Attack`,
           layer2: `${fmtBonus(attack.bonus)} to hit • ${dice}${attack.damageBonus !== 0 ? fmtBonus(attack.damageBonus) : ''} ${capitalize(attack.damageType)}`,
           layer3: null, outcomes: [], triggerNote: null, activation, resourceCost: null,
           tabs: ['actions', 'features'], available: availability.available, unavailableReason: availability.reason,
           incapacitatedOverridable: availability.incapacitatedOverridable,
+          // Item-identity closure: same stale-instance revalidation at
+          // execution time as an authored item-feature card, even though
+          // this synthetic card has no abilityEffects of its own to apply —
+          // still worth rejecting cleanly rather than silently no-op'ing
+          // against a stale removed/unequipped weapon.
+          ...(inst.id ? { sourceKind: 'item' as const, sourceId: inst.id } : {}),
         });
       }
     }

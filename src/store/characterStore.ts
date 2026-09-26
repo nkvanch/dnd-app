@@ -26,7 +26,8 @@ import { itemRepo } from '../content/itemRepo';
 import { itemIdsOnEntity } from '../content/itemRepo.types';
 import { recomputeDerived } from '../engine/pipeline';
 import { useHomebrewStore } from './homebrewStore';
-import { hydrateItemInstanceDefinitionFacts, resolveItemDefinition } from '../engine/itemMechanics';
+import { hydrateItemInstanceDefinitionFacts, resolveItemDefinition, hydrateLegacyItemInstanceIds } from '../engine/itemMechanics';
+import { validateEntityDeep } from '../engine/entityValidation';
 
 export type { EntityMeta };
 
@@ -42,7 +43,16 @@ export type { EntityMeta };
  * below) must have already warmed via ensureLoaded — this function itself
  * stays synchronous so it's a drop-in map over the character list.
  */
-function hydrateItemFeatures(entity: Entity): Entity {
+function hydrateItemFeatures(rawEntity: Entity): Entity {
+  // Item-identity closure (pass 2, finding A): id backfill is now the ONE
+  // shared, reusable hydrator (itemMechanics.ts) — also called from
+  // characterPortable.ts (portable import) and applyIncomingEntity
+  // (backup restore / inbound sync), so no path can insert an
+  // identity-less legacy item into normal runtime state. See its own doc
+  // comment for why the id must be deterministic here specifically (this
+  // function runs on every load; loadCharacters() doesn't write the
+  // hydrated result back to SQLite by itself).
+  const entity = hydrateLegacyItemInstanceIds(rawEntity);
   function hydrateInstance(inst: ItemInstance): ItemInstance {
     const def = resolveItemDefinition(inst.itemId);
     return hydrateItemInstanceDefinitionFacts(inst, def);
@@ -740,7 +750,15 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     }
   },
 
-  applyIncomingEntity: async (entity) => {
+  applyIncomingEntity: async (rawEntity) => {
+    // Item-identity closure (pass 2, finding A/A4): an inbound full
+    // snapshot (backup restore OR live device sync) can carry a legacy
+    // entity whose items predate ItemInstance.id — hydrate with the SAME
+    // shared, pure function used by boot load and portable import before
+    // it's exposed to any code path below (the ownedCharacterId early
+    // return, Tier-2 warming, and the eventual `set`/persist). A no-op for
+    // an entity that already has ids on everything.
+    const entity = hydrateLegacyItemInstanceIds(rawEntity);
     // Bug fix (architecture review P1, S0): an incoming FULL snapshot for a
     // character THIS device already has locally AND currently owns/controls
     // (syncManager.ownedCharacterId) used to unconditionally overwrite local
@@ -816,6 +834,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       }));
     }
     let merged: Entity | null = null;
+    let rejected = false;
     set(state => {
       const next = state.characters.map(c => {
         if (c.id !== entityId) return c;
@@ -823,11 +842,36 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
         // merging, same reasoning as applyIncomingEntity above — the patch
         // itself may carry an unrelated `revision` value from the sender,
         // which must not leak into this device's own monotonic counter.
-        merged = { ...deepMerge(c, patch), revision: (c.revision ?? 0) + 1 };
+        const rawMerged = { ...deepMerge(c, patch), revision: (c.revision ?? 0) + 1 };
+        // Item-identity closure (pass 3, finding B): a patch is a PARTIAL
+        // fragment — hydrating it in isolation could invent an id from the
+        // wrong array position (the patch's own inventory arrays don't
+        // necessarily line up with the full entity's). Hydrate the FULL
+        // merged entity instead, with the SAME shared hydrator every other
+        // ingress uses, so an incoming patch that introduces an
+        // identity-less legacy item is normalized before it's ever exposed
+        // to Zustand/persisted — no app restart required.
+        const hydrated = hydrateLegacyItemInstanceIds(rawMerged);
+        // Hydration only ever fills what's MISSING — it never rewrites
+        // malformed or duplicate SUPPLIED ids, so validating afterward
+        // still catches genuinely bad incoming data (a malformed id, a
+        // duplicate nonempty id across two rows) without hydration masking
+        // it. Reject the whole patch rather than exposing/persisting
+        // invalid state — the safest behavior when a sync peer sends
+        // something structurally wrong.
+        if (!validateEntityDeep(hydrated).valid) {
+          rejected = true;
+          return c;
+        }
+        merged = hydrated;
         return merged;
       });
-      return { characters: next };
+      return rejected ? state : { characters: next };
     });
+    if (rejected) {
+      reportPersistOutcome('applyIncomingPatch', new Error('Incoming patch produced an invalid entity — rejected.'));
+      return;
+    }
     if (merged) {
       saveEntity(merged).then(
         () => reportPersistOutcome('applyIncomingPatch', null),
@@ -840,9 +884,16 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     // silently doing nothing is the safe behavior rather than guessing.
   },
 
-  importCharacter: async (entity) => {
+  importCharacter: async (rawEntity) => {
     try {
-      if (await persistedCharacterExists(entity.id)) return false;
+      if (await persistedCharacterExists(rawEntity.id)) return false;
+      // Item-identity closure (pass 2, finding A/A3): defense-in-depth —
+      // characterPortable.ts's own parsePortableCharacter already hydrates
+      // missing ItemInstance ids before returning, but this is the generic
+      // entry point any future import path could call directly; hydrating
+      // again here is a safe no-op once ids already exist, and guarantees
+      // the invariant holds regardless of caller.
+      const entity = hydrateLegacyItemInstanceIds(rawEntity);
       await saveEntity(entity);
       set(state => ({ characters: [entity, ...state.characters.filter(c => c.id !== entity.id)] }));
       reportPersistOutcome('importCharacter', null);

@@ -118,6 +118,17 @@ function validateFeature(raw: unknown, path: string, errors: string[]) {
 
 function validateItemInstance(raw: unknown, path: string, errors: string[]) {
   if (!object(raw)) { errors.push(`${path}: must be an object`); return; }
+  // Item-identity closure: `id` (the owned-instance identity, distinct from
+  // `itemId`/the shared definition reference) is optional ONLY for
+  // backward compatibility with a character saved before this field
+  // existed — characterStore.ts's load hydration backfills it before the
+  // engine ever sees the entity, so a well-formed LIVE entity always has
+  // one; this validator still accepts its absence (a structural migration
+  // gap, not malformed data) but rejects it if present and not a nonempty
+  // string. Cross-instance duplicate-id detection happens one level up
+  // (across BOTH equipped and carried together), where every ItemInstance
+  // on the entity is in scope at once.
+  if (raw.id !== undefined && (!string(raw.id) || !raw.id)) errors.push(`${path}.id: must be a nonempty string when present`);
   if (!string(raw.itemId) || !raw.itemId) errors.push(`${path}.itemId: required string`);
   if (!finite(raw.quantity) || raw.quantity <= 0) errors.push(`${path}.quantity: must be finite and positive`);
   if (!boolean(raw.attuned)) errors.push(`${path}.attuned: required boolean`);
@@ -256,12 +267,29 @@ export function validateEntityDeep(raw: unknown): ValidationResult {
   }
 
   if (!object(raw.inventory)) errors.push('inventory: required object');
-  else for (const key of ['equipped', 'carried']) {
-    const list = raw.inventory[key];
-    if (!Array.isArray(list)) errors.push(`inventory.${key}: required array`);
-    else {
-      if (list.length > LIMITS.maxInventory) errors.push(`inventory.${key}: too many entries`);
-      list.forEach((item, i) => validateItemInstance(item, `inventory.${key}[${i}]`, errors));
+  else {
+    for (const key of ['equipped', 'carried']) {
+      const list = raw.inventory[key];
+      if (!Array.isArray(list)) errors.push(`inventory.${key}: required array`);
+      else {
+        if (list.length > LIMITS.maxInventory) errors.push(`inventory.${key}: too many entries`);
+        list.forEach((item, i) => validateItemInstance(item, `inventory.${key}[${i}]`, errors));
+      }
+    }
+    // Item-identity closure: two owned instances (anywhere on this ONE
+    // entity — equipped and carried together) must never share the same
+    // `id` — that would make them indistinguishable again exactly the way
+    // this closure exists to prevent (equip/attune/remove would no longer
+    // reliably target one specific copy). Only checks instances that
+    // actually carry an id (see validateItemInstance's own doc comment for
+    // why an absent id is a migration gap, not malformed data).
+    const equippedList = Array.isArray(raw.inventory.equipped) ? raw.inventory.equipped : [];
+    const carriedList  = Array.isArray(raw.inventory.carried)  ? raw.inventory.carried  : [];
+    const seenIds = new Set<string>();
+    for (const item of [...equippedList, ...carriedList]) {
+      if (!object(item) || !string(item.id) || !item.id) continue;
+      if (seenIds.has(item.id)) errors.push(`inventory: duplicate ItemInstance id "${item.id}"`);
+      seenIds.add(item.id);
     }
   }
 

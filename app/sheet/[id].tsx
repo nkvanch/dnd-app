@@ -18,7 +18,7 @@ import { recomputeDerived } from '../../src/engine/pipeline';
 import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
-import { equipItem, unequipItem, toggleAttunement } from '../../src/engine/inventory';
+import { equipItem, unequipItem, toggleAttunement, generateItemInstanceId, isStatefulItem, applyItemInfusion, removeItemInfusion } from '../../src/engine/inventory';
 import { commitSpellPayment, restoreSpellSlot, SpellPaymentOption } from '../../src/engine/spellPayment';
 import { captureLoadout, applyLoadout, deleteLoadout } from '../../src/engine/loadout';
 import { simulate } from '../../src/engine/simulate';
@@ -282,19 +282,24 @@ export default function CharacterSheetScreen() {
     kind: 'equip' | 'unequip'; itemName: string; before: Entity; after: Entity;
   } | null>(null);
 
-  const handleEquip = useCallback(async (itemId: string) => {
+  // `instanceId` (item-identity closure) — the EXACT owned copy the player
+  // tapped, since two carried/equipped rows can share `itemId`. TabInventory
+  // already iterates real ItemInstance objects, so it always has one to
+  // pass; omitted only by any not-yet-updated caller, which falls back to
+  // the first `itemId` match (equipItem/unequipItem's own back-compat).
+  const handleEquip = useCallback(async (itemId: string, instanceId?: string) => {
     if (!entity) return;
     await itemRepo.ensureLoaded([itemId]);
     const def = itemRepo.getItemSync(itemId) ?? homebrewItems.find(i => i.id === itemId);
-    const { before, after } = simulate(entity, e => equipItem(e, itemId, def, rules), rules);
+    const { before, after } = simulate(entity, e => equipItem(e, itemId, def, rules, instanceId), rules);
     setEquipPreview({ kind: 'equip', itemName: def?.name ?? itemId, before, after });
   }, [entity, homebrewItems, rules]);
 
-  const handleUnequip = useCallback(async (itemId: string) => {
+  const handleUnequip = useCallback(async (itemId: string, instanceId?: string) => {
     if (!entity) return;
     await itemRepo.ensureLoaded([itemId]); // symmetry — resolves the name for display
     const def = itemRepo.getItemSync(itemId) ?? homebrewItems.find(i => i.id === itemId);
-    const { before, after } = simulate(entity, e => unequipItem(e, itemId, rules), rules);
+    const { before, after } = simulate(entity, e => unequipItem(e, itemId, rules, instanceId), rules);
     setEquipPreview({ kind: 'unequip', itemName: def?.name ?? itemId, before, after });
   }, [entity, homebrewItems, rules]);
 
@@ -317,8 +322,8 @@ export default function CharacterSheetScreen() {
   // check itself lives in toggleAttunement() (a no-op past the cap); the UI
   // (TabInventory) checks countAttuned()/attunementCap() itself first so it
   // can show an explanatory Alert instead of a silent no-op.
-  const handleToggleAttune = useCallback((itemId: string) => {
-    mutate(e => toggleAttunement(e, itemId), `Toggled attunement: ${itemName(itemId)}`, 'inventory');
+  const handleToggleAttune = useCallback((itemId: string, instanceId?: string) => {
+    mutate(e => toggleAttunement(e, itemId, instanceId), `Toggled attunement: ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
 
   // Item 13 (loadouts) — save/apply/delete a named (equipped items,
@@ -372,59 +377,97 @@ export default function CharacterSheetScreen() {
 
   const handleAddItem = useCallback(async (itemId: string) => {
     await itemRepo.ensureLoaded([itemId]);
+    const def = itemRepo.getItemSync(itemId) ?? homebrewItems.find(i => i.id === itemId);
     mutate(e => {
-      // Stack onto an existing carried instance of the same item (arrows,
-      // potions, torches, etc.) instead of adding a second duplicate row —
+      // Item-identity closure: stack onto an existing carried instance ONLY
+      // for a genuinely fungible item (arrows, potions, torches, etc.) —
       // "+ Add Item" on something already in the bag should read as "add
-      // one more", matching the ×N badge ItemRow already renders.
-      const existing = e.inventory.carried.find(i => i.itemId === itemId);
+      // one more", matching the ×N badge ItemRow already renders. A
+      // STATEFUL item (attunable, weapon/armor/shield, or feature-granting
+      // — see isStatefulItem's own doc comment) always gets its OWN new
+      // instance/id instead: selecting the same magic-item definition twice
+      // must be able to end with two independently-tracked owned copies,
+      // never silently merged into one shared quantity row.
+      const stateful = isStatefulItem(def);
+      const existing = !stateful ? e.inventory.carried.find(i => i.itemId === itemId) : undefined;
       const carried = existing
-        ? e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity: i.quantity + 1 } : i)
-        : [...e.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }];
+        ? e.inventory.carried.map(i => i === existing ? { ...i, quantity: i.quantity + 1 } : i)
+        : [...e.inventory.carried, { id: generateItemInstanceId(), itemId, quantity: 1, attuned: false, features: [] }];
       return { ...e, inventory: { ...e.inventory, carried } };
     }, `Added item: ${itemName(itemId)}`, 'inventory');
-  }, [mutate, itemName]);
+  }, [mutate, itemName, homebrewItems]);
 
-  const handleRemoveItem = useCallback((itemId: string) => {
-    mutate(e => ({
-      ...e,
-      inventory: {
-        ...e.inventory,
-        equipped: e.inventory.equipped.filter(i => i.itemId !== itemId),
-        carried:  e.inventory.carried.filter(i => i.itemId !== itemId),
-      },
-    }), `Removed item: ${itemName(itemId)}`, 'inventory');
+  // `instanceId` (item-identity closure) — removes that EXACT owned copy.
+  // Falls back to removing the first `itemId` match only (never every
+  // matching row) when omitted, so a stale/legacy caller can't silently
+  // wipe every copy of a shared definition (the exact INV-1-class bug this
+  // closure exists to prevent).
+  const handleRemoveItem = useCallback((itemId: string, instanceId?: string) => {
+    mutate(e => {
+      function removeOneMatch(list: ItemInstance[]): ItemInstance[] {
+        const index = instanceId
+          ? list.findIndex(i => i.id === instanceId)
+          : list.findIndex(i => i.itemId === itemId);
+        if (index < 0) return list;
+        const next = [...list]; next.splice(index, 1); return next;
+      }
+      // An instance lives in exactly one of equipped/carried — removing
+      // from both is safe (whichever doesn't contain it is a no-op), and
+      // avoids the caller needing to know which side it's currently on.
+      return {
+        ...e,
+        inventory: {
+          ...e.inventory,
+          equipped: removeOneMatch(e.inventory.equipped),
+          carried:  removeOneMatch(e.inventory.carried),
+        },
+      };
+    }, `Removed item: ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
 
   // +/- stepper on a carried stack's quantity. Dropping to 0 removes it
   // outright — same "gone" result as tapping the ✕ button, just reachable
   // from the stepper too so the player doesn't need both controls.
-  const handleUpdateQuantity = useCallback((itemId: string, delta: number) => {
+  // `instanceId` — targets that exact carried row (see handleRemoveItem's
+  // own doc comment for why falling back to itemId only ever touches the
+  // first match, never every row sharing a definition).
+  const handleUpdateQuantity = useCallback((itemId: string, delta: number, instanceId?: string) => {
     mutate(e => {
-      const inst = e.inventory.carried.find(i => i.itemId === itemId);
+      const inst = instanceId
+        ? e.inventory.carried.find(i => i.id === instanceId)
+        : e.inventory.carried.find(i => i.itemId === itemId);
       if (!inst) return e;
       const nextQty = inst.quantity + delta;
       const carried = nextQty <= 0
-        ? e.inventory.carried.filter(i => i.itemId !== itemId)
-        : e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity: nextQty } : i);
+        ? e.inventory.carried.filter(i => i !== inst)
+        : e.inventory.carried.map(i => i === inst ? { ...i, quantity: nextQty } : i);
       return { ...e, inventory: { ...e.inventory, carried } };
     }, `${delta > 0 ? '+' : ''}${delta} ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
 
   // Typed exact quantity (e.g. "you just picked up 20 arrows") — same
   // 0-removes-the-stack behavior as the +/- stepper above.
-  const handleSetQuantity = useCallback((itemId: string, quantity: number) => {
+  const handleSetQuantity = useCallback((itemId: string, quantity: number, instanceId?: string) => {
     mutate(e => {
-      const inst = e.inventory.carried.find(i => i.itemId === itemId);
+      const inst = instanceId
+        ? e.inventory.carried.find(i => i.id === instanceId)
+        : e.inventory.carried.find(i => i.itemId === itemId);
       if (!inst) return e;
       const carried = quantity <= 0
-        ? e.inventory.carried.filter(i => i.itemId !== itemId)
-        : e.inventory.carried.map(i => i.itemId === itemId ? { ...i, quantity } : i);
+        ? e.inventory.carried.filter(i => i !== inst)
+        : e.inventory.carried.map(i => i === inst ? { ...i, quantity } : i);
       return { ...e, inventory: { ...e.inventory, carried } };
     }, `Set ${itemName(itemId)} quantity to ${quantity}`, 'inventory');
   }, [mutate, itemName]);
 
-  const handleApplyInfusion = useCallback((itemId: string, infusionId: string, damageType?: string) => {
+  // Item-identity closure (pass 2, finding B): targets the EXACT selected
+  // ItemInstance by `instanceId` — the picker (InfuseItemModal,
+  // TabInventory.tsx) now selects a real owned instance, not merely a
+  // definition, so two eligible rows sharing `itemId` are independently
+  // targetable. Falls back to the first `itemId` match only when
+  // `instanceId` is genuinely absent (defensive — shouldn't happen once an
+  // instance has gone through boot/import hydration).
+  const handleApplyInfusion = useCallback((itemId: string, infusionId: string, damageType: string | undefined, instanceId?: string) => {
     mutate(e => {
       const infusion = getInfusion(infusionId);
       if (!infusion) return e;
@@ -444,45 +487,12 @@ export default function CharacterSheetScreen() {
         };
       }
 
-      // Additive — unlike handleEquip's hydration, which replaces an item
-      // instance's features wholesale, an infusion must stack alongside
-      // whatever features the base item definition already carries.
-      function applyTo(inst: ItemInstance): ItemInstance {
-        if (inst.itemId !== itemId || inst.infusedWith) return inst;
-        return {
-          ...inst,
-          infusedWith: infusionId,
-          features: feature ? [...inst.features, feature] : inst.features,
-        };
-      }
-
-      return {
-        ...e,
-        inventory: {
-          ...e.inventory,
-          equipped: e.inventory.equipped.map(applyTo),
-          carried:  e.inventory.carried.map(applyTo),
-        },
-      };
+      return applyItemInfusion(e, itemId, infusionId, feature ?? null, instanceId);
     }, `Infused ${itemName(itemId)}: ${getInfusion(infusionId)?.name ?? infusionId}`, 'inventory');
   }, [mutate, itemName]);
 
-  const handleRemoveInfusion = useCallback((itemId: string) => {
-    mutate(e => {
-      function removeFrom(inst: ItemInstance): ItemInstance {
-        if (inst.itemId !== itemId || !inst.infusedWith) return inst;
-        const featureId = `infusion_${inst.infusedWith}`;
-        return { ...inst, infusedWith: null, features: inst.features.filter(f => f.id !== featureId) };
-      }
-      return {
-        ...e,
-        inventory: {
-          ...e.inventory,
-          equipped: e.inventory.equipped.map(removeFrom),
-          carried:  e.inventory.carried.map(removeFrom),
-        },
-      };
-    }, `Removed infusion from ${itemName(itemId)}`, 'inventory');
+  const handleRemoveInfusion = useCallback((itemId: string, instanceId?: string) => {
+    mutate(e => removeItemInfusion(e, itemId, instanceId), `Removed infusion from ${itemName(itemId)}`, 'inventory');
   }, [mutate, itemName]);
 
   const handleUpdateCurrency = useCallback((currency: import('../../src/engine/types').Currency) => {

@@ -166,7 +166,11 @@ export default function EquipmentScreen() {
   const entity = draft;
 
   function addManualItem(itemId: string) {
-    const result = addAdditionalEquipment(entity, itemId);
+    // Item-identity closure: ItemIndexEntry carries the authoritative compact
+    // hasFeatures signal, so this is correct on native before its lazy Tier-2
+    // definition cache has been warmed. Homebrew entries are likewise indexed
+    // through the same toItemIndexEntry path.
+    const result = addAdditionalEquipment(entity, itemId, itemLookup(itemId));
     setDraft(result.entity);
     setAdditionalFeedback(result.added ? `Added ${itemName(itemId)}` : `${itemName(itemId)} is already added`);
     setAddFlow('closed');

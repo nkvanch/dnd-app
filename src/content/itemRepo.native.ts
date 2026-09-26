@@ -17,7 +17,7 @@ const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 
 type ItemIndexRow = {
   id: string; name: string; weight: number; cost: string;
-  properties: string; hasDamageEffect: number; weaponRange: string | null;
+  properties: string; hasDamageEffect: number; hasFeatures?: number; weaponRange: string | null;
   srd: number | null; rulesetId: string | null;
 };
 
@@ -29,7 +29,7 @@ async function init(): Promise<void> {
   try {
     const db = getContentDb();
     const rows = await db.getAllAsync<ItemIndexRow>(
-      'SELECT id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd, rulesetId FROM items'
+      'SELECT id, name, weight, cost, properties, hasDamageEffect, hasFeatures, weaponRange, srd, rulesetId FROM items'
     );
     const built: ItemIndexEntry[] = [];
     for (const r of rows) {
@@ -42,6 +42,7 @@ async function init(): Promise<void> {
           cost:            r.cost,
           properties:      JSON.parse(r.properties) as string[],
           hasDamageEffect: r.hasDamageEffect === 1,
+          hasFeatures:     r.hasFeatures === 1,
           weaponRange:     r.weaponRange,
           srd:             r.srd === null ? undefined : r.srd === 1,
           rulesetId:       r.rulesetId ? asRulesetId(r.rulesetId) : undefined,

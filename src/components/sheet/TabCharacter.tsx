@@ -33,7 +33,7 @@ import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
 import { ConcentrationModal } from './ConcentrationModal';
 import { CompanionSection } from './CompanionSection';
-import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard, ActivationOptionModal, useCardContent } from './TabActions';
+import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard, actionCardIdentity, ActivationOptionModal, useCardContent } from './TabActions';
 import { LevelUpPreviewModal } from './LevelUpPreviewModal';
 import { ProgressionPlannerModal } from './ProgressionPlannerModal';
 import { MulticlassProgressionPlannerModal } from './MulticlassProgressionPlannerModal';
@@ -1011,7 +1011,7 @@ function TabCharacterInner({
   // Unarmed Strike have no backing Feature to store a flag on).
   const { requestPayment, paymentChooser } = useSpellPayment(entity);
   const favoriteCardContent = useCardContent(entity);
-  const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c.featureId));
+  const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c));
   function handleUseFavorite(card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext, bypassIncapacitated?: boolean) {
     // A-57 (item 10): a favorited card with discrete use-time options
     // (e.g. Divine Smite's spell-slot tier) must resolve the picker BEFORE
@@ -1288,12 +1288,12 @@ function TabCharacterInner({
           <Text style={styles.sectionTitle}>FAVORITES</Text>
           {favoriteCards.map(c => (
             <ActionCardRow
-              key={c.featureId}
+              key={actionCardIdentity(c)}
               card={c}
               entity={entity}
               onUse={handleUseFavorite}
               isFavorite
-              onToggleFavorite={c => onEntityUpdate(toggleFavoriteTag(entity, c.featureId))}
+              onToggleFavorite={c => onEntityUpdate(toggleFavoriteTag(entity, c))}
             />
           ))}
         </View>

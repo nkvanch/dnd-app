@@ -14,6 +14,7 @@ import type { ItemIndexEntry } from '../content/itemRepo.types';
 import { hpMinHalfDie, bonusFeatEveryLevel } from './houseRules';
 import { getClassLevels, syncLegacyIdentity, multiclassProficienciesFor } from './multiclass';
 import { initializeEntitlementInputs, grantEntitlement, grantEntitlements, revokeEntitlementsFromChoice, revokeResourceSource, recomputeResourceMaximums } from './entitlements';
+import { generateItemInstanceId } from './inventory';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -357,7 +358,7 @@ export function applyGrant(
         ...entity,
         inventory: {
           ...entity.inventory,
-          carried: [...entity.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }],
+          carried: [...entity.inventory.carried, { id: generateItemInstanceId(), itemId, quantity: 1, attuned: false, features: [] }],
         },
       };
     }
@@ -1698,6 +1699,11 @@ export function resolveChoice(
     : pending.definition.forClassId
       ? { kind: 'class' as const, id: pending.definition.forClassId, choiceId: pending.id }
       : { kind: 'manual' as const, choiceId: pending.id };
+  // Item-identity closure (pass 3, finding F2): collects the EXACT
+  // ItemInstance ids this choice grants, across every selection, so
+  // reopenEquipmentChoice can later remove precisely what THIS choice
+  // added instead of the first same-itemId row it happens to find.
+  const grantedItemInstanceIds: string[] = [];
 
   for (const selId of selections) {
     if (!Array.isArray(pending.definition.pool)) continue;
@@ -1713,13 +1719,15 @@ export function resolveChoice(
     if (pending.definition.kind === "equipment") {
       const itemIds = Array.isArray(option.value) ? (option.value as string[]) : [];
       for (const itemId of itemIds) {
+        const instanceId = generateItemInstanceId();
+        grantedItemInstanceIds.push(instanceId);
         updated = {
           ...updated,
           inventory: {
             ...updated.inventory,
             carried: [
               ...updated.inventory.carried,
-              { itemId, quantity: 1, attuned: false, features: [] },
+              { id: instanceId, itemId, quantity: 1, attuned: false, features: [] },
             ],
           },
         };
@@ -1756,7 +1764,9 @@ export function resolveChoice(
   updated = {
     ...updated,
     choices: updated.choices.map(c =>
-      c.id === choiceId ? { ...c, resolved: true, selections } : c
+      c.id === choiceId
+        ? { ...c, resolved: true, selections, ...(grantedItemInstanceIds.length ? { grantedItemInstanceIds } : {}) }
+        : c
     )
   };
 
@@ -1835,18 +1845,23 @@ export function resolveEquipmentChoice(
   for (const grant of pending.definition.grants) {
     updated = applyGrant(updated, grant, pending.grantedAt);
   }
+  const grantedItemInstanceIds: string[] = [];
   for (const itemId of [...fixedItemIds, ...filteredItemIds]) {
+    const instanceId = generateItemInstanceId();
+    grantedItemInstanceIds.push(instanceId);
     updated = {
       ...updated,
       inventory: {
         ...updated.inventory,
-        carried: [...updated.inventory.carried, { itemId, quantity: 1, attuned: false, features: [] }],
+        carried: [...updated.inventory.carried, { id: instanceId, itemId, quantity: 1, attuned: false, features: [] }],
       },
     };
   }
   updated = {
     ...updated,
-    choices: updated.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections } : c),
+    choices: updated.choices.map(c => c.id === choiceId
+      ? { ...c, resolved: true, selections, ...(grantedItemInstanceIds.length ? { grantedItemInstanceIds } : {}) }
+      : c),
   };
 
   return recomputeDerived(updated, rules);

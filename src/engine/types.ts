@@ -134,7 +134,22 @@ export type ResistanceState  = 'none' | 'resistance' | 'immunity' | 'vulnerabili
 export type StrategyKind     = 'stat_modifier' | 'named_bonus' | 'advantage_track' | 'temp_hp' | 'base_ac_formula';
 
 export interface AttackBonus {
+  /** Historically the equipped item's `itemId` (definition id) for a weapon
+   *  attack, or a synthetic id ('unarmed_strike') otherwise — kept exactly
+   *  as-is for every existing consumer. When TWO equipped instances share
+   *  an `itemId`, computeWeaponAttackBonuses (pipeline.ts) still produces
+   *  one AttackBonus per instance (never deduplicated), but `id` alone can
+   *  no longer tell them apart — see `instanceId` below, the item-identity
+   *  closure's fix for that. */
   id:          string;
+  /** Item-identity closure: the equipped ItemInstance's own `id` (owned-
+   *  copy identity), when the instance has one — undefined for a synthetic
+   *  entry (Unarmed Strike) or a still-unmigrated instance. Lets a caller
+   *  that HAS a specific ItemInstance in hand (e.g. actionCards.ts's
+   *  equipped-item loop) find the EXACT matching AttackBonus instead of
+   *  `.find(a => a.id === itemId)`'s old first-match-only behavior, which
+   *  silently returned the same entry for every instance sharing itemId. */
+  instanceId?: string;
   name:        string;
   bonus:       number;
   type:        'melee' | 'ranged' | 'spell' | string;
@@ -1227,6 +1242,21 @@ export type ChoiceState = {
    */
   sourceKind?: EntitlementSourceKind;
   sourceId?:   string;
+  /**
+   * Item-identity closure (pass 3, finding F): for a RESOLVED `kind:
+   * 'equipment'` choice, the exact ItemInstance ids it granted into
+   * inventory.carried — lets reopenEquipmentChoice (equipmentDisplay.ts)
+   * remove precisely what THIS choice added, never the first same-itemId
+   * row it happens to find (which, now that duplicate stateful
+   * ItemDefinitions are legitimately allowed, could belong to a DIFFERENT
+   * choice, Additional Equipment, or another grant entirely). Optional/
+   * undefined for a non-equipment choice, an unresolved choice, or one
+   * resolved before this field existed — reopenEquipmentChoice falls back
+   * to its original itemId-based removal in that case (a documented,
+   * least-destructive legacy compromise, not a claim that old data secretly
+   * tracked per-instance provenance it never recorded).
+   */
+  grantedItemInstanceIds?: string[];
 };
 
 export type SlotEntry   = { total: number; used: number };
@@ -1380,6 +1410,29 @@ export type BeastForm = {
 };
 
 export type ItemInstance = {
+  /**
+   * Item-identity closure: stable identity for THIS OWNED COPY, distinct
+   * from `itemId` (the shared ItemDefinition/content id two independently-
+   * owned copies of the same magic item both point at). Two ItemInstances
+   * may legally share `itemId` while having different `id` — that's exactly
+   * what makes "two identical swords, one equipped+attuned, one not" a
+   * legal, stable state instead of one shared mutable row. Generated once
+   * at a mutation boundary (add/duplicate/import) — see
+   * generateItemInstanceId (inventory.ts) — never inside recomputeDerived
+   * or another pure derivation function.
+   *
+   * Optional so every pre-existing ItemInstance literal across the app
+   * (test fixtures, and any character saved before this field existed)
+   * stays valid — the SAME disclosed-migration-gap convention this type's
+   * own requiresAttunement/wearsArmorOrShield fields already use.
+   * characterStore.ts's load hydration backfills a stable id for any
+   * instance missing one, exactly once, so nothing regenerates it on
+   * every recompute. Code that needs to target ONE SPECIFIC owned
+   * instance (equip/unequip/attune/remove/resource lookups) should match
+   * on `id`, not `itemId` — matching on `itemId` can silently pick
+   * whichever same-definition copy happens to be first in the array.
+   */
+  id?:      string;
   itemId:   string;
   quantity: number;
   /** Stable owner for creation-time additional items. */
@@ -1924,7 +1977,26 @@ export type Entity = {
 export type Loadout = {
   id:                string;
   name:              string;
+  /** Definition ids of the items this loadout equips — kept for
+   *  itemRepo.ensureLoaded()/display-name lookups and as the LEGACY
+   *  targeting field for a loadout saved before `equippedItemInstanceIds`
+   *  existed. Never the sole targeting key for a NEWLY captured loadout —
+   *  see `equippedItemInstanceIds`'s own doc comment (item-identity
+   *  closure, pass 2 finding E). */
   equippedItemIds:   string[];
+  /**
+   * Item-identity closure (pass 2, finding E): the OWNED ItemInstance ids
+   * this loadout equips — captured alongside `equippedItemIds` above so a
+   * loadout can distinguish which SPECIFIC copy of a duplicated stateful
+   * item it wants equipped (two identical swords: Loadout 1 equips A,
+   * Loadout 2 equips B). Optional so a loadout saved before this field
+   * existed still parses; applyLoadout (loadout.ts) falls back to
+   * itemId-only matching (first eligible instance — a loadout literally
+   * cannot know which historical duplicate it meant) only when this is
+   * absent. A loadout captured or re-saved under the current app always
+   * populates it.
+   */
+  equippedItemInstanceIds?: string[];
   preparedSpellIds:  string[];
   createdAt:         number;
 };
@@ -2333,6 +2405,25 @@ export type ActionCard = {
    * normal single-tap Cast/Cast-Anyway flow applies unchanged.
    */
   spellCastingContexts?: SpellCastingContext[];
+  /**
+   * Item-identity closure (pass 2, finding D): when this card was generated
+   * from an authored Feature living on a SPECIFIC equipped ItemInstance
+   * (not a class/race/feat Feature on entity.features), `sourceKind:'item'`
+   * + `sourceId: <that ItemInstance.id>` records exactly which owned copy
+   * it came from — `featureId` above stays the plain Feature.id (shared by
+   * every instance of the same ItemDefinition, since two identical items
+   * carry the identical authored feature), so content/definition lookups by
+   * featureId are unaffected. applyActionCardUse (actionUse.ts) revalidates
+   * `sourceId` is STILL an equipped instance before executing, and resolves
+   * the feature from THAT instance alone — never a flat search across every
+   * equipped item's features, which would silently execute a stale card
+   * (its instance already removed/unequipped) against an identical
+   * remaining copy instead of rejecting it. undefined for every non-item
+   * card, and for a card generated before this fix existed (legacy
+   * fallback: the old flat-search behavior, unchanged).
+   */
+  sourceKind?: 'item';
+  sourceId?:   string;
 };
 
 // ── 11. Sync & campaign system ───────────────────────────────────────────────

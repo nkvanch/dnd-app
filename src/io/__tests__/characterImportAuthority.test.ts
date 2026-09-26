@@ -46,3 +46,54 @@ describe('authoritative portable character conflict resolution', () => {
   });
 });
 
+// ============================================================================
+// Item-identity closure (pass 2, finding A3/H1): a legacy portable export
+// predating ItemInstance.id must not enter runtime identity-less. Verifies
+// the REAL parsePortableCharacter/resolvePortableCharacterImport path
+// hydrates missing instance ids BEFORE returning — not merely on the next
+// app boot's loadCharacters().
+// ============================================================================
+describe('item-identity closure — portable import hydrates legacy ItemInstance ids', () => {
+  function legacyCharacterWithDuplicateSwords() {
+    const base = makeEmptyEntity('char-legacy-swords');
+    return {
+      ...base,
+      inventory: {
+        ...base.inventory,
+        // Two duplicate stateful items, NEITHER with an id — exactly the
+        // shape a character exported before ItemInstance.id existed.
+        equipped: [
+          { itemId: 'longsword_1', quantity: 1, attuned: true,  features: [] },
+        ],
+        carried: [
+          { itemId: 'longsword_1', quantity: 1, attuned: false, features: [] },
+        ],
+      },
+    };
+  }
+
+  it('two identity-less duplicate stateful items both get distinct, stable ids immediately on import', async () => {
+    const text = serializePortableCharacter(legacyCharacterWithDuplicateSwords() as any);
+    const parsed = await resolvePortableCharacterImport(text, [], jest.fn().mockResolvedValue(false));
+    const equippedSword = parsed.entity.inventory.equipped[0];
+    const carriedSword  = parsed.entity.inventory.carried[0];
+    expect(equippedSword.id).toBeTruthy();
+    expect(carriedSword.id).toBeTruthy();
+    expect(equippedSword.id).not.toBe(carriedSword.id);
+    // Original mutable state preserved exactly — hydration only ADDS the id.
+    expect(equippedSword.attuned).toBe(true);
+    expect(carriedSword.attuned).toBe(false);
+  });
+
+  it('a supplied MODERN id is preserved verbatim, never regenerated', async () => {
+    const base = makeEmptyEntity('char-modern-item');
+    const entity = {
+      ...base,
+      inventory: { ...base.inventory, carried: [{ id: 'my-stable-id', itemId: 'dagger', quantity: 1, attuned: false, features: [] }] },
+    };
+    const text = serializePortableCharacter(entity as any);
+    const parsed = await resolvePortableCharacterImport(text, [], jest.fn().mockResolvedValue(false));
+    expect(parsed.entity.inventory.carried[0].id).toBe('my-stable-id');
+  });
+});
+

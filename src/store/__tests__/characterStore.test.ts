@@ -469,3 +469,62 @@ describe('lastPersistError — surfaces SQLite write failures instead of only lo
     expect(useCharacterStore.getState().lastPersistError).toBeNull();
   });
 });
+
+describe('applyIncomingPatch — normalizes item-instance identity before exposing/persisting (item-identity closure, pass 3 finding B)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    useCharacterStore.setState({ lastPersistError: null });
+  });
+
+  it('a patch introducing a legacy identity-less carried item gets an id immediately, no restart required', async () => {
+    reset([testCharacter('c1', 20)]);
+    const saveSpy = jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+
+    await useCharacterStore.getState().applyIncomingPatch('c1', {
+      inventory: { equipped: [], carried: [{ itemId: 'rope_50ft', quantity: 1, attuned: false, features: [] }] },
+    });
+
+    const entity = useCharacterStore.getState().characters.find(c => c.id === 'c1')!;
+    expect(entity.inventory.carried).toHaveLength(1);
+    expect(typeof entity.inventory.carried[0].id).toBe('string');
+    expect(entity.inventory.carried[0].id).toBeTruthy();
+    expect(useCharacterStore.getState().lastPersistError).toBeNull();
+    saveSpy.mockRestore();
+  });
+
+  it('rejects a patch whose supplied ItemInstance id is malformed (empty string), leaving prior local state untouched', async () => {
+    reset([testCharacter('c1', 20)]);
+    const saveSpy = jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+    const before = useCharacterStore.getState().characters.find(c => c.id === 'c1')!;
+
+    await useCharacterStore.getState().applyIncomingPatch('c1', {
+      inventory: { equipped: [], carried: [{ id: '', itemId: 'rope_50ft', quantity: 1, attuned: false, features: [] }] },
+    });
+
+    expect(useCharacterStore.getState().characters.find(c => c.id === 'c1')).toEqual(before);
+    expect(useCharacterStore.getState().lastPersistError).not.toBeNull();
+    expect(saveSpy).not.toHaveBeenCalled();
+    saveSpy.mockRestore();
+  });
+
+  it('rejects a patch that introduces two carried rows with the same supplied nonempty instance id', async () => {
+    reset([testCharacter('c1', 20)]);
+    const saveSpy = jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+    const before = useCharacterStore.getState().characters.find(c => c.id === 'c1')!;
+
+    await useCharacterStore.getState().applyIncomingPatch('c1', {
+      inventory: {
+        equipped: [],
+        carried: [
+          { id: 'dup:1', itemId: 'rope_50ft', quantity: 1, attuned: false, features: [] },
+          { id: 'dup:1', itemId: 'torch', quantity: 1, attuned: false, features: [] },
+        ],
+      },
+    });
+
+    expect(useCharacterStore.getState().characters.find(c => c.id === 'c1')).toEqual(before);
+    expect(useCharacterStore.getState().lastPersistError).not.toBeNull();
+    expect(saveSpy).not.toHaveBeenCalled();
+    saveSpy.mockRestore();
+  });
+});

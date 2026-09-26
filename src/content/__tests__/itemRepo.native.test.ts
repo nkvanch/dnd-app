@@ -87,6 +87,17 @@ describe('itemRepo.native error handling', () => {
     expect(itemRepo.getIndex()[0].rulesetId).toBe('dnd5e-2024');
   });
 
+  it('init() exposes the compact feature-presence fact needed by creation-time item identity', async () => {
+    mockGetContentDb.mockReturnValue({
+      getAllAsync: jest.fn().mockResolvedValue([
+        { id: 'broom', name: 'Broom of Flying', weight: 3, cost: '—', properties: '["magic item"]', hasDamageEffect: 0, hasFeatures: 1, weaponRange: null, srd: 1, rulesetId: null },
+      ]),
+    });
+
+    await itemRepo.init();
+    expect(itemRepo.getIndex()[0].hasFeatures).toBe(true);
+  });
+
   // A pre-TIER1-EXT-1 row (rulesetId column absent/NULL) must not crash.
   it('init() tolerates a row with the rulesetId column absent (pre-migration shape)', async () => {
     mockGetContentDb.mockReturnValue({

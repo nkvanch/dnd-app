@@ -568,6 +568,14 @@ export function applyDamage(
   // Taking damage while ALREADY at 0 HP counts as one automatic failure
   // (book rule) — this only applies to real damage getting through, not
   // damage fully absorbed by temp HP while already at 0.
+  //
+  // Rules-correctness fix (HIGH batch, B): this branch used to also require
+  // `!deathSaves.stable`, so a STABLE creature at 0 HP that took further
+  // qualifying damage silently stayed stable and never recorded a failure —
+  // wrong (a stable creature takes damage, it stops being stable and starts
+  // failing death saves again, PHB p.197). `stable` is now explicitly
+  // cleared here instead of gating the whole branch on it; existing
+  // failures are preserved and incremented by exactly one, never reset.
   let deathSaves = entity.resources.deathSaves;
   if (newCurrent === 0 && !wasAtZero) {
     deathSaves = {
@@ -575,9 +583,10 @@ export function applyDamage(
       failures:  deathSavesPersist(rules) ? deathSaves.failures : 0,
       stable:    false,
     };
-  } else if (newCurrent === 0 && wasAtZero && remainingDmg > 0 && !deathSaves.stable) {
+  } else if (newCurrent === 0 && wasAtZero && remainingDmg > 0) {
     deathSaves = {
       ...deathSaves,
+      stable:   false,
       failures: Math.min(3, deathSaves.failures + 1),
     };
   }
@@ -653,6 +662,41 @@ export function recordDeathSave(
     resources: { ...entity.resources, deathSaves: stabilized },
   };
   return recomputeDerived(updated, rules);
+}
+
+// ── Status legality (HIGH batch, C): 0 HP / Unconscious / Dead ──────────────
+
+/**
+ * True if the entity is incapacitated for normal gameplay ActionCard use —
+ * either currently at 0 HP, or carrying the explicit `unconscious` condition
+ * (see content/conditions/index.ts) independent of HP (e.g. Sleep, Hold
+ * Person). Deliberately just these two existing, authoritative pieces of
+ * state — no new flag is introduced; `hp.current === 0` and `entity.conditions`
+ * already exist and drive every other part of this app. isFeatureAvailable
+ * (actionCards.ts) is the ONE place that consults this for normal-action
+ * legality, mirroring isSpellPreparationLegal's own "one authoritative
+ * check, used by both card generation and cast-time enforcement" pattern.
+ *
+ * `hp.maximum > 0` guards against an entity that has never actually been
+ * initialized with real hit points (a bare fixture/placeholder — every real
+ * character/monster gets a positive max HP immediately on creation) so a
+ * freshly-created entity isn't treated as "at 0 HP" before it has any HP
+ * concept at all.
+ */
+export function isIncapacitated(entity: Entity): boolean {
+  return (entity.resources.hp.maximum > 0 && entity.resources.hp.current === 0)
+    || entity.conditions.some(c => c.id === 'unconscious');
+}
+
+/**
+ * True once death-save failures have reached 3 — this engine has no
+ * separate "dead" flag (see recordDeathSave's own doc comment). Unlike
+ * isIncapacitated, this is a HARD blocker on normal ActionCard use: never
+ * offered a Use Anyway override (C12) — a dead creature's own table-first
+ * exception is Free Edit/a DM ruling, not a one-off per-action override.
+ */
+export function isDead(entity: Entity): boolean {
+  return entity.resources.deathSaves.failures >= 3;
 }
 
 /**

@@ -982,6 +982,7 @@ function TabCharacterInner({
     card: ActionCard;
     bypassSpellPreparation?: boolean;
     selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext;
+    bypassIncapacitated?: boolean;
   } | null>(null);
   const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
   const [sensesOpen, setSensesOpen] = useState(false);
@@ -1011,16 +1012,17 @@ function TabCharacterInner({
   const { requestPayment, paymentChooser } = useSpellPayment(entity);
   const favoriteCardContent = useCardContent(entity);
   const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c.featureId));
-  function handleUseFavorite(card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext) {
+  function handleUseFavorite(card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext, bypassIncapacitated?: boolean) {
     // A-57 (item 10): a favorited card with discrete use-time options
     // (e.g. Divine Smite's spell-slot tier) must resolve the picker BEFORE
     // spending anything, same as TabActions' own handleUse — this call
     // site used to always pass chosenOption undefined, silently falling
     // back to the card's default cost/tier instead of asking.
     if (card.activation.options && card.activation.options.length > 0) {
-      // Rules-engine blocker RE-AUDIT closure 2F: preserve the bypass/
-      // context decision ActionCardRow already made, not just the card.
-      setPendingFavUse({ card, bypassSpellPreparation, selectedSpellCastingContext });
+      // Rules-engine blocker RE-AUDIT closure 2F (extended, HIGH batch C7/
+      // C8): preserve the bypass/context/status-override decision
+      // ActionCardRow already made, not just the card.
+      setPendingFavUse({ card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated });
       return;
     }
     // Same fix as TabActions' handleUse — always run applyActionCardUse
@@ -1030,7 +1032,7 @@ function TabCharacterInner({
     // choice from ActionCardRow (rules-engine blocker closure 1F) through
     // to the same shared applyActionCardUse every other cast surface uses.
     requestPayment(card, undefined, payment => {
-      const updated = applyActionCardUse(entity, card, rules, undefined, payment, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent);
+      const updated = applyActionCardUse(entity, card, rules, undefined, payment, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent, bypassIncapacitated);
       if (updated === entity) return;
       onEntityUpdate(updated);
       setActiveFavCard(card);
@@ -1040,9 +1042,9 @@ function TabCharacterInner({
     const pending = pendingFavUse;
     setPendingFavUse(null);
     if (!pending) return;
-    const { card, bypassSpellPreparation, selectedSpellCastingContext } = pending;
+    const { card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated } = pending;
     requestPayment(card, option, payment => {
-      const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent);
+      const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent, bypassIncapacitated);
       if (updated === entity) return;
       onEntityUpdate(updated);
       setActiveFavCard(card);
@@ -1866,6 +1868,7 @@ function TabCharacterInner({
         card={pendingFavUse?.card ?? null}
         onChoose={handleChooseFavoriteOption}
         onClose={() => setPendingFavUse(null)}
+        bypassIncapacitated={pendingFavUse?.bypassIncapacitated}
       />
 
       {/* Add a feat ad-hoc from the sheet */}

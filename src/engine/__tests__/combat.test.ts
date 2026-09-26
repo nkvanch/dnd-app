@@ -21,6 +21,7 @@ import {
 } from '../combat';
 import { applyCondition } from '../conditions';
 import { isFeatureAvailable } from '../actionCards';
+import { recomputeDerived } from '../pipeline';
 import { setRandomSource } from '../dice';
 import { Entity, SpellSlots, FeatureInstance, Spell, AbilityEffect, FeatureActivation } from '../types';
 
@@ -275,12 +276,121 @@ describe('applyDamage', () => {
     expect(e.resources.hp.current).toBe(0);      // still 0, not negative
   });
 
-  it('does not add an automatic failure once stable', () => {
-    let e = testEntity(5);
-    e = applyDamage(e, 5, DEFAULT_RULES);
-    e = { ...e, resources: { ...e.resources, deathSaves: { successes: 3, failures: 0, stable: true } } };
-    e = applyDamage(e, 3, DEFAULT_RULES);
-    expect(e.resources.deathSaves.failures).toBe(0);
+  // Rules-correctness fix (HIGH batch, B): a STABLE creature at 0 HP that
+  // takes further qualifying damage must stop being stable and record a
+  // death-save failure (PHB p.197) — this used to be a silent no-op.
+  describe('damage to a stable creature at 0 HP (HIGH batch, B)', () => {
+    it('B7-1: HP 0, stable, failures 0 + qualifying damage -> unstable, failures 1', () => {
+      let e = testEntity(5);
+      e = applyDamage(e, 5, DEFAULT_RULES); // drops to 0
+      e = { ...e, resources: { ...e.resources, deathSaves: { successes: 3, failures: 0, stable: true } } };
+      e = applyDamage(e, 3, DEFAULT_RULES);
+      expect(e.resources.deathSaves).toEqual({ successes: 3, failures: 1, stable: false });
+      expect(e.resources.hp.current).toBe(0);
+    });
+
+    it('B7-2: HP 0, stable, failures 1 + qualifying damage -> failures 2 (existing failures preserved, not reset)', () => {
+      let e = testEntity(5);
+      e = applyDamage(e, 5, DEFAULT_RULES);
+      e = { ...e, resources: { ...e.resources, deathSaves: { successes: 0, failures: 1, stable: true } } };
+      e = applyDamage(e, 3, DEFAULT_RULES);
+      expect(e.resources.deathSaves).toEqual({ successes: 0, failures: 2, stable: false });
+    });
+
+    it('B7-3: HP 0, NOT stable, failures 1 + damage -> failures 2 (already-working case still works)', () => {
+      let e = testEntity(5);
+      e = applyDamage(e, 5, DEFAULT_RULES);
+      e = { ...e, resources: { ...e.resources, deathSaves: { successes: 0, failures: 1, stable: false } } };
+      e = applyDamage(e, 3, DEFAULT_RULES);
+      expect(e.resources.deathSaves.failures).toBe(2);
+    });
+
+    it('B7-4: HP reduced exactly to 0 from above 0 does NOT itself count as an automatic failure', () => {
+      const e = testEntity(5);
+      const updated = applyDamage(e, 5, DEFAULT_RULES);
+      expect(updated.resources.hp.current).toBe(0);
+      expect(updated.resources.deathSaves).toEqual({ successes: 0, failures: 0, stable: false });
+    });
+
+    it('B7-5: temp HP partially absorbs, damage penetrates while stable at 0 -> exactly one failure', () => {
+      let e = testEntity(5);
+      e = applyDamage(e, 5, DEFAULT_RULES); // 0 HP
+      e = {
+        ...e,
+        resources: { ...e.resources, hp: { ...e.resources.hp, temp: 2 }, deathSaves: { successes: 2, failures: 0, stable: true } },
+      };
+      const updated = applyDamage(e, 5, DEFAULT_RULES); // 2 absorbed by temp, 3 penetrates
+      expect(updated.resources.hp.temp).toBe(0);
+      expect(updated.resources.hp.current).toBe(0);
+      expect(updated.resources.deathSaves).toEqual({ successes: 2, failures: 1, stable: false });
+    });
+
+    it('B7-5b: temp HP fully absorbs the hit while at 0 and stable -> no failure, stable unchanged', () => {
+      let e = testEntity(5);
+      e = applyDamage(e, 5, DEFAULT_RULES);
+      e = {
+        ...e,
+        resources: { ...e.resources, hp: { ...e.resources.hp, temp: 10 }, deathSaves: { successes: 3, failures: 0, stable: true } },
+      };
+      const updated = applyDamage(e, 5, DEFAULT_RULES); // fully absorbed by temp HP
+      expect(updated.resources.hp.temp).toBe(5);
+      expect(updated.resources.deathSaves).toEqual({ successes: 3, failures: 0, stable: true }); // unchanged
+    });
+
+    it('B7-6: immunity reduces effective damage to 0 while stable at 0 -> no failure', () => {
+      let e = testEntity(5);
+      e = applyDamage(e, 5, DEFAULT_RULES);
+      e = {
+        ...e,
+        features: [{
+          id: 'fire_immune', name: 'Fire Immune', description: '', source: { kind: 'race', refId: 'test' },
+          level: null, effects: [{ type: 'grant_immunity', target: 'fire', operation: 'immunity', value: null, condition: null }],
+          actions: [], choices: [], passive: true, isActive: true,
+        }],
+        resources: { ...e.resources, deathSaves: { successes: 1, failures: 0, stable: true } },
+      };
+      const updated = applyDamage(e, 20, DEFAULT_RULES, 'fire');
+      expect(updated.resources.deathSaves).toEqual({ successes: 1, failures: 0, stable: true }); // unchanged
+    });
+
+    it('B7-7: resistance still leaves positive qualifying damage while stable at 0 -> one failure', () => {
+      let e = testEntity(5);
+      e = applyDamage(e, 5, DEFAULT_RULES);
+      e = {
+        ...e,
+        features: [{
+          id: 'cold_resist', name: 'Cold Resist', description: '', source: { kind: 'race', refId: 'test' },
+          level: null, effects: [{ type: 'grant_resistance', target: 'cold', operation: 'resistance', value: null, condition: null }],
+          actions: [], choices: [], passive: true, isActive: true,
+        }],
+        resources: { ...e.resources, deathSaves: { successes: 0, failures: 0, stable: true } },
+      };
+      const updated = applyDamage(e, 10, DEFAULT_RULES, 'cold'); // floor(10/2)=5, still > 0
+      expect(updated.resources.deathSaves).toEqual({ successes: 0, failures: 1, stable: false });
+    });
+
+    it('B7-9: Wild Shape overflow into a base entity stable at 0 HP uses the same death-state path', () => {
+      let e = testEntity(5);
+      e = applyDamage(e, 5, DEFAULT_RULES); // base entity at 0
+      e = {
+        ...e,
+        resources: { ...e.resources, deathSaves: { successes: 2, failures: 0, stable: true } },
+        wildShapeState: { active: true, formId: 'wolf', beastHp: 3, beastHpMax: 11, expiresAt: { unit: 'hours', remaining: 1 } },
+      };
+      // Wolf beastHpMax 11; 3 beastHp remaining -> 5 damage overflows by 2 into the base entity.
+      const updated = applyWildShapeDamage(e, 5, DEFAULT_RULES);
+      expect(updated.wildShapeState).toBeNull();
+      expect(updated.resources.hp.current).toBe(0);
+      expect(updated.resources.deathSaves).toEqual({ successes: 2, failures: 1, stable: false });
+    });
+
+    it('B7-10: stable/failure state survives a plain recompute (persistence)', () => {
+      let e = testEntity(5);
+      e = applyDamage(e, 5, DEFAULT_RULES);
+      e = { ...e, resources: { ...e.resources, deathSaves: { successes: 1, failures: 2, stable: false } } };
+      const recomputed = recomputeDerived(e, DEFAULT_RULES);
+      expect(recomputed.resources.deathSaves).toEqual({ successes: 1, failures: 2, stable: false });
+    });
   });
 });
 

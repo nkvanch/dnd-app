@@ -101,6 +101,15 @@ type PendingActionUse = {
   card: ActionCard;
   bypassSpellPreparation?: boolean;
   selectedSpellCastingContext?: SpellCastingContext;
+  /**
+   * Rules-engine HIGH-batch closure (C7/C8): the SAME `bypassIncapacitated`
+   * flag applyActionCardUse accepts (actionUse.ts) — carried alongside the
+   * card exactly like bypassSpellPreparation above, so a "Use Anyway"
+   * decision made before an activation-option picker opens survives into
+   * handleChooseOption instead of being silently discarded (the same bug
+   * class closure 2F already fixed for bypassSpellPreparation).
+   */
+  bypassIncapacitated?: boolean;
 };
 
 // ── Use Result Modal ──────────────────────────────────────────────────────────
@@ -197,9 +206,17 @@ interface ActivationOptionModalProps {
   card:     ActionCard | null;
   onChoose: (option: ActivationOption) => void;
   onClose:  () => void;
+  /**
+   * Rules-engine HIGH-batch closure (C7): the SAME `bypassIncapacitated`
+   * decision the player already made (before this picker opened) —
+   * threaded through so an option row isn't disabled a SECOND time by the
+   * exact status restriction they already agreed to override. Never
+   * bypasses a genuinely missing resource/payment for that option.
+   */
+  bypassIncapacitated?: boolean;
 }
 
-export function ActivationOptionModal({ entity, card, onChoose, onClose }: ActivationOptionModalProps) {
+export function ActivationOptionModal({ entity, card, onChoose, onClose, bypassIncapacitated }: ActivationOptionModalProps) {
   if (!card || !card.activation.options || card.activation.options.length === 0) return null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -210,7 +227,7 @@ export function ActivationOptionModal({ entity, card, onChoose, onClose }: Activ
           {card.activation.options.map(opt => (
             <Pressable key={opt.id} style={styles.optionRow}
               disabled={!isFeatureAvailable({ activation: { ...card.activation, options: undefined,
-                resourceCost: opt.resourceCost ?? card.resourceCost } }, entity).available}
+                resourceCost: opt.resourceCost ?? card.resourceCost } }, entity, bypassIncapacitated).available}
               onPress={() => onChoose(opt)}>
               <Text style={styles.optionLabel}>{opt.label}</Text>
               {opt.description && <Text style={styles.optionDesc}>{opt.description}</Text>}
@@ -239,10 +256,12 @@ interface CardRowProps {
    * applyActionCardUse already accepts (actionUse.ts). The third param
    * (closure 1B/1D) is the EXACT SpellCastingContext the player is casting
    * through — passed straight to applyActionCardUse's own matching param.
-   * Both optional so every existing non-spell caller (a plain feature
-   * card's [Use]) is unaffected.
+   * The fourth param (HIGH batch, C4) is the SAME `bypassIncapacitated`
+   * flag applyActionCardUse also accepts — "Use Anyway" for a card blocked
+   * ONLY by 0HP/Unconscious. All optional so every existing non-spell
+   * caller (a plain feature card's [Use]) is unaffected.
    */
-  onUse:   (card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext) => void;
+  onUse:   (card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean) => void;
   /** Omit to hide the star entirely (not offered everywhere a card might render). */
   isFavorite?:       boolean;
   onToggleFavorite?: (card: ActionCard) => void;
@@ -272,12 +291,45 @@ interface CardRowProps {
  * deliberately-selected prep-blocked source still offers its own Cast
  * Anyway. Single-source spells (the overwhelming majority) and every
  * non-spell card skip this entirely.
+ *
+ * Rules-engine HIGH-batch closure (C): `card.incapacitatedOverridable` (see
+ * its own doc comment, types.ts) is true ONLY when 0HP/Unconscious is the
+ * entire remaining reason a card is blocked — same "stays enabled, prompts
+ * Cancel/Use Anyway instead of a hard N/A" pattern as preparationOverridable
+ * above, and the two compose independently (C7): a spell blocked by BOTH
+ * preparation and status resolves the preparation decision first (via
+ * castViaContext/the existing prompt below), then finalizeUse checks status
+ * on top before actually calling onUse — so either, both, or neither
+ * override can apply to one cast without one masking the other.
  */
 export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorite }: CardRowProps) {
   const borderColor = CARD_COLORS[card.color];
   const blockedOnlyByPreparation = card.preparationOverridable === true;
-  const genuinelyUnavailable = !card.available && !blockedOnlyByPreparation;
+  const blockedByIncapacitation = card.incapacitatedOverridable === true;
+  const overridable = blockedOnlyByPreparation || blockedByIncapacitation;
+  const genuinelyUnavailable = !card.available && !overridable;
   const cardContent = useCardContent(entity);
+
+  // Rules-engine HIGH-batch closure (C4): the LAST step before actually
+  // calling onUse — after any preparation decision is already resolved,
+  // checks whether status (0HP/Unconscious) still needs its own one-off
+  // "Use Anyway" on top. card.unavailableReason already carries the exact
+  // "At 0 HP"/"Unconscious" text (see generateSpellCard/generateActionCard),
+  // so the prompt always reflects the entity's real current state.
+  function finalizeUse(bypassSpellPreparation: boolean, context?: SpellCastingContext) {
+    if (blockedByIncapacitation) {
+      Alert.alert(
+        `${card.name}: ${card.unavailableReason ?? 'Incapacitated'}`,
+        'Use it anyway as a one-off table ruling? This does not change HP, conditions, or death-save state.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Use Anyway', onPress: () => onUse(card, bypassSpellPreparation, context, true) },
+        ],
+      );
+      return;
+    }
+    onUse(card, bypassSpellPreparation, context);
+  }
 
   function castViaContext(context: SpellCastingContext) {
     if (!context.legal) {
@@ -286,12 +338,12 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
         'Cast it anyway as a one-off? This does not add it to your prepared list.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Cast Anyway', onPress: () => onUse(card, true, context) },
+          { text: 'Cast Anyway', onPress: () => finalizeUse(true, context) },
         ],
       );
       return;
     }
-    onUse(card, false, context);
+    finalizeUse(false, context);
   }
 
   function handlePress() {
@@ -316,12 +368,12 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
         'Cast it anyway as a one-off? This does not add it to your prepared list.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Cast Anyway', onPress: () => onUse(card, true, card.spellCastingContext) },
+          { text: 'Cast Anyway', onPress: () => finalizeUse(true, card.spellCastingContext) },
         ],
       );
       return;
     }
-    onUse(card, false, card.spellCastingContext);
+    finalizeUse(false, card.spellCastingContext);
   }
 
   return (
@@ -350,7 +402,7 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
         onPress={handlePress}
       >
         <Text style={[styles.useBtnTxt, genuinelyUnavailable && styles.useBtnTxtDisabled]}>
-          {card.available || blockedOnlyByPreparation ? 'Use' : 'N/A'}
+          {card.available || overridable ? 'Use' : 'N/A'}
         </Text>
       </Pressable>
     </View>
@@ -361,7 +413,7 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
 
 function Section({ title, cards, entity, onUse, favoriteIds, onToggleFavorite }: {
   title: string; cards: ActionCard[]; entity: Entity;
-  onUse: (c: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext) => void;
+  onUse: (c: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean) => void;
   favoriteIds?: Set<string>; onToggleFavorite?: (c: ActionCard) => void;
 }) {
   if (cards.length === 0) return null;
@@ -476,13 +528,15 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   // attack) rather than costing its own action/bonus action/reaction.
   const freeActions  = all.filter(c => c.activation.actionType === 'free');
 
-  const handleUse = useCallback((card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext) => {
+  const handleUse = useCallback((card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean) => {
     if (card.activation.options && card.activation.options.length > 0) {
-      // Rules-engine blocker RE-AUDIT closure 2F: preserve whatever source/
-      // Cast-Anyway decision ActionCardRow already made (bypassSpellPreparation/
-      // selectedSpellCastingContext), not just the bare card — handleChooseOption
-      // below reads these back out once the option is picked.
-      setPendingUse({ card, bypassSpellPreparation, selectedSpellCastingContext });
+      // Rules-engine blocker RE-AUDIT closure 2F (extended, HIGH batch C7/C8):
+      // preserve whatever source/Cast-Anyway/Use-Anyway decision
+      // ActionCardRow already made (bypassSpellPreparation/
+      // selectedSpellCastingContext/bypassIncapacitated), not just the bare
+      // card — handleChooseOption below reads these back out once the
+      // option is picked.
+      setPendingUse({ card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated });
       return;
     }
     if (!onEntityUpdate || !rules) {
@@ -497,7 +551,7 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     // half to run, which previously never fired because this whole call
     // was gated on resourceCost being truthy.
     requestPayment(card, undefined, payment => {
-      const updated = applyActionCardUse(entity, card, rules, undefined, payment, bypassSpellPreparation, selectedSpellCastingContext, cardContent);
+      const updated = applyActionCardUse(entity, card, rules, undefined, payment, bypassSpellPreparation, selectedSpellCastingContext, cardContent, bypassIncapacitated);
       if (updated === entity) return;
       onEntityUpdate(updated);
       setActiveCard(card);
@@ -508,10 +562,10 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     const pending = pendingUse;
     setPendingUse(null);
     if (!pending) return;
-    const { card, bypassSpellPreparation, selectedSpellCastingContext } = pending;
+    const { card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated } = pending;
     requestPayment(card, option, payment => {
       if (!onEntityUpdate || !rules) return;
-      const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, cardContent);
+      const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, cardContent, bypassIncapacitated);
       if (updated === entity) return;
       onEntityUpdate(updated);
       setActiveCard(card);
@@ -603,6 +657,7 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
         card={pendingUse?.card ?? null}
         onChoose={handleChooseOption}
         onClose={() => setPendingUse(null)}
+        bypassIncapacitated={pendingUse?.bypassIncapacitated}
       />
     </ScrollView>
   );

@@ -21,6 +21,7 @@ import { isWeapon } from '../content/items/itemBrowse';
 import { toItemIndexEntry } from '../content/itemRepo.types';
 import { usesLargeCreatureWeaponDice } from './houseRules';
 import { hasLegalSpellPayment } from './spellPayment';
+import { isIncapacitated, isDead } from './combat';
 import { CampaignRules } from './types';
 import { ALL_CHAR_CLASSES } from '../content/classes';
 import { ALL_RACES } from '../content/races';
@@ -948,34 +949,43 @@ const ACTION_ECONOMY_LABEL: Record<string, string> = {
  * entity.turnState is non-null — see that type's own doc comment for why
  * null means "not actively tracked, don't gate anything."
  */
-export function isFeatureAvailable(
+/**
+ * Turn-economy + resource/payment legality only — deliberately has NO
+ * status/incapacitation check, so isFeatureAvailable below can apply the
+ * 0HP/Unconscious/Dead status gate exactly once, on top of an unambiguous
+ * resource verdict, rather than the two concerns tangled together. This is
+ * also what a `bypassIncapacitated` Quick Override consults on its own
+ * (C6/C10) — status is never itself a "resource," so bypassing it can never
+ * accidentally also bypass a missing slot/resource/action-economy failure.
+ */
+function resourceAndEconomyLegal(
   feature: Pick<Feature, 'activation'>,
   entity: Entity,
-): { available: boolean; reason: string | null } {
+): { legal: boolean; reason: string | null } {
   const actionType = feature.activation?.actionType;
   if (entity.turnState && actionType && actionType in ACTION_ECONOMY_LABEL) {
     const used = actionType === 'action' ? entity.turnState.actionUsed
       : actionType === 'bonus_action' ? entity.turnState.bonusActionUsed
       : entity.turnState.reactionUsed;
     if (used) {
-      return { available: false, reason: `Already used your ${ACTION_ECONOMY_LABEL[actionType]} this turn.` };
+      return { legal: false, reason: `Already used your ${ACTION_ECONOMY_LABEL[actionType]} this turn.` };
     }
   }
 
   const options = feature.activation?.options;
   if (options?.length) {
-    const available = options.some(option => isFeatureAvailable({
+    const legal = options.some(option => resourceAndEconomyLegal({
       ...feature, activation: { ...feature.activation!, options: undefined,
         resourceCost: option.resourceCost ?? feature.activation!.resourceCost },
-    }, entity).available);
-    return { available, reason: available ? null : 'No legal activation payment remaining.' };
+    }, entity).legal);
+    return { legal, reason: legal ? null : 'No legal activation payment remaining.' };
   }
   const cost = feature.activation?.resourceCost;
-  if (!cost) return { available: true, reason: null };
+  if (!cost) return { legal: true, reason: null };
 
   if (cost.resourceId === 'spell_slots') {
     if (!entity.spellcasting) {
-      return { available: false, reason: 'No spellcasting.' };
+      return { legal: false, reason: 'No spellcasting.' };
     }
     const tier = cost.spellSlotTier ?? 1;
     // Re-audit items 1/2 (A12): the ONE shared resolver — legal-payment
@@ -985,17 +995,54 @@ export function isFeatureAvailable(
     // the same spellPayment.ts functions, so "available" and "what gets
     // spent" can never diverge again.
     if (hasLegalSpellPayment(entity.spellcasting, tier)) {
-      return { available: true, reason: null };
+      return { legal: true, reason: null };
     }
-    return { available: false, reason: `No spell slots of level ${tier}+ remaining.` };
+    return { legal: false, reason: `No spell slots of level ${tier}+ remaining.` };
   }
 
   const resource = entity.resources.custom.find(r => r.id === cost.resourceId);
   if (!resource) {
-    return { available: false, reason: `Resource "${cost.resourceId}" not found.` };
+    return { legal: false, reason: `Resource "${cost.resourceId}" not found.` };
   }
   if (resource.current < cost.quantity) {
-    return { available: false, reason: `${resource.name}: ${resource.current}/${resource.maximum} remaining.` };
+    return { legal: false, reason: `${resource.name}: ${resource.current}/${resource.maximum} remaining.` };
+  }
+
+  return { legal: true, reason: null };
+}
+
+export function isFeatureAvailable(
+  feature: Pick<Feature, 'activation'>,
+  entity: Entity,
+  /**
+   * Rules-engine HIGH-batch closure (C4/C6/C10) — table-first, one-off
+   * Quick Override for the 0HP/Unconscious status restriction ONLY ("Use
+   * Anyway"). Bypasses NOTHING else: a missing spell slot/Pact slot,
+   * insufficient resource, or an already-spent action/bonus/reaction still
+   * blocks normally (resourceAndEconomyLegal is computed independently,
+   * before this flag is even consulted). Never bypasses the hard `isDead`
+   * blocker. Defaults to false so every existing caller — including card
+   * GENERATION, which must always reflect the TRUE default legality so the
+   * UI can offer the override in the first place — is unaffected.
+   */
+  bypassIncapacitated: boolean = false,
+): { available: boolean; reason: string | null; incapacitatedOverridable?: boolean } {
+  // Dead: hard blocker, checked first, never overridable (C12).
+  if (isDead(entity)) {
+    return { available: false, reason: 'Dead' };
+  }
+
+  const { legal: resourceLegal, reason: resourceReason } = resourceAndEconomyLegal(feature, entity);
+  if (!resourceLegal) {
+    return { available: false, reason: resourceReason };
+  }
+
+  if (isIncapacitated(entity) && !bypassIncapacitated) {
+    return {
+      available: false,
+      reason: entity.resources.hp.current === 0 ? 'At 0 HP' : 'Unconscious',
+      incapacitatedOverridable: true,
+    };
   }
 
   return { available: true, reason: null };
@@ -1015,7 +1062,7 @@ export function generateActionCard(
   if (!feature.activation) return null;
 
   const cardType = classifyFeature(feature);
-  const { available, reason } = isFeatureAvailable(feature, entity);
+  const { available, reason, incapacitatedOverridable } = isFeatureAvailable(feature, entity);
 
   const tabs: ActionCard['tabs'] = ['features'];
   const actionType = feature.activation.actionType;
@@ -1044,6 +1091,7 @@ export function generateActionCard(
     tabs,
     available,
     unavailableReason: reason,
+    incapacitatedOverridable,
   };
 }
 
@@ -1089,16 +1137,21 @@ export function generateSpellCard(
     requiresSave: null,
   };
 
-  // Always call isFeatureAvailable, even for a cantrip (cost === null) —
-  // bug fix: it used to be skipped whenever cost was falsy, which also
-  // skipped the turn-economy check at the TOP of isFeatureAvailable (that
-  // check runs before the resource-cost check, so it applies regardless of
-  // whether there's a cost). A cantrip card was therefore always shown
-  // available:true even after the character had already used their
-  // action/bonus action/reaction this turn. isFeatureAvailable already
-  // handles cost===null correctly on its own (falls through to
-  // available:true once the economy check passes), so no ternary is needed.
-  const { available: costAndEconomyLegal, reason: costReason } = isFeatureAvailable(
+  // Always check resource/economy legality, even for a cantrip (cost ===
+  // null) — bug fix: it used to be skipped whenever cost was falsy, which
+  // also skipped the turn-economy check (that check runs before the
+  // resource-cost check, so it applies regardless of whether there's a
+  // cost). A cantrip card was therefore always shown available:true even
+  // after the character had already used their action/bonus action/
+  // reaction this turn. resourceAndEconomyLegal already handles cost===null
+  // correctly on its own (falls through to legal:true once the economy
+  // check passes), so no ternary is needed. Deliberately calls
+  // resourceAndEconomyLegal directly (not isFeatureAvailable) so this
+  // function can independently combine THREE separate legality gates —
+  // resource/economy, preparation, and incapacitation (HIGH batch, C7) —
+  // each with its own override flag, rather than isFeatureAvailable's
+  // single combined status gate.
+  const { legal: costAndEconomyLegal, reason: costReason } = resourceAndEconomyLegal(
     { activation, effects: [], abilityEffects: [] } as unknown as Feature, entity,
   );
 
@@ -1120,13 +1173,26 @@ export function generateSpellCard(
   const distinctContexts = collapseDistinctSpellCastingContexts(allContexts);
   const selectedContext = selectSpellCastingContext(entity, spellId, classDefs);
   const preparationLegal = distinctContexts.some(c => c.legal);
-  const available = costAndEconomyLegal && preparationLegal;
-  // Only offer the table-first "Cast Anyway" Quick Override when
-  // preparation is the ENTIRE reason this card is unavailable — if a slot
-  // is also missing or the action economy is already spent, those still
-  // block normally (no "cast with no slot anyway" support here).
-  const preparationOverridable = costAndEconomyLegal && !preparationLegal;
-  const reason = !costAndEconomyLegal ? costReason : !preparationLegal ? 'Not prepared' : null;
+
+  // Rules-engine HIGH-batch closure (C7): preparation and incapacitation
+  // (0HP/Unconscious) are two INDEPENDENT one-off overridable restrictions —
+  // a spell can be blocked by either, both, or neither, and each gets its
+  // own override flag so the UI can offer "Cast Anyway"/"Use Anyway"
+  // separately (or together) without one masking the other. Dead is a hard
+  // blocker checked first, same as isFeatureAvailable.
+  const dead = isDead(entity);
+  const incapacitated = !dead && isIncapacitated(entity);
+  const available = costAndEconomyLegal && preparationLegal && !incapacitated && !dead;
+  // Only offer an override when the resource/economy check ITSELF still
+  // passes — if a slot is also missing or the action economy is already
+  // spent, those still block normally (no "cast with no slot anyway"
+  // support here, for either override).
+  const preparationOverridable = costAndEconomyLegal && !preparationLegal && !dead;
+  const incapacitatedOverridable = costAndEconomyLegal && incapacitated && !dead;
+  const statusReason = incapacitated ? (entity.resources.hp.current === 0 ? 'At 0 HP' : 'Unconscious') : null;
+  const reason = dead ? 'Dead'
+    : !costAndEconomyLegal ? costReason
+    : [!preparationLegal ? 'Not prepared' : null, statusReason].filter(Boolean).join(' • ') || null;
 
   const tabs: ActionCard['tabs'] = ['spellcasting', 'features'];
   if (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction') {
@@ -1149,6 +1215,7 @@ export function generateSpellCard(
     available,
     unavailableReason: reason,
     preparationOverridable,
+    incapacitatedOverridable,
     // Closure 1B: the card PRESERVES the exact context it was generated
     // against — applyActionCardUse revalidates this same context (by
     // contextKey) at execution time rather than silently re-resolving a
@@ -1238,6 +1305,7 @@ export function generateAllActionCards(
           layer2: `${fmtBonus(attack.bonus)} to hit • ${dice}${attack.damageBonus !== 0 ? fmtBonus(attack.damageBonus) : ''} ${capitalize(attack.damageType)}`,
           layer3: null, outcomes: [], triggerNote: null, activation, resourceCost: null,
           tabs: ['actions', 'features'], available: availability.available, unavailableReason: availability.reason,
+          incapacitatedOverridable: availability.incapacitatedOverridable,
         });
       }
     }
@@ -1254,7 +1322,7 @@ export function generateAllActionCards(
     // Was hardcoded available:true, unconditionally — bypassed
     // isFeatureAvailable() entirely, which is otherwise the only card ever
     // exempt from A-25's action-economy gate (a real attack, not a passive).
-    const { available, reason } = isFeatureAvailable(
+    const { available, reason, incapacitatedOverridable } = isFeatureAvailable(
       { activation: unarmedActivation, effects: [], abilityEffects: [] } as unknown as Feature, entity,
     );
     cards.push({
@@ -1272,6 +1340,7 @@ export function generateAllActionCards(
       tabs: ['actions', 'features'],
       available,
       unavailableReason: reason,
+      incapacitatedOverridable,
     });
   }
 

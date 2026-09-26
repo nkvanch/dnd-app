@@ -270,11 +270,35 @@ export function recomputeDerived(
   const speedEffects  = allEffects.filter(ae => ae.effect.target === 'speed');
   const hasSetSpeed   = speedEffects.some(ae => ae.effect.operation === 'set');
   const speedResolved = resolveEffectsForTarget('speed', allEffects, rules) as number;
-  const finalSpeed    = beastForm
+  // Rules-correctness fix (speed-zero precedence): a condition that sets
+  // speed to 0 (Grappled/Restrained/Stunned/Unconscious — see
+  // content/conditions/index.ts's speedZeroFeature) is a RESTRICTION, not
+  // an ordinary "highest set wins" replacement value — 5e RAW: the creature
+  // "can't benefit from any bonus to its speed" while this applies. Without
+  // this check, resolveCombine's normal 'set' tie-break (highest value
+  // wins) let an ordinary higher replacement speed (e.g. a 40ft "set"
+  // effect) or an additive bonus stacked on top of the winning 'set' beat
+  // the 0, which is wrong — the restriction must dominate base speed,
+  // additive bonuses, AND ordinary replacement/set effects. An explicit
+  // character/DM override for 'speed' (applied later, unconditionally,
+  // near the end of this function) still wins over this — this only
+  // affects the CALCULATED value overrides start from.
+  // Rules-correctness fix (Wild Shape speed-zero precedence): the
+  // beastForm branch used to short-circuit straight to beastForm.speed
+  // BEFORE the restriction check below ever ran, so a transformed,
+  // Grappled/Restrained creature incorrectly kept its full beast-form
+  // movement — the active condition's effects survive transformation (they
+  // live on entity.features, untouched by Wild Shape), so the restriction
+  // must still apply. Compute the ordinary-or-transformed CALCULATED speed
+  // first, then apply the restriction on top unconditionally, exactly like
+  // the non-transformed path always has.
+  const calculatedSpeed = beastForm
     ? beastForm.speed
     : hasSetSpeed
       ? speedResolved
       : entity.resources.speed + speedResolved;
+  const hasZeroSpeedRestriction = speedEffects.some(ae => ae.effect.operation === 'set' && ae.effect.value === 0);
+  const finalSpeed = hasZeroSpeedRestriction ? 0 : calculatedSpeed;
 
   // ── Senses: aggregate grant_sense effects, dedup by type (largest range) ──
   const senseEffects = allEffects.filter(ae => ae.effect.type === 'grant_sense');

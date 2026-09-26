@@ -45,15 +45,29 @@ import { ALL_CHAR_CLASSES } from '../content/classes';
  * existing caller that hasn't been updated to pass homebrew-aware content.
  * Also threaded into the final recomputeDerived call so the entity's
  * freshly-regenerated actionCards reflect the SAME content this cast used.
+ *
+ * `bypassIncapacitated` (rules-engine HIGH-batch closure C4/C6/C10) is the
+ * table-first Quick Override ("Use Anyway") for a normal action blocked
+ * ONLY by the 0HP/Unconscious status restriction. Passing `true` bypasses
+ * that ONE legality check for this one use — never healing, never clearing
+ * Unconscious, never touching death-save state, and never bypassing the
+ * hard `isDead` blocker or any resource/action-economy/preparation check
+ * below (isFeatureAvailable itself keeps those independent — see its own
+ * doc comment). Appended as the LAST parameter (rather than alongside
+ * `bypassSpellPreparation`) so every existing positional call site is
+ * unaffected. A card blocked by BOTH preparation and status can have both
+ * flags passed together (C7) — they are independent, not mutually
+ * exclusive.
  */
 export function applyActionCardUse(
   entity: Entity, card: ActionCard, rules: CampaignRules, chosenOption?: ActivationOption, selectedPayment?: SpellPaymentOption,
   bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext,
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
+  bypassIncapacitated?: boolean,
 ): Entity {
   let updated = entity;
   const cost = chosenOption?.resourceCost ?? card.resourceCost;
-  if (!isFeatureAvailable({ activation: { ...card.activation, options: undefined, resourceCost: cost } }, entity).available) return entity;
+  if (!isFeatureAvailable({ activation: { ...card.activation, options: undefined, resourceCost: cost } }, entity, bypassIncapacitated).available) return entity;
   const classDefs = content.classDefs ?? ALL_CHAR_CLASSES;
 
   if (card.spellCastingContext) {

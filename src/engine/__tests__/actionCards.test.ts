@@ -4,7 +4,7 @@
 // auto-applied) plus baseline regression coverage for buildLayer1/2/3, which
 // had zero tests before despite every action card in the app going through
 // them.
-import { Feature, FeatureInstance, Entity, SpellSlots, Race, Subrace, Spell, CharClass, Item, EntitlementRecord, ClassLevelEntry, asClassId, asSubclassId, ActionCard, SpellCastingContext } from '../types';
+import { Feature, FeatureInstance, Entity, SpellSlots, Race, Subrace, Spell, CharClass, Item, EntitlementRecord, ClassLevelEntry, asClassId, asSubclassId, ActionCard, SpellCastingContext, ActivationOption } from '../types';
 import {
   buildLayer1, buildLayer2, buildLayer3, buildOutcomeLines, generateActionCard, generateAllActionCards, generateSpellCard,
   getTriggeredFeatures, isFeatureAvailable, isLargeCreature,
@@ -674,6 +674,187 @@ describe('applyActionCardUse — Quick Override "Cast Anyway" (rules-engine bloc
     const resultOverride = applyActionCardUse(unprepared, cardUnprepared, {} as any, undefined, undefined, true);
     // Same slot consumption via the identical mutation path either way.
     expect(resultNormal.spellcasting!.slots['3'].used).toBe(resultOverride.spellcasting!.slots['3'].used);
+  });
+});
+
+// ============================================================================
+// HIGH-batch rules-correctness closure (C): normal ActionCard use at 0 HP /
+// Unconscious is blocked by default, with a table-first Quick Override
+// ("Use Anyway") mirroring "Cast Anyway"'s exact shape. Engine-level
+// coverage for C13's test matrix (component-level UI wiring is covered
+// separately, per this codebase's "test the pure function/contract, not the
+// RN component" convention).
+// ============================================================================
+describe('isFeatureAvailable / applyActionCardUse — Quick Override "Use Anyway" (HIGH batch, C)', () => {
+  function healthyEntity(): Entity {
+    return { ...makeEmptyEntity('e1'), resources: { ...makeEmptyEntity('e1').resources, hp: { current: 20, maximum: 20, temp: 0 } } };
+  }
+  function zeroHpEntity(): Entity {
+    return { ...healthyEntity(), resources: { ...healthyEntity().resources, hp: { current: 0, maximum: 20, temp: 0 } } };
+  }
+  function unconsciousEntity(): Entity {
+    // HP > 0 but the explicit Unconscious condition is present independent of HP.
+    return { ...healthyEntity(), conditions: [{ id: 'unconscious', sourceId: 'test', duration: null, suppressedBy: [] }] };
+  }
+  function simpleFeature(): FeatureInstance {
+    return makeFeatureInstance({ activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null } });
+  }
+  function costedFeature(): FeatureInstance {
+    return makeFeatureInstance({ activation: { actionType: 'action', resourceCost: { resourceId: 'rage', quantity: 1 }, range: '5 feet', target: 'single', requiresSave: null } });
+  }
+  function withRageResource(entity: Entity, current: number): Entity {
+    return { ...entity, resources: { ...entity.resources, custom: [{ id: 'rage', name: 'Rage', current, maximum: 2, recharge: 'long_rest' as const }] } };
+  }
+
+  it('1: a healthy character\'s action is normally available', () => {
+    expect(isFeatureAvailable(simpleFeature(), healthyEntity())).toEqual({ available: true, reason: null });
+  });
+
+  it('2: HP 0 — a normal attempt is blocked, with incapacitatedOverridable=true', () => {
+    const result = isFeatureAvailable(simpleFeature(), zeroHpEntity());
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe('At 0 HP');
+    expect(result.incapacitatedOverridable).toBe(true);
+  });
+
+  it('3: HP 0 -> Use Anyway (bypassIncapacitated=true) executes through the normal mutation path', () => {
+    const e = zeroHpEntity();
+    const feature = { ...e, features: [simpleFeature()] };
+    const card = generateActionCard(feature.features[0], feature)!;
+    expect(card.available).toBe(false);
+    expect(card.incapacitatedOverridable).toBe(true);
+    const result = applyActionCardUse(feature, card, {} as any, undefined, undefined, undefined, undefined, {}, true);
+    expect(result).not.toBe(feature); // action economy mutated -> real execution happened
+  });
+
+  it('4: explicit Unconscious (HP > 0) — a normal attempt is blocked', () => {
+    const result = isFeatureAvailable(simpleFeature(), unconsciousEntity());
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe('Unconscious');
+    expect(result.incapacitatedOverridable).toBe(true);
+  });
+
+  it('5: Unconscious -> Use Anyway executes', () => {
+    const e = unconsciousEntity();
+    const feature = { ...e, features: [simpleFeature()] };
+    const card = generateActionCard(feature.features[0], feature)!;
+    const result = applyActionCardUse(feature, card, {} as any, undefined, undefined, undefined, undefined, {}, true);
+    expect(result).not.toBe(feature);
+  });
+
+  it('6: a normal blocked attempt (no override / "Cancel") produces no mutation at all', () => {
+    const e = zeroHpEntity();
+    const feature = { ...e, features: [simpleFeature()] };
+    const card = generateActionCard(feature.features[0], feature)!;
+    const result = applyActionCardUse(feature, card, {} as any); // bypassIncapacitated omitted
+    expect(result).toBe(feature);
+  });
+
+  it('7: Use Anyway never heals, never clears Unconscious, never touches death-save state', () => {
+    const e = { ...unconsciousEntity(), resources: { ...unconsciousEntity().resources, hp: { current: 0, maximum: 20, temp: 0 }, deathSaves: { successes: 0, failures: 1, stable: false } } };
+    const feature = { ...e, features: [simpleFeature()] };
+    const card = generateActionCard(feature.features[0], feature)!;
+    const result = applyActionCardUse(feature, card, {} as any, undefined, undefined, undefined, undefined, {}, true);
+    expect(result.resources.hp.current).toBe(0); // unchanged
+    expect(result.conditions).toEqual(e.conditions); // Unconscious still present
+    expect(result.resources.deathSaves).toEqual(e.resources.deathSaves); // unchanged
+  });
+
+  it('8: a resource-cost action still spends the resource under Use Anyway', () => {
+    const e = withRageResource(zeroHpEntity(), 2);
+    const feature = { ...e, features: [costedFeature()] };
+    const card = generateActionCard(feature.features[0], feature)!;
+    expect(card.incapacitatedOverridable).toBe(true);
+    const result = applyActionCardUse(feature, card, {} as any, undefined, undefined, undefined, undefined, {}, true);
+    expect(result.resources.custom[0].current).toBe(1); // spent normally
+  });
+
+  it('9: Use Anyway does NOT bypass a missing resource — no rage available still blocks', () => {
+    const e = withRageResource(zeroHpEntity(), 0);
+    const feature = { ...e, features: [costedFeature()] };
+    const card = generateActionCard(feature.features[0], feature)!;
+    expect(card.available).toBe(false);
+    expect(card.incapacitatedOverridable).toBeFalsy(); // resource is ALSO blocking — not solely status
+    const result = applyActionCardUse(feature, card, {} as any, undefined, undefined, undefined, undefined, {}, true);
+    expect(result).toBe(feature); // still blocked despite the override
+  });
+
+  it('10: a spell at 0 HP that IS prepared -> only the status override is needed', () => {
+    const fireball = leveledSpell('fireball', 3);
+    const e: Entity = {
+      ...zeroHpEntity(),
+      entitlements: [ent('spell_access', 'fireball', 'class', 'wizard')],
+      spellcasting: { ability: 'int', slots: emptySlots({ '3': { total: 2, used: 0 } }), cantrips: [], known: ['fireball'], prepared: ['fireball'], concentrating: null },
+    };
+    const opts = { homebrewSpells: [fireball] };
+    const card = generateSpellCard('fireball', e, opts)!;
+    expect(card.available).toBe(false);
+    expect(card.preparationOverridable).toBeFalsy(); // prepared — not the blocker
+    expect(card.incapacitatedOverridable).toBe(true);
+    // Status override alone (no bypassSpellPreparation) is sufficient.
+    const result = applyActionCardUse(e, card, {} as any, undefined, undefined, false, undefined, opts, true);
+    expect(result).not.toBe(e);
+    expect(result.spellcasting!.slots['3'].used).toBe(1);
+  });
+
+  it('11: a spell at 0 HP that is UNPREPARED -> both overrides are independently required and both preserved', () => {
+    const fireball = leveledSpell('fireball', 3);
+    const e: Entity = {
+      ...zeroHpEntity(),
+      entitlements: [ent('spell_access', 'fireball', 'class', 'wizard')],
+      spellcasting: { ability: 'int', slots: emptySlots({ '3': { total: 2, used: 0 } }), cantrips: [], known: ['fireball'], prepared: [], concentrating: null },
+    };
+    const opts = { homebrewSpells: [fireball] };
+    const card = generateSpellCard('fireball', e, opts)!;
+    expect(card.available).toBe(false);
+    expect(card.preparationOverridable).toBe(true);
+    expect(card.incapacitatedOverridable).toBe(true);
+    // Only ONE override: still blocked.
+    expect(applyActionCardUse(e, card, {} as any, undefined, undefined, true, undefined, opts, false)).toBe(e);
+    expect(applyActionCardUse(e, card, {} as any, undefined, undefined, false, undefined, opts, true)).toBe(e);
+    // BOTH overrides together: executes, spell stays unprepared.
+    const result = applyActionCardUse(e, card, {} as any, undefined, undefined, true, undefined, opts, true);
+    expect(result).not.toBe(e);
+    expect(result.spellcasting!.slots['3'].used).toBe(1);
+    expect(result.spellcasting!.prepared).toEqual([]);
+  });
+
+  it('12: same unprepared-at-0-HP case with an activation option chosen — both overrides survive option selection', () => {
+    const fireball = leveledSpell('fireball', 3);
+    const options: ActivationOption[] = [
+      { id: 'tier3', label: '3rd-level slot', resourceCost: { resourceId: 'spell_slots' as const, quantity: 1, spellSlotTier: 3 as const }, description: '' },
+      { id: 'tier4', label: '4th-level slot', resourceCost: { resourceId: 'spell_slots' as const, quantity: 1, spellSlotTier: 4 as const }, description: '' },
+    ];
+    const e: Entity = {
+      ...zeroHpEntity(),
+      entitlements: [ent('spell_access', 'fireball', 'class', 'wizard')],
+      spellcasting: { ability: 'int', slots: emptySlots({ '3': { total: 0, used: 0 }, '4': { total: 2, used: 0 } }), cantrips: [], known: ['fireball'], prepared: [], concentrating: null },
+    };
+    const opts = { homebrewSpells: [fireball] };
+    const card = generateSpellCard('fireball', e, opts)!;
+    const result = applyActionCardUse(e, card, {} as any, options[1], { kind: 'normal', tier: '4' }, true, undefined, opts, true);
+    expect(result).not.toBe(e);
+    expect(result.spellcasting!.slots['4'].used).toBe(1);
+    expect(result.spellcasting!.prepared).toEqual([]);
+  });
+
+  it('17: bypass flags are pure call-time parameters — never persisted on the resulting entity', () => {
+    const e = zeroHpEntity();
+    const feature = { ...e, features: [simpleFeature()] };
+    const card = generateActionCard(feature.features[0], feature)!;
+    const result = applyActionCardUse(feature, card, {} as any, undefined, undefined, undefined, undefined, {}, true);
+    // Same key set as an ordinary recompute of the identical entity with NO
+    // bypass involved — proves the override left no trace of itself
+    // (no bypass/quick-override flag) anywhere on the entity.
+    const ordinaryRecompute = recomputeDerived(feature, {} as any);
+    expect(Object.keys(result).sort()).toEqual(Object.keys(ordinaryRecompute).sort());
+    // The entity is still at 0 HP afterward — a freshly regenerated card for
+    // the SAME feature, with no bypass info in sight, still correctly shows
+    // the restriction (still available:false, still incapacitatedOverridable),
+    // proving nothing about the earlier override "unlocked" future use.
+    const cardAfter = generateActionCard(result.features[0], result)!;
+    expect(cardAfter.available).toBe(false);
+    expect(cardAfter.incapacitatedOverridable).toBe(true);
   });
 });
 

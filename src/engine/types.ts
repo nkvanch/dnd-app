@@ -2300,6 +2300,19 @@ export type ActionCard = {
    */
   preparationOverridable?: boolean;
   /**
+   * Rules-engine HIGH-batch closure (C): true ONLY when the entity is
+   * incapacitated (0 HP or the explicit Unconscious condition — see
+   * isIncapacitated, combat.ts) AND that status is the card's ENTIRE
+   * remaining unavailability — every other legality check (resource cost,
+   * action economy, and for a spell card, preparation) already passed. The
+   * UI offers a table-first "Use Anyway" Quick Override on top of the
+   * normal disabled state when this is true, mirroring
+   * preparationOverridable's own pattern exactly. false/undefined for a
+   * healthy entity, a Dead entity (hard blocker, never overridable — see
+   * isDead's own doc comment), or a card blocked by anything else.
+   */
+  incapacitatedOverridable?: boolean;
+  /**
    * Rules-engine blocker closure (1B — ActionCard must preserve context):
    * the SpellCastingContext this card was generated to represent — the
    * default/primary one when several exist (see spellCastingContexts

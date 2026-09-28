@@ -97,3 +97,22 @@ describe('item-identity closure — portable import hydrates legacy ItemInstance
   });
 });
 
+// ============================================================================
+// Extra Attack sequence closure (two-issue final closure, Part B/F10): a
+// portable export made mid-Attack-sequence must not import back into a
+// resumable, already-paid-for state. Same REAL resolvePortableCharacterImport
+// path the item-identity closure above verifies, mirrored for this concern.
+// ============================================================================
+describe('Extra Attack sequence closure — portable import strips attackSequence', () => {
+  it('F10: an entity exported mid-sequence imports with attackSequence cleared', async () => {
+    const base = makeEmptyEntity('char-mid-sequence');
+    const withSequence = {
+      ...base,
+      attackSequence: { sequenceId: 'exported-seq', actorId: base.id, maxAttacks: 2, usedAttacks: 1 },
+    };
+    const text = serializePortableCharacter(withSequence as any);
+    const parsed = await resolvePortableCharacterImport(text, [], jest.fn().mockResolvedValue(false));
+    expect(parsed.entity.attackSequence).toBeFalsy();
+  });
+});
+

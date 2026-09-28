@@ -7,7 +7,7 @@
 // ============================================================================
 import { Platform } from 'react-native';
 import { getDb } from './db';
-import { Entity } from '../engine/types';
+import { Entity, stripTransientRuntimeState } from '../engine/types';
 
 /** Upserts the current creation draft (single-row table). */
 export async function saveDraftState(entity: Entity): Promise<void> {
@@ -20,7 +20,19 @@ export async function saveDraftState(entity: Entity): Promise<void> {
   );
 }
 
-/** Loads the persisted draft. Returns null if none saved or on error. */
+/**
+ * Loads the persisted draft. Returns null if none saved or on error.
+ *
+ * Extra Attack sequence closure (final single-issue closure): the parse/load
+ * boundary that reconstructs the draft Entity — a raw JSON blob deserialized
+ * with no engine involvement otherwise, so `attackSequence` (transient,
+ * never-persisted runtime state — see stripTransientRuntimeState's own doc
+ * comment, types.ts) must be normalized away HERE before the caller
+ * (app/_layout.tsx) ever exposes it as `useCharacterStore`'s `draft`. Uses
+ * the SAME shared normalizer every other durable ingress (DB load, sync,
+ * portable import) already uses, rather than a second hand-coded
+ * `{ attackSequence: null }` patch.
+ */
 export async function loadDraftState(): Promise<Entity | null> {
   if (Platform.OS === 'web') return null;
   try {
@@ -29,7 +41,7 @@ export async function loadDraftState(): Promise<Entity | null> {
       'SELECT data FROM character_draft WHERE id = 1'
     );
     if (!row) return null;
-    return JSON.parse(row.data) as Entity;
+    return stripTransientRuntimeState(JSON.parse(row.data) as Entity);
   } catch {
     return null;
   }

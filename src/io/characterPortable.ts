@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { CustomRuleProfile, Entity } from '../engine/types';
 import { migrateEntity } from '../engine/multiclass';
 import { hydrateLegacyItemInstanceIds } from '../engine/itemMechanics';
+import { stripTransientRuntimeState } from '../engine/combat';
 import { validateEntityShape } from '../engine/homebrewValidator';
 import { persistedCharacterExists } from '../db/entityRepo';
 import { identifyGrimoireImport, WRONG_CHARACTER_IMPORTER_MESSAGE } from './importEnvelope';
@@ -30,7 +31,11 @@ export function parsePortableCharacter(text: string, existingIds: ReadonlySet<st
   // attuned/infused immediately after import using first-itemId-match
   // fallback semantics until the next app restart happened to run the
   // normal load hydration.
-  const hydrated = hydrateLegacyItemInstanceIds(migrated);
+  // Extra Attack sequence closure (Part B4): a portable export made mid-
+  // sequence could physically contain attackSequence — stripped here, the
+  // same shared normalizer every other durable ingress uses, before this
+  // entity is ever exposed to validation/runtime.
+  const hydrated = stripTransientRuntimeState(hydrateLegacyItemInstanceIds(migrated));
   const validation = validateEntityShape(hydrated);
   if (!validation.valid) throw new Error('Character validation failed: ' + validation.errors.join('; '));
   const entity = hydrated; let profileToImport: CustomRuleProfile | undefined;

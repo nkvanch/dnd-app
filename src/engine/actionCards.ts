@@ -1046,9 +1046,23 @@ const ACTION_ECONOMY_LABEL: Record<string, string> = {
 function resourceAndEconomyLegal(
   feature: Pick<Feature, 'activation'>,
   entity: Entity,
+  /**
+   * Extra Attack sequence closure (Part D — action type safety): narrowly
+   * skips ONLY the "already used this turn" action-economy gate below,
+   * without touching anything else this function checks (resource pools,
+   * spell slots, activation options). Used for a ritual cast and a
+   * validated chained attack — both have a real 'action'/'bonus_action'/
+   * 'reaction' actionType that must stay intact for every OTHER purpose
+   * (display, classification), so the old approach of rewriting
+   * activation.actionType to 'passive' to sneak past this same gate is
+   * replaced by this explicit, narrow parameter instead (see
+   * applyActionCardUse, actionUse.ts, for the two callers). Defaults to
+   * false so every existing caller/behavior is unaffected.
+   */
+  bypassActionEconomySlot: boolean = false,
 ): { legal: boolean; reason: string | null } {
   const actionType = feature.activation?.actionType;
-  if (entity.turnState && actionType && actionType in ACTION_ECONOMY_LABEL) {
+  if (!bypassActionEconomySlot && entity.turnState && actionType && actionType in ACTION_ECONOMY_LABEL) {
     const used = actionType === 'action' ? entity.turnState.actionUsed
       : actionType === 'bonus_action' ? entity.turnState.bonusActionUsed
       : entity.turnState.reactionUsed;
@@ -1062,7 +1076,7 @@ function resourceAndEconomyLegal(
     const legal = options.some(option => resourceAndEconomyLegal({
       ...feature, activation: { ...feature.activation!, options: undefined,
         resourceCost: option.resourceCost ?? feature.activation!.resourceCost },
-    }, entity).legal);
+    }, entity, bypassActionEconomySlot).legal);
     return { legal, reason: legal ? null : 'No legal activation payment remaining.' };
   }
   const cost = feature.activation?.resourceCost;
@@ -1111,13 +1125,24 @@ export function isFeatureAvailable(
    * UI can offer the override in the first place — is unaffected.
    */
   bypassIncapacitated: boolean = false,
+  /**
+   * Extra Attack sequence closure (Part D — action type safety): forwarded
+   * straight to resourceAndEconomyLegal's own identically-named parameter —
+   * see that function's doc comment. Replaces the previous mechanism (both
+   * a ritual cast and a validated chained attack rewrote the feature's own
+   * activation.actionType to 'passive' before calling this function) with an
+   * explicit flag, so a chained attack's real actionType is preserved for
+   * every other purpose. Defaults to false — unaffected for every existing
+   * caller.
+   */
+  bypassActionEconomySlot: boolean = false,
 ): { available: boolean; reason: string | null; incapacitatedOverridable?: boolean } {
   // Dead: hard blocker, checked first, never overridable (C12).
   if (isDead(entity)) {
     return { available: false, reason: 'Dead' };
   }
 
-  const { legal: resourceLegal, reason: resourceReason } = resourceAndEconomyLegal(feature, entity);
+  const { legal: resourceLegal, reason: resourceReason } = resourceAndEconomyLegal(feature, entity, bypassActionEconomySlot);
   if (!resourceLegal) {
     return { available: false, reason: resourceReason };
   }
@@ -1396,8 +1421,29 @@ export function generateAllActionCards(
       // generateActionCard's own doc comment).
       const card = generateActionCard(fi, entity, opts, inst.id);
       if (card) {
-        cards.push(card);
-        if (fi.abilityEffects?.some(effect => effect.type === 'damage')) hasAuthoredAttack = true;
+        const isDamageFeature = fi.abilityEffects?.some(effect => effect.type === 'damage') ?? false;
+        if (isDamageFeature) hasAuthoredAttack = true;
+        // Extra Attack / action-structure batch: gated on isWeapon(), not
+        // isDamageFeature alone — in principle these could diverge for
+        // content this catalog doesn't currently author (a non-weapon
+        // item's own damage-dealing feature), but isWeapon() ITSELF already
+        // treats any declared damage effect as sufficient evidence of being
+        // a weapon (hasDamageEffect, itemBrowse.ts) for every item shape
+        // actually authored here, so this stays the semantically correct
+        // (never narrower) gate rather than assuming isDamageFeature alone
+        // is enough — see ActionCard.isWeaponAttack's own doc comment.
+        //
+        // Extra Attack sequence closure (two-issue final closure, Part A2):
+        // ALSO requires actionType === 'action' — a weapon's own authored
+        // attack feature that activates as a Bonus Action or Reaction (e.g.
+        // a magic weapon's "as a bonus action, make a melee attack" rider)
+        // deals damage and belongs to a weapon, but is NOT a genuine Attack-
+        // action attack and must never be sequence-eligible merely because
+        // it satisfies the other two conditions. Standalone use of such a
+        // card (its own normal Bonus Action/Reaction economy) is completely
+        // unaffected — this only controls the isWeaponAttack flag.
+        const isWeaponAttack = isDamageFeature && !!definition && isWeapon(toItemIndexEntry(definition)) && fi.activation.actionType === 'action';
+        cards.push(isWeaponAttack ? { ...card, isWeaponAttack: true } : card);
       }
     }
     if (definition && isWeapon(toItemIndexEntry(definition)) && !hasAuthoredAttack) {
@@ -1426,6 +1472,7 @@ export function generateAllActionCards(
           layer3: null, outcomes: [], triggerNote: null, activation, resourceCost: null,
           tabs: ['actions', 'features'], available: availability.available, unavailableReason: availability.reason,
           incapacitatedOverridable: availability.incapacitatedOverridable,
+          isWeaponAttack: true, // Extra Attack / action-structure batch — a real weapon attack, eligible for the Attack action's extra attack opportunities.
           // Item-identity closure: same stale-instance revalidation at
           // execution time as an authored item-feature card, even though
           // this synthetic card has no abilityEffects of its own to apply —
@@ -1467,6 +1514,7 @@ export function generateAllActionCards(
       available,
       unavailableReason: reason,
       incapacitatedOverridable,
+      isWeaponAttack: true, // Extra Attack / action-structure batch — usable with the Attack action's extra attack opportunities.
     });
   }
 

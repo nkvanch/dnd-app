@@ -149,11 +149,40 @@ export function startTurn(entity: Entity): Entity {
   return {
     ...entity,
     turnState: { actionUsed: false, bonusActionUsed: false, reactionUsed: false },
+    // Extra Attack sequence closure: a fresh turn always closes out any
+    // leftover in-progress Attack-action sequence from before — a new turn
+    // means a new Action to spend, never a continuation of an old one.
+    attackSequence: null,
     resources: hasStartOfTurn
       ? { ...entity.resources, custom: entity.resources.custom.map(r => r.recharge === 'start_of_turn' ? { ...r, current: r.maximum } : r) }
       : entity.resources,
   };
 }
+
+/**
+ * Extra Attack sequence closure, Part O (Cancel/Done): explicitly closes the
+ * entity's currently in-progress Attack-action sequence WITHOUT touching
+ * anything else — the Action already spent by the lead attack (if any) stays
+ * spent, and any unused attack opportunities are simply discarded. A no-op
+ * (returns entity unchanged) when no sequence is active. The UI calls this
+ * when the player presses "Done" after a partial sequence, or "Cancel" (also
+ * a no-op there specifically, since Cancel before any successful attack
+ * means entity.attackSequence was never set in the first place — see
+ * applyActionCardUse's own doc comment, actionUse.ts).
+ */
+export function endAttackSequence(entity: Entity): Entity {
+  if (!entity.attackSequence) return entity;
+  return { ...entity, attackSequence: null };
+}
+
+// stripTransientRuntimeState (Extra Attack sequence closure, Part B) lives
+// in types.ts, not here — db/entityRepo.ts's own per-row read path
+// (parseEntityRow) is one of its required call sites, and combat.ts
+// transitively imports DEFAULT_RULES from store/characterStore.ts, which
+// itself imports entityRepo.ts — importing combat.ts from entityRepo.ts
+// would create a cycle. types.ts has no such dependency, so the shared
+// normalizer is defined there instead and re-exported here for convenience.
+export { stripTransientRuntimeState } from './types';
 
 /**
  * The authoritative solo-player "End Turn" mutation — re-audit item 18.

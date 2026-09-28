@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, memo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules, ActivationOption, SpellCastingContext } from '../../engine/types';
-import { endWildShape } from '../../engine/combat';
+import { endWildShape, endAttackSequence } from '../../engine/combat';
 import { getTriggeredFeatures, isFeatureAvailable, formatCastingContextLabel, CardGenOptions, isContextLegalForCastMode, needsPreparationOverride } from '../../engine/actionCards';
 import { applyActionCardUse } from '../../engine/actionUse';
 import { useSpellPayment } from './SpellPaymentChooser';
@@ -120,6 +120,18 @@ export function toggleFavoriteTag(entity: Entity, card: string | CardLike): Enti
     };
   }
   return { ...entity, favoriteActionIds: [...current, identity] };
+}
+
+/**
+ * Extra Attack sequence closure: a fresh, opaque correlation token for one
+ * Attack-action sequence — see AttackSequenceUse's own doc comment
+ * (types.ts) for why this never needs to be unguessable/cryptographic. It
+ * only correlates this UI's own successive calls against the engine's own
+ * authoritative entity.attackSequence record; it grants no authority by
+ * itself.
+ */
+function generateSequenceId(): string {
+  return `attack-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 const CARD_COLORS: Record<ActionCard['color'], string> = {
@@ -628,6 +640,19 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   // closure 2F: carries the bypass/context decision ALONGSIDE the card, not
   // just the card alone — see PendingActionUse's own doc comment.
   const [pendingUse, setPendingUse] = useState<PendingActionUse | null>(null);
+  // Extra Attack sequence closure: which attack of the CURRENT Attack action
+  // sequence comes next, plus the opaque `sequenceId` token correlating every
+  // call in this sequence — transient UI-only state, never persisted (the
+  // character only ever records entity.attackSequence, the ENGINE's own
+  // authoritative, transient record — see AttackSequenceState's doc comment,
+  // types.ts). `attackNumber`/`totalAttacks` here are for DISPLAY only (which
+  // Alert prompt to show next); they are never trusted by the engine — every
+  // call still passes `{ sequenceId }` and the engine re-derives the real
+  // count from entity.attackSequence itself (Part N: UI may display sequence
+  // state, but engine/application validation enforces it independently).
+  // Null whenever no sequence is in progress (the overwhelmingly common case
+  // for a character without Extra Attack).
+  const [attackSequence, setAttackSequence] = useState<{ sequenceId: string; totalAttacks: number; attackNumber: number } | null>(null);
 
   const { requestPayment, paymentChooser } = useSpellPayment(entity);
   const cardContent = useCardContent(entity);
@@ -638,6 +663,124 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   // 'free' — usable alongside another action (e.g. a maneuver riding a normal
   // attack) rather than costing its own action/bonus action/reaction.
   const freeActions  = all.filter(c => c.activation.actionType === 'free');
+
+  // Extra Attack / action-structure batch, Part C: the Attack action's own
+  // attack opportunities are exactly the cards flagged isWeaponAttack (see
+  // that field's own doc comment, types.ts) — never every 'action'-type
+  // card (that would wrongly include e.g. Second Wind). Shown as a
+  // dedicated "Attack (N attacks)" entry ONLY when the character actually
+  // has more than the base 1 (attackActionAttacks — see DerivedStats' own
+  // doc comment) AND owns at least one such attack right now; a character
+  // without Extra Attack never sees this at all, and their individual
+  // weapon-attack cards below are completely unaffected.
+  const eligibleAttacks = actions.filter(c => c.isWeaponAttack);
+  const attackActionCount = entity.derived.attackActionAttacks ?? 1;
+  const showAttackAction = attackActionCount > 1 && eligibleAttacks.length > 0;
+  const canStartAttackAction = eligibleAttacks.some(c => c.available || c.incapacitatedOverridable);
+
+  // Part C5/C9: one Alert-style chooser per attack, mirroring this file's
+  // existing "Cast as..." context-chooser convention exactly — no target
+  // binding (this app never models targets on any card, so C9's "each
+  // attack may pick its own target" is already true by construction: the
+  // player just says who out loud at the table), no forced same-weapon
+  // (C4: recomputed fresh every call, so attack 2 can pick a different
+  // card than attack 1), and no auto-roll (C5: picking a card here only
+  // resolves payment/economy — the roll/manual-entry UseModal below still
+  // requires its own explicit tap, exactly like a standalone attack).
+  //
+  // Extra Attack sequence closure, Part O: "Done"/"Cancel" both call
+  // closeSequence() — a no-op via endAttackSequence when nothing has
+  // succeeded yet (Cancel before attack 1: entity.attackSequence was never
+  // set), and an explicit close of the authoritative engine-side record
+  // otherwise (Done after 1+ successful attacks) so a stale sequenceId can
+  // never be resumed later in the same turn.
+  function openAttackChooser(attackNumber: number, totalAttacks: number, sequenceId: string) {
+    const eligible = actions.filter(c => c.isWeaponAttack);
+    if (eligible.length === 0) { closeSequence(); return; }
+    Alert.alert(
+      `Attack ${attackNumber} of ${totalAttacks}`,
+      undefined,
+      [
+        ...eligible.map(card => ({
+          text: card.name,
+          onPress: () => handleAttackChoice(card, attackNumber, totalAttacks, sequenceId),
+        })),
+        { text: attackNumber > 1 ? 'Done' : 'Cancel', style: 'cancel' as const, onPress: () => closeSequence() },
+      ],
+    );
+  }
+
+  function closeSequence() {
+    setAttackSequence(null);
+    if (!onEntityUpdate) return;
+    const closed = endAttackSequence(entity);
+    // endAttackSequence is a no-op (returns the same reference) when there
+    // was nothing to close — e.g. Cancel before any attack succeeded — so
+    // this never pushes a spurious no-op update, matching every other
+    // caller's `if (updated === entity) return;` convention in this file.
+    if (closed !== entity) onEntityUpdate(closed);
+  }
+
+  // Part C7/H: calls applyActionCardUse DIRECTLY (weapon attacks never
+  // carry a spell-slot resourceCost, so useSpellPayment's chooser would
+  // just call its commit callback immediately anyway) with the SAME
+  // `sequenceId` token on every call of this sequence — the engine (not
+  // this attackNumber param, which is display-only) decides whether this is
+  // the paying lead attack or a bypass-eligible chained one, by matching the
+  // token against entity.attackSequence (see applyActionCardUse's own doc
+  // comment for the full authority model). Preserves Use Anyway (K13) for a
+  // lead attack blocked only by incapacitation, and preserves item-instance
+  // stale-attack rejection (H2/K14) via the exact same revalidation
+  // applyActionCardUse already does for every card.
+  function handleAttackChoice(card: ActionCard, attackNumber: number, totalAttacks: number, sequenceId: string, bypassIncapacitated?: boolean) {
+    if (!onEntityUpdate || !rules) return;
+    const updated = applyActionCardUse(entity, card, rules, undefined, undefined, undefined, undefined, cardContent, bypassIncapacitated, undefined, { sequenceId });
+    if (updated === entity) {
+      if (!bypassIncapacitated && card.incapacitatedOverridable) {
+        Alert.alert(
+          `${card.name}: ${card.unavailableReason ?? 'Incapacitated'}`,
+          'Use it anyway as a one-off table ruling? This does not change HP, conditions, or death-save state.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Use Anyway', onPress: () => handleAttackChoice(card, attackNumber, totalAttacks, sequenceId, true) },
+          ],
+        );
+        return;
+      }
+      // Stale/removed weapon (H2), an exhausted/rejected sequence, or some
+      // other now-illegal attack — never retargets a different same-
+      // definition instance; the player picks again or ends the sequence.
+      // The already-spent Action (if this isn't the lead attack) is
+      // unaffected either way, and the count never advanced (Part J).
+      Alert.alert(`Can't use ${card.name}`, card.unavailableReason ?? 'That attack is no longer available.', [
+        { text: 'Try Again', onPress: () => openAttackChooser(attackNumber, totalAttacks, sequenceId) },
+        { text: 'End Attack Action', style: 'cancel', onPress: () => closeSequence() },
+      ]);
+      return;
+    }
+    onEntityUpdate(updated);
+    setActiveCard(card); // same roll/manual-entry UseModal every standalone attack already uses
+    // Part C6/C7/E: the NEXT prompt is driven by the engine's OWN post-use
+    // record (updated.attackSequence), never a locally-incremented counter —
+    // null means the engine itself closed the sequence (exhausted after this
+    // attack), so the chooser simply doesn't reopen. This is what makes
+    // "cancel before the first attack" spend nothing (this function is never
+    // called at all) and "stop after attack 1 of 2" leave the Action spent
+    // with the second opportunity discarded — never a second Action, never
+    // forced completion.
+    const active = updated.attackSequence;
+    setAttackSequence(active ? { sequenceId, totalAttacks: active.maxAttacks, attackNumber: active.usedAttacks + 1 } : null);
+  }
+
+  // Part H: the roll/manual-entry modal closing is what advances to the
+  // NEXT attack chooser (if any remain) — so the player sees their damage
+  // result before being asked to pick the next attack, and a sequence with
+  // no attacks left to make (or that was ended early via "Done"/"End
+  // Attack Action") never reopens anything.
+  function handleCloseUseModal() {
+    setActiveCard(null);
+    if (attackSequence) openAttackChooser(attackSequence.attackNumber, attackSequence.totalAttacks, attackSequence.sequenceId);
+  }
 
   const handleUse = useCallback((card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean, castMode?: 'ritual') => {
     if (card.activation.options && card.activation.options.length > 0) {
@@ -759,6 +902,18 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
           <Text style={styles.emptySubTxt}>Level up or learn spells to unlock abilities.</Text>
         </View>
       )}
+      {/* Extra Attack / action-structure batch, Part I: kept minimal — one
+          entry, only when it's actually meaningful, no combat planner. */}
+      {showAttackAction && (
+        <Pressable
+          style={[styles.attackActionBtn, !canStartAttackAction && styles.attackActionBtnDisabled]}
+          disabled={!canStartAttackAction}
+          onPress={() => openAttackChooser(1, attackActionCount, generateSequenceId())}
+        >
+          <Text style={styles.attackActionBtnTxt}>⚔️ Attack</Text>
+          <Text style={styles.attackActionBtnSub}>{attackActionCount} attacks</Text>
+        </Pressable>
+      )}
       <Section title="ACTIONS"       cards={actions}      entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
       <Section title="BONUS ACTIONS" cards={bonusActions} entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
       <Section title="REACTIONS"     cards={reactions}    entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
@@ -770,7 +925,7 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
       <UseModal
         card={activeCard}
         onRoll={rollForCard}
-        onClose={() => setActiveCard(null)}
+        onClose={handleCloseUseModal}
       />
       <ActivationOptionModal
         entity={entity}
@@ -835,6 +990,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 6,
   },
   endTurnBtnTxt: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+
+  attackActionBtn: {
+    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
+    backgroundColor: Colors.red, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+  },
+  attackActionBtnDisabled: { opacity: 0.4 },
+  attackActionBtnTxt: { color: Colors.white, fontSize: FontSize.md, fontWeight: FontWeight.bold },
+  attackActionBtnSub: { color: Colors.white, fontSize: FontSize.sm },
 
   wildShapeBanner: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.md,

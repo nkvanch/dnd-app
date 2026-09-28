@@ -60,4 +60,27 @@ describe('draftRepo', () => {
     runAsync.mockRejectedValueOnce(new Error('disk full'));
     await expect(repo.clearDraftState()).resolves.toBeUndefined();
   });
+
+  // Extra Attack sequence closure (final single-issue closure): a draft
+  // persisted while its underlying Entity carried an in-progress Attack
+  // sequence (e.g. an "edit as draft" flow that copied a live, mid-combat
+  // character) must not restore it as resumable. Through the REAL
+  // loadDraftState path, not a direct helper unit test.
+  it('loadDraftState strips a persisted attackSequence rather than restoring it as resumable', async () => {
+    const draftWithSequence: Entity = {
+      ...draft,
+      attackSequence: { sequenceId: 'stale-draft-seq', actorId: draft.id, maxAttacks: 2, usedAttacks: 1 },
+    };
+    getFirstAsync.mockResolvedValue({ data: JSON.stringify(draftWithSequence) });
+    const loaded = await repo.loadDraftState();
+    expect(loaded?.attackSequence).toBeFalsy();
+    // Everything else about the draft is preserved exactly — only the
+    // transient field is affected.
+    expect(loaded).toEqual({ ...draft, attackSequence: null });
+  });
+
+  it('loadDraftState leaves an ordinary draft (no attackSequence) unchanged', async () => {
+    getFirstAsync.mockResolvedValue({ data: JSON.stringify(draft) });
+    expect(await repo.loadDraftState()).toEqual(draft);
+  });
 });

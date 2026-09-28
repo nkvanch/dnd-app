@@ -6,7 +6,7 @@
 // kind, and updatedAt for efficient list/filter queries.
 // ============================================================================
 import { Platform } from 'react-native';
-import { Entity } from '../engine/types';
+import { Entity, stripTransientRuntimeState } from '../engine/types';
 import { getDb } from './db';
 import { migrateEntity } from '../engine/multiclass';
 import { validateEntityShape } from '../engine/homebrewValidator';
@@ -87,7 +87,11 @@ function parseEntityRow(r: EntityRow): Entity | null {
       console.error(`[entityRepo] quarantining structurally invalid row id=${r.id}:`, shape.errors);
       return null;
     }
-    return migrated;
+    // Extra Attack sequence closure (Part B4): this is the single choke
+    // point behind every DB read (loadEntity, loadAllEntities,
+    // loadEntitiesByKind) — a row saved mid-Attack-sequence must never come
+    // back with a resumable attackSequence still attached.
+    return stripTransientRuntimeState(migrated);
   } catch (e) {
     console.error(`[entityRepo] skipping malformed row id=${r.id}:`, e);
     return null;

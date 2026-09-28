@@ -14,7 +14,7 @@ import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
   Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus, AuditSourceKind,
 } from './types';
-import { resolveEffectsForTarget, resolveBinary, resolveCombine } from './resolver';
+import { resolveEffectsForTarget, resolveBinary, resolveCombine, resolveExtraAttack } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
 import { generateAllActionCards, CardGenOptions } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
@@ -402,6 +402,9 @@ export function recomputeDerived(
       wis: abilityDC(profBonus, modifier(effectiveStats.wis)),
       cha: abilityDC(profBonus, modifier(effectiveStats.cha)),
     },
+    // Extra Attack / action-structure batch — see this field's own doc
+    // comment (types.ts) for the multiclass max-not-additive rationale.
+    attackActionAttacks: 1 + resolveExtraAttack(allEffects),
   };
 
   // ── Apply DM overrides LAST ───────────────────────────────────────────────

@@ -931,6 +931,23 @@ export type DerivedStats = {
    * remember to roll 2d20, not auto-applied to any roll.
    */
   advantageStates:   { target: string; state: 'advantage' | 'disadvantage' }[];
+  /**
+   * Extra Attack / action-structure batch: how many individual attacks the
+   * character's Attack action contains — `1 + resolveExtraAttack(allEffects)`
+   * (resolver.ts). Extra Attack-granting features author a `stat_modifier`
+   * effect targeting `'extra_attack'` with `operation: 'set'` and a value
+   * one less than the total attack count (Fighter 5's value is `1` → 2
+   * total attacks); resolveExtraAttack takes the MAXIMUM across every such
+   * effect rather than summing them, so a Fighter 5/Paladin 5 multiclass
+   * correctly stays at 2, never 3 — see resolveExtraAttack's own doc
+   * comment for the full multiclassing rationale. This field describes ONLY
+   * how many attack opportunities the Attack action contains; it never
+   * implies multiple action-economy spends — a single Attack action with
+   * this many attacks still consumes exactly one Action (see
+   * applyActionCardUse's `attackSequence` parameter, actionUse.ts, and
+   * AttackSequenceState's own doc comment, section 6 below).
+   */
+  attackActionAttacks: number;
 };
 
 /**
@@ -1883,6 +1900,54 @@ export type TurnState = {
 };
 
 /**
+ * Extra Attack sequence closure (single-HIGH final closure): the engine-
+ * owned, per-entity record of an IN-PROGRESS Attack action containing
+ * multiple attacks (Extra Attack / Multiattack) — replaces the removed
+ * `isChainedAttack?: boolean` escape hatch, which let any caller claim "this
+ * is a chained attack" and bypass action economy with zero verification
+ * (CALLER BOOLEAN ≠ AUTHORITY). This is the single source of truth
+ * applyActionCardUse (actionUse.ts) consults to decide whether a given
+ * attack is a legitimate continuation of an already-paid-for Attack action.
+ *
+ * Deliberately NOT a durable/persisted character fact — it exists only for
+ * the duration of one Attack action and is cleared (`null`) the moment the
+ * sequence closes (exhausted, or the player presses Done/Cancel) or a fresh
+ * turn starts (startTurn, combat.ts, resets it alongside turnState). A
+ * saved/reloaded character with a leftover non-null value here (e.g. the app
+ * closed mid-sequence) is harmless: the next attempt to CONTINUE it either
+ * matches (and simply resumes, still bounded by maxAttacks/usedAttacks) or
+ * fails the actorId/sequenceId match and is treated as a fresh lead attack.
+ *
+ * `sequenceId` is an opaque, caller-supplied correlation token (see
+ * AttackSequenceUse below) — it is NEVER trusted as authority on its own.
+ * The only thing that grants a call "chained" status is an EXACT match
+ * against THIS entity's OWN currently-stored AttackSequenceState, which the
+ * caller cannot fabricate: a token that doesn't match `entity.attackSequence`
+ * (because none exists yet, or it belongs to a different/closed sequence) is
+ * always treated as an attempt to start a brand-new, independent lead attack
+ * instead — which then pays its own Action normally, and is therefore
+ * blocked by ordinary action economy if the Action was already spent this
+ * turn. See applyActionCardUse's own doc comment for the full validation.
+ */
+export type AttackSequenceState = {
+  sequenceId:  string;
+  /** The Entity.id this sequence belongs to — re-checked on every
+   *  continuation attempt so one entity's in-progress sequence can never be
+   *  advanced by a call operating on a DIFFERENT entity, even one that
+   *  somehow carries a matching sequenceId (Part F — sequence ownership). */
+  actorId:     string;
+  /** Snapshot of DerivedStats.attackActionAttacks at the moment the LEAD
+   *  attack succeeded — the hard ceiling on how many attacks this sequence
+   *  may ever execute, regardless of what a later call claims. */
+  maxAttacks:  number;
+  /** How many attacks (lead + chained) have successfully executed so far.
+   *  Only incremented on a SUCCESSFUL attack — a rejected child (stale item,
+   *  resource unavailable, incapacitated, wrong card kind, exhausted, etc.)
+   *  never advances this (Part J — failure must not advance the count). */
+  usedAttacks: number;
+};
+
+/**
  * The master entity. Characters, monsters, and NPCs all share this shape.
  *   conditions       = flat active condition list for UI rendering.
  *   conditionMonitor = full runtime state: exhaustion, flags, suppressions.
@@ -1982,6 +2047,14 @@ export type Entity = {
    */
   turnState?: TurnState | null;
   /**
+   * Extra Attack sequence closure: the currently in-progress Attack-action
+   * sequence (Extra Attack/Multiattack), if any — see AttackSequenceState's
+   * own doc comment for the full model. Null/undefined means "no sequence in
+   * progress," true for every entity outside an active multi-attack Attack
+   * action, including every character without Extra Attack at all.
+   */
+  attackSequence?: AttackSequenceState | null;
+  /**
    * Item 9 (context-dependent/three-state mechanics) — the player/DM's
    * current answer to each situational fact a currently-held Effect asks
    * about (keyed by Effect.situational.id). Absent key = unanswered
@@ -2040,6 +2113,55 @@ export type Entity = {
    * authoritative grant inputs. Flat proficiency/spell arrays are output only. */
   entitlementInputsVersion?: 1;
 };
+
+/**
+ * Extra Attack sequence closure (two-issue final closure, Part B): the ONE
+ * shared normalizer that strips runtime-only state which must NEVER survive
+ * a durable boundary — today, just `attackSequence`. AttackSequenceState's
+ * own doc comment (above) already documents it as transient/never-
+ * persisted, but a plain Entity is serialized/deserialized generically
+ * (SQLite row, portable export/import, sync entity/patch), so without this
+ * an in-progress sequence recorded at save time would come back unchanged
+ * on load — a stale, already-paid-for Action-economy bypass a caller could
+ * then "continue" with the old sequenceId after a reload.
+ *
+ * Defined here (types.ts), not combat.ts, specifically so db/entityRepo.ts's
+ * own per-row read path (parseEntityRow — the single choke point behind
+ * BOTH loadEntity and loadAllEntities/loadEntitiesByKind) can call it
+ * without a circular import: combat.ts transitively imports DEFAULT_RULES
+ * from store/characterStore.ts, which itself imports entityRepo.ts.
+ * types.ts has no such dependency. combat.ts re-exports this for callers
+ * that already import turn-economy helpers from there.
+ *
+ * Called at every durable ingress point a raw/deserialized Entity can enter
+ * normal runtime through — entityRepo.ts's parseEntityRow (covers
+ * characterStore.ts's boot-time loadCharacters AND any direct loadEntity/
+ * loadAllEntities/loadEntitiesByKind caller), applyIncomingEntity (sync full
+ * snapshot AND backup restore, which reuses it — see app/backup.tsx),
+ * applyIncomingPatch (on the merged result, so an incoming patch can never
+ * SET attackSequence either), importCharacter, and portable character
+ * import (characterPortable.ts) — mirroring the same set of call sites
+ * hydrateLegacyItemInstanceIds (itemMechanics.ts) already uses for the
+ * equivalent item-identity concern, rather than duplicating ad hoc
+ * `{ attackSequence: null }` patches at each one individually.
+ *
+ * Deliberately narrower than startTurn's own reset (combat.ts): this must
+ * run regardless of whether a turn is currently active (a save mid-turn,
+ * mid-sequence, then reloaded), whereas startTurn only fires when a NEW turn
+ * begins. `turnState` is intentionally left untouched — it has its own,
+ * already-correct persistence semantics (a save mid-turn should still show
+ * the same action-economy state on reload), and this closure is scoped to
+ * `attackSequence` only.
+ *
+ * A no-op (returns the same reference) when there's nothing to strip,
+ * matching this codebase's existing "avoid unnecessary object creation"
+ * convention for hydration helpers (see hydrateItemFeatures,
+ * characterStore.ts).
+ */
+export function stripTransientRuntimeState(entity: Entity): Entity {
+  if (!entity.attackSequence) return entity;
+  return { ...entity, attackSequence: null };
+}
 
 /** See Entity.loadouts' doc comment. `equippedItemIds`/`preparedSpellIds`
  *  are itemId/spellId lists, not full instance snapshots — applying a
@@ -2323,6 +2445,28 @@ export type FeatureActivation = {
  * changes flavor" (e.g. Great Weapon Master's two attack choices cost
  * nothing extra either way).
  */
+/**
+ * Extra Attack sequence closure: the caller's request to treat one weapon-
+ * attack use as part of an Attack-action sequence (Extra Attack/Multiattack)
+ * — see AttackSequenceState's own doc comment (section 3, above) for the
+ * full authority model this replaces the old, unconstrained
+ * `isChainedAttack: true` boolean with. `sequenceId` is generated ONCE by
+ * the application/UI layer when it opens the FIRST attack chooser (any
+ * opaque unique string — e.g. a uuid, or `${Date.now()}-${Math.random()}`)
+ * and passed unchanged on every subsequent attack of that same sequence.
+ * Passing this on the first attack of a fresh sequence (entity.attackSequence
+ * is null, or doesn't match) is always safe — it behaves EXACTLY like an
+ * ordinary single attack (same cost, same action-economy spend) and only
+ * additionally marks entity.attackSequence for potential continuation on
+ * success. Only a call whose sequenceId matches an entity's OWN currently-
+ * active AttackSequenceState is ever treated as a bypass-eligible
+ * continuation — see applyActionCardUse (actionUse.ts). Omitted entirely
+ * (undefined) for every ordinary, non-Attack-action card use.
+ */
+export type AttackSequenceUse = {
+  sequenceId: string;
+};
+
 export type ActivationOption = {
   id:            string;
   label:         string;         // e.g. "2nd-level slot"
@@ -2511,6 +2655,35 @@ export type ActionCard = {
    * fails safely at execution rather than casting for free.
    */
   ritualEligible?: boolean;
+  /**
+   * Extra Attack / action-structure batch: true only for a card that
+   * represents an actual weapon-or-unarmed ATTACK usable with the Attack
+   * action — the synthetic basic-weapon-attack card, the synthetic Unarmed
+   * Strike card, and an equipped item's own authored attack feature (a
+   * `damage`-type abilityEffect) WHEN that item is itself a weapon, per the
+   * SAME isWeapon() classifier every other weapon check in this codebase
+   * already uses (see generateAllActionCards, actionCards.ts, for exactly
+   * where each is set). Undefined for every spell card and every non-attack
+   * class/race/item feature — those are never eligible for Extra Attack's
+   * extra attack opportunities even when they also happen to be
+   * `cardType: 'damage'`. This is the ONE signal the player-facing Attack
+   * Action sequence (TabActions.tsx) uses to decide which cards to offer as
+   * attack choices; it never infers attack-eligibility from `cardType`
+   * alone, which also covers non-weapon damage sources like a spell.
+   *
+   * Extra Attack sequence closure (two-issue final closure, Part A): ALSO
+   * requires `activation.actionType === 'action'` — a weapon's own authored
+   * attack feature that activates as a Bonus Action or Reaction (deals
+   * damage, belongs to a weapon, but isn't a genuine Attack-action attack)
+   * must never be true, since that would let it be used as a free Extra
+   * Attack continuation. The two hardcoded synthetic cards (basic weapon
+   * attack, Unarmed Strike) are unconditionally `actionType: 'action'` by
+   * construction, so this never excludes them. `applyActionCardUse`
+   * (actionUse.ts) independently re-checks `activation.actionType ===
+   * 'action'` at execution time — never trusts this flag alone — so a
+   * misclassified or forged `true` here still can't bypass action economy.
+   */
+  isWeaponAttack?: boolean;
 };
 
 // ── 11. Sync & campaign system ───────────────────────────────────────────────

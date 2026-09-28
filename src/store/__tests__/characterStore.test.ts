@@ -429,6 +429,107 @@ describe('creation draft durability (re-audit A09, item 11)', () => {
   });
 });
 
+describe('Extra Attack sequence closure (final single-issue closure): attackSequence never survives the creation-draft boundary', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    useCharacterStore.setState({ draft: null, lastPersistError: null });
+  });
+
+  it('setDraft strips an attackSequence before it ever lands in Zustand state or the persisted draft row', () => {
+    const saveDraftSpy = jest.spyOn(draftRepo, 'saveDraftState').mockResolvedValue(undefined);
+    const draftWithSequence: Entity = {
+      ...testCharacter('draft1'),
+      attackSequence: { sequenceId: 'live-draft-seq', actorId: 'draft1', maxAttacks: 2, usedAttacks: 1 },
+    };
+
+    useCharacterStore.getState().setDraft(draftWithSequence);
+
+    expect(useCharacterStore.getState().draft?.attackSequence).toBeFalsy();
+    expect(saveDraftSpy).toHaveBeenCalledWith(expect.objectContaining({ attackSequence: null }));
+  });
+
+  it('saveDraft() strips attackSequence at the COMMIT boundary — defense-in-depth, independent of whatever load already did', async () => {
+    const saveEntitySpy = jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+    const clearDraftSpy = jest.spyOn(draftRepo, 'clearDraftState').mockResolvedValue(undefined);
+    reset([]);
+    // Simulate a draft whose Zustand state was populated with a non-null
+    // attackSequence WITHOUT going through setDraft (e.g. a stale/legacy
+    // persisted draft, or a future alternate loading path) — this bypasses
+    // setDraft's own stripping entirely, so a pass here proves saveDraft
+    // does its OWN independent normalization at commit time.
+    const forgedDraft: Entity = {
+      ...testCharacter('draft1'),
+      attackSequence: { sequenceId: 'forged-commit-seq', actorId: 'draft1', maxAttacks: 2, usedAttacks: 1 },
+    };
+    useCharacterStore.setState({ draft: forgedDraft });
+
+    const result = await useCharacterStore.getState().saveDraft();
+
+    expect(result).toBe(true);
+    const committed = useCharacterStore.getState().characters.find(c => c.id === 'draft1');
+    expect(committed?.attackSequence).toBeFalsy();
+    // The actual persisted write also never carried the sequence.
+    expect(saveEntitySpy).toHaveBeenCalledWith(expect.objectContaining({ attackSequence: null }));
+    saveEntitySpy.mockRestore();
+    clearDraftSpy.mockRestore();
+  });
+
+  it('legitimate creation progress survives the strip untouched — only attackSequence is affected', async () => {
+    const saveEntitySpy = jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+    jest.spyOn(draftRepo, 'clearDraftState').mockResolvedValue(undefined);
+    reset([]);
+    const richDraft: Entity = {
+      ...testCharacter('draft1'),
+      identity: { ...testCharacter('draft1').identity, raceId: 'elf', classId: 'wizard', backgroundId: 'sage', name: 'Thren' },
+      stats: { str: 8, dex: 14, con: 12, int: 16, wis: 10, cha: 10 },
+      inventory: { ...testCharacter('draft1').inventory, equipped: [{ id: 'inst-1', itemId: 'dagger', quantity: 1, attuned: false, features: [] }] },
+      spellcasting: { ability: 'int', known: ['fire_bolt'], prepared: [], slots: {} } as unknown as Entity['spellcasting'],
+      attackSequence: { sequenceId: 'x', actorId: 'draft1', maxAttacks: 2, usedAttacks: 1 },
+    };
+    useCharacterStore.setState({ draft: richDraft });
+
+    await useCharacterStore.getState().saveDraft();
+
+    const committed = useCharacterStore.getState().characters.find(c => c.id === 'draft1')!;
+    expect(committed.identity).toEqual(richDraft.identity);
+    expect(committed.stats).toEqual(richDraft.stats);
+    expect(committed.inventory).toEqual(richDraft.inventory);
+    expect(committed.spellcasting).toEqual(richDraft.spellcasting);
+    expect(committed.attackSequence).toBeFalsy();
+  });
+
+  it('an ordinary draft with no attackSequence commits completely unchanged', async () => {
+    jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+    jest.spyOn(draftRepo, 'clearDraftState').mockResolvedValue(undefined);
+    reset([]);
+    const draft = testCharacter('draft1');
+    useCharacterStore.setState({ draft });
+
+    await useCharacterStore.getState().saveDraft();
+
+    expect(useCharacterStore.getState().characters.find(c => c.id === 'draft1')).toEqual(draft);
+  });
+
+  it('old-token safety: a forged draft sequence token cannot authorize a free continuation after commit', async () => {
+    jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+    jest.spyOn(draftRepo, 'clearDraftState').mockResolvedValue(undefined);
+    reset([]);
+    const forgedDraft: Entity = {
+      ...testCharacter('draft1'),
+      attackSequence: { sequenceId: 'old-token', actorId: 'draft1', maxAttacks: 2, usedAttacks: 1 },
+    };
+    useCharacterStore.setState({ draft: forgedDraft });
+
+    await useCharacterStore.getState().saveDraft();
+    const committed = useCharacterStore.getState().characters.find(c => c.id === 'draft1')!;
+
+    // At minimum: the old token no longer exists anywhere on the committed
+    // character to match against.
+    expect(committed.attackSequence).toBeFalsy();
+    expect(JSON.stringify(committed)).not.toContain('old-token');
+  });
+});
+
 describe('lastPersistError — surfaces SQLite write failures instead of only logging them (PERSIST-5)', () => {
   beforeEach(() => {
     // Earlier describe blocks in this file exercise real (unmocked)
@@ -525,6 +626,59 @@ describe('applyIncomingPatch — normalizes item-instance identity before exposi
     expect(useCharacterStore.getState().characters.find(c => c.id === 'c1')).toEqual(before);
     expect(useCharacterStore.getState().lastPersistError).not.toBeNull();
     expect(saveSpy).not.toHaveBeenCalled();
+    saveSpy.mockRestore();
+  });
+});
+
+describe('Extra Attack sequence closure (two-issue final closure, Part B): attackSequence never survives applyIncomingEntity/applyIncomingPatch', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    useCharacterStore.setState({ lastPersistError: null });
+  });
+
+  it('F11: an incoming full snapshot carrying an in-progress attackSequence is stripped before it ever reaches state', async () => {
+    const saveSpy = jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+    reset([]); // no local copy — this is the "brand-new/backup-restore" path
+
+    const incoming: Entity = {
+      ...testCharacter('c1', 20),
+      attackSequence: { sequenceId: 'sync-seq', actorId: 'c1', maxAttacks: 2, usedAttacks: 1 },
+    };
+    await useCharacterStore.getState().applyIncomingEntity(incoming);
+
+    const stored = useCharacterStore.getState().characters.find(c => c.id === 'c1');
+    expect(stored?.attackSequence).toBeFalsy();
+    saveSpy.mockRestore();
+  });
+
+  it('F12: an incoming patch attempting to SET attackSequence is stripped from the merged result before it is exposed/persisted', async () => {
+    const saveSpy = jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+    reset([testCharacter('c1', 20)]);
+
+    await useCharacterStore.getState().applyIncomingPatch('c1', {
+      attackSequence: { sequenceId: 'forged-patch-seq', actorId: 'c1', maxAttacks: 2, usedAttacks: 1 },
+    });
+
+    const merged = useCharacterStore.getState().characters.find(c => c.id === 'c1');
+    expect(merged?.attackSequence).toBeFalsy();
+    expect(useCharacterStore.getState().lastPersistError).toBeNull();
+    saveSpy.mockRestore();
+  });
+
+  it('importCharacter (generic import entry point) also strips an attackSequence present on the raw entity', async () => {
+    const existsSpy = jest.spyOn(entityRepo, 'persistedCharacterExists').mockResolvedValue(false);
+    const saveSpy   = jest.spyOn(entityRepo, 'saveEntity').mockResolvedValue(undefined);
+    reset([]);
+
+    const raw: Entity = {
+      ...testCharacter('c1', 20),
+      attackSequence: { sequenceId: 'import-seq', actorId: 'c1', maxAttacks: 2, usedAttacks: 1 },
+    };
+    const ok = await useCharacterStore.getState().importCharacter(raw);
+    expect(ok).toBe(true);
+    expect(useCharacterStore.getState().characters.find(c => c.id === 'c1')?.attackSequence).toBeFalsy();
+
+    existsSpy.mockRestore();
     saveSpy.mockRestore();
   });
 });

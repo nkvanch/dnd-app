@@ -44,3 +44,40 @@ describe('entityRepo quarantine boundary', () => {
     await expect(repo.loadAllEntities()).resolves.toEqual([good]);
   });
 });
+
+describe('entityRepo — Extra Attack sequence closure (two-issue final closure, Part B): attackSequence never survives a load', () => {
+  let repo: typeof import('../entityRepo');
+  let getAllAsync: jest.Mock;
+  let getFirstAsync: jest.Mock;
+  const valid = (id: string) => ({ ...makeEmptyEntity(id), identity: { ...makeEmptyEntity(id).identity, name: id } });
+
+  beforeEach(() => {
+    jest.resetModules();
+    getAllAsync = jest.fn().mockResolvedValue([]);
+    getFirstAsync = jest.fn().mockResolvedValue(null);
+    jest.doMock('../db', () => ({ getDb: jest.fn(() => ({ getAllAsync, getFirstAsync, runAsync: jest.fn() })) }));
+    jest.doMock('../../engine/multiclass', () => ({ migrateEntity: (e: any) => e }));
+    repo = require('../entityRepo');
+  });
+
+  it('loadAllEntities (F8) strips a persisted, in-progress attackSequence', async () => {
+    const withSeq = { ...valid('e1'), attackSequence: { sequenceId: 's', actorId: 'e1', maxAttacks: 2, usedAttacks: 1 } };
+    getAllAsync.mockResolvedValue([{ id: withSeq.id, kind: withSeq.kind, data: JSON.stringify(withSeq), updatedAt: 1 }]);
+    const [loaded] = await repo.loadAllEntities();
+    expect(loaded.attackSequence).toBeNull();
+  });
+
+  it('loadEntity strips a persisted, in-progress attackSequence (single-row load path)', async () => {
+    const withSeq = { ...valid('e1'), attackSequence: { sequenceId: 's', actorId: 'e1', maxAttacks: 2, usedAttacks: 1 } };
+    getFirstAsync.mockResolvedValue({ id: withSeq.id, kind: withSeq.kind, data: JSON.stringify(withSeq), updatedAt: 1 });
+    const loaded = await repo.loadEntity(withSeq.id);
+    expect(loaded?.attackSequence).toBeNull();
+  });
+
+  it('F15: an ordinary entity with no attackSequence loads completely unchanged', async () => {
+    const plain = valid('e1');
+    getAllAsync.mockResolvedValue([{ id: plain.id, kind: plain.kind, data: JSON.stringify(plain), updatedAt: 1 }]);
+    const [loaded] = await repo.loadAllEntities();
+    expect(loaded).toEqual(plain);
+  });
+});

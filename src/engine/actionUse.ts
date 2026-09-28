@@ -1,5 +1,5 @@
 import { isFeatureAvailable, isSpellPreparationLegal, resolveSpellCastingContexts, CardGenOptions } from './actionCards';
-import { Entity, ActionCard, CampaignRules, ActivationOption, SpellCastingContext } from './types';
+import { Entity, ActionCard, CampaignRules, ActivationOption, SpellCastingContext, AttackSequenceUse } from './types';
 import { applyAbilityEffects, castConcentrationSpell, markActionSlotUsed } from './combat';
 import { legalSpellPaymentOptions, commitSpellPayment, SpellPaymentOption } from './spellPayment';
 import { recomputeDerived } from './pipeline';
@@ -76,6 +76,46 @@ import { ALL_CHAR_CLASSES } from '../content/classes';
  * context's own `ritualEligible` flag, so a stale/spoofed ritual request
  * for a source that doesn't actually have Ritual Casting is rejected with
  * zero mutation rather than casting for free.
+ *
+ * `attackSequence` (Extra Attack sequence closure, replacing the removed
+ * `isChainedAttack?: boolean` escape hatch) is the caller's request to treat
+ * this use as part of a multi-attack Attack action (Extra Attack) or a
+ * monster Multiattack — see AttackSequenceUse/AttackSequenceState's own doc
+ * comments (types.ts) for the full authority model. A bare boolean could
+ * previously be asserted by ANY caller with no verification at all; this is
+ * resolved HERE, against `entity.attackSequence` (the engine-owned record of
+ * what's actually in progress), never trusted from the caller's intent:
+ *
+ *   - `attackSequence` omitted: behaves exactly as any ordinary card use
+ *     always has — no sequence created, no bypass, unaffected by this
+ *     closure.
+ *   - `attackSequence` provided, but `card.isWeaponAttack` is not true:
+ *     rejected outright (zero mutation) — only a genuine weapon/unarmed
+ *     attack card may ever start or continue a sequence (Part C — a spell,
+ *     an arbitrary feature, a Bonus Action, or a Reaction can never be
+ *     smuggled in as a "chained attack").
+ *   - `attackSequence.sequenceId` matches `entity.attackSequence` (and its
+ *     `actorId` equals this entity's own id, and it isn't already exhausted
+ *     — `usedAttacks < maxAttacks`): a legitimate CHAINED continuation. The
+ *     parent Action is NOT re-spent (it was already paid by the lead
+ *     attack), but this attack's own `cost` is still fully evaluated and
+ *     paid normally (H1 — e.g. a future per-attack resource like
+ *     ammunition must remain chargeable).
+ *   - Otherwise (no active sequence yet, or the token doesn't match one):
+ *     always treated as a brand-new LEAD attack — pays its own Action
+ *     exactly like a standalone attack always has, and additionally starts
+ *     tracking `entity.attackSequence` on success so a LATER call with the
+ *     SAME sequenceId can legally chain off of it. This is what makes an
+ *     exhausted/closed/foreign sequence token safe to reuse: it simply
+ *     starts a fresh lead attempt, which then fails normally if the Action
+ *     was already spent this turn.
+ *
+ * The core invariant this exists to enforce is unchanged from before this
+ * closure: one Attack action containing N attacks consumes exactly ONE
+ * Action, never N. Preparation, incapacitation, item-instance revalidation,
+ * and effect application are completely unaffected — a chained attack is
+ * exactly as legal or illegal as the SAME card used standalone, just without
+ * re-spending the Action.
  */
 export function applyActionCardUse(
   entity: Entity, card: ActionCard, rules: CampaignRules, chosenOption?: ActivationOption, selectedPayment?: SpellPaymentOption,
@@ -83,21 +123,64 @@ export function applyActionCardUse(
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
   bypassIncapacitated?: boolean,
   castMode?: 'ritual',
+  attackSequence?: AttackSequenceUse,
 ): Entity {
   let updated = entity;
   const isRitual = castMode === 'ritual';
+
+  // Extra Attack sequence closure: resolve the caller's attackSequence
+  // REQUEST (an opaque token) against this entity's OWN authoritative
+  // state — never trusted as authority on its own. See AttackSequenceState's
+  // doc comment (types.ts) for the full model this enforces.
+  let sequenceKind: 'none' | 'lead' | 'chained' = 'none';
+  if (attackSequence) {
+    // Part C, and Extra Attack sequence closure two-issue final closure
+    // (Part A1): only a genuine weapon/unarmed ACTION attack may ever start
+    // or continue an Attack-action sequence — rejected with zero mutation
+    // before any economy/resource logic runs otherwise. `isWeaponAttack`
+    // alone is not trusted here even though card generation should already
+    // only ever stamp it true for an actionType:'action' card (Part A2,
+    // actionCards.ts) — this authoritative execution path independently
+    // re-checks actionType so a misclassified or forged `isWeaponAttack:
+    // true` on a Bonus Action/Reaction/passive card can never smuggle a free
+    // action-economy bypass through, whether or not card generation's own
+    // gate is (or ever becomes) the only place enforcing it.
+    if (!card.isWeaponAttack || card.activation.actionType !== 'action') return entity;
+    const active = entity.attackSequence;
+    if (active && active.sequenceId === attackSequence.sequenceId && active.actorId === entity.id) {
+      // A genuine continuation — but only while attacks remain (Part P.2/3/
+      // 4/12: an exhausted sequence, even if the token still matches, may
+      // never be reused to squeeze out one more free attack).
+      if (active.usedAttacks >= active.maxAttacks) return entity;
+      sequenceKind = 'chained';
+    } else {
+      // No active sequence, or the token doesn't match one currently active
+      // for THIS entity — always treated as a fresh, independent LEAD
+      // attack (Part F/P.10/P.11), never an implicit continuation of some
+      // OTHER sequence's progress.
+      sequenceKind = 'lead';
+    }
+  }
+  const isChainedAttack = sequenceKind === 'chained';
+
+  // A chained attack and a ritual cast both need the SAME action-economy
+  // bypass, for independent reasons (already-spent-by-the-lead-attack vs.
+  // no-economy-concept-at-all).
+  const bypassActionEconomy = isRitual || isChainedAttack;
   // Ritual: no resourceCost at all (no slot, no other resource — RAW ritual
   // casting costs nothing but time) — `cost` staying null skips both the
   // availability check below AND the spend block further down automatically,
   // one falsy value doing both jobs rather than two separate ritual branches.
+  // A chained attack, unlike ritual, still evaluates its OWN `cost` normally
+  // — only the action-economy portion is bypassed for it (H1/Part L).
   const cost = isRitual ? null : (chosenOption?.resourceCost ?? card.resourceCost);
-  // Ritual: reports actionType as 'passive' (a real FeatureActivation
-  // value meaning "no action-economy tracked") so the turn-based action-
-  // economy gate (isFeatureAvailable → resourceAndEconomyLegal) never
-  // applies — a 10-minutes-longer ritual cast isn't the single 6-second
-  // action/bonus action/reaction this tracking exists for (A5).
-  const availabilityActivation = { ...card.activation, options: undefined, resourceCost: cost, actionType: isRitual ? 'passive' as const : card.activation.actionType };
-  if (!isFeatureAvailable({ activation: availabilityActivation }, entity, bypassIncapacitated).available) return entity;
+  // Part D (action type safety): the card's REAL actionType is preserved —
+  // bypassActionEconomySlot (isFeatureAvailable's own 4th param) narrowly
+  // skips only the "already used this turn" gate, rather than pretending a
+  // ritual/chained attack is a 'passive' feature (which used to also be true
+  // here, an architecturally sloppier way to reach the same result).
+  const availabilityActivation = { ...card.activation, options: undefined, resourceCost: cost };
+  if (!isFeatureAvailable({ activation: availabilityActivation }, entity, bypassIncapacitated, bypassActionEconomy).available) return entity;
   const classDefs = content.classDefs ?? ALL_CHAR_CLASSES;
 
   // Item-identity closure (pass 2, finding D3/D4): a card generated from a
@@ -165,9 +248,11 @@ export function applyActionCardUse(
 
   // A-25: mark the action-economy slot used, when the entity is actively
   // tracking a turn (see TurnState's doc comment — a no-op otherwise).
-  // Ritual: never marked — see castMode's own doc comment (A5).
+  // Ritual: never marked (A5). Chained attack: never marked either — the
+  // LEAD attack of the sequence already marked it; see attackSequence's own
+  // doc comment for the full invariant this enforces.
   const actionType = card.activation.actionType;
-  if (!isRitual && (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction')) {
+  if (!bypassActionEconomy && (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction')) {
     updated = markActionSlotUsed(updated, actionType);
   }
 
@@ -222,6 +307,42 @@ export function applyActionCardUse(
   const spell = spellRepo.getSpellSync(card.featureId);
   if (spell?.concentration) {
     updated = castConcentrationSpell(updated, spell, rules);
+  }
+
+  // Extra Attack sequence closure: only reached once EVERY legality/resource
+  // check above has already succeeded (Part J — a rejected attack, whatever
+  // the reason, returns `entity` above and never reaches here, so it can
+  // never advance/start sequence bookkeeping). `updated.attackSequence` is
+  // still whatever `entity.attackSequence` was — nothing above this point
+  // touches it — so reading it back for the 'chained' branch is exactly the
+  // same object `active` was validated against earlier.
+  if (sequenceKind === 'lead') {
+    const maxAttacks = entity.derived.attackActionAttacks ?? 1;
+    // Auto-close immediately when the lead attack IS the only attack this
+    // Attack action allows (an ordinary character, maxAttacks 1) — mirrors
+    // the 'chained' branch's own auto-close below, so a maxAttacks-1
+    // character's sequence never lingers open for a follow-up to (harmlessly
+    // but pointlessly) match against.
+    updated = {
+      ...updated,
+      attackSequence: maxAttacks <= 1 ? null : {
+        sequenceId: attackSequence!.sequenceId,
+        actorId:    entity.id,
+        maxAttacks,
+        usedAttacks: 1,
+      },
+    };
+  } else if (sequenceKind === 'chained') {
+    const active = updated.attackSequence!;
+    const usedAttacks = active.usedAttacks + 1;
+    // Auto-close on exhaustion (Part R/O): once the last allowed attack
+    // executes, the sequence closes itself — an exhausted-but-still-open
+    // sequence would otherwise sit around only to be rejected by the
+    // usedAttacks>=maxAttacks check above on the next attempt anyway; closing
+    // it immediately is equivalent and simpler, and means a stale/foreign
+    // reuse attempt is uniformly handled by the "no active sequence → treat
+    // as a fresh lead attack, blocked by ordinary action economy" path.
+    updated = { ...updated, attackSequence: usedAttacks >= active.maxAttacks ? null : { ...active, usedAttacks } };
   }
 
   return recomputeDerived(updated, rules, content);

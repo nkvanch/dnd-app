@@ -53,20 +53,33 @@ const EXHAUSTION_EFFECTS: Record<number, string> = {
   6: 'Death',
 };
 
-// Display-only mechanical reminders. The engine already applies the real effects
-// via the Effect system; these just surface what each condition does.
-const CONDITION_WARNINGS: Record<string, string> = {
-  poisoned:   'Disadvantage on attacks and ability checks',
-  blinded:    'Attacks against you have advantage; you have disadvantage on attacks',
-  prone:      'Disadvantage on attacks; melee attacks against you have advantage',
-  paralyzed:  'Speed 0; auto-fail STR/DEX saves; attacks against you have advantage',
-  frightened: 'Disadvantage on checks and attacks while source is visible',
-  stunned:    'Speed 0; auto-fail STR/DEX saves; attacks against you have advantage',
-  restrained: 'Speed 0; disadvantage on attacks; attacks against you have advantage',
-  grappled:   'Speed 0',
-  incapacitated: 'Cannot take actions or reactions',
-  petrified:  'Incapacitated; resistance to all damage; attacks against you have advantage',
-  unconscious:'Incapacitated, prone; auto-fail STR/DEX saves; attacks have advantage',
+/**
+ * 2014 condition-mechanics closure, Part S: split per condition into what
+ * Grimoire actually ENFORCES right now (`automated` — speed/action-economy
+ * consequences; a condition's own roll-modifier consequence, if any, is
+ * NOT repeated here since it already shows up in the Advantage/Disadvantage
+ * list right below this block, driven by the same live derived.advantageStates
+ * — listing it twice would be redundant, not clearer) versus what stays a
+ * table/context-dependent judgment call (`reminder` — target-side facts,
+ * auto-fail saves/checks, anything needing distance/visibility/source
+ * identity this engine doesn't track). See content/conditions/index.ts's
+ * own header comment for the full per-condition reasoning behind this split.
+ */
+const CONDITION_MECHANICS: Record<string, { automated: string[]; reminder: string[] }> = {
+  blinded:       { automated: [], reminder: ['Attacks against you have advantage', 'You automatically fail sight-based checks'] },
+  charmed:       { automated: [], reminder: ["Can't attack the charmer or target them with harmful effects", 'The charmer has advantage on social checks against you'] },
+  deafened:      { automated: [], reminder: ['You automatically fail hearing-based checks'] },
+  frightened:    { automated: [], reminder: ['Disadvantage on checks and attacks while the source of fear is visible', "Can't willingly move closer to the source of fear"] },
+  grappled:      { automated: ['Speed 0'], reminder: [] },
+  incapacitated: { automated: ['Cannot take Actions or Reactions'], reminder: [] },
+  invisible:     { automated: [], reminder: ['Attacks against you have disadvantage'] },
+  paralyzed:     { automated: ['Speed 0', 'Cannot take Actions or Reactions'], reminder: ['You automatically fail STR and DEX saves', 'Attacks against you have advantage, and are critical hits within 5 feet'] },
+  petrified:     { automated: ['Speed 0', 'Cannot take Actions or Reactions', 'Resistance to all damage'], reminder: ['You automatically fail STR and DEX saves', 'Attacks against you have advantage', 'Immune to poison and disease (not mechanically enforced)'] },
+  poisoned:      { automated: [], reminder: [] },
+  prone:         { automated: [], reminder: ['Attacks against you have advantage within 5 feet, disadvantage otherwise', 'Standing up costs half your movement (not tracked)'] },
+  restrained:    { automated: ['Speed 0'], reminder: ['Attacks against you have advantage'] },
+  stunned:       { automated: ['Speed 0', 'Cannot take Actions or Reactions'], reminder: ['You automatically fail STR and DEX saves', 'Attacks against you have advantage'] },
+  unconscious:   { automated: ['Speed 0', 'Cannot take Actions or Reactions'], reminder: ["Falls prone and drops what it's holding", 'You automatically fail STR and DEX saves', 'Attacks against you have advantage, and are critical hits within 5 feet'] },
 };
 
 // Death saves live in entity.resources.deathSaves — persisted and synced,
@@ -1617,12 +1630,25 @@ function TabCharacterInner({
           <Text style={styles.endTurnBtnTxt}>⏭ End Turn</Text>
         </Pressable>
 
-        {/* Mechanical effect reminders for active conditions */}
-        {conditions.filter(c => CONDITION_WARNINGS[c.id]).map(c => (
-          <Text key={`warn-${c.id}`} style={styles.condWarning}>
-            ⚠ <Text style={styles.condWarningName}>{c.id}:</Text> {CONDITION_WARNINGS[c.id]}
-          </Text>
-        ))}
+        {/* Mechanical effect breakdown for active conditions — Automated
+            (Grimoire enforces this right now) vs. Table reminder (context-
+            dependent, the table/DM applies it) — see CONDITION_MECHANICS'
+            own doc comment above. */}
+        {conditions.filter(c => CONDITION_MECHANICS[c.id]).map(c => {
+          const { automated, reminder } = CONDITION_MECHANICS[c.id];
+          if (automated.length === 0 && reminder.length === 0) return null;
+          return (
+            <View key={`warn-${c.id}`} style={styles.condMechanicsBlock}>
+              <Text style={styles.condWarningName}>{c.id}</Text>
+              {automated.map((line, i) => (
+                <Text key={`a-${i}`} style={[styles.condWarning, styles.condAutomated]}>✓ {line}</Text>
+              ))}
+              {reminder.map((line, i) => (
+                <Text key={`r-${i}`} style={styles.condWarning}>⚠ {line}</Text>
+              ))}
+            </View>
+          );
+        })}
 
         {/* Advantage/Disadvantage grants from race/class traits, items, etc.
             Reminder only, same as condition warnings above — the app has no
@@ -2031,8 +2057,10 @@ const styles = StyleSheet.create({
   weaponBadgeTxt:    { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
 
   // Condition warnings
-  condWarning:     { fontSize: FontSize.xs, color: Colors.gold, marginTop: 4, lineHeight: 16 },
-  condWarningName: { fontWeight: FontWeight.bold, textTransform: 'capitalize' },
+  condMechanicsBlock: { marginTop: 4, gap: 1 },
+  condWarning:     { fontSize: FontSize.xs, color: Colors.gold, lineHeight: 16 },
+  condWarningName: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, textTransform: 'capitalize', color: Colors.textSecondary },
+  condAutomated:   { color: Colors.green },
   advList: { marginTop: 4, gap: 2 },
   advTxt:    { color: Colors.green },
   disadvTxt: { color: Colors.red },

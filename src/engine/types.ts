@@ -924,8 +924,10 @@ export type DerivedStats = {
    * they cancel to straight and don't appear here at all). `target` is a
    * free-text description of what it applies to (e.g. "Wisdom saving
    * throws against being charmed"), matching the same free-text pattern
-   * already used for condition mechanical reminders (CONDITION_WARNINGS in
-   * TabCharacter.tsx) — 5e's variety here is too large to enumerate as a
+   * condition content itself now authors for its own self-side roll
+   * modifiers (see content/conditions/index.ts's rollModifierFeature, and
+   * CONDITION_MECHANICS in TabCharacter.tsx for the UI split) — 5e's
+   * variety here is too large to enumerate as a
    * fixed set of targets. Display/reminder only, same as everywhere else
    * in the app with no attack-roll automation: shown to the player so they
    * remember to roll 2d20, not auto-applied to any roll.

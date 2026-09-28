@@ -21,7 +21,7 @@ import { isWeapon } from '../content/items/itemBrowse';
 import { toItemIndexEntry } from '../content/itemRepo.types';
 import { usesLargeCreatureWeaponDice } from './houseRules';
 import { hasLegalSpellPayment } from './spellPayment';
-import { isIncapacitated, isDead } from './combat';
+import { isIncapacitated, isDead, incapacitationReason } from './combat';
 import { CampaignRules } from './types';
 import { ALL_CHAR_CLASSES } from '../content/classes';
 import { ALL_RACES } from '../content/races';
@@ -1150,7 +1150,7 @@ export function isFeatureAvailable(
   if (isIncapacitated(entity) && !bypassIncapacitated) {
     return {
       available: false,
-      reason: entity.resources.hp.current === 0 ? 'At 0 HP' : 'Unconscious',
+      reason: incapacitationReason(entity),
       incapacitatedOverridable: true,
     };
   }
@@ -1316,7 +1316,7 @@ export function generateSpellCard(
   // support here, for either override).
   const preparationOverridable = costAndEconomyLegal && !preparationLegal && !dead;
   const incapacitatedOverridable = costAndEconomyLegal && incapacitated && !dead;
-  const statusReason = incapacitated ? (entity.resources.hp.current === 0 ? 'At 0 HP' : 'Unconscious') : null;
+  const statusReason = incapacitated ? incapacitationReason(entity) : null;
   const reason = dead ? 'Dead'
     : !costAndEconomyLegal ? costReason
     : [!preparationLegal ? 'Not prepared' : null, statusReason].filter(Boolean).join(' • ') || null;

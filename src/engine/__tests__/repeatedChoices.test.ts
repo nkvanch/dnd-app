@@ -5,9 +5,11 @@
 // (choiceEligibility.ts) both TabFeatures.tsx and the creation flow read
 // from, and validateEntity's new Issue codes.
 import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
-import { queueChoice, applyExpertiseChoiceToEntity, applyToolChoiceToEntity, applyLanguageChoiceToEntity } from '../leveling';
+import { queueChoice, applyExpertiseChoiceToEntity, applyToolChoiceToEntity, applyLanguageChoiceToEntity, withExpertiseChoiceGrantStripped, effectiveRequiredCount } from '../leveling';
 import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from '../choiceEligibility';
 import { validateEntity } from '../validation';
+import { recomputeDerived } from '../pipeline';
+import { setManualEntitlement } from '../entitlements';
 import type { ChoiceDefinition, Entity, SkillName } from '../types';
 
 function expertiseDef(id: string, count = 2, pool: ChoiceDefinition['pool'] = 'all'): ChoiceDefinition {
@@ -26,6 +28,25 @@ function withTrained(e: Entity, skills: SkillName[]): Entity {
     next = { ...next, skills: { skills: { ...next.skills.skills, [s]: { ...next.skills.skills[s], trained: true } } } };
   }
   return next;
+}
+
+/**
+ * Simulates "an earlier proficiency choice changed since" in a way that
+ * actually SURVIVES a later recompute — a bare `{ ...trained: false }`
+ * object mutation does NOT: entity.skills.skills[x].trained is DERIVED
+ * output, rewritten from entity.entitlements on every recomputeDerived pass
+ * (see EntitlementRecord's own doc comment, types.ts) — the very FIRST
+ * recompute this test entity ever went through (inside
+ * applyExpertiseChoiceToEntity, when withTrained's own raw mutation was
+ * migrated into a permanent 'manual' skill_proficiency entitlement via
+ * initializeEntitlementInputs) already baked that training in, so a later
+ * raw mutation would just get overwritten back to `true` by the next
+ * recompute. setManualEntitlement is the real, supported way to revoke it
+ * (mirrors swapBackground's own skill-retrain checklist — the ONE real path
+ * that can flip `trained` back to false in this app).
+ */
+function untrained(e: Entity, skill: SkillName): Entity {
+  return recomputeDerived(setManualEntitlement(e, 'skill_proficiency', skill, false), DEFAULT_RULES);
 }
 
 function baseContentDB() {
@@ -96,14 +117,21 @@ describe('Expertise — resolution (items 5, 30)', () => {
 
   it('rejects a skill the character is not proficient in (item 3 legality, never inferred from display strings)', () => {
     let e = makeEmptyEntity('e1');
-    e = withTrained(e, ['arcana']);
+    // Two eligible skills so the effective-required-count gate (2 of 2)
+    // passes and this exercises the per-skill legality check specifically
+    // — see the Expertise-choice deadlock closure's own report for why an
+    // under-provisioned fixture (only 1 eligible skill for a count-2
+    // choice) would instead trip the count gate first.
+    e = withTrained(e, ['arcana', 'perception']);
     e = queueChoice(e, expertiseDef('c1', 2), 1);
     expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'athletics'], DEFAULT_RULES)).toThrow(/not proficient/i);
   });
 
   it('rejects a skill that already has expertise (no duplicate grant)', () => {
     let e = makeEmptyEntity('e1');
-    e = withTrained(e, ['arcana', 'investigation']);
+    // Three trained skills so excluding the already-expert one still
+    // leaves 2 eligible (matching the count-2 choice) — see the note above.
+    e = withTrained(e, ['arcana', 'investigation', 'perception']);
     e = { ...e, skills: { skills: { ...e.skills.skills, arcana: { ...e.skills.skills.arcana, expertise: true } } } };
     e = queueChoice(e, expertiseDef('c1', 2), 1);
     expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'investigation'], DEFAULT_RULES)).toThrow(/already has expertise/i);
@@ -111,7 +139,8 @@ describe('Expertise — resolution (items 5, 30)', () => {
 
   it('rejects duplicate selections within the same choice (item 27)', () => {
     let e = makeEmptyEntity('e1');
-    e = withTrained(e, ['arcana']);
+    // Two eligible skills — see the note above.
+    e = withTrained(e, ['arcana', 'perception']);
     e = queueChoice(e, expertiseDef('c1', 2), 1);
     expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'arcana'], DEFAULT_RULES)).toThrow(/duplicate/i);
   });
@@ -121,6 +150,308 @@ describe('Expertise — resolution (items 5, 30)', () => {
     e = withTrained(e, ['arcana', 'investigation', 'perception']);
     e = queueChoice(e, expertiseDef('c1', 2), 1);
     expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana'], DEFAULT_RULES)).toThrow(/expected 2/i);
+  });
+});
+
+// ============================================================================
+// Expertise-choice deadlock/edit closure: effectiveRequiredCount capping
+// (Parts A/B/C) and edit-in-place re-resolution (Part B/E/F/G/H).
+// ============================================================================
+describe('Expertise — effective required count (deadlock closure, Part A/C)', () => {
+  it('1. choose 1 of 1 — complete with exactly the one eligible skill', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana']);
+    e = queueChoice(e, expertiseDef('c1', 1), 1);
+    const updated = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana'], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+    expect(updated.skills.skills.arcana.expertise).toBe(true);
+  });
+
+  it('2. choose 2 of 5 — one selected is still incomplete (rejected), two selected completes', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'investigation', 'perception', 'stealth', 'athletics']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana'], DEFAULT_RULES)).toThrow(/expected 2/i);
+    const updated = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'investigation'], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+  });
+
+  it('3. choose 2 of 2 — both selectable, complete', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'investigation']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    const updated = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'investigation'], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+    expect(updated.skills.skills.arcana.expertise).toBe(true);
+    expect(updated.skills.skills.investigation.expertise).toBe(true);
+  });
+
+  it('4. requested 2, eligible 1 (deadlock case) — selecting the one legal option completes the choice', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana']); // only ONE trained skill for a count-2 choice
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    // The old exact-count gate would make this choice permanently
+    // unresolvable — confirm it no longer is.
+    const updated = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana'], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.selections).toEqual(['arcana']);
+    expect(updated.skills.skills.arcana.expertise).toBe(true);
+  });
+
+  it('5/14. requested 2, eligible 0 — resolves with an empty selection; creation is never blocked', () => {
+    let e = makeEmptyEntity('e1'); // no trained skills at all
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    const updated = applyExpertiseChoiceToEntity(e, 'c1_1', [], DEFAULT_RULES);
+    const resolved = updated.choices.find(c => c.id === 'c1_1')!;
+    expect(resolved.resolved).toBe(true);
+    expect(resolved.selections).toEqual([]);
+    // No synthetic grant feature was created for an empty selection.
+    expect(updated.features.some(f => f.id === 'c1_1_grant')).toBe(false);
+  });
+
+  it('6. a duplicate skill still cannot fill two slots, even when the nominal count exceeds eligibility', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'investigation']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'arcana'], DEFAULT_RULES)).toThrow(/duplicate/i);
+  });
+
+  it('12/13. hub-style completion gate: resolved reflects the effective count, not the nominal one', () => {
+    // requested 3, eligible 1 — mirrors hub.tsx's own `!c.resolved` done
+    // check: creation must be able to finish even though only 1 of the
+    // nominal 3 could ever be granted.
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana']);
+    e = queueChoice(e, expertiseDef('c1', 3), 1);
+    const updated = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana'], DEFAULT_RULES);
+    expect(updated.choices.filter(c => c.definition.kind === 'expertise' && !c.resolved)).toHaveLength(0);
+
+    // Contrast: requested 2, eligible 5, only 1 selected — genuinely
+    // incomplete, still correctly blocks (13).
+    let e2 = makeEmptyEntity('e1');
+    e2 = withTrained(e2, ['arcana', 'investigation', 'perception', 'stealth', 'athletics']);
+    e2 = queueChoice(e2, expertiseDef('c2', 2), 1);
+    expect(() => applyExpertiseChoiceToEntity(e2, 'c2_1', ['arcana'], DEFAULT_RULES)).toThrow(/expected 2/i);
+  });
+});
+
+describe('Expertise — edit-in-place re-resolution (deadlock/edit closure, Part B/E/F/G/H)', () => {
+  it('7. choose A+B, then replace A with C — final selection is B+C, both actually granted', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'investigation', 'perception']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'investigation'], DEFAULT_RULES);
+    expect(e.skills.skills.arcana.expertise).toBe(true);
+    expect(e.skills.skills.investigation.expertise).toBe(true);
+
+    // Replace: drop arcana, keep investigation, add perception.
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['investigation', 'perception'], DEFAULT_RULES);
+    expect(e.skills.skills.arcana.expertise).toBe(false);       // released
+    expect(e.skills.skills.investigation.expertise).toBe(true); // retained
+    expect(e.skills.skills.perception.expertise).toBe(true);    // newly granted
+    expect(e.choices.find(c => c.id === 'c1_1')!.selections).toEqual(['investigation', 'perception']);
+  });
+
+  it('8. reopening a resolved choice: its own selections are exactly what the choice state records', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'investigation']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'investigation'], DEFAULT_RULES);
+    const reopened = e.choices.find(c => c.id === 'c1_1')!;
+    expect(reopened.resolved).toBe(true);
+    expect(reopened.selections).toEqual(['arcana', 'investigation']);
+  });
+
+  it('9. replacing one selection changes only this choice\'s own grant — no other feature/entitlement is touched', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'investigation', 'perception']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'investigation'], DEFAULT_RULES);
+    const featuresBeforeEdit = e.features.length;
+
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'perception'], DEFAULT_RULES);
+    // Same ONE synthetic grant feature id, just updated content — not a
+    // second, orphaned feature left behind.
+    expect(e.features.filter(f => f.id === 'c1_1_grant')).toHaveLength(1);
+    expect(e.features.length).toBe(featuresBeforeEdit);
+    expect(e.skills.skills.investigation.expertise).toBe(false); // released
+    expect(e.skills.skills.perception.expertise).toBe(true);     // newly granted
+  });
+
+  it('11. provenance from another source (manual/race/class) is never touched by editing this choice', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'investigation', 'stealth']);
+    // A manually-granted expertise on a DIFFERENT skill, from an unrelated source.
+    const manualExpertiseFeature = {
+      id: 'homebrew_manual_expertise', name: 'Innate Cunning', description: '', source: { kind: 'manual' as const, refId: 'test' },
+      level: null, effects: [{ type: 'grant_proficiency' as const, target: 'skill:stealth', operation: 'multiply' as const, value: null, condition: null }],
+      actions: [], choices: [], passive: true, isActive: true,
+    };
+    e = { ...e, features: [...e.features, manualExpertiseFeature] };
+    e = recomputeDerived(e, DEFAULT_RULES);
+    expect(e.skills.skills.stealth.expertise).toBe(true);
+
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'investigation'], DEFAULT_RULES);
+    // Edit this choice's OWN selection...
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['investigation', 'arcana'], DEFAULT_RULES);
+
+    // The unrelated manual grant survives untouched throughout.
+    expect(e.features.some(f => f.id === 'homebrew_manual_expertise')).toBe(true);
+    expect(e.skills.skills.stealth.expertise).toBe(true);
+  });
+
+  it('re-resolving a NOT-YET-resolved choice id is unaffected (first-resolution path unchanged)', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'investigation']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    const updated = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'investigation'], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+  });
+
+  it('resolving a nonexistent choice id is still a safe no-op', () => {
+    const e = makeEmptyEntity('e1');
+    const updated = applyExpertiseChoiceToEntity(e, 'nonexistent', ['arcana'], DEFAULT_RULES);
+    expect(updated).toBe(e);
+  });
+});
+
+// ============================================================================
+// Codex re-audit finding (stale-eligibility closure): the creation picker
+// used to compute effectiveRequired from the DISPLAYED option count (legal
+// options + stale merged-back selections), which could disagree with the
+// engine's own authoritative count when a stale selection is stale for a
+// reason OTHER than "this choice's own grant is in the way" (e.g. an
+// earlier proficiency choice was changed since, so the skill isn't even
+// trained anymore). Fixed by extracting withExpertiseChoiceGrantStripped so
+// both the UI and the engine compute "what's legal right now" through the
+// exact same function — these tests exercise THAT function directly (the
+// same one app/creation/repeated-choice.tsx now calls for its own
+// `legalOptions`), plus applyExpertiseChoiceToEntity's own authoritative
+// acceptance/rejection, so a regression here would be caught at the exact
+// layer the UI actually depends on.
+// ============================================================================
+describe('Expertise — stale-eligibility closure (Codex re-audit, Part A-F)', () => {
+  it('A: invalidated prior selection, zero legal options — engine accepts [], UI-computed legal count agrees', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['athletics']);
+    e = queueChoice(e, expertiseDef('c1', 1), 1);
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['athletics'], DEFAULT_RULES);
+    expect(e.skills.skills.athletics.expertise).toBe(true);
+
+    // Earlier proficiency edit invalidates the only trained skill.
+    e = untrained(e, 'athletics');
+
+    // This is EXACTLY what app/creation/repeated-choice.tsx computes for
+    // `legalOptions` — mirrored here so a regression in either place is caught.
+    const stripped = withExpertiseChoiceGrantStripped(e, 'c1_1', DEFAULT_RULES);
+    const legal = eligibleExpertiseOptions(stripped, 'all');
+    expect(legal).toHaveLength(0); // athletics correctly excluded — genuinely stale, not just "this choice's own grant"
+    expect(effectiveRequiredCount(1, legal.length)).toBe(0);
+
+    // The stale id must never satisfy the (now-zero) requirement — rejected
+    // by the count gate itself, since there is no legal slot for it at all.
+    expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['athletics'], DEFAULT_RULES)).toThrow(/expected 0/i);
+    // [] is accepted — creation unblocks.
+    const resolved = applyExpertiseChoiceToEntity(e, 'c1_1', [], DEFAULT_RULES);
+    expect(resolved.choices.find(c => c.id === 'c1_1')!.selections).toEqual([]);
+    expect(resolved.skills.skills.athletics.expertise).toBe(false);
+  });
+
+  it('B: invalidated prior selection, one legal replacement — stale id alone AND combined with the legal one are both rejected', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['athletics', 'arcana']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['athletics', 'arcana'], DEFAULT_RULES);
+    e = untrained(e, 'athletics');
+
+    const stripped = withExpertiseChoiceGrantStripped(e, 'c1_1', DEFAULT_RULES);
+    const legal = eligibleExpertiseOptions(stripped, 'all');
+    expect(legal.map(o => o.id)).toEqual(['arcana']); // arcana legal again (grant stripped); athletics genuinely stale
+    expect(effectiveRequiredCount(2, legal.length)).toBe(1);
+
+    // Not valid: the stale id alone.
+    expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['athletics'], DEFAULT_RULES)).toThrow(/not proficient/i);
+    // Not valid: stale + legal combined (count mismatch — effectiveRequired is 1, not 2).
+    expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['athletics', 'arcana'], DEFAULT_RULES)).toThrow(/expected 1/i);
+    // Valid: the one legal replacement alone.
+    const resolved = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana'], DEFAULT_RULES);
+    expect(resolved.choices.find(c => c.id === 'c1_1')!.selections).toEqual(['arcana']);
+    expect(resolved.skills.skills.athletics.expertise).toBe(false);
+    expect(resolved.skills.skills.arcana.expertise).toBe(true);
+  });
+
+  it('C: stale selection alongside enough OTHER legal options — stale cannot fill either slot', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['athletics', 'arcana', 'perception', 'stealth']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['athletics', 'arcana'], DEFAULT_RULES);
+    e = untrained(e, 'athletics');
+
+    const stripped = withExpertiseChoiceGrantStripped(e, 'c1_1', DEFAULT_RULES);
+    const legal = eligibleExpertiseOptions(stripped, 'all').map(o => o.id).sort();
+    expect(legal).toEqual(['arcana', 'perception', 'stealth']); // 3 legal — athletics excluded
+    expect(effectiveRequiredCount(2, legal.length)).toBe(2); // still the nominal 2 — plenty of legal options
+
+    expect(() => applyExpertiseChoiceToEntity(e, 'c1_1', ['athletics', 'arcana'], DEFAULT_RULES)).toThrow(/not proficient/i);
+    const resolved = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'perception'], DEFAULT_RULES);
+    expect(resolved.choices.find(c => c.id === 'c1_1')!.selections).toEqual(['arcana', 'perception']);
+  });
+
+  it('D: a still-legal current selection continues to count normally (no false invalidation)', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'perception']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'perception'], DEFAULT_RULES);
+
+    // Nothing invalidated — re-resolving with the SAME (still fully legal)
+    // selection must behave exactly like a normal edit, not treat either
+    // skill as stale.
+    const stripped = withExpertiseChoiceGrantStripped(e, 'c1_1', DEFAULT_RULES);
+    const legal = eligibleExpertiseOptions(stripped, 'all').map(o => o.id).sort();
+    expect(legal).toEqual(['arcana', 'perception']);
+    expect(effectiveRequiredCount(2, legal.length)).toBe(2);
+
+    const resolved = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'perception'], DEFAULT_RULES);
+    expect(resolved.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+  });
+
+  it('E: invalid_expertise_target stays surfaced by validateEntity — the resolved choice is never silently reassigned', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['athletics']);
+    e = queueChoice(e, expertiseDef('c1', 1), 1);
+    e = applyExpertiseChoiceToEntity(e, 'c1_1', ['athletics'], DEFAULT_RULES);
+
+    // Same raw-mutation pattern as the pre-existing "invalidated eligibility"
+    // describe block above (validateEntity reads entity.skills.skills[x]
+    // directly, with no recompute in between — a real recompute would
+    // re-derive `trained` from this choice's OWN still-present multiply
+    // grant and heal it right back to true, which is a different, already-
+    // covered scenario — see test A above for the "properly revoked via
+    // entitlement removal, survives recompute" case instead).
+    const stale: Entity = { ...e, skills: { skills: { ...e.skills.skills, athletics: { ...e.skills.skills.athletics, trained: false } } } };
+
+    // The Issue-surfacing mechanism agrees with the closure's own
+    // legal-options computation (test A) that athletics no longer works —
+    // and never silently drops/reassigns the choice's own selections.
+    expect(stale.choices.find(c => c.id === 'c1_1')!.selections).toEqual(['athletics']);
+    const issues = validateEntity(stale, baseContentDB(), []);
+    expect(issues.some(i => i.code === 'invalid_expertise_target' && i.affectedId === 'athletics')).toBe(true);
+  });
+
+  it('F: fresh (never-resolved) Expertise creation is completely unaffected — withExpertiseChoiceGrantStripped is a true no-op', () => {
+    let e = makeEmptyEntity('e1');
+    e = withTrained(e, ['arcana', 'investigation']);
+    e = queueChoice(e, expertiseDef('c1', 2), 1);
+
+    const beforeStrip = e;
+    const stripped = withExpertiseChoiceGrantStripped(e, 'c1_1', DEFAULT_RULES);
+    expect(stripped).toBe(beforeStrip); // same reference — nothing to strip, no recompute
+
+    const resolved = applyExpertiseChoiceToEntity(e, 'c1_1', ['arcana', 'investigation'], DEFAULT_RULES);
+    expect(resolved.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+    expect(resolved.skills.skills.arcana.expertise).toBe(true);
+    expect(resolved.skills.skills.investigation.expertise).toBe(true);
   });
 });
 

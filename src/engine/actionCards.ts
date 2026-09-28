@@ -138,6 +138,75 @@ function resolveClassAbility(classId: string | undefined, classDefs: readonly Ch
 }
 
 /**
+ * Rules-completeness batch (ritual casting), HIGH-fix closure: this
+ * class's own ritual-access requirement (see CharClass.ritualCastingPolicy's
+ * own doc comment) — undefined classId (no class-rooted source) or an
+ * unauthored/homebrew-omitted policy both fail closed to `'none'`.
+ */
+function resolveClassRitualCastingPolicy(classId: string | undefined, classDefs: readonly CharClass[]): 'none' | 'known' | 'prepared' | 'spellbook' {
+  if (!classId) return 'none';
+  return classDefs.find(c => c.id === classId)?.ritualCastingPolicy ?? 'none';
+}
+
+/**
+ * Rules-completeness batch (ritual casting), HIGH-fix closure: whether a
+ * ritual attempt is legal RIGHT NOW under one class's own ritual-access
+ * policy — see SpellCastingContext.ritualLegal's own doc comment (types.ts)
+ * for exactly why this deliberately disagrees with normal preparation
+ * legality for a `'spellbook'`-policy class.
+ */
+function ritualLegalForPolicy(policy: 'none' | 'known' | 'prepared' | 'spellbook', isPrepared: boolean): boolean {
+  switch (policy) {
+    case 'spellbook': return true;   // legal straight from the spellbook, prepared or not
+    case 'known':     return true;   // no separate prepared/unprepared state to bypass
+    case 'prepared':  return isPrepared; // identical requirement to a normal cast
+    case 'none':      return false;
+  }
+}
+
+/**
+ * Rules-completeness batch (ritual casting), one-issue closure: the ONE
+ * shared UI decision for "is the SELECTED context legal to cast through,
+ * given this cast mode" — normal casting checks `legal` (ordinary
+ * preparation), ritual casting checks `ritualLegal` (a separate, source-
+ * specific policy that can legally DISAGREE with `legal` — a Wizard ritual
+ * straight from the spellbook is `ritualLegal: true` while `legal: false`
+ * when unprepared). Deliberately takes the CONTEXT, never the coarse
+ * card-level `ritualEligible`/`preparationOverridable` — those reflect a
+ * best-effort DEFAULT context computed at generation time, which can be a
+ * different context than the one actually selected (e.g. a multiclass
+ * Wizard/Sorcerer spell where the player picks Sorcerer specifically).
+ * TabActions.tsx and TabSpells.tsx both call this at every point where they
+ * used to check `context.legal` unconditionally.
+ */
+export function isContextLegalForCastMode(context: SpellCastingContext, castMode?: 'ritual'): boolean {
+  return castMode === 'ritual' ? context.ritualLegal === true : context.legal;
+}
+
+/**
+ * Rules-completeness batch (ritual casting), one-issue closure: whether an
+ * illegal cast attempt through `context` should offer the EXISTING "Cast
+ * Anyway" preparation-bypass override at all. True only when the block is
+ * genuinely about PREPARATION on a source that has SOME capability to cast
+ * this way — normal casting, always (unchanged, matches every existing
+ * "not prepared" prompt); ritual casting, only when `context.ritualEligible`
+ * is true (e.g. an unprepared Cleric ritual — Cast Anyway legitimately
+ * bypasses that class's own prep requirement, exactly like a normal cast).
+ * False whenever the context has NO ritual-casting policy at all
+ * (`ritualEligible` false, e.g. Sorcerer) — Cast Anyway bypasses
+ * PREPARATION, not "grants a mechanical capability the source never had,"
+ * and applyActionCardUse refuses that case unconditionally regardless of
+ * bypassSpellPreparation (see its own doc comment) — offering the override
+ * there would promise the player something it can never deliver. Already
+ * implies `!isContextLegalForCastMode(context, castMode)` is true; callers
+ * check that separately to decide the silent-decline path.
+ */
+export function needsPreparationOverride(context: SpellCastingContext, castMode?: 'ritual'): boolean {
+  if (isContextLegalForCastMode(context, castMode)) return false;
+  return castMode === 'ritual' ? context.ritualEligible === true : true;
+}
+
+/**
  * Deterministic, stable identity for a context — see SpellCastingContext.
  * contextKey's own doc comment (types.ts). Rules-engine blocker RE-AUDIT
  * closure (2A/2C): EntitlementRecord has no separate `id` field of its own
@@ -164,11 +233,14 @@ function makeContextKey(
  *  "what does casting as class X actually mean" is computed exactly once. */
 function contextForClass(
   classId: string, isPrepared: boolean, isCantrip: boolean, entity: Entity, classDefs: readonly CharClass[],
-): { policy: SpellPreparationPolicy; ability: Ability; legal: boolean } {
+): { policy: SpellPreparationPolicy; ability: Ability; legal: boolean; ritualEligible: boolean; ritualLegal: boolean } {
   const policy  = isCantrip ? 'always_available' : resolvePreparationPolicy(classId, classDefs);
   const ability = resolveClassAbility(classId, classDefs) ?? entity.spellcasting?.ability ?? 'int';
   const legal   = policy === 'known' || policy === 'always_available' || isPrepared;
-  return { policy, ability, legal };
+  const ritualPolicy   = resolveClassRitualCastingPolicy(classId, classDefs);
+  const ritualEligible = ritualPolicy !== 'none';
+  const ritualLegal     = ritualLegalForPolicy(ritualPolicy, isPrepared);
+  return { policy, ability, legal, ritualEligible, ritualLegal };
 }
 
 /**
@@ -262,11 +334,11 @@ export function resolveSpellCastingContexts(
 
     if (s.sourceKind === 'manual' && s.ambiguousClassIds && s.ambiguousClassIds.length > 0) {
       for (const candidateClassId of s.ambiguousClassIds) {
-        const { policy, ability, legal } = contextForClass(candidateClassId, isPrepared, entitlementIsCantrip, entity, classDefs);
+        const { policy, ability, legal, ritualEligible, ritualLegal } = contextForClass(candidateClassId, isPrepared, entitlementIsCantrip, entity, classDefs);
         contexts.push({
           contextKey: makeContextKey('manual', s.sourceId, candidateClassId, s.kind, s.choiceId),
           sourceKind: 'manual', sourceId: s.sourceId, classId: candidateClassId,
-          preparationPolicy: policy, castingAbility: ability, legal,
+          preparationPolicy: policy, castingAbility: ability, legal, ritualEligible, ritualLegal,
           unresolvedLegacy: true,
         });
       }
@@ -276,25 +348,38 @@ export function resolveSpellCastingContexts(
     let classId: string | undefined;
     let policy:  SpellPreparationPolicy;
     let ability: Ability;
+    let ritualEligible: boolean;
+    let ritualLegal: boolean;
 
     if (s.sourceKind === 'class') {
       classId = s.sourceId;
-      ({ policy, ability } = contextForClass(classId ?? '', isPrepared, entitlementIsCantrip, entity, classDefs));
+      ({ policy, ability, ritualEligible, ritualLegal } = contextForClass(classId ?? '', isPrepared, entitlementIsCantrip, entity, classDefs));
     } else if (s.sourceKind === 'subclass') {
       classId = s.sourceId ? resolveClassIdForSubclass(entity, s.sourceId) : undefined;
       policy  = 'always_available';
       ability = resolveClassAbility(classId, classDefs) ?? entity.spellcasting?.ability ?? 'int';
+      // Domain/circle spells are cast through the parent class's own casting
+      // rules (RAW: they don't need separate preparation — resolved via the
+      // SAME parent classId just derived above, never a second, independent
+      // policy). Ritual legality follows suit: a domain spell is never
+      // "unprepared" in the first place, so ritualLegal matches ritualEligible
+      // exactly (both true only when the parent class has a ritual policy).
+      const ritualPolicy = resolveClassRitualCastingPolicy(classId, classDefs);
+      ritualEligible = ritualPolicy !== 'none';
+      ritualLegal = ritualEligible;
     } else {
       classId = undefined;
       policy  = 'always_available';
       ability = entity.spellcasting?.ability ?? 'int';
+      ritualEligible = false; // no class-rooted ritual-casting policy applies to a race/feat/item/manual grant
+      ritualLegal = false;
     }
 
     const legal = policy === 'known' || policy === 'always_available' || isPrepared;
     contexts.push({
       contextKey: makeContextKey(s.sourceKind, s.sourceId, classId, s.kind, s.choiceId),
       sourceKind: s.sourceKind, sourceId: s.sourceId, classId,
-      preparationPolicy: policy, castingAbility: ability, legal,
+      preparationPolicy: policy, castingAbility: ability, legal, ritualEligible, ritualLegal,
     });
   }
 
@@ -1183,6 +1268,13 @@ export function generateSpellCard(
   const distinctContexts = collapseDistinctSpellCastingContexts(allContexts);
   const selectedContext = selectSpellCastingContext(entity, spellId, classDefs);
   const preparationLegal = distinctContexts.some(c => c.legal);
+  // Rules-completeness batch (ritual casting): offered whenever the spell
+  // is ritual-tagged content AND at least one candidate source can ritual-
+  // cast at all — a coarse "should the UI even ask" signal. The SPECIFIC
+  // context the player ultimately selects (default or chosen via "Cast
+  // as...") is re-checked for its OWN ritualEligible flag at execution time
+  // (applyActionCardUse) — this flag never gates the actual mutation.
+  const ritualEligible = spell.ritual && distinctContexts.some(c => c.ritualEligible);
 
   // Rules-engine HIGH-batch closure (C7): preparation and incapacitation
   // (0HP/Unconscious) are two INDEPENDENT one-off overridable restrictions —
@@ -1234,6 +1326,7 @@ export function generateSpellCard(
     // there's nothing to choose between.
     spellCastingContext:  selectedContext,
     spellCastingContexts: distinctContexts.length > 1 ? distinctContexts : undefined,
+    ...(ritualEligible ? { ritualEligible: true as const } : {}),
   };
 }
 

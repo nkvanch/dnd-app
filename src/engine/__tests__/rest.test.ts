@@ -4,7 +4,11 @@
 // wrong pool, or recharging both when only one should refresh), so it gets
 // dedicated coverage rather than relying on manual device testing.
 import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
-import { takeRest, spendHitDie, discardHitDie, spendHitDieManual, currentHitDieSize } from '../rest';
+import {
+  takeRest, spendHitDie, discardHitDie, spendHitDieManual, currentHitDieSize,
+  hitDiceRecoveryNeedsAllocation, hitDiceRecoveryBudget, expendedHitDicePools,
+  HitDiceRecoveryAllocation,
+} from '../rest';
 import { Entity, SpellSlots, CampaignRules, asClassId } from '../types';
 
 function emptySlots(overrides: Partial<Record<keyof SpellSlots, { total: number; used: number }>> = {}): SpellSlots {
@@ -367,9 +371,21 @@ describe('spendHitDie / discardHitDie with a mixed pool', () => {
     });
   }
 
-  it('spendHitDie rolls the largest available die, not the legacy `die` field', () => {
+  // Rules-completeness batch (mixed hit-die pools), C2/C4: with 2+ genuinely
+  // spendable die sizes, the engine must never silently pick one for the
+  // player — see spendFromHitDicePools' own doc comment (rest.ts). This
+  // replaces the old "always rolls the largest" expectation, which encoded
+  // exactly the auto-pick behavior this batch removes.
+  it('spendHitDie refuses (no-op) when 2+ pools are spendable and no dieSize is given', () => {
+    Math.random = () => 0.99;
+    const entity = mixedPoolEntity();
+    const result = spendHitDie(entity, DEFAULT_RULES);
+    expect(result).toBe(entity); // unchanged — never guesses which pool
+  });
+
+  it('spendHitDie spends EXACTLY the named pool when dieSize is given', () => {
     Math.random = () => 0.99; // near-max roll: d10→10, d6→6 — distinguishes which die was actually rolled
-    const result = spendHitDie(mixedPoolEntity(), DEFAULT_RULES);
+    const result = spendHitDie(mixedPoolEntity(), DEFAULT_RULES, 10);
     // +0 CON mod: healed amount equals the die rolled.
     expect(result.resources.hp.current).toBe(10 + 10);
     expect(result.resources.hitDice.pools).toEqual([
@@ -377,6 +393,32 @@ describe('spendHitDie / discardHitDie with a mixed pool', () => {
       { die: 6, total: 1, remaining: 1 },  // ...the d6 pool untouched
     ]);
     expect(result.resources.hitDice.remaining).toBe(3); // sum stays correct
+  });
+
+  it('spendHitDie spends the OTHER named pool (d6) when that is what was chosen', () => {
+    Math.random = () => 0.99;
+    const result = spendHitDie(mixedPoolEntity(), DEFAULT_RULES, 6);
+    expect(result.resources.hp.current).toBe(10 + 6);
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 3, remaining: 3 }, // untouched
+      { die: 6, total: 1, remaining: 0 },
+    ]);
+  });
+
+  it('spendHitDie refuses (no-op) when dieSize names a size the character does not have', () => {
+    const entity = mixedPoolEntity();
+    const result = spendHitDie(entity, DEFAULT_RULES, 12);
+    expect(result).toBe(entity);
+  });
+
+  it('spendHitDie refuses (no-op) when dieSize names a pool that is already exhausted', () => {
+    const e = mixedPoolEntity();
+    const drained = {
+      ...e,
+      resources: { ...e.resources, hitDice: { ...e.resources.hitDice, remaining: 1, pools: [{ die: 10, total: 3, remaining: 0 }, { die: 6, total: 1, remaining: 1 }] } },
+    };
+    const result = spendHitDie(drained, DEFAULT_RULES, 10);
+    expect(result).toBe(drained);
   });
 
   it('spends from the d6 pool once every d10 is gone', () => {
@@ -397,8 +439,14 @@ describe('spendHitDie / discardHitDie with a mixed pool', () => {
     ]);
   });
 
-  it('discardHitDie decrements the largest pool and keeps the sum correct', () => {
-    const result = discardHitDie(mixedPoolEntity(), DEFAULT_RULES);
+  it('discardHitDie refuses (no-op) when 2+ pools are spendable and no dieSize is given', () => {
+    const entity = mixedPoolEntity();
+    const result = discardHitDie(entity, DEFAULT_RULES);
+    expect(result).toBe(entity);
+  });
+
+  it('discardHitDie decrements EXACTLY the named pool and keeps the sum correct', () => {
+    const result = discardHitDie(mixedPoolEntity(), DEFAULT_RULES, 10);
     expect(result.resources.hitDice.pools).toEqual([
       { die: 10, total: 3, remaining: 2 },
       { die: 6, total: 1, remaining: 1 },
@@ -477,7 +525,7 @@ describe('spendHitDieManual', () => {
     expect(result).toBe(e);
   });
 
-  it('spends exactly one die from the largest pool, same as spendHitDie, for a mixed pool', () => {
+  it('refuses (no-op) for a mixed pool when 2+ pools are spendable and no dieSize is given', () => {
     const e = baseEntity({
       resources: {
         ...makeEmptyEntity('e1').resources,
@@ -489,6 +537,21 @@ describe('spendHitDieManual', () => {
       },
     });
     const result = spendHitDieManual(e, 7, DEFAULT_RULES);
+    expect(result).toBe(e);
+  });
+
+  it('spends exactly one die from the NAMED pool for a mixed pool', () => {
+    const e = baseEntity({
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        hp: { current: 10, maximum: 50, temp: 0 },
+        hitDice: {
+          die: 6, total: 4, remaining: 4,
+          pools: [{ die: 10, total: 3, remaining: 3 }, { die: 6, total: 1, remaining: 1 }],
+        },
+      },
+    });
+    const result = spendHitDieManual(e, 7, DEFAULT_RULES, 10);
     expect(result.resources.hp.current).toBe(10 + 7);
     expect(result.resources.hitDice.pools).toEqual([
       { die: 10, total: 3, remaining: 2 },
@@ -524,15 +587,13 @@ describe('long rest hit-dice restore with a mixed pool', () => {
     });
   }
 
-  it('restores across pools in acquisition order, capped per pool', () => {
-    // fullHitDiceOnLongRest house rule off by default → restores
-    // max(1, floor(level/2)); baseEntity()'s level is 0 → restores 1.
-    const result = takeRest(mixedDrainedEntity(), 'long', DEFAULT_RULES);
-    const restored = result.resources.hitDice.pools!;
-    expect(restored[0].remaining).toBeLessThanOrEqual(3);
-    expect(restored[1].remaining).toBeLessThanOrEqual(1);
-    expect(restored[0].remaining + restored[1].remaining).toBe(result.resources.hitDice.remaining);
-  });
+  // Rules-completeness batch (long-rest recovery), HIGH-fix closure: budget
+  // (1) is smaller than the total expended across the two pools (4) — a
+  // REAL choice exists, so the engine must never pick a pool automatically
+  // (the old "acquisition order" behavior this test used to encode was
+  // exactly the bug the Codex audit flagged). Superseded by the dedicated
+  // "long-rest hit-die recovery allocation" describe block below, which
+  // covers both the refusal-without-allocation and explicit-choice cases.
 
   it('never restores a pool past its own total even with the full-restore house rule', () => {
     const result = takeRest(mixedDrainedEntity(), 'long', { ...DEFAULT_RULES, customRules: { fullHitDiceOnLongRest: true } });
@@ -541,5 +602,179 @@ describe('long rest hit-dice restore with a mixed pool', () => {
       { die: 6, total: 1, remaining: 1 },
     ]);
     expect(result.resources.hitDice.remaining).toBe(4);
+  });
+});
+
+// ============================================================================
+// HIGH-fix closure (Codex audit finding 2): mixed-pool long-rest recovery
+// must let the PLAYER choose which expended dice recover when the recovery
+// budget is smaller than the total expended across 2+ pools — never
+// largest/smallest/acquisition order. See HitDiceRecoveryAllocation and
+// hitDiceRecoveryNeedsAllocation's own doc comments (rest.ts).
+// ============================================================================
+describe('long-rest hit-die recovery allocation (HIGH-fix closure)', () => {
+  // level 2 → budget = max(1, floor(2/2)) = 1
+  function twoExpendedPoolsEntity(overrides: Partial<Entity> = {}) {
+    return baseEntity({
+      identity: { ...makeEmptyEntity('e1').identity, level: 2 },
+      resources: {
+        ...makeEmptyEntity('e1').resources,
+        hitDice: {
+          die: 6, total: 4, remaining: 0,
+          pools: [{ die: 10, total: 2, remaining: 0 }, { die: 6, total: 2, remaining: 0 }],
+        },
+      },
+      ...overrides,
+    });
+  }
+
+  it('1. one expended pool → simple automatic legal recovery, no allocation required', () => {
+    const e = baseEntity({
+      identity: { ...makeEmptyEntity('e1').identity, level: 2 },
+      resources: { ...makeEmptyEntity('e1').resources, hitDice: { die: 8, total: 3, remaining: 1 } },
+    });
+    expect(hitDiceRecoveryNeedsAllocation(e, DEFAULT_RULES)).toBe(false);
+    const result = takeRest(e, 'long', DEFAULT_RULES);
+    expect(result.resources.hitDice.remaining).toBe(2); // budget 1, restored automatically
+  });
+
+  it('2. two expended pools, budget smaller than total expended → explicit allocation required (refused without one)', () => {
+    const e = twoExpendedPoolsEntity();
+    expect(hitDiceRecoveryNeedsAllocation(e, DEFAULT_RULES)).toBe(true);
+    expect(hitDiceRecoveryBudget(e, DEFAULT_RULES)).toBe(1);
+    // takeRest always runs recomputeDerived on its result (even a refused
+    // one), so object identity can't be asserted here — every REST
+    // CONSEQUENCE (hit dice, HP, resources) must instead be byte-for-byte
+    // unchanged, proving the refusal really is atomic and not just "hit
+    // dice stayed put while everything else quietly rested."
+    const result = takeRest(e, 'long', DEFAULT_RULES); // no allocation supplied
+    expect(result.resources.hitDice).toEqual(e.resources.hitDice);
+    expect(result.resources.hp).toEqual(e.resources.hp);
+    expect(result.resources.custom).toEqual(e.resources.custom);
+  });
+
+  it('3. choose all recovery from d10 → only the d10 pool is restored', () => {
+    const e = twoExpendedPoolsEntity();
+    const allocation: HitDiceRecoveryAllocation = [{ dieSize: 10, recover: 1 }];
+    const result = takeRest(e, 'long', DEFAULT_RULES, allocation);
+    expect(result).not.toBe(e);
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 2, remaining: 1 },
+      { die: 6, total: 2, remaining: 0 },
+    ]);
+  });
+
+  it('4. split between d10/d6 → exact counts restored', () => {
+    // Budget 2 (level 4) split 1/1 across both pools.
+    const e = twoExpendedPoolsEntity({ identity: { ...makeEmptyEntity('e1').identity, level: 4 } });
+    const allocation: HitDiceRecoveryAllocation = [{ dieSize: 10, recover: 1 }, { dieSize: 6, recover: 1 }];
+    const result = takeRest(e, 'long', DEFAULT_RULES, allocation);
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 2, remaining: 1 },
+      { die: 6, total: 2, remaining: 1 },
+    ]);
+  });
+
+  it('5. choose all recovery from d6 → exact d6 recovery, d10 untouched', () => {
+    const e = twoExpendedPoolsEntity();
+    const allocation: HitDiceRecoveryAllocation = [{ dieSize: 6, recover: 1 }];
+    const result = takeRest(e, 'long', DEFAULT_RULES, allocation);
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 2, remaining: 0 },
+      { die: 6, total: 2, remaining: 1 },
+    ]);
+  });
+
+  it('6. an allocation requesting more than the legal budget is rejected — whole rest refused', () => {
+    const e = twoExpendedPoolsEntity(); // budget 1
+    const allocation: HitDiceRecoveryAllocation = [{ dieSize: 10, recover: 1 }, { dieSize: 6, recover: 1 }]; // totals 2 > budget 1
+    const result = takeRest(e, 'long', DEFAULT_RULES, allocation);
+    expect(result.resources.hitDice).toEqual(e.resources.hitDice);
+  });
+
+  it("7. an allocation requesting more than a pool's own expended count is rejected", () => {
+    const e = twoExpendedPoolsEntity({ identity: { ...makeEmptyEntity('e1').identity, level: 20 } }); // huge budget, irrelevant
+    const allocation: HitDiceRecoveryAllocation = [{ dieSize: 10, recover: 3 }]; // only 2 total, both expended — 3 exceeds the pool itself
+    const result = takeRest(e, 'long', DEFAULT_RULES, allocation);
+    expect(result.resources.hitDice).toEqual(e.resources.hitDice);
+  });
+
+  it('8. an allocation naming an invalid die size is rejected', () => {
+    const e = twoExpendedPoolsEntity();
+    const allocation: HitDiceRecoveryAllocation = [{ dieSize: 12, recover: 1 }]; // no d12 pool exists
+    const result = takeRest(e, 'long', DEFAULT_RULES, allocation);
+    expect(result.resources.hitDice).toEqual(e.resources.hitDice);
+  });
+
+  it('9. a budget that covers all expended dice needs no meaningful chooser and restores everything automatically', () => {
+    const e = twoExpendedPoolsEntity({ identity: { ...makeEmptyEntity('e1').identity, level: 8 } }); // budget 4 == total expended
+    expect(hitDiceRecoveryNeedsAllocation(e, DEFAULT_RULES)).toBe(false);
+    const result = takeRest(e, 'long', DEFAULT_RULES); // no allocation — still succeeds
+    expect(result.resources.hitDice.pools).toEqual([
+      { die: 10, total: 2, remaining: 2 },
+      { die: 6, total: 2, remaining: 2 },
+    ]);
+  });
+
+  it('10. canceling (never calling takeRest) leaves no long-rest state mutation — nothing to assert beyond the refusal itself', () => {
+    // The UI contract: canceling never invokes takeRest at all (see
+    // RestPreviewModal.onConfirm's own doc comment) — modeled here as the
+    // same "no allocation supplied" refusal already proven by test 2, since
+    // from the engine's perspective a cancel and a missing allocation are
+    // indistinguishable and both must be fully inert.
+    const e = twoExpendedPoolsEntity();
+    expect(takeRest(e, 'long', DEFAULT_RULES).resources.hitDice).toEqual(e.resources.hitDice);
+  });
+
+  it('11. repeated long rests never exceed pool totals even with a generous allocation', () => {
+    let e = twoExpendedPoolsEntity({ identity: { ...makeEmptyEntity('e1').identity, level: 20 } }); // budget covers everything
+    e = takeRest(e, 'long', DEFAULT_RULES); // fully restored, no allocation needed (budget >= expended)
+    expect(e.resources.hitDice.remaining).toBe(4);
+    // A second long rest with nothing expended is a legal no-op — never
+    // exceeds each pool's own total.
+    const again = takeRest(e, 'long', DEFAULT_RULES);
+    expect(again.resources.hitDice.remaining).toBe(4);
+    expect(again.resources.hitDice.pools).toEqual([
+      { die: 10, total: 2, remaining: 2 },
+      { die: 6, total: 2, remaining: 2 },
+    ]);
+  });
+
+  it('12. chosen pool state survives being read back exactly as persisted (save/load proxy)', () => {
+    const e = twoExpendedPoolsEntity();
+    const allocation: HitDiceRecoveryAllocation = [{ dieSize: 6, recover: 1 }];
+    const result = takeRest(e, 'long', DEFAULT_RULES, allocation);
+    // Round-trip through JSON, the same serialization boundary save/load
+    // crosses — proves nothing about the allocation choice is retained
+    // anywhere except the resulting plain pool state.
+    const reloaded: Entity = JSON.parse(JSON.stringify(result));
+    expect(reloaded.resources.hitDice.pools).toEqual([
+      { die: 10, total: 2, remaining: 0 },
+      { die: 6, total: 2, remaining: 1 },
+    ]);
+  });
+
+  it('expendedHitDicePools reports only pools with something actually spent', () => {
+    const e = twoExpendedPoolsEntity();
+    expect(expendedHitDicePools(e.resources.hitDice)).toEqual([
+      { die: 10, total: 2, remaining: 0 },
+      { die: 6, total: 2, remaining: 0 },
+    ]);
+    const fresh = baseEntity({ resources: { ...makeEmptyEntity('e1').resources, hitDice: { die: 8, total: 3, remaining: 3 } } });
+    expect(expendedHitDicePools(fresh.resources.hitDice)).toEqual([]);
+  });
+
+  it('a duplicate die-size entry in the allocation is rejected as ambiguous', () => {
+    const e = twoExpendedPoolsEntity();
+    const allocation: HitDiceRecoveryAllocation = [{ dieSize: 10, recover: 0 }, { dieSize: 10, recover: 1 }];
+    const result = takeRest(e, 'long', DEFAULT_RULES, allocation);
+    expect(result.resources.hitDice).toEqual(e.resources.hitDice);
+  });
+
+  it('a negative recover count is rejected', () => {
+    const e = twoExpendedPoolsEntity();
+    const allocation: HitDiceRecoveryAllocation = [{ dieSize: 10, recover: -1 }];
+    const result = takeRest(e, 'long', DEFAULT_RULES, allocation);
+    expect(result.resources.hitDice).toEqual(e.resources.hitDice);
   });
 });

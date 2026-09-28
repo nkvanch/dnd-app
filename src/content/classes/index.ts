@@ -1219,9 +1219,9 @@ export const ALL_CHAR_CLASSES_CATALOG = [
   { id: 'rogue',     name: 'Rogue',     hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.rogue,
     savingThrows: ['dex', 'int'], armorProfs: ['light'], weaponProfs: ['simple', 'Hand Crossbow', 'Longsword', 'Rapier', 'Shortsword'], toolProfs: ["Thieves' Tools"] },
   { id: 'wizard',    name: 'Wizard',    hitDie: 6,  features: [], srd: true,
-    savingThrows: ['int', 'wis'], armorProfs: [], weaponProfs: ['Dagger', 'Dart', 'Sling', 'Quarterstaff', 'Light Crossbow'], spellcastingAbility: 'int', spellPreparationPolicy: 'spellbook_prepared' },
+    savingThrows: ['int', 'wis'], armorProfs: [], weaponProfs: ['Dagger', 'Dart', 'Sling', 'Quarterstaff', 'Light Crossbow'], spellcastingAbility: 'int', spellPreparationPolicy: 'spellbook_prepared', ritualCastingPolicy: 'spellbook' },
   { id: 'cleric',    name: 'Cleric',    hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.cleric,
-    savingThrows: ['wis', 'cha'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], spellcastingAbility: 'wis', spellPreparationPolicy: 'full_list_prepared' },
+    savingThrows: ['wis', 'cha'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], spellcastingAbility: 'wis', spellPreparationPolicy: 'full_list_prepared', ritualCastingPolicy: 'prepared' },
   { id: 'barbarian', name: 'Barbarian', hitDie: 12, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.barbarian,
     savingThrows: ['str', 'con'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple', 'martial'] },
   { id: 'ranger',    name: 'Ranger',    hitDie: 10, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.ranger,
@@ -1229,9 +1229,9 @@ export const ALL_CHAR_CLASSES_CATALOG = [
   { id: 'paladin',   name: 'Paladin',   hitDie: 10, features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.paladin,
     savingThrows: ['wis', 'cha'], armorProfs: ['light', 'medium', 'heavy', 'shield'], weaponProfs: ['simple', 'martial'], spellcastingAbility: 'cha', spellPreparationPolicy: 'full_list_prepared' },
   { id: 'druid',     name: 'Druid',     hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.druid,
-    savingThrows: ['int', 'wis'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['Club', 'Dagger', 'Dart', 'Javelin', 'Mace', 'Quarterstaff', 'Scimitar', 'Sickle', 'Sling', 'Spear'], toolProfs: ['Herbalism Kit'], spellcastingAbility: 'wis', spellPreparationPolicy: 'full_list_prepared' },
+    savingThrows: ['int', 'wis'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['Club', 'Dagger', 'Dart', 'Javelin', 'Mace', 'Quarterstaff', 'Scimitar', 'Sickle', 'Sling', 'Spear'], toolProfs: ['Herbalism Kit'], spellcastingAbility: 'wis', spellPreparationPolicy: 'full_list_prepared', ritualCastingPolicy: 'prepared' },
   { id: 'bard',      name: 'Bard',      hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.bard,
-    savingThrows: ['dex', 'cha'], armorProfs: ['light'], weaponProfs: ['simple', 'Hand Crossbow', 'Longsword', 'Rapier', 'Shortsword'], spellcastingAbility: 'cha', spellPreparationPolicy: 'known' },
+    savingThrows: ['dex', 'cha'], armorProfs: ['light'], weaponProfs: ['simple', 'Hand Crossbow', 'Longsword', 'Rapier', 'Shortsword'], spellcastingAbility: 'cha', spellPreparationPolicy: 'known', ritualCastingPolicy: 'known' },
   { id: 'monk',      name: 'Monk',      hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.monk,
     savingThrows: ['str', 'dex'], armorProfs: [], weaponProfs: ['simple', 'Shortsword'] },
   { id: 'sorcerer',  name: 'Sorcerer',  hitDie: 6,  features: [], srd: true,
@@ -1239,7 +1239,7 @@ export const ALL_CHAR_CLASSES_CATALOG = [
   { id: 'warlock',   name: 'Warlock',   hitDie: 8,  features: [], srd: true, multiclassProficiencies: MULTICLASS_PROFICIENCIES.warlock,
     savingThrows: ['wis', 'cha'], armorProfs: ['light'], weaponProfs: ['simple'], spellcastingAbility: 'cha', spellPreparationPolicy: 'known' },
   { id: 'artificer', name: 'Artificer', hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.artificer,
-    savingThrows: ['con', 'int'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], toolProfs: ["Thieves' Tools", "Tinker's Tools"], spellcastingAbility: 'int', spellPreparationPolicy: 'full_list_prepared' },
+    savingThrows: ['con', 'int'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], toolProfs: ["Thieves' Tools", "Tinker's Tools"], spellcastingAbility: 'int', spellPreparationPolicy: 'full_list_prepared', ritualCastingPolicy: 'prepared' },
 ] as import('../../engine/types').CharClass[];
 
 /** Exposure policy for public SRD builds. The full catalog remains bundled. */

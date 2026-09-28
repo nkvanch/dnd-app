@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules, ActivationOption, SpellCastingContext } from '../../engine/types';
 import { endWildShape } from '../../engine/combat';
-import { getTriggeredFeatures, isFeatureAvailable, formatCastingContextLabel, CardGenOptions } from '../../engine/actionCards';
+import { getTriggeredFeatures, isFeatureAvailable, formatCastingContextLabel, CardGenOptions, isContextLegalForCastMode, needsPreparationOverride } from '../../engine/actionCards';
 import { applyActionCardUse } from '../../engine/actionUse';
 import { useSpellPayment } from './SpellPaymentChooser';
 import { doubleDiceCount } from '../../engine/dice';
@@ -155,6 +155,12 @@ type PendingActionUse = {
    * class closure 2F already fixed for bypassSpellPreparation).
    */
   bypassIncapacitated?: boolean;
+  /** Rules-completeness batch (ritual casting): the SAME `castMode`
+   *  decision already made before the activation-option picker opened —
+   *  carried alongside every other already-resolved decision here so it
+   *  survives into handleChooseOption, exactly like bypassSpellPreparation/
+   *  bypassIncapacitated above (same bug class those two already fixed). */
+  castMode?: 'ritual';
 };
 
 // ── Use Result Modal ──────────────────────────────────────────────────────────
@@ -306,7 +312,7 @@ interface CardRowProps {
    * ONLY by 0HP/Unconscious. All optional so every existing non-spell
    * caller (a plain feature card's [Use]) is unaffected.
    */
-  onUse:   (card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean) => void;
+  onUse:   (card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean, castMode?: 'ritual') => void;
   /** Omit to hide the star entirely (not offered everywhere a card might render). */
   isFavorite?:       boolean;
   onToggleFavorite?: (card: ActionCard) => void;
@@ -352,7 +358,13 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
   const blockedOnlyByPreparation = card.preparationOverridable === true;
   const blockedByIncapacitation = card.incapacitatedOverridable === true;
   const overridable = blockedOnlyByPreparation || blockedByIncapacitation;
-  const genuinelyUnavailable = !card.available && !overridable;
+  // Rules-completeness batch (ritual casting): a ritual-eligible spell is
+  // never hard-disabled by a missing spell slot alone — ritual mode spends
+  // none — so the row stays tappable and lets handlePress below offer the
+  // ritual path even when card.available is false purely for that reason.
+  // Execution (applyActionCardUse) revalidates ritual eligibility fresh
+  // regardless, so this is a display-only relaxation, never a legality one.
+  const genuinelyUnavailable = !card.available && !overridable && !card.ritualEligible;
   const cardContent = useCardContent(entity);
 
   // Rules-engine HIGH-batch closure (C4): the LAST step before actually
@@ -361,37 +373,64 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
   // "Use Anyway" on top. card.unavailableReason already carries the exact
   // "At 0 HP"/"Unconscious" text (see generateSpellCard/generateActionCard),
   // so the prompt always reflects the entity's real current state.
-  function finalizeUse(bypassSpellPreparation: boolean, context?: SpellCastingContext) {
+  //
+  // `castMode` (rules-completeness batch — ritual casting) rides alongside
+  // every other already-resolved decision (context, preparation override,
+  // incapacitation override) all the way to onUse, exactly like
+  // bypassSpellPreparation/context do — never a separate, parallel cast path.
+  function finalizeUse(bypassSpellPreparation: boolean, context?: SpellCastingContext, castMode?: 'ritual') {
     if (blockedByIncapacitation) {
       Alert.alert(
         `${card.name}: ${card.unavailableReason ?? 'Incapacitated'}`,
         'Use it anyway as a one-off table ruling? This does not change HP, conditions, or death-save state.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Use Anyway', onPress: () => onUse(card, bypassSpellPreparation, context, true) },
+          { text: 'Use Anyway', onPress: () => onUse(card, bypassSpellPreparation, context, true, castMode) },
         ],
       );
       return;
     }
-    onUse(card, bypassSpellPreparation, context);
+    onUse(card, bypassSpellPreparation, context, undefined, castMode);
   }
 
-  function castViaContext(context: SpellCastingContext) {
-    if (!context.legal) {
+  // Rules-completeness batch (ritual casting), one-issue closure: checks the
+  // SELECTED context against the ACTUAL cast mode (isContextLegalForCastMode
+  // — `ritualLegal` for a ritual attempt, `legal` for a normal one), never a
+  // bare `context.legal` unconditionally — that was exactly the bug this
+  // closure fixes (a legal Wizard-spellbook ritual was still prompting Cast
+  // Anyway because the check never looked at castMode at all).
+  // needsPreparationOverride further distinguishes "genuinely blocked by
+  // preparation on a source that can cast this way at all" (offer the
+  // override) from "this source has no ritual-casting capability
+  // whatsoever" (silently decline — Cast Anyway can't fix that, and
+  // applyActionCardUse refuses it unconditionally regardless).
+  function castViaContext(context: SpellCastingContext, castMode?: 'ritual') {
+    if (needsPreparationOverride(context, castMode)) {
       Alert.alert(
         `${card.name} is not prepared.`,
         'Cast it anyway as a one-off? This does not add it to your prepared list.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Cast Anyway', onPress: () => finalizeUse(true, context) },
+          { text: 'Cast Anyway', onPress: () => finalizeUse(true, context, castMode) },
         ],
       );
       return;
     }
-    finalizeUse(false, context);
+    if (!isContextLegalForCastMode(context, castMode)) return; // ritual-incapable source — nothing to override, decline silently
+    finalizeUse(false, context, castMode);
   }
 
-  function handlePress() {
+  // Every decision that used to start directly at handlePress — context
+  // choice, preparation override — now runs identically for BOTH a normal
+  // cast and a ritual cast, just carrying `castMode` through unchanged.
+  // Ritual does NOT bypass preparation on its own (see castMode's own doc
+  // comment, actionUse.ts) — an unprepared ritual-eligible spell still
+  // prompts the SAME Cast Anyway here, exactly like a normal cast — UNLESS
+  // the SELECTED context's own `ritualLegal` says otherwise (a Wizard
+  // ritual straight from the spellbook), checked live below rather than
+  // via the static, generation-time, normal-legality-only
+  // `blockedOnlyByPreparation` flag — the exact mismatch this closure fixes.
+  function proceed(castMode?: 'ritual') {
     if (card.spellCastingContexts && card.spellCastingContexts.length > 1) {
       const classDefs = cardContent.classDefs;
       Alert.alert(
@@ -400,25 +439,52 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
         [
           ...card.spellCastingContexts.map(ctx => ({
             text: formatCastingContextLabel(entity, ctx, classDefs),
-            onPress: () => castViaContext(ctx),
+            onPress: () => castViaContext(ctx, castMode),
           })),
           { text: 'Cancel', style: 'cancel' as const },
         ],
       );
       return;
     }
+    const context = card.spellCastingContext;
+    if (context) {
+      castViaContext(context, castMode);
+      return;
+    }
+    // No SpellCastingContext at all — a non-spell feature card, for which
+    // `preparationOverridable`/ritual casting were never a concept in the
+    // first place (see generateActionCard vs generateSpellCard). Unchanged.
     if (blockedOnlyByPreparation) {
       Alert.alert(
         `${card.name} is not prepared.`,
         'Cast it anyway as a one-off? This does not add it to your prepared list.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Cast Anyway', onPress: () => finalizeUse(true, card.spellCastingContext) },
+          { text: 'Cast Anyway', onPress: () => finalizeUse(true, undefined, castMode) },
         ],
       );
       return;
     }
-    finalizeUse(false, card.spellCastingContext);
+    finalizeUse(false, undefined, castMode);
+  }
+
+  // Rules-completeness batch (ritual casting), A3: an explicit peer choice
+  // — never a silent default to either mode — offered only when the spell
+  // is actually ritual-capable through some source the character has.
+  function handlePress() {
+    if (card.ritualEligible) {
+      Alert.alert(
+        `Cast ${card.name} as...`,
+        undefined,
+        [
+          { text: 'Cast Normally', onPress: () => proceed(undefined) },
+          { text: 'Cast as Ritual (no slot, +10 min)', onPress: () => proceed('ritual') },
+          { text: 'Cancel', style: 'cancel' as const },
+        ],
+      );
+      return;
+    }
+    proceed(undefined);
   }
 
   return (
@@ -447,7 +513,7 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
         onPress={handlePress}
       >
         <Text style={[styles.useBtnTxt, genuinelyUnavailable && styles.useBtnTxtDisabled]}>
-          {card.available || overridable ? 'Use' : 'N/A'}
+          {card.available || overridable || card.ritualEligible ? 'Use' : 'N/A'}
         </Text>
       </Pressable>
     </View>
@@ -458,7 +524,7 @@ export function ActionCardRow({ card, entity, onUse, isFavorite, onToggleFavorit
 
 function Section({ title, cards, entity, onUse, onToggleFavorite }: {
   title: string; cards: ActionCard[]; entity: Entity;
-  onUse: (c: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean) => void;
+  onUse: (c: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean, castMode?: 'ritual') => void;
   onToggleFavorite?: (c: ActionCard) => void;
 }) {
   if (cards.length === 0) return null;
@@ -573,19 +639,28 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   // attack) rather than costing its own action/bonus action/reaction.
   const freeActions  = all.filter(c => c.activation.actionType === 'free');
 
-  const handleUse = useCallback((card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean) => {
+  const handleUse = useCallback((card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext, bypassIncapacitated?: boolean, castMode?: 'ritual') => {
     if (card.activation.options && card.activation.options.length > 0) {
       // Rules-engine blocker RE-AUDIT closure 2F (extended, HIGH batch C7/C8):
       // preserve whatever source/Cast-Anyway/Use-Anyway decision
       // ActionCardRow already made (bypassSpellPreparation/
-      // selectedSpellCastingContext/bypassIncapacitated), not just the bare
-      // card — handleChooseOption below reads these back out once the
-      // option is picked.
-      setPendingUse({ card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated });
+      // selectedSpellCastingContext/bypassIncapacitated/castMode), not just
+      // the bare card — handleChooseOption below reads these back out once
+      // the option is picked.
+      setPendingUse({ card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated, castMode });
       return;
     }
     if (!onEntityUpdate || !rules) {
       // No update handler — just show the roll modal.
+      setActiveCard(card);
+      return;
+    }
+    // Rules-completeness batch (ritual casting), A4: never request a slot
+    // payment for a ritual cast — the chooser modal simply never opens.
+    if (castMode === 'ritual') {
+      const updated = applyActionCardUse(entity, card, rules, undefined, undefined, bypassSpellPreparation, selectedSpellCastingContext, cardContent, bypassIncapacitated, castMode);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
       setActiveCard(card);
       return;
     }
@@ -607,9 +682,16 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     const pending = pendingUse;
     setPendingUse(null);
     if (!pending) return;
-    const { card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated } = pending;
+    const { card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated, castMode } = pending;
+    if (!onEntityUpdate || !rules) return;
+    if (castMode === 'ritual') {
+      const updated = applyActionCardUse(entity, card, rules, option, undefined, bypassSpellPreparation, selectedSpellCastingContext, cardContent, bypassIncapacitated, castMode);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveCard(card);
+      return;
+    }
     requestPayment(card, option, payment => {
-      if (!onEntityUpdate || !rules) return;
       const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, cardContent, bypassIncapacitated);
       if (updated === entity) return;
       onEntityUpdate(updated);

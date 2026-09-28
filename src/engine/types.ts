@@ -479,6 +479,43 @@ export type CharClass  = {
    * default for an untracked entitlement.
    */
   spellPreparationPolicy?: SpellPreparationPolicy;
+  /**
+   * Rules-completeness batch (ritual casting), HIGH-fix closure: WHICH
+   * spell-access requirement applies when this class casts a spell as a
+   * ritual — a SEPARATE axis from spellPreparationPolicy (a half-caster
+   * like Paladin uses 'full_list_prepared' too but has no Ritual Casting
+   * feature at all; the two must never be conflated), and a strictly finer
+   * question than a plain "can this class ritual-cast at all" boolean (the
+   * ORIGINAL, now-superseded shape of this field) — 2014 Wizard ritual
+   * casting is legal straight from the spellbook, UNPREPARED, while 2014
+   * Cleric/Druid ritual casting still requires preparation, even though
+   * both classes "have Ritual Casting."
+   *
+   *   - 'none':      no Ritual Casting feature at all (Paladin, Ranger,
+   *                  Sorcerer, ordinary Warlock, every non-caster). The
+   *                  default for undefined — this app never grants a real-
+   *                  rules mechanical capability a class didn't explicitly
+   *                  author, matching KNOWN_ATTUNEMENT_ITEM_IDS' own
+   *                  fail-closed convention.
+   *   - 'spellbook': legal whenever the spell is in this class's own
+   *                  known/spellbook collection — preparation is NOT
+   *                  required for ritual purposes specifically, even though
+   *                  normal (non-ritual) casting still requires it (Wizard).
+   *   - 'prepared':  legal only when the spell is currently prepared —
+   *                  identical requirement to normal casting, no ritual-
+   *                  specific bypass (Cleric, Druid; Artificer if/when
+   *                  modeled as ritual-capable, reusing its existing
+   *                  prepared-source semantics unchanged).
+   *   - 'known':     legal whenever the class provides access at all — the
+   *                  class doesn't prepare in the first place, so there is
+   *                  no separate "unprepared" state to bypass (Bard).
+   *
+   * Book of Ancient Secrets, subclass-granted ritual capability, and any
+   * other feature-level ritual grant are explicitly OUT OF SCOPE — not
+   * modeled by this field, which only ever describes a BASE CLASS's own
+   * policy.
+   */
+  ritualCastingPolicy?: 'none' | 'known' | 'prepared' | 'spellbook';
   spellcastingStartLevel?: number;       // first level that gets spell slots (default 1)
   asiLevels?:             number[];      // defaults to [4,8,12,16,19]
   /**
@@ -1113,6 +1150,41 @@ export type SpellCastingContext = {
    *  the UI that this context was never confirmed by the player and a
    *  source choice should be offered rather than silently assumed. */
   unresolvedLegacy?: boolean;
+  /**
+   * Rules-completeness batch (ritual casting): true only when THIS source
+   * is a class/subclass whose class has a `CharClass.ritualCastingPolicy`
+   * other than `'none'` (see that field's own doc comment) — independent of
+   * `legal`/prepared status. A spell is only actually ritual-castable
+   * through this context when it is ALSO ritual-tagged content
+   * (`Spell.ritual`); this field alone answers "may this SOURCE cast
+   * something as a ritual at all," never "is THIS attempt currently legal"
+   * (see `ritualLegal` below for that) or "is this specific spell a
+   * ritual." Undefined/false for every non-class-rooted source (race/feat/
+   * item/manual/etc.) — no ritual-casting policy is modeled for those, so
+   * they conservatively never offer ritual mode rather than guessing.
+   */
+  ritualEligible?: boolean;
+  /**
+   * Rules-completeness batch (ritual casting), HIGH-fix closure: whether a
+   * RITUAL attempt through THIS SPECIFIC context is legal RIGHT NOW —
+   * computed from the class's own `ritualCastingPolicy`, deliberately
+   * SEPARATE from `legal` (normal-cast preparation legality), because the
+   * two genuinely disagree for a `'spellbook'`-policy class: a Wizard's
+   * ritual is legal straight from the spellbook whether or not it's
+   * prepared (`ritualLegal` true even when `legal` is false), while a
+   * `'prepared'`-policy class's ritual (Cleric, Druid) requires the exact
+   * same preparation a normal cast does (`ritualLegal` always equals
+   * `isPrepared`, same value as `legal` computes to for that policy) — and
+   * a `'known'`-policy class (Bard) is unconditionally legal either way,
+   * same as `legal` already is for it. `applyActionCardUse` uses THIS field
+   * (not `legal`) to gate a `castMode: 'ritual'` attempt, so Cast Anyway
+   * (`bypassSpellPreparation`) is never needed for a legal Wizard-spellbook
+   * ritual, while it remains available (and required) for an unprepared
+   * Cleric/Druid ritual exactly as it already is for a normal cast.
+   * Undefined/false wherever `ritualEligible` is false — there is no
+   * "legal ritual" through a source that cannot ritual-cast at all.
+   */
+  ritualLegal?: boolean;
 };
 
 /** See CharClass.spellPreparationPolicy's own doc comment for the full
@@ -2424,6 +2496,21 @@ export type ActionCard = {
    */
   sourceKind?: 'item';
   sourceId?:   string;
+  /**
+   * Rules-completeness batch (ritual casting): true when this is a spell
+   * card AND the spell is ritual-tagged (Spell.ritual) AND at least one of
+   * this card's candidate SpellCastingContexts has ritualEligible === true
+   * (see that field's own doc comment). Undefined for every non-spell card
+   * and every spell that isn't ritual-capable through any source the
+   * character currently has. Purely a "should the UI offer a Cast-Normally-
+   * vs-Cast-as-Ritual choice at all" signal generated against the BEST-
+   * EFFORT/default context; applyActionCardUse revalidates the SPECIFIC
+   * selected context's own ritualEligible flag fresh at execution time
+   * (never trusts this precomputed card-level flag alone), so a card that
+   * over-offers ritual mode for a context that turns out not to support it
+   * fails safely at execution rather than casting for free.
+   */
+  ritualEligible?: boolean;
 };
 
 // ── 11. Sync & campaign system ───────────────────────────────────────────────

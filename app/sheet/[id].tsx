@@ -519,8 +519,12 @@ export default function CharacterSheetScreen() {
   // in the app. See docs/ROADMAP_1.0.md Phase 3.4 for the honest gap this
   // simplifies. (This composition lives in buildRestMutation, shared with
   // RestPreviewModal, so the preview and the real action can never drift.)
-  const handleRest = useCallback((kind: 'short' | 'long') => {
-    mutate(buildRestMutation(kind, rules), kind === 'short' ? 'Short Rest' : 'Long Rest', 'rest');
+  // `hitDiceAllocation` (rules-completeness batch, long-rest recovery) —
+  // the player's own mixed-pool choice from RestPreviewModal, threaded
+  // straight through to the SAME buildRestMutation the preview already
+  // simulated against, so what Confirm applies is exactly what was shown.
+  const handleRest = useCallback((kind: 'short' | 'long', hitDiceAllocation?: import('../../src/engine/rest').HitDiceRecoveryAllocation) => {
+    mutate(buildRestMutation(kind, rules, hitDiceAllocation), kind === 'short' ? 'Short Rest' : 'Long Rest', 'rest');
   }, [mutate, rules]);
 
   const [restPreview, setRestPreview] = useState<'short' | 'long' | null>(null);
@@ -897,7 +901,7 @@ export default function CharacterSheetScreen() {
           kind={restPreview ?? 'short'}
           entity={entity}
           rules={rules}
-          onConfirm={() => { handleRest(restPreview!); setRestPreview(null); }}
+          onConfirm={(hitDiceAllocation) => { handleRest(restPreview!, hitDiceAllocation); setRestPreview(null); }}
           onCancel={() => setRestPreview(null)}
         />
       )}

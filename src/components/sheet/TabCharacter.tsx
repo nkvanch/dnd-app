@@ -18,7 +18,7 @@ import { rollDie } from '../../engine/leveling';
 import { levelUp, levelUpClass, calculateLevelUpHpGain, isValidHpRoll } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
 import { getClassLevels } from '../../engine/multiclass';
-import { spendHitDie, spendHitDieManual, currentHitDieSize } from '../../engine/rest';
+import { spendHitDie, spendHitDieManual, currentHitDieSize, spendableHitDicePools } from '../../engine/rest';
 import { rollExpression, doubleDiceCount } from '../../engine/dice';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
@@ -983,6 +983,9 @@ function TabCharacterInner({
     bypassSpellPreparation?: boolean;
     selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext;
     bypassIncapacitated?: boolean;
+    /** Rules-completeness batch (ritual casting) — see TabActions.tsx's
+     *  PendingActionUse.castMode for the identical fix. */
+    castMode?: 'ritual';
   } | null>(null);
   const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
   const [sensesOpen, setSensesOpen] = useState(false);
@@ -995,6 +998,19 @@ function TabCharacterInner({
   // same compact pattern as the death-save/initiative inline controls.
   const [hitDieEntry, setHitDieEntry] = useState(false);
   const [hitDieDraft, setHitDieDraft] = useState('');
+  // Rules-completeness batch (mixed hit-die pools), C2/C4: which die SIZE
+  // the player has explicitly chosen to spend next — only meaningful (and
+  // only rendered as a picker) when 2+ distinct sizes are currently
+  // spendable; a single-pool character never sees this at all and every
+  // spend call below omits dieSize exactly as before this batch. Reset
+  // whenever the spendable set changes shape (a spend/rest/level-up) so a
+  // stale selection (e.g. a pool that just hit 0) can't linger.
+  const [selectedHitDieSize, setSelectedHitDieSize] = useState<number | null>(null);
+  const spendableHitDice = spendableHitDicePools(entity.resources.hitDice);
+  const hitDieChoiceNeeded = spendableHitDice.length > 1;
+  const effectiveHitDieSize = hitDieChoiceNeeded
+    ? (spendableHitDice.some(p => p.die === selectedHitDieSize) ? selectedHitDieSize : null)
+    : (spendableHitDice[0]?.die ?? null);
 
   function showHitDieResult(msg: string) {
     setHitDieResult(msg);
@@ -1012,7 +1028,7 @@ function TabCharacterInner({
   const { requestPayment, paymentChooser } = useSpellPayment(entity);
   const favoriteCardContent = useCardContent(entity);
   const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c));
-  function handleUseFavorite(card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext, bypassIncapacitated?: boolean) {
+  function handleUseFavorite(card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext, bypassIncapacitated?: boolean, castMode?: 'ritual') {
     // A-57 (item 10): a favorited card with discrete use-time options
     // (e.g. Divine Smite's spell-slot tier) must resolve the picker BEFORE
     // spending anything, same as TabActions' own handleUse — this call
@@ -1022,7 +1038,16 @@ function TabCharacterInner({
       // Rules-engine blocker RE-AUDIT closure 2F (extended, HIGH batch C7/
       // C8): preserve the bypass/context/status-override decision
       // ActionCardRow already made, not just the card.
-      setPendingFavUse({ card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated });
+      setPendingFavUse({ card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated, castMode });
+      return;
+    }
+    // Rules-completeness batch (ritual casting), A4: never request a slot
+    // payment for a ritual cast.
+    if (castMode === 'ritual') {
+      const updated = applyActionCardUse(entity, card, rules, undefined, undefined, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent, bypassIncapacitated, castMode);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveFavCard(card);
       return;
     }
     // Same fix as TabActions' handleUse — always run applyActionCardUse
@@ -1042,7 +1067,14 @@ function TabCharacterInner({
     const pending = pendingFavUse;
     setPendingFavUse(null);
     if (!pending) return;
-    const { card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated } = pending;
+    const { card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated, castMode } = pending;
+    if (castMode === 'ritual') {
+      const updated = applyActionCardUse(entity, card, rules, option, undefined, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent, bypassIncapacitated, castMode);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveFavCard(card);
+      return;
+    }
     requestPayment(card, option, payment => {
       const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent, bypassIncapacitated);
       if (updated === entity) return;
@@ -1120,11 +1152,21 @@ function TabCharacterInner({
       rules,
     ));
   }
+  // Rules-completeness batch (mixed hit-die pools), C2: both hit-die spend
+  // paths below require an explicit, currently-valid pool choice before
+  // doing anything — `effectiveHitDieSize` is only non-null when either
+  // there's nothing to choose between (one spendable pool) or the player
+  // has already tapped one of the picker chips. Neither path falls back to
+  // spendHitDie/spendHitDieManual's own single-pool convenience omission
+  // once 2+ pools exist — that would silently reintroduce the exact
+  // largest-first auto-pick this batch removes.
   function handleRollHitDie() {
-    if (resources.hitDice.remaining <= 0) return;
+    if (resources.hitDice.remaining <= 0 || effectiveHitDieSize === null) return;
     const before  = resources.hp.current;
-    const updated = spendHitDie(entity, rules);
+    const updated = spendHitDie(entity, rules, effectiveHitDieSize);
+    if (updated === entity) return;
     onEntityUpdate(updated);
+    setSelectedHitDieSize(null);
     const healed = updated.resources.hp.current - before;
     showHitDieResult(`+${healed} HP restored`);
   }
@@ -1133,17 +1175,20 @@ function TabCharacterInner({
   // same final mutation (healFromSpentHitDie, inside spendHitDieManual)
   // handleRollHitDie's in-app convenience uses.
   function openHitDieEntry() {
-    if (resources.hitDice.remaining <= 0) return;
+    if (resources.hitDice.remaining <= 0 || effectiveHitDieSize === null) return;
     setHitDieDraft('');
     setHitDieEntry(true);
   }
   function submitHitDieEntry() {
-    const dieSize = currentHitDieSize(entity);
+    if (effectiveHitDieSize === null) return;
+    const dieSize = currentHitDieSize(entity, effectiveHitDieSize);
     const roll = parseInt(hitDieDraft, 10);
     if (isNaN(roll) || roll < 1 || roll > dieSize) return;
     const before  = resources.hp.current;
-    const updated = spendHitDieManual(entity, roll, rules);
+    const updated = spendHitDieManual(entity, roll, rules, effectiveHitDieSize);
+    if (updated === entity) return;
     onEntityUpdate(updated);
+    setSelectedHitDieSize(null);
     const healed = updated.resources.hp.current - before;
     showHitDieResult(`+${healed} HP restored`);
     setHitDieEntry(false);
@@ -1418,9 +1463,32 @@ function TabCharacterInner({
             }
           </Text>
         </View>
+        {/* Rules-completeness batch (mixed hit-die pools), C2/C8: an
+            explicit die-size picker, shown ONLY when 2+ distinct sizes are
+            currently spendable — a single-pool character never sees this
+            row at all, matching this app's "never ask when there's nothing
+            to choose" convention elsewhere. Each spend clears the selection
+            (see handleRollHitDie/submitHitDieEntry), so spending a d10 then
+            a d6 then another d10 in the same rest each requires its own
+            explicit tap — never assumes the previous choice still applies. */}
+        {hitDieChoiceNeeded && !hitDieEntry && (
+          <View style={styles.hitDieRow}>
+            {spendableHitDice.map(p => (
+              <Pressable
+                key={p.die}
+                style={[styles.hitDieBtn, selectedHitDieSize === p.die ? styles.hitDieUse : styles.hitDieRoll]}
+                onPress={() => setSelectedHitDieSize(p.die)}
+              >
+                <Text style={selectedHitDieSize === p.die ? styles.hitDieUseTxt : styles.useHitDieTxt}>
+                  d{p.die} ({p.remaining} left)
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
         {hitDieEntry ? (
           <View style={styles.hitDieEntryRow}>
-            <Text style={styles.hitDieEntryLabel}>Rolled (1–d{currentHitDieSize(entity)}):</Text>
+            <Text style={styles.hitDieEntryLabel}>Rolled (1–d{currentHitDieSize(entity, effectiveHitDieSize ?? undefined)}):</Text>
             <TextInput
               style={styles.hitDieEntryInput}
               value={hitDieDraft}
@@ -1442,23 +1510,25 @@ function TabCharacterInner({
           <View style={styles.hitDieRow}>
             {/* Primary — table-first: the die was already rolled physically. */}
             <Pressable
-              style={[styles.hitDieBtn, styles.hitDieUse, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
+              style={[styles.hitDieBtn, styles.hitDieUse, (resources.hitDice.remaining <= 0 || effectiveHitDieSize === null) && styles.useHitDieBtnDisabled]}
               onPress={openHitDieEntry}
-              disabled={resources.hitDice.remaining <= 0}
+              disabled={resources.hitDice.remaining <= 0 || effectiveHitDieSize === null}
             >
               <Text style={styles.hitDieUseTxt}>Use Hit Die</Text>
             </Pressable>
             {/* Secondary convenience — rolls, then the exact same mutation. */}
             <Pressable
-              style={[styles.hitDieBtn, styles.hitDieRoll, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
+              style={[styles.hitDieBtn, styles.hitDieRoll, (resources.hitDice.remaining <= 0 || effectiveHitDieSize === null) && styles.useHitDieBtnDisabled]}
               onPress={handleRollHitDie}
-              disabled={resources.hitDice.remaining <= 0}
+              disabled={resources.hitDice.remaining <= 0 || effectiveHitDieSize === null}
             >
               <Text style={styles.useHitDieTxt}>🎲 Roll in App</Text>
             </Pressable>
           </View>
         )}
-        <Text style={styles.hitDieHint}>Use: enter your table roll and heal.  Roll: app rolls and heals for you.</Text>
+        <Text style={styles.hitDieHint}>
+          {hitDieChoiceNeeded ? 'Choose a die size above, then: ' : ''}Use: enter your table roll and heal.  Roll: app rolls and heals for you.
+        </Text>
         {hitDieResult && (
           <Text style={styles.dieResultTxt}>{hitDieResult}</Text>
         )}

@@ -11,7 +11,7 @@ import {
   isSpellPreparationLegal, resolveSpellAbility, PREPARED_CASTER_CLASS_IDS,
   resolveSpellCastingContexts, selectSpellCastingContext, resolveSpellSaveDC, resolveSpellAttackBonus,
   buildLayer2ForSpell, buildLayer3ForSpell, collapseDistinctSpellCastingContexts,
-  formatCastingContextLabel,
+  formatCastingContextLabel, isContextLegalForCastMode, needsPreparationOverride,
 } from '../actionCards';
 import { ALL_CHAR_CLASSES } from '../../content/classes';
 import { applyActionCardUse } from '../actionUse';
@@ -1719,5 +1719,84 @@ describe('applyActionCardUse — activation option + context/bypass together (cl
     // PRE-FIX flow effectively did (discarded the Cast Anyway decision).
     const result = applyActionCardUse(e, card, {} as any, options[1], undefined, undefined, wizardContext);
     expect(result).toBe(e); // correctly blocked — proves the bypass parameter is load-bearing, not a no-op
+  });
+});
+
+// ============================================================================
+// Rules-completeness batch (ritual casting), one-issue closure: the shared UI
+// decision (isContextLegalForCastMode / needsPreparationOverride) that fixes
+// the reported bug — TabActions.tsx and TabSpells.tsx both used to check
+// `context.legal` unconditionally even after the player chose ritual mode,
+// so a legal Wizard-spellbook ritual still prompted Cast Anyway. Tested here
+// as pure functions against SpellCastingContext fixtures, independent of any
+// RN rendering — see actionCards.ts's own doc comments for full rationale.
+// ============================================================================
+describe('isContextLegalForCastMode / needsPreparationOverride (UI legality decision, one-issue closure)', () => {
+  function ctx(overrides: Partial<SpellCastingContext>): SpellCastingContext {
+    return {
+      contextKey: 'test', sourceKind: 'class', sourceId: 'test', classId: 'test',
+      preparationPolicy: 'full_list_prepared', castingAbility: 'int',
+      legal: false, ritualEligible: false, ritualLegal: false,
+      ...overrides,
+    };
+  }
+
+  it('1. Wizard-shaped context (legal:false, ritualLegal:true), NORMAL mode → illegal, override required', () => {
+    const wizard = ctx({ legal: false, ritualEligible: true, ritualLegal: true });
+    expect(isContextLegalForCastMode(wizard, undefined)).toBe(false);
+    expect(needsPreparationOverride(wizard, undefined)).toBe(true);
+  });
+
+  it('2. the SAME Wizard-shaped context, RITUAL mode → legal, no override needed', () => {
+    const wizard = ctx({ legal: false, ritualEligible: true, ritualLegal: true });
+    expect(isContextLegalForCastMode(wizard, 'ritual')).toBe(true);
+    expect(needsPreparationOverride(wizard, 'ritual')).toBe(false);
+  });
+
+  it('3. Cleric-shaped context (legal:false, ritualLegal:false, ritualEligible:true), RITUAL mode → still illegal, override still offered (existing flow)', () => {
+    const cleric = ctx({ legal: false, ritualEligible: true, ritualLegal: false });
+    expect(isContextLegalForCastMode(cleric, 'ritual')).toBe(false);
+    expect(needsPreparationOverride(cleric, 'ritual')).toBe(true); // Cast Anyway legitimately bypasses Cleric's own prep requirement
+  });
+
+  it('4. an already-legal normal context → no override, either mode', () => {
+    const legal = ctx({ legal: true, ritualEligible: false, ritualLegal: false });
+    expect(needsPreparationOverride(legal, undefined)).toBe(false);
+    expect(isContextLegalForCastMode(legal, undefined)).toBe(true);
+  });
+
+  it('5. a ritual-INELIGIBLE source (Sorcerer-shaped: legal:true, ritualEligible:false, ritualLegal:false) never proceeds as a legal ritual, and is not offered a misleading preparation override', () => {
+    const sorcerer = ctx({ legal: true, ritualEligible: false, ritualLegal: false });
+    expect(isContextLegalForCastMode(sorcerer, 'ritual')).toBe(false); // never legal as a ritual
+    // Cast Anyway bypasses PREPARATION — this source isn't blocked by
+    // preparation at all (legal:true already), it simply has no ritual
+    // capability, so offering the override would promise something it
+    // can never deliver (applyActionCardUse refuses it unconditionally).
+    expect(needsPreparationOverride(sorcerer, 'ritual')).toBe(false);
+  });
+
+  it('6. source-specific: real Wizard vs Sorcerer contexts for the same spell resolve independently', () => {
+    const spell = leveledSpell('detect_magic_ui_test', 1, { ritual: true });
+    const e: Entity = {
+      ...makeEmptyEntity('e1'),
+      entitlements: [
+        ent('spell_access', 'detect_magic_ui_test', 'class', 'wizard'),
+        ent('spell_access', 'detect_magic_ui_test', 'class', 'sorcerer'),
+      ],
+      spellcasting: { ability: 'int', slots: emptySlots({ '1': { total: 1, used: 0 } }), cantrips: [], known: ['detect_magic_ui_test'], prepared: [], concentrating: null },
+    };
+    const contexts = resolveSpellCastingContexts(e, 'detect_magic_ui_test', ALL_CHAR_CLASSES);
+    const wizardCtx = contexts.find(c => c.classId === 'wizard')!;
+    const sorcererCtx = contexts.find(c => c.classId === 'sorcerer')!;
+
+    // Select Wizard + Ritual → legal, no override.
+    expect(isContextLegalForCastMode(wizardCtx, 'ritual')).toBe(true);
+    expect(needsPreparationOverride(wizardCtx, 'ritual')).toBe(false);
+
+    // Select Sorcerer + Ritual → must NOT proceed as legal merely because
+    // the Wizard context (or the card-level ritualEligible flag) says the
+    // SPELL is ritual-capable through SOME source.
+    expect(isContextLegalForCastMode(sorcererCtx, 'ritual')).toBe(false);
+    expect(needsPreparationOverride(sorcererCtx, 'ritual')).toBe(false); // no misleading "not prepared" prompt either
   });
 });

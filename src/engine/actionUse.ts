@@ -58,16 +58,46 @@ import { ALL_CHAR_CLASSES } from '../content/classes';
  * unaffected. A card blocked by BOTH preparation and status can have both
  * flags passed together (C7) — they are independent, not mutually
  * exclusive.
+ *
+ * `castMode` (rules-completeness batch — ritual casting) is `'ritual'` for
+ * an explicit ritual cast, undefined for every normal cast. Ritual mode
+ * changes exactly two things versus a normal cast of the SAME card: no
+ * spell slot (or any other resourceCost) is spent, and no action-economy
+ * slot (action/bonus action/reaction) is marked used — see A5's own
+ * rationale, a ritual's extra casting time isn't a single combat action,
+ * so this app's per-turn economy tracking doesn't apply to it. It does
+ * NOT change preparation legality, incapacitation, source/context
+ * selection, concentration, or effect application — a ritual cast still
+ * needs `bypassSpellPreparation` (Cast Anyway) to go through while
+ * unprepared, exactly like a normal cast (see SpellCastingContext.
+ * ritualEligible's own doc comment for why this app doesn't model the
+ * real-RAW "ritual bypasses prep" nuance). Revalidated fresh here — never
+ * trusted from `card.ritualEligible` alone — against the SAME selected
+ * context's own `ritualEligible` flag, so a stale/spoofed ritual request
+ * for a source that doesn't actually have Ritual Casting is rejected with
+ * zero mutation rather than casting for free.
  */
 export function applyActionCardUse(
   entity: Entity, card: ActionCard, rules: CampaignRules, chosenOption?: ActivationOption, selectedPayment?: SpellPaymentOption,
   bypassSpellPreparation?: boolean, selectedSpellCastingContext?: SpellCastingContext,
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
   bypassIncapacitated?: boolean,
+  castMode?: 'ritual',
 ): Entity {
   let updated = entity;
-  const cost = chosenOption?.resourceCost ?? card.resourceCost;
-  if (!isFeatureAvailable({ activation: { ...card.activation, options: undefined, resourceCost: cost } }, entity, bypassIncapacitated).available) return entity;
+  const isRitual = castMode === 'ritual';
+  // Ritual: no resourceCost at all (no slot, no other resource — RAW ritual
+  // casting costs nothing but time) — `cost` staying null skips both the
+  // availability check below AND the spend block further down automatically,
+  // one falsy value doing both jobs rather than two separate ritual branches.
+  const cost = isRitual ? null : (chosenOption?.resourceCost ?? card.resourceCost);
+  // Ritual: reports actionType as 'passive' (a real FeatureActivation
+  // value meaning "no action-economy tracked") so the turn-based action-
+  // economy gate (isFeatureAvailable → resourceAndEconomyLegal) never
+  // applies — a 10-minutes-longer ritual cast isn't the single 6-second
+  // action/bonus action/reaction this tracking exists for (A5).
+  const availabilityActivation = { ...card.activation, options: undefined, resourceCost: cost, actionType: isRitual ? 'passive' as const : card.activation.actionType };
+  if (!isFeatureAvailable({ activation: availabilityActivation }, entity, bypassIncapacitated).available) return entity;
   const classDefs = content.classDefs ?? ALL_CHAR_CLASSES;
 
   // Item-identity closure (pass 2, finding D3/D4): a card generated from a
@@ -85,6 +115,7 @@ export function applyActionCardUse(
     return entity;
   }
 
+  let revalidatedContext: SpellCastingContext | undefined;
   if (card.spellCastingContext) {
     // A spell card — revalidate the SPECIFIC selected context, not "does
     // any source happen to be legal" (that would let a cast that showed
@@ -96,18 +127,47 @@ export function applyActionCardUse(
     // source-kind/id match that could collide between two mechanically
     // different contexts sharing the same entitlement/feature.
     const requested = selectedSpellCastingContext ?? card.spellCastingContext;
-    const revalidated = resolveSpellCastingContexts(entity, card.featureId, classDefs)
+    revalidatedContext = resolveSpellCastingContexts(entity, card.featureId, classDefs)
       .find(c => c.contextKey === requested.contextKey);
-    if (!revalidated) return entity; // source disappeared since the card was generated — fail safely, never silently switch
-    if (!bypassSpellPreparation && !revalidated.legal) return entity;
+    if (!revalidatedContext) return entity; // source disappeared since the card was generated — fail safely, never silently switch
+    // Rules-completeness batch (ritual casting), HIGH-fix closure: a
+    // RITUAL attempt is gated by `ritualLegal`, never the normal-cast
+    // `legal` — for a 'spellbook'-policy source (Wizard) these deliberately
+    // disagree while unprepared: `legal` is false (normal casting still
+    // requires preparation, untouched by this fix — see A6) but
+    // `ritualLegal` is true (2014 RAW: a Wizard may ritual-cast straight
+    // from the spellbook with no preparation at all), so Cast Anyway is
+    // never needed for a legal Wizard-spellbook ritual. For a 'prepared'-
+    // policy source (Cleric/Druid) the two happen to compute to the exact
+    // same value (both driven by isPrepared), so nothing changes for them.
+    const preparationLegal = isRitual ? revalidatedContext.ritualLegal === true : revalidatedContext.legal;
+    if (!bypassSpellPreparation && !preparationLegal) return entity;
   } else if (!bypassSpellPreparation && !isSpellPreparationLegal(entity, card.featureId, classDefs)) {
     return entity;
   }
 
+  // Rules-completeness batch (ritual casting): revalidated fresh against
+  // the SAME already-revalidated context — never trusts card.ritualEligible
+  // (precomputed at generation time against a best-effort default context,
+  // possibly a DIFFERENT one than what's actually selected/still legal) or
+  // the caller's own castMode alone. A non-spell card, or a spell that isn't
+  // ritual-tagged, or a context whose source has no Ritual Casting policy,
+  // all refuse with zero mutation — no free cast on stale/spoofed UI state.
+  // (The preparation-legality gate just above already enforced ritualLegal
+  // for a policy-bearing context; this ALSO catches the "context supports
+  // no ritual policy at all" case — ritualEligible false — even though
+  // ritualLegal is false there too, since `spell.ritual` itself still needs
+  // checking independently of any class policy.)
+  if (isRitual) {
+    const ritualSpell = spellRepo.getSpellSync(card.featureId) ?? content.homebrewSpells?.find(s => s.id === card.featureId);
+    if (!ritualSpell?.ritual || !revalidatedContext?.ritualEligible) return entity;
+  }
+
   // A-25: mark the action-economy slot used, when the entity is actively
   // tracking a turn (see TurnState's doc comment — a no-op otherwise).
+  // Ritual: never marked — see castMode's own doc comment (A5).
   const actionType = card.activation.actionType;
-  if (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction') {
+  if (!isRitual && (actionType === 'action' || actionType === 'bonus_action' || actionType === 'reaction')) {
     updated = markActionSlotUsed(updated, actionType);
   }
 

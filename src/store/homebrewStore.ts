@@ -107,20 +107,47 @@ type HomebrewStore = {
 // the app (race-detail.tsx, class-detail.tsx, TabCharacter.tsx,
 // dm/encounter.tsx's QuickPanel, several homebrew builders) call this
 // unmemoized, so a single re-render could redo this merge several times.
-// Single-entry reference-equality cache: since the store's own content
-// arrays only get NEW references on an actual load/save/delete (never
-// mutated in place — confirmed via loadHomebrew's `set({...})` calls and
-// saveItem/deleteItem below), comparing by `===` against the previous
-// call's inputs is a safe, correct way to skip redoing the merge when
-// nothing has actually changed. `bannedIds` callers that construct a fresh
-// Set every render (see race-detail.tsx) simply won't benefit from this
-// cache themselves — the majority of call sites (which pass no bannedIds)
-// still do, with no correctness change either way.
+// Reference-equality cache keyed on the full argument tuple: since the
+// store's own content arrays only get NEW references on an actual load/
+// save/delete (never mutated in place — confirmed via loadHomebrew's
+// `set({...})` calls and saveItem/deleteItem below), comparing by `===`
+// against a previous call's inputs is a safe, correct way to skip redoing
+// the merge when nothing has actually changed. `bannedIds` callers that
+// construct a fresh Set every render (see race-detail.tsx) simply won't
+// benefit from this cache themselves — the majority of call sites (which
+// pass no bannedIds) still do, with no correctness change either way.
+//
+// Combat/Spells crash closure: this was a SINGLE-entry cache until this
+// batch — reproduced live (web preview) as a genuine "Maximum update depth
+// exceeded" on both the Combat and Spells tabs. Root cause: within one
+// render tree, one component reads this through a Zustand selector that
+// CALLS it with one argument shape (e.g. `s => s.getMergedContentDB(entity.
+// rulesetId)` — TabCharacter.tsx's useCardContent, TabSpells.tsx's own
+// call), while a sibling/child in the SAME tree (LevelUpSection inside
+// TabCharacter.tsx, AddSpellModal under TabSpells.tsx) calls it directly in
+// its own render body with a DIFFERENT shape (`getMergedContentDB()`, no
+// args). A single-entry cache means the second call evicts the first
+// call's entry; when Zustand's useSyncExternalStore machinery re-invokes
+// the ORIGINAL selector right after commit to verify the snapshot hasn't
+// changed, it gets a cache miss, recomputes, and returns a new object
+// reference — which reads as "snapshot changed since render" and forces
+// another re-render, repeating forever. Actions/Abilities/Features/Items
+// never crashed because nothing in their own tree calls this with a second,
+// different argument shape. Widening to a small multi-entry cache (find-by-
+// key instead of a single slot) fixes this at the actual fault line — the
+// cache's own fragility — rather than chasing down and re-auditing every
+// current and future call site across the app for argument consistency.
 type MergedContentDBCacheKey = readonly [
   unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[],
   RulesetId | undefined, Set<string> | undefined,
 ];
-let mergedContentDBCache: { key: MergedContentDBCacheKey; value: ContentDB } | null = null;
+// Small LRU, not unbounded — a handful of distinct argument shapes are
+// legitimately in real use across the app at once (bare, ruleset-scoped,
+// banned-ids-scoped); capping keeps this from growing without bound if a
+// caller ever passes a fresh bannedIds Set every render (which never hits
+// the cache anyway — see the doc comment above).
+const MERGED_CONTENT_DB_CACHE_MAX = 6;
+let mergedContentDBCacheEntries: { key: MergedContentDBCacheKey; value: ContentDB }[] = [];
 
 /** The per-type upsert-into-array patch for ONE item — factored out of
  *  saveItem so saveItems (item 14's atomic batch import) can fold N items
@@ -207,9 +234,8 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       races, subraces, classes, spells, backgrounds, features, items, feats, conditions,
       activeRuleset, bannedIds,
     ];
-    if (mergedContentDBCache && cacheKey.every((v, i) => v === mergedContentDBCache!.key[i])) {
-      return mergedContentDBCache.value;
-    }
+    const hit = mergedContentDBCacheEntries.find(entry => cacheKey.every((v, i) => v === entry.key[i]));
+    if (hit) return hit.value;
     // Item 15 (campaign content manifest) — banned homebrew packs' content
     // ids, pre-computed by the caller (packDiagnostics.ts's
     // bannedContentIds()) from the active campaign's Campaign.bannedPackIds.
@@ -262,7 +288,9 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       features:    notBanned(homebrewWinsById(globalContentDB.features, features)),
       feats:       notBanned(homebrewWinsById(globalContentDB.feats ?? [], feats).filter(f => matchesRuleset(f.rulesetId, activeRuleset))),
     };
-    mergedContentDBCache = { key: cacheKey, value: result };
+    // Most-recently-used first; evict the oldest entry once over the cap.
+    mergedContentDBCacheEntries = [{ key: cacheKey, value: result }, ...mergedContentDBCacheEntries]
+      .slice(0, MERGED_CONTENT_DB_CACHE_MAX);
     return result;
   },
 

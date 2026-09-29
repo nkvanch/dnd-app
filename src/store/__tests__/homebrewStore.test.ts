@@ -45,4 +45,30 @@ describe('homebrewStore.getMergedContentDB caching (CONTENT-REGISTRY-PERF-1)', (
     const withBanned2 = useHomebrewStore.getState().getMergedContentDB(undefined, new Set(['x']));
     expect(withBanned2).not.toBe(withBanned);
   });
+
+  // Combat/Spells crash closure: reproduced live (web preview) as a genuine
+  // "Maximum update depth exceeded" on both tabs. Root cause — a single-
+  // entry cache means two call sites in the SAME render tree using
+  // different argument shapes (e.g. TabCharacter.tsx's useCardContent
+  // selector calling `getMergedContentDB(entity.rulesetId)`, while its
+  // child LevelUpSection calls `getMergedContentDB()` with no args in its
+  // own render body) permanently evict each other's entry. When Zustand's
+  // useSyncExternalStore machinery re-invokes the ORIGINAL selector right
+  // after commit to verify the snapshot is stable, it gets a cache miss,
+  // recomputes, and returns a NEW object reference — which React reads as
+  // "the snapshot changed since render," forcing an infinite re-render
+  // loop. This locks in that alternating argument shapes no longer thrash
+  // a shared cache slot.
+  it('two different argument shapes both stay cached when interleaved (no thrashing)', () => {
+    const ruleset = 'dnd5e-2014' as any;
+    const scopedFirst = useHomebrewStore.getState().getMergedContentDB(ruleset);
+    const bareFirst   = useHomebrewStore.getState().getMergedContentDB();
+    // Re-request the FIRST shape after a DIFFERENT-shape call landed in
+    // between — before the multi-entry cache, this alone was enough to
+    // evict and force a fresh (differently-referenced) recompute forever.
+    const scopedAgain = useHomebrewStore.getState().getMergedContentDB(ruleset);
+    const bareAgain   = useHomebrewStore.getState().getMergedContentDB();
+    expect(scopedAgain).toBe(scopedFirst);
+    expect(bareAgain).toBe(bareFirst);
+  });
 });

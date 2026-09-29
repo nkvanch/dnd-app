@@ -291,6 +291,10 @@ export default function PackageBuilderScreen() {
   );
 }
 
+// The Review Package button is the footer's only child, so extra bottom padding
+// lifts it. 18dp (asked for 15-20) — one constant to tweak.
+const REVIEW_BUTTON_LIFT = 18;
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Spacing.xl + 8, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
@@ -317,7 +321,7 @@ const s = StyleSheet.create({
   typeBadge: { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm, paddingHorizontal: 6, paddingVertical: 2 },
   typeBadgeTxt: { fontSize: FontSize.xs, color: Colors.textDim },
   autoBadge: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  footer: { padding: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.bg },
+  footer: { padding: Spacing.lg, paddingBottom: Spacing.lg + REVIEW_BUTTON_LIFT, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.bg },
   footerBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center' },
   footerBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   disabled: { opacity: 0.4 },

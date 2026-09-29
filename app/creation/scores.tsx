@@ -13,6 +13,7 @@ import { resolveEffectiveCampaignRules } from '../../src/engine/customRuleProfil
 import { adjustPointBuy, minimumPointBuyScores, normalizePointBuyConfig, pointBuyCost, validatePointBuy } from '../../src/engine/pointBuy';
 import { Ability, AbilityScores } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const ABILITY_LABELS: Record<Ability, string> = {
@@ -225,7 +226,11 @@ export default function ScoresScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
 
         <Text style={styles.heading}>Ability Scores</Text>
         <View style={styles.divider} />
@@ -380,15 +385,18 @@ export default function ScoresScreen() {
           );
         })}
 
-        <View style={styles.divider} />
-        <Pressable
-          style={[styles.nextBtn, !canConfirm() && styles.nextBtnDisabled]}
-          onPress={handleConfirm}
-          disabled={!canConfirm()}
-        >
-          <Text style={styles.nextBtnText}>Confirm Scores</Text>
-        </Pressable>
       </ScrollView>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable
+            style={[styles.nextBtn, !canConfirm() && styles.nextBtnDisabled]}
+            onPress={handleConfirm}
+            disabled={!canConfirm()}
+          >
+            <Text style={styles.nextBtnText}>Confirm Scores</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
     </KeyboardAvoidingView>
   );
 }
@@ -420,7 +428,8 @@ const sd = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   backBtn:   { marginBottom: Spacing.md },
   backBtnText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },

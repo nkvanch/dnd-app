@@ -13,6 +13,7 @@ import { FEATS_BY_ID } from '../../src/content/feats/index';
 import { Entity, ChoiceState } from '../../src/engine/types';
 import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 /** Builds a fresh, unresolved feat choice anchored at level 1 for the picker. */
 function makeCreationFeatChoice(index: number): ChoiceState {
@@ -80,7 +81,11 @@ export default function CreationFeatsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
       <Text style={styles.heading}>Feats</Text>
       <View style={styles.divider} />
 
@@ -117,13 +122,17 @@ export default function CreationFeatsScreen() {
         <Text style={styles.addBtnTxt}>+ Add a Feat</Text>
       </Pressable>
 
-      <View style={styles.divider} />
-      <Pressable
-        style={styles.doneBtn}
-        onPress={() => { setDraft(markVisited(draft)); router.push('/creation/hub'); }}
-      >
-        <Text style={styles.doneBtnTxt}>Done →</Text>
-      </Pressable>
+    </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable
+          style={styles.doneBtn}
+          onPress={() => { setDraft(markVisited(draft)); router.push('/creation/hub'); }}
+        >
+          <Text style={styles.doneBtnTxt}>Done →</Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
 
       {/* Feat picker (feat-only mode) */}
       <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
@@ -143,13 +152,14 @@ export default function CreationFeatsScreen() {
           />
         </View>
       </Modal>
-    </ScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
   divider:   { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
 

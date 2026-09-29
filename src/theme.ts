@@ -47,6 +47,21 @@ export const Radius = {
   full: 999,
 };
 
+/**
+ * Safe-area-aware bottom padding for a scrollable screen whose last child is
+ * a primary CTA (Continue/Select/Confirm/Save). Without the device's actual
+ * bottom inset added on top of the ordinary visual spacing, that CTA's full
+ * touch target can render underneath the system navigation bar/home
+ * indicator and swallow taps meant for the app — confirmed on a physical
+ * Android device using 3-button navigation. Pass `insets.bottom` from
+ * `useSafeAreaInsets()` (react-native-safe-area-context) — never a
+ * hardcoded pixel guess, since the inset varies by device and nav mode
+ * (3-button, gesture, none).
+ */
+export function scrollBottomPadding(insetsBottom: number, visualSpacing: number = Spacing.xxl): number {
+  return visualSpacing + insetsBottom;
+}
+
 export const FontSize = {
   xs:   11,
   sm:   13,

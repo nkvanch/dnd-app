@@ -15,6 +15,7 @@
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
+import { SafeBottomView } from './SafeBottomView';
 
 export type RepeatedChoiceOption = {
   id:       string;
@@ -146,7 +147,12 @@ export function RepeatedChoicePicker({
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.headerRow}>
         <Text style={styles.heading}>{heading}</Text>
         {onClose && (
@@ -220,25 +226,31 @@ export function RepeatedChoicePicker({
         </Text>
       )}
 
-      <Pressable
-        style={[styles.applyBtn, legalSelectedCount !== requiredCount && styles.applyBtnDisabled]}
-        disabled={legalSelectedCount !== requiredCount}
-        onPress={commit}
-      >
-        {/* Part C/5: zero eligible options is a legitimately COMPLETE choice
-            with nothing to pick — "Grant Expertise in 0 Skills →" would be a
-            confusing label for that, so this is the one case the picker
-            overrides commitLabel itself rather than pushing an n===0 special
-            case onto every caller. */}
-        <Text style={styles.applyTxt}>{requiredCount === 0 ? 'Continue' : commitLabel(legalSelectedCount)}</Text>
-      </Pressable>
     </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable
+          style={[styles.applyBtn, legalSelectedCount !== requiredCount && styles.applyBtnDisabled]}
+          disabled={legalSelectedCount !== requiredCount}
+          onPress={commit}
+        >
+          {/* Part C/5: zero eligible options is a legitimately COMPLETE choice
+              with nothing to pick — "Grant Expertise in 0 Skills →" would be a
+              confusing label for that, so this is the one case the picker
+              overrides commitLabel itself rather than pushing an n===0 special
+              case onto every caller. */}
+          <Text style={styles.applyTxt}>{requiredCount === 0 ? 'Continue' : commitLabel(legalSelectedCount)}</Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   heading:   { flex: 1, flexShrink: 1, fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.gold, marginBottom: Spacing.xs },
   close:     { fontSize: FontSize.xl, color: Colors.textSecondary, paddingLeft: Spacing.md },

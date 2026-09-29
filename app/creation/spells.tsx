@@ -10,6 +10,7 @@ import { grantEntitlements, grantEntitlement, revokeEntitlementsFromChoice } fro
 //      and write the picks into entity.spellcasting.cantrips / .known.
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
@@ -26,7 +27,8 @@ import { SortControl } from '../../src/components/SortControl';
 import { Alert } from '../../src/utils/alert';
 import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
 import { FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips } from '../../src/components/FilterChipRow';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, scrollBottomPadding } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { useBrowseStateStore } from '../../src/store/browseStateStore';
 import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { SPELLS_AT_L1, readCreationPicks, writeCreationPicks, CreationSpellPicks } from '../../src/content/creationProgress';
@@ -100,6 +102,7 @@ function SpellRow({
 
 export default function SpellsScreen() {
   const router   = useRouter();
+  const insets   = useSafeAreaInsets();
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
@@ -354,7 +357,7 @@ export default function SpellsScreen() {
         {additionalFlow === 'menu' && (
           <Modal visible transparent animationType="fade" onRequestClose={() => setAdditionalFlow('closed')}>
             <Pressable style={styles.backdrop} onPress={() => setAdditionalFlow('closed')}>
-              <Pressable style={styles.menuSheet} onPress={e => e.stopPropagation()}>
+              <Pressable style={[styles.menuSheet, { paddingBottom: scrollBottomPadding(insets.bottom, Spacing.md) }]} onPress={e => e.stopPropagation()}>
                 <Text style={styles.menuTitle}>Add Additional Spell</Text>
                 <Text style={styles.menuSub}>Browses the whole spell library — doesn't use up your class's spell picks.</Text>
                 <Pressable style={styles.menuBtn} onPress={() => setAdditionalFlow('library')}>
@@ -393,23 +396,36 @@ export default function SpellsScreen() {
   // ── 1. Non-spellcaster ──────────────────────────────────────────────────────
   if (!isSpellcaster) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
         <Text style={styles.heading}>Spells</Text>
         <Text style={styles.sub}>This class does not use spells.</Text>
-        <Pressable style={styles.nextBtn} onPress={() => {
-          setDraft(markVisited(draft));
-          router.push('/creation/hub');
-        }}>
-          <Text style={styles.nextBtnText}>Continue →</Text>
-        </Pressable>
       </ScrollView>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable style={styles.nextBtn} onPress={() => {
+            setDraft(markVisited(draft));
+            router.push('/creation/hub');
+          }}>
+            <Text style={styles.nextBtnText}>Continue →</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
+      </>
     );
   }
 
   // ── 1b. ChoiceDefinition-based choices already resolved (re-entering) ──────
   if (spellChoices.length === 0 && resolvedSpellChoices.length > 0) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
         <Text style={styles.heading}>Spells</Text>
         <Text style={styles.sub}>Spells already chosen:</Text>
         {resolvedSpellChoices.map(choice => (
@@ -424,13 +440,18 @@ export default function SpellsScreen() {
           <Text style={styles.changeBtnTxt}>✎ Change Spells</Text>
         </Pressable>
         {renderAdditionalSpellSection()}
-        <Pressable style={styles.nextBtn} onPress={() => {
-          setDraft(markVisited(draft));
-          router.push('/creation/hub');
-        }}>
-          <Text style={styles.nextBtnText}>Continue →</Text>
-        </Pressable>
       </ScrollView>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable style={styles.nextBtn} onPress={() => {
+            setDraft(markVisited(draft));
+            router.push('/creation/hub');
+          }}>
+            <Text style={styles.nextBtnText}>Continue →</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
+      </>
     );
   }
 
@@ -445,11 +466,21 @@ export default function SpellsScreen() {
   // SpellChoicePicker.
   if (spellChoices.length > 0) {
     const isCantripChoice = (id: string) => id.includes('cantrip');
+    // BUGFIX-WARLOCK-SPELLS-1: a pure Warlock's castable level lives in
+    // pactSlots, never sc.slots (see SpellcastingBlock's own doc comment —
+    // pact slots are deliberately excluded from the regular multiclass slot
+    // table). Reading only sc.slots left maxCastableLevel at 0 for a pure
+    // Warlock, so every level-1+ "known spell" choice showed an empty pool
+    // ("No available spells for this choice") even though cantrips worked
+    // fine (cantrips don't depend on this at all). A Warlock multiclassed
+    // into a full/half-caster class still gets the higher of the two tables.
     const maxCastableLevel = (() => {
       const sc = draft.spellcasting;
       if (!sc) return 0;
       const tiers = ['9', '8', '7', '6', '5', '4', '3', '2', '1'] as const;
-      for (const t of tiers) { if ((sc.slots[t]?.total ?? 0) > 0) return Number(t); }
+      for (const t of tiers) {
+        if ((sc.slots[t]?.total ?? 0) > 0 || (sc.pactSlots?.[t]?.total ?? 0) > 0) return Number(t);
+      }
       return 0;
     })();
     const alreadyKnown = new Set([
@@ -579,19 +610,28 @@ export default function SpellsScreen() {
     };
 
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
         <Text style={styles.heading}>Spells</Text>
         {renderGroup(cantripGroup, 'Cantrips')}
         {renderGroup(knownGroup, 'Known Spells')}
         {renderAdditionalSpellSection()}
-        <Pressable
-          style={[styles.nextBtn, !canConfirm && styles.nextBtnDisabled]}
-          onPress={() => { void handleConfirmChoices(); }}
-          disabled={!canConfirm}
-        >
-          <Text style={styles.nextBtnText}>Confirm Spells →</Text>
-        </Pressable>
       </ScrollView>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable
+            style={[styles.nextBtn, !canConfirm && styles.nextBtnDisabled]}
+            onPress={() => { void handleConfirmChoices(); }}
+            disabled={!canConfirm}
+          >
+            <Text style={styles.nextBtnText}>Confirm Spells →</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
+      </>
     );
   }
 
@@ -691,7 +731,11 @@ export default function SpellsScreen() {
   const nothingToPick = targets.cantrips === 0 && targets.spells === 0;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
       <Text style={styles.heading}>Spells</Text>
 
       {nothingToPick ? (
@@ -851,21 +895,26 @@ export default function SpellsScreen() {
       )}
 
       {renderAdditionalSpellSection()}
-
-      <Pressable
-        style={[styles.nextBtn, !nothingToPick && !canConfirm && styles.nextBtnDisabled]}
-        onPress={() => { void handleConfirm(); }}
-        disabled={!nothingToPick && !canConfirm}
-      >
-        <Text style={styles.nextBtnText}>{nothingToPick ? 'Continue →' : 'Confirm Spells →'}</Text>
-      </Pressable>
     </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable
+          style={[styles.nextBtn, !nothingToPick && !canConfirm && styles.nextBtnDisabled]}
+          onPress={() => { void handleConfirm(); }}
+          disabled={!nothingToPick && !canConfirm}
+        >
+          <Text style={styles.nextBtnText}>{nothingToPick ? 'Continue →' : 'Confirm Spells →'}</Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.gold, marginBottom: Spacing.xs },
   sub:       { fontSize: FontSize.md, color: Colors.textSecondary, marginBottom: Spacing.lg },
   search: {

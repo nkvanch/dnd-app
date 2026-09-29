@@ -10,6 +10,7 @@ import { Entity } from '../../src/engine/types';
 import { subclassEntriesForClassMerged } from '../../src/content/subclasses/subclassBrowse';
 import { skillProgressFor, spellProgressFor } from '../../src/content/creationProgress';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 type Section = {
   key:   string;
@@ -266,7 +267,11 @@ export default function HubScreen() {
   const nextSection = sections.find(s => !s.done(draft));
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
 
       <Text style={styles.heading}>Character Creation</Text>
       <View style={styles.divider} />
@@ -327,29 +332,34 @@ export default function HubScreen() {
         })}
       </View>
 
-      <View style={styles.divider} />
-
-      {/* Next sequential button */}
-      {nextSection && !allDone && (
-        <Pressable style={styles.nextBtn} onPress={() => router.push(nextSection.route as any)}>
-          <Text style={styles.nextBtnText}>Next: {nextSection.label} →</Text>
-        </Pressable>
-      )}
-
-      {/* Review — only when everything done */}
-      {allDone && (
-        <Pressable style={styles.reviewBtn} onPress={() => router.push('/creation/review')}>
-          <Text style={styles.reviewBtnText}>Review Character →</Text>
-        </Pressable>
-      )}
-
     </ScrollView>
+    {(nextSection && !allDone || allDone) && (
+      <SafeBottomView>
+        <View style={styles.footer}>
+          {/* Next sequential button */}
+          {nextSection && !allDone && (
+            <Pressable style={styles.nextBtn} onPress={() => router.push(nextSection.route as any)}>
+              <Text style={styles.nextBtnText}>Next: {nextSection.label} →</Text>
+            </Pressable>
+          )}
+
+          {/* Review — only when everything done */}
+          {allDone && (
+            <Pressable style={styles.reviewBtn} onPress={() => router.push('/creation/review')}>
+              <Text style={styles.reviewBtnText}>Review Character →</Text>
+            </Pressable>
+          )}
+        </View>
+      </SafeBottomView>
+    )}
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   heading: { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
   sectionLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary, marginBottom: Spacing.md, textTransform: 'uppercase', letterSpacing: 1 },

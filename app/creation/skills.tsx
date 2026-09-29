@@ -15,6 +15,7 @@ import { skillOverlapMode } from '../../src/engine/houseRules';
 import { ChoiceOption, SkillName } from '../../src/engine/types';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 const SKILL_LABELS: Record<string, string> = {
   athletics: 'Athletics', acrobatics: 'Acrobatics', sleight_of_hand: 'Sleight of Hand',
@@ -204,24 +205,37 @@ export default function SkillsScreen() {
   // ── Case 1: no skill choices ───────────────────────────────────────────────
   if (allSkillChoices.length === 0) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
         <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backBtnTxt}>← Back</Text>
         </Pressable>
         <Text style={styles.heading}>Skill Selection</Text>
         <View style={styles.divider} />
         <Text style={styles.emptyNote}>No additional skill choices for this class.</Text>
-        <Pressable style={styles.nextBtn} onPress={() => router.push('/creation/hub')}>
-          <Text style={styles.nextBtnText}>Continue →</Text>
-        </Pressable>
       </ScrollView>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable style={styles.nextBtn} onPress={() => router.push('/creation/hub')}>
+            <Text style={styles.nextBtnText}>Continue →</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
+      </>
     );
   }
 
   // ── Case 2: all resolved (re-entering) ────────────────────────────────────
   if (pendingSkillChoices.length === 0) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
         <Pressable style={styles.backBtn} onPress={safeGoBack}>
           <Text style={styles.backBtnTxt}>← Back</Text>
         </Pressable>
@@ -237,14 +251,18 @@ export default function SkillsScreen() {
             return <Text key={selId} style={styles.ownedSkill}>✓ {label}</Text>;
           });
         })}
-        <View style={styles.divider} />
-        <Pressable style={styles.changeBtn} onPress={startEditingSkills}>
-          <Text style={styles.changeBtnTxt}>✎ Change Skills</Text>
-        </Pressable>
-        <Pressable style={styles.nextBtn} onPress={() => router.push('/creation/hub')}>
-          <Text style={styles.nextBtnText}>Continue →</Text>
-        </Pressable>
       </ScrollView>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable style={styles.changeBtn} onPress={startEditingSkills}>
+            <Text style={styles.changeBtnTxt}>✎ Change Skills</Text>
+          </Pressable>
+          <Pressable style={styles.nextBtn} onPress={() => router.push('/creation/hub')}>
+            <Text style={styles.nextBtnText}>Continue →</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
+      </>
     );
   }
 
@@ -252,7 +270,11 @@ export default function SkillsScreen() {
   const ready = canProceed();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
       <Pressable style={styles.backBtn} onPress={safeGoBack}>
         <Text style={styles.backBtnTxt}>← Back</Text>
       </Pressable>
@@ -354,32 +376,38 @@ export default function SkillsScreen() {
         </View>
       )}
 
-      {/* Confirm button */}
-      <Pressable
-        style={[styles.nextBtn, (!ready || showWarnBox) && styles.nextBtnDisabled]}
-        onPress={() => {
-          if (!ready || showWarnBox) return;
-          if (overlapMode === 'warn' && totalLost > 0) {
-            setShowWarnBox(true);   // show inline confirmation
-          } else {
-            commit();
-          }
-        }}
-        disabled={!ready || showWarnBox}
-      >
-        <Text style={styles.nextBtnText}>
-          {ready && overlapMode === 'warn' && totalLost > 0
-            ? `Confirm Skills (losing ${totalLost} pick${totalLost === 1 ? '' : 's'})`
-            : 'Confirm Skills'}
-        </Text>
-      </Pressable>
     </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        {/* Confirm button */}
+        <Pressable
+          style={[styles.nextBtn, (!ready || showWarnBox) && styles.nextBtnDisabled]}
+          onPress={() => {
+            if (!ready || showWarnBox) return;
+            if (overlapMode === 'warn' && totalLost > 0) {
+              setShowWarnBox(true);   // show inline confirmation
+            } else {
+              commit();
+            }
+          }}
+          disabled={!ready || showWarnBox}
+        >
+          <Text style={styles.nextBtnText}>
+            {ready && overlapMode === 'warn' && totalLost > 0
+              ? `Confirm Skills (losing ${totalLost} pick${totalLost === 1 ? '' : 's'})`
+              : 'Confirm Skills'}
+          </Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: Spacing.sm },
 
   backBtn: { marginBottom: Spacing.md },
   backBtnTxt: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },

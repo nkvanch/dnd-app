@@ -20,7 +20,8 @@ import {
   FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow,
   ActiveFilterChips, ZeroResultsState,
 } from '../../src/components/FilterChipRow';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, scrollBottomPadding } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { useBrowseStateStore } from '../../src/store/browseStateStore';
 import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 
@@ -225,8 +226,10 @@ export default function BackgroundScreen() {
   }
   const noResults = backgrounds.length === 0 && filteredHomebrewBackgrounds.length === 0;
 
-  return (
-    <View style={styles.container}>
+  // SCROLL-HEADER-1: see race.tsx's identical comment — heading/search/
+  // filters now scroll away with the list instead of staying pinned above it.
+  const listHeader = (
+    <>
       <Text style={styles.heading}>Select Background</Text>
       <View style={styles.divider} />
 
@@ -267,18 +270,26 @@ export default function BackgroundScreen() {
         </View>
       )}
       <ActiveFilterChips chips={activeFilterChips} onClearAll={clearAllFilters} />
+    </>
+  );
 
+  return (
+    <View style={styles.container}>
       {noResults ? (
-        <ZeroResultsState
-          hasActiveFilters={activeFilterChips.length > 0}
-          emptyMessage="No backgrounds match your search."
-          onClearFilters={clearAllFilters}
-        />
+        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: scrollBottomPadding(insets.bottom) }]}>
+          {listHeader}
+          <ZeroResultsState
+            hasActiveFilters={activeFilterChips.length > 0}
+            emptyMessage="No backgrounds match your search."
+            onClearFilters={clearAllFilters}
+          />
+        </ScrollView>
       ) : (
         <FlatList
           data={backgrounds}
           keyExtractor={b => b.id}
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + Spacing.xxl }]}
+          ListHeaderComponent={listHeader}
+          contentContainerStyle={[styles.list, { paddingBottom: scrollBottomPadding(insets.bottom) }]}
           renderItem={({ item }) => (
             <Pressable
               style={styles.row}
@@ -499,7 +510,11 @@ function BackgroundDetail({ id }: { id: string }) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
       <View style={styles.headingRow}>
         <Text style={styles.heading}>{bg.name}</Text>
         {isHomebrew && (
@@ -606,15 +621,19 @@ function BackgroundDetail({ id }: { id: string }) {
         </>
       )}
 
-      <View style={styles.divider} />
-      <Pressable
-        style={[styles.selectBtn, !flexComplete && styles.selectBtnDisabled]}
-        onPress={selectBackground}
-        disabled={!flexComplete}
-      >
-        <Text style={styles.selectBtnText}>Select Background</Text>
-      </Pressable>
     </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable
+          style={[styles.selectBtn, !flexComplete && styles.selectBtnDisabled]}
+          onPress={selectBackground}
+          disabled={!flexComplete}
+        >
+          <Text style={styles.selectBtnText}>Select Background</Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
+    </>
   );
 }
 
@@ -666,7 +685,8 @@ const ppStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
   headingRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm },
   sub:       { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },

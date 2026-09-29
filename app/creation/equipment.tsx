@@ -14,6 +14,7 @@
 // the same multi-item choice.
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
@@ -26,7 +27,8 @@ import { buildSimpleCustomItem } from '../../src/content/items/itemBrowse';
 import { describeConstraint, reopenEquipmentChoice, skipEquipmentChoice, skipRemainingEquipment, addAdditionalEquipment, additionalEquipment, removeAdditionalEquipment } from '../../src/content/items/equipmentDisplay';
 import { ItemPickerModal } from '../../src/components/ItemPickerModal';
 import { Alert } from '../../src/utils/alert';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, scrollBottomPadding } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 /** Marks equipmentVisited in notes JSON. */
 function markVisited(entity: Entity): Entity {
@@ -37,6 +39,7 @@ function markVisited(entity: Entity): Entity {
 
 export default function EquipmentScreen() {
   const router   = useRouter();
+  const insets   = useSafeAreaInsets();
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
@@ -311,7 +314,11 @@ export default function EquipmentScreen() {
   const canProceed = true;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
       <Text style={styles.heading}>Starting Equipment</Text>
 
       {totalRequired > 0 && (
@@ -428,14 +435,18 @@ export default function EquipmentScreen() {
       </View>
 
       {equipChoices.length > 0 && <Pressable testID="equipment-skip-remaining" accessibilityLabel="Skip remaining equipment" style={styles.skipRemainingBtn} onPress={() => setDraft(skipRemainingEquipment(entity))}><Text style={styles.skipChoiceTxt}>Skip remaining equipment</Text></Pressable>}
-
-      <Pressable
-        style={[styles.nextBtn, !canProceed && styles.nextBtnDisabled]}
-        onPress={handleConfirm}
-        disabled={!canProceed}
-      >
-        <Text style={styles.nextBtnText}>Next: Spells →</Text>
-      </Pressable>
+    </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable
+          style={[styles.nextBtn, !canProceed && styles.nextBtnDisabled]}
+          onPress={handleConfirm}
+          disabled={!canProceed}
+        >
+          <Text style={styles.nextBtnText}>Next: Spells →</Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
 
       {activePicker && (
         <ItemPickerModal
@@ -466,7 +477,7 @@ export default function EquipmentScreen() {
       {addFlow === 'menu' && (
         <Modal visible transparent animationType="fade" onRequestClose={() => setAddFlow('closed')}>
           <Pressable style={styles.backdrop} onPress={() => setAddFlow('closed')}>
-            <Pressable style={styles.menuSheet} onPress={e => e.stopPropagation()}>
+            <Pressable style={[styles.menuSheet, { paddingBottom: scrollBottomPadding(insets.bottom, Spacing.md) }]} onPress={e => e.stopPropagation()}>
               <Text style={styles.menuTitle}>Add Additional Item</Text>
               <Pressable style={styles.menuBtn} onPress={() => setAddFlow('library')}>
                 <Text style={styles.menuBtnTxt}>Browse Item Library</Text>
@@ -491,7 +502,7 @@ export default function EquipmentScreen() {
       {addFlow === 'simple' && (
         <Modal visible transparent animationType="fade" onRequestClose={() => setAddFlow('closed')}>
           <Pressable style={styles.backdrop} onPress={() => setAddFlow('closed')}>
-            <Pressable style={styles.menuSheet} onPress={e => e.stopPropagation()}>
+            <Pressable style={[styles.menuSheet, { paddingBottom: scrollBottomPadding(insets.bottom, Spacing.md) }]} onPress={e => e.stopPropagation()}>
               <Text style={styles.menuTitle}>Create Simple Custom Item</Text>
               <TextInput style={styles.input} value={scName} onChangeText={setScName} placeholder="Item name" placeholderTextColor={Colors.textDim} />
               <TextInput style={styles.input} value={scProps} onChangeText={setScProps} placeholder="Properties (comma-separated, optional)" placeholderTextColor={Colors.textDim} />
@@ -506,13 +517,14 @@ export default function EquipmentScreen() {
           </Pressable>
         </Modal>
       )}
-    </ScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.gold, marginBottom: Spacing.xs },
   sub:       { fontSize: FontSize.md, color: Colors.textSecondary, marginBottom: Spacing.md },
   progressPanel: {

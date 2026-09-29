@@ -20,7 +20,7 @@ const SCREEN_KEY = 'class_picker';
 const ABILITY_LABELS: Record<Ability, string> = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' };
 const ARMOR_LABELS: Record<string, string> = { light: 'Light', medium: 'Medium', heavy: 'Heavy', shield: 'Shield' };
 const WEAPON_LABELS: Record<string, string> = { simple: 'Simple', martial: 'Martial' };
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, scrollBottomPadding } from '../../src/theme';
 
 const CLASS_DESCRIPTIONS: Record<string, string> = {
   barbarian: 'A fierce warrior who can enter a battle rage to deal devastating damage and shrug off attacks. STR-based martial combatant. Hit Die: d12.',
@@ -138,9 +138,10 @@ export default function ClassScreen() {
     setSaveFilter(new Set()); setArmorFilter(new Set()); setWeaponFilter(new Set());
   }
 
-  return (
-    <View style={styles.container}>
-
+  // SCROLL-HEADER-1: see race.tsx's identical comment — heading/search/
+  // filters now scroll away with the list instead of staying pinned above it.
+  const listHeader = (
+    <>
       <Text style={styles.heading}>Select Class</Text>
       <View style={styles.divider} />
 
@@ -194,11 +195,16 @@ export default function ClassScreen() {
         </View>
       )}
       <ActiveFilterChips chips={activeFilterChips} onClearAll={clearAllFilters} />
+    </>
+  );
 
+  return (
+    <View style={styles.container}>
       <FlatList
         data={classes}
         keyExtractor={c => c.id}
-        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + Spacing.xxl }]}
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={[styles.list, { paddingBottom: scrollBottomPadding(insets.bottom) }]}
         renderItem={({ item }) => {
           const isOpen    = expanded === item.id;
           const desc      = CLASS_DESCRIPTIONS[item.id];

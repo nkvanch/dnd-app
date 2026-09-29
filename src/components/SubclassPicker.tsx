@@ -8,6 +8,7 @@
 // updated entity back via onResolved. Shared by creation and in-play sheet.
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { applySubclassToEntity } from '../engine/leveling';
 import {
   subclassEntriesForClassMerged, subclassFeaturesByLevel,
@@ -21,7 +22,7 @@ import {
 } from './FilterChipRow';
 import { SortControl } from './SortControl';
 import { Entity, ChoiceState, CampaignRules } from '../engine/types';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, scrollBottomPadding } from '../theme';
 
 export function SubclassPicker({
   entity,
@@ -47,6 +48,7 @@ export function SubclassPicker({
   onCreateNewSubclass?: () => void;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
 
   // Multiclass-aware: a choice queued by levelUpClass() tags which class it
@@ -115,7 +117,11 @@ export function SubclassPicker({
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding(insets.bottom) }]}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.headerRow}>
         <Text style={styles.heading}>Choose Your Subclass</Text>
         {onClose && (
@@ -235,7 +241,7 @@ export function SubclassPicker({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.gold, marginBottom: Spacing.xs },
   close:     { fontSize: FontSize.xl, color: Colors.textSecondary, paddingLeft: Spacing.md },

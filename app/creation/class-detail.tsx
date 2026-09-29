@@ -23,6 +23,7 @@ import {
 } from '../../src/components/FilterChipRow';
 import { SortControl } from '../../src/components/SortControl';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 type ClassDetail = {
   description: string;
@@ -328,7 +329,10 @@ export default function ClassDetailScreen() {
 
   return (
     <>
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
 
       <View style={styles.headingRow}>
         <Text style={styles.heading}>{cls.name}</Text>
@@ -636,11 +640,14 @@ export default function ClassDetailScreen() {
         );
       })()}
 
-      <View style={styles.divider} />
-      <Pressable style={styles.selectBtn} onPress={selectClass}>
-        <Text style={styles.selectBtnText}>Select Class</Text>
-      </Pressable>
     </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable style={styles.selectBtn} onPress={selectClass}>
+          <Text style={styles.selectBtnText}>Select Class</Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
 
     {/* Class-change confirmation — custom dark/gold modal (replaces native Alert) */}
     <Modal visible={!!changePrompt} transparent animationType="fade" onRequestClose={() => setChangePrompt(null)}>
@@ -750,7 +757,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   heading: { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
   headingRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm },
   homebrewTag: {

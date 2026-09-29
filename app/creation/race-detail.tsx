@@ -24,6 +24,7 @@ import {
 } from '../../src/content/races/subraceBrowse';
 import { sortByOption } from '../../src/content/contentQuery';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 const ABILITY_LABELS: { key: Ability; label: string }[] = [
   { key: 'str', label: 'STR' }, { key: 'dex', label: 'DEX' }, { key: 'con', label: 'CON' },
@@ -381,7 +382,11 @@ export default function RaceDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
 
       <View style={styles.headingRow}>
         <Text style={styles.heading}>{race.name}</Text>
@@ -587,20 +592,24 @@ export default function RaceDetailScreen() {
         </>
       )}
 
-      <View style={styles.divider} />
-      <Pressable
-        style={[styles.selectBtn, !canSelect && styles.selectBtnDisabled]}
-        onPress={selectRace}
-        disabled={!canSelect}
-      >
-        <Text style={styles.selectBtnText}>
-          {hasSubraces && !subRaceId && !subracesOptional ? 'Choose a subrace to continue'
-            : hasAncestry && !ancestryId ? 'Choose an ancestry to continue'
-            : !flexComplete ? 'Choose ability scores to continue'
-            : 'Select Race'}
-        </Text>
-      </Pressable>
     </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable
+          style={[styles.selectBtn, !canSelect && styles.selectBtnDisabled]}
+          onPress={selectRace}
+          disabled={!canSelect}
+        >
+          <Text style={styles.selectBtnText}>
+            {hasSubraces && !subRaceId && !subracesOptional ? 'Choose a subrace to continue'
+              : hasAncestry && !ancestryId ? 'Choose an ancestry to continue'
+              : !flexComplete ? 'Choose ability scores to continue'
+              : 'Select Race'}
+          </Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
+    </>
   );
 }
 
@@ -635,7 +644,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   backBtn:   { marginBottom: Spacing.md },
   backBtnText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
   headingRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.md },

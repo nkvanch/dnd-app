@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useCharacterStore, makeEmptyEntity } from '../../src/store/characterStore';
 import { RulesetId } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 const LEVEL_OPTIONS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
 
@@ -77,7 +78,11 @@ export default function NameScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.inner}
+        keyboardShouldPersistTaps="handled"
+      >
 
         {/* Header — title + original app settings button */}
         <View style={styles.headerRow}>
@@ -144,22 +149,27 @@ export default function NameScreen() {
 
         <View style={styles.divider} />
 
-        <Pressable
-          style={[styles.continueBtn, !name.trim() && styles.continueBtnDisabled]}
-          onPress={handleContinue}
-          disabled={!name.trim()}
-        >
-          <Text style={styles.continueBtnText}>Continue</Text>
-        </Pressable>
-
       </ScrollView>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable
+            style={[styles.continueBtn, !name.trim() && styles.continueBtnDisabled]}
+            onPress={handleContinue}
+            disabled={!name.trim()}
+          >
+            <Text style={styles.continueBtnText}>Continue</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  inner: { padding: Spacing.lg, paddingTop: Spacing.xxl, paddingBottom: Spacing.xxl },
+  scroll:    { flex: 1 },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
+  inner: { padding: Spacing.lg, paddingTop: Spacing.xxl },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md },
   headerSpacer: { width: 32 },

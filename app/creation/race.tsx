@@ -15,7 +15,7 @@ import { sortByOption } from '../../src/content/contentQuery';
 import { SortControl } from '../../src/components/SortControl';
 import { useBrowseStateStore } from '../../src/store/browseStateStore';
 import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, scrollBottomPadding } from '../../src/theme';
 
 const SCREEN_KEY = 'race_picker';
 
@@ -121,9 +121,12 @@ export default function RaceScreen() {
     setRulesetFilter(null); setOfficialFilter('all'); setHasSubracesOnly(false);
   }
 
-  return (
-    <View style={styles.container}>
-
+  // SCROLL-HEADER-1: heading/search/filters used to sit in a plain View
+  // above the FlatList — a fixed header that never scrolled away, wasting
+  // screen space once the player opens Filters. Moved into
+  // ListHeaderComponent so it scrolls with the list like everything else.
+  const listHeader = (
+    <>
       <Text style={styles.heading}>Select Race</Text>
       <View style={styles.divider} />
 
@@ -182,11 +185,16 @@ export default function RaceScreen() {
         </View>
       )}
       <ActiveFilterChips chips={activeFilterChips} onClearAll={clearAllFilters} />
+    </>
+  );
 
+  return (
+    <View style={styles.container}>
       <FlatList
         data={races}
         keyExtractor={r => r.id}
-        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + Spacing.xxl }]}
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={[styles.list, { paddingBottom: scrollBottomPadding(insets.bottom) }]}
         renderItem={({ item }) => {
           const isOpen = expanded === item.id;
           const desc   = RACE_DESCRIPTIONS[item.id];

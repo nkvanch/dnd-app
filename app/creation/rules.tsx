@@ -26,6 +26,7 @@ import {
 import { Entity, CampaignRules } from '../../src/engine/types';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 type HpMode = 'fixed' | 'rolled' | 'max';
 
@@ -94,7 +95,11 @@ export default function CreationRulesScreen() {
   }, {});
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
       <View style={styles.headerRow}>
         <Text style={styles.heading}>Campaign Settings</Text>
         <Pressable onPress={() => setRules(DEFAULT_RULES)}>
@@ -242,13 +247,17 @@ export default function CreationRulesScreen() {
         </Accordion>
       ))}
 
-      <View style={styles.divider} />
-      <Pressable style={styles.doneBtn} onPress={handleDone}>
-        <Text style={styles.doneBtnTxt}>
-          {hasDraft ? 'Done \u2192' : '\u2190 Back to Basics'}
-        </Text>
-      </Pressable>
     </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable style={styles.doneBtn} onPress={handleDone}>
+          <Text style={styles.doneBtnTxt}>
+            {hasDraft ? 'Done \u2192' : '\u2190 Back to Basics'}
+          </Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
+    </>
   );
 }
 
@@ -351,7 +360,8 @@ function ToggleRow({ label, description, value, onToggle }: {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary },

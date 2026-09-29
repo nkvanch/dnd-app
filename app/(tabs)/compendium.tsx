@@ -664,8 +664,14 @@ function OfficialCompendiumView() {
     setMonsterLanguage(new Set()); setMonsterLegendary(false); setMonsterLair(false); setMonsterDarkvision(false); setMonsterSpellcaster(false);
   }
 
-  return (
-    <View style={styles.screen} testID="compendium-screen">
+  // SCROLL-HEADER-1: see the creation-flow browse screens' identical
+  // comment — heading/search/type-chips/filters used to sit in a plain View
+  // above the results FlatList, pinned in place while only the results
+  // scrolled beneath. Moved into ListHeaderComponent so the whole header —
+  // including an open Filters panel, which can be tall — scrolls away with
+  // the results instead of permanently eating screen space.
+  const listHeader = (
+    <>
       <View style={styles.header}>
         <Text style={styles.subtitle}>{contentType === 'all' ? 'All Content' : CONTENT_TYPE_LABELS[contentType]}</Text>
       </View>
@@ -929,9 +935,14 @@ function OfficialCompendiumView() {
         )}
         <ActiveFilterChips chips={globalFilterChips} onClearAll={clearAllFilters} />
       </View>
+    </>
+  );
 
+  return (
+    <View style={styles.screen} testID="compendium-screen">
       {results.length === 0 ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          {listHeader}
           <ZeroResultsState
             hasActiveFilters={globalFilterChips.length > 0 || filtersOpen}
             emptyMessage={favoritesOnly ? 'No favorites yet — tap ☆ on a result to add one.' : 'No results match your search.'}
@@ -948,6 +959,7 @@ function OfficialCompendiumView() {
           contentContainerStyle={styles.content}
           data={results}
           keyExtractor={entry => `${entry.type}:${entry.id}`}
+          ListHeaderComponent={listHeader}
           initialNumToRender={20}
           windowSize={7}
           maxToRenderPerBatch={20}

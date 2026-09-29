@@ -404,6 +404,33 @@ export function dropConcentration(entity: Entity): Entity {
 }
 
 /**
+ * Names of the effects that end together with the current concentration —
+ * features tagged source.kind='spell' for the concentrated spell (exactly the
+ * set dropConcentration removes). Empty when not concentrating or when the
+ * spell carries no mechanical effect of its own.
+ */
+export function concentrationLinkedEffectNames(entity: Entity): string[] {
+  const id = entity.spellcasting?.concentrating;
+  if (!id) return [];
+  return entity.features
+    .filter(f => f.source.kind === 'spell' && f.source.refId === id)
+    .map(f => f.name);
+}
+
+/**
+ * The player/DM ends concentration by hand — the human-confirmed path the
+ * table-first design calls for (a broken save, a dispel or a ruling all end
+ * up here). Same deterministic cleanup as a failed concentration save:
+ * dropConcentration clears the tracker and the linked spell features, and the
+ * recompute makes sure nothing derived from those features lingers.
+ * No-op when not concentrating.
+ */
+export function endConcentration(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity {
+  if (!entity.spellcasting?.concentrating) return entity;
+  return recomputeDerived(dropConcentration(entity), rules);
+}
+
+/**
  * Begins concentrating on a spell.
  * Applies any onConcentrationFeatures from the spell definition.
  * Tags them with source = { kind: 'spell', refId: spell.id }

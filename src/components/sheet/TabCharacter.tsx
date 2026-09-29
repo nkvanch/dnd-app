@@ -12,7 +12,8 @@ import {
 import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker, ActivationOption, matchesRuleset, Ability } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
-import { toggleActionEconomy, parseRechargeThreshold, rollRecharge } from '../../engine/combat';
+import { toggleActionEconomy, parseRechargeThreshold, rollRecharge, concentrationLinkedEffectNames } from '../../engine/combat';
+import { confirmEndConcentration } from './spellTabUi';
 import { recomputeDerived, modifier, effectiveAbilityScores } from '../../engine/pipeline';
 import { rollDie } from '../../engine/leveling';
 import { levelUp, levelUpClass, calculateLevelUpHpGain, isValidHpRoll } from '../../engine/leveling';
@@ -102,6 +103,9 @@ interface Props {
   onResourceChange:  (resourceId: string, delta: number) => void;
   onSpendSlot:       (tier: string, kind?: 'normal' | 'pact') => void;
   onRestoreSlot:     (tier: string, kind?: 'normal' | 'pact') => void;
+  /** Manually ends the current concentration (and its linked effects) — the
+   *  one shared handler app/sheet/[id].tsx also gives the Spells tab. */
+  onEndConcentration: (spellName: string) => void;
   onEntityUpdate:    (updated: Entity) => void;
   /** Closure item 16 — the one authoritative End Turn entry point, shared
    *  verbatim with the Actions and Spells tabs (see app/sheet/[id].tsx's
@@ -957,7 +961,7 @@ function MovementModal({
 function TabCharacterInner({
   entity, rules, isDm, campaignId, deviceId,
   onDamage, onHeal, onAddCondition, onRemoveCondition,
-  onResourceChange, onSpendSlot, onRestoreSlot, onEntityUpdate, onEndTurn,
+  onResourceChange, onSpendSlot, onRestoreSlot, onEndConcentration, onEntityUpdate, onEndTurn,
 }: Props) {
   // Sourced from the merged content DB (not a hardcoded, official-only id
   // list) so homebrew conditions are actually pickable here — audit
@@ -1667,11 +1671,22 @@ function TabCharacterInner({
 
       {/* Concentration indicator */}
       {spellcasting?.concentrating && (
-        <View style={styles.concIndicator}>
-          <Text style={styles.concIndicatorTxt}>
+        <View style={[styles.concIndicator, styles.concIndicatorRow]}>
+          <Text style={[styles.concIndicatorTxt, styles.concIndicatorLabel]}>
             🧠 Concentrating on: {spellRepo.getSpellSync(spellcasting.concentrating)?.name ?? spellcasting.concentrating}
             {spellcasting.concentratingDuration?.unit === 'rounds' && ` · ${spellcasting.concentratingDuration.remaining}r`}
           </Text>
+          <Pressable
+            style={styles.concEndBtn}
+            hitSlop={6}
+            accessibilityLabel="End concentration"
+            onPress={() => {
+              const name = spellRepo.getSpellSync(spellcasting.concentrating!)?.name ?? spellcasting.concentrating!;
+              confirmEndConcentration(name, concentrationLinkedEffectNames(entity), () => onEndConcentration(name));
+            }}
+          >
+            <Text style={styles.concEndBtnTxt}>End</Text>
+          </Pressable>
         </View>
       )}
 
@@ -1836,8 +1851,10 @@ function TabCharacterInner({
 
       {/* Condition Picker Modal */}
       <Modal visible={condModal} transparent animationType="slide" onRequestClose={closeConditionFlow}>
-        <Pressable style={styles.backdrop} onPress={closeConditionFlow}>
-          <Pressable style={styles.condPickerSheet} onPress={e => e.stopPropagation()}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeConditionFlow} accessible={false} />
+          <View style={styles.condPickerSheet}>
             {pendingConditionId === null ? (
               <>
                 <Text style={styles.condPickerTitle}>Add Condition</Text>
@@ -1888,8 +1905,8 @@ function TabCharacterInner({
                 </Pressable>
               </>
             )}
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <NumberPromptModal
@@ -2267,6 +2284,14 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
   },
   concIndicatorTxt: { color: Colors.blue, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+  concIndicatorRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  concIndicatorLabel: { flex: 1 },
+  concEndBtn: {
+    backgroundColor: Colors.red + '22', borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.red + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+  },
+  concEndBtnTxt: { fontSize: FontSize.sm, color: Colors.red, fontWeight: FontWeight.bold },
 
   resourceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   resourceInfo:     { flex: 1 },

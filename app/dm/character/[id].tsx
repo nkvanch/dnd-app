@@ -10,7 +10,7 @@ import { useCampaignStore }  from '../../../src/store/campaignStore';
 import { useSessionStore }   from '../../../src/store/sessionStore';
 import { useHomebrewStore }  from '../../../src/store/homebrewStore';
 import { recomputeDerived }  from '../../../src/engine/pipeline';
-import { applyHealing, playerEndTurn } from '../../../src/engine/combat';
+import { applyHealing, playerEndTurn, endConcentration } from '../../../src/engine/combat';
 import { dmDamageMutation } from '../../../src/engine/dmCharacterDamage';
 import { applyCondition, removeCondition } from '../../../src/engine/conditions';
 import { dmFullStatVisibility } from '../../../src/engine/houseRules';
@@ -174,6 +174,7 @@ export default function DmCharacterView() {
               const slots = restoreSpellSlot(e.spellcasting, { kind, tier: tier as SlotTier });
               return slots === e.spellcasting ? e : { ...e, spellcasting: slots };
             }, `DM: Restored level ${tier} spell slot`, 'spells')}
+            onEndConcentration={name => mutate(e => endConcentration(e, rules), `DM: Ended concentration on ${name}`, 'spells')}
             onEntityUpdate={updated => mutate(() => updated, 'DM: Character tab edit', 'other')}
             onEndTurn={handleEndTurn}
           />

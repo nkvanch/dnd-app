@@ -15,7 +15,7 @@ import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
 import { useCombatTurnStore } from '../../src/store/combatTurnStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn } from '../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn, endConcentration } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { equipItem, unequipItem, toggleAttunement, generateItemInstanceId, isStatefulItem, applyItemInfusion, removeItemInfusion } from '../../src/engine/inventory';
@@ -267,6 +267,14 @@ export default function CharacterSheetScreen() {
       return { ...e, spellcasting: slots };
     }, `Restored level ${tier} spell slot`, 'spells');
   }, [mutate]);
+
+  // Manual End Concentration — the ONE handler both the Character and Spells
+  // tabs call (same single-entry-point rule as handleEndTurn), so the
+  // timeline label/category/undo/sync are identical from either tab. Also
+  // removes the spell's linked effects (see endConcentration).
+  const handleEndConcentration = useCallback((spellName: string) => {
+    mutate(e => endConcentration(e, rules), `Ended concentration on ${spellName}`, 'spells');
+  }, [mutate, rules]);
 
   // Set by handleEquip/handleUnequip once the change has been simulated but
   // not yet resolved — drives EquipmentPreviewModal. Both resolve the
@@ -746,6 +754,7 @@ export default function CharacterSheetScreen() {
                 onResourceChange={handleResourceChange}
                 onSpendSlot={handleSpendSlot}
                 onRestoreSlot={handleRestoreSlot}
+                onEndConcentration={handleEndConcentration}
                 onEntityUpdate={onCombatEntityUpdate}
                 onEndTurn={handleEndTurn}
               />
@@ -777,6 +786,8 @@ export default function CharacterSheetScreen() {
             rules={rules}
             onEntityUpdate={onSpellsEntityUpdate}
             onEndTurn={handleEndTurn}
+            onRestoreSlot={handleRestoreSlot}
+            onEndConcentration={handleEndConcentration}
           />
         )}
         {activeTab === 'abilities' && (

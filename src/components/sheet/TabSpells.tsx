@@ -21,7 +21,8 @@ import { spellRepo } from '../../content/spellRepo';
 import { resolveSpellById } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { getClassLevels } from '../../engine/multiclass';
-import { castConcentrationSpell } from '../../engine/combat';
+import { castConcentrationSpell, concentrationLinkedEffectNames } from '../../engine/combat';
+import { castButtonStates, castHistoryLabel, confirmEndConcentration } from './spellTabUi';
 import { doubleDiceCount } from '../../engine/dice';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { UseModal, applyActionCardUse, ActivationOptionModal } from './TabActions';
@@ -50,13 +51,15 @@ const SLOT_ORDINALS: Record<number, string> = {
  * — see B2, ritual always casts at base level with no slot).
  */
 function castLevelLabel(card: ActionCard, payment: SpellPaymentOption | undefined, castMode?: 'ritual'): string {
-  if (castMode === 'ritual') return `Cast ${card.name} (Ritual)`;
   const baseLevel = card.resourceCost?.spellSlotTier;
-  const castLevel = payment ? Number(payment.tier) : baseLevel;
-  if (baseLevel && castLevel && castLevel > baseLevel) {
-    return `Cast ${card.name} at ${SLOT_ORDINALS[castLevel] ?? `${castLevel}th`} level`;
-  }
-  return `Cast ${card.name}`;
+  return castHistoryLabel({
+    name: card.name,
+    castMode,
+    ritualCapable: card.ritualEligible === true,
+    baseLevel,
+    castLevel: payment ? Number(payment.tier) : baseLevel,
+    ordinal: l => SLOT_ORDINALS[l] ?? `${l}th`,
+  });
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -74,11 +77,18 @@ interface Props {
    *  verbatim with the Character and Actions tabs (see app/sheet/[id].tsx's
    *  handleEndTurn). */
   onEndTurn: () => void;
+  /** Manually gives back one used spell slot of `tier` (normal or pact) so the
+   *  player can cast again — the same shared handler the Character tab's slot
+   *  "+" button calls (app/sheet/[id].tsx's handleRestoreSlot). */
+  onRestoreSlot: (tier: string, kind?: 'normal' | 'pact') => void;
+  /** Manually ends the current concentration (and its linked effects) — the
+   *  one shared handler both tabs call (app/sheet/[id].tsx). */
+  onEndConcentration: (spellName: string) => void;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
+function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn, onRestoreSlot, onEndConcentration }: Props) {
   const [activeCard, setActiveCard] = useState<ActionCard | null>(null);
   // Rules-engine blocker RE-AUDIT closure (2F): carries the bypass/context
   // decision ALONGSIDE the card, not just the card alone — see
@@ -393,22 +403,23 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
 
   // Rules-completeness batch (ritual casting), A3: an explicit peer choice
   // — never a silent default to either mode — offered only when the spell
-  // is actually ritual-capable through some source the character has.
-  const handleCast = useCallback((card: ActionCard) => {
-    if (card.ritualEligible) {
-      Alert.alert(
-        `Cast ${card.name} as...`,
-        undefined,
-        [
-          { text: 'Cast Normally', onPress: () => proceedCast(card, undefined) },
-          { text: 'Cast as Ritual (no slot, +10 min)', onPress: () => proceedCast(card, 'ritual') },
-          { text: 'Cancel', style: 'cancel' as const },
-        ],
-      );
-      return;
-    }
-    proceedCast(card, undefined);
-  }, [proceedCast]);
+  // is actually ritual-capable through some source the character has. It used
+  // to be a popup ("Cast as... Normally / Ritual") behind a single Cast
+  // button, which hid that there were two different ways to pay; now a
+  // ritual-capable row shows two separate buttons, "Ritual" (no slot, +10
+  // min) and "Cast" (spends a slot), so the choice is visible at a glance.
+  // Both funnel into the same proceedCast the popup used, unchanged.
+  const handleSlotCast   = useCallback((card: ActionCard) => proceedCast(card, undefined), [proceedCast]);
+  const handleRitualCast = useCallback((card: ActionCard) => proceedCast(card, 'ritual'), [proceedCast]);
+
+  // Manual End Concentration (confirm first — it also removes the spell's
+  // linked effects). Name resolved the same homebrew-first way the banner does.
+  const handleEndConcentrationPress = useCallback(() => {
+    const id = entity.spellcasting?.concentrating;
+    if (!id) return;
+    const name = spellMap.get(id)?.name ?? resolveSpellById(id, homebrewSpells)?.name ?? id;
+    confirmEndConcentration(name, concentrationLinkedEffectNames(entity), () => onEndConcentration(name));
+  }, [entity, spellMap, homebrewSpells, onEndConcentration]);
 
   const handleChooseOption = useCallback((option: ActivationOption) => {
     const pending = pendingUse;
@@ -472,11 +483,19 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
 
       {/* Concentration banner */}
       {spellcasting.concentrating && (
-        <View style={styles.concBanner}>
-          <Text style={styles.concBannerTxt}>
+        <View style={[styles.concBanner, styles.concBannerRow]}>
+          <Text style={[styles.concBannerTxt, styles.concBannerLabel]}>
             🧠 Concentrating: {spellMap.get(spellcasting.concentrating)?.name ?? spellcasting.concentrating}
             {spellcasting.concentratingDuration?.unit === 'rounds' && ` · ${spellcasting.concentratingDuration.remaining}r`}
           </Text>
+          <Pressable
+            style={styles.concEndBtn}
+            onPress={handleEndConcentrationPress}
+            hitSlop={6}
+            accessibilityLabel="End concentration"
+          >
+            <Text style={styles.concEndBtnTxt}>End</Text>
+          </Pressable>
         </View>
       )}
 
@@ -495,7 +514,13 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
       {sortedLevels.map(level => {
         const cards    = grouped.get(level)!;
         const slotKey  = String(level) as keyof typeof spellcasting.slots;
-        const slotData = level > 0 ? spellcasting.slots[slotKey] : null;
+        // Every slot pool at this tier — ordinary slots AND a Warlock's pact
+        // slots (they live in a separate pool, and a pure Warlock has none of
+        // the ordinary kind) — each gets its own count and restore button.
+        const slotPools = level === 0 ? [] : ([
+          { kind: 'normal' as const, data: spellcasting.slots[slotKey] },
+          { kind: 'pact'   as const, data: spellcasting.pactSlots?.[slotKey] },
+        ]).filter(p => p.data && p.data.total > 0);
 
         return (
           <View key={level} style={styles.levelSection}>
@@ -506,19 +531,32 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
                   ? 'CANTRIPS'
                   : `${SLOT_ORDINALS[level]?.toUpperCase() ?? `LEVEL ${level}`} LEVEL`}
               </Text>
-              {slotData && slotData.total > 0 && (
-                <View style={[
-                  styles.slotBadge,
-                  slotData.used >= slotData.total && styles.slotBadgeEmpty,
-                ]}>
-                  <Text style={[
-                    styles.slotBadgeTxt,
-                    slotData.used >= slotData.total && styles.slotBadgeTxtEmpty,
-                  ]}>
-                    {slotData.total - slotData.used}/{slotData.total} slots
-                  </Text>
-                </View>
-              )}
+              <View style={styles.slotPools}>
+                {slotPools.map(({ kind, data }) => {
+                  const empty = data!.used >= data!.total;
+                  return (
+                    <View key={kind} style={styles.slotPool}>
+                      {/* Restore one used slot so the player can cast again —
+                          disabled when nothing is spent. Same shared handler
+                          as the Character tab's slot "+". */}
+                      <Pressable
+                        style={[styles.slotRestoreBtn, data!.used === 0 && styles.slotRestoreBtnDisabled]}
+                        disabled={data!.used === 0}
+                        hitSlop={8}
+                        onPress={() => onRestoreSlot(String(level), kind)}
+                        accessibilityLabel={`Restore a ${kind === 'pact' ? 'pact ' : ''}level ${level} slot`}
+                      >
+                        <Text style={[styles.slotRestoreBtnTxt, data!.used === 0 && styles.slotRestoreBtnTxtDisabled]}>+</Text>
+                      </Pressable>
+                      <View style={[styles.slotBadge, empty && styles.slotBadgeEmpty]}>
+                        <Text style={[styles.slotBadgeTxt, empty && styles.slotBadgeTxtEmpty]}>
+                          {kind === 'pact' ? 'Pact ' : ''}{data!.total - data!.used}/{data!.total} slots
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
 
             {/* Spell rows */}
@@ -531,19 +569,17 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
               // spell blocked ONLY by preparation stays fully discoverable
               // and actionable — not dimmed/hidden like a genuinely
               // unavailable card (no slot, action already used, etc.).
-              // Tapping Cast opens the "Cast Anyway" prompt (handleCast);
+              // Tapping Cast opens the "Cast Anyway" prompt (handleSlotCast);
               // the button is never disabled for this reason alone.
               const blockedOnlyByPreparation = card.preparationOverridable === true;
               // Rules-engine HIGH-batch closure (C): same "stays actionable,
               // prompts Cancel/Use Anyway" treatment for 0HP/Unconscious.
-              const blockedByIncapacitation = card.incapacitatedOverridable === true;
-              const overridable = blockedOnlyByPreparation || blockedByIncapacitation;
               // Rules-completeness batch (ritual casting): a ritual-eligible
               // spell is never hard-disabled by a missing spell slot alone
-              // (ritual spends none) — see ActionCardRow's identical fix,
-              // TabActions.tsx, for the full rationale. Execution still
-              // revalidates fresh regardless.
-              const genuinelyUnavailable = !card.available && !overridable && !card.ritualEligible;
+              // (ritual spends none) — the slot Cast button greys out but the
+              // separate Ritual button stays live. Execution still
+              // revalidates fresh regardless. See castButtonStates.
+              const { slotCastDisabled, showRitual, rowDimmed: genuinelyUnavailable } = castButtonStates(card);
 
               return (
                 <View key={card.featureId} style={[
@@ -599,13 +635,25 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
                           </Text>
                         </Pressable>
                       )}
+                      {/* Ritual-capable spells show TWO distinct ways to cast:
+                          Ritual (no slot, +10 min) and Cast (spends a slot). */}
+                      {showRitual && (
+                        <Pressable
+                          style={styles.ritualBtn}
+                          onPress={() => handleRitualCast(card)}
+                          accessibilityLabel={`Cast ${card.name} as a ritual, no spell slot`}
+                        >
+                          <Text style={styles.ritualBtnTxt}>Ritual</Text>
+                        </Pressable>
+                      )}
                       <Pressable
-                        style={[styles.castBtn, genuinelyUnavailable && styles.castBtnDisabled]}
-                        onPress={() => handleCast(card)}
-                        disabled={genuinelyUnavailable}
+                        style={[styles.castBtn, slotCastDisabled && styles.castBtnDisabled]}
+                        onPress={() => handleSlotCast(card)}
+                        disabled={slotCastDisabled}
+                        accessibilityLabel={showRitual ? `Cast ${card.name} using a spell slot` : `Cast ${card.name}`}
                       >
-                        <Text style={[styles.castBtnTxt, genuinelyUnavailable && styles.castBtnTxtDisabled]}>
-                          {card.available || overridable || card.ritualEligible ? 'Cast' : 'N/A'}
+                        <Text style={[styles.castBtnTxt, slotCastDisabled && styles.castBtnTxtDisabled]}>
+                          {slotCastDisabled ? 'N/A' : 'Cast'}
                         </Text>
                       </Pressable>
                     </View>
@@ -759,6 +807,42 @@ const styles = StyleSheet.create({
     fontSize:   FontSize.sm,
     textAlign:  'center',
   },
+  concBannerRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  concBannerLabel: { flex: 1, textAlign: 'left' },
+  concEndBtn: {
+    backgroundColor:   Colors.red + '22',
+    borderRadius:      Radius.md,
+    borderWidth:       1,
+    borderColor:       Colors.red + '66',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:   Spacing.xs,
+  },
+  concEndBtnTxt: { fontSize: FontSize.sm, color: Colors.red, fontWeight: FontWeight.bold },
+
+  // Per-level slot pools (ordinary + pact), each with its restore button
+  slotPools: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  slotPool:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  slotRestoreBtn: {
+    width: 22, height: 22, borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceHigh, borderWidth: 1, borderColor: Colors.blue + '66',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  slotRestoreBtnDisabled:    { borderColor: Colors.border, opacity: 0.5 },
+  slotRestoreBtnTxt:         { fontSize: FontSize.sm, color: Colors.blue, fontWeight: FontWeight.bold, lineHeight: FontSize.sm + 2 },
+  slotRestoreBtnTxtDisabled: { color: Colors.textDim },
+
+  // Ritual cast — gold, to match the "Ritual" tag and stay clearly distinct
+  // from the blue slot-spending Cast button beside it.
+  ritualBtn: {
+    backgroundColor:   Colors.gold + '22',
+    borderRadius:      Radius.md,
+    borderWidth:       1,
+    borderColor:       Colors.gold + '88',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:   Spacing.xs,
+    alignItems:        'center',
+  },
+  ritualBtnTxt: { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold },
 
   // Empty
   empty:      { alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.sm },

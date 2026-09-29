@@ -618,6 +618,115 @@ describe('Languages (items 10-13, 27, 32)', () => {
   });
 });
 
+// ============================================================================
+// Tool/Language deadlock closure: the SAME effective-required-count /
+// edit-in-place fix Expertise already got (see the "effective required
+// count"/"edit-in-place" describe blocks above), applied to Tool/Language —
+// they share the exact same bug shape (exact-count-required, no
+// re-resolution). Restricted literal pools are used throughout to get a
+// deterministic small eligible count without pre-granting dozens of real
+// tool/language proficiencies.
+// ============================================================================
+describe('Tool/Language deadlock closure — effective required count', () => {
+  const twoToolPool: ChoiceDefinition['pool'] = [
+    { id: 'smiths_tools', label: "Smith's Tools", value: 'smiths_tools' },
+    { id: 'masons_tools', label: "Mason's Tools", value: 'masons_tools' },
+  ];
+  const oneToolPool: ChoiceDefinition['pool'] = [
+    { id: 'smiths_tools', label: "Smith's Tools", value: 'smiths_tools' },
+  ];
+  const twoLangPool: ChoiceDefinition['pool'] = [
+    { id: 'elvish', label: 'Elvish', value: 'elvish' },
+    { id: 'dwarvish', label: 'Dwarvish', value: 'dwarvish' },
+  ];
+  const oneLangPool: ChoiceDefinition['pool'] = [
+    { id: 'elvish', label: 'Elvish', value: 'elvish' },
+  ];
+
+  it('normal required choice: requested 2, eligible 2 (via restricted pool) — both required, one alone is rejected', () => {
+    let e = makeEmptyEntity('e1');
+    e = queueChoice(e, toolDef('c1', 2, twoToolPool), 1);
+    expect(() => applyToolChoiceToEntity(e, 'c1_1', ['smiths_tools'], DEFAULT_RULES)).toThrow(/expected 2/i);
+    const updated = applyToolChoiceToEntity(e, 'c1_1', ['smiths_tools', 'masons_tools'], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+  });
+
+  it('reduced legal option count: requested 2, eligible 1 (deadlock case) — selecting the one legal tool completes the choice', () => {
+    let e = makeEmptyEntity('e1');
+    e = queueChoice(e, toolDef('c1', 2, oneToolPool), 1);
+    const updated = applyToolChoiceToEntity(e, 'c1_1', ['smiths_tools'], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+    expect(updated.proficiencies.tools).toContain('smiths_tools');
+  });
+
+  it('zero eligible options: requested 2, eligible 0 — resolves with [], never blocks creation', () => {
+    let e = makeEmptyEntity('e1');
+    e = { ...e, proficiencies: { ...e.proficiencies, tools: ['smiths_tools'] } }; // the only pool option is already known
+    e = queueChoice(e, toolDef('c1', 2, oneToolPool), 1);
+    const updated = applyToolChoiceToEntity(e, 'c1_1', [], DEFAULT_RULES);
+    const resolved = updated.choices.find(c => c.id === 'c1_1')!;
+    expect(resolved.resolved).toBe(true);
+    expect(resolved.selections).toEqual([]);
+  });
+
+  it('duplicate rejection still applies even when the nominal count exceeds eligibility', () => {
+    let e = makeEmptyEntity('e1');
+    e = queueChoice(e, toolDef('c1', 2, twoToolPool), 1);
+    expect(() => applyToolChoiceToEntity(e, 'c1_1', ['smiths_tools', 'smiths_tools'], DEFAULT_RULES)).toThrow(/duplicate/i);
+  });
+
+  it('provenance: the choiceId tag on the resulting entitlement is preserved, so only THIS choice\'s grant is removable', () => {
+    let e = makeEmptyEntity('e1');
+    e = queueChoice(e, toolDef('c1', 1, oneToolPool), 1);
+    e = applyToolChoiceToEntity(e, 'c1_1', ['smiths_tools'], DEFAULT_RULES);
+    expect(e.entitlements?.some(ent => ent.kind === 'tool_proficiency' && ent.key === 'smiths_tools' && ent.choiceId === 'c1_1')).toBe(true);
+  });
+
+  it('engine-level edit-in-place (reopen not yet wired in the UI for Tool/Language, but the engine now supports it): replacing a tool selection swaps the grant', () => {
+    let e = makeEmptyEntity('e1');
+    e = queueChoice(e, toolDef('c1', 1, twoToolPool), 1);
+    e = applyToolChoiceToEntity(e, 'c1_1', ['smiths_tools'], DEFAULT_RULES);
+    expect(e.proficiencies.tools).toContain('smiths_tools');
+
+    e = applyToolChoiceToEntity(e, 'c1_1', ['masons_tools'], DEFAULT_RULES);
+    expect(e.proficiencies.tools).not.toContain('smiths_tools');
+    expect(e.proficiencies.tools).toContain('masons_tools');
+    expect(e.choices.find(c => c.id === 'c1_1')!.selections).toEqual(['masons_tools']);
+  });
+
+  it('enough legal options still requires the full nominal count (never silently made optional)', () => {
+    let e = makeEmptyEntity('e1');
+    e = queueChoice(e, toolDef('c1', 2, twoToolPool), 1);
+    expect(() => applyToolChoiceToEntity(e, 'c1_1', [], DEFAULT_RULES)).toThrow(/expected 2/i);
+  });
+
+  // ── Same matrix for Language, condensed (identical mechanism) ──────────────
+
+  it('language: reduced legal option count — requested 2, eligible 1 completes with just the one', () => {
+    let e = makeEmptyEntity('e1');
+    e = queueChoice(e, languageDef('c1', 2, oneLangPool), 1);
+    const updated = applyLanguageChoiceToEntity(e, 'c1_1', ['elvish'], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+    expect(updated.proficiencies.languages).toContain('elvish');
+  });
+
+  it('language: zero eligible options resolves with [] and does not block creation', () => {
+    let e = makeEmptyEntity('e1');
+    e = { ...e, proficiencies: { ...e.proficiencies, languages: ['elvish'] } };
+    e = queueChoice(e, languageDef('c1', 1, oneLangPool), 1);
+    const updated = applyLanguageChoiceToEntity(e, 'c1_1', [], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+  });
+
+  it('language: enough legal options still requires the full nominal count', () => {
+    let e = makeEmptyEntity('e1');
+    e = queueChoice(e, languageDef('c1', 2, twoLangPool), 1);
+    expect(() => applyLanguageChoiceToEntity(e, 'c1_1', ['elvish'], DEFAULT_RULES)).toThrow(/expected 2/i);
+    const updated = applyLanguageChoiceToEntity(e, 'c1_1', ['elvish', 'dwarvish'], DEFAULT_RULES);
+    expect(updated.choices.find(c => c.id === 'c1_1')!.resolved).toBe(true);
+  });
+});
+
 describe('Repeated-choice resolution semantics (item 33, engine-level proxy for the shared picker mechanics)', () => {
   it('a choice with count 3 only resolves once all 3 are supplied at once — the apply function itself has no partial-progress state', () => {
     let e = makeEmptyEntity('e1');

@@ -6,10 +6,10 @@
 // remain, THEN returns to the hub — never bounces back to the hub between
 // individual choices within the same kind.
 //
-// Expertise-choice deadlock/edit closure: Expertise specifically (not Tool/
-// Language — see the closure's own report for why those weren't touched)
-// gained two behaviors on top of the above:
-//   1. The completion count is capped at however many distinct skills are
+// Expertise-choice deadlock/edit closure, later extended to Tool/Language
+// (Tool/Language deadlock closure): every bounded repeated choice kind
+// (Expertise/Tool/Language) shares two behaviors on top of the above:
+//   1. The completion count is capped at however many distinct options are
 //      actually eligible right now (effectiveRequiredCount, leveling.ts),
 //      so a choice asking for more than exist can still complete instead of
 //      permanently blocking creation.
@@ -18,11 +18,15 @@
 //      which already lets you tap ANY section regardless of done-state) as
 //      an EDIT view showing the current selections, rather than
 //      immediately bouncing back to the hub — so changing a pick no longer
-//      requires backing out of the choice entirely.
+//      requires backing out of the choice entirely. Tool/Language keep the
+//      ORIGINAL reopen behavior (not reachable once resolved) — only the
+//      count-capping fix (item 1) was extended to them; see the Tool/
+//      Language deadlock closure's own report for why the reopen UX wasn't
+//      generalized this pass.
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
-import { applyExpertiseChoiceToEntity, applyToolChoiceToEntity, applyLanguageChoiceToEntity, effectiveRequiredCount, withExpertiseChoiceGrantStripped } from '../../src/engine/leveling';
+import { applyExpertiseChoiceToEntity, applyToolChoiceToEntity, applyLanguageChoiceToEntity, effectiveRequiredCount, withExpertiseChoiceGrantStripped, withProficiencyChoiceGrantStripped } from '../../src/engine/leveling';
 import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from '../../src/engine/choiceEligibility';
 import { ALL_SKILL_OPTIONS } from '../../src/content/skills';
 import { RepeatedChoicePicker, RepeatedChoiceOption } from '../../src/components/RepeatedChoicePicker';
@@ -140,35 +144,40 @@ export default function RepeatedChoiceScreen() {
 
   if (!draft || !choice) return null;
 
-  // Expertise stale-eligibility closure (Codex re-audit): eligibility is
-  // computed against the GRANT-STRIPPED entity — the exact same input
-  // applyExpertiseChoiceToEntity itself will validate against — never the
-  // raw, un-stripped draft. This is what makes `legalOptions` an accurate
-  // answer to "what could this choice legally select right now", including
-  // correctly EXCLUDING a selection that's stale for a reason other than
-  // "this choice's own grant is in the way" (e.g. an earlier proficiency
-  // choice changed since — see withExpertiseChoiceGrantStripped's own doc
-  // comment, leveling.ts). No-op for tool/language and for a not-yet-
-  // resolved choice.
-  const strippedDraft = isExpertise ? withExpertiseChoiceGrantStripped(draft, choice.id, rules) : draft;
+  // Eligibility is computed against the GRANT-STRIPPED entity — the exact
+  // same input each kind's own apply function will validate against — never
+  // the raw, un-stripped draft. This is what makes `legalOptions` an
+  // accurate answer to "what could this choice legally select right now",
+  // including correctly EXCLUDING a selection that's stale for a reason
+  // other than "this choice's own grant is in the way" (e.g. an earlier
+  // proficiency choice changed since — see withExpertiseChoiceGrantStripped/
+  // withProficiencyChoiceGrantStripped's own doc comments, leveling.ts). A
+  // no-op for a not-yet-resolved choice regardless of kind (the ONLY
+  // reachable case for tool/language today, since they have no reopen UX —
+  // see below), so this is safe to call unconditionally.
+  const strippedDraft = isExpertise
+    ? withExpertiseChoiceGrantStripped(draft, choice.id, rules)
+    : withProficiencyChoiceGrantStripped(draft, choice.id, rules);
   const legalOptions: RepeatedChoiceOption[] = config.eligible(strippedDraft, choice.definition.pool);
   // `displayOptions` additionally includes the choice's CURRENT selections
   // purely so a genuinely-stale pick stays visible/removable — see
-  // mergeStaleSelections' own doc comment. NEVER used for legality/count —
-  // that's `legalOptions` alone, below.
+  // mergeStaleSelections' own doc comment. Only meaningful for Expertise
+  // (the only kind with a reachable "already resolved" reopen state);
+  // harmless no-op for tool/language. NEVER used for legality/count — that's
+  // `legalOptions` alone, below.
   const displayOptions = isExpertise && choice.resolved
     ? mergeStaleSelections(legalOptions, choice.selections)
     : legalOptions;
-  // Expertise-choice deadlock closure (Part A/B), corrected: the effective
-  // completion count is capped by how many options are actually LEGAL right
-  // now — never by how many are merely DISPLAYED (a stale selection must
-  // never inflate this). Tool/Language keep validating against the raw
-  // nominal count (unchanged) since their apply functions weren't updated
-  // this pass.
-  const requiredCount = isExpertise
-    ? effectiveRequiredCount(choice.definition.count, legalOptions.length)
-    : choice.definition.count;
-  const legalOptionIds = isExpertise ? new Set(legalOptions.map(o => o.id)) : undefined;
+  // Tool/Language deadlock closure: the effective completion count is
+  // capped by how many options are actually LEGAL right now — never by how
+  // many are merely DISPLAYED (a stale selection must never inflate this)
+  // — for ALL THREE kinds now, not just Expertise. This is the actual fix
+  // for the "requested > eligible" deadlock: capping only the ENGINE's own
+  // validation (leveling.ts) without also capping what the PICKER requires
+  // would leave the picker's own commit gate permanently disabled, since it
+  // would still wait for the full nominal count that can never be reached.
+  const requiredCount = effectiveRequiredCount(choice.definition.count, legalOptions.length);
+  const legalOptionIds = new Set(legalOptions.map(o => o.id));
 
   return (
     <View style={styles.container}>
@@ -182,7 +191,7 @@ export default function RepeatedChoiceScreen() {
         heading={config.heading}
         prompt={choice.definition.prompt}
         requiredCount={requiredCount}
-        nominalCount={isExpertise ? choice.definition.count : undefined}
+        nominalCount={choice.definition.count}
         options={displayOptions}
         legalOptionIds={legalOptionIds}
         initialSelected={choice.resolved ? choice.selections : undefined}

@@ -15,7 +15,7 @@ import { hpMinHalfDie, bonusFeatEveryLevel } from './houseRules';
 import { getClassLevels, syncLegacyIdentity, multiclassProficienciesFor } from './multiclass';
 import { initializeEntitlementInputs, grantEntitlement, grantEntitlements, revokeEntitlementsFromChoice, revokeResourceSource, recomputeResourceMaximums } from './entitlements';
 import { generateItemInstanceId } from './inventory';
-import { eligibleExpertiseOptions } from './choiceEligibility';
+import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from './choiceEligibility';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -1316,6 +1316,24 @@ export function withExpertiseChoiceGrantStripped(entity: Entity, choiceId: strin
 }
 
 /**
+ * Tool/Language deadlock/edit closure: the SAME "strip this choice's own
+ * prior grant, then recompute" pattern as withExpertiseChoiceGrantStripped
+ * above, but for Tool/Language — which grant through the ENTITLEMENT system
+ * (applyGrant's 'proficiency' kind, tagged with this choiceId — see
+ * applyToolChoiceToEntity/applyLanguageChoiceToEntity) rather than a
+ * synthetic Feature, so the strip step is revokeEntitlementsFromChoice, not
+ * a feature filter. A no-op (same reference, no recompute) when the choice
+ * isn't resolved yet or has no entitlement to strip.
+ */
+export function withProficiencyChoiceGrantStripped(entity: Entity, choiceId: string, rules: CampaignRules): Entity {
+  const pending = entity.choices.find(c => c.id === choiceId);
+  if (!pending?.resolved) return entity;
+  const stripped = revokeEntitlementsFromChoice(entity, choiceId);
+  if (stripped === entity) return entity;
+  return recomputeDerived(stripped, rules);
+}
+
+/**
  * Resolves (or RE-resolves — see below) an 'expertise' pending choice.
  * Bypasses resolveChoice for the same reason ASI/subclass/infusion/spell do
  * — the legal pool is computed live from the character's own current
@@ -1426,14 +1444,30 @@ export function applyExpertiseChoiceToEntity(
 }
 
 /**
- * Resolves a 'tool' pending choice — reuses the existing Grant.kind:
- * 'proficiency' mechanism (the same one static content already uses to
- * grant a FIXED tool list) rather than inventing a new mutation path;
- * `entity.proficiencies.tools` already dedupes on merge. Bypasses
- * resolveChoice for the same 'all'-sentinel-pool reason as every other
- * live-picker-driven choice above; a literal-array pool (a restricted
- * "choose one of: X, Y, Z") still routes through here too — checkPoolRestriction
- * enforces it as the authoritative check, not just the picker UI.
+ * Resolves (or RE-resolves — Tool/Language deadlock/edit closure) a 'tool'
+ * pending choice — reuses the existing Grant.kind:'proficiency' mechanism
+ * (the same one static content already uses to grant a FIXED tool list)
+ * rather than inventing a new mutation path; `entity.proficiencies.tools`
+ * already dedupes on merge. Bypasses resolveChoice for the same
+ * 'all'-sentinel-pool reason as every other live-picker-driven choice
+ * above; a literal-array pool (a restricted "choose one of: X, Y, Z") still
+ * routes through here too — checkPoolRestriction enforces it as the
+ * authoritative check, not just the picker UI.
+ *
+ * Mirrors applyExpertiseChoiceToEntity's own deadlock/edit closure exactly
+ * (same two behavior changes, same rationale — see that function's doc
+ * comment for the full writeup):
+ *
+ * 1. EFFECTIVE REQUIRED COUNT: `toolIds.length` must equal
+ *    effectiveRequiredCount(definition.count, <live eligible distinct
+ *    tools>), not the raw nominal `count` — a choice asking for more tools
+ *    than exist can still complete instead of permanently blocking
+ *    creation.
+ * 2. EDIT-IN-PLACE: an already-resolved choice can be resolved again —
+ *    withProficiencyChoiceGrantStripped removes ONLY this choice's own
+ *    prior entitlement grant first (never another choice's/source's/a
+ *    manual override's), so eligibility/legality below are checked against
+ *    a clean slate before the new selection is applied.
  */
 export function applyToolChoiceToEntity(
   entity:   Entity,
@@ -1442,17 +1476,30 @@ export function applyToolChoiceToEntity(
   rules:    CampaignRules,
 ): Entity {
   const pending = entity.choices.find(c => c.id === choiceId);
-  if (!pending || pending.resolved) return entity;
-  if (toolIds.length !== pending.definition.count) {
-    throw new Error(`Expected ${pending.definition.count} tool selections, got ${toolIds.length}.`);
+  if (!pending) return entity;
+
+  const base = withProficiencyChoiceGrantStripped(entity, choiceId, rules);
+  const eligibleNow = eligibleToolOptions(base, pending.definition.pool).length;
+  const effectiveRequired = effectiveRequiredCount(pending.definition.count, eligibleNow);
+  if (toolIds.length !== effectiveRequired) {
+    throw new Error(`Expected ${effectiveRequired} tool selection${effectiveRequired === 1 ? '' : 's'}, got ${toolIds.length}.`);
   }
   if (new Set(toolIds).size !== toolIds.length) {
     throw new Error('Duplicate tool selections in the same choice.');
   }
   checkPoolRestriction(pending.definition.pool, toolIds, 'restricted tool');
   for (const id of toolIds) {
-    if (entity.proficiencies.tools.includes(id)) throw new Error(`Already proficient with "${id}".`);
+    if (base.proficiencies.tools.includes(id)) throw new Error(`Already proficient with "${id}".`);
   }
+
+  if (toolIds.length === 0) {
+    const updated = {
+      ...base,
+      choices: base.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections: [] } : c),
+    };
+    return recomputeDerived(updated, rules);
+  }
+
   // Closure pass 2: tag the resulting entitlement(s) with the choice's own
   // explicit provenance (ChoiceState.sourceKind/sourceId, closure pass 2)
   // when set, falling back to classId-inference the same way applyGrant's
@@ -1460,7 +1507,7 @@ export function applyToolChoiceToEntity(
   // choice's origin (via revokeEntitlementsFromChoice) doesn't disturb a
   // different grant from the same source.
   let updated = applyGrant(
-    entity, { kind: 'proficiency', value: { tools: toolIds } }, pending.grantedAt, pending.definition.forClassId,
+    base, { kind: 'proficiency', value: { tools: toolIds } }, pending.grantedAt, pending.definition.forClassId,
     pending.sourceKind
       ? { kind: pending.sourceKind, id: pending.sourceId, choiceId }
       : pending.definition.forClassId
@@ -1474,7 +1521,13 @@ export function applyToolChoiceToEntity(
   return recomputeDerived(updated, rules);
 }
 
-/** Resolves a 'language' pending choice — same shape as applyToolChoiceToEntity above, targeting entity.proficiencies.languages instead. */
+/**
+ * Resolves (or RE-resolves — Tool/Language deadlock/edit closure) a
+ * 'language' pending choice — same shape as applyToolChoiceToEntity above,
+ * targeting entity.proficiencies.languages instead. See that function's
+ * doc comment for the full effective-required-count / edit-in-place
+ * rationale.
+ */
 export function applyLanguageChoiceToEntity(
   entity:      Entity,
   choiceId:    string,
@@ -1482,19 +1535,32 @@ export function applyLanguageChoiceToEntity(
   rules:       CampaignRules,
 ): Entity {
   const pending = entity.choices.find(c => c.id === choiceId);
-  if (!pending || pending.resolved) return entity;
-  if (languageIds.length !== pending.definition.count) {
-    throw new Error(`Expected ${pending.definition.count} language selections, got ${languageIds.length}.`);
+  if (!pending) return entity;
+
+  const base = withProficiencyChoiceGrantStripped(entity, choiceId, rules);
+  const eligibleNow = eligibleLanguageOptions(base, pending.definition.pool).length;
+  const effectiveRequired = effectiveRequiredCount(pending.definition.count, eligibleNow);
+  if (languageIds.length !== effectiveRequired) {
+    throw new Error(`Expected ${effectiveRequired} language selection${effectiveRequired === 1 ? '' : 's'}, got ${languageIds.length}.`);
   }
   if (new Set(languageIds).size !== languageIds.length) {
     throw new Error('Duplicate language selections in the same choice.');
   }
   checkPoolRestriction(pending.definition.pool, languageIds, 'restricted language');
   for (const id of languageIds) {
-    if (entity.proficiencies.languages.includes(id)) throw new Error(`Already knows "${id}".`);
+    if (base.proficiencies.languages.includes(id)) throw new Error(`Already knows "${id}".`);
   }
+
+  if (languageIds.length === 0) {
+    const updated = {
+      ...base,
+      choices: base.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections: [] } : c),
+    };
+    return recomputeDerived(updated, rules);
+  }
+
   let updated = applyGrant(
-    entity, { kind: 'proficiency', value: { languages: languageIds } }, pending.grantedAt, pending.definition.forClassId,
+    base, { kind: 'proficiency', value: { languages: languageIds } }, pending.grantedAt, pending.definition.forClassId,
     pending.sourceKind
       ? { kind: pending.sourceKind, id: pending.sourceId, choiceId }
       : pending.definition.forClassId

@@ -129,8 +129,10 @@ export function CharacterHistoryModal({ visible, entityId, onClose, sessionLog }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={styles.sheet}>
           <Text style={styles.title}>History</Text>
 
           {history !== null && history.length > 0 && (
@@ -182,18 +184,22 @@ export function CharacterHistoryModal({ visible, entityId, onClose, sessionLog }
           <Pressable style={styles.cancelBtn} onPress={onClose}>
             <Text style={styles.cancelTxt}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
+
+// The Close button is the sheet's last child, so extra bottom padding lifts it.
+// 5dp, the amount asked for — one constant to tweak.
+const CLOSE_BUTTON_LIFT = 5;
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000000cc', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: Colors.surfaceHigh,
     borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,
-    padding: Spacing.md, gap: Spacing.sm, paddingBottom: Spacing.xl, maxHeight: '80%',
+    padding: Spacing.md, gap: Spacing.sm, paddingBottom: Spacing.xl + CLOSE_BUTTON_LIFT, maxHeight: '80%',
   },
   title: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold, textAlign: 'center' },
   emptyTxt: { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic', textAlign: 'center', padding: Spacing.lg },

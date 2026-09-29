@@ -293,8 +293,15 @@ function AddItemModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={addStyles.backdrop} onPress={onClose}>
-        <Pressable style={addStyles.sheet} onPress={e => e.stopPropagation()}>
+      {/* SCROLL-TOUCH-1: the sheet used to BE a Pressable (to swallow backdrop
+          taps). A Pressable ancestor claims every touch that starts on a
+          non-touchable child, so once a category was picked (rows are plain
+          Views, only "+ Add" is a button) the list only scrolled when the
+          drag began on "+ Add". The backdrop is now a separate sibling, and
+          the sheet a plain View that never takes part in touch negotiation. */}
+      <View style={addStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={addStyles.sheet}>
           <View style={addStyles.titleRow}>
             <Text style={addStyles.title}>Add Item</Text>
             <Pressable
@@ -528,8 +535,8 @@ function AddItemModal({
           <Pressable style={addStyles.cancelBtn} onPress={onClose}>
             <Text style={addStyles.cancelTxt}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -784,8 +791,10 @@ function InfuseItemModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={addStyles.backdrop} onPress={handleClose}>
-        <Pressable style={addStyles.sheet} onPress={e => e.stopPropagation()}>
+      <View style={addStyles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} accessible={false} />
+        <View style={addStyles.sheet}>
           <Text style={addStyles.title}>Infuse an Item</Text>
           <Text style={infuseStyles.capNote}>{infusedInstances.length}/{cap} items currently infused</Text>
           {atCap && <Text style={infuseStyles.warn}>At capacity — remove an infusion before adding another.</Text>}
@@ -849,8 +858,8 @@ function InfuseItemModal({
           <Pressable style={addStyles.cancelBtn} onPress={handleClose}>
             <Text style={addStyles.cancelTxt}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

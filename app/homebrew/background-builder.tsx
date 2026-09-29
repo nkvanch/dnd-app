@@ -117,9 +117,11 @@ function FeatureListEditor({ features, onChange }: {
       </View>
 
       <Modal visible={!!open} transparent animationType="slide" onRequestClose={() => setOpenId(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpenId(null)}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenId(null)} accessible={false} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
-          <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
+          <View style={styles.modalSheet}>
             {open && (
               <ScrollView keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>{open.name}</Text>
@@ -144,9 +146,9 @@ function FeatureListEditor({ features, onChange }: {
                 </SafeBottomView>
               </ScrollView>
             )}
-          </Pressable>
+          </View>
           </KeyboardAvoidingView>
-        </Pressable>
+        </View>
       </Modal>
     </View>
   );

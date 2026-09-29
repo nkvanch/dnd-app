@@ -56,8 +56,10 @@ export function AuditModal({
   return (
     <>
       <Modal visible={!!stat} transparent animationType="fade" onRequestClose={onClose}>
-        <Pressable style={styles.backdrop} onPress={onClose}>
-          <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+          <View style={styles.sheet}>
 
             {/* Header */}
             <View style={styles.titleRow}>
@@ -134,8 +136,8 @@ export function AuditModal({
             <Pressable style={styles.closeBtn} onPress={onClose}>
               <Text style={styles.closeTxt}>Close</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {stat && (

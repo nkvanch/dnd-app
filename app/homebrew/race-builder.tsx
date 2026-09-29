@@ -98,9 +98,11 @@ function SubraceEditor({ subraces, onChange }: {
 
       {/* Subrace detail modal — its own ASI grid + its own trait list, same pattern as the parent race */}
       <Modal visible={!!open} transparent animationType="slide" onRequestClose={() => setOpenId(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpenId(null)}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenId(null)} accessible={false} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
-          <Pressable style={styles.traitModalSheet} onPress={e => e.stopPropagation()}>
+          <View style={styles.traitModalSheet}>
             {open && (
               <ScrollView keyboardShouldPersistTaps="handled">
                 <Text style={styles.traitModalTitle}>{open.name}</Text>
@@ -129,9 +131,9 @@ function SubraceEditor({ subraces, onChange }: {
                 </SafeBottomView>
               </ScrollView>
             )}
-          </Pressable>
+          </View>
           </KeyboardAvoidingView>
-        </Pressable>
+        </View>
       </Modal>
     </View>
   );

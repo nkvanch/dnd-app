@@ -142,8 +142,10 @@ export function ChangeBackgroundModal({ visible, entity, rules, onConfirm, onCan
 
     return (
       <Modal visible transparent animationType="slide" onRequestClose={onCancel}>
-        <Pressable style={styles.backdrop} onPress={onCancel}>
-          <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessible={false} />
+          <View style={styles.sheet}>
             <Text style={styles.title}>Change Background</Text>
             <TextInput
               style={styles.searchInput}
@@ -194,8 +196,8 @@ export function ChangeBackgroundModal({ visible, entity, rules, onConfirm, onCan
             <Pressable style={styles.discardBtn} onPress={onCancel}>
               <Text style={styles.discardTxt}>Cancel</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     );
   }

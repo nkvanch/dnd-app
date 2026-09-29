@@ -493,8 +493,10 @@ function TabExplorationInner({
 
       {/* Spell detail */}
       <Modal visible={!!spellDetail} transparent animationType="slide" onRequestClose={() => setSpellDetail(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setSpellDetail(null)}>
-          <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSpellDetail(null)} accessible={false} />
+          <View style={styles.sheet}>
             {spellDetail && (
               <ScrollView>
                 <Text style={styles.spellDetailName}>{spellDetail.name}</Text>
@@ -514,8 +516,8 @@ function TabExplorationInner({
             <Pressable style={styles.secondaryBtn} onPress={() => setSpellDetail(null)}>
               <Text style={styles.secondaryBtnTxt}>Close</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Add feat */}

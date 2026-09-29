@@ -67,8 +67,10 @@ export function MulticlassProgressionPlannerModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={styles.sheet}>
           <Text style={styles.title}>Progression Planner</Text>
           <Text style={styles.subtitle}>Max HP assumed for all projected levels — read-only, changes nothing.</Text>
 
@@ -134,8 +136,8 @@ export function MulticlassProgressionPlannerModal({
           <Pressable style={styles.closeBtn} onPress={onClose}>
             <Text style={styles.closeTxt}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

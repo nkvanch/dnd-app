@@ -79,8 +79,10 @@ function MonsterPreview({ template, isHomebrew, onSpawn, onClose }: {
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.previewSheet} onPress={e => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={styles.previewSheet}>
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* Header */}
             <View style={styles.rowNameLine}>
@@ -175,8 +177,8 @@ function MonsterPreview({ template, isHomebrew, onSpawn, onClose }: {
           <Pressable style={styles.closeBtn} onPress={onClose}>
             <Text style={styles.closeTxt}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

@@ -134,9 +134,11 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDone}>
-      <Pressable style={styles.backdrop} onPress={onDone}>
+      <View style={styles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onDone} accessible={false} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
-        <Pressable style={styles.traitModalSheet} onPress={e => e.stopPropagation()}>
+        <View style={styles.traitModalSheet}>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.traitModalTitle}>{trait.name}</Text>
 
@@ -660,9 +662,9 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
               </View>
             </SafeBottomView>
           </ScrollView>
-        </Pressable>
+        </View>
         </KeyboardAvoidingView>
-      </Pressable>
+      </View>
     </Modal>
   );
 }

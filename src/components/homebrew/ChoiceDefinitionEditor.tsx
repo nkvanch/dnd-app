@@ -108,9 +108,11 @@ export function ChoiceDefinitionEditorModal({ draft, visible, onChange, onDone, 
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDone}>
-      <Pressable style={traitStyles.backdrop} onPress={onDone}>
+      <View style={traitStyles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onDone} accessible={false} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
-        <Pressable style={traitStyles.traitModalSheet} onPress={e => e.stopPropagation()}>
+        <View style={traitStyles.traitModalSheet}>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={traitStyles.traitModalTitle}>Player Choice</Text>
 
@@ -208,9 +210,9 @@ export function ChoiceDefinitionEditorModal({ draft, visible, onChange, onDone, 
               </View>
             </SafeBottomView>
           </ScrollView>
-        </Pressable>
+        </View>
         </KeyboardAvoidingView>
-      </Pressable>
+      </View>
     </Modal>
   );
 }

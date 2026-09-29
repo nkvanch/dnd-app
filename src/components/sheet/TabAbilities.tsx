@@ -176,8 +176,10 @@ function ProficienciesModal({ visible, entity, rules, onUpdate, onClose }: {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={pStyles.backdrop} onPress={onClose}>
-        <Pressable style={[pStyles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]} onPress={e => e.stopPropagation()}>
+      <View style={pStyles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={[pStyles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={pStyles.title}>Proficiencies</Text>
 
@@ -298,8 +300,8 @@ function ProficienciesModal({ visible, entity, rules, onUpdate, onClose }: {
               <Text style={pStyles.doneBtnTxt}>Done</Text>
             </Pressable>
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

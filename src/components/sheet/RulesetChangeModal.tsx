@@ -92,8 +92,10 @@ export function RulesetChangeModal({ visible, entity, rules, onConfirm, onCancel
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <Pressable style={styles.backdrop} onPress={handleClose}>
-        <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} accessible={false} />
+        <View style={styles.sheet}>
           <ScrollView>
             <Text style={styles.title}>Change Ruleset</Text>
 
@@ -239,8 +241,8 @@ export function RulesetChangeModal({ visible, entity, rules, onConfirm, onCancel
               )}
             </View>
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

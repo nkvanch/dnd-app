@@ -16,6 +16,7 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, SectionList,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Entity, Spell, CharClass, matchesRuleset } from '../../engine/types';
 import { spellRepo } from '../../content/spellRepo';
 import type { SpellIndexEntry } from '../../content/spellRepo.types';
@@ -26,7 +27,7 @@ import { classDisplayName } from '../../content/classes/classBrowse';
 import { sortByOption } from '../../content/contentQuery';
 import { SortControl } from '../SortControl';
 import { useHomebrewStore } from '../../store/homebrewStore';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, scrollBottomPadding } from '../../theme';
 
 interface Props {
   visible: boolean;
@@ -42,6 +43,7 @@ interface Props {
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
 
 export function AddSpellModal({ visible, entity, onAdd, onClose, initialOfficialFilter = 'all' }: Props) {
+  const insets = useSafeAreaInsets();
   const homebrewSpells = useHomebrewStore(s => s.spells);
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
   const allClasses = getMergedContentDB().classes as CharClass[];
@@ -178,8 +180,11 @@ export function AddSpellModal({ visible, entity, onAdd, onClose, initialOfficial
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose}>
-        <Pressable style={s.sheet} onPress={e => e.stopPropagation()}>
+      {/* SCROLL-TOUCH-1: sheet is a plain View, backdrop a sibling — a Pressable
+          ancestor claims touches on non-touchable rows and blocks list drags. */}
+      <View style={s.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={[s.sheet, { paddingBottom: scrollBottomPadding(insets.bottom, Spacing.md) }]}>
 
           <View style={s.headerRow}>
             <Text style={s.title}>Add Spell</Text>
@@ -350,8 +355,8 @@ export function AddSpellModal({ visible, entity, onAdd, onClose, initialOfficial
           <Pressable style={s.doneBtn} onPress={onClose}>
             <Text style={s.doneTxt}>Done</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

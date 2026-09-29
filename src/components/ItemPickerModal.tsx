@@ -33,7 +33,7 @@ import { sortByOption, matchesSearchText } from '../content/contentQuery';
 import { SortControl } from './SortControl';
 import { FilterSection, FilterChipRow, MultiSelectChipRow, OfficialHomebrewChipRow } from './FilterChipRow';
 import { NonSrdBadge, isNonSrd } from './NonSrdBadge';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, scrollBottomPadding } from '../theme';
 import { isStartingEquipmentItem } from '../content/items/equipmentDisplay';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -187,8 +187,11 @@ export function ItemPickerModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={s.backdrop} onPress={handleClose}>
-        <Pressable style={[s.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]} onPress={e => e.stopPropagation()}>
+      {/* SCROLL-TOUCH-1: sheet is a plain View, backdrop a sibling — a Pressable
+          ancestor claims touches on non-touchable rows and blocks list drags. */}
+      <View style={s.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} accessible={false} />
+        <View style={[s.sheet, { paddingBottom: scrollBottomPadding(insets.bottom, Spacing.md) }]}>
           <View style={s.headerRow}>
             <Text style={s.title}>{title}</Text>
             {mode === 'required' && (
@@ -265,8 +268,8 @@ export function ItemPickerModal({
               <Text style={s.doneBtnTxt}>Done</Text>
             </Pressable>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

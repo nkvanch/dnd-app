@@ -65,8 +65,10 @@ function AddMonsterModal({ visible, onClose, onPick }: {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.pickerSheet} onPress={e => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={styles.pickerSheet}>
           <Text style={styles.pickerTitle}>Add Monster</Text>
           <TextInput
             style={styles.pickerSearch}
@@ -88,8 +90,8 @@ function AddMonsterModal({ visible, onClose, onPick }: {
           <Pressable style={styles.pickerClose} onPress={onClose}>
             <Text style={styles.pickerCloseTxt}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

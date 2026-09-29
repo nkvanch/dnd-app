@@ -68,8 +68,10 @@ export function HomebrewExportModal({ visible, entry, onClose }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose}>
-        <Pressable style={s.sheet} onPress={e => e.stopPropagation()} testID="homebrew-export-review">
+      <View style={s.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={s.sheet} testID="homebrew-export-review">
           <ScrollView>
             <Text style={s.title}>Export Homebrew</Text>
             <Text style={s.sub}>One entry, plus anything it needs to work. The file imports through Homebrew → Import Homebrew.</Text>
@@ -115,8 +117,8 @@ export function HomebrewExportModal({ visible, entry, onClose }: Props) {
               </Pressable>
             </View>
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

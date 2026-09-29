@@ -53,11 +53,17 @@ export function SpellChoicePicker({
   // Highest spell slot tier this entity currently has any slots in — caps
   // which leveled spells are choosable (a caster can't learn a spell above
   // what they can currently cast). Cantrips have no such cap.
+  // BUGFIX-WARLOCK-SPELLS-1: see app/creation/spells.tsx's identical fix —
+  // a pure Warlock's castable level lives in pactSlots, never
+  // spellcasting.slots (pact slots are deliberately excluded from the
+  // regular multiclass slot table). Reading only .slots left this at 0 for
+  // a leveling-up Warlock, making every "choose N more spells known"
+  // picker show zero eligible spells past level 1.
   const maxCastableLevel = useMemo(() => {
     if (!spellcasting) return 0;
     const tiers = ['9','8','7','6','5','4','3','2','1'] as const;
     for (const t of tiers) {
-      if ((spellcasting.slots[t]?.total ?? 0) > 0) return Number(t);
+      if ((spellcasting.slots[t]?.total ?? 0) > 0 || (spellcasting.pactSlots?.[t]?.total ?? 0) > 0) return Number(t);
     }
     return 0;
   }, [spellcasting]);

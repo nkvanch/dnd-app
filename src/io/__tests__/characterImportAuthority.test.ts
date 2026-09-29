@@ -116,3 +116,45 @@ describe('Extra Attack sequence closure — portable import strips attackSequenc
   });
 });
 
+// ============================================================================
+// Pre-device closed-alpha readiness pass (Part 5): the underlying rejection
+// logic (validateEntityDeep — two ItemInstances sharing an id, an empty-
+// string id) already had direct unit coverage, but nothing previously drove
+// a malformed file through the REAL end-to-end import entry point
+// (resolvePortableCharacterImport) to confirm it's actually wired up and
+// throws before the bad entity is ever returned. hydrateLegacyItemInstanceIds
+// deliberately leaves an already-supplied, genuinely-duplicate/malformed id
+// untouched (see its own doc comment) specifically so validateEntityShape
+// downstream can reject it — these tests lock in that handoff.
+// ============================================================================
+describe('portable import rejects malformed/duplicate item-instance ids end-to-end', () => {
+  it('rejects two ItemInstances that already share the same explicit, non-missing id', async () => {
+    const base = makeEmptyEntity('char-dup-item-ids');
+    const entity = {
+      ...base,
+      inventory: {
+        ...base.inventory,
+        equipped: [{ id: 'same-id', itemId: 'longsword_1', quantity: 1, attuned: false, features: [] }],
+        carried:  [{ id: 'same-id', itemId: 'dagger',      quantity: 1, attuned: false, features: [] }],
+      },
+    };
+    const text = serializePortableCharacter(entity as any);
+    await expect(resolvePortableCharacterImport(text, [], jest.fn().mockResolvedValue(false)))
+      .rejects.toThrow(/duplicate ItemInstance id "same-id"/);
+  });
+
+  it('rejects an explicit empty-string ItemInstance id rather than silently treating it as missing', async () => {
+    const base = makeEmptyEntity('char-empty-item-id');
+    const entity = {
+      ...base,
+      inventory: {
+        ...base.inventory,
+        carried: [{ id: '', itemId: 'dagger', quantity: 1, attuned: false, features: [] }],
+      },
+    };
+    const text = serializePortableCharacter(entity as any);
+    await expect(resolvePortableCharacterImport(text, [], jest.fn().mockResolvedValue(false)))
+      .rejects.toThrow(/must be a nonempty string when present/);
+  });
+});
+

@@ -4,7 +4,8 @@
 // mutation) and Phase B (the persistent timeline write is fire-and-forget
 // and never blocks the synchronous state update) of the undo/redo +
 // mechanical timeline track.
-import { useCharacterStore, makeEmptyEntity } from '../characterStore';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../characterStore';
+import { applyCondition, removeCondition } from '../../engine/conditions';
 import { Entity } from '../../engine/types';
 import * as timelineRepo from '../../db/timelineRepo';
 import * as entityRepo from '../../db/entityRepo';
@@ -126,6 +127,85 @@ describe('undo/redo — pop/push symmetry', () => {
     expect(() => useCharacterStore.getState().undo()).not.toThrow();
     expect(useCharacterStore.getState().undoStack).toHaveLength(0); // stale entry still popped
     expect(useCharacterStore.getState().redoStack).toHaveLength(0); // nothing to push — character was gone
+  });
+});
+
+// Pre-device closed-alpha readiness pass (Part 5): the undo/redo stack
+// plumbing itself (push/pop symmetry, cap, redo invalidation, conflict
+// refusal) was already thoroughly covered above, but only ever through HP
+// mutations — conditions and inventory went through updateCharacter/undo/
+// redo structurally untested. These use the SAME real engine functions the
+// sheet screen's own onAddCondition/onRemoveCondition handlers call
+// (app/sheet/[id].tsx), not a hand-rolled field mutation, so this exercises
+// the real condition-application path through the undo stack.
+describe('undo/redo — condition mutations', () => {
+  it('undo() reverts an applied condition; redo() re-applies it', () => {
+    reset([testCharacter('c1', 20)]);
+    useCharacterStore.getState().updateCharacter(
+      'c1', e => applyCondition(e, 'poisoned', 'manual', DEFAULT_RULES), 'Added condition: Poisoned',
+    );
+    expect(useCharacterStore.getState().characters[0].conditions.some(c => c.id === 'poisoned')).toBe(true);
+
+    useCharacterStore.getState().undo();
+    expect(useCharacterStore.getState().characters[0].conditions.some(c => c.id === 'poisoned')).toBe(false);
+
+    useCharacterStore.getState().redo();
+    expect(useCharacterStore.getState().characters[0].conditions.some(c => c.id === 'poisoned')).toBe(true);
+  });
+
+  it('undo() restores a removed condition; redo() removes it again', () => {
+    const withCondition = applyCondition(testCharacter('c1', 20), 'blinded', 'manual', DEFAULT_RULES);
+    reset([withCondition]);
+    useCharacterStore.getState().updateCharacter(
+      'c1', e => removeCondition(e, 'blinded', DEFAULT_RULES), 'Removed condition: Blinded',
+    );
+    expect(useCharacterStore.getState().characters[0].conditions.some(c => c.id === 'blinded')).toBe(false);
+
+    useCharacterStore.getState().undo();
+    expect(useCharacterStore.getState().characters[0].conditions.some(c => c.id === 'blinded')).toBe(true);
+
+    useCharacterStore.getState().redo();
+    expect(useCharacterStore.getState().characters[0].conditions.some(c => c.id === 'blinded')).toBe(false);
+  });
+});
+
+describe('undo/redo — inventory mutations', () => {
+  function withCarriedItem(id: string, hp = 20) {
+    const e = testCharacter(id, hp);
+    return { ...e, inventory: { ...e.inventory, carried: [{ id: 'inst-1', itemId: 'dagger', quantity: 1, attuned: false, features: [] }] } };
+  }
+
+  it('undo() restores a removed carried item; redo() removes it again', () => {
+    reset([withCarriedItem('c1')]);
+    useCharacterStore.getState().updateCharacter(
+      'c1', e => ({ ...e, inventory: { ...e.inventory, carried: e.inventory.carried.filter(i => i.id !== 'inst-1') } }), 'Dropped item',
+    );
+    expect(useCharacterStore.getState().characters[0].inventory.carried).toHaveLength(0);
+
+    useCharacterStore.getState().undo();
+    expect(useCharacterStore.getState().characters[0].inventory.carried).toHaveLength(1);
+    expect(useCharacterStore.getState().characters[0].inventory.carried[0].id).toBe('inst-1');
+
+    useCharacterStore.getState().redo();
+    expect(useCharacterStore.getState().characters[0].inventory.carried).toHaveLength(0);
+  });
+
+  it('undo() reverts an item moved from carried to equipped; redo() re-applies the move', () => {
+    reset([withCarriedItem('c1')]);
+    useCharacterStore.getState().updateCharacter('c1', e => {
+      const inst = e.inventory.carried.find(i => i.id === 'inst-1')!;
+      return { ...e, inventory: { ...e.inventory, equipped: [...e.inventory.equipped, inst], carried: e.inventory.carried.filter(i => i.id !== 'inst-1') } };
+    }, 'Equipped item');
+    expect(useCharacterStore.getState().characters[0].inventory.equipped).toHaveLength(1);
+    expect(useCharacterStore.getState().characters[0].inventory.carried).toHaveLength(0);
+
+    useCharacterStore.getState().undo();
+    expect(useCharacterStore.getState().characters[0].inventory.equipped).toHaveLength(0);
+    expect(useCharacterStore.getState().characters[0].inventory.carried).toHaveLength(1);
+
+    useCharacterStore.getState().redo();
+    expect(useCharacterStore.getState().characters[0].inventory.equipped).toHaveLength(1);
+    expect(useCharacterStore.getState().characters[0].inventory.carried).toHaveLength(0);
   });
 });
 

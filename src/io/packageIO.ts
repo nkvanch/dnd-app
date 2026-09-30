@@ -96,6 +96,8 @@ export type PackageImportPreview = {
 export async function pickAndValidatePackage(
   knownRulesetIds: Set<string>,
   localLookup:     (ref: DependencyRef) => (HomebrewContent & { rulesetId?: string }) | undefined,
+  /** Whether a reference points at bundled official content (see content/officialRefs.ts). */
+  isOfficialRef:   (ref: DependencyRef) => boolean = () => false,
 ): Promise<PackageImportPreview | null> {
   const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
   if (result.canceled || !result.assets?.[0]) return null;
@@ -113,7 +115,7 @@ export async function pickAndValidatePackage(
 
   if (identifyGrimoireImport(data) === 'character') throw new Error(WRONG_HOMEBREW_IMPORTER_MESSAGE);
 
-  const validation = validatePackageForImport(data, knownRulesetIds, localLookup);
+  const validation = validatePackageForImport(data, knownRulesetIds, localLookup, isOfficialRef);
   if (validation.blocking.length > 0) {
     const shown = validation.blocking.slice(0, 5).join('\n');
     const more = validation.blocking.length > 5 ? `\n…and ${validation.blocking.length - 5} more.` : '';

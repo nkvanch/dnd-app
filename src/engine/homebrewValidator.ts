@@ -42,6 +42,7 @@ export function validateFeature(f: unknown, path: string): ValidationResult {
       'stat_modifier','grant_proficiency','grant_resistance','grant_immunity',
       'apply_condition','grant_resource','override_rule','base_ac_formula',
       'suppress_condition_effects','condition_immunity',
+      'grant_spell','grant_sense','grant_movement',
     ]);
     for (const [i, e] of feat.effects.entries()) {
       if (!VALID_EFFECT_TYPES.has((e as any).type)) {

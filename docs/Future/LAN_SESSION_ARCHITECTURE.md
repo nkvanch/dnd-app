@@ -1,5 +1,8 @@
 # LAN_SESSION_ARCHITECTURE.md
 
+> **Update:** the Host/DM/Player split, DM change requests, and the general effect system described below are now built (as an additive
+> layer on port 7743). See `docs/LIVE_SESSIONS.md` for what exists; treat the rest of this file as the remaining roadmap.
+
 # Purpose
 
 This document defines the planned architecture for LAN/session play, the

@@ -1,0 +1,291 @@
+{
+ "generatedAt": "2026-09-30T05:45:50",
+ "jest": {
+  "jest-session.json": {
+   "suites": 12,
+   "suitesFailed": 0,
+   "tests": 101,
+   "passed": 101,
+   "failed": 0,
+   "perSuite": [
+    {
+     "file": "src/session/__tests__/e2eMode.test.ts",
+     "passed": 3,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/prepEdit.test.ts",
+     "passed": 6,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/db/__tests__/sessionDocRepo.test.ts",
+     "passed": 4,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/roles.test.ts",
+     "passed": 15,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/reconnect.test.ts",
+     "passed": 11,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/prep.test.ts",
+     "passed": 11,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/story.test.ts",
+     "passed": 1,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/changeRequests.test.ts",
+     "passed": 13,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/effects.test.ts",
+     "passed": 15,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/wire.test.ts",
+     "passed": 5,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/characterBridge.test.ts",
+     "passed": 9,
+     "failed": 0,
+     "failedTests": []
+    },
+    {
+     "file": "src/session/__tests__/runtime.test.ts",
+     "passed": 8,
+     "failed": 0,
+     "failedTests": []
+    }
+   ]
+  },
+  "jest-full.json": {
+   "suites": 182,
+   "suitesFailed": 4,
+   "tests": 2785,
+   "passed": 2776,
+   "failed": 9,
+   "perSuite": [
+    {
+     "file": "src/content/items/__tests__/srdCanonicalExtraction.test.ts",
+     "passed": 11,
+     "failed": 1,
+     "failedTests": [
+      "SRD 5.1 canonical item extraction keeps every captured mundane row as source-derived structured data"
+     ]
+    },
+    {
+     "file": "src/content/__tests__/contentDbSrdParity.test.ts",
+     "passed": 6,
+     "failed": 2,
+     "failedTests": [
+      "native repos in SRD-only mode (real content.db) the native item index equals the source public item set",
+      "native repos in SRD-only mode (real content.db) hidden ids stay resolvable by explicit id (existing characters keep working)"
+     ]
+    },
+    {
+     "file": "src/content/items/__tests__/srdProvenance.test.ts",
+     "passed": 0,
+     "failed": 3,
+     "failedTests": [
+      "SRD item provenance public gate has a factual unverified record for every currently classified-public item",
+      "SRD item provenance public gate refuses classified-but-unverified items publicly while preserving the full catalog",
+      "SRD item provenance public gate exposes no item from the real public-build module while provenance is unverified"
+     ]
+    },
+    {
+     "file": "src/content/__tests__/srdOnlyPublicExposure.test.ts",
+     "passed": 29,
+     "failed": 3,
+     "failedTests": [
+      "SRD-only runtime exposure counts (golden) pins the public counts",
+      "SRD-only deny cases exposes the canonical entry, not the duplicate, for the confirmed duplicates",
+      "SRD-only allow cases exposes all nine Figurines of Wondrous Power, Feather Token and the Arcane focus Staff"
+     ]
+    }
+   ]
+  }
+ },
+ "android": {
+  "dm-live": {
+   "pass": true,
+   "seconds": 336,
+   "description": "F-AM: phone = DM against a Node Host + Players; activation, secrets, change requests, per-target effects, reconnects, Host X -> Host Y",
+   "videos": [],
+   "checks": [
+    "CHECK ok: before approval the joiner holds NO capability",
+    "CHECK ok: DM screen is not reachable before approval",
+    "CHECK ok: after approval the phone is DM only (not Host, not Player)",
+    "CHECK ok: Bridge Ambush is NOT active after linking",
+    "CHECK ok: Blessing / Hidden Curse are NOT applied after linking",
+    "CHECK ok: Host state does not contain \"automation fixture note\"",
+    "CHECK ok: Host state does not contain \"the troll\"",
+    "CHECK ok: Host state does not contain \"doppelganger\"",
+    "CHECK ok: Host state does not contain \"ransom letter\"",
+    "CHECK ok: Host state does not contain \"Hidden Curse\"",
+    "CHECK ok: Host state does not contain \"amulet is cursed\"",
+    "CHECK ok: players never receive encounter DM notes",
+    "CHECK ok: Blessing has one application per target",
+    "CHECK ok: Alice's raw wire bytes do not contain \"Hidden Curse\"",
+    "CHECK ok: Alice's persisted state does not contain \"Hidden Curse\"",
+    "CHECK ok: Alice's raw wire bytes do not contain \"DMONLY\"",
+    "CHECK ok: Alice's persisted state does not contain \"DMONLY\"",
+    "CHECK ok: Alice's raw wire bytes do not contain \"amulet\"",
+    "CHECK ok: Alice's persisted state does not contain \"amulet\"",
+    "CHECK ok: Alice's raw wire bytes do not contain \"reveal at level 5\"",
+    "CHECK ok: Alice's persisted state does not contain \"reveal at level 5\"",
+    "CHECK ok: Alice's raw wire bytes do not contain \"until remove curse\"",
+    "CHECK ok: Alice's persisted state does not contain \"until remove curse\"",
+    "CHECK ok: Bob learns nothing about the curse",
+    "CHECK ok: the curse still changes Alice's AC by -1 (mechanics intact, identity hidden)",
+    "CHECK ok: Alice's character received the modified +2 exactly once",
+    "CHECK ok: the original +1 proposal is preserved",
+    "CHECK ok: Due to End does not remove the effect",
+    "CHECK ok: Bob's Blessing is still ACTIVE",
+    "CHECK ok: Alice's replica equals the Host's authorized projection after reconnect",
+    "CHECK ok: the request appears exactly once",
+    "CHECK ok: the secret curse appears exactly once",
+    "CHECK ok: offline DM note never reached the Host",
+    "CHECK ok: Host Y is a different session from Host X",
+    "CHECK ok: nothing from Host X followed the DM to Host Y",
+    "CHECK ok: Host Y carries no Host X identity"
+   ],
+   "stepCount": 12,
+   "error": ""
+  },
+  "dm-prepare-offline": {
+   "pass": true,
+   "seconds": 227,
+   "description": "A-E: prepare campaign / encounter / public + secret effects / change template / DM note offline, kill the app, relaunch, verify persistence",
+   "videos": [],
+   "checks": [],
+   "stepCount": 9,
+   "error": ""
+  },
+  "host-only": {
+   "pass": true,
+   "seconds": 96,
+   "description": "phone = Host-only: approve a DM, forged DM ops refused, Host sees no DM material, Host app restart resumes with roles intact",
+   "videos": [],
+   "checks": [
+    "CHECK ok: a Host-only device is routed to the Host screen",
+    "CHECK ok: the DM holds no capability until the Host approves",
+    "CHECK ok: the phone Host refuses a DM op from an unapproved participant",
+    "CHECK ok: after approval the DM holds the dm capability and NOT host",
+    "CHECK ok: the DM did not gain the host capability",
+    "CHECK ok: the phone Host applied every DM op",
+    "CHECK ok: the secret effect identity never crossed the phone Host to the player",
+    "CHECK ok: the phone Host refuses a DM op from a Player over the real network",
+    "CHECK ok: Host screen does not show \"Bridge Ambush\"",
+    "CHECK ok: Host screen does not show \"Hidden Curse\"",
+    "CHECK ok: Host screen does not show \"Blessing\"",
+    "CHECK ok: Host screen does not show \"Exhaustion Increase\"",
+    "CHECK ok: Host screen does not show \"automation fixture\"",
+    "CHECK ok: Host screen does not show \"Bandit\"",
+    "CHECK ok: a Host-only device has no DM screen entry",
+    "CHECK ok: a Host-only device has no Player screen entry",
+    "CHECK ok: the DM kept its role across a Host restart (token + registry persisted)",
+    "CHECK ok: the live state (accepted request) survived the Host restart",
+    "CHECK ok: effects survived the Host restart exactly once"
+   ],
+   "stepCount": 9,
+   "error": ""
+  },
+  "host-plus-dm": {
+   "pass": true,
+   "seconds": 109,
+   "description": "phone = Host + DM (explicit): both screens reachable, no Player screen, DM operations work through its own Host, secrets stay out of the player wire",
+   "videos": [],
+   "checks": [
+    "CHECK ok: a Host + DM device is offered the DM screen",
+    "CHECK ok: and no Player screen (it did not ask to play)",
+    "CHECK ok: two roles: the app lets the user choose instead of guessing",
+    "CHECK ok: Alice's wire bytes from the Host + DM phone do not contain \"Hidden Curse\"",
+    "CHECK ok: Alice's wire bytes from the Host + DM phone do not contain \"DMONLY\"",
+    "CHECK ok: Alice's wire bytes from the Host + DM phone do not contain \"amulet\"",
+    "CHECK ok: Alice's wire bytes from the Host + DM phone do not contain \"reveal at level 5\"",
+    "CHECK ok: encounter DM notes never left the phone",
+    "CHECK ok: the phone Host refuses the Player's DM op even though the phone itself is a DM"
+   ],
+   "stepCount": 5,
+   "error": ""
+  },
+  "player-phone": {
+   "pass": true,
+   "seconds": 333,
+   "description": "phone = Player: change request modified on-device, secret effect hidden but its AC change applied to the real sheet, exactly-once across reconnect",
+   "videos": [],
+   "checks": [
+    "CHECK ok: Fixture Hero starts with AC 10 (was 10)",
+    "CHECK ok: a Player-only device is routed to the Player screen",
+    "CHECK ok: the phone holds exactly the player capability",
+    "CHECK ok: the DM sees the character the phone reported",
+    "CHECK ok: Player screen does not show \"Hidden Curse\"",
+    "CHECK ok: Player screen does not show \"amulet\"",
+    "CHECK ok: Player screen does not show \"reveal at level 5\"",
+    "CHECK ok: Player screen does not show \"Cursed\"",
+    "CHECK ok: the secret effect still lowers the REAL sheet AC to 9 (was 9)",
+    "CHECK ok: the DM still knows what it is",
+    "CHECK ok: DM still sees the original -4 proposal",
+    "CHECK ok: and the player's final -2",
+    "CHECK ok: the real character now has max HP 22 (24 - 2), got \"22 / 22 HP\"",
+    "CHECK ok: exactly one Boon request exists",
+    "CHECK ok: +3 was applied exactly once to max HP (22 -> 25; current HP is unchanged), got \"22 / 25 HP\"",
+    "CHECK ok: AC is back to 10 after the effect ends (was 10)",
+    "CHECK ok: a new curse lowers AC again",
+    "CHECK ok: AC is back to 10 after leaving the session"
+   ],
+   "stepCount": 8,
+   "error": ""
+  },
+  "tater-dm-workflow": {
+   "pass": true,
+   "seconds": 315,
+   "description": "Tater the Bard: DM prepares offline, connects to a Host, activates prepared content, change request modified by the player, per-target effects, secret effect, reconnect, prep still there",
+   "videos": [
+    "tater-dm-workflow-part1.mp4",
+    "tater-dm-workflow-part2.mp4"
+   ],
+   "checks": [
+    "CHECK ok: the prepared encounter is not live after linking",
+    "CHECK ok: the Host never received DM notes",
+    "CHECK ok: the modified +2 was applied to Alice exactly once",
+    "CHECK ok: Bob's Blessing is still active",
+    "CHECK ok: Alice's raw wire bytes do not contain \"Hidden Curse\"",
+    "CHECK ok: Alice's raw wire bytes do not contain \"DMONLY\"",
+    "CHECK ok: Alice's raw wire bytes do not contain \"amulet\"",
+    "CHECK ok: Alice's raw wire bytes do not contain \"reveal at level 5\"",
+    "CHECK ok: Alice's raw wire bytes do not contain \"until remove curse\"",
+    "CHECK ok: Alice's replica does not contain the curse's name",
+    "CHECK ok: Alice's replica equals her authorized projection",
+    "CHECK ok: no duplicate requests or effects after reconnect",
+    "CHECK ok: preparation persisted after the whole live session"
+   ],
+   "stepCount": 9,
+   "error": ""
+  }
+ }
+}

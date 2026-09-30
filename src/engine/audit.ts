@@ -31,7 +31,7 @@ import {
   modifier, collectAllEffects, applyStatModifiers, effectiveAbilityScores,
   proficiencyBonus, AC_DC_BASE, selectBestAcFormula,
 } from './pipeline';
-import { resolveCombine } from './resolver';
+import { resolveCombine, resolveScaleFactor, applyScale } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -45,6 +45,7 @@ import { ALL_BEAST_FORMS } from '../content/beastforms';
  */
 export function explainValue(entity: Entity, stat: string): AuditTrail {
   const entries = buildEntries(entity, stat);
+  appendScaleEntry(entity, stat, entries);
   const calculated = entries.reduce((sum, e) => sum + e.value, 0);
   const override = appendDmOverrides(entity, stat, entries, calculated);
 
@@ -54,6 +55,18 @@ export function explainValue(entity: Entity, stat: string): AuditTrail {
   const total = override ?? entries.reduce((sum, e) => sum + e.value, 0);
 
   return { stat, total, entries, calculated, override, effective: total };
+}
+
+/** 'scale' effects ("double your speed") apply to the resolved stat, so the trail needs a line for them. */
+function appendScaleEntry(entity: Entity, stat: string, entries: AuditEntry[]): void {
+  if (stat !== 'ac' && stat !== 'speed' && stat !== 'initiative' && !isAbility(stat)) return;
+  const scaling = collectAllEffects(entity).filter(ae => ae.effect.target === stat && ae.effect.operation === 'scale');
+  if (scaling.length === 0) return;
+  const before = entries.reduce((sum, e) => sum + e.value, 0);
+  const after = applyScale(before, resolveScaleFactor(scaling));
+  if (after === before) return;
+  const rep = scaling[scaling.length - 1];
+  entries.push(entry(`${scaling.map(ae => ae.sourceName).join(' + ')} (×${resolveScaleFactor(scaling)})`, after - before, rep.sourceKind ?? 'base', rep.sourceId));
 }
 
 // ── Builders ──────────────────────────────────────────────────────────────────

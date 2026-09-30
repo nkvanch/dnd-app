@@ -15,6 +15,7 @@ import { Ability } from '../../src/engine/types';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
+import { resolveIdentityLabels } from '../../src/content/identityLabels';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const ABILITY_LABELS: Record<Ability, string> = {
@@ -33,6 +34,7 @@ export default function ReviewScreen() {
   const setDraft  = useCharacterStore(s => s.setDraft);
   const rules     = useCharacterStore(s => s.rules);
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
   // Re-audit A09/A01 (item 11): saveDraft() now reports whether the
   // durable write actually succeeded (see characterStore.ts's own doc
   // comment) instead of always clearing the draft and navigating away
@@ -51,6 +53,8 @@ export default function ReviewScreen() {
 
   const { identity, stats, derived, resources, features, choices } = draft;
   const pendingChoices = choices.filter(c => !c.resolved);
+  // Display names (same merged official + homebrew content as elsewhere); the stored ids are untouched.
+  const labels = resolveIdentityLabels(draft, getMergedContentDB(draft.rulesetId), homebrewSubclasses);
 
   // Compute race bonuses to show effective scores in the grid
   const raceBonuses: Partial<Record<Ability, number>> = {};
@@ -133,9 +137,10 @@ export default function ReviewScreen() {
         <Text style={styles.sectionTitle}>Identity</Text>
         <Row label="Name"       value={identity.name} />
         <Row label="Level"      value={String(identity.level)} />
-        <Row label="Race"       value={identity.raceId || '—'} />
-        <Row label="Class"      value={identity.classId || '—'} />
-        <Row label="Background" value={identity.backgroundId || '—'} />
+        <Row label="Race"       value={labels.subrace ? `${labels.race} (${labels.subrace})` : (labels.race || '—')} />
+        <Row label="Class"      value={labels.class || '—'} />
+        {labels.subclass && <Row label="Subclass"   value={labels.subclass} />}
+        <Row label="Background" value={labels.background || '—'} />
       </View>
 
       {/* Combat stats */}

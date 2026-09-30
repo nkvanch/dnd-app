@@ -21,6 +21,7 @@ import { loadAllEncounters } from '../../db/encounterRepo';
 import type { PreparedEncounter, Issue } from '../../engine/types';
 import { diagnosePack } from '../../engine/packDiagnostics';
 import { makeHomebrewLookup } from '../../store/homebrewLookup';
+import { isOfficialRef, officialRefName } from '../../content/officialRefs';
 import { sortByOption } from '../../content/contentQuery';
 import { editHrefFor } from '../../content/homebrewLibrary';
 import {
@@ -86,7 +87,7 @@ export function InstalledPackagesView() {
   const statusOf = useCallback((p: InstalledPack) => packageStatusOf(diagnostics.get(p.id) ?? []), [diagnostics]);
   const details = useMemo(() => {
     const map = new Map<string, PackDetail>();
-    for (const p of packs) map.set(p.id, buildPackDetail(p, lookup));
+    for (const p of packs) map.set(p.id, buildPackDetail(p, lookup, { isOfficial: isOfficialRef, nameOf: officialRefName }));
     return map;
   }, [packs, lookup]);
 

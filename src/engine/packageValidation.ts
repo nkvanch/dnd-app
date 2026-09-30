@@ -54,11 +54,19 @@ export type PackageValidationResult = {
  * whether a {type,id} already exists locally (used both to check
  * dependency resolution and, separately, by detectConflicts). Pure — no
  * platform/file-system access, so this is directly unit-testable.
+ *
+ * `isOfficialRef` — whether a reference points at BUNDLED official content
+ * (e.g. a subclass whose parent is the built-in Bard). The engine layer can't
+ * import content, so the caller injects it (see content/officialRefs.ts). A
+ * dependency counts as satisfied by, in order: the package itself, homebrew
+ * already installed on this device, or official content available in this
+ * build. Omitting it keeps the previous behavior (official content unknown).
  */
 export function validatePackageForImport(
   data:            unknown,
   knownRulesetIds: Set<string>,
   localLookup:     (ref: DependencyRef) => (HomebrewContent & { rulesetId?: string }) | undefined,
+  isOfficialRef:   (ref: DependencyRef) => boolean = () => false,
 ): PackageValidationResult {
   const blocking: string[] = [];
 
@@ -197,6 +205,10 @@ export function validatePackageForImport(
   // catalog, which this check can't see (see comment above).
   for (const ref of unresolved) {
     if (ref.type === 'spell' || ref.type === 'item') continue;
+    // A reference to bundled official content (Bard, Fighter, …) is satisfied
+    // by the app itself — it does not "need to already exist on this device"
+    // as homebrew. Only genuinely unknown references warn.
+    if (isOfficialRef(ref)) continue;
     issues.push({
       severity: 'warning', code: 'package_missing_dependency',
       message: `This package references a "${ref.type}" ("${ref.id}") that isn't included in the package and doesn't already exist on this device. Content depending on it may not work correctly until that dependency is also available.`,

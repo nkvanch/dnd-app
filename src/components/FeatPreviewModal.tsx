@@ -10,6 +10,7 @@
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, Feat, Ability, SkillName, DerivedStats, DERIVED_NUMERIC_KEYS } from '../engine/types';
 import { applyStatModifiers, collectAllEffects } from '../engine/pipeline';
+import { diffEffectSets } from '../engine/effectDiff';
 import { DERIVED_LABELS } from './sheet/derivedStatLabels';
 import { SKILL_LABELS } from './sheet/skillLabels';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
@@ -54,6 +55,9 @@ export function buildFeatSummaryRows(before: Entity, after: Entity): Row[] {
   if (before.resources.hp.maximum !== after.resources.hp.maximum) {
     rows.push({ label: `Max HP: ${before.resources.hp.maximum} → ${after.resources.hp.maximum}` });
   }
+
+  // Resistances, immunities, senses, movement, advantage, gear/language proficiencies (see engine/effectDiff.ts).
+  for (const label of diffEffectSets(before, after).gained) rows.push({ label });
 
   return rows;
 }

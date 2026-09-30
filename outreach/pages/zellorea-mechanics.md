@@ -5,7 +5,7 @@ This is a map of the edges, so you can aim at them. I wrote it from the engine's
 ## Modeled, the engine computes it
 
 Passive effects, recomputed after every change. They all go through one resolver, and stacking does not depend on the order effects are collected in:
-- Ability score and other numeric modifiers (add, multiply, set), including stat targets such as AC, speed and initiative
+- Ability score and other numeric modifiers (add, set, and scale), including stat targets such as AC, speed, initiative, saving throws, spell DC, extra attacks and passive scores. "Scale" multiplies the finished stat (double your speed, halve initiative, rounded down). The older "multiply" operation multiplies only the bonus total, so a lone x2 on speed does nothing; the editor offers scale
 - Base AC formulas (armor, unarmored defense style: a base plus chosen abilities, with optional per-ability caps). The highest formula wins and flat AC bonuses stack on top
 - Proficiency grants (skills, saves, tools, armor, weapons, languages) and skill expertise
 - Damage resistance, immunity and vulnerability, condition immunity, and suppressing a condition's effects
@@ -15,7 +15,7 @@ Passive effects, recomputed after every change. They all go through one resolver
 - Situational effects that depend on a yes or no question the app cannot observe ("an ally within 5 ft"). An unanswered question counts as no, so a bonus is never overstated
 
 Resources and time:
-- Limited-use resources with a maximum and a recharge (short rest, long rest, other), and spending and restoring them
+- Limited-use resources with a maximum and a recharge (short rest, long rest, dawn, or other), and spending and restoring them. Dawn is restored by the sheet's Dawn button, not by a rest. "Other" (per encounter, once a day, ...) is a label: the app cannot detect the event, so you restore it by hand with the + button
 - Spell slots, pact slots, hit dice, exhaustion and temporary HP
 - Conditions with durations (rounds, until rest, permanent). Rounds tick down on End Turn
 - Concentration, including a round countdown taken from the spell's duration, and a concentration check when damaged (War Caster included)
@@ -26,6 +26,7 @@ Structure:
 - Multiclassing, with a campaign switch to allow or forbid it
 - Dependencies between content, for example a species that grants a spell or an item that applies a condition. Export pulls in what an item needs, and import shows a preview before anything touches your library
 - Homebrew classes, subclasses, species, subraces, backgrounds, feats, spells, items, monsters, conditions and standalone features, all using the same types as the built-in content
+- The trait editor exposes: ability, AC, speed, initiative, saves, spell DC, extra attacks and passive-score modifiers; skill, tool, weapon and armor proficiency; resistance, immunity, vulnerability and condition immunity; senses and movement; advantage/disadvantage reminders; spell grants; limited-use abilities with a save whose DC can scale (8 + proficiency + an ability modifier), follow the spell save DC, or be fixed. The full engine-versus-editor table is docs/EFFECT_AUTHORING_PARITY.md
 
 Configurable per table:
 - Campaign rules: ability score cap, level cap, XP on or off, HP per level (fixed, rolled or max), multiclassing allowed, and ability score generation (including point buy settings)

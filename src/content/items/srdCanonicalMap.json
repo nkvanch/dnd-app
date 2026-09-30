@@ -1,0 +1,4580 @@
+{
+  "document": "SRD-5.1-CC",
+  "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+  "generatorVersion": 2,
+  "policy": "Only a unique mechanics-normalized exact canonical name or a finite explicit SRD template variant is confirmed. Aliases, fuzzy matches, ambiguous matches, and unsupported variants remain blocked.",
+  "mappings": {
+    "dagger": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:dagger",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "handaxe": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:handaxe",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "club": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:club",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "greatclub": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:greatclub",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "light_hammer": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:light-hammer",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "sickle": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:sickle",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "quarterstaff": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:quarterstaff",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "javelin": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:javelin",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "spear": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:spear",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "mace": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:mace",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "shortbow": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:shortbow",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "light_crossbow": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "sling": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dart": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:dart",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "longsword": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:longsword",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "battleaxe": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:battleaxe",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "flail": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:flail",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "glaive": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:glaive",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "halberd": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:halberd",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "lance": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:lance",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "greatsword": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:greatsword",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "greataxe": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:greataxe",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "morningstar": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:morningstar",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "pike": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:pike",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "scimitar": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:scimitar",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "rapier": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:rapier",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "trident": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:trident",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "war_pick": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:war-pick",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "warhammer": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:warhammer",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "maul": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:maul",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "shortsword": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:shortsword",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "whip": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:whip",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "longbow": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:longbow",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "heavy_crossbow": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "hand_crossbow": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "blowgun": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:blowgun",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "net": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:net",
+      "sourcePage": 66,
+      "sourceEndPage": 66,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.66."
+    },
+    "leather_armor": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "studded_leather": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:studded-leather",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "chain_shirt": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:chain-shirt",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "scale_mail": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:scale-mail",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "breastplate": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:breastplate",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "half_plate": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:half-plate",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "ring_mail": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-mail",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "chain_mail": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:chain-mail",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "splint": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:splint",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "plate_mail": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:plate",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "shield": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:shield",
+      "sourcePage": 64,
+      "sourceEndPage": 64,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.64."
+    },
+    "backpack": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:backpack",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "rope_hemp_50ft": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "torch": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:torch",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "rations_1day": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:rations-1-day",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "healers_kit": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:healer-s-kit",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "arcane_focus_orb": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "holy_symbol": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "druidic_focus": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "component_pouch": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:component-pouch",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "spellbook": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:spellbook",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "lute": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:lute",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "thieves_tools": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:thieves-tools",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "arrows_20": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:arrows-20",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "bolts_20": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "explorers_pack": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dungeoneers_pack": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "priests_pack": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "scholars_pack": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "diplomats_pack": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "entertainers_pack": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "burglars_pack": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_catching_shield": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:arrow-catching-shield",
+      "sourcePage": 209,
+      "sourceEndPage": 209,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.209."
+    },
+    "brooch_of_shielding": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:brooch-of-shielding",
+      "sourcePage": 212,
+      "sourceEndPage": 212,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.212."
+    },
+    "broom_of_flying": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:broom-of-flying",
+      "sourcePage": 213,
+      "sourceEndPage": 213,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.213."
+    },
+    "candle_of_invocation": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:candle-of-invocation",
+      "sourcePage": 213,
+      "sourceEndPage": 213,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.213."
+    },
+    "circlet_of_blasting": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:circlet-of-blasting",
+      "sourcePage": 214,
+      "sourceEndPage": 214,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.214."
+    },
+    "glamoured_studded_leather_armor": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "helm_of_brilliance": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:helm-of-brilliance",
+      "sourcePage": 225,
+      "sourceEndPage": 225,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.225."
+    },
+    "helm_of_comprehending_languages": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:helm-of-comprehending-languages",
+      "sourcePage": 225,
+      "sourceEndPage": 225,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.225."
+    },
+    "helm_of_telepathy": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:helm-of-telepathy",
+      "sourcePage": 225,
+      "sourceEndPage": 225,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.225."
+    },
+    "helm_of_teleportation": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:helm-of-teleportation",
+      "sourcePage": 225,
+      "sourceEndPage": 225,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.225."
+    },
+    "manual_of_clay_golems": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "manual_of_flesh_golems": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "manual_of_iron_golems": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "manual_of_stone_golems": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "oil_of_slipperiness": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:oil-of-slipperiness",
+      "sourcePage": 232,
+      "sourceEndPage": 232,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.232."
+    },
+    "philter_of_love": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:philter-of-love",
+      "sourcePage": 232,
+      "sourceEndPage": 232,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.232."
+    },
+    "restorative_ointment": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:restorative-ointment",
+      "sourcePage": 235,
+      "sourceEndPage": 235,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.235."
+    },
+    "slippers_of_spider_climbing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:slippers-of-spider-climbing",
+      "sourcePage": 242,
+      "sourceEndPage": 242,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.242."
+    },
+    "sovereign_glue": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:sovereign-glue",
+      "sourcePage": 242,
+      "sourceEndPage": 242,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.242."
+    },
+    "sphere_of_annihilation": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:sphere-of-annihilation",
+      "sourcePage": 242,
+      "sourceEndPage": 243,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.242."
+    },
+    "abacus": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:abacus",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "acid_vial": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:acid-vial",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "adamantine_armor": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:adamantine-armor",
+      "sourcePage": 207,
+      "sourceEndPage": 207,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.207."
+    },
+    "alchemist_s_fire": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "alchemist_s_supplies": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:alchemist-s-supplies",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "amulet": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:amulet",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "amulet_of_health": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:amulet-of-health",
+      "sourcePage": 207,
+      "sourceEndPage": 207,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.207."
+    },
+    "amulet_of_proof_against_detection_and_location": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "amulet_of_the_planes": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:amulet-of-the-planes",
+      "sourcePage": 207,
+      "sourceEndPage": 207,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.207."
+    },
+    "animal_feed_per_day": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "animated_shield": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:animated-shield",
+      "sourcePage": 208,
+      "sourceEndPage": 208,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.208."
+    },
+    "antitoxin": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "apparatus_of_the_crab": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:apparatus-of-the-crab",
+      "sourcePage": 208,
+      "sourceEndPage": 208,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.208."
+    },
+    "armor_of_invulnerability": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:armor-of-invulnerability",
+      "sourcePage": 208,
+      "sourceEndPage": 208,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.208."
+    },
+    "armor_of_vulnerability": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:armor-of-vulnerability",
+      "sourcePage": 209,
+      "sourceEndPage": 209,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.209."
+    },
+    "arrow_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_aberration_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_beast_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_celestial_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_construct_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_dragon_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_elemental_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_fey_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_fiend_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_giant_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_humanoid_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_monstrosity_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_ooze_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_plant_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "arrow_of_undead_slaying": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "bag_of_beans": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bag-of-beans",
+      "sourcePage": 209,
+      "sourceEndPage": 210,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.209."
+    },
+    "bag_of_devouring": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bag-of-devouring",
+      "sourcePage": 210,
+      "sourceEndPage": 210,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.210."
+    },
+    "bag_of_holding": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bag-of-holding",
+      "sourcePage": 210,
+      "sourceEndPage": 210,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.210."
+    },
+    "bag_of_tricks": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bag-of-tricks",
+      "sourcePage": 210,
+      "sourceEndPage": 211,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.210."
+    },
+    "bagpipes": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bagpipes",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "ball_bearings": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "barrel": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:barrel",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "basic_poison": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "basket": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:basket",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "battleaxe_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "battleaxe_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "battleaxe_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "bead_of_force": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bead-of-force",
+      "sourcePage": 211,
+      "sourceEndPage": 211,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.211."
+    },
+    "bedroll": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bedroll",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "bell": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "belt_of_hill_giant_strength": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "belt_of_frost_giant_strength": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "belt_of_stone_giant_strength": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "belt_of_fire_giant_strength": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "belt_of_cloud_giant_strength": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "belt_of_storm_giant_strength": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "belt_of_dwarvenkind": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:belt-of-dwarvenkind",
+      "sourcePage": 211,
+      "sourceEndPage": 211,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.211."
+    },
+    "berserker_axe": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "black_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "blanket": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:blanket",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "block_and_tackle": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:block-and-tackle",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "blowgun_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "blowgun_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "blowgun_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "blowgun_needles": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "blue_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "blue_sapphire_elemental_gem": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "bolts": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "book": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:book",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "boots_of_elvenkind": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:boots-of-elvenkind",
+      "sourcePage": 212,
+      "sourceEndPage": 212,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.212."
+    },
+    "boots_of_levitation": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:boots-of-levitation",
+      "sourcePage": 212,
+      "sourceEndPage": 212,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.212."
+    },
+    "boots_of_speed": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:boots-of-speed",
+      "sourcePage": 212,
+      "sourceEndPage": 212,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.212."
+    },
+    "boots_of_striding_and_springing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:boots-of-striding-and-springing",
+      "sourcePage": 212,
+      "sourceEndPage": 212,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.212."
+    },
+    "boots_of_the_winterlands": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:boots-of-the-winterlands",
+      "sourcePage": 212,
+      "sourceEndPage": 212,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.212."
+    },
+    "bottle": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "bowl_of_commanding_water_elementals": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "bracers_of_archery": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bracers-of-archery",
+      "sourcePage": 212,
+      "sourceEndPage": 212,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.212."
+    },
+    "bracers_of_defense": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bracers-of-defense",
+      "sourcePage": 212,
+      "sourceEndPage": 212,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.212."
+    },
+    "brazier_of_commanding_fire_elementals": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "breastplate_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "breastplate_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "breastplate_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "breastplate_armor_of_resistance": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "brewer_s_supplies": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:brewer-s-supplies",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "bucket": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:bucket",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "burnt_othur_fumes": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "calligrapher_s_supplies": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:calligrapher-s-supplies",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "candle": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "cape_of_the_mountebank": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cape-of-the-mountebank",
+      "sourcePage": 213,
+      "sourceEndPage": 213,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.213."
+    },
+    "carpenter_s_tools": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:carpenter-s-tools",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "carpet_of_flying": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:carpet-of-flying",
+      "sourcePage": 213,
+      "sourceEndPage": 213,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.213."
+    },
+    "carrion_crawler_mucus": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "cartographer_s_tools": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cartographer-s-tools",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "case_crossbow_bolt": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:case-crossbow-bolt",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "case_map_or_scroll": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:case-map-or-scroll",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "censer_of_controlling_air_elementals": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:censer-of-controlling-air-elementals",
+      "sourcePage": 213,
+      "sourceEndPage": 213,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.213."
+    },
+    "chain_mail_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "chain_mail_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "chain_mail_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "chain_shirt_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "chain_shirt_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "chain_shirt_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "chalk": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "chime_of_opening": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:chime-of-opening",
+      "sourcePage": 213,
+      "sourceEndPage": 214,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.213."
+    },
+    "chest": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:chest",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "cloak_of_arachnida": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cloak-of-arachnida",
+      "sourcePage": 214,
+      "sourceEndPage": 214,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.214."
+    },
+    "cloak_of_displacement": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cloak-of-displacement",
+      "sourcePage": 214,
+      "sourceEndPage": 214,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.214."
+    },
+    "cloak_of_elvenkind": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cloak-of-elvenkind",
+      "sourcePage": 214,
+      "sourceEndPage": 214,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.214."
+    },
+    "cloak_of_protection": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cloak-of-protection",
+      "sourcePage": 214,
+      "sourceEndPage": 214,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.214."
+    },
+    "cloak_of_the_bat": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cloak-of-the-bat",
+      "sourcePage": 214,
+      "sourceEndPage": 214,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.214."
+    },
+    "cloak_of_the_manta_ray": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cloak-of-the-manta-ray",
+      "sourcePage": 214,
+      "sourceEndPage": 214,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.214."
+    },
+    "club_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "club_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "club_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "cook_s_utensils": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cook-s-utensils",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "copper_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "crossbow_bolt_case": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "crowbar": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:crowbar",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "crystal": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:crystal",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "crystal_ball": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:crystal-ball",
+      "sourcePage": 214,
+      "sourceEndPage": 215,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.214."
+    },
+    "crystal_ball_of_mind_reading": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "crystal_ball_of_telepathy": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "crystal_ball_of_true_seeing": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "cube_of_force": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:cube-of-force",
+      "sourcePage": 215,
+      "sourceEndPage": 215,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.215."
+    },
+    "cubic_gate": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dagger_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dagger_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dagger_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dagger_of_venom": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:dagger-of-venom",
+      "sourcePage": 215,
+      "sourceEndPage": 215,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.215."
+    },
+    "dancing_greatsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dancing_longsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dancing_rapier": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dancing_scimitar": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dancing_shortsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dart_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dart_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dart_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "decanter_of_endless_water": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:decanter-of-endless-water",
+      "sourcePage": 216,
+      "sourceEndPage": 216,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.216."
+    },
+    "deck_of_illusions": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:deck-of-illusions",
+      "sourcePage": 216,
+      "sourceEndPage": 216,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.216."
+    },
+    "deck_of_many_things": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:deck-of-many-things",
+      "sourcePage": 216,
+      "sourceEndPage": 218,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.216."
+    },
+    "defender_rapier": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "defender_scimitar": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "defender_shortsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "demon_armor": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:demon-armor",
+      "sourcePage": 218,
+      "sourceEndPage": 218,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.218."
+    },
+    "dimensional_shackles": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:dimensional-shackles",
+      "sourcePage": 219,
+      "sourceEndPage": 219,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.219."
+    },
+    "dragon_scale_mail": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:dragon-scale-mail",
+      "sourcePage": 219,
+      "sourceEndPage": 219,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.219."
+    },
+    "brass_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "bronze_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "gold_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "green_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "red_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "silver_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "white_dragon_scale_mail": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dragon_slayer_greatsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dragon_slayer_longsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dust_of_disappearance": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:dust-of-disappearance",
+      "sourcePage": 219,
+      "sourceEndPage": 219,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.219."
+    },
+    "dust_of_dryness": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:dust-of-dryness",
+      "sourcePage": 219,
+      "sourceEndPage": 219,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.219."
+    },
+    "dust_of_sneezing_and_choking": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:dust-of-sneezing-and-choking",
+      "sourcePage": 219,
+      "sourceEndPage": 219,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.219."
+    },
+    "dwarven_plate_armor": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "dwarven_thrower": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:dwarven-thrower",
+      "sourcePage": 220,
+      "sourceEndPage": 220,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.220."
+    },
+    "ebony_fly": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "efficient_quiver": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:efficient-quiver",
+      "sourcePage": 220,
+      "sourceEndPage": 220,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.220."
+    },
+    "efreeti_bottle": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:efreeti-bottle",
+      "sourcePage": 220,
+      "sourceEndPage": 220,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.220."
+    },
+    "emerald_elemental_gem": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "red_corundum_elemental_gem": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "yellow_diamond_elemental_gem": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "elven_chain": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "eversmoking_bottle": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:eversmoking-bottle",
+      "sourcePage": 220,
+      "sourceEndPage": 220,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.220."
+    },
+    "eyes_of_charming": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:eyes-of-charming",
+      "sourcePage": 220,
+      "sourceEndPage": 221,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.220."
+    },
+    "eyes_of_minute_seeing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:eyes-of-minute-seeing",
+      "sourcePage": 221,
+      "sourceEndPage": 221,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.221."
+    },
+    "eyes_of_the_eagle": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:eyes-of-the-eagle",
+      "sourcePage": 221,
+      "sourceEndPage": 221,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.221."
+    },
+    "feather_token_anchor": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "feather_token_bird": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "feather_token_fan": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "feather_token_swan_boat": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "feather_token_tree": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "feather_token_whip": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "figurine_of_wondrous_power_bronze_griffon": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "figurine_of_wondrous_power_ebony_fly": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "figurine_of_wondrous_power_golden_lions": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "figurine_of_wondrous_power_ivory_goats": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "figurine_of_wondrous_power_marble_elephant": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "figurine_of_wondrous_power_obsidian_steed": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "figurine_of_wondrous_power_onyx_dog": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "figurine_of_wondrous_power_serpentine_owl": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "figurine_of_wondrous_power_silver_raven": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "fine_clothes": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "fishing_tackle": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:fishing-tackle",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "flame_tongue_greatsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "flame_tongue_longsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "flame_tongue_rapier": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "flame_tongue_scimitar": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "flame_tongue_shortsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "flask": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "flute": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:flute",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "flying_carpet_3x5": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "flying_carpet_4x6": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "flying_carpet_5x7": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "flying_carpet_6x9": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "folding_boat": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:folding-boat",
+      "sourcePage": 223,
+      "sourceEndPage": 223,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.223."
+    },
+    "forgery_kit": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:forgery-kit",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "frost_brand_greatsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "frost_brand_longsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "frost_brand_rapier": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "frost_brand_scimitar": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "frost_brand_shortsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "gauntlets_of_ogre_power": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:gauntlets-of-ogre-power",
+      "sourcePage": 223,
+      "sourceEndPage": 223,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.223."
+    },
+    "gem_of_brightness": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:gem-of-brightness",
+      "sourcePage": 223,
+      "sourceEndPage": 223,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.223."
+    },
+    "gem_of_seeing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:gem-of-seeing",
+      "sourcePage": 223,
+      "sourceEndPage": 223,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.223."
+    },
+    "giant_slayer_battleaxe": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "giant_slayer_greatsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "giant_slayer_longsword": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "glaive_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "glaive_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "glaive_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "glassblower_s_tools": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:glassblower-s-tools",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "gloves_of_missile_snaring": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:gloves-of-missile-snaring",
+      "sourcePage": 224,
+      "sourceEndPage": 224,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.224."
+    },
+    "gloves_of_swimming_and_climbing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:gloves-of-swimming-and-climbing",
+      "sourcePage": 224,
+      "sourceEndPage": 224,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.224."
+    },
+    "goggles_of_night": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:goggles-of-night",
+      "sourcePage": 224,
+      "sourceEndPage": 224,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.224."
+    },
+    "gold_piece": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greataxe_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greataxe_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greataxe_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greatclub_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greatclub_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greatclub_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greatsword_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greatsword_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greatsword_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "greatsword_of_sharpness": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "halberd_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "halberd_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "halberd_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "hammer_of_thunderbolts": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:hammer-of-thunderbolts",
+      "sourcePage": 224,
+      "sourceEndPage": 224,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.224."
+    },
+    "hammer": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:hammer",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "handaxe_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "handaxe_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "handaxe_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "handy_haversack": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:handy-haversack",
+      "sourcePage": 224,
+      "sourceEndPage": 225,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.224."
+    },
+    "hat_of_disguise": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:hat-of-disguise",
+      "sourcePage": 225,
+      "sourceEndPage": 225,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.225."
+    },
+    "headband_of_intellect": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:headband-of-intellect",
+      "sourcePage": 225,
+      "sourceEndPage": 225,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.225."
+    },
+    "herbalism_kit": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:herbalism-kit",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "holy_avenger": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:holy-avenger",
+      "sourcePage": 225,
+      "sourceEndPage": 226,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.225."
+    },
+    "holy_symbol_amulet": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "holy_symbol_emblem": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "holy_symbol_reliquary": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "horn_of_blasting": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:horn-of-blasting",
+      "sourcePage": 226,
+      "sourceEndPage": 226,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.226."
+    },
+    "horn_of_valhalla_silver": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "horn_of_valhalla_brass": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "horn_of_valhalla_bronze": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "horn_of_valhalla_iron": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "horn": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:horn",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "horseshoes_of_speed": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:horseshoes-of-speed",
+      "sourcePage": 226,
+      "sourceEndPage": 226,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.226."
+    },
+    "horseshoes_of_a_zephyr": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:horseshoes-of-a-zephyr",
+      "sourcePage": 226,
+      "sourceEndPage": 226,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.226."
+    },
+    "hourglass": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:hourglass",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "hunting_trap": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:hunting-trap",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "immovable_rod": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:immovable-rod",
+      "sourcePage": 226,
+      "sourceEndPage": 226,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.226."
+    },
+    "ink_1_oz_bottle": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ink_pen": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "iron_bands_of_binding": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:iron-bands-of-binding",
+      "sourcePage": 228,
+      "sourceEndPage": 228,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.228."
+    },
+    "iron_flask": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:iron-flask",
+      "sourcePage": 228,
+      "sourceEndPage": 228,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.228."
+    },
+    "ioun_stone_absorption": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_agility": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_awareness": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_fortitude": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_insight": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_intellect": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_leadership": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_mastery": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_protection": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_regeneration": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_reserve": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_strength": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ioun_stone_sustenance": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "javelin_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "javelin_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "javelin_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "javelin_of_lightning": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:javelin-of-lightning",
+      "sourcePage": 228,
+      "sourceEndPage": 228,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.228."
+    },
+    "jeweler_s_tools": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:jeweler-s-tools",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "key": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "lance_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "lance_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "lance_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "lantern_bullseye": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:lantern-bullseye",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "lantern_hooded": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:lantern-hooded",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "lantern_of_revealing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:lantern-of-revealing",
+      "sourcePage": 228,
+      "sourceEndPage": 228,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.228."
+    },
+    "leather_armor_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "leather_armor_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "leather_armor_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "leather_armor_of_resistance": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "light_hammer_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "light_hammer_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "light_hammer_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "lock": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:lock",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "longbow_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "longbow_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "longbow_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "longsword_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "longsword_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "longsword_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "longsword_of_sharpness": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "luck_blade": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:luck-blade",
+      "sourcePage": 229,
+      "sourceEndPage": 229,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.229."
+    },
+    "lyre": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:lyre",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "mace_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "mace_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "mace_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "mace_of_disruption": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:mace-of-disruption",
+      "sourcePage": 229,
+      "sourceEndPage": 229,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.229."
+    },
+    "mace_of_smiting": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:mace-of-smiting",
+      "sourcePage": 229,
+      "sourceEndPage": 229,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.229."
+    },
+    "mace_of_terror": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:mace-of-terror",
+      "sourcePage": 229,
+      "sourceEndPage": 229,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.229."
+    },
+    "mantle_of_spell_resistance": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "manual_of_bodily_health": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:manual-of-bodily-health",
+      "sourcePage": 229,
+      "sourceEndPage": 229,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.229."
+    },
+    "manual_of_gainful_exercise": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "manual_of_quickness_of_action": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:manual-of-quickness-of-action",
+      "sourcePage": 230,
+      "sourceEndPage": 230,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.230."
+    },
+    "tome_of_clear_thought": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:tome-of-clear-thought",
+      "sourcePage": 247,
+      "sourceEndPage": 247,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.247."
+    },
+    "tome_of_leadership_and_influence": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:tome-of-leadership-and-influence",
+      "sourcePage": 247,
+      "sourceEndPage": 247,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.247."
+    },
+    "tome_of_understanding": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:tome-of-understanding",
+      "sourcePage": 247,
+      "sourceEndPage": 247,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.247."
+    },
+    "map_case": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "marble": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "marvelous_pigments": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:marvelous-pigments",
+      "sourcePage": 230,
+      "sourceEndPage": 230,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.230."
+    },
+    "medallion_of_thoughts": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:medallion-of-thoughts",
+      "sourcePage": 230,
+      "sourceEndPage": 230,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.230."
+    },
+    "mirror_of_life_trapping": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:mirror-of-life-trapping",
+      "sourcePage": 230,
+      "sourceEndPage": 231,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.230."
+    },
+    "mithral_armor": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:mithral-armor",
+      "sourcePage": 231,
+      "sourceEndPage": 231,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.231."
+    },
+    "mithral_chain_shirt": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "morningstar_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "morningstar_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "morningstar_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "necklace_of_adaptation": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:necklace-of-adaptation",
+      "sourcePage": 231,
+      "sourceEndPage": 231,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.231."
+    },
+    "necklace_of_fireballs": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:necklace-of-fireballs",
+      "sourcePage": 231,
+      "sourceEndPage": 231,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.231."
+    },
+    "necklace_of_prayer_beads": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:necklace-of-prayer-beads",
+      "sourcePage": 231,
+      "sourceEndPage": 231,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.231."
+    },
+    "nine_lives_stealer": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:nine-lives-stealer",
+      "sourcePage": 231,
+      "sourceEndPage": 231,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.231."
+    },
+    "oathbow": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "oil_flask": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:oil-flask",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "oil_of_etherealness": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:oil-of-etherealness",
+      "sourcePage": 231,
+      "sourceEndPage": 232,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.231."
+    },
+    "oil_of_sharpness": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:oil-of-sharpness",
+      "sourcePage": 232,
+      "sourceEndPage": 232,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.232."
+    },
+    "orb_of_dragonkind_black": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "orb_of_dragonkind_blue": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "orb_of_dragonkind_green": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "orb_of_dragonkind_red": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "orb_of_dragonkind_white": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "orb": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:orb",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "padlock": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "painter_s_supplies": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:painter-s-supplies",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "pan_flute": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:pan-flute",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "paper_one_sheet": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "pearl_of_power": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:pearl-of-power",
+      "sourcePage": 232,
+      "sourceEndPage": 232,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.232."
+    },
+    "periapt_of_health": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:periapt-of-health",
+      "sourcePage": 232,
+      "sourceEndPage": 232,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.232."
+    },
+    "periapt_of_proof_against_poison": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:periapt-of-proof-against-poison",
+      "sourcePage": 232,
+      "sourceEndPage": 232,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.232."
+    },
+    "periapt_of_wound_closure": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:periapt-of-wound-closure",
+      "sourcePage": 232,
+      "sourceEndPage": 232,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.232."
+    },
+    "pike_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "pike_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "pike_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "pipes_of_haunting": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:pipes-of-haunting",
+      "sourcePage": 232,
+      "sourceEndPage": 233,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.232."
+    },
+    "pipes_of_the_sewers": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "plate_armor_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "plate_armor_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "plate_armor_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "plate_armor_of_etherealness": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:plate-armor-of-etherealness",
+      "sourcePage": 233,
+      "sourceEndPage": 233,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.233."
+    },
+    "plate_armor_of_resistance": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "poisoner_s_kit": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:poisoner-s-kit",
+      "sourcePage": 70,
+      "sourceEndPage": 70,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.70."
+    },
+    "portable_hole": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:portable-hole",
+      "sourcePage": 233,
+      "sourceEndPage": 233,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.233."
+    },
+    "potion_of_healing": {
+      "kind": "unmapped",
+      "status": "MANUAL_AMBIGUOUS",
+      "evidence": "Multiple canonical records share the normalized name.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_greater_healing": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_superior_healing": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_supreme_healing": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_animal_friendship": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-animal-friendship",
+      "sourcePage": 233,
+      "sourceEndPage": 233,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.233."
+    },
+    "potion_of_clairvoyance": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-clairvoyance",
+      "sourcePage": 233,
+      "sourceEndPage": 233,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.233."
+    },
+    "potion_of_climbing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-climbing",
+      "sourcePage": 233,
+      "sourceEndPage": 233,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.233."
+    },
+    "potion_of_diminution": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-diminution",
+      "sourcePage": 233,
+      "sourceEndPage": 233,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.233."
+    },
+    "potion_of_flying": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-flying",
+      "sourcePage": 234,
+      "sourceEndPage": 234,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.234."
+    },
+    "potion_of_gaseous_form": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-gaseous-form",
+      "sourcePage": 234,
+      "sourceEndPage": 234,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.234."
+    },
+    "potion_of_giant_strength_hill_giant": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_giant_strength_stone_giant": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_giant_strength_frost_giant": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_giant_strength_fire_giant": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_giant_strength_cloud_giant": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_giant_strength_storm_giant": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_growth": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-growth",
+      "sourcePage": 234,
+      "sourceEndPage": 234,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.234."
+    },
+    "potion_of_heroism": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-heroism",
+      "sourcePage": 234,
+      "sourceEndPage": 234,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.234."
+    },
+    "potion_of_invisibility": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "potion_of_mind_reading": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-mind-reading",
+      "sourcePage": 234,
+      "sourceEndPage": 234,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.234."
+    },
+    "potion_of_poison": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-poison",
+      "sourcePage": 234,
+      "sourceEndPage": 234,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.234."
+    },
+    "potion_of_resistance": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-resistance",
+      "sourcePage": 235,
+      "sourceEndPage": 235,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.235."
+    },
+    "potion_of_speed": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-speed",
+      "sourcePage": 235,
+      "sourceEndPage": 235,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.235."
+    },
+    "potion_of_water_breathing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:potion-of-water-breathing",
+      "sourcePage": 235,
+      "sourceEndPage": 235,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.235."
+    },
+    "quarterstaff_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "quarterstaff_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "quarterstaff_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ram_portable": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ram-portable",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "ring_of_the_ram": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-the-ram",
+      "sourcePage": 238,
+      "sourceEndPage": 238,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.238."
+    },
+    "rapier_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "rapier_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "rapier_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ring_of_animal_influence": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-animal-influence",
+      "sourcePage": 235,
+      "sourceEndPage": 235,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.235."
+    },
+    "ring_of_djinni_summoning": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-djinni-summoning",
+      "sourcePage": 235,
+      "sourceEndPage": 235,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.235."
+    },
+    "ring_of_air_elemental_command": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ring_of_earth_elemental_command": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ring_of_fire_elemental_command": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ring_of_water_elemental_command": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "ring_of_evasion": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-evasion",
+      "sourcePage": 236,
+      "sourceEndPage": 236,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.236."
+    },
+    "ring_of_feather_falling": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-feather-falling",
+      "sourcePage": 236,
+      "sourceEndPage": 236,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.236."
+    },
+    "ring_of_free_action": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-free-action",
+      "sourcePage": 236,
+      "sourceEndPage": 236,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.236."
+    },
+    "ring_of_invisibility": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-invisibility",
+      "sourcePage": 236,
+      "sourceEndPage": 236,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.236."
+    },
+    "ring_of_jumping": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-jumping",
+      "sourcePage": 236,
+      "sourceEndPage": 236,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.236."
+    },
+    "ring_of_mind_shielding": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-mind-shielding",
+      "sourcePage": 236,
+      "sourceEndPage": 236,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.236."
+    },
+    "ring_of_protection": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-protection",
+      "sourcePage": 237,
+      "sourceEndPage": 237,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.237."
+    },
+    "ring_of_regeneration": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-regeneration",
+      "sourcePage": 237,
+      "sourceEndPage": 237,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.237."
+    },
+    "ring_of_resistance": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-resistance",
+      "sourcePage": 237,
+      "sourceEndPage": 237,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.237."
+    },
+    "ring_of_shooting_stars": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-shooting-stars",
+      "sourcePage": 237,
+      "sourceEndPage": 237,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.237."
+    },
+    "ring_of_spell_storing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-spell-storing",
+      "sourcePage": 237,
+      "sourceEndPage": 237,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.237."
+    },
+    "ring_of_spell_turning": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-spell-turning",
+      "sourcePage": 237,
+      "sourceEndPage": 237,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.237."
+    },
+    "ring_of_swimming": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-swimming",
+      "sourcePage": 238,
+      "sourceEndPage": 238,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.238."
+    },
+    "ring_of_telekinesis": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-telekinesis",
+      "sourcePage": 238,
+      "sourceEndPage": 238,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.238."
+    },
+    "ring_of_warmth": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-warmth",
+      "sourcePage": 238,
+      "sourceEndPage": 238,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.238."
+    },
+    "ring_of_water_walking": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-water-walking",
+      "sourcePage": 238,
+      "sourceEndPage": 238,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.238."
+    },
+    "ring_of_x_ray_vision": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-x-ray-vision",
+      "sourcePage": 238,
+      "sourceEndPage": 238,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.238."
+    },
+    "ring_of_three_wishes": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:ring-of-three-wishes",
+      "sourcePage": 238,
+      "sourceEndPage": 238,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.238."
+    },
+    "robe_of_eyes": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:robe-of-eyes",
+      "sourcePage": 238,
+      "sourceEndPage": 238,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.238."
+    },
+    "robe_of_scintillating_colors": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:robe-of-scintillating-colors",
+      "sourcePage": 238,
+      "sourceEndPage": 238,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.238."
+    },
+    "robe_of_stars": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:robe-of-stars",
+      "sourcePage": 239,
+      "sourceEndPage": 239,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.239."
+    },
+    "robe_of_the_archmagi": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:robe-of-the-archmagi",
+      "sourcePage": 239,
+      "sourceEndPage": 239,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.239."
+    },
+    "robe_of_useful_items": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:robe-of-useful-items",
+      "sourcePage": 239,
+      "sourceEndPage": 239,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.239."
+    },
+    "rod_of_absorption": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:rod-of-absorption",
+      "sourcePage": 239,
+      "sourceEndPage": 240,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.239."
+    },
+    "rod_of_alertness": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:rod-of-alertness",
+      "sourcePage": 240,
+      "sourceEndPage": 240,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.240."
+    },
+    "rod_of_lordly_might": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:rod-of-lordly-might",
+      "sourcePage": 240,
+      "sourceEndPage": 240,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.240."
+    },
+    "rod_of_rulership": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:rod-of-rulership",
+      "sourcePage": 240,
+      "sourceEndPage": 241,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.240."
+    },
+    "rod_of_security": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:rod-of-security",
+      "sourcePage": 241,
+      "sourceEndPage": 241,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.241."
+    },
+    "rope_of_climbing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:rope-of-climbing",
+      "sourcePage": 241,
+      "sourceEndPage": 241,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.241."
+    },
+    "rope_of_entanglement": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:rope-of-entanglement",
+      "sourcePage": 241,
+      "sourceEndPage": 241,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.241."
+    },
+    "scarab_of_protection": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:scarab-of-protection",
+      "sourcePage": 241,
+      "sourceEndPage": 241,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.241."
+    },
+    "scimitar_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "scimitar_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "scimitar_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "scimitar_of_speed": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:scimitar-of-speed",
+      "sourcePage": 241,
+      "sourceEndPage": 241,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.241."
+    },
+    "scroll_case": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "shield_1": {
+      "kind": "templateVariant",
+      "status": "CONFIRMED_TEMPLATE_VARIANT",
+      "canonicalId": "srd51:shield-1-2-or-3",
+      "parameters": {
+        "bonus": 1
+      },
+      "sourcePage": 242,
+      "sourceEndPage": 242,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Explicit SRD template Shield, +1, +2, or +3; permitted bonus 1."
+    },
+    "shield_2": {
+      "kind": "templateVariant",
+      "status": "CONFIRMED_TEMPLATE_VARIANT",
+      "canonicalId": "srd51:shield-1-2-or-3",
+      "parameters": {
+        "bonus": 2
+      },
+      "sourcePage": 242,
+      "sourceEndPage": 242,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Explicit SRD template Shield, +1, +2, or +3; permitted bonus 2."
+    },
+    "shield_3": {
+      "kind": "templateVariant",
+      "status": "CONFIRMED_TEMPLATE_VARIANT",
+      "canonicalId": "srd51:shield-1-2-or-3",
+      "parameters": {
+        "bonus": 3
+      },
+      "sourcePage": 242,
+      "sourceEndPage": 242,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Explicit SRD template Shield, +1, +2, or +3; permitted bonus 3."
+    },
+    "shield_of_missile_attraction": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:shield-of-missile-attraction",
+      "sourcePage": 242,
+      "sourceEndPage": 242,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.242."
+    },
+    "spellguard_shield": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:spellguard-shield",
+      "sourcePage": 242,
+      "sourceEndPage": 242,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.242."
+    },
+    "spear_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spear_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spear_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_cantrip": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_1st_level": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_2nd_level": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_3rd_level": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_4th_level": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_5th_level": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_6th_level": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_7th_level": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_8th_level": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "spell_scroll_9th_level": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "staff": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff",
+      "sourcePage": 69,
+      "sourceEndPage": 69,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.69."
+    },
+    "staff_of_charming": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-charming",
+      "sourcePage": 243,
+      "sourceEndPage": 243,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.243."
+    },
+    "staff_of_fire": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-fire",
+      "sourcePage": 243,
+      "sourceEndPage": 243,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.243."
+    },
+    "staff_of_frost": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-frost",
+      "sourcePage": 243,
+      "sourceEndPage": 243,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.243."
+    },
+    "staff_of_healing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-healing",
+      "sourcePage": 243,
+      "sourceEndPage": 243,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.243."
+    },
+    "staff_of_power": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-power",
+      "sourcePage": 243,
+      "sourceEndPage": 244,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.243."
+    },
+    "staff_of_striking": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-striking",
+      "sourcePage": 244,
+      "sourceEndPage": 244,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.244."
+    },
+    "staff_of_swarming_insects": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-swarming-insects",
+      "sourcePage": 244,
+      "sourceEndPage": 244,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.244."
+    },
+    "staff_of_the_magi": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-the-magi",
+      "sourcePage": 244,
+      "sourceEndPage": 245,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.244."
+    },
+    "staff_of_the_python": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-the-python",
+      "sourcePage": 245,
+      "sourceEndPage": 245,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.245."
+    },
+    "staff_of_the_woodlands": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-the-woodlands",
+      "sourcePage": 245,
+      "sourceEndPage": 245,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.245."
+    },
+    "staff_of_thunder_and_lightning": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-thunder-and-lightning",
+      "sourcePage": 245,
+      "sourceEndPage": 246,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.245."
+    },
+    "staff_of_withering": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:staff-of-withering",
+      "sourcePage": 246,
+      "sourceEndPage": 246,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.246."
+    },
+    "stone_of_good_luck_luckstone": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:stone-of-good-luck-luckstone",
+      "sourcePage": 246,
+      "sourceEndPage": 246,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.246."
+    },
+    "stone_of_controlling_earth_elementals": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:stone-of-controlling-earth-elementals",
+      "sourcePage": 246,
+      "sourceEndPage": 246,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.246."
+    },
+    "sun_blade": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:sun-blade",
+      "sourcePage": 246,
+      "sourceEndPage": 246,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.246."
+    },
+    "sword_of_life_stealing": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:sword-of-life-stealing",
+      "sourcePage": 246,
+      "sourceEndPage": 246,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.246."
+    },
+    "sword_of_sharpness": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:sword-of-sharpness",
+      "sourcePage": 246,
+      "sourceEndPage": 246,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.246."
+    },
+    "sword_of_wounding": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:sword-of-wounding",
+      "sourcePage": 246,
+      "sourceEndPage": 247,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.246."
+    },
+    "talisman_of_pure_good": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:talisman-of-pure-good",
+      "sourcePage": 247,
+      "sourceEndPage": 247,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.247."
+    },
+    "talisman_of_ultimate_evil": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:talisman-of-ultimate-evil",
+      "sourcePage": 247,
+      "sourceEndPage": 247,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.247."
+    },
+    "talisman_of_the_sphere": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:talisman-of-the-sphere",
+      "sourcePage": 247,
+      "sourceEndPage": 247,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.247."
+    },
+    "trident_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "trident_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "trident_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "trident_of_fish_command": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:trident-of-fish-command",
+      "sourcePage": 247,
+      "sourceEndPage": 248,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.247."
+    },
+    "universal_solvent": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:universal-solvent",
+      "sourcePage": 248,
+      "sourceEndPage": 248,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.248."
+    },
+    "vicious_weapon": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:vicious-weapon",
+      "sourcePage": 248,
+      "sourceEndPage": 248,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.248."
+    },
+    "vorpal_sword": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:vorpal-sword",
+      "sourcePage": 248,
+      "sourceEndPage": 248,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.248."
+    },
+    "wand_of_binding": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-binding",
+      "sourcePage": 248,
+      "sourceEndPage": 248,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.248."
+    },
+    "wand_of_enemy_detection": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "wand_of_fear": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-fear",
+      "sourcePage": 248,
+      "sourceEndPage": 248,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.248."
+    },
+    "wand_of_fireballs": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-fireballs",
+      "sourcePage": 248,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.248."
+    },
+    "wand_of_lightning_bolts": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-lightning-bolts",
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.249."
+    },
+    "wand_of_magic_detection": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-magic-detection",
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.249."
+    },
+    "wand_of_magic_missiles": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-magic-missiles",
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.249."
+    },
+    "wand_of_paralysis": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-paralysis",
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.249."
+    },
+    "wand_of_polymorph": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-polymorph",
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.249."
+    },
+    "wand_of_secrets": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-secrets",
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.249."
+    },
+    "wand_of_the_war_mage_1": {
+      "kind": "templateVariant",
+      "status": "CONFIRMED_TEMPLATE_VARIANT",
+      "canonicalId": "srd51:wand-of-the-war-mage-1-2-or-3",
+      "parameters": {
+        "bonus": 1
+      },
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Explicit SRD template Wand of the War Mage, +1, +2, or +3; permitted bonus 1."
+    },
+    "wand_of_the_war_mage_2": {
+      "kind": "templateVariant",
+      "status": "CONFIRMED_TEMPLATE_VARIANT",
+      "canonicalId": "srd51:wand-of-the-war-mage-1-2-or-3",
+      "parameters": {
+        "bonus": 2
+      },
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Explicit SRD template Wand of the War Mage, +1, +2, or +3; permitted bonus 2."
+    },
+    "wand_of_the_war_mage_3": {
+      "kind": "templateVariant",
+      "status": "CONFIRMED_TEMPLATE_VARIANT",
+      "canonicalId": "srd51:wand-of-the-war-mage-1-2-or-3",
+      "parameters": {
+        "bonus": 3
+      },
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Explicit SRD template Wand of the War Mage, +1, +2, or +3; permitted bonus 3."
+    },
+    "wand_of_web": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-web",
+      "sourcePage": 249,
+      "sourceEndPage": 249,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.249."
+    },
+    "wand_of_wonder": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wand-of-wonder",
+      "sourcePage": 249,
+      "sourceEndPage": 250,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.249."
+    },
+    "war_pick_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "war_pick_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "war_pick_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "warhammer_1": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "warhammer_2": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "warhammer_3": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "well_of_many_worlds": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:well-of-many-worlds",
+      "sourcePage": 250,
+      "sourceEndPage": 250,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.250."
+    },
+    "wind_fan": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wind-fan",
+      "sourcePage": 250,
+      "sourceEndPage": 251,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.250."
+    },
+    "winged_boots": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:winged-boots",
+      "sourcePage": 251,
+      "sourceEndPage": 251,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.251."
+    },
+    "wings_of_flying": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:wings-of-flying",
+      "sourcePage": 251,
+      "sourceEndPage": 251,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.251."
+    },
+    "wondrous_figurine_silver_raven": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "wondrous_figurine_bronze_griffon": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "wondrous_figurine_ebony_fly": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "wondrous_figurine_golden_lions": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "wondrous_figurine_ivory_goats": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "wondrous_figurine_marble_elephant": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "wondrous_figurine_obsidian_steed": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "wondrous_figurine_onyx_dog": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "wondrous_figurine_serpentine_owl": {
+      "kind": "unmapped",
+      "status": "NO_CANONICAL_SOURCE",
+      "evidence": "No exact canonical name or explicit template match in current extraction.",
+      "verificationMethod": "none — strict canonical identity not established"
+    },
+    "weapon_1": {
+      "kind": "templateVariant",
+      "status": "CONFIRMED_TEMPLATE_VARIANT",
+      "canonicalId": "srd51:weapon-1-2-or-3",
+      "parameters": {
+        "bonus": 1
+      },
+      "sourcePage": 250,
+      "sourceEndPage": 250,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Explicit SRD template Weapon, +1, +2, or +3; permitted bonus 1."
+    },
+    "weapon_2": {
+      "kind": "templateVariant",
+      "status": "CONFIRMED_TEMPLATE_VARIANT",
+      "canonicalId": "srd51:weapon-1-2-or-3",
+      "parameters": {
+        "bonus": 2
+      },
+      "sourcePage": 250,
+      "sourceEndPage": 250,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Explicit SRD template Weapon, +1, +2, or +3; permitted bonus 2."
+    },
+    "weapon_3": {
+      "kind": "templateVariant",
+      "status": "CONFIRMED_TEMPLATE_VARIANT",
+      "canonicalId": "srd51:weapon-1-2-or-3",
+      "parameters": {
+        "bonus": 3
+      },
+      "sourcePage": 250,
+      "sourceEndPage": 250,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Explicit SRD template Weapon, +1, +2, or +3; permitted bonus 3."
+    },
+    "feather_token": {
+      "kind": "canonical",
+      "status": "CONFIRMED_CANONICAL",
+      "canonicalId": "srd51:feather-token",
+      "sourcePage": 221,
+      "sourceEndPage": 221,
+      "sourceHash": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+      "evidence": "Unique normalized exact canonical name on SRD p.221."
+    }
+  }
+}

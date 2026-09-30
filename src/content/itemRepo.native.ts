@@ -12,6 +12,9 @@ import { Item, asRulesetId } from '../engine/types';
 import { getContentDb } from '../db/contentDb';
 import type { ItemIndexEntry, ItemRepo } from './itemRepo.types';
 import { baseWeaponIdFromName } from './items/itemBrowse';
+import { hasVerifiedPublicItemProvenance } from './items/srdProvenance';
+import { GENERATED_SRD_ITEMS } from './items/generatedSrdItems';
+import { toItemIndexEntry } from './itemRepo.types';
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 
@@ -26,6 +29,17 @@ const fullCache = new Map<string, Item>();
 
 async function init(): Promise<void> {
   if (index.length > 0) return;
+  // The app's SQLite content DB is the full/private catalog. Public mode must
+  // never hydrate those rows: use the separate canonical-generated artifact.
+  if (SRD_ONLY) {
+    index = GENERATED_SRD_ITEMS
+      .filter(item => hasVerifiedPublicItemProvenance(item.id))
+      .map(toItemIndexEntry);
+    for (const item of GENERATED_SRD_ITEMS) {
+      if (hasVerifiedPublicItemProvenance(item.id)) fullCache.set(item.id, item);
+    }
+    return;
+  }
   try {
     const db = getContentDb();
     const rows = await db.getAllAsync<ItemIndexRow>(
@@ -33,7 +47,7 @@ async function init(): Promise<void> {
     );
     const built: ItemIndexEntry[] = [];
     for (const r of rows) {
-      if (SRD_ONLY && r.srd !== 1) continue;
+      if (SRD_ONLY && (r.srd !== 1 || !hasVerifiedPublicItemProvenance(r.id))) continue;
       try {
         built.push({
           id:              r.id,
@@ -67,6 +81,7 @@ function getIndex(): ItemIndexEntry[] {
 }
 
 async function ensureLoaded(ids: string[]): Promise<void> {
+  if (SRD_ONLY) return;
   const requested = new Set(ids);
   for (const id of ids) {
     const entry = index.find(item => item.id === id);

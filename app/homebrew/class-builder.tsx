@@ -21,7 +21,7 @@ import { Alert } from '../../src/utils/alert';
 import { mergeItemIndex, resolveItemById } from '../../src/content/contentResolution';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
-import { newDraftTrait, TraitEditorModal, COMMON_TOOLS, disambiguateId } from '../../src/components/homebrew/TraitEditor';
+import { newDraftTrait, TraitEditorModal, COMMON_TOOLS, disambiguateId, EFFECT_KIND_LABELS as TRAIT_KIND_LABELS } from '../../src/components/homebrew/TraitEditor';
 import { globalContentDB } from '../../src/content/classes/library';
 import { getProgressionForClass } from '../../src/content/classes/progressions';
 import { simulate } from '../../src/engine/simulate';
@@ -783,7 +783,7 @@ export default function ClassBuilderScreen() {
                 <Pressable key={f.localId} style={styles.featureItem} onPress={() => setOpenFeatureId(f.localId)}>
                   <View style={styles.featureItemBody}>
                     <Text style={styles.featureItemName}>{f.name}</Text>
-                    <Text style={styles.featureItemDesc} numberOfLines={1}>{EFFECT_KIND_LABELS[f.effectKind]}</Text>
+                    <Text style={styles.featureItemDesc} numberOfLines={1}>{EFFECT_KIND_LABELS[f.effectKind] ?? TRAIT_KIND_LABELS[f.effectKind]}</Text>
                   </View>
                   <Pressable
                     style={styles.featureDeleteBtn}

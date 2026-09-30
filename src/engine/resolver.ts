@@ -96,6 +96,24 @@ export function resolveCombine(effects: ActiveEffect[]): number {
 }
 
 /**
+ * The combined 'scale' factor for a target: the product of every numeric 'scale' effect. "Multiply
+ * the resolved stat" — unlike 'multiply', which acts on the bonus pool (see resolveCombine). A
+ * product is commutative, so this is order-independent; 1 when nothing scales the target.
+ */
+export function resolveScaleFactor(effects: ActiveEffect[]): number {
+  let factor = 1;
+  for (const ae of effects) {
+    if (ae.effect.operation === 'scale' && typeof ae.effect.value === 'number') factor *= ae.effect.value;
+  }
+  return factor;
+}
+
+/** Applies a scale factor to a resolved whole-number stat (floored, like halving in the rules). */
+export function applyScale(value: number, factor: number): number {
+  return factor === 1 ? value : Math.floor(value * factor);
+}
+
+/**
  * Strategy 2: Same Name Rule Deduplication
  * Groups modifiers with matching source descriptions (e.g. two castings of "Bless").
  * Only the highest value is applied, using application timestamps as a tiebreaker.

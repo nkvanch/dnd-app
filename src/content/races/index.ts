@@ -107,7 +107,7 @@ export const raceHuman: Race = {
   subracesOptional: true,
   subraces: [
     {
-      id: 'variant_human', name: 'Variant Human', parentId: 'human', srd: true,
+      id: 'variant_human', name: 'Variant Human', parentId: 'human', srd: false,
       replacesBaseFeatureIds: ['human_asi'],
       flexibleAsi: {
         prompt: 'Two different ability scores of your choice each increase by 1.',
@@ -566,7 +566,7 @@ export const raceElf: Race = {
       ],
     },
     {
-      id: 'wood_elf', name: 'Wood Elf', parentId: 'elf', srd: true,
+      id: 'wood_elf', name: 'Wood Elf', parentId: 'elf', srd: false,
       features: [
         {
           id: 'wood_elf_asi',
@@ -595,7 +595,7 @@ export const raceElf: Race = {
       ],
     },
     {
-      id: 'drow', name: 'Dark Elf (Drow)', parentId: 'elf', srd: true,
+      id: 'drow', name: 'Dark Elf (Drow)', parentId: 'elf', srd: false,
       features: [
         {
           id: 'drow_asi',
@@ -1147,7 +1147,7 @@ export const raceDwarf: Race = {
       ],
     },
     {
-      id: 'mountain_dwarf', name: 'Mountain Dwarf', parentId: 'dwarf', srd: true,
+      id: 'mountain_dwarf', name: 'Mountain Dwarf', parentId: 'dwarf', srd: false,
       features: [
         {
           id: 'mountain_dwarf_asi',
@@ -1340,7 +1340,7 @@ export const raceHalfling: Race = {
       ],
     },
     {
-      id: 'stout_halfling', name: 'Stout Halfling', parentId: 'halfling', srd: true,
+      id: 'stout_halfling', name: 'Stout Halfling', parentId: 'halfling', srd: false,
       features: [
         {
           id: 'stout_asi',
@@ -1787,7 +1787,7 @@ export const raceGnome: Race = {
   ],
   subraces: [
     {
-      id: 'forest_gnome', name: 'Forest Gnome', parentId: 'gnome', srd: true,
+      id: 'forest_gnome', name: 'Forest Gnome', parentId: 'gnome', srd: false,
       features: [
         {
           id: 'forest_gnome_asi', name: 'Ability Score Increase',

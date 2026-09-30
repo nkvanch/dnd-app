@@ -40,7 +40,7 @@ import { conditionSourceLabel } from './conditions/conditionBrowse';
 export type SubraceWithParent = Subrace & { parentRaceId: string; parentRaceName: string; rulesetId?: Race['rulesetId']; srd?: boolean };
 
 export function flattenSubraces(races: Race[]): SubraceWithParent[] {
-  return races.flatMap(r => (r.subraces ?? []).map(sr => ({ ...sr, parentRaceId: r.id, parentRaceName: r.name, rulesetId: r.rulesetId, srd: r.srd })));
+  return races.flatMap(r => (r.subraces ?? []).map(sr => ({ ...sr, parentRaceId: r.id, parentRaceName: r.name, rulesetId: r.rulesetId })));
 }
 
 export type ContentTypeVisual = { accent: string; icon: string };

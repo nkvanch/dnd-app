@@ -24,6 +24,30 @@ import { pactSlotTableFor } from '../content/classes/spellSlotTables';
  * the final decision already made — see longRest's own doc comment for why
  * that ordering is what keeps this atomic.
  */
+/** True when the character has at least one resource that recharges at dawn and is not full. */
+export function hasSpentDawnResources(entity: Entity): boolean {
+  return entity.resources.custom.some(r => r.recharge === 'dawn' && r.current < r.maximum);
+}
+
+/**
+ * The explicit "a new day begins" event: refills every resource tagged recharge:'dawn' (a magic
+ * item's "regains charges at dawn", a homebrew "1/day" ability that renews at dawn). It is
+ * deliberately NOT part of a long rest — the app has no clock, so the player says when the day turns
+ * — and it changes nothing else (no HP, slots or hit dice). Resources tagged short_rest, long_rest,
+ * never, or free text are untouched.
+ */
+export function takeDawn(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity {
+  if (!hasSpentDawnResources(entity)) return entity;
+  const refreshed: Entity = {
+    ...entity,
+    resources: {
+      ...entity.resources,
+      custom: entity.resources.custom.map(r => (r.recharge === 'dawn' ? { ...r, current: r.maximum } : r)),
+    },
+  };
+  return recomputeDerived(refreshed, rules);
+}
+
 export function takeRest(
   entity: Entity,
   kind:   'short' | 'long',
@@ -46,9 +70,11 @@ function shortRest(entity: Entity): Entity {
   // Re-audit A15: a short rest must restore ONLY 'short_rest'-tagged
   // resources. This used to also restore 'long_rest' resources (a long_rest
   // pool at 0/3 recovered to 3/3 on a mere short rest) — the reproduced bug.
-  // 'dawn' and any free-text homebrew recharge string are genuinely
-  // unsupported categories (this engine has no time-of-day/dawn clock) —
-  // left untouched rather than silently mapped onto either rest policy.
+  // 'dawn' is NOT a rest: it is refilled only by the explicit takeDawn() event
+  // below (the sheet's ☀ Dawn button). Free-text homebrew recharge strings
+  // ("per encounter", …) have no event the app can detect, so they are
+  // restored manually with the + control. Neither is silently mapped onto
+  // either rest policy.
   const rechargedResources = entity.resources.custom.map(r => {
     if (r.recharge === 'short_rest') {
       return { ...r, current: r.maximum };
@@ -147,11 +173,11 @@ function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES, hitDiceA
   // 2. Custom resources — re-audit A15: a long rest restores 'short_rest'
   //    and 'long_rest' tagged resources (a long rest is a superset of a
   //    short rest's recovery), but must NOT blindly restore every resource
-  //    regardless of its declared policy. 'never' stays spent; 'dawn' and
-  //    any free-text homebrew recharge string are genuinely unsupported by
-  //    this engine (no time-of-day clock) — left untouched rather than
+  //    regardless of its declared policy. 'never' stays spent; 'dawn' is
+  //    refilled only by takeDawn() (a long rest is not a new day), and any
+  //    free-text homebrew recharge string is restored manually — none is
   //    silently treated as long-rest recovery, per the same "disclose, don't
-  //    fake" rule shortRest above now follows.
+  //    fake" rule shortRest above follows.
   updated = {
     ...updated,
     resources: {

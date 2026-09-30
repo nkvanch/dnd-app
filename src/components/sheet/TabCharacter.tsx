@@ -19,7 +19,7 @@ import { rollDie } from '../../engine/leveling';
 import { levelUp, levelUpClass, calculateLevelUpHpGain, isValidHpRoll } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
 import { getClassLevels } from '../../engine/multiclass';
-import { spendHitDie, spendHitDieManual, currentHitDieSize, spendableHitDicePools } from '../../engine/rest';
+import { spendHitDie, spendHitDieManual, currentHitDieSize, spendableHitDicePools, hasSpentDawnResources, takeDawn } from '../../engine/rest';
 import { rollExpression, doubleDiceCount } from '../../engine/dice';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
@@ -1694,6 +1694,12 @@ function TabCharacterInner({
       {resources.custom.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>RESOURCES</Text>
+          {/* Dawn is an explicit event, not a rest: only offered when a dawn resource is spent. */}
+          {hasSpentDawnResources(entity) && (
+            <Pressable style={styles.dawnBtn} onPress={() => onEntityUpdate(takeDawn(entity, rules))} accessibilityLabel="Dawn: restore resources that recharge at dawn">
+              <Text style={styles.dawnBtnTxt}>☀ Dawn — restore dawn resources</Text>
+            </Pressable>
+          )}
           {resources.custom.map(r => {
             // Table-first recharge: the +/- controls below are already the
             // PRIMARY "mark recharged" path (a DM/player just taps + after
@@ -2307,6 +2313,8 @@ const styles = StyleSheet.create({
   resourceCount: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, minWidth: 40, textAlign: 'center' },
   resourceMax:   { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.normal },
   disabled:      { opacity: 0.3 },
+  dawnBtn: { alignSelf: 'flex-start', backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, marginBottom: Spacing.xs },
+  dawnBtnTxt: { color: Colors.gold, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
   rechargeBtn: {
     width: 28, height: 28, borderRadius: Radius.full,
     alignItems: 'center', justifyContent: 'center',

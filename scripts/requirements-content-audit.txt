@@ -1,0 +1,2 @@
+# Deterministic, local-only extraction of the checked-in official SRD PDF.
+pypdf==6.19.0

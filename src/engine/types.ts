@@ -1647,7 +1647,17 @@ export type Effect = {
            | 'grant_movement';
   target:    string;
   operation: 'add' | 'multiply' | 'set' | 'advantage' | 'disadvantage'
-           | 'resistance' | 'immunity' | 'vulnerability' | 'suppress';
+           | 'resistance' | 'immunity' | 'vulnerability' | 'suppress'
+           /**
+            * 'scale' — multiply the FULLY RESOLVED stat ("double your speed", "halve your
+            * initiative"). Deliberately separate from 'multiply', which the resolver has always
+            * applied to the accumulated bonus pool of that target (and which a locked-in audit
+            * test documents, and which expertise markers reuse). Applied last, after every
+            * set/add, floored to a whole number; several scales multiply together in any order.
+            * Supported on ability scores, speed, initiative and AC. See resolver.ts's
+            * resolveScaleFactor.
+            */
+           | 'scale';
   value:     number | string | string[] | null;
   condition: string | null;
   /**
@@ -1779,7 +1789,14 @@ export type TraitEffectKind =
   | 'none' | 'ability_score' | 'unarmored_defense' | 'ac_bonus' | 'skill_proficiency' | 'tool_proficiency'
   | 'advantage_disadvantage' | 'sense' | 'movement' | 'movement_condition'
   | 'damage_resistance' | 'damage_immunity' | 'damage_vulnerability'
-  | 'spell_grant' | 'resource_ability';
+  | 'spell_grant' | 'resource_ability'
+  // Added for engine/editor parity (see docs/EFFECT_AUTHORING_PARITY.md):
+  | 'stat_bonus' | 'gear_proficiency' | 'condition_immunity';
+
+/** Stats the 'stat_bonus' kind can modify. Every one is honored by the pipeline (see traitCompiler's STAT_BONUS_TARGETS). */
+export type StatBonusTarget =
+  | 'speed' | 'initiative' | 'extra_attack' | 'spell_save_dc' | 'spell_attack_bonus'
+  | 'passive_perception' | 'passive_investigation' | 'passive_insight' | 'saving_throw';
 
 export type DraftTrait = {
   localId:     string;
@@ -1839,7 +1856,7 @@ export type DraftTrait = {
     actionType:   'action' | 'bonus_action' | 'reaction';
     unlockLevel:  string;
     mode:         'resource' | 'slot';
-    recharge:     'short_rest' | 'long_rest' | 'other';
+    recharge:     'short_rest' | 'long_rest' | 'dawn' | 'other';
     rechargeOther: string;
     uses:         string;
     minSlotLevel: string;
@@ -1847,7 +1864,7 @@ export type DraftTrait = {
   // resource_ability (e.g. Chi Pulse: bonus action, 1/rest, heal)
   actionType:      'action' | 'bonus_action' | 'reaction' | 'other';
   actionTypeOther: string;
-  recharge:        'short_rest' | 'long_rest' | 'other';
+  recharge:        'short_rest' | 'long_rest' | 'dawn' | 'other';
   rechargeOther:   string;
   uses:            string;
   healDice:        string;
@@ -1862,6 +1879,31 @@ export type DraftTrait = {
    * this flag (see buildTraitFeature in traitCompiler.ts).
    */
   limitedUse: boolean;
+  // stat_bonus: a modifier to speed / initiative / extra attacks / spell DC / spell attack / passive senses / saves.
+  statTarget?:      StatBonusTarget;
+  /** For statTarget 'saving_throw': which save (or all six). */
+  statSaveAbility?: Ability | 'all';
+  statOperation?:   'add' | 'set' | 'scale';
+  statAmount?:      string;
+  // gear_proficiency: a weapon or armor proficiency.
+  gearKind?:        'weapon' | 'armor';
+  gearName?:        string;
+  // condition_immunity: cannot be affected by this condition.
+  conditionImmunityTarget?: string;
+  // Saving-throw DC for an ability that forces a save (limited-use abilities). See traitCompiler's buildRequiresSave.
+  saveEnabled?:     boolean;
+  saveAbility?:     Ability;
+  /** 'ability' scales with the character (8 + proficiency + that ability's modifier); 'spell' = their spell save DC; 'fixed' = a set number. */
+  saveDcMode?:      'ability' | 'spell' | 'fixed';
+  saveDcAbility?:   Ability;
+  saveDcFixed?:     string;
+  /**
+   * Set ONLY when a builder hydrates a saved/imported (already-compiled) feature it cannot turn back into an
+   * editable effect kind: a one-line summary of the mechanics the compiled feature really carries (see
+   * content/featureMechanics.ts). Display-only — it lets the trait row say what the trait does instead of
+   * "Flavor only", and tells the save path the mechanics must be kept. Never persisted by the compiler.
+   */
+  mechanicsSummary?: string;
 };
 
 // ── 6. Entity master type ────────────────────────────────────────────────────

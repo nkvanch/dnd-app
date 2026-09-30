@@ -10,7 +10,7 @@
 // everything from this file.
 import {
   Ability, SkillName, SenseType, Feature, FeatureSource, Effect, ResourceGrant,
-  DraftTrait, Race, Subrace,
+  DraftTrait, Race, Subrace, StatBonusTarget, TraitEffectKind, FeatureActivation,
 } from '../engine/types';
 
 export const ABILITIES: Ability[] = ['str','dex','con','int','wis','cha'];
@@ -44,8 +44,18 @@ export const ACTION_TYPES = [
 export const RECHARGE_TYPES = [
   { key: 'short_rest' as const, label: 'Short Rest' },
   { key: 'long_rest' as const, label: 'Long Rest' },
-  { key: 'other' as const, label: 'Other' },
+  // Renews when the player presses the sheet's ☀ Dawn button (see engine/rest.ts takeDawn) — not on a rest.
+  { key: 'dawn' as const, label: 'Dawn' },
+  // Any other trigger the app cannot detect: shown as text, restored by hand with + on the sheet.
+  { key: 'other' as const, label: 'Other (manual)' },
 ];
+
+/** The stored recharge string for an authored trait. Typing "Dawn" under Other means the same as the Dawn chip. */
+export function resolveRecharge(recharge: 'short_rest' | 'long_rest' | 'dawn' | 'other', rechargeOther: string): string {
+  if (recharge !== 'other') return recharge;
+  const text = rechargeOther.trim();
+  return text.toLowerCase() === 'dawn' ? 'dawn' : (text || 'other');
+}
 // Common 5e tool/kit proficiencies — a starting point for the searchable
 // tool_proficiency picker; the field stays free-text, this is just a
 // tap-to-fill suggestion list, not a closed catalog.
@@ -71,6 +81,55 @@ export const SPEED_ZEROING_CONDITIONS: { key: string; label: string }[] = [
   { key: 'stunned', label: 'Stunned' }, { key: 'unconscious', label: 'Unconscious' },
 ];
 
+// ── stat_bonus / gear_proficiency / condition_immunity vocabularies ─────────────
+// Every target here is one the pipeline actually honors (verified in engine/pipeline.ts). The parity table in
+// docs/EFFECT_AUTHORING_PARITY.md records what was deliberately NOT exposed and why.
+export const STAT_BONUS_TARGETS: { key: StatBonusTarget; label: string; effectTarget: string; ops: ('add' | 'set' | 'scale')[] }[] = [
+  { key: 'speed',                 label: 'Walking speed',         effectTarget: 'speed',                ops: ['add', 'set', 'scale'] },
+  { key: 'initiative',            label: 'Initiative',            effectTarget: 'initiative',           ops: ['add', 'scale'] },
+  { key: 'extra_attack',          label: 'Extra attacks',         effectTarget: 'extra_attack',         ops: ['add'] },
+  { key: 'spell_save_dc',         label: 'Spell save DC',         effectTarget: 'spell_save_dc',        ops: ['add'] },
+  { key: 'spell_attack_bonus',    label: 'Spell attack bonus',    effectTarget: 'spell_attack_bonus',   ops: ['add'] },
+  { key: 'passive_perception',    label: 'Passive Perception',    effectTarget: 'passivePerception',    ops: ['add'] },
+  { key: 'passive_investigation', label: 'Passive Investigation', effectTarget: 'passiveInvestigation', ops: ['add'] },
+  { key: 'passive_insight',       label: 'Passive Insight',       effectTarget: 'passiveInsight',       ops: ['add'] },
+  { key: 'saving_throw',          label: 'Saving throws',         effectTarget: 'savingThrows',         ops: ['add'] },
+];
+export const STAT_OP_LABELS: Record<'add' | 'set' | 'scale', string> = { add: 'Bonus (+N)', set: 'Set to N', scale: 'Multiply (×N)' };
+export const ARMOR_PROFICIENCIES: { key: string; label: string }[] = [
+  { key: 'light', label: 'Light armor' }, { key: 'medium', label: 'Medium armor' }, { key: 'heavy', label: 'Heavy armor' }, { key: 'shields', label: 'Shields' },
+];
+export const WEAPON_PROFICIENCIES: { key: string; label: string }[] = [
+  { key: 'simple', label: 'Simple weapons' }, { key: 'martial', label: 'Martial weapons' },
+];
+// The standard conditions the engine models (content/conditions), minus exhaustion, which is a level track rather than on/off.
+export const IMMUNITY_CONDITIONS: { key: string; label: string }[] = [
+  'blinded', 'charmed', 'deafened', 'frightened', 'grappled', 'incapacitated', 'invisible', 'paralyzed', 'petrified', 'poisoned', 'prone', 'restrained', 'stunned', 'unconscious',
+].map(k => ({ key: k, label: k.charAt(0).toUpperCase() + k.slice(1) }));
+
+/** Human label for every effect kind, shared by every builder's trait list (no blank labels for newer kinds). */
+export const EFFECT_KIND_LABELS: Record<TraitEffectKind, string> = {
+  none: 'Flavor only', ability_score: 'Ability score bonus', unarmored_defense: 'Unarmored Defense (AC formula)',
+  ac_bonus: 'AC bonus', skill_proficiency: 'Skill proficiency', tool_proficiency: 'Tool proficiency',
+  advantage_disadvantage: 'Advantage/Disadvantage', sense: 'Grants a sense', movement: 'Grants movement',
+  movement_condition: 'Movement conditions', damage_resistance: 'Resistance', damage_immunity: 'Immunity',
+  damage_vulnerability: 'Vulnerability', spell_grant: 'Grants spells', resource_ability: 'Limited-use ability',
+  stat_bonus: 'Stat modifier', gear_proficiency: 'Weapon/armor proficiency', condition_immunity: 'Condition immunity',
+};
+
+/** The `requiresSave` a save-forcing ability carries, or null. The DC scales with the character unless the author fixes it. */
+export function buildRequiresSave(t: DraftTrait): FeatureActivation['requiresSave'] {
+  if (!t.saveEnabled) return null;
+  const ability = t.saveAbility ?? 'wis';
+  const mode = t.saveDcMode ?? 'ability';
+  if (mode === 'spell') return { ability, dc: 'spell_save_dc' };
+  if (mode === 'fixed') {
+    const n = parseInt(t.saveDcFixed ?? '', 10);
+    return { ability, dc: Number.isFinite(n) && n > 0 ? n : 10 };
+  }
+  return { ability, dc: { ability: t.saveDcAbility ?? 'cha' } };
+}
+
 export function toId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
@@ -95,6 +154,9 @@ export function newDraftTrait(name: string): DraftTrait {
     actionType: 'bonus_action', actionTypeOther: '',
     recharge: 'short_rest', rechargeOther: '', uses: '1', healDice: '1d8',
     limitedUse: false,
+    statTarget: 'speed', statSaveAbility: 'all', statOperation: 'add', statAmount: '10',
+    gearKind: 'armor', gearName: 'heavy', conditionImmunityTarget: 'poisoned',
+    saveEnabled: false, saveAbility: 'wis', saveDcMode: 'ability', saveDcAbility: 'cha', saveDcFixed: '13',
   };
 }
 
@@ -199,6 +261,32 @@ function buildTraitFeatureCore(
       resource: null,
     };
   }
+  if (t.effectKind === 'stat_bonus') {
+    const spec = STAT_BONUS_TARGETS.find(s => s.key === (t.statTarget ?? 'speed')) ?? STAT_BONUS_TARGETS[0];
+    const op = spec.ops.includes(t.statOperation ?? 'add') ? (t.statOperation ?? 'add') : 'add';
+    const amount = op === 'scale' ? parseFloat(t.statAmount ?? '') : parseInt(t.statAmount ?? '', 10);
+    // An empty/zero bonus (or a x1 / non-positive multiplier) does nothing; only 'set' may legitimately be 0.
+    const meaningful = Number.isFinite(amount) && (op === 'set' || (op === 'scale' ? amount > 0 && amount !== 1 : amount !== 0));
+    if (!meaningful) return { feature: { ...base, effects: [] }, resource: null };
+    const targets = spec.key === 'saving_throw'
+      ? ((t.statSaveAbility ?? 'all') === 'all' ? ABILITIES : [t.statSaveAbility as Ability]).map(a => `savingThrows.${a}`)
+      : [spec.effectTarget];
+    return {
+      feature: { ...base, effects: targets.map(target => ({ type: 'stat_modifier' as const, target, operation: op, value: amount, condition: null })) },
+      resource: null,
+    };
+  }
+  if (t.effectKind === 'gear_proficiency') {
+    const name = (t.gearName ?? '').trim().toLowerCase().replace(/\s+/g, '_');
+    if (!name) return { feature: { ...base, effects: [] }, resource: null };
+    const kind = t.gearKind === 'weapon' ? 'weapon' : 'armor';
+    return { feature: { ...base, effects: [{ type: 'grant_proficiency', target: `${kind}:${name}`, operation: 'add', value: null, condition: null }] }, resource: null };
+  }
+  if (t.effectKind === 'condition_immunity') {
+    const target = (t.conditionImmunityTarget ?? '').trim().toLowerCase();
+    if (!target) return { feature: { ...base, effects: [] }, resource: null };
+    return { feature: { ...base, effects: [{ type: 'condition_immunity', target, operation: 'immunity', value: null, condition: null }] }, resource: null };
+  }
   if (t.effectKind === 'skill_proficiency') {
     const effect: Effect = {
       type: 'grant_proficiency', target: `skill:${t.skillTarget}`,
@@ -298,7 +386,7 @@ function buildTraitFeatureCore(
         : (() => {
             const poolId = `${grantFid}_pool`;
             const maxUses = Math.max(1, parseInt(g.uses, 10) || 1);
-            const recharge = g.recharge === 'other' ? (g.rechargeOther.trim() || 'other') : g.recharge;
+            const recharge = resolveRecharge(g.recharge, g.rechargeOther);
             extraResources.push({ resourceId: poolId, name: `${t.name}: ${g.spellName || g.spellId}`, maximum: maxUses, recharge });
             return { resourceId: poolId, quantity: 1 };
           })();
@@ -322,7 +410,7 @@ function buildTraitFeatureCore(
   if (t.effectKind === 'resource_ability') {
     const resourceId = `${fid}_pool`;
     const maxUses = Math.max(1, parseInt(t.uses, 10) || 1);
-    const recharge = t.recharge === 'other' ? (t.rechargeOther.trim() || 'other') : t.recharge;
+    const recharge = resolveRecharge(t.recharge, t.rechargeOther);
     const resource: ResourceGrant = {
       resourceId, name: t.name, maximum: maxUses, recharge,
     };
@@ -338,7 +426,7 @@ function buildTraitFeatureCore(
         activation: {
           actionType,
           resourceCost: { resourceId, quantity: 1 },
-          range: 'self', target: 'self', requiresSave: null,
+          range: 'self', target: buildRequiresSave(t) ? 'single' : 'self', requiresSave: buildRequiresSave(t),
         },
         abilityEffects: t.healDice.trim() ? [{ type: 'heal', dice: t.healDice.trim() }] : [],
       },
@@ -376,7 +464,7 @@ export function buildTraitFeature(
   // exact same disambiguation buildTraitFeatureCore already resolved.
   const resourceId = `${result.feature.id}_pool`;
   const maxUses     = Math.max(1, parseInt(t.uses, 10) || 1);
-  const recharge    = t.recharge === 'other' ? (t.rechargeOther.trim() || 'other') : t.recharge;
+  const recharge    = resolveRecharge(t.recharge, t.rechargeOther);
   const resource: ResourceGrant = { resourceId, name: `${t.name} (Uses)`, maximum: maxUses, recharge };
   const actionType = t.actionType === 'other' ? 'free' : t.actionType;
   return {
@@ -387,7 +475,7 @@ export function buildTraitFeature(
       activation: {
         actionType,
         resourceCost: { resourceId, quantity: 1 },
-        range: 'self', target: 'self', requiresSave: null,
+        range: 'self', target: buildRequiresSave(t) ? 'single' : 'self', requiresSave: buildRequiresSave(t),
       },
     },
     resource,

@@ -10,6 +10,7 @@
 // for removal, unlike feat-taking.
 import { Entity, Ability, SkillName, DerivedStats, DERIVED_NUMERIC_KEYS } from '../../engine/types';
 import { applyStatModifiers, collectAllEffects } from '../../engine/pipeline';
+import { diffEffectSets } from '../../engine/effectDiff';
 import { DERIVED_LABELS } from './derivedStatLabels';
 import { SKILL_LABELS } from './skillLabels';
 
@@ -58,6 +59,11 @@ export function buildFeatureGrantRows(before: Entity, after: Entity): Row[] {
   if (before.resources.hp.maximum !== after.resources.hp.maximum) {
     rows.push({ label: `Max HP: ${before.resources.hp.maximum} → ${after.resources.hp.maximum}` });
   }
+
+  // Resistances, immunities, senses, movement, advantage, gear/language proficiencies — gained or lost.
+  const effectDiff = diffEffectSets(before, after);
+  for (const label of effectDiff.gained) rows.push({ label });
+  for (const label of effectDiff.lost) rows.push({ label: `No longer: ${label}` });
 
   const beforeRes = new Map(before.resources.custom.map(r => [r.id, r]));
   const afterRes  = new Map(after.resources.custom.map(r => [r.id, r]));

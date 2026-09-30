@@ -193,6 +193,19 @@ export const CREATE_CUSTOM_RULE_PROFILES_TABLE = `
   );
 `;
 
+// Host / DM / Player live-session layer (src/session/*): a small document store
+// for DM campaign preparation, the DM's secret-effect vault, per-participant
+// restart state and the optional Host live-state snapshot. Key-addressed JSON
+// blobs, same rationale as the rest of this file. Additive: an existing
+// database simply gains the table (CREATE TABLE IF NOT EXISTS).
+export const CREATE_SESSION_DOCS_TABLE = `
+  CREATE TABLE IF NOT EXISTS session_docs (
+    key       TEXT PRIMARY KEY NOT NULL,
+    data      TEXT NOT NULL,
+    updatedAt INTEGER NOT NULL
+  );
+`;
+
 // Indexes for common query patterns
 export const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_entities_kind     ON entities    (kind);
@@ -218,5 +231,6 @@ export const ALL_TABLES = [
   CREATE_INSTALLED_PACKS_TABLE,
   CREATE_PREPARED_ENCOUNTERS_TABLE,
   CREATE_CUSTOM_RULE_PROFILES_TABLE,
+  CREATE_SESSION_DOCS_TABLE,
   CREATE_INDEXES,
 ];

@@ -19,7 +19,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, Entity, asSubclassId, RulesetId, Feature } from '../../src/engine/types';
+import { DraftTrait, HomebrewSubclass, LevelEntry, Grant, Entity, asSubclassId, RulesetId, Feature, ResourceGrant } from '../../src/engine/types';
 import {
   ChoiceDefinitionEditorModal, DraftChoice, newDraftChoice,
 } from '../../src/components/homebrew/ChoiceDefinitionEditor';
@@ -31,7 +31,8 @@ import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
-import { toId, disambiguateId } from '../../src/content/traitCompiler';
+import { toId, disambiguateId, EFFECT_KIND_LABELS as TRAIT_KIND_LABELS } from '../../src/content/traitCompiler';
+import { mechanicsLabel } from '../../src/content/featureMechanics';
 import { FULL_SUBCLASS_LIBRARY } from '../../src/content/subclasses/index';
 import { deriveSubclassId } from '../../src/content/subclasses/subclassBrowse';
 import { simulate } from '../../src/engine/simulate';
@@ -64,7 +65,14 @@ function draftFeaturesFromEntries(entries: LevelEntry[]): LevelFeature[] {
     for (const grant of entry.grants) {
       if (grant.kind !== 'feature') continue;
       const f = grant.value as Feature;
-      out.push({ ...newDraftTrait(f.name), level: entry.level, description: f.description, effectKind: 'none', originalFeature: f });
+      // Resource pools granted alongside this feature at the same level (resource_ability traits compile to a
+      // feature + a ResourceGrant whose id starts with the feature's id).
+      const pools = entry.grants.filter(g => g.kind === 'resource').map(g => g.value as ResourceGrant).filter(r => r.resourceId.startsWith(f.id));
+      const summary = mechanicsLabel([f], pools);
+      out.push({
+        ...newDraftTrait(f.name), level: entry.level, description: f.description, effectKind: 'none', originalFeature: f,
+        ...(summary !== 'Flavor only' ? { mechanicsSummary: summary } : {}),
+      });
     }
   }
   return out;
@@ -200,8 +208,13 @@ export default function SubclassBuilderScreen() {
     for (let level = 1; level <= 20; level++) {
       const usedIds = new Set<string>();
       for (const f of (featuresByLevel.get(level) ?? [])) {
-        if (f.originalFeature && !touchedFeatureIds.has(f.localId)) {
-          featureEdits.push({ level, originalFeatureId: f.originalFeature.id, grants: [{ kind: 'feature', value: f.originalFeature }] });
+        // An imported feature that is still "no new effect chosen" keeps its compiled mechanics even after its
+        // text was edited: opening it must never silently downgrade it to flavor text.
+        if (f.originalFeature && (!touchedFeatureIds.has(f.localId) || f.effectKind === 'none')) {
+          const kept: Feature = touchedFeatureIds.has(f.localId)
+            ? { ...f.originalFeature, name: f.name, description: f.description.trim() || f.originalFeature.description }
+            : f.originalFeature;
+          featureEdits.push({ level, originalFeatureId: f.originalFeature.id, grants: [{ kind: 'feature', value: kept }] });
           usedIds.add(f.originalFeature.id);
           continue;
         }
@@ -349,7 +362,7 @@ export default function SubclassBuilderScreen() {
                 <Pressable key={f.localId} style={styles.featureItem} onPress={() => setOpenFeatureId(f.localId)}>
                   <View style={styles.featureItemBody}>
                     <Text style={styles.featureItemName}>{f.name}</Text>
-                    <Text style={styles.featureItemDesc} numberOfLines={1}>{EFFECT_KIND_LABELS[f.effectKind]}</Text>
+                    <Text style={styles.featureItemDesc} numberOfLines={2}>{f.effectKind === 'none' && f.mechanicsSummary ? f.mechanicsSummary : (EFFECT_KIND_LABELS[f.effectKind] ?? TRAIT_KIND_LABELS[f.effectKind])}</Text>
                   </View>
                   <Pressable style={styles.featureDeleteBtn} onPress={() => deleteFeature(f.localId)} hitSlop={8}>
                     <Text style={styles.featureDeleteTxt}>✕</Text>

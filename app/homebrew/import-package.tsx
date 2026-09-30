@@ -12,6 +12,7 @@ import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { makeHomebrewLookup } from '../../src/store/homebrewLookup';
 import { pickAndValidatePackage, PackageImportPreview } from '../../src/io/packageIO';
+import { isOfficialRef } from '../../src/content/officialRefs';
 import { planPackageImport, ConflictResolution, PackageConflict, flattenPackageContents } from '../../src/engine/packageConflicts';
 import { removedPackItemRefs, stillReferencedRefs } from '../../src/engine/packDiagnostics';
 import { groupPackContents, PACKAGE_TYPE_LABELS } from '../../src/engine/packageBuilder';
@@ -21,6 +22,7 @@ import { PreparedEncounter } from '../../src/engine/types';
 import { RULESETS } from '../../src/content/rulesets';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
+import { ImportMode, initialImportMode, isUpdatingInstalledPack, updatingBannerText, importConfirmLabel } from '../../src/engine/packageImportFlow';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const KNOWN_RULESET_IDS = new Set(Object.keys(RULESETS));
@@ -55,7 +57,7 @@ export default function ImportPackageScreen() {
   // together with it. `updateChoice` gates which UI step is shown —
   // null means "ask the user" (only reachable when updateTarget is set).
   const [updateTarget, setUpdateTarget] = useState<InstalledPack | null>(null);
-  const [updateChoice, setUpdateChoice] = useState<'update' | 'copy' | null>(null);
+  const [updateChoice, setUpdateChoice] = useState<ImportMode>(null);
 
   async function handlePick() {
     setPicking(true);
@@ -64,6 +66,7 @@ export default function ImportPackageScreen() {
       const result = await pickAndValidatePackage(
         KNOWN_RULESET_IDS,
         makeHomebrewLookup(homebrew),
+        isOfficialRef,
       );
       if (result) {
         setPreview(result);
@@ -76,7 +79,7 @@ export default function ImportPackageScreen() {
         setResolutions(initial);
         const match = result.pack.packageId ? installedPacks.find(p => p.id === result.pack.packageId) ?? null : null;
         setUpdateTarget(match);
-        setUpdateChoice(match ? null : 'update'); // no real choice to make when there's nothing installed to update
+        setUpdateChoice(initialImportMode(match)); // 'new' when nothing installed matches: an ordinary import, NOT an update
       }
     } catch (e: any) {
       Alert.alert('That file couldn’t be imported', e?.message ?? 'Unknown error.');
@@ -150,7 +153,7 @@ export default function ImportPackageScreen() {
       // against `toSave` — a Keep-Local resolution means the local edit
       // wins, not that the author removed the content from their package.
       let removalNote = '';
-      if (updateChoice === 'update' && updateTarget) {
+      if (isUpdatingInstalledPack(updateChoice, updateTarget) && updateTarget) {
         const newRefs = (preview.pack.contents ?? flattenPackageContents(preview.pack.homebrew).map(c => ({ type: c.type, id: c.item.id })));
         const removed = removedPackItemRefs(updateTarget.itemRefs, newRefs);
         const kept = stillReferencedRefs(removed, installedPacks, homebrew, characters, encounters);
@@ -258,8 +261,8 @@ export default function ImportPackageScreen() {
       {preview && updateChoice !== null && (
         <>
           <View style={styles.section}>
-            {updateChoice === 'update' && (
-              <Text style={styles.pkgMeta}>Updating installed pack "{updateTarget?.name}"</Text>
+            {updatingBannerText(updateChoice, updateTarget) && (
+              <Text style={styles.pkgMeta}>{updatingBannerText(updateChoice, updateTarget)}</Text>
             )}
             <Text style={styles.pkgName}>{preview.pack.name ?? preview.suggestedName}</Text>
             {preview.pack.packageVersion && <Text style={styles.pkgMeta}>Version {preview.pack.packageVersion}</Text>}
@@ -367,7 +370,7 @@ export default function ImportPackageScreen() {
               disabled={!allResolved || committing}
               onPress={() => { void handleConfirmImport(); }}
             >
-              {committing ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.confirmTxt} testID="import-confirm">{updateChoice === 'update' ? 'Update' : previewGroups.counts.total > 1 ? 'Import All' : 'Import'}</Text>}
+              {committing ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.confirmTxt} testID="import-confirm">{importConfirmLabel(updateChoice, updateTarget, previewGroups.counts.total)}</Text>}
             </Pressable>
           </View>
         </>

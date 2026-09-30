@@ -2431,7 +2431,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "tensers_floating_disk",
-    "name": "Tenser's Floating Disk",
+    "name": "Floating Disk",
     "level": 1,
     "school": "Conjuration",
     "castingTime": "1 action",
@@ -6394,7 +6394,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "leomunds_secret_chest",
-    "name": "Leomund's Secret Chest",
+    "name": "Secret Chest",
     "level": 4,
     "school": "Conjuration",
     "castingTime": "1 action",
@@ -6441,7 +6441,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "mordenkainens_faithful_hound",
-    "name": "Mordenkainen's Faithful Hound",
+    "name": "Faithful Hound",
     "level": 4,
     "school": "Conjuration",
     "castingTime": "1 action",
@@ -6945,7 +6945,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "bigbys_hand",
-    "name": "Bigby's Hand",
+    "name": "Arcane Hand",
     "level": 5,
     "school": "Evocation",
     "castingTime": "1 action",
@@ -7771,7 +7771,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "rarys_telepathic_bond",
-    "name": "Rary's Telepathic Bond",
+    "name": "Telepathic Bond",
     "level": 5,
     "school": "Divination",
     "castingTime": "1 action",
@@ -8384,7 +8384,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "drawmijs_instant_summons",
-    "name": "Drawmij's Instant Summons",
+    "name": "Instant Summons",
     "level": 6,
     "school": "Conjuration",
     "castingTime": "1 minute",
@@ -9423,13 +9423,17 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "mordenkainens_magnificent_mansion",
-    "name": "Mordenkainen's Magnificent Mansion",
+    "name": "Magnificent Mansion",
     "level": 7,
     "school": "Conjuration",
-    "castingTime": "1 minute **Range**: 300 feet **Components**: V, S, M (a miniature portal carved from ivory, a small piece of polished marble, and a tiny silver spoon, each item worth at least 5 gp) **Duration**: 24 hours",
-    "range": "",
-    "components": [],
-    "duration": "",
+    "castingTime": "1 minute",
+    "range": "300 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "24 hours",
     "description": "You conjure an extradimensional dwelling in range that lasts for the duration. You choose where its one entrance is located. The entrance shimmers faintly and is 5 feet wide and 10 feet tall. You and any creature you designate when you cast the spell can enter the extradimensional dwelling as long as the portal remains open. You can open or close the portal if you are within 30 feet of it. While closed, the portal is invisible.\n\nBeyond the portal is a magnificent foyer with numerous chambers beyond. The atmosphere is clean, fresh, and warm.\n\nYou can create any floor plan you like, but the space can't exceed 50 cubes, each cube being 10 feet on each side. The place is furnished and decorated as you choose. It contains sufficient food to serve a nine-course banquet for up to 100 people. A staff of 100 near-transparent servants attends all who enter. You decide the visual appearance of these servants and their attire. They are completely obedient to your orders. Each servant can perform any task a normal human servant could perform, but they can't attack or take any action that would directly harm another creature. Thus the servants can fetch things, clean, mend, fold clothes, light fires, serve food, pour wine, and so on. The servants can go anywhere in the mansion but can't leave it. Furnishings and other objects created by this spell dissipate into smoke if removed from the mansion. When the spell ends, any creatures or objects left inside the extradimensional space are expelled into the open spaces nearest to the entrance.",
     "upcast": null,
     "ritual": false,
@@ -9441,17 +9445,21 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "mordenkainens_sword",
-    "name": "Mordenkainen's Sword",
+    "name": "Arcane Sword",
     "level": 7,
     "school": "Evocation",
-    "castingTime": "1 action **Range**: 60 feet **Components**: V, S, M (a miniature platinum sword with a grip and pommel of copper and zinc, worth 250 gp) **Duration**: Concentration, up to 1 minute",
-    "range": "",
-    "components": [],
-    "duration": "",
+    "castingTime": "1 action",
+    "range": "60 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "Concentration, up to 1 minute",
     "description": "You create a sword-shaped plane of force that hovers within range. It lasts for the duration.\n\nWhen the sword appears, you make a melee spell attack against a target of your choice within 5 feet of the sword. On a hit, the target takes 3d10 force damage. Until the spell ends, you can use a bonus action on each of your turns to move the sword up to 20 feet to a spot you can see and repeat this attack against the same target or a different one.",
     "upcast": null,
     "ritual": false,
-    "concentration": false,
+    "concentration": true,
     "classes": [
       "bard",
       "wizard"

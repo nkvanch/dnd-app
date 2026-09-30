@@ -101,7 +101,9 @@ describe('Where each export lives (Compendium integration)', () => {
   it('the import screen previews grouped content and offers Import All', () => {
     const src = read('app/homebrew/import-package.tsx');
     expect(src).toContain('groupPackContents');
-    expect(src).toContain('Import All');
+    // The confirm-button wording now lives in the pure import-flow model (engine/packageImportFlow.ts) the screen calls.
+    expect(src).toContain('importConfirmLabel');
+    expect(read('src/engine/packageImportFlow.ts')).toContain('Import All');
     expect(src).toContain('INCLUDED AUTOMATICALLY');
   });
 });

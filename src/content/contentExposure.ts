@@ -26,3 +26,17 @@ export function selectExposedContent<T extends ExposableContent>(
 ): T[] {
   return content.filter(entry => isContentExposed(entry, context)).filter(search).filter(filter);
 }
+
+/** The one exposure rule for a race's nested subraces. A public base race stays
+ * visible even when some of its subraces are not SRD; only `srd === true`
+ * subraces survive in SRD-only mode (unknown/false → hidden). Full builds keep
+ * everything, and homebrew subraces (per `isHomebrew`) keep their own
+ * visibility. Resolving a saved character's subrace by id is deliberately NOT
+ * routed through this: hiding is a browsing decision, not a data deletion. */
+export function exposedSubraces<T extends { srd?: boolean }>(
+  subraces: readonly T[] | undefined,
+  context: ContentExposureContext,
+  isHomebrew: (subrace: T) => boolean = () => false,
+): T[] {
+  return (subraces ?? []).filter(sr => isContentExposed({ srd: sr.srd, isHomebrew: isHomebrew(sr), type: 'subrace' }, context));
+}

@@ -14016,8 +14016,9 @@ export const FULL_MONSTER_LIBRARY: MonsterTemplate[] = [
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 
 /**
- * The monster list the app should use. All 12 templates here are already
- * SRD-safe, so this filter is currently a no-op — wired for consistency and
+ * The monster list the app should use. All 322 templates here are SRD-tagged
+ * (an official SRD 5.1 verification pass found no non-SRD monster), so this
+ * filter is currently a no-op — wired for consistency and
  * to protect any non-SRD monster added here in the future, same pattern as
  * spells/subclasses/races/backgrounds/feats. See docs/ROADMAP_1.0.md Phase 1.
  */

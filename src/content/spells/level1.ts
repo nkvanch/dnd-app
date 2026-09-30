@@ -10,7 +10,7 @@ export const spellChromaticOrb: Spell = {
   duration: 'Instantaneous',
   description: 'You hurl a 4-inch-diameter sphere of energy at a creature you can see within range. You choose acid, cold, fire, lightning, poison, or thunder for the type of orb you create, and then make a ranged spell attack. On a hit, the creature takes 3d8 damage of the type you chose.',
   upcast: 'When you cast this spell using a slot of 2nd level or higher, the damage increases by 1d8 for each slot level above 1st.',
-  ritual: false, concentration: false, srd: true, classes: ['sorcerer', 'wizard'],
+  ritual: false, concentration: false, srd: false, classes: ['sorcerer', 'wizard'],
 };
 
 export const spellWitchBolt: Spell = {
@@ -19,7 +19,7 @@ export const spellWitchBolt: Spell = {
   duration: 'Concentration, up to 1 minute',
   description: 'A beam of crackling blue energy lances out toward a creature within range, forming a sustained arc of lightning between you and the target. Make a ranged spell attack. On a hit, the target takes 1d12 lightning damage. On each of your turns for the duration, you can use your action to deal 1d12 lightning damage to the target automatically. The spell ends if you use your action to do anything else, if the target is ever outside the spell\'s range, or if the target has total cover from you.',
   upcast: 'When you cast this spell using a slot of 2nd level or higher, the initial damage increases by 1d12 for each slot level above 1st.',
-  ritual: false, concentration: true, srd: true, classes: ['sorcerer', 'warlock', 'wizard'],
+  ritual: false, concentration: true, srd: false, classes: ['sorcerer', 'warlock', 'wizard'],
 };
 
 // NOT SRD — Ice Knife is from Xanathar's Guide to Everything (2017).

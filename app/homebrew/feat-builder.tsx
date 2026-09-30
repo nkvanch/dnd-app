@@ -28,7 +28,8 @@ import { gameIdForRuleset } from '../../src/content/rulesets';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
-import { toId, disambiguateId } from '../../src/content/traitCompiler';
+import { toId, disambiguateId, EFFECT_KIND_LABELS as TRAIT_KIND_LABELS } from '../../src/content/traitCompiler';
+import { mechanicsLabel } from '../../src/content/featureMechanics';
 import { FULL_FEAT_LIBRARY } from '../../src/content/feats/index';
 import { simulate } from '../../src/engine/simulate';
 import { applyGrant } from '../../src/engine/leveling';
@@ -112,7 +113,8 @@ export default function FeatBuilderScreen() {
     // (effects are already-compiled Effect objects, not the authoring shape) —
     // edit mode starts the effect as "Flavor only" with the saved description,
     // same accepted limitation subclass-builder.tsx's edit-mode recovery has.
-    setTrait({ ...newDraftTrait('Effect'), description: editing.feature.description });
+    const summary = mechanicsLabel([editing.feature]);
+    setTrait({ ...newDraftTrait('Effect'), description: editing.feature.description, ...(summary !== 'Flavor only' ? { mechanicsSummary: summary } : {}) });
     setTraitTouched(false);
     if (editing.abilityChoice) {
       setAbilityChoiceOn(true);
@@ -163,7 +165,8 @@ export default function FeatBuilderScreen() {
     // grants on a rename-only save. Pass the original feature through
     // verbatim in that case; only recompile from `trait` once the user has
     // actually used the editor.
-    const feature = (editing && !traitTouched)
+    // Opening the editor without choosing a new effect kind (still "none") keeps the feat's compiled mechanics too.
+    const feature = (editing && (!traitTouched || (trait.effectKind === 'none' && !!trait.mechanicsSummary)))
       ? editing.feature
       : buildTraitFeature(trait, { idPrefix: id, sourceKind: 'feat', sourceRefId: id, level: null }).feature;
     return mergeHomebrewDefinition(editing, {
@@ -280,7 +283,7 @@ export default function FeatBuilderScreen() {
         <Field label="Mechanical Effect">
           <Pressable style={styles.effectCard} onPress={() => setTraitOpen(true)}>
             <Text style={styles.effectCardName}>Edit Effect</Text>
-            <Text style={styles.effectCardDesc}>{EFFECT_KIND_LABELS[trait.effectKind]}</Text>
+            <Text style={styles.effectCardDesc}>{trait.effectKind === 'none' && trait.mechanicsSummary ? trait.mechanicsSummary : (EFFECT_KIND_LABELS[trait.effectKind] ?? TRAIT_KIND_LABELS[trait.effectKind])}</Text>
           </Pressable>
         </Field>
 

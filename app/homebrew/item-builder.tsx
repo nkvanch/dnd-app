@@ -21,7 +21,8 @@ import { describeConstraint } from '../../src/content/items/equipmentDisplay';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
-import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
+import { newDraftTrait, buildTraitFeature, TraitEditorModal, EFFECT_KIND_LABELS as TRAIT_KIND_LABELS } from '../../src/components/homebrew/TraitEditor';
+import { mechanicsLabel } from '../../src/content/featureMechanics';
 import { simulate } from '../../src/engine/simulate';
 import { equipItem } from '../../src/engine/inventory';
 import { buildEquipmentSummaryRows } from '../../src/components/sheet/EquipmentPreviewModal';
@@ -155,7 +156,8 @@ export default function ItemBuilderScreen() {
       // accepted limitation feat-builder.tsx's edit-mode recovery has,
       // unless a DraftTrait was itself persisted (any item saved after this
       // migration).
-      setTrait((draft.trait as DraftTrait) ?? newDraftTrait('Effect'));
+      const legacySummary = mechanicsLabel(editing.features);
+      setTrait((draft.trait as DraftTrait) ?? { ...newDraftTrait('Effect'), ...(legacySummary !== 'Flavor only' ? { mechanicsSummary: legacySummary } : {}) });
     } else {
       setDescription(editing.features[0]?.description ?? '');
     }
@@ -575,7 +577,7 @@ export default function ItemBuilderScreen() {
         <Text style={styles.hint}>Layers on top of weapon damage / armor AC above — same effect system feats use (stat bonus, sense, resistance, proficiency, etc.). Granted while the item is equipped.</Text>
         <Pressable style={styles.effectCard} onPress={() => setTraitOpen(true)}>
           <Text style={styles.effectCardName}>Edit Effect</Text>
-          <Text style={styles.effectCardDesc}>{EFFECT_KIND_LABELS[trait.effectKind]}</Text>
+          <Text style={styles.effectCardDesc}>{trait.effectKind === 'none' && trait.mechanicsSummary ? trait.mechanicsSummary : (EFFECT_KIND_LABELS[trait.effectKind] ?? TRAIT_KIND_LABELS[trait.effectKind])}</Text>
         </Pressable>
       </ScrollView>
 

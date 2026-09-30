@@ -14,7 +14,7 @@ import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
   Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus, AuditSourceKind,
 } from './types';
-import { resolveEffectsForTarget, resolveBinary, resolveCombine, resolveExtraAttack } from './resolver';
+import { resolveEffectsForTarget, resolveBinary, resolveCombine, resolveExtraAttack, resolveScaleFactor, applyScale } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
 import { generateAllActionCards, CardGenOptions } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
@@ -106,7 +106,8 @@ export function applyStatModifiers(
     // uses just below (see the "Speed: respect 'set' operations" block).
     const hasSet   = relevant.some(ae => ae.effect.operation === 'set');
     const resolved = resolveCombine(relevant);
-    result[ab] = hasSet ? resolved : base[ab] + resolved;
+    // 'scale' ("double your Strength") multiplies the fully resolved score, after set/add.
+    result[ab] = applyScale(hasSet ? resolved : base[ab] + resolved, resolveScaleFactor(relevant));
   }
   return result;
 }
@@ -298,7 +299,8 @@ export function recomputeDerived(
       ? speedResolved
       : entity.resources.speed + speedResolved;
   const hasZeroSpeedRestriction = speedEffects.some(ae => ae.effect.operation === 'set' && ae.effect.value === 0);
-  const finalSpeed = hasZeroSpeedRestriction ? 0 : calculatedSpeed;
+  // 'scale' (double/halve speed) applies to the resolved speed; a speed-zero restriction still wins.
+  const finalSpeed = hasZeroSpeedRestriction ? 0 : applyScale(calculatedSpeed, resolveScaleFactor(speedEffects));
 
   // ── Senses: aggregate grant_sense effects, dedup by type (largest range) ──
   const senseEffects = allEffects.filter(ae => ae.effect.type === 'grant_sense');
@@ -350,9 +352,11 @@ export function recomputeDerived(
 
   const derived: DerivedStats = {
     proficiencyBonus: profBonus,
-    ac:               calculatedBaseAc + acBonus,
-    initiative:       modifier(effectiveStats.dex)
-                        + (resolveEffectsForTarget('initiative', allEffects, rules) as number),
+    ac:               applyScale(calculatedBaseAc + acBonus, resolveScaleFactor(allEffects.filter(ae => ae.effect.target === 'ac'))),
+    initiative:       applyScale(
+                        modifier(effectiveStats.dex) + (resolveEffectsForTarget('initiative', allEffects, rules) as number),
+                        resolveScaleFactor(allEffects.filter(ae => ae.effect.target === 'initiative')),
+                      ),
     speed:            finalSpeed,
     // Bug fix (architecture review U7): a passive-score-targeted
     // stat_modifier effect (e.g. Observant's +5 to passive Perception and

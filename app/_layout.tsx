@@ -14,6 +14,7 @@ import { initContentDb } from '../src/db/contentDb';
 import { spellRepo } from '../src/content/spellRepo';
 import { itemRepo } from '../src/content/itemRepo';
 import { getMeta } from '../src/db/appMetaRepo';
+import { clearStaleSessionEffects } from '../src/session/effectBridge';
 import { useCharacterStore } from '../src/store/characterStore';
 import { useSessionStore }   from '../src/store/sessionStore';
 import { useCampaignStore }  from '../src/store/campaignStore';
@@ -143,6 +144,18 @@ export default function RootLayout() {
         // 5b. Named custom rule profiles are independent local configuration.
         try { await useCustomRuleProfileStore.getState().load(); }
         catch (e) { console.error('[_layout] Custom rule profiles failed to load:', e); }
+
+        // 5c. Live-session effects only exist while a session is running. If the app was killed mid-session
+        // (or the Host vanished), nothing has told the sheet the effects ended: clear any leftover session
+        // overrides so a stale AC penalty can never outlive the session it came from.
+        try {
+          const cs = useCharacterStore.getState();
+          for (const c of cs.characters) {
+            if (c.dmOverrides.some(o => o.id.startsWith('session:'))) {
+              cs.updateCharacter(c.id, e => clearStaleSessionEffects(e, cs.rules), 'Session effects cleared', 'other');
+            }
+          }
+        } catch (e) { console.error('[_layout] clearing stale session effects failed:', e); }
 
         // 6. Wire up the sync manager — must run after stores are hydrated
         try {
@@ -290,6 +303,7 @@ export default function RootLayout() {
             headerShown:false for the whole group — see its own header
             comment (audit finding ROUTE-GUARD-1). */}
         <Stack.Screen name="dm"                  options={{ headerShown: false }} />
+        <Stack.Screen name="live"                options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/import-review"      options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/package-builder"    options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/spell-builder"      options={{ headerShown: false }} />

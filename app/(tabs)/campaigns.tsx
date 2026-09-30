@@ -27,6 +27,8 @@ import { SyncStatusDot }     from '../../src/components/SyncStatusDot';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { Quest, SessionLogEntry, Campaign } from '../../src/engine/types';
 import { InstalledPack, loadInstalledPacks } from '../../src/db/packRegistryRepo';
+import { useSessionRuntime } from '../../src/session/runtime';
+import { capabilityLabel } from '../../src/session/routing';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1043,6 +1045,9 @@ export default function CampaignsScreen() {
   const session        = useSessionStore(s => s.session);
   const setNickname    = useSessionStore(s => s.setNickname);
   const { action }     = useLocalSearchParams<{ action?: string }>();
+  const router         = useRouter();
+  const liveMode       = useSessionRuntime(s => s.mode);
+  const liveCaps       = useSessionRuntime(s => s.capabilities);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen,   setJoinOpen]   = useState(false);
@@ -1072,6 +1077,17 @@ export default function CampaignsScreen() {
         <Text style={styles.title}>Campaigns</Text>
       </View>
 
+      {/* Live Session (Host / DM / Player as separate roles) — additive to the campaign flow below. */}
+      <Pressable
+        style={styles.liveEntry} onPress={() => router.push('/live' as never)}
+        testID="campaigns-open-live" accessibilityRole="button" accessibilityLabel="Live Session: Host, DM or Player"
+      >
+        <Text style={styles.liveEntryTitle}>Live Session · Host, DM or Player</Text>
+        <Text style={styles.liveEntrySub}>
+          {liveMode === 'idle' ? 'Prepare a campaign offline, host a table, or join one →' : `In a session as ${capabilityLabel(liveCaps)} →`}
+        </Text>
+      </Pressable>
+
       {activeCampaign ? (
         isDm ? <DmActiveView /> : <PlayerActiveView />
       ) : (
@@ -1099,6 +1115,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
+
+  liveEntry: {
+    marginHorizontal: Spacing.md, marginTop: Spacing.sm, padding: Spacing.sm,
+    backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.goldDim,
+  },
+  liveEntryTitle: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  liveEntrySub:   { color: Colors.textSecondary, fontSize: FontSize.xs, marginTop: 2 },
 
   scroll:        { flex: 1 },
   content:       { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },

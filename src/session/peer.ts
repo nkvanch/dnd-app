@@ -13,7 +13,7 @@ import {
   Capability, CharacterAdapter, CharacterChange, ClientMessage, Op, OpBody, OpResult, ParticipantId,
   ServerMessage, ViewState, LiveEvent, ChangeRequest, LiveEffect, EffectApplication, SecretEffectMeta,
   EffectComponent, EffectDuration, EffectDefinitionInput, MonsterVisibility, PublicPersona, ReportedCharacter,
-  RewardKind, SessionLogKind,
+  RewardKind, SessionLogKind, CombatantResource,
 } from './types';
 import { applyEvent } from './state';
 import { ClientTransport, Connection, decodeFrame, encodeFrame } from './transport';
@@ -408,6 +408,13 @@ export class SessionPeer {
   setCombatantConditions(encounterId: string, combatantId: string, conditions: string[]): string {
     this.need('dm');
     return this.sendRaw({ kind: 'dm.set_combatant_conditions', encounterId, combatantId, conditions });
+  }
+
+  /** DM_SCREEN_SPEC.md item 6's monster resource/recharge — always DM-only, full replace (see
+   *  LiveCombatant.resources's own doc comment). */
+  setCombatantResources(encounterId: string, combatantId: string, resources: CombatantResource[]): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.set_combatant_resources', encounterId, combatantId, resources });
   }
 
   /** Per-field reveal state (DM_SCREEN_SPEC.md item 9) — see MonsterVisibility's own doc comment. */

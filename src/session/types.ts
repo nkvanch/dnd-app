@@ -190,10 +190,26 @@ export type LiveCombatant = {
    * when visibility.conditions is false (see combatantForPlayer).
    */
   conditions?: string[];
+  /**
+   * DM_SCREEN_SPEC.md item 6's "monster resource/recharge" (legendary actions, a breath weapon's
+   * recharge, etc.) — always DM-only, never sent to a Player at all (no visibility flag, unlike
+   * conditions/hpState/ac/exactHp above): item 9's own per-field toggle list never names
+   * "resources", and this is DM encounter-running bookkeeping, not table-facing information. No
+   * dice-rolling automation for recharge (e.g. "5-6 on a d6") — the DM rolls at the table and taps
+   * Recharge/Use here, same "table-resolved, not simulated" tradeoff item 8 already allows for.
+   */
+  resources?: CombatantResource[];
   /** Defaults to {name:true, hpState:true, exactHp:false, ac:true, conditions:true} on creation —
    *  matches what a combatant already showed before this field existed, so nothing already in
    *  play silently loses information the instant this ships. */
   visibility: MonsterVisibility;
+};
+
+export type CombatantResource = {
+  id:      string;
+  name:    string;
+  current: number;
+  maximum: number;
 };
 
 export const STANDARD_MONSTER_VISIBILITY: MonsterVisibility = { name: true, hpState: true, exactHp: false, ac: true, conditions: true };
@@ -448,6 +464,7 @@ export type LiveEventBody =
   | { t: 'combatant_hp_state_set'; encounterId: string; combatantId: string; hpState: 'healthy' | 'bloodied' | 'down' }
   | { t: 'combatant_exact_hp_set'; encounterId: string; combatantId: string; current: number; max: number }
   | { t: 'combatant_conditions_set'; encounterId: string; combatantId: string; conditions: string[] }
+  | { t: 'combatant_resources_set'; encounterId: string; combatantId: string; resources: CombatantResource[] }
   | { t: 'combatant_visibility_set'; encounterId: string; combatantId: string; visibility: MonsterVisibility }
   | { t: 'effect_applied';      definition: EffectDefinition; applications: EffectApplication[] }
   | { t: 'applications_due';    applicationIds: string[]; ticked?: { applicationId: string; remaining: number }[] }
@@ -507,6 +524,7 @@ export type OpBody =
   | { kind: 'dm.set_combatant_hp'; encounterId: string; combatantId: string; hpState: 'healthy' | 'bloodied' | 'down' }
   | { kind: 'dm.set_combatant_exact_hp'; encounterId: string; combatantId: string; current: number; max: number }
   | { kind: 'dm.set_combatant_conditions'; encounterId: string; combatantId: string; conditions: string[] }
+  | { kind: 'dm.set_combatant_resources'; encounterId: string; combatantId: string; resources: CombatantResource[] }
   | { kind: 'dm.set_combatant_visibility'; encounterId: string; combatantId: string; visibility: MonsterVisibility }
   | { kind: 'dm.apply_effect';       effect: EffectDefinitionInput; targets: ParticipantId[] }
   | { kind: 'dm.mark_due';           applicationId: string }

@@ -562,6 +562,21 @@ export class SessionHost {
         return done('applied');
       }
 
+      case 'dm.set_combatant_resources': {
+        const enc = this.state.encounters[body.encounterId];
+        if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
+        const target = enc.combatants.find(c => c.id === body.combatantId);
+        if (!target) return done('rejected', 'unknown-combatant');
+        if (!Array.isArray(body.resources) || body.resources.length > 20 || !body.resources.every(r =>
+          isObj(r) && str(r.id) && str(r.name) && int(r.current) && int(r.maximum)
+          && r.current >= 0 && r.maximum >= 1 && r.current <= r.maximum)) {
+          return done('rejected', 'malformed');
+        }
+        this.commit({ t: 'combatant_resources_set', encounterId: enc.id, combatantId: target.id, resources: body.resources }, pid,
+          { kind: 'encounter', text: `${target.name}'s resources updated`, scope: 'dm', refId: enc.id });
+        return done('applied');
+      }
+
       case 'dm.set_combatant_visibility': {
         const enc = this.state.encounters[body.encounterId];
         if (!enc || !enc.active) return done('rejected', 'no-active-encounter');

@@ -691,6 +691,9 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run, 
   const [monsterDelta, setMonsterDelta] = useState<{ combatantId: string; kind: 'damage' | 'heal' } | null>(null);
   const [monsterDeltaAmount, setMonsterDeltaAmount] = useState('');
   const [addingMonsterCondition, setAddingMonsterCondition] = useState<string | null>(null);
+  const [addingMonsterResource, setAddingMonsterResource] = useState<string | null>(null);
+  const [newResourceName, setNewResourceName] = useState('');
+  const [newResourceMax, setNewResourceMax] = useState('');
 
   const actors = [
     ...encounter.combatants.map(c => ({ id: c.id, label: c.name })),
@@ -808,6 +811,42 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run, 
               </Row>
             ) : (
               <Btn small kind="ghost" label="+ Condition" disabled={offline} onPress={() => setAddingMonsterCondition(c.id)} testID={`dm-monster-addcondition-open-${c.name}`} />
+            )}
+            {(c.resources ?? []).length > 0 && (
+              <>
+                <Muted>Resources (DM-only, never sent to players):</Muted>
+                {(c.resources ?? []).map(r => (
+                  <Row wrap key={r.id}>
+                    <Body>{r.name} {r.current}/{r.maximum}</Body>
+                    <Btn small kind="ghost" label="Use" disabled={offline || r.current <= 0}
+                      onPress={() => run(() => peer.setCombatantResources(encounter.id, c.id, (c.resources ?? []).map(x => x.id === r.id ? { ...x, current: Math.max(0, x.current - 1) } : x)))}
+                      testID={`dm-resource-use-${c.name}-${r.name}`} />
+                    <Btn small label="Recharge" disabled={offline || r.current >= r.maximum}
+                      onPress={() => run(() => peer.setCombatantResources(encounter.id, c.id, (c.resources ?? []).map(x => x.id === r.id ? { ...x, current: x.maximum } : x)))}
+                      testID={`dm-resource-recharge-${c.name}-${r.name}`} />
+                    <Btn small kind="danger" label="Remove" disabled={offline}
+                      onPress={() => run(() => peer.setCombatantResources(encounter.id, c.id, (c.resources ?? []).filter(x => x.id !== r.id)))}
+                      testID={`dm-resource-remove-${c.name}-${r.name}`} />
+                  </Row>
+                ))}
+              </>
+            )}
+            {addingMonsterResource === c.id ? (
+              <Row wrap>
+                <Field label="Name" value={newResourceName} onChangeText={setNewResourceName} placeholder="Legendary Actions" testID={`dm-resource-name-${c.name}`} />
+                <Field label="Max" value={newResourceMax} onChangeText={setNewResourceMax} keyboardType="number-pad" testID={`dm-resource-max-${c.name}`} />
+                <Btn small label="Add" disabled={offline || !newResourceName.trim() || !newResourceMax.trim()} testID={`dm-resource-add-${c.name}`}
+                  onPress={() => {
+                    const max = Number(newResourceMax.trim());
+                    if (!Number.isFinite(max) || max < 1) { Alert.alert('Invalid max', 'Enter a whole number of at least 1.'); return; }
+                    const resource = { id: `res_${Date.now().toString(36)}`, name: newResourceName.trim(), current: max, maximum: max };
+                    run(() => peer.setCombatantResources(encounter.id, c.id, [...(c.resources ?? []), resource]));
+                    setAddingMonsterResource(null); setNewResourceName(''); setNewResourceMax('');
+                  }} />
+                <Btn small kind="ghost" label="Cancel" onPress={() => setAddingMonsterResource(null)} />
+              </Row>
+            ) : (
+              <Btn small kind="ghost" label="+ Resource" disabled={offline} onPress={() => setAddingMonsterResource(c.id)} testID={`dm-resource-open-${c.name}`} />
             )}
             <Muted>Visible to players:</Muted>
             <Row wrap>

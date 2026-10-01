@@ -107,6 +107,12 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
       if (c) c.conditions = b.conditions;
       break;
     }
+    case 'combatant_resources_set': {
+      const enc = s.encounters[b.encounterId];
+      const c = enc?.combatants.find(x => x.id === b.combatantId);
+      if (c) c.resources = b.resources;
+      break;
+    }
     case 'combatant_visibility_set': {
       const enc = s.encounters[b.encounterId];
       const c = enc?.combatants.find(x => x.id === b.combatantId);
@@ -392,6 +398,12 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
       if (level === 'dm') return keep(b);
       const c = after.encounters[b.encounterId]?.combatants.find(x => x.id === b.combatantId);
       return c && c.visibility.conditions ? keep(b) : null;
+    }
+
+    // Monster resources are always DM-only — no visibility flag, never shown to a Player at all
+    // (see LiveCombatant.resources's own doc comment).
+    case 'combatant_resources_set': {
+      return level === 'dm' ? keep(b) : null;
     }
 
     case 'effect_applied': {

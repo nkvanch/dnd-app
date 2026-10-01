@@ -52,18 +52,23 @@ export async function waitUntil(cond: () => boolean, what: string, ms = 30000): 
 }
 
 /**
- * Fills the join form and joins. The name field lives on the Live Session entry page; "Join Campaign"
- * then opens the join modal, where the rest of the fields live. Chip states are read from the
- * accessibility label, never assumed.
+ * Fills the join form and joins by IP (via the Advanced disclosure) — the test table runs on the
+ * PC's localhost, which is an IP, not a real LAN room code scenario, so this intentionally
+ * exercises the same "Advanced -> Connect by IP" path a real user falls back to, per
+ * CAMPAIGN_DM_AUTHORITY_RULES.md §33 (room code is the normal path; IP is secondary, not a
+ * dual-purpose field). The name field lives on the Live Session card; "Join Campaign" opens the
+ * join modal, where the rest of the fields live. Chip states are read from the accessibility
+ * label, never assumed.
  */
 export async function joinSession(phone: Phone, o: { nick: string; address: string; player: boolean; dm: boolean; character?: string }): Promise<void> {
   await phone.typeInto({ id: 'live-nickname' }, o.nick);
   await phone.tap({ id: 'live-join-campaign' });
-  await phone.typeInto({ id: 'live-address' }, o.address);
   await phone.setChip('live-want-player', o.player);
   await phone.setChip('live-want-dm', o.dm);
   if (o.player && o.character) await phone.tap({ id: `live-char-${o.character}` });
-  await phone.tap({ id: 'live-join' });
+  await phone.tap({ id: 'live-join-advanced-toggle' });
+  await phone.typeInto({ id: 'live-join-ip' }, o.address);
+  await phone.tap({ id: 'live-join-ip-connect' });
 }
 
 /** Backs out of stacked screens until the bottom tab bar is showing. */

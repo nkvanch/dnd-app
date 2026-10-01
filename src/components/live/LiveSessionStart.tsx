@@ -26,20 +26,6 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 type HostRole = 'host' | 'host+dm' | 'host+player';
 
-/** Accepts "192.168.1.20", "192.168.1.20:7743", or a 7-character room code. */
-function resolveJoinTarget(text: string): { host: string; port: number } | null {
-  const byAddress = parseAddress(text);
-  if (byAddress) return byAddress;
-  const trimmed = text.trim();
-  if (/^[0-9A-Za-z]{7}$/.test(trimmed)) {
-    try {
-      const { ip, port } = decodeRoomCode(trimmed, SESSION_PORT);
-      return { host: ip, port };
-    } catch { return null; }
-  }
-  return null;
-}
-
 /**
  * The permanent "Live Session" card for the Campaigns page (idle state — no session yet).
  * Host/Join Session open the role-and-connection modals; "Advanced" is a quiet escape hatch to
@@ -175,10 +161,15 @@ export function HostModal({ visible, onClose, nickname }: { visible: boolean; on
 
 // ── Join Campaign modal ──────────────────────────────────────────────────────
 
+// Join hierarchy per CAMPAIGN_DM_AUTHORITY_RULES.md §33: room code is the normal path (primary
+// field + QR scan); a direct IP is a deliberately secondary "Advanced" escape hatch, not an
+// equally-weighted alternative — so it gets its own disclosed field, not a dual-purpose one.
 export function JoinModal({ visible, onClose, nickname }: { visible: boolean; onClose: () => void; nickname: string }) {
   const rt = useSessionRuntime();
   const characters = useCharacterStore(s => s.characters).filter(c => c.kind === 'character');
-  const [address, setAddress] = useState('');
+  const [code, setCode] = useState('');
+  const [ip, setIp] = useState('');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [wantPlayer, setWantPlayer] = useState(true);
   const [wantDm, setWantDm] = useState(false);
   const [characterId, setCharacterId] = useState<string | null>(null);
@@ -191,9 +182,8 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
     return a;
   }
 
-  async function join(rawAddress?: string) {
-    const target = resolveJoinTarget(rawAddress ?? address);
-    if (!target) { Alert.alert('Address needed', 'Enter the Host address (e.g. 192.168.1.20), a 7-character room code, or scan the QR.'); return; }
+  async function join(target: { host: string; port: number } | null) {
+    if (!target) { Alert.alert('Address needed', 'Enter the room code, scan the QR, or use Advanced to connect by IP.'); return; }
     const wants: Capability[] = [...(wantPlayer ? ['player' as Capability] : []), ...(wantDm ? ['dm' as Capability] : [])];
     if (wants.length === 0) { Alert.alert('Pick a role', 'Join as Player, DM, or both.'); return; }
     if (wantPlayer && !characterId) { Alert.alert('Pick a character', 'Joining as a Player needs a character.'); return; }
@@ -205,20 +195,24 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
     onClose();
   }
 
+  function targetFromCode(raw: string): { host: string; port: number } | null {
+    try { const { ip: host, port } = decodeRoomCode(raw, SESSION_PORT); return { host, port }; } catch { return null; }
+  }
+
   return (
     <>
       <QrScannerModal visible={scannerOpen}
         hint="Point at the Host's room-code QR"
-        onScan={code => { setScannerOpen(false); setAddress(code); void join(code); }}
+        onScan={scanned => { setScannerOpen(false); setCode(scanned); void join(targetFromCode(scanned)); }}
         onClose={() => setScannerOpen(false)} />
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
         <KeyboardAvoidingView style={m.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Pressable style={m.backdropTapArea} onPress={onClose} />
           <Pressable style={m.sheet} onPress={e => e.stopPropagation()}>
             <Text style={m.title}>Join Campaign</Text>
-            <Muted>Enter the Host's address, type their 7-character room code, or scan the QR they're showing.</Muted>
-            <Field label="Address or room code" value={address} onChangeText={setAddress}
-              placeholder="192.168.1.20 or XXXXXXX" autoCapitalize="characters" testID="live-address" />
+            <Muted>Enter the Host's 7-character room code, or scan the QR they're showing.</Muted>
+            <Field label="Room code" value={code} onChangeText={t => setCode(t.toUpperCase().slice(0, 7))}
+              placeholder="K7M4XQP" autoCapitalize="characters" maxLength={7} testID="live-address" />
             {Platform.OS !== 'web' && (
               <Pressable style={m.ghostBtn} onPress={() => setScannerOpen(true)} testID="live-scan-qr">
                 <Text style={m.ghostBtnTxt}>📷  Scan QR Code</Text>
@@ -229,9 +223,22 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
               <Chip label="DM" active={wantDm} onPress={() => setWantDm(!wantDm)} testID="live-want-dm" />
             </Row>
             {wantPlayer && <CharacterPicker characters={characters} value={characterId} onChange={setCharacterId} />}
-            <Pressable style={[m.primaryBtn, rt.busy && m.btnDisabled]} onPress={() => { void join(); }} disabled={rt.busy} testID="live-join">
+            <Pressable style={[m.primaryBtn, rt.busy && m.btnDisabled]} onPress={() => { void join(targetFromCode(code)); }} disabled={rt.busy} testID="live-join">
               {rt.busy ? <ActivityIndicator color={Colors.bg} /> : <Text style={m.primaryBtnTxt}>Join session</Text>}
             </Pressable>
+
+            <Pressable style={m.advancedToggle} onPress={() => setAdvancedOpen(o => !o)} testID="live-join-advanced-toggle">
+              <Text style={m.advancedToggleTxt}>Advanced {advancedOpen ? '▴' : '▾'}</Text>
+            </Pressable>
+            {advancedOpen && (
+              <View style={m.advancedBody}>
+                <Field label="Connect by IP" value={ip} onChangeText={setIp} placeholder="192.168.1.20" autoCapitalize="none" testID="live-join-ip" />
+                <Pressable style={m.ghostBtn} onPress={() => { void join(parseAddress(ip)); }} testID="live-join-ip-connect">
+                  <Text style={m.ghostBtnTxt}>Connect</Text>
+                </Pressable>
+              </View>
+            )}
+
             <Pressable style={m.cancelBtn} onPress={onClose}>
               <Text style={m.cancelTxt}>Cancel</Text>
             </Pressable>

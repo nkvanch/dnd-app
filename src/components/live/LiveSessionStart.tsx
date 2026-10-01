@@ -17,8 +17,8 @@ import { useCharacterStore } from '../../store/characterStore';
 import { EntityAdapter } from '../../session/entityAdapter';
 import { parseAddress, SESSION_PORT } from '../../session/lanTransport';
 import { decodeRoomCode } from '../../sync/discovery';
-import { Capability } from '../../session/types';
-import { Chip, Field, Row, Muted } from './LiveUi';
+import { Capability, PeekResult } from '../../session/types';
+import { Chip, Field, Row, Muted, Card, Badge, Body } from './LiveUi';
 import { Alert } from '../../utils/alert';
 import { E2E_ENABLED } from '../../session/e2e';
 import { QrScannerModal } from '../QrScannerModal';
@@ -166,6 +166,15 @@ export function HostModal({ visible, onClose, nickname, initialRole }: { visible
 // Join hierarchy per CAMPAIGN_DM_AUTHORITY_RULES.md §33: room code is the normal path (primary
 // field + QR scan); a direct IP is a deliberately secondary "Advanced" escape hatch, not an
 // equally-weighted alternative — so it gets its own disclosed field, not a dual-purpose one.
+//
+// Three steps, per JOIN_SESSION_FLOW_SPEC.md: 'find' (resolve a target and peek the room, without
+// joining it) -> 'confirm' (what peekRoom() answered — Host identity, attached campaign,
+// participant count, whether approval is required — before the user commits to anything) ->
+// 'role' (Player/DM + character, same mechanics as before this screen existed). Peeking never
+// registers a participant on the Host (see session/roomPeek.ts) — backing out of 'confirm' costs
+// the room nothing.
+type JoinStep = 'find' | 'confirm' | 'role';
+
 export function JoinModal({ visible, onClose, nickname }: { visible: boolean; onClose: () => void; nickname: string }) {
   const rt = useSessionRuntime();
   const characters = useCharacterStore(s => s.characters).filter(c => c.kind === 'character');
@@ -176,6 +185,17 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
   const [wantDm, setWantDm] = useState(false);
   const [characterId, setCharacterId] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [step, setStep] = useState<JoinStep>('find');
+  const [peeking, setPeeking] = useState(false);
+  const [peekError, setPeekError] = useState<string | null>(null);
+  const [peek, setPeek] = useState<PeekResult | null>(null);
+  const [target, setTarget] = useState<{ host: string; port: number } | null>(null);
+
+  useEffect(() => {
+    if (visible) return;
+    setStep('find'); setPeek(null); setPeekError(null); setTarget(null);
+    setCode(''); setIp(''); setAdvancedOpen(false); setCharacterId(null);
+  }, [visible]);
 
   async function adapterFor(id: string | null): Promise<EntityAdapter | undefined> {
     if (!id) return undefined;
@@ -184,8 +204,22 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
     return a;
   }
 
-  async function join(target: { host: string; port: number } | null) {
-    if (!target) { Alert.alert('Address needed', 'Enter the room code, scan the QR, or use Advanced to connect by IP.'); return; }
+  async function findRoom(candidate: { host: string; port: number } | null) {
+    if (!candidate) { Alert.alert('Address needed', 'Enter the room code, scan the QR, or use Advanced to connect by IP.'); return; }
+    setPeeking(true); setPeekError(null);
+    try {
+      const result = await getSessionRuntime().peekRoom(candidate.host, candidate.port);
+      if (result.ended) { Alert.alert('Session ended', 'This room has already ended.'); return; }
+      setPeek(result); setTarget(candidate); setStep('confirm');
+    } catch (e) {
+      setPeekError((e as Error).message);
+    } finally {
+      setPeeking(false);
+    }
+  }
+
+  async function join() {
+    if (!target) return;
     const wants: Capability[] = [...(wantPlayer ? ['player' as Capability] : []), ...(wantDm ? ['dm' as Capability] : [])];
     if (wants.length === 0) { Alert.alert('Pick a role', 'Join as Player, DM, or both.'); return; }
     if (wantPlayer && !characterId) { Alert.alert('Pick a character', 'Joining as a Player needs a character.'); return; }
@@ -205,45 +239,91 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
     <>
       <QrScannerModal visible={scannerOpen}
         hint="Point at the Host's room-code QR"
-        onScan={scanned => { setScannerOpen(false); setCode(scanned); void join(targetFromCode(scanned)); }}
+        onScan={scanned => { setScannerOpen(false); setCode(scanned); void findRoom(targetFromCode(scanned)); }}
         onClose={() => setScannerOpen(false)} />
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
         <KeyboardAvoidingView style={m.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Pressable style={m.backdropTapArea} onPress={onClose} />
           <Pressable style={m.sheet} onPress={e => e.stopPropagation()}>
-            <Text style={m.title}>Join Campaign</Text>
-            <Muted>Enter the Host's 7-character room code, or scan the QR they're showing.</Muted>
-            <Field label="Room code" value={code} onChangeText={t => setCode(t.toUpperCase().slice(0, 7))}
-              placeholder="K7M4XQP" autoCapitalize="characters" maxLength={7} testID="live-address" />
-            {Platform.OS !== 'web' && (
-              <Pressable style={m.ghostBtn} onPress={() => setScannerOpen(true)} testID="live-scan-qr">
-                <Text style={m.ghostBtnTxt}>📷  Scan QR Code</Text>
-              </Pressable>
-            )}
-            <Row wrap>
-              <Chip label="Player" active={wantPlayer} onPress={() => setWantPlayer(!wantPlayer)} testID="live-want-player" />
-              <Chip label="DM" active={wantDm} onPress={() => setWantDm(!wantDm)} testID="live-want-dm" />
-            </Row>
-            {wantPlayer && <CharacterPicker characters={characters} value={characterId} onChange={setCharacterId} />}
-            <Pressable style={[m.primaryBtn, rt.busy && m.btnDisabled]} onPress={() => { void join(targetFromCode(code)); }} disabled={rt.busy} testID="live-join">
-              {rt.busy ? <ActivityIndicator color={Colors.bg} /> : <Text style={m.primaryBtnTxt}>Join session</Text>}
-            </Pressable>
 
-            <Pressable style={m.advancedToggle} onPress={() => setAdvancedOpen(o => !o)} testID="live-join-advanced-toggle">
-              <Text style={m.advancedToggleTxt}>Advanced {advancedOpen ? '▴' : '▾'}</Text>
-            </Pressable>
-            {advancedOpen && (
-              <View style={m.advancedBody}>
-                <Field label="Connect by IP" value={ip} onChangeText={setIp} placeholder="192.168.1.20" autoCapitalize="none" testID="live-join-ip" />
-                <Pressable style={m.ghostBtn} onPress={() => { void join(parseAddress(ip)); }} testID="live-join-ip-connect">
-                  <Text style={m.ghostBtnTxt}>Connect</Text>
+            {step === 'find' && (
+              <>
+                <Text style={m.title}>Join Session</Text>
+                <Muted>Enter the Host's 7-character room code, or scan the QR they're showing.</Muted>
+                <Field label="Room code" value={code} onChangeText={t => setCode(t.toUpperCase().slice(0, 7))}
+                  placeholder="K7M4XQP" autoCapitalize="characters" maxLength={7} testID="live-address" />
+                {Platform.OS !== 'web' && (
+                  <Pressable style={m.ghostBtn} onPress={() => setScannerOpen(true)} testID="live-scan-qr">
+                    <Text style={m.ghostBtnTxt}>📷  Scan QR Code</Text>
+                  </Pressable>
+                )}
+                {!!peekError && <Muted>{peekError}</Muted>}
+                <Pressable style={[m.primaryBtn, peeking && m.btnDisabled]} onPress={() => { void findRoom(targetFromCode(code)); }} disabled={peeking} testID="live-find-room">
+                  {peeking ? <ActivityIndicator color={Colors.bg} /> : <Text style={m.primaryBtnTxt}>Find room</Text>}
                 </Pressable>
-              </View>
+
+                <Pressable style={m.advancedToggle} onPress={() => setAdvancedOpen(o => !o)} testID="live-join-advanced-toggle">
+                  <Text style={m.advancedToggleTxt}>Advanced {advancedOpen ? '▴' : '▾'}</Text>
+                </Pressable>
+                {advancedOpen && (
+                  <View style={m.advancedBody}>
+                    <Field label="Connect by IP" value={ip} onChangeText={setIp} placeholder="192.168.1.20" autoCapitalize="none" testID="live-join-ip" />
+                    <Pressable style={[m.ghostBtn, peeking && m.btnDisabled]} onPress={() => { void findRoom(parseAddress(ip)); }} disabled={peeking} testID="live-join-ip-connect">
+                      <Text style={m.ghostBtnTxt}>Connect</Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                <Pressable style={m.cancelBtn} onPress={onClose}>
+                  <Text style={m.cancelTxt}>Cancel</Text>
+                </Pressable>
+              </>
             )}
 
-            <Pressable style={m.cancelBtn} onPress={onClose}>
-              <Text style={m.cancelTxt}>Cancel</Text>
-            </Pressable>
+            {step === 'confirm' && peek && (
+              <>
+                <Text style={m.title}>Room Found</Text>
+                <Card testID="live-join-confirm">
+                  <Row wrap>
+                    <Body bold>{peek.hostNickname ?? 'Unknown Host'}</Body>
+                    <Badge label={peek.dmApprovalRequired ? 'DM approval required' : 'DM joins freely'} tone={peek.dmApprovalRequired ? 'warn' : 'good'} />
+                  </Row>
+                  <Muted>{peek.campaignName ? `Campaign attached: ${peek.campaignName}` : 'No campaign attached yet'}</Muted>
+                  <Muted>{peek.participantCount} participant{peek.participantCount === 1 ? '' : 's'} connected</Muted>
+                </Card>
+                <Pressable style={m.primaryBtn} onPress={() => setStep('role')} testID="live-join-confirm-continue">
+                  <Text style={m.primaryBtnTxt}>Continue</Text>
+                </Pressable>
+                <Pressable style={m.ghostBtn} onPress={() => setStep('find')} testID="live-join-confirm-back">
+                  <Text style={m.ghostBtnTxt}>Back</Text>
+                </Pressable>
+                <Pressable style={m.cancelBtn} onPress={onClose}>
+                  <Text style={m.cancelTxt}>Cancel</Text>
+                </Pressable>
+              </>
+            )}
+
+            {step === 'role' && (
+              <>
+                <Text style={m.title}>Join as…</Text>
+                <Muted>There's no Host role here — Host is only ever created locally when starting a room.</Muted>
+                <Row wrap>
+                  <Chip label="Player" active={wantPlayer} onPress={() => setWantPlayer(!wantPlayer)} testID="live-want-player" />
+                  <Chip label="DM" active={wantDm} onPress={() => setWantDm(!wantDm)} testID="live-want-dm" />
+                </Row>
+                {wantPlayer && <CharacterPicker characters={characters} value={characterId} onChange={setCharacterId} />}
+                <Pressable style={[m.primaryBtn, rt.busy && m.btnDisabled]} onPress={() => { void join(); }} disabled={rt.busy} testID="live-join">
+                  {rt.busy ? <ActivityIndicator color={Colors.bg} /> : <Text style={m.primaryBtnTxt}>Join session</Text>}
+                </Pressable>
+                <Pressable style={m.ghostBtn} onPress={() => setStep('confirm')}>
+                  <Text style={m.ghostBtnTxt}>Back</Text>
+                </Pressable>
+                <Pressable style={m.cancelBtn} onPress={onClose}>
+                  <Text style={m.cancelTxt}>Cancel</Text>
+                </Pressable>
+              </>
+            )}
+
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>

@@ -12,7 +12,8 @@ import { SessionPeer, PeerStatus } from './peer';
 import { PrepService, SecretVault } from './prep';
 import { KeyValueStore } from './kv';
 import { ClientTransport, Connection, ServerTransport } from './transport';
-import { Capability, CharacterAdapter, ViewState, ParticipantId } from './types';
+import { Capability, CharacterAdapter, ViewState, ParticipantId, PeekResult } from './types';
+import { peekRoom } from './roomPeek';
 import type { ActiveComponents } from './effectBridge';
 
 // ── Store mirrored for React ──────────────────────────────────────────────────
@@ -160,6 +161,12 @@ export class SessionRuntime {
   }
 
   // ── Joining ────────────────────────────────────────────────────────────────
+
+  /** Room info before committing to a role — opens and closes its own one-shot connection, no
+   *  effect on this device's actual connection state (mode/status/view all untouched). */
+  peekRoom(host: string, port?: number): Promise<PeekResult> {
+    return peekRoom(this.deps.remoteClient(host, port ?? this.deps.port));
+  }
 
   async join(opts: {
     host:        string;

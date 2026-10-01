@@ -275,10 +275,28 @@ export type ClientMessage =
   | { type: 'hello'; participantId: ParticipantId; token: string | null; nickname: string;
       requestedCapabilities: Capability[]; characterId: string | null; lastRevision: number }
   | { type: 'op'; op: Op }
-  | { type: 'resync' };
+  | { type: 'resync' }
+  /** Room-info query that does NOT join — no participantId/hello, no registry entry, no
+   *  authority granted. Lets the Join flow show a confirmation screen (Host identity, attached
+   *  campaign, participant count, whether DM approval is required) before the user commits to a
+   *  role. See host.ts's onPeek and session/roomPeek.ts for the one-shot client helper. */
+  | { type: 'peek' };
 
 /** A viewer-specific projection of the live state. */
 export type ViewState = LiveState;
+
+/** Everything a 'peek' may answer with, per CAMPAIGN_DM_AUTHORITY_RULES.md's room-code-is-not-
+ *  identity rule — deliberately NOT a room name (no such field exists on LiveState yet; that's
+ *  tracked separately under Host room config) and deliberately nothing privileged: a Player
+ *  scanning a QR still learns nothing more than an unprivileged participant eventually would. */
+export type PeekResult = {
+  sessionId:          string;
+  hostNickname:       string | null;
+  campaignName:       string | null;
+  participantCount:   number;
+  dmApprovalRequired: boolean;
+  ended:              boolean;
+};
 
 export type ServerMessage =
   | { type: 'welcome'; participantId: ParticipantId; token: string; capabilities: Capability[];
@@ -286,4 +304,5 @@ export type ServerMessage =
   | { type: 'snapshot'; revision: number; view: ViewState }
   | { type: 'event'; revision: number; event: LiveEvent | null }   // null = tick (not visible to you)
   | { type: 'result'; result: OpResult }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | ({ type: 'peek_result' } & PeekResult);

@@ -166,6 +166,8 @@ export class SessionHost {
       this.send(conn, { type: 'error', message: 'malformed message' });
       return;
     }
+    // Unauthenticated, pre-hello — never registers a participant or grants anything.
+    if (msg.type === 'peek') { this.onPeek(conn); return; }
     if (msg.type === 'hello') { this.onHello(conn, msg); return; }
     const pid = this.bound.get(conn);
     if (!pid || this.entries.get(pid)?.conn !== conn) {
@@ -253,6 +255,24 @@ export class SessionHost {
       view: projectState(this.state, this.viewerOf(pid)),
     });
     this.persistNow();
+  }
+
+  /** Answers a room-info query without registering a participant — see ClientMessage's 'peek'. */
+  private onPeek(conn: Connection): void {
+    const host = Object.values(this.state.participants).find(p => p.capabilities.includes('host'));
+    const participantCount = Object.values(this.state.participants).filter(p => p.connected).length;
+    this.send(conn, {
+      type: 'peek_result',
+      sessionId: this.state.sessionId,
+      hostNickname: host?.nickname ?? null,
+      campaignName: this.state.campaign?.name ?? null,
+      participantCount,
+      // 'auto-first' is the only policy where a DM can join without the Host acting — every
+      // other policy ('manual', 'never') means SOME participant request needs Host attention,
+      // which is what "approval required" means to a prospective joiner.
+      dmApprovalRequired: this.dmPolicy !== 'auto-first',
+      ended: this.state.ended,
+    });
   }
 
   private viewerOf(pid: ParticipantId): Viewer {

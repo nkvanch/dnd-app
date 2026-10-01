@@ -27,9 +27,6 @@ import { SyncStatusDot }     from '../../src/components/SyncStatusDot';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { Quest, SessionLogEntry, Campaign } from '../../src/engine/types';
 import { InstalledPack, loadInstalledPacks } from '../../src/db/packRegistryRepo';
-import { useSessionRuntime } from '../../src/session/runtime';
-import { LiveSessionCard } from '../../src/components/live/LiveSessionStart';
-import { LiveSessionStatus } from '../../src/components/live/LiveSessionStatus';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -918,10 +915,10 @@ function SavedCampaignsList() {
 // ── No Campaign View ──────────────────────────────────────────────────────────
 
 function NoCampaignView({
-  nickname, onNicknameChange, onCreate, onJoin, onPlan,
+  nickname, onNicknameChange, onCreate, onJoin,
 }: {
   nickname: string; onNicknameChange: (n: string) => void;
-  onCreate: () => void; onJoin: () => void; onPlan: () => void;
+  onCreate: () => void; onJoin: () => void;
 }) {
   // Campaign hosting/joining uses a raw TCP socket over the local WiFi network.
   // Browsers have no API for raw TCP sockets (only HTTP/WebSocket to a server
@@ -962,11 +959,6 @@ function NoCampaignView({
                 🗡 Join Campaign (Player)
               </Text>
             </Pressable>
-            <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onPlan} testID="live-open-prepare">
-              <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>
-                📖 Plan Campaign
-              </Text>
-            </Pressable>
           </View>
 
           <SavedCampaignsList />
@@ -993,12 +985,10 @@ export default function CampaignsScreen() {
   const session        = useSessionStore(s => s.session);
   const setNickname    = useSessionStore(s => s.setNickname);
   const { action }     = useLocalSearchParams<{ action?: string }>();
-  const liveMode       = useSessionRuntime(s => s.mode);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen,   setJoinOpen]   = useState(false);
   const [nickname,   setLocalNick]  = useState(session?.nickname ?? '');
-  const router = useRouter();
 
   const actionHandled = useRef(false);
   useEffect(() => {
@@ -1024,13 +1014,6 @@ export default function CampaignsScreen() {
         <Text style={styles.title}>Campaigns</Text>
       </View>
 
-      {/* Live Session — a permanent section of this page, independent of whether a (legacy,
-          DM-owned, rules-syncing) campaign is active below. A campaign isn't owned by a Host:
-          campaignId != sessionId != roomCode. */}
-      <View style={styles.liveSectionDivider}>
-        {liveMode === 'idle' ? <LiveSessionCard /> : <View style={styles.liveStatusWrap}><LiveSessionStatus /></View>}
-      </View>
-
       {activeCampaign ? (
         isDm ? <DmActiveView /> : <PlayerActiveView />
       ) : (
@@ -1039,7 +1022,6 @@ export default function CampaignsScreen() {
           onNicknameChange={handleNicknameChange}
           onCreate={() => setCreateOpen(true)}
           onJoin={() => setJoinOpen(true)}
-          onPlan={() => router.push('/live/prepare')}
         />
       )}
 
@@ -1060,8 +1042,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
 
-  liveStatusWrap: { padding: Spacing.md },
-  liveSectionDivider: { paddingBottom: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border },
 
   scroll:        { flex: 1 },
   content:       { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },

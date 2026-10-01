@@ -556,7 +556,10 @@ export class SessionPeer {
     const ch = this.cfg.character;
     if (!ch) return null;
     this.need('player');
-    return this.sendRaw({ kind: 'player.report_character', characterId: ch.characterId, revision: ch.getRevision(), summary: ch.summary() });
+    return this.sendRaw({
+      kind: 'player.report_character', characterId: ch.characterId, revision: ch.getRevision(), summary: ch.summary(),
+      ...(ch.vitals ? { vitals: ch.vitals() } : {}),
+    });
   }
 
   /** "Public Persona" (LAN_PLAYER_SCREEN_SPEC.md) — what OTHER players see instead of your real

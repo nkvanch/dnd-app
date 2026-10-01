@@ -38,13 +38,23 @@ function signed(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;
 }
 
+/** Raw content ids are slugs like 'poisoned' — title-case them for display rather than requiring
+ *  a shared content registry lookup over the wire (see CharacterVitals's own doc comment). */
+export function formatContentId(id: string): string {
+  return id.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
 export function describeChange(c: CharacterChange): string {
   switch (c.kind) {
-    case 'exhaustion': return `Exhaustion ${signed(c.delta)}`;
-    case 'max_hp':     return `Max HP ${signed(c.delta)}`;
-    case 'ability':    return `${ABILITY_LABEL[c.ability] ?? c.ability} ${signed(c.delta)}`;
-    case 'hp':         return c.delta < 0 ? `${-c.delta} damage` : `Heal ${c.delta}`;
-    case 'temp_hp':    return `${c.amount} temp HP`;
+    case 'exhaustion':         return `Exhaustion ${signed(c.delta)}`;
+    case 'max_hp':             return `Max HP ${signed(c.delta)}`;
+    case 'ability':            return `${ABILITY_LABEL[c.ability] ?? c.ability} ${signed(c.delta)}`;
+    case 'hp':                 return c.delta < 0 ? `${-c.delta} damage` : `Heal ${c.delta}`;
+    case 'temp_hp':            return `${c.amount} temp HP`;
+    case 'condition_add':      return `Add condition: ${formatContentId(c.conditionId)}`;
+    case 'condition_remove':   return `Remove condition: ${formatContentId(c.conditionId)}`;
+    case 'concentration_break': return 'Break concentration';
+    case 'stabilize':          return 'Stabilize';
   }
 }
 
@@ -67,6 +77,10 @@ const SESSION_LOG_KIND_LABEL: Record<SessionLogKind, string> = {
 
 export function describeSessionLogKind(kind: SessionLogKind): string { return SESSION_LOG_KIND_LABEL[kind]; }
 
+function validConditionId(x: unknown): x is string {
+  return typeof x === 'string' && x.length > 0 && x.length <= 100;
+}
+
 /** Structural validation of untrusted change lists. */
 export function validChanges(changes: unknown): changes is CharacterChange[] {
   if (!Array.isArray(changes) || changes.length === 0 || changes.length > 20) return false;
@@ -74,6 +88,8 @@ export function validChanges(changes: unknown): changes is CharacterChange[] {
     if (!c || typeof c !== 'object') return false;
     const ch = c as Record<string, unknown>;
     if (ch.kind === 'temp_hp') return typeof ch.amount === 'number' && Number.isFinite(ch.amount) && Number.isInteger(ch.amount) && ch.amount >= 0;
+    if (ch.kind === 'condition_add' || ch.kind === 'condition_remove') return validConditionId(ch.conditionId);
+    if (ch.kind === 'concentration_break' || ch.kind === 'stabilize') return true;
     if (typeof ch.delta !== 'number' || !Number.isFinite(ch.delta) || !Number.isInteger(ch.delta)) return false;
     if (ch.kind === 'exhaustion' || ch.kind === 'max_hp' || ch.kind === 'hp') return true;
     if (ch.kind === 'ability') return typeof ch.ability === 'string' && ch.ability in ABILITY_LABEL;

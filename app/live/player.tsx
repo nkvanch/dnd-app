@@ -62,10 +62,18 @@ function RewardModifyEditor({ onSubmit, onCancel }: { onSubmit: (note: string) =
   );
 }
 
-// temp_hp carries `amount` (never negative, 5e doesn't stack it); every other kind carries
-// `delta`. These two keep the editor below generic over both instead of assuming `.delta` everywhere.
-function amountOf(c: CharacterChange): number { return c.kind === 'temp_hp' ? c.amount : c.delta; }
-function withAmount(c: CharacterChange, n: number): CharacterChange { return c.kind === 'temp_hp' ? { ...c, amount: n } : { ...c, delta: n }; }
+// temp_hp carries `amount` (never negative, 5e doesn't stack it); the numeric kinds carry `delta`;
+// condition/concentration/stabilize carry neither — they're not editable here, just accepted or
+// rejected as the DM proposed them (see isNumericChange below).
+type NumericChange = Extract<CharacterChange, { kind: 'exhaustion' | 'max_hp' | 'ability' | 'hp' | 'temp_hp' }>;
+function isNumericChange(c: CharacterChange): c is NumericChange {
+  return c.kind === 'exhaustion' || c.kind === 'max_hp' || c.kind === 'ability' || c.kind === 'hp' || c.kind === 'temp_hp';
+}
+function amountOf(c: CharacterChange): number { return isNumericChange(c) ? (c.kind === 'temp_hp' ? c.amount : c.delta) : 0; }
+function withAmount(c: CharacterChange, n: number): CharacterChange {
+  if (!isNumericChange(c)) return c;
+  return c.kind === 'temp_hp' ? { ...c, amount: n } : { ...c, delta: n };
+}
 
 /** Re-uses the DM's change kinds but lets the player edit each amount. */
 function ModifyEditor({ request, onSubmit, onCancel }: {
@@ -73,14 +81,22 @@ function ModifyEditor({ request, onSubmit, onCancel }: {
 }) {
   const [amounts, setAmounts] = useState<string[]>(request.original.map(c => String(amountOf(c))));
   const parsed = amounts.map(parseSignedInt);
-  const valid = parsed.every((n, i) => n !== null && (request.original[i].kind === 'temp_hp' ? n >= 0 : n !== 0));
+  const valid = parsed.every((n, i) => {
+    const c = request.original[i];
+    if (!isNumericChange(c)) return true;
+    return n !== null && (c.kind === 'temp_hp' ? n >= 0 : n !== 0);
+  });
   return (
     <Card testID="player-modify-editor">
       <Muted>Change the amounts, then accept your version. The DM sees both.</Muted>
       {request.original.map((c, i) => (
-        <Field key={i} label={describeChanges([withAmount(c, 0)]).replace(/ [+-]?0$/, '')} value={amounts[i]}
-          onChangeText={t => setAmounts(a => a.map((x, j) => j === i ? t : x))}
-          keyboardType="numbers-and-punctuation" testID={`player-modify-amount-${i}`} />
+        isNumericChange(c) ? (
+          <Field key={i} label={describeChanges([withAmount(c, 0)]).replace(/ [+-]?0$/, '')} value={amounts[i]}
+            onChangeText={t => setAmounts(a => a.map((x, j) => j === i ? t : x))}
+            keyboardType="numbers-and-punctuation" testID={`player-modify-amount-${i}`} />
+        ) : (
+          <Body key={i}>{describeChanges([c])}</Body>
+        )
       ))}
       <Row>
         <Btn small label="Accept my version" disabled={!valid} testID="player-modify-submit"

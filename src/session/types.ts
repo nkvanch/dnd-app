@@ -37,13 +37,48 @@ export type CharacterChange =
   | { kind: 'hp';         delta: number }
   /** Grants temp HP — 5e temp HP doesn't stack, so apply takes the higher of current temp and
    *  this amount rather than adding (see applyChangesToEntity). */
-  | { kind: 'temp_hp';    amount: number };
+  | { kind: 'temp_hp';    amount: number }
+  /** DM_SCREEN_SPEC.md item 2's "Add Condition" fast action. `conditionId` is a raw content id
+   *  (e.g. 'poisoned') — the player's own device resolves it against its own content registry to
+   *  apply any mechanical features (see entityAdapter.ts), the same way the character sheet's own
+   *  condition toggle already does; the DM side only ever needs the id to label the request. */
+  | { kind: 'condition_add';    conditionId: string }
+  | { kind: 'condition_remove'; conditionId: string }
+  /** DM_SCREEN_SPEC.md item 2's "Concentration" fast action — breaks it, same as failing a
+   *  concentration save; there is no "start concentrating on X" DM action, since the DM doesn't
+   *  choose what a Player casts. */
+  | { kind: 'concentration_break' }
+  /** DM_SCREEN_SPEC.md item 2's "Stabilize" fast action — resets death save counters and marks
+   *  the character stable, same end state 3 successful death saves already reach. */
+  | { kind: 'stabilize' };
 
 export type CharacterSummary = {
   name:  string;
   hp:    number;
   maxHp: number;
   ac:    number;
+};
+
+/**
+ * DM_SCREEN_SPEC.md item 2's Party Dashboard fields beyond the bare CharacterSummary — reported
+ * alongside it, read-only, DM-dashboard-only data: never given a Public Persona override (see
+ * PublicPersona's own doc comment — it only ever carries name/hp/maxHp/ac) and never sent to a
+ * peer player at all (state.ts's publicCharacterOf simply omits this field entirely, the same way
+ * it already omits persona's raw config). Condition ids and the concentration spell id are raw
+ * content ids, not resolved display names — resolving them would need the DM's device to share a
+ * content registry with the player's, which isn't guaranteed; the DM-side UI formats the raw id
+ * (capitalize, replace separators) instead, same tradeoff as everywhere else this wire deals in ids.
+ */
+export type CharacterVitals = {
+  tempHp:        number;
+  speed:         number;
+  exhaustion:    number;
+  conditions:    string[];
+  concentration: string | null;
+  deathSaves:    { successes: number; failures: number; stable: boolean };
+  resources:     { id: string; name: string; current: number; maximum: number }[];
+  /** null = this character has no spellcasting at all (not "caster with zero slots"). */
+  spellSlots:    Record<string, { total: number; used: number }> | null;
 };
 
 /** What the player's device exposes so the session layer can apply accepted
@@ -53,6 +88,8 @@ export interface CharacterAdapter {
   /** Monotonic revision of the persistent character. Bumped by ANY local change. */
   getRevision(): number;
   summary(): CharacterSummary;
+  /** Optional — a real character reports it, the test FakeCharacter may not. */
+  vitals?(): CharacterVitals;
   /** Applies persistent changes; must bump the revision. Returns the new revision. */
   applyChanges(changes: CharacterChange[], requestId: string): number;
 }
@@ -341,6 +378,8 @@ export type ReportedCharacter = {
    *  the already-computed public projection (state.ts's publicCharacterOf), never the raw config,
    *  so there's nothing for them to reverse-engineer the real values from. */
   persona?:      PublicPersona;
+  /** See CharacterVitals's own doc comment — DM-dashboard-only, never sent to a peer player. */
+  vitals?:       CharacterVitals;
 };
 
 // CampaignPolicy (what a linked campaign publishes to the room — see its own doc comment) lives
@@ -462,7 +501,7 @@ export type OpBody =
   | { kind: 'dm.cancel_request';     requestId: string }
   | { kind: 'player.respond';        requestId: string; decision: 'accept' | 'reject' | 'modify';
       modified?: CharacterChange[]; currentRevision: number; acknowledgeStale?: boolean }
-  | { kind: 'player.report_character'; characterId: string; revision: number; summary: CharacterSummary }
+  | { kind: 'player.report_character'; characterId: string; revision: number; summary: CharacterSummary; vitals?: CharacterVitals }
   | { kind: 'player.set_persona';    persona: PublicPersona }
   | { kind: 'player.suggest_rule';   suggestionId: string; rule: string; proposedValue: string; note: string }
   | { kind: 'dm.resolve_rule_suggestion'; suggestionId: string; decision: 'accept' | 'modify' | 'reject'; dmResponse?: string }

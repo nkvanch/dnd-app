@@ -16,7 +16,7 @@ import {
   emptyLiveState, PublicParticipant, ParticipantId, EffectApplication, EffectDefinition, AuditEntry,
   ChangeRequest, LiveEncounter, ReportedCharacter, CharacterChange, RuleSuggestion, RuleSuggestionStatus,
   STANDARD_MONSTER_VISIBILITY, MonsterVisibility, PublicPersona, Reward, RewardKind, RewardStatus,
-  SessionLogEntry, SessionLogKind,
+  SessionLogEntry, SessionLogKind, CharacterVitals,
 } from './types';
 import { applyEvent, projectEvent, projectState, Viewer } from './state';
 import { Connection, ServerTransport, decodeFrame, encodeFrame } from './transport';
@@ -76,6 +76,27 @@ function sessionLogKind(x: unknown): x is SessionLogKind {
 /** Session log text is narrative prose, not a short label — same ceiling as a RuleSuggestion note. */
 function logText(x: unknown): x is string {
   return typeof x === 'string' && x.length > 0 && x.length <= 2000;
+}
+
+/** Lightweight structural validation — this is read-only DM-dashboard display data (see
+ *  CharacterVitals's own doc comment), not something any op applies consequences from, so this
+ *  checks shape/types rather than game-rule bounds (e.g. a homebrew resource's maximum isn't
+ *  capped here). */
+function validVitals(x: unknown): x is CharacterVitals {
+  if (!isObj(x)) return false;
+  if (typeof x.tempHp !== 'number' || typeof x.speed !== 'number') return false;
+  if (!int(x.exhaustion) || x.exhaustion < 0 || x.exhaustion > 6) return false;
+  if (!Array.isArray(x.conditions) || !x.conditions.every(c => typeof c === 'string')) return false;
+  if (x.concentration !== null && typeof x.concentration !== 'string') return false;
+  const ds = x.deathSaves;
+  if (!isObj(ds) || !int(ds.successes) || !int(ds.failures) || typeof ds.stable !== 'boolean') return false;
+  if (!Array.isArray(x.resources) || !x.resources.every(r =>
+    isObj(r) && str(r.id) && str(r.name) && typeof r.current === 'number' && typeof r.maximum === 'number')) return false;
+  if (x.spellSlots !== null) {
+    if (!isObj(x.spellSlots)) return false;
+    if (!Object.values(x.spellSlots).every(s => isObj(s) && typeof s.total === 'number' && typeof s.used === 'number')) return false;
+  }
+  return true;
 }
 
 export class SessionHost {
@@ -616,16 +637,19 @@ export class SessionHost {
         if (!str(body.characterId) || !int(body.revision) || body.revision < 0 || !isObj(body.summary)) return done('rejected', 'malformed');
         const s = body.summary;
         if (!str(s.name) || typeof s.hp !== 'number' || typeof s.maxHp !== 'number' || typeof s.ac !== 'number') return done('rejected', 'malformed');
+        if (body.vitals !== undefined && !validVitals(body.vitals)) return done('rejected', 'malformed');
         const prev = this.state.characters[pid];
         if (prev && (body.revision < prev.revision)) return done('rejected', 'stale-report');
         if (prev && prev.revision === body.revision && prev.characterId === body.characterId
-          && JSON.stringify(prev.summary) === JSON.stringify(body.summary)) return done('applied', 'no-op');
+          && JSON.stringify(prev.summary) === JSON.stringify(body.summary)
+          && JSON.stringify(prev.vitals) === JSON.stringify(body.vitals)) return done('applied', 'no-op');
         const character: ReportedCharacter = {
           participantId: pid, characterId: body.characterId, revision: body.revision,
           summary: { name: s.name, hp: s.hp, maxHp: s.maxHp, ac: s.ac },
           // Preserve an existing persona across an ordinary character report (HP changing, etc.)
           // — this op has nothing to do with Public Persona, so it must never silently clear one.
           ...(prev?.persona ? { persona: prev.persona } : {}),
+          ...(body.vitals ? { vitals: body.vitals } : {}),
         };
         this.commit({ t: 'character_reported', character }, pid, null);
         return done('applied');

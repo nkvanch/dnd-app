@@ -9,8 +9,10 @@
 // ============================================================================
 import { Entity } from '../engine/types';
 import { recomputeDerived } from '../engine/pipeline';
+import { applyCondition, removeCondition } from '../engine/conditions';
 import { useCharacterStore } from '../store/characterStore';
-import { CharacterAdapter, CharacterChange, CharacterSummary } from './types';
+import { useHomebrewStore } from '../store/homebrewStore';
+import { CharacterAdapter, CharacterChange, CharacterSummary, CharacterVitals } from './types';
 import { KeyValueStore } from './kv';
 
 const ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
@@ -38,6 +40,20 @@ export function applyChangesToEntity(entity: Entity, changes: CharacterChange[],
       // 5e temp HP doesn't stack — take the higher of what's already there, never add.
       const temp = Math.max(next.resources.hp.temp, c.amount);
       next = { ...next, resources: { ...next.resources, hp: { ...next.resources.hp, temp } } };
+    } else if (c.kind === 'condition_add') {
+      // Same primitive and content lookup the character sheet's own condition toggle uses
+      // (app/sheet/[id].tsx) — mechanical features attach exactly as they would locally.
+      const contentDB = useHomebrewStore.getState().getMergedContentDB(next.rulesetId);
+      const cond = contentDB.conditions.find(x => x.id === c.conditionId);
+      next = applyCondition(next, c.conditionId, 'dm', rules, cond?.features);
+    } else if (c.kind === 'condition_remove') {
+      next = removeCondition(next, c.conditionId, rules);
+    } else if (c.kind === 'concentration_break') {
+      if (next.spellcasting) {
+        next = { ...next, spellcasting: { ...next.spellcasting, concentrating: null, concentratingDuration: undefined } };
+      }
+    } else if (c.kind === 'stabilize') {
+      next = { ...next, resources: { ...next.resources, deathSaves: { successes: 0, failures: 0, stable: true } } };
     } else {
       next = { ...next, stats: { ...next.stats, [c.ability]: Math.max(1, next.stats[c.ability] + c.delta) } };
     }
@@ -82,6 +98,22 @@ export class EntityAdapter implements CharacterAdapter {
     const e = this.entity();
     if (!e) return { name: 'Unknown', hp: 0, maxHp: 0, ac: 0 };
     return { name: e.identity.name || 'Unnamed', hp: e.resources.hp.current, maxHp: e.resources.hp.maximum, ac: e.derived.ac };
+  }
+
+  /** DM_SCREEN_SPEC.md item 2's Party Dashboard fields — see CharacterVitals's own doc comment. */
+  vitals(): CharacterVitals {
+    const e = this.entity();
+    if (!e) {
+      return { tempHp: 0, speed: 0, exhaustion: 0, conditions: [], concentration: null, deathSaves: { successes: 0, failures: 0, stable: false }, resources: [], spellSlots: null };
+    }
+    return {
+      tempHp: e.resources.hp.temp, speed: e.resources.speed, exhaustion: e.conditionMonitor.exhaustion,
+      conditions: e.conditionMonitor.active.map(c => c.id),
+      concentration: e.spellcasting?.concentrating ?? null,
+      deathSaves: { ...e.resources.deathSaves },
+      resources: e.resources.custom.map(r => ({ id: r.id, name: r.name, current: r.current, maximum: r.maximum })),
+      spellSlots: e.spellcasting ? Object.fromEntries(Object.entries(e.spellcasting.slots).filter(([, s]) => s.total > 0)) : null,
+    };
   }
 
   applyChanges(changes: CharacterChange[], requestId: string): number {

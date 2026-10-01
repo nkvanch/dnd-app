@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime';
 import { CampaignPrep, NoteCategory, PrepEncounter } from '../../src/session/prep';
 import { addNote, describeDuration, describeEffectComponent, describeNoteCategory, parseSignedInt, removeItem } from '../../src/session/prepEdit';
-import { describeChanges, describeRewardKind, describeSessionLogKind } from '../../src/session/roles';
+import { describeChanges, describeRewardKind, describeSessionLogKind, formatContentId } from '../../src/session/roles';
 import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility, RewardKind, SessionLogKind } from '../../src/session/types';
 import { SessionPeer } from '../../src/session/peer';
 import { LiveScreen, Section, Card, Btn, Chip, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
@@ -29,6 +29,14 @@ type FastAction = { participantId: string; kind: 'hp_damage' | 'hp_heal' | 'temp
 const REWARD_KINDS: RewardKind[] = ['homebrew_feature', 'resource', 'proficiency', 'reward_tier', 'permanent_modifier', 'campaign_boon'];
 const SESSION_LOG_KINDS: SessionLogKind[] = ['major_event', 'encounter_outcome', 'npc_death', 'quest_outcome', 'reward', 'milestone', 'rule_change', 'custom_note'];
 const NOTE_CATEGORIES: NoteCategory[] = ['session', 'encounter', 'player', 'monster', 'reminder'];
+// The 14 standard SRD conditions (src/content/conditions/index.ts) — a fixed picker rather than a
+// live content-registry lookup, since the DM screen doesn't otherwise depend on content modules;
+// a homebrew condition can still be added by typing its id directly in DM-only notes as a
+// reminder, same disclosed tradeoff as everywhere else this wire deals in raw content ids.
+const SRD_CONDITIONS = [
+  'blinded', 'charmed', 'deafened', 'frightened', 'grappled', 'incapacitated', 'invisible',
+  'paralyzed', 'petrified', 'poisoned', 'prone', 'restrained', 'stunned', 'unconscious',
+];
 
 export default function DmLiveScreen() {
   const router = useRouter();
@@ -67,6 +75,7 @@ export default function DmLiveScreen() {
   // this and the bonus notes just stop showing until the DM starts an encounter again — disclosed,
   // not silently papered over.
   const [lastActivatedPrepEncounter, setLastActivatedPrepEncounter] = useState<PrepEncounter | null>(null);
+  const [addingCondition, setAddingCondition] = useState<string | null>(null);
 
   const linked = rt.view?.campaign?.campaignId ?? null;
 
@@ -239,6 +248,33 @@ export default function DmLiveScreen() {
                     <Badge label={view?.participants[c.participantId]?.connected ? 'online' : 'offline'} tone={view?.participants[c.participantId]?.connected ? 'good' : 'bad'} />
                   </Row>
                   <Muted>{nameOf(c.participantId)} · HP {c.summary.hp}/{c.summary.maxHp} · AC {c.summary.ac}</Muted>
+                  {c.vitals && (
+                    <>
+                      <Muted>
+                        Speed {c.vitals.speed}{c.vitals.tempHp > 0 ? ` · ${c.vitals.tempHp} temp HP` : ''}
+                        {c.vitals.exhaustion > 0 ? ` · Exhaustion ${c.vitals.exhaustion}` : ''}
+                        {c.vitals.concentration ? ` · Concentrating: ${formatContentId(c.vitals.concentration)}` : ''}
+                      </Muted>
+                      {(c.vitals.deathSaves.successes > 0 || c.vitals.deathSaves.failures > 0 || c.vitals.deathSaves.stable) && (
+                        <Muted>Death saves: {c.vitals.deathSaves.successes}✓ {c.vitals.deathSaves.failures}✗{c.vitals.deathSaves.stable ? ' (stable)' : ''}</Muted>
+                      )}
+                      {c.vitals.resources.length > 0 && (
+                        <Muted>{c.vitals.resources.map(r => `${r.name} ${r.current}/${r.maximum}`).join(' · ')}</Muted>
+                      )}
+                      {c.vitals.spellSlots && (
+                        <Muted>Slots: {Object.entries(c.vitals.spellSlots).map(([lvl, s]) => `${lvl}:${s.total - s.used}/${s.total}`).join(' ')}</Muted>
+                      )}
+                      {c.vitals.conditions.length > 0 && (
+                        <Row wrap>
+                          {c.vitals.conditions.map(cond => (
+                            <Chip key={cond} label={formatContentId(cond)} active
+                              onPress={() => run(() => dmPeer.requestChange(c.participantId, `Remove condition: ${formatContentId(cond)}`, [{ kind: 'condition_remove', conditionId: cond }]))}
+                              testID={`dm-condition-${c.summary.name}-${cond}`} />
+                          ))}
+                        </Row>
+                      )}
+                    </>
+                  )}
                   {c.persona?.enabled && (
                     <Row wrap>
                       <Badge label="Cover identity active" tone="secret" />
@@ -252,6 +288,15 @@ export default function DmLiveScreen() {
                       <Btn small label="Send" disabled={offline} onPress={submitFastAction} testID={`dm-fast-submit-${c.summary.name}`} />
                       <Btn small kind="ghost" label="Cancel" onPress={() => setFastAction(null)} />
                     </Row>
+                  ) : addingCondition === c.participantId ? (
+                    <Row wrap>
+                      {SRD_CONDITIONS.filter(cond => !c.vitals?.conditions.includes(cond)).map(cond => (
+                        <Chip key={cond} label={formatContentId(cond)}
+                          onPress={() => { run(() => dmPeer.requestChange(c.participantId, `Add condition: ${formatContentId(cond)}`, [{ kind: 'condition_add', conditionId: cond }])); setAddingCondition(null); }}
+                          testID={`dm-addcondition-${c.summary.name}-${cond}`} />
+                      ))}
+                      <Btn small kind="ghost" label="Cancel" onPress={() => setAddingCondition(null)} />
+                    </Row>
                   ) : (
                     <Row wrap>
                       <Btn small kind="danger" label="Damage" disabled={offline} onPress={() => openFastAction(c.participantId, 'hp_damage')} testID={`dm-damage-${c.summary.name}`} />
@@ -261,13 +306,19 @@ export default function DmLiveScreen() {
                       <Btn small kind="ghost" label="Exh. +1" disabled={offline} onPress={() => exhaustionStep(c.participantId, 1)} testID={`dm-exh-up-${c.summary.name}`} />
                       <Btn small kind="ghost" label="Exh. -1" disabled={offline} onPress={() => exhaustionStep(c.participantId, -1)} testID={`dm-exh-down-${c.summary.name}`} />
                       <Btn small kind="danger" label="0 HP" disabled={offline} onPress={() => quickKill(c.participantId)} testID={`dm-kill-${c.summary.name}`} />
+                      <Btn small kind="ghost" label="Stabilize" disabled={offline} onPress={() => run(() => dmPeer.requestChange(c.participantId, 'Stabilize', [{ kind: 'stabilize' }]))} testID={`dm-stabilize-${c.summary.name}`} />
+                      <Btn small kind="ghost" label="+ Condition" disabled={offline} onPress={() => setAddingCondition(c.participantId)} testID={`dm-addcondition-open-${c.summary.name}`} />
+                      {!!c.vitals?.concentration && (
+                        <Btn small kind="ghost" label="Break Concentration" disabled={offline}
+                          onPress={() => run(() => dmPeer.requestChange(c.participantId, 'Break concentration', [{ kind: 'concentration_break' }]))} testID={`dm-concbreak-${c.summary.name}`} />
+                      )}
                     </Row>
                   )}
 
                   <Btn small kind="ghost" label={expanded ? 'Hide details ▴' : 'Details ▾'} onPress={() => setExpandedChar(expanded ? null : c.participantId)} testID={`dm-expand-${c.summary.name}`} />
                   {expanded && (
                     <>
-                      <Muted>Only what this player's device reports is visible here — name, HP, AC. The full character sheet stays on their device.</Muted>
+                      <Muted>Only what this player's device reports is visible here — name/HP/AC plus the vitals above, if reported. The full character sheet stays on their device.</Muted>
                       {theirEffects.length === 0 && theirRequests.length === 0 && theirRewards.length === 0 && <Muted>No active effects, requests, or rewards.</Muted>}
                       {theirEffects.map(({ effectId, displayName, effect }) => (
                         <Muted key={effectId}>Effect: {displayName} ({effect.definition.components.map(describeEffectComponent).join(', ') || 'no numeric change'})</Muted>

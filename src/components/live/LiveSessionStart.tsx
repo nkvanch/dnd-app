@@ -265,11 +265,13 @@ function CharacterPicker({ characters, value, onChange }: {
 const m = StyleSheet.create({
   wrap: { gap: Spacing.sm },
 
+  // Deliberately no border/background here — a boxed card reads as a separate floating widget
+  // sitting on top of the page. This section should look like part of the Campaigns page itself,
+  // the same way "No Active Campaign" below it is plain content, not a card.
   card: {
-    backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border,
-    padding: Spacing.md, gap: Spacing.sm, marginHorizontal: Spacing.md, marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md, paddingTop: Spacing.md, gap: Spacing.sm,
   },
-  cardTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  cardTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
   advancedToggle: { paddingVertical: Spacing.xs },
   advancedToggleTxt: { color: Colors.textDim, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
   advancedBody: { gap: Spacing.sm },

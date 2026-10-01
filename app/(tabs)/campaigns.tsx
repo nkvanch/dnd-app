@@ -1027,7 +1027,9 @@ export default function CampaignsScreen() {
       {/* Live Session — a permanent section of this page, independent of whether a (legacy,
           DM-owned, rules-syncing) campaign is active below. A campaign isn't owned by a Host:
           campaignId != sessionId != roomCode. */}
-      {liveMode === 'idle' ? <LiveSessionCard /> : <View style={styles.liveStatusWrap}><LiveSessionStatus /></View>}
+      <View style={styles.liveSectionDivider}>
+        {liveMode === 'idle' ? <LiveSessionCard /> : <View style={styles.liveStatusWrap}><LiveSessionStatus /></View>}
+      </View>
 
       {activeCampaign ? (
         isDm ? <DmActiveView /> : <PlayerActiveView />
@@ -1059,6 +1061,7 @@ const styles = StyleSheet.create({
   title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
 
   liveStatusWrap: { padding: Spacing.md },
+  liveSectionDivider: { paddingBottom: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border },
 
   scroll:        { flex: 1 },
   content:       { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },

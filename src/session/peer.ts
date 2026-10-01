@@ -12,6 +12,7 @@
 import {
   Capability, CharacterAdapter, CharacterChange, ClientMessage, Op, OpBody, OpResult, ParticipantId,
   ServerMessage, ViewState, LiveEvent, ChangeRequest, LiveEffect, EffectApplication, SecretEffectMeta,
+  EffectComponent, EffectDuration, EffectDefinitionInput,
 } from './types';
 import { applyEvent } from './state';
 import { ClientTransport, Connection, decodeFrame, encodeFrame } from './transport';
@@ -406,6 +407,28 @@ export class SessionPeer {
       this.secretCache[effectId] = secret;
     }
     const opId = this.sendRaw({ kind: 'dm.apply_effect', effect: input, targets });
+    return { opId, effectId };
+  }
+
+  /**
+   * A "Quick Override" (DM_SCREEN_SPEC.md item 12) — a one-off exception the DM builds on the
+   * spot, rather than something pre-authored in DM Preparation. Same underlying op as
+   * applyPreparedEffect; source is always 'DM Override' so it's visibly distinguishable from a
+   * prepared effect. Deliberately public/target only — a Quick Override that needed secret
+   * identity would need the SecretVault round-trip applyPreparedEffect uses, which doesn't fit
+   * "quick."
+   */
+  applyQuickEffect(
+    input: { name: string; description?: string; visibility: 'public' | 'target'; components: EffectComponent[]; duration: EffectDuration },
+    targets: ParticipantId[],
+  ): { opId: string; effectId: string } {
+    this.need('dm');
+    const effectId = this.id('qfx');
+    const defInput: EffectDefinitionInput = {
+      id: effectId, name: input.name, description: input.description ?? null, source: 'DM Override',
+      visibility: input.visibility, components: input.components, duration: input.duration,
+    };
+    const opId = this.sendRaw({ kind: 'dm.apply_effect', effect: defInput, targets });
     return { opId, effectId };
   }
 

@@ -29,7 +29,15 @@ export type PublicParticipant = {
 export type CharacterChange =
   | { kind: 'exhaustion'; delta: number }
   | { kind: 'max_hp';     delta: number }
-  | { kind: 'ability';    ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'; delta: number };
+  | { kind: 'ability';    ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'; delta: number }
+  /** Current HP damage (negative delta) or healing (positive delta), clamped to [0, maximum] on
+   *  apply — see entityAdapter.ts's applyChangesToEntity. Same consent flow as every other
+   *  CharacterChange (dm.request_change -> player.respond); there is no way for the DM to apply
+   *  this directly without the player accepting/modifying it, same as a permanent change. */
+  | { kind: 'hp';         delta: number }
+  /** Grants temp HP — 5e temp HP doesn't stack, so apply takes the higher of current temp and
+   *  this amount rather than adding (see applyChangesToEntity). */
+  | { kind: 'temp_hp';    amount: number };
 
 export type CharacterSummary = {
   name:  string;

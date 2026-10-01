@@ -43,6 +43,8 @@ export function describeChange(c: CharacterChange): string {
     case 'exhaustion': return `Exhaustion ${signed(c.delta)}`;
     case 'max_hp':     return `Max HP ${signed(c.delta)}`;
     case 'ability':    return `${ABILITY_LABEL[c.ability] ?? c.ability} ${signed(c.delta)}`;
+    case 'hp':         return c.delta < 0 ? `${-c.delta} damage` : `Heal ${c.delta}`;
+    case 'temp_hp':    return `${c.amount} temp HP`;
   }
 }
 
@@ -56,8 +58,9 @@ export function validChanges(changes: unknown): changes is CharacterChange[] {
   return changes.every(c => {
     if (!c || typeof c !== 'object') return false;
     const ch = c as Record<string, unknown>;
+    if (ch.kind === 'temp_hp') return typeof ch.amount === 'number' && Number.isFinite(ch.amount) && Number.isInteger(ch.amount) && ch.amount >= 0;
     if (typeof ch.delta !== 'number' || !Number.isFinite(ch.delta) || !Number.isInteger(ch.delta)) return false;
-    if (ch.kind === 'exhaustion' || ch.kind === 'max_hp') return true;
+    if (ch.kind === 'exhaustion' || ch.kind === 'max_hp' || ch.kind === 'hp') return true;
     if (ch.kind === 'ability') return typeof ch.ability === 'string' && ch.ability in ABILITY_LABEL;
     return false;
   });

@@ -29,6 +29,22 @@ describe('applying accepted change requests to a real character', () => {
     expect(applyChangesToEntity(e, [{ kind: 'max_hp', delta: 4 }], DEFAULT_RULES).resources.hp).toMatchObject({ maximum: 24, current: 20 });
   });
 
+  it('hp damage/heal is clamped to [0, maximum] and never touches maximum itself', () => {
+    const e = base();
+    expect(applyChangesToEntity(e, [{ kind: 'hp', delta: -8 }], DEFAULT_RULES).resources.hp).toMatchObject({ current: 12, maximum: 20 });
+    expect(applyChangesToEntity(e, [{ kind: 'hp', delta: -999 }], DEFAULT_RULES).resources.hp.current).toBe(0);
+    const hurt = { ...e, resources: { ...e.resources, hp: { ...e.resources.hp, current: 5 } } };
+    expect(applyChangesToEntity(hurt, [{ kind: 'hp', delta: 999 }], DEFAULT_RULES).resources.hp).toMatchObject({ current: 20, maximum: 20 });
+  });
+
+  it('temp HP takes the higher of what\'s already there instead of stacking (5e rule)', () => {
+    const e = base();
+    const granted = applyChangesToEntity(e, [{ kind: 'temp_hp', amount: 5 }], DEFAULT_RULES);
+    expect(granted.resources.hp.temp).toBe(5);
+    expect(applyChangesToEntity(granted, [{ kind: 'temp_hp', amount: 3 }], DEFAULT_RULES).resources.hp.temp).toBe(5);
+    expect(applyChangesToEntity(granted, [{ kind: 'temp_hp', amount: 8 }], DEFAULT_RULES).resources.hp.temp).toBe(8);
+  });
+
   it('ability changes flow through the derived numbers', () => {
     const e = base();
     const up = applyChangesToEntity(e, [{ kind: 'ability', ability: 'dex', delta: 4 }], DEFAULT_RULES);

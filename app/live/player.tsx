@@ -9,24 +9,29 @@ import { ChangeRequest, CharacterChange } from '../../src/session/types';
 import { LiveScreen, Section, Card, Btn, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
 import { Alert } from '../../src/utils/alert';
 
+// temp_hp carries `amount` (never negative, 5e doesn't stack it); every other kind carries
+// `delta`. These two keep the editor below generic over both instead of assuming `.delta` everywhere.
+function amountOf(c: CharacterChange): number { return c.kind === 'temp_hp' ? c.amount : c.delta; }
+function withAmount(c: CharacterChange, n: number): CharacterChange { return c.kind === 'temp_hp' ? { ...c, amount: n } : { ...c, delta: n }; }
+
 /** Re-uses the DM's change kinds but lets the player edit each amount. */
 function ModifyEditor({ request, onSubmit, onCancel }: {
   request: ChangeRequest; onSubmit: (changes: CharacterChange[]) => void; onCancel: () => void;
 }) {
-  const [amounts, setAmounts] = useState<string[]>(request.original.map(c => String(c.delta)));
+  const [amounts, setAmounts] = useState<string[]>(request.original.map(c => String(amountOf(c))));
   const parsed = amounts.map(parseSignedInt);
-  const valid = parsed.every(n => n !== null && n !== 0);
+  const valid = parsed.every((n, i) => n !== null && (request.original[i].kind === 'temp_hp' ? n >= 0 : n !== 0));
   return (
     <Card testID="player-modify-editor">
       <Muted>Change the amounts, then accept your version. The DM sees both.</Muted>
       {request.original.map((c, i) => (
-        <Field key={i} label={describeChanges([{ ...c, delta: 0 }]).replace(/ [+-]?0$/, '')} value={amounts[i]}
+        <Field key={i} label={describeChanges([withAmount(c, 0)]).replace(/ [+-]?0$/, '')} value={amounts[i]}
           onChangeText={t => setAmounts(a => a.map((x, j) => j === i ? t : x))}
           keyboardType="numbers-and-punctuation" testID={`player-modify-amount-${i}`} />
       ))}
       <Row>
         <Btn small label="Accept my version" disabled={!valid} testID="player-modify-submit"
-          onPress={() => onSubmit(request.original.map((c, i) => ({ ...c, delta: parsed[i] as number })))} />
+          onPress={() => onSubmit(request.original.map((c, i) => withAmount(c, parsed[i] as number)))} />
         <Btn small kind="ghost" label="Cancel" onPress={onCancel} />
       </Row>
     </Card>

@@ -31,6 +31,13 @@ export function applyChangesToEntity(entity: Entity, changes: CharacterChange[],
     } else if (c.kind === 'max_hp') {
       const maximum = Math.max(1, next.resources.hp.maximum + c.delta);
       next = { ...next, resources: { ...next.resources, hp: { ...next.resources.hp, maximum, current: Math.min(next.resources.hp.current, maximum) } } };
+    } else if (c.kind === 'hp') {
+      const current = Math.max(0, Math.min(next.resources.hp.maximum, next.resources.hp.current + c.delta));
+      next = { ...next, resources: { ...next.resources, hp: { ...next.resources.hp, current } } };
+    } else if (c.kind === 'temp_hp') {
+      // 5e temp HP doesn't stack — take the higher of what's already there, never add.
+      const temp = Math.max(next.resources.hp.temp, c.amount);
+      next = { ...next, resources: { ...next.resources, hp: { ...next.resources.hp, temp } } };
     } else {
       next = { ...next, stats: { ...next.stats, [c.ability]: Math.max(1, next.stats[c.ability] + c.delta) } };
     }

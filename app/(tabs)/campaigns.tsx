@@ -27,6 +27,7 @@ import { SyncStatusDot }     from '../../src/components/SyncStatusDot';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { Quest, SessionLogEntry, Campaign } from '../../src/engine/types';
 import { InstalledPack, loadInstalledPacks } from '../../src/db/packRegistryRepo';
+import { HostModal } from '../../src/components/live/LiveSessionStart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -915,10 +916,10 @@ function SavedCampaignsList() {
 // ── No Campaign View ──────────────────────────────────────────────────────────
 
 function NoCampaignView({
-  nickname, onNicknameChange, onCreate, onJoin,
+  nickname, onNicknameChange, onCreate, onHost, onJoin,
 }: {
   nickname: string; onNicknameChange: (n: string) => void;
-  onCreate: () => void; onJoin: () => void;
+  onCreate: () => void; onHost: () => void; onJoin: () => void;
 }) {
   // Campaign hosting/joining uses a raw TCP socket over the local WiFi network.
   // Browsers have no API for raw TCP sockets (only HTTP/WebSocket to a server
@@ -954,6 +955,11 @@ function NoCampaignView({
             <Pressable style={styles.primaryBtn} onPress={onCreate}>
               <Text style={styles.primaryBtnTxt}>👑 Create Campaign (DM)</Text>
             </Pressable>
+            <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onHost} testID="live-host-campaign">
+              <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>
+                Host Campaign
+              </Text>
+            </Pressable>
             <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onJoin}>
               <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>
                 🗡 Join Campaign (Player)
@@ -987,6 +993,7 @@ export default function CampaignsScreen() {
   const { action }     = useLocalSearchParams<{ action?: string }>();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [hostOpen,   setHostOpen]   = useState(false);
   const [joinOpen,   setJoinOpen]   = useState(false);
   const [nickname,   setLocalNick]  = useState(session?.nickname ?? '');
 
@@ -1021,11 +1028,13 @@ export default function CampaignsScreen() {
           nickname={nickname}
           onNicknameChange={handleNicknameChange}
           onCreate={() => setCreateOpen(true)}
+          onHost={() => setHostOpen(true)}
           onJoin={() => setJoinOpen(true)}
         />
       )}
 
       <CreateModal visible={createOpen} onClose={() => setCreateOpen(false)} />
+      <HostModal visible={hostOpen} onClose={() => setHostOpen(false)} nickname={nickname} />
       <JoinModal visible={joinOpen} onClose={() => setJoinOpen(false)} />
     </View>
   );

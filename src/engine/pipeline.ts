@@ -22,6 +22,7 @@ import { isMartialWeapon } from '../content/items/itemBrowse';
 import { effectiveItemFeatures, effectiveWeaponAttackFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition } from './itemMechanics';
 import { getClassEntry } from './multiclass';
 import { selfAuraGrants } from './allyAuras';
+import { reconcileModes } from './modes';
 import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -175,7 +176,7 @@ export function recomputeDerived(
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
 ): Entity {
   // Use a mutable local reference so we can apply grant_proficiency effects
-  let entity = refreshSelfAuras(recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells)), content.items);
+  let entity = refreshSelfAuras(recomputeResourceMaximums(reconcileModes(initializeEntitlementInputs(entityParam, content.homebrewSpells))), content.items);
 
   const allEffects    = collectAllEffects(entity, content.items);
   let effectiveStats = applyStatModifiers(entity.stats, allEffects);

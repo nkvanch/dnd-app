@@ -604,6 +604,7 @@ function entitlementSourceKindLabel(kind: EntitlementSourceKind): string {
     case 'condition':  return 'Condition';
     case 'campaign':   return 'Campaign';
     case 'manual':     return 'Manual';
+    case 'mode':       return 'Mode';
   }
 }
 
@@ -759,7 +760,7 @@ export function buildLayer1(feature: Feature, cardType: ActionCardType): string 
     return `Spell • ${typeLabel}`;
   }
 
-  const sourceLabel = sourceKindLabel(feature.source.kind);
+  const sourceLabel = sourceKindLabel(feature.source.kind, feature.sourceLabel);
   return `${sourceLabel} • ${actionLabel} • ${typeLabel}`;
 }
 
@@ -1550,7 +1551,8 @@ function actionTypeLabel(actionType: FeatureActivation['actionType']): string {
   }
 }
 
-function sourceKindLabel(kind: Feature['source']['kind']): string {
+function sourceKindLabel(kind: Feature['source']['kind'], override?: string): string {
+  if (override) return override;
   switch (kind) {
     case 'race':       return 'Racial';
     case 'class':      return 'Class';
@@ -1562,5 +1564,6 @@ function sourceKindLabel(kind: Feature['source']['kind']): string {
     case 'condition':  return 'Condition';
     case 'campaign':   return 'Campaign';
     case 'manual':     return 'Manual';
+    case 'mode':       return 'Mode';
   }
 }

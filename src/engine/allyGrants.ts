@@ -8,6 +8,7 @@
 // returned entities; recipient recomputes happen here so derived stats
 // (AC, saves, …) reflect the grant immediately.
 import { Entity, ReceivedGrant, Item, CampaignRules, Ability } from './types';
+import { listModeGroups } from './modes';
 import { recomputeDerived, modifier, effectiveAbilityScores } from './pipeline';
 import { applyTempHP, tickReceivedGrants } from './combat';
 import { rollExpression } from './dice';
@@ -57,17 +58,40 @@ export function syncAllyGrants(
       }
     }
   }
+  // Target-scope mode groups (Command the Field): each member's currently
+  // picked option becomes that member's grant. The carrier feature being
+  // active IS the group's lifetime (a concentration spell's feature leaves
+  // when concentration drops), so no separate flag check is needed.
+  for (const holder of roster) {
+    for (const { feature, group } of listModeGroups(holder)) {
+      if (group.scope !== 'target') continue;
+      const members = holder.targetModes?.[group.id]?.members ?? {};
+      for (const [targetId, optionId] of Object.entries(members)) {
+        const option = group.options.find(o => o.id === optionId);
+        if (!option || !byId.has(targetId)) continue;
+        const grant: ReceivedGrant = {
+          id: `mode:${holder.id}:${group.id}:${targetId}`, mode: 'mode', modeGroupId: group.id, modeOptionId: option.id,
+          sourceEntityId: holder.id, sourceName: holder.identity.name || 'Ally', sourceFeatureId: feature.id, specId: group.id,
+          label: `${group.name}: ${option.name}`, effects: (option.effects ?? []).map(x => ({ ...x })), note: option.note,
+          duration: null, grantedAt: now,
+        };
+        desired.set(targetId, [...(desired.get(targetId) ?? []), grant]);
+      }
+    }
+  }
+  const synced = (g: ReceivedGrant, e: Entity) => g.mode === 'mode' || (g.mode === 'aura' && g.sourceEntityId !== e.id);
   return roster.map(e => {
     const want = desired.get(e.id) ?? [];
-    const have = (e.receivedGrants ?? []).filter(g => g.mode === 'aura' && g.sourceEntityId !== e.id);
+    const have = (e.receivedGrants ?? []).filter(g => synced(g, e));
     const same = want.length === have.length && want.every(w => {
       const h = have.find(x => x.id === w.id);
-      return h && JSON.stringify(h.effects) === JSON.stringify(w.effects) && h.label === w.label && h.sourceName === w.sourceName;
+      return h && JSON.stringify(h.effects) === JSON.stringify(w.effects) && h.label === w.label && h.sourceName === w.sourceName
+        && h.modeOptionId === w.modeOptionId && h.note === w.note;
     });
     if (same) return e;
     // Keep the original grantedAt of an aura grant that persists but whose numbers changed.
     const merged = want.map(w => ({ ...w, grantedAt: have.find(h => h.id === w.id)?.grantedAt ?? w.grantedAt }));
-    const kept = (e.receivedGrants ?? []).filter(g => !(g.mode === 'aura' && g.sourceEntityId !== e.id));
+    const kept = (e.receivedGrants ?? []).filter(g => !synced(g, e));
     return recomputeDerived({ ...e, receivedGrants: [...kept, ...merged] }, rules);
   });
 }

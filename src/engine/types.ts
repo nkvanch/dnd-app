@@ -413,6 +413,8 @@ export type Race = {
 export type CharClass  = {
   id:          string;
   name:        string;
+  /** Singular noun for this class's subclass choice in pickers ("Bound Spirit"). Absent → "Subclass". */
+  subclassLabel?: string;
   hitDie:      number;
   features:    Feature[];     // level-1 features (backward-compat; Phase 2 uses levelFeatures)
   description?: string;
@@ -1049,6 +1051,8 @@ export type CustomResource = {
   maximum:  number;
   /** Authoritative maximum before source-owned upgrades are applied. */
   baseMaximum?: number;
+  /** True while the mode option that owns this pool is not the active one: its spent amount is kept, but it is hidden and unusable. */
+  inactive?: boolean;
   recharge: 'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
   /** What granted this resource — lets clearClassData (app/creation/class-
    * detail.tsx) tell a class-owned resource pool apart from a racial one and
@@ -1071,7 +1075,7 @@ export type CustomResource = {
  *  grant_spell effect's resulting spell_access/cantrip_access record). */
 export type EntitlementSourceKind =
   'race' | 'subrace' | 'subclass' | 'class' | 'background' | 'feat' | 'feature'
-  | 'item' | 'spell' | 'condition' | 'campaign' | 'manual';
+  | 'item' | 'spell' | 'condition' | 'campaign' | 'manual' | 'mode';
 
 export type EntitlementKind =
   'skill_proficiency' | 'skill_expertise' | 'tool_proficiency' | 'armor_proficiency' | 'weapon_proficiency' | 'language'
@@ -1635,7 +1639,9 @@ export type ConditionMonitor = {
  */
 export type FeatureSource = {
   kind:  'race' | 'class' | 'subclass' | 'background' | 'feat'
-       | 'item' | 'spell' | 'condition' | 'campaign' | 'manual';
+       | 'item' | 'spell' | 'condition' | 'campaign' | 'manual'
+       // A feature materialized from the active option of a ModeGroup (refId `${groupId}:${optionId}`).
+       | 'mode';
   // refId stays plain `string`, not branded — the concrete content type it
   // references (RaceId/ClassId/SpellId/...) depends on the sibling `kind`
   // field, so a single branded type here would be wrong for most `kind`
@@ -1730,6 +1736,108 @@ export type Effect = {
   movementRange?: number;
 };
 
+/**
+ * MODE GROUPS — "one active option out of a set, swappable, each with its own
+ * level-gated grants" (Emperor Warlock's Bound Spirits, a stance set, …).
+ *
+ * scope 'self': the holder has one active option. Switching is one pure
+ * mutation (setMode): the old option's features leave, the new option's
+ * level-appropriate features arrive, and recomputeDerived reconciles — there
+ * is never a half-old/half-new state. Resources an option grants keep their
+ * spent amount while the option is inactive (CustomResource.inactive), so
+ * leaving and returning does not refill them.
+ *
+ * scope 'target': the holder (e.g. a concentrating caster) keeps a set of
+ * target creatures, EACH with its own independently re-pickable option —
+ * Command the Field. Targets receive the option's effects as ReceivedGrants
+ * (synced like auras; membership/"in range" is table-resolved).
+ *
+ * How an option gets chosen is configuration (ModeSelector), not code:
+ *  - 'choice': pick any option any time (player- or DM-set).
+ *  - 'table': a die roll maps to an option. The app can roll it, or the
+ *    player can enter the die they rolled physically; extra config adds
+ *    roll-two-pick-one, a limited re-roll, and a level from which the option
+ *    is simply chosen with no roll at all.
+ * There is no calendar: "monthly" is a label — the player presses "new
+ * period" when the table says the month changed.
+ */
+export type ModeEntry = {
+  /** Unlocks when the owning level (ModeGroup.levelSource) reaches this. */
+  level:      number;
+  features?:  Feature[];
+  resources?: ResourceGrant[];
+};
+
+export type ModeOption = {
+  id:      string;
+  name:    string;
+  summary?: string;
+  /** scope 'self': level-gated grants. */
+  entries: ModeEntry[];
+  /** scope 'target': passive effects the target gets while this option is picked. */
+  effects?: Effect[];
+  /** scope 'target': what the option does beyond `effects` (table-resolved text). */
+  note?: string;
+};
+
+export type ModeSelector =
+  | { kind: 'choice' }
+  | {
+      kind: 'table';
+      /** Die size (12 → d12). Value v selects `table[v]` or, by default, options[v-1]. */
+      die: number;
+      table?: { value: number; optionId: string }[];
+      /** From `level`, roll `rolls` dice and pick one (Two Voices). Highest applicable row wins. */
+      pickBest?: { level: number; rolls: number }[];
+      /** From `level`, this many re-rolls each period; a re-roll REPLACES the result (Council of Spirits). */
+      reroll?: { level: number; perPeriod: number };
+      /** From this level the option is simply chosen — rolling is optional (Crown of Legends). */
+      freeChoiceFromLevel?: number;
+      /** Display label for the cadence ("in-game month"); purely descriptive. */
+      periodLabel?: string;
+    };
+
+export type ModeGroup = {
+  id:          string;
+  name:        string;
+  /** Singular noun for ONE option in every picker and heading ("Bound Spirit"). Never rendered as "Subclass". */
+  optionLabel: string;
+  scope:       'self' | 'target';
+  options:     ModeOption[];
+  /** Which level gates ModeEntry.level. Default: total character level. */
+  levelSource?: { kind: 'class'; classId: string } | { kind: 'total' };
+  selector:    ModeSelector;
+  /** Must an option always be active? (self scope) */
+  requireActiveOption?: boolean;
+  /** scope 'target': base number of targets (upcasting adds more table-side). */
+  maxTargets?: number;
+};
+
+export type ModeHistoryEntry = {
+  optionId: string;
+  at:       string;
+  how:      'roll' | 'reroll' | 'pick' | 'choice' | 'dm' | 'physical_roll';
+  roll?:    number;
+  rolls?:   number[];
+};
+
+/** Per-group live state on the holder (scope 'self'). */
+export type ModeState = {
+  groupId:        string;
+  activeOptionId: string | null;
+  history:        ModeHistoryEntry[];
+  /** Two-Voices style: rolled, now waiting for the player to pick one. */
+  pendingRolls?:  number[];
+};
+
+/** Holder-side roster of a target-scope group: target entity id → picked option id. */
+export type TargetModeState = {
+  groupId: string;
+  members: Record<string, string>;
+  /** Extra targets beyond maxTargets (upcast), set by hand. */
+  extraTargets: number;
+};
+
 /** One row of an entity's mid-campaign feature-grant ledger. */
 export type FeatureGrantRecord = {
   id:         string;
@@ -1800,7 +1908,10 @@ export type AllyGrantSpec = {
 /** A grant currently held by a creature, given by another creature's feature. */
 export type ReceivedGrant = {
   id:              string;
-  mode:            'aura' | 'chosen';
+  mode:            'aura' | 'chosen' | 'mode';
+  /** mode === 'mode': which group/option this target currently has (re-pick replaces it). */
+  modeGroupId?:    string;
+  modeOptionId?:   string;
   sourceEntityId:  string;
   sourceName:      string;
   sourceFeatureId: string;
@@ -1862,6 +1973,16 @@ export type Feature = {
    * alongside the existing UniversalActionsSection.
    */
   trigger?: string;
+  /**
+   * Makes this feature the CARRIER of a mode group: a named set of options of
+   * which exactly one is active at a time, each with its own level-gated
+   * features/resources. The carrier defines the group's lifetime — remove the
+   * feature and the group (and everything it materialized) goes with it.
+   * See ModeGroup.
+   */
+  modeGroup?: ModeGroup;
+  /** Overrides the generic "Class"/"Mode" source word on this feature's action card ("Bound Spirit"). */
+  sourceLabel?: string;
   /**
    * Effects this feature gives to creatures OTHER than its holder — an
    * ongoing aura or a one-shot grant to a chosen target. See AllyGrantSpec.
@@ -2271,6 +2392,10 @@ export type Entity = {
    * History is never deleted — a replaced tier stays visible as 'replaced'.
    */
   featureGrants?: FeatureGrantRecord[];
+  /** Live state of each mode group this creature carries (scope 'self'), keyed by group id. */
+  modeStates?: Record<string, ModeState>;
+  /** Holder-side rosters for target-scope mode groups, keyed by group id. */
+  targetModes?: Record<string, TargetModeState>;
   /** Grants this creature holds from OTHER creatures' features (auras and chosen grants). See AllyGrantSpec. */
   receivedGrants?: ReceivedGrant[];
   /**
@@ -2414,6 +2539,13 @@ export type ClassProgression = {
 export type HomebrewSubclass = ClassProgression & {
   id:   SubclassId;
   name: string;
+  /**
+   * What the app calls ONE of these in pickers and headings ("Bound Spirit",
+   * "Sacred Oath", "Martial Archetype"). Absent → "Subclass". A class can also
+   * set CharClass.subclassLabel once for all of its options; this field wins
+   * when both are present. See subclassLabelFor (subclassBrowse.ts).
+   */
+  displayLabel?: string;
 };
 
 export type Grant = {
@@ -2553,7 +2685,8 @@ export type AuditSourceKind =
   | 'manual'
   | 'dm_override'
   | 'character_override'
-  | 'ally_grant';
+  | 'ally_grant'
+  | 'mode';
 
 /** One contribution to a derived value. */
 export type AuditEntry = {

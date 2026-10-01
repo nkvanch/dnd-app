@@ -1691,7 +1691,7 @@ function TabCharacterInner({
       )}
 
       {/* Resources */}
-      {resources.custom.length > 0 && (
+      {resources.custom.some(r => !r.inactive) && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>RESOURCES</Text>
           {/* Dawn is an explicit event, not a rest: only offered when a dawn resource is spent. */}
@@ -1700,7 +1700,7 @@ function TabCharacterInner({
               <Text style={styles.dawnBtnTxt}>☀ Dawn — restore dawn resources</Text>
             </Pressable>
           )}
-          {resources.custom.map(r => {
+          {resources.custom.filter(r => !r.inactive).map(r => {
             // Table-first recharge: the +/- controls below are already the
             // PRIMARY "mark recharged" path (a DM/player just taps + after
             // rolling physically). This adds only the secondary "Roll

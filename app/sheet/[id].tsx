@@ -138,6 +138,8 @@ export default function CharacterSheetScreen() {
   const auraSignature = entity
     ? JSON.stringify([
         entity.auraMembers ?? null,
+        entity.targetModes ?? null,
+        entity.features.filter(f => f.modeGroup?.scope === 'target').map(f => f.id),
         entity.conditionMonitor.flags,
         entity.resources.hp.current === 0,
         entity.conditions.map(c => c.id),

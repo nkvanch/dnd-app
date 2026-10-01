@@ -13,8 +13,9 @@ import { applySubclassToEntity } from '../engine/leveling';
 import {
   subclassEntriesForClassMerged, subclassFeaturesByLevel,
   subclassAdditions, SUBCLASS_ADDITION_LABELS, subclassSortOptions,
-  filterAndSortSubclassOptions, SubclassAddition, SubclassEntry,
+  filterAndSortSubclassOptions, SubclassAddition, SubclassEntry, subclassLabelFor,
 } from '../content/subclasses/subclassBrowse';
+import { ALL_CHAR_CLASSES } from '../content/classes';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { useBrowseStateStore } from '../store/browseStateStore';
 import {
@@ -56,6 +57,8 @@ export function SubclassPicker({
   // classId for single-class characters and pre-existing choices without
   // the tag, so nothing changes for the common case.
   const forClassId = choice.definition.forClassId ?? entity.identity.classId;
+  const homebrewClasses = useHomebrewStore(s => s.classes);
+  const subclassLabel = subclassLabelFor(forClassId, homebrewSubclasses, [...homebrewClasses, ...ALL_CHAR_CLASSES]);
 
   // LIVE-RULESET-2/3 (items 4, 7): subclassEntriesForClassMerged now carries
   // real ruleset filtering for BOTH official and homebrew subclasses (see
@@ -123,7 +126,7 @@ export function SubclassPicker({
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.headerRow}>
-        <Text style={styles.heading}>Choose Your Subclass</Text>
+        <Text style={styles.heading}>Choose Your {subclassLabel}</Text>
         {onClose && (
           <Pressable onPress={onClose} hitSlop={8}>
             <Text style={styles.close}>✕</Text>
@@ -138,7 +141,7 @@ export function SubclassPicker({
 
       {onCreateNewSubclass && (
         <Pressable style={styles.createNewBtn} onPress={onCreateNewSubclass}>
-          <Text style={styles.createNewTxt}>+ Create New Homebrew Subclass</Text>
+          <Text style={styles.createNewTxt}>+ Create New Homebrew {subclassLabel}</Text>
         </Pressable>
       )}
 

@@ -197,6 +197,12 @@ export default function DmLiveScreen() {
                     <Badge label={view?.participants[c.participantId]?.connected ? 'online' : 'offline'} tone={view?.participants[c.participantId]?.connected ? 'good' : 'bad'} />
                   </Row>
                   <Muted>{nameOf(c.participantId)} · HP {c.summary.hp}/{c.summary.maxHp} · AC {c.summary.ac}</Muted>
+                  {c.persona?.enabled && (
+                    <Row wrap>
+                      <Badge label="Cover identity active" tone="secret" />
+                      <Muted>Table sees: {c.persona.name} · HP {c.persona.hp}/{c.persona.maxHp} · AC {c.persona.ac}</Muted>
+                    </Row>
+                  )}
 
                   {fastAction?.participantId === c.participantId ? (
                     <Row wrap>

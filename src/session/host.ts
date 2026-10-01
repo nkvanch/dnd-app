@@ -15,7 +15,7 @@ import {
   Capability, ClientMessage, ServerMessage, Op, OpBody, OpResult, LiveState, LiveEvent, LiveEventBody,
   emptyLiveState, PublicParticipant, ParticipantId, EffectApplication, EffectDefinition, AuditEntry,
   ChangeRequest, LiveEncounter, ReportedCharacter, CharacterChange, RuleSuggestion, RuleSuggestionStatus,
-  STANDARD_MONSTER_VISIBILITY, MonsterVisibility,
+  STANDARD_MONSTER_VISIBILITY, MonsterVisibility, PublicPersona,
 } from './types';
 import { applyEvent, projectEvent, projectState, Viewer } from './state';
 import { Connection, ServerTransport, decodeFrame, encodeFrame } from './transport';
@@ -610,8 +610,24 @@ export class SessionHost {
         const character: ReportedCharacter = {
           participantId: pid, characterId: body.characterId, revision: body.revision,
           summary: { name: s.name, hp: s.hp, maxHp: s.maxHp, ac: s.ac },
+          // Preserve an existing persona across an ordinary character report (HP changing, etc.)
+          // — this op has nothing to do with Public Persona, so it must never silently clear one.
+          ...(prev?.persona ? { persona: prev.persona } : {}),
         };
         this.commit({ t: 'character_reported', character }, pid, null);
+        return done('applied');
+      }
+
+      case 'player.set_persona': {
+        const prev = this.state.characters[pid];
+        if (!prev) return done('rejected', 'no-character-reported');
+        const p = body.persona;
+        if (!isObj(p) || typeof p.enabled !== 'boolean' || !str(p.name)
+          || typeof p.hp !== 'number' || typeof p.maxHp !== 'number' || typeof p.ac !== 'number') {
+          return done('rejected', 'malformed');
+        }
+        const persona: PublicPersona = { enabled: p.enabled, name: p.name, hp: p.hp, maxHp: p.maxHp, ac: p.ac };
+        this.commit({ t: 'persona_set', participantId: pid, persona }, pid, null);
         return done('applied');
       }
 

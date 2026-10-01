@@ -7,6 +7,7 @@
 import {
   Capability, ParticipantId, LiveState, LiveEvent, ViewState, AuditEntry,
   EffectApplication, LiveEffect, PublicParticipant, LiveCombatant, LiveEncounter,
+  ReportedCharacter, CharacterSummary,
 } from './types';
 
 // ── Viewers ──────────────────────────────────────────────────────────────────
@@ -169,6 +170,11 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
     case 'character_reported':
       s.characters[b.character.participantId] = b.character;
       break;
+    case 'persona_set': {
+      const c = s.characters[b.participantId];
+      if (c) c.persona = b.persona;
+      break;
+    }
     case 'session_ended':
       s.ended = true;
       break;
@@ -234,6 +240,24 @@ function encounterForPlayer(e: LiveEncounter): LiveEncounter {
   return { ...e, combatants: e.combatants.map(combatantForPlayer) };
 }
 
+/**
+ * Player-to-player visibility ("Public Persona" — LAN_PLAYER_SCREEN_SPEC.md). What ANOTHER
+ * player sees for this character: the real summary verbatim when no persona is enabled, or the
+ * persona's values entirely when it is — never a mix, and never a route back to the real values
+ * (see PublicPersona's own doc comment for why there's no per-field fallback).
+ */
+function publicSummaryOf(rc: ReportedCharacter): CharacterSummary {
+  if (!rc.persona?.enabled) return rc.summary;
+  const { name, hp, maxHp, ac } = rc.persona;
+  return { name, hp, maxHp, ac };
+}
+
+/** The shape sent to a PEER player — summary only, never the raw persona config (nothing for
+ *  them to reverse-engineer the real values from; see publicSummaryOf). */
+function publicCharacterOf(rc: ReportedCharacter): ReportedCharacter {
+  return { participantId: rc.participantId, characterId: rc.characterId, revision: rc.revision, summary: publicSummaryOf(rc) };
+}
+
 /** The complete state a viewer is entitled to see. */
 export function projectState(state: LiveState, viewer: Viewer): ViewState {
   const level = viewLevel(viewer);
@@ -262,8 +286,12 @@ export function projectState(state: LiveState, viewer: Viewer): ViewState {
     for (const [id, s] of Object.entries(state.ruleSuggestions)) {
       if (s.playerId === viewer.id) out.ruleSuggestions[id] = clone(s);
     }
-    const own = state.characters[viewer.id];
-    if (own) out.characters[viewer.id] = clone(own);
+    // Own character: full, authoritative, unfiltered. Every OTHER player's character: only their
+    // current public projection (real summary, or persona if enabled) — never the authoritative
+    // values, and never the raw persona config itself (see publicCharacterOf's own doc comment).
+    for (const [id, rc] of Object.entries(state.characters)) {
+      out.characters[id] = id === viewer.id ? clone(rc) : clone(publicCharacterOf(rc));
+    }
   }
   return out;
 }
@@ -375,10 +403,24 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
       return sug && sug.playerId === viewer.id ? keep(b) : null;
     }
 
-    case 'character_reported':
+    case 'character_reported': {
       if (level === 'host') return null;
       if (level === 'dm' || b.character.participantId === viewer.id) return keep(b);
-      return null;
+      // A peer: redirect to their public projection, computed fresh from the post-event
+      // canonical state (which already has whatever persona is currently in effect) — never
+      // the raw authoritative summary.
+      const rc = after.characters[b.character.participantId];
+      return rc ? keep({ t: 'character_reported', character: publicCharacterOf(rc) }) : null;
+    }
+
+    case 'persona_set': {
+      if (level === 'host') return null;
+      if (level === 'dm' || b.participantId === viewer.id) return keep(b);
+      // A peer never receives persona config directly — they get a character_reported-shaped
+      // update to the now-current public projection, same redirection as above.
+      const rc = after.characters[b.participantId];
+      return rc ? keep({ t: 'character_reported', character: publicCharacterOf(rc) }) : null;
+    }
   }
 }
 

@@ -5,9 +5,47 @@ import { useState } from 'react';
 import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime';
 import { describeChanges } from '../../src/session/roles';
 import { describeEffectComponent, parseSignedInt } from '../../src/session/prepEdit';
-import { ChangeRequest, CharacterChange } from '../../src/session/types';
-import { LiveScreen, Section, Card, Btn, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
+import { ChangeRequest, CharacterChange, PublicPersona } from '../../src/session/types';
+import { LiveScreen, Section, Card, Btn, Field, Row, Badge, Muted, Body, NotCapable, Chip } from '../../src/components/live/LiveUi';
 import { Alert } from '../../src/utils/alert';
+
+function parsePositiveInt(s: string): number | null {
+  const n = Number(s.trim());
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/** Edits a PublicPersona (LAN_PLAYER_SCREEN_SPEC.md's "What others see"). Pre-fills from the
+ *  existing persona if one is set, otherwise from the real summary — an untouched field already
+ *  means "show the truth for this one," since there's no per-field omit option on the wire. */
+function PersonaEditor({ real, initial, onSave, onCancel }: {
+  real: { name: string; hp: number; maxHp: number; ac: number };
+  initial: PublicPersona | undefined;
+  onSave: (p: PublicPersona) => void; onCancel: () => void;
+}) {
+  const base = initial ?? { enabled: true, ...real };
+  const [name, setName] = useState(base.name);
+  const [hp, setHp] = useState(String(base.hp));
+  const [maxHp, setMaxHp] = useState(String(base.maxHp));
+  const [ac, setAc] = useState(String(base.ac));
+  const parsedHp = parsePositiveInt(hp);
+  const parsedMaxHp = parsePositiveInt(maxHp);
+  const parsedAc = parsePositiveInt(ac);
+  const valid = name.trim().length > 0 && parsedHp !== null && parsedMaxHp !== null && parsedMaxHp >= 1 && parsedAc !== null;
+  return (
+    <Card testID="player-persona-editor">
+      <Muted>These values replace your real name, HP, max HP and AC for every other player at the table. The DM always sees your real sheet too.</Muted>
+      <Field label="Name shown to others" value={name} onChangeText={setName} testID="player-persona-name" />
+      <Field label="HP shown" value={hp} onChangeText={setHp} keyboardType="number-pad" testID="player-persona-hp" />
+      <Field label="Max HP shown" value={maxHp} onChangeText={setMaxHp} keyboardType="number-pad" testID="player-persona-maxhp" />
+      <Field label="AC shown" value={ac} onChangeText={setAc} keyboardType="number-pad" testID="player-persona-ac" />
+      <Row wrap>
+        <Btn small label="Save" disabled={!valid} testID="player-persona-save"
+          onPress={() => onSave({ enabled: true, name: name.trim(), hp: parsedHp as number, maxHp: parsedMaxHp as number, ac: parsedAc as number })} />
+        <Btn small kind="ghost" label="Cancel" onPress={onCancel} />
+      </Row>
+    </Card>
+  );
+}
 
 // temp_hp carries `amount` (never negative, 5e doesn't stack it); every other kind carries
 // `delta`. These two keep the editor below generic over both instead of assuming `.delta` everywhere.
@@ -43,6 +81,7 @@ export default function PlayerScreen() {
   const runtime = getSessionRuntime();
   const peer = runtime.currentPeer;
   const [modifying, setModifying] = useState<string | null>(null);
+  const [editingPersona, setEditingPersona] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestRule, setSuggestRule] = useState('');
   const [suggestValue, setSuggestValue] = useState('');
@@ -61,6 +100,8 @@ export default function PlayerScreen() {
   const effects = peer.visibleEffects();
   const encounters = Object.values(view?.encounters ?? {}).filter(e => e.active);
   const mySuggestions = Object.values(view?.ruleSuggestions ?? {});
+  const party = peer.partyView();
+  const persona = character?.persona;
   const offline = rt.status !== 'connected';
   const send = (fn: () => unknown) => { try { fn(); } catch (e) { Alert.alert('Not sent', (e as Error).message); } };
 
@@ -77,6 +118,42 @@ export default function PlayerScreen() {
         {offline && <Muted>You are offline. Your sheet still works; changes sync when you reconnect.</Muted>}
         {offline && <Btn small kind="ghost" label="Reconnect" onPress={() => { void runtime.reconnect(); }} testID="player-reconnect" />}
       </Card>
+
+      <Section title="Public Persona" hint="Show the rest of the table a different name, HP, max HP and AC than your real sheet. The DM always sees your real numbers alongside this.">
+        {editingPersona ? (
+          character ? (
+            <PersonaEditor real={character.summary} initial={persona}
+              onCancel={() => setEditingPersona(false)}
+              onSave={(p) => { send(() => peer.setPersona(p)); setEditingPersona(false); }} />
+          ) : <Muted>Report your character first.</Muted>
+        ) : (
+          <Card testID="player-persona-status">
+            <Row wrap>
+              <Badge label={persona?.enabled ? 'Showing a cover identity' : 'Showing your real sheet'} tone={persona?.enabled ? 'secret' : 'default'} />
+            </Row>
+            {persona?.enabled && <Body>Others see: {persona.name} · HP {persona.hp}/{persona.maxHp} · AC {persona.ac}</Body>}
+            <Row wrap>
+              <Btn small label={persona?.enabled ? 'Edit' : 'Set up a cover identity'} disabled={offline || !character}
+                onPress={() => setEditingPersona(true)} testID="player-persona-edit" />
+              {persona?.enabled && (
+                <Btn small kind="ghost" label="Show my real sheet" disabled={offline} testID="player-persona-disable"
+                  onPress={() => send(() => peer.setPersona({ ...persona, enabled: false }))} />
+              )}
+            </Row>
+          </Card>
+        )}
+      </Section>
+
+      {party.length > 0 && (
+        <Section title="Party">
+          {party.map(c => (
+            <Card key={c.participantId} testID={`player-party-${c.summary.name}`}>
+              <Body bold>{c.summary.name}</Body>
+              <Muted>HP {c.summary.hp}/{c.summary.maxHp} · AC {c.summary.ac}</Muted>
+            </Card>
+          ))}
+        </Section>
+      )}
 
       {encounters.map(e => {
         const nameOf = (id: string) => e.combatants.find(c => c.id === id)?.name ?? view?.participants[id]?.nickname ?? id;

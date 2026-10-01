@@ -12,7 +12,7 @@
 import {
   Capability, CharacterAdapter, CharacterChange, ClientMessage, Op, OpBody, OpResult, ParticipantId,
   ServerMessage, ViewState, LiveEvent, ChangeRequest, LiveEffect, EffectApplication, SecretEffectMeta,
-  EffectComponent, EffectDuration, EffectDefinitionInput, MonsterVisibility,
+  EffectComponent, EffectDuration, EffectDefinitionInput, MonsterVisibility, PublicPersona, ReportedCharacter,
 } from './types';
 import { applyEvent } from './state';
 import { ClientTransport, Connection, decodeFrame, encodeFrame } from './transport';
@@ -515,6 +515,19 @@ export class SessionPeer {
     if (!ch) return null;
     this.need('player');
     return this.sendRaw({ kind: 'player.report_character', characterId: ch.characterId, revision: ch.getRevision(), summary: ch.summary() });
+  }
+
+  /** "Public Persona" (LAN_PLAYER_SCREEN_SPEC.md) — what OTHER players see instead of your real
+   *  summary, when enabled. Requires a character already reported at least once. */
+  setPersona(persona: PublicPersona): string {
+    this.need('player');
+    return this.sendRaw({ kind: 'player.set_persona', persona });
+  }
+
+  /** Other connected players' PUBLIC projections only — never authoritative data (LAN_PLAYER_
+   *  SCREEN_SPEC.md's "Party/public view"). Excludes this device's own entry. */
+  partyView(): ReportedCharacter[] {
+    return Object.values(this.view?.characters ?? {}).filter(c => c.participantId !== this.cfg.participantId);
   }
 
   pendingRequests(): ChangeRequest[] {

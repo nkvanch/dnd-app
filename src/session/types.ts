@@ -236,11 +236,35 @@ export type AuditEntry = {
 
 // ── Live state (canonical on the Host, projected on replicas) ────────────────
 
+/**
+ * A player's own "Public Persona" (LAN_PLAYER_SCREEN_SPEC.md's "What others see") — what OTHER
+ * PLAYERS see about this character instead of the real summary, when enabled. All four fields are
+ * always required rather than per-field optional overrides: the player's own device pre-fills the
+ * form from their real current values, so leaving a field unedited already means "show the truth
+ * for this one" — no separate "fall back to real" flag needed. The DM always sees BOTH this and
+ * the real summary (never redacted for the DM — see state.ts's projectState), so they can compare,
+ * per DM_SCREEN_SPEC.md item 10. Scope note: there is no "omit this field entirely" option, only
+ * "show this value instead" — CharacterSummary's hp/maxHp/ac are plain required numbers everywhere
+ * else in this file, and inventing a parallel optional-field shape just for this one feature
+ * wasn't worth the ripple; a player who wants a field hidden fakes a value for it instead.
+ */
+export type PublicPersona = {
+  enabled: boolean;
+  name:    string;
+  hp:      number;
+  maxHp:   number;
+  ac:      number;
+};
+
 export type ReportedCharacter = {
   participantId: ParticipantId;
   characterId:   string;
   revision:      number;
   summary:       CharacterSummary;
+  /** Set via player.set_persona. Never sent to a PEER player directly — peers only ever receive
+   *  the already-computed public projection (state.ts's publicCharacterOf), never the raw config,
+   *  so there's nothing for them to reverse-engineer the real values from. */
+  persona?:      PublicPersona;
 };
 
 // CampaignPolicy (what a linked campaign publishes to the room — see its own doc comment) lives
@@ -304,6 +328,7 @@ export type LiveEventBody =
   | { t: 'rule_suggestion_created';  suggestion: RuleSuggestion }
   | { t: 'rule_suggestion_resolved'; suggestionId: string; status: RuleSuggestionStatus; dmResponse: string | null }
   | { t: 'character_reported';  character: ReportedCharacter }
+  | { t: 'persona_set';         participantId: ParticipantId; persona: PublicPersona }
   | { t: 'session_ended' };
 
 export type LiveEvent = {
@@ -354,6 +379,7 @@ export type OpBody =
   | { kind: 'player.respond';        requestId: string; decision: 'accept' | 'reject' | 'modify';
       modified?: CharacterChange[]; currentRevision: number; acknowledgeStale?: boolean }
   | { kind: 'player.report_character'; characterId: string; revision: number; summary: CharacterSummary }
+  | { kind: 'player.set_persona';    persona: PublicPersona }
   | { kind: 'player.suggest_rule';   suggestionId: string; rule: string; proposedValue: string; note: string }
   | { kind: 'dm.resolve_rule_suggestion'; suggestionId: string; decision: 'accept' | 'modify' | 'reject'; dmResponse?: string }
   | { kind: 'host.assign_capabilities'; participantId: ParticipantId; capabilities: Capability[] }

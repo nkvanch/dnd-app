@@ -1,0 +1,429 @@
+# Canonical SRD 5.1 item extraction
+
+## Mundane equipment (176)
+
+- Club - SRD p.66
+- Dagger - SRD p.66
+- Greatclub - SRD p.66
+- Handaxe - SRD p.66
+- Javelin - SRD p.66
+- Light hammer - SRD p.66
+- Mace - SRD p.66
+- Quarterstaff - SRD p.66
+- Sickle - SRD p.66
+- Spear - SRD p.66
+- Crossbow, light - SRD p.66
+- Dart - SRD p.66
+- Shortbow - SRD p.66
+- Battleaxe - SRD p.66
+- Flail - SRD p.66
+- Glaive - SRD p.66
+- Greataxe - SRD p.66
+- Greatsword - SRD p.66
+- Halberd - SRD p.66
+- Lance - SRD p.66
+- Longsword - SRD p.66
+- Maul - SRD p.66
+- Morningstar - SRD p.66
+- Pike - SRD p.66
+- Rapier - SRD p.66
+- Scimitar - SRD p.66
+- Shortsword - SRD p.66
+- Trident - SRD p.66
+- War pick - SRD p.66
+- Warhammer - SRD p.66
+- Whip - SRD p.66
+- Blowgun - SRD p.66
+- Crossbow, hand - SRD p.66
+- Crossbow, heavy - SRD p.66
+- Longbow - SRD p.66
+- Net - SRD p.66
+- Abacus - SRD p.69
+- Acid (vial) - SRD p.69
+- Alchemist’s fire (flask) - SRD p.69
+- Arrows (20) - SRD p.69
+- Blowgun needles (50) - SRD p.69
+- Crystal - SRD p.69
+- Orb - SRD p.69
+- Rod - SRD p.69
+- Staff - SRD p.69
+- Wand - SRD p.69
+- Backpack - SRD p.69
+- Ball bearings (bag of 1,000) - SRD p.69
+- Barrel - SRD p.69
+- Basket - SRD p.69
+- Bedroll - SRD p.69
+- Blanket - SRD p.69
+- Block and tackle - SRD p.69
+- Book - SRD p.69
+- Bottle, glass - SRD p.69
+- Bucket - SRD p.69
+- Caltrops (bag of 20) - SRD p.69
+- Case, crossbow bolt - SRD p.69
+- Case, map or scroll - SRD p.69
+- Chain (10 feet) - SRD p.69
+- Chest - SRD p.69
+- Climber’s kit - SRD p.69
+- Clothes, common - SRD p.69
+- Clothes, costume - SRD p.69
+- Clothes, fine - SRD p.69
+- Clothes, traveler’s - SRD p.69
+- Component pouch - SRD p.69
+- Crowbar - SRD p.69
+- Wooden staff - SRD p.69
+- Yew wand - SRD p.69
+- Fishing tackle - SRD p.69
+- Flask or tankard - SRD p.69
+- Grappling hook - SRD p.69
+- Hammer - SRD p.69
+- Hammer, sledge - SRD p.69
+- Healer’s kit - SRD p.69
+- Amulet - SRD p.69
+- Reliquary - SRD p.69
+- Holy water (flask) - SRD p.69
+- Hourglass - SRD p.69
+- Hunting trap - SRD p.69
+- Jug or pitcher - SRD p.69
+- Ladder (10 -- foot) - SRD p.69
+- Lamp - SRD p.69
+- Lantern, bullseye - SRD p.69
+- Lantern, hooded - SRD p.69
+- Lock - SRD p.69
+- Manacles - SRD p.69
+- Mess kit - SRD p.69
+- Mirror, steel - SRD p.69
+- Oil (flask) - SRD p.69
+- Pick, miner’s - SRD p.69
+- Piton - SRD p.69
+- Pole (10 -- foot) - SRD p.69
+- Pot, iron - SRD p.69
+- Potion of healing - SRD p.69
+- Pouch - SRD p.69
+- Quiver - SRD p.69
+- Ram, portable - SRD p.69
+- Rations (1 day) - SRD p.69
+- Robes - SRD p.69
+- Rope, hempen (50 feet) - SRD p.69
+- Rope, silk (50 feet) - SRD p.69
+- Sack - SRD p.69
+- Scale, merchant’s - SRD p.69
+- Shovel - SRD p.69
+- Spellbook - SRD p.69
+- Spikes, iron (10) - SRD p.69
+- Spyglass - SRD p.69
+- Tent, two -- person - SRD p.69
+- Tinderbox - SRD p.69
+- Torch - SRD p.69
+- Waterskin - SRD p.69
+- Whetstone - SRD p.69
+- Alchemist’s supplies - SRD p.70
+- Brewer’s supplies - SRD p.70
+- Calligrapher's supplies - SRD p.70
+- Carpenter’s tools - SRD p.70
+- Cartographer’s tools - SRD p.70
+- Cobbler’s tools - SRD p.70
+- Cook’s utensils - SRD p.70
+- Glassblower’s tools - SRD p.70
+- Jeweler’s tools - SRD p.70
+- Leatherworker’s tools - SRD p.70
+- Mason’s tools - SRD p.70
+- Painter’s supplies - SRD p.70
+- Potter’s tools - SRD p.70
+- Smith’s tools - SRD p.70
+- Tinker’s tools - SRD p.70
+- Weaver’s tools - SRD p.70
+- Woodcarver’s tools - SRD p.70
+- Disguise kit - SRD p.70
+- Forgery kit - SRD p.70
+- Herbalism kit - SRD p.70
+- Bagpipes - SRD p.70
+- Drum - SRD p.70
+- Dulcimer - SRD p.70
+- Flute - SRD p.70
+- Lute - SRD p.70
+- Lyre - SRD p.70
+- Horn - SRD p.70
+- Pan flute - SRD p.70
+- Shawm - SRD p.70
+- Viol - SRD p.70
+- Navigator’s tools - SRD p.70
+- Poisoner’s kit - SRD p.70
+- Thieves’ tools - SRD p.70
+- Horse, draft - SRD p.72
+- Horse, riding - SRD p.72
+- Mastiff - SRD p.72
+- Pony - SRD p.72
+- Warhorse - SRD p.72
+- Bit and bridle - SRD p.72
+- Carriage - SRD p.72
+- Cart - SRD p.72
+- Chariot - SRD p.72
+- Feed (per day) - SRD p.72
+- Exotic - SRD p.72
+- Military - SRD p.72
+- Pack - SRD p.72
+- Riding - SRD p.72
+- Saddlebags - SRD p.72
+- Sled - SRD p.72
+- Wagon - SRD p.72
+- Leather - SRD p.64
+- Studded leather - SRD p.64
+- Hide - SRD p.64
+- Chain shirt - SRD p.64
+- Scale mail - SRD p.64
+- Breastplate - SRD p.64
+- Half plate - SRD p.64
+- Ring mail - SRD p.64
+- Chain mail - SRD p.64
+- Splint - SRD p.64
+- Plate - SRD p.64
+- Shield - SRD p.64
+
+## Magic Items A-Z (236)
+
+- Adamantine Armor - SRD p.207
+- Ammunition, +1, +2, or +3 - SRD p.207
+- Amulet of Health - SRD p.207
+- Am ulet of Proof against Detection and Location - SRD p.207
+- Amulet of the Planes - SRD p.207
+- Animated Shield - SRD p.208
+- Apparatus of the Crab - SRD p.208
+- Armor, +1, +2, or +3 - SRD p.208
+- Armor of Invulnerability - SRD p.208
+- Armor of Resistance - SRD p.208
+- Armor of Vulnerability - SRD p.209
+- Arrow-Catching Shield - SRD p.209
+- Arrow of Slaying - SRD p.209
+- Bag of Beans - SRD p.209
+- Bag of Devouring - SRD p.210
+- Bag of Holding - SRD p.210
+- Bag of Tricks - SRD p.210
+- Bead of Force - SRD p.211
+- Belt of Dwarvenkind - SRD p.211
+- Belt of Giant Strength - SRD p.211
+- Storm giant 29 Legendary Berserker Axe - SRD p.211
+- Boots of Elvenkind - SRD p.212
+- Boots of Levitation - SRD p.212
+- Boots of Speed - SRD p.212
+- Boots of Striding and Springing - SRD p.212
+- Boots of the Winterlands - SRD p.212
+- Bracers of Archery - SRD p.212
+- Bracers of Defense - SRD p.212
+- Brazier of Commanding Fire E lementals - SRD p.212
+- Brooch of Shielding - SRD p.212
+- Broom of Flying - SRD p.213
+- Candle of Invocation - SRD p.213
+- Cape of the Mountebank - SRD p.213
+- Carpet of Flying - SRD p.213
+- Censer of Controlling Air Elementals - SRD p.213
+- Chime of Opening - SRD p.213
+- Circlet of Blasting - SRD p.214
+- Cloak of Arachnida - SRD p.214
+- Cloak of Displacement - SRD p.214
+- Cloak of Elvenkind - SRD p.214
+- Cloak of Protection - SRD p.214
+- Cloak of the Bat - SRD p.214
+- Cloak of the Manta Ray - SRD p.214
+- Crystal Ball - SRD p.214
+- Cube of Force - SRD p.215
+- Wall of fire 1d4 Cubic Gate - SRD p.215
+- Dagger of Venom - SRD p.215
+- Dancing Sword - SRD p.215
+- Decanter of Endless Water - SRD p.216
+- Deck of Illusions - SRD p.216
+- Deck of Many Things - SRD p.216
+- Defender - SRD p.218
+- Demon Armor - SRD p.218
+- Dimensional Shackles - SRD p.219
+- Dragon Scale Mail - SRD p.219
+- Copper Acid White Cold Dragon Slayer - SRD p.219
+- Dust of Disappearance - SRD p.219
+- Dust of Dryness - SRD p.219
+- Dust of Sneezing and Choking - SRD p.219
+- Dwarven Plate - SRD p.220
+- Dwarven Thrower - SRD p.220
+- Efficient Quiver - SRD p.220
+- Efreeti Bottle - SRD p.220
+- Elemental Gem - SRD p.220
+- Emerald Water elemental Elven Chain - SRD p.220
+- Eversmoking Bottle - SRD p.220
+- Eyes of Charming - SRD p.220
+- Eyes of Minute Seeing - SRD p.221
+- Eyes of the Eagle - SRD p.221
+- Feather Token - SRD p.221
+- Figurine of Wondrous Power - SRD p.221
+- Flame Tongue - SRD p.223
+- Folding Boat - SRD p.223
+- Frost Brand - SRD p.223
+- Gauntlets of Ogre Power - SRD p.223
+- Gem of Brightness - SRD p.223
+- Gem of Seeing - SRD p.223
+- Giant Slayer - SRD p.224
+- Glamoured Studded Leather - SRD p.224
+- Gloves of Missile Snaring - SRD p.224
+- Gloves of Swimming and Climbing - SRD p.224
+- Goggles of Night - SRD p.224
+- Hammer of Thunderbolts - SRD p.224
+- Handy Haversack - SRD p.224
+- Hat of Disguise - SRD p.225
+- Headband of Intellect - SRD p.225
+- Helm of Brilliance - SRD p.225
+- Helm of Comprehending Languages - SRD p.225
+- Helm of Telepathy - SRD p.225
+- Helm of Teleportation - SRD p.225
+- Holy Avenger - SRD p.225
+- Horn of Blasting - SRD p.226
+- Horn of Valhalla - SRD p.226
+- Horseshoes of a Zephyr - SRD p.226
+- Horseshoes of Speed - SRD p.226
+- Immovable Rod - SRD p.226
+- Instant Fortress - SRD p.226
+- Ioun Stone - SRD p.227
+- Iron Bands of Binding - SRD p.228
+- Iron Flask - SRD p.228
+- Javelin of Lightning - SRD p.228
+- Lantern of Revealing - SRD p.228
+- Luck Blade - SRD p.229
+- Mace of Disruption - SRD p.229
+- Mace of Smiting - SRD p.229
+- Mace of Terror - SRD p.229
+- Manual of Bodily Health - SRD p.229
+- Manual of Gainf ul Exercise - SRD p.229
+- Manual of Golems - SRD p.229
+- Manual of Quickness of Action - SRD p.230
+- Marvelous Pigments - SRD p.230
+- Medallion of Thoughts - SRD p.230
+- Mirror of Life Trapping - SRD p.230
+- Mithral Armor - SRD p.231
+- Necklace of Adaptation - SRD p.231
+- Necklace of Fireballs - SRD p.231
+- Necklace of Prayer Beads - SRD p.231
+- Nine Lives Stealer - SRD p.231
+- Oath bow - SRD p.231
+- Oil of Etherealness - SRD p.231
+- Oil of Sharpness - SRD p.232
+- Oil of Slipperiness - SRD p.232
+- Pearl of Power - SRD p.232
+- Periapt of Health - SRD p.232
+- Periapt of Proof against Poison - SRD p.232
+- Periapt of Wound Closure - SRD p.232
+- Philter of Love - SRD p.232
+- Pipes of Haunting - SRD p.232
+- Plate Armor of Etherealness - SRD p.233
+- Portable Hole - SRD p.233
+- Potion of Animal Friendship - SRD p.233
+- Potion of Clairvoyance - SRD p.233
+- Potion of Climbing - SRD p.233
+- Potion of Diminution - SRD p.233
+- Potion of Flying - SRD p.234
+- Potion of Gaseous Form - SRD p.234
+- Potion of Giant Strength - SRD p.234
+- Potion of Growth - SRD p.234
+- Potion of Healing - SRD p.234
+- Potion of Heroism - SRD p.234
+- Potion of I nvisibility - SRD p.234
+- Potion of Mind Reading - SRD p.234
+- Potion of Poison - SRD p.234
+- Potion of Resistance - SRD p.235
+- Potion of Speed - SRD p.235
+- Potion of Water Breathing - SRD p.235
+- Restorative Ointment - SRD p.235
+- Ring of Animal Influence - SRD p.235
+- Ring of Djinni Summoning - SRD p.235
+- Ring of Elemental Command - SRD p.235
+- Ring of Evasion - SRD p.236
+- Ring of Feather Falling - SRD p.236
+- Ring of Free Action - SRD p.236
+- Ring of Invisibility - SRD p.236
+- Ring of Jumping - SRD p.236
+- Ring of Mind Shielding - SRD p.236
+- Ring of Protection - SRD p.237
+- Ring of Regeneration - SRD p.237
+- Ring of Resistance - SRD p.237
+- Ring of Shooting Stars - SRD p.237
+- Ring of Spell Storing - SRD p.237
+- Ring of Spell Turning - SRD p.237
+- Ring of Swimming - SRD p.238
+- Ring of Telekinesis - SRD p.238
+- Ring of the Ram - SRD p.238
+- Ring of Three Wishes - SRD p.238
+- Ring of Warmth - SRD p.238
+- Ring of Water Walking - SRD p.238
+- Ring of X-ray Vision - SRD p.238
+- Robe of Eyes - SRD p.238
+- Robe of Scintillating Colors - SRD p.238
+- Robe of Stars - SRD p.239
+- Robe of the Archmagi - SRD p.239
+- Robe of Useful Items - SRD p.239
+- Rod of Absorption - SRD p.239
+- Rod of Alertness - SRD p.240
+- Rod of Lordly Might - SRD p.240
+- Rod of Rulership - SRD p.240
+- Rod of Security - SRD p.241
+- Rope of Climbing - SRD p.241
+- Rope of Entanglement - SRD p.241
+- Scarab of Protection - SRD p.241
+- Scimitar of Speed - SRD p.241
+- Shield, +1, +2, or +3 - SRD p.242
+- Shield of Missile Attraction - SRD p.242
+- Slippers of Spider Climbing - SRD p.242
+- Sovereign Glue - SRD p.242
+- Spell Scroll - SRD p.242
+- Spellguard Shield - SRD p.242
+- Sphere of Annihilation - SRD p.242
+- Staff of Charming - SRD p.243
+- Staff of Fire - SRD p.243
+- Staff of Frost - SRD p.243
+- Staff of Healing - SRD p.243
+- Staff of Power - SRD p.243
+- Staff of Striking - SRD p.244
+- Staff of Swarming Insects - SRD p.244
+- Staff of the Magi - SRD p.244
+- Staff of the Python - SRD p.245
+- Staff of the Woodlands - SRD p.245
+- Staff of Thunder and Lightning - SRD p.245
+- Staff of Withering - SRD p.246
+- Stone of Controlling Earth Elementals - SRD p.246
+- Stone of Good Luck (Luckstone) - SRD p.246
+- Sun Blade - SRD p.246
+- Sword of Life Stealing - SRD p.246
+- Sword of Sharpness - SRD p.246
+- Sword of Wounding - SRD p.246
+- Talisman of Pure Good - SRD p.247
+- Talisman of the Sphere - SRD p.247
+- Talisman of Ultimate Evil - SRD p.247
+- Tome of Clear Thought - SRD p.247
+- Tome of Leadership and Influence - SRD p.247
+- Tome of Understanding - SRD p.247
+- Trident of Fish Command - SRD p.247
+- Universal Solvent - SRD p.248
+- Vicious Weapon - SRD p.248
+- Vorpal Sword - SRD p.248
+- Wand of Binding - SRD p.248
+- Wand of Ene my Detection - SRD p.248
+- Wand of Fear - SRD p.248
+- Wand of Fireballs - SRD p.248
+- Wand of Lightning Bolts - SRD p.249
+- Wand of Magic Detection - SRD p.249
+- Wand of Magic Missiles - SRD p.249
+- Wand of Paralysis - SRD p.249
+- Wand of Polymorph - SRD p.249
+- Wand of Secrets - SRD p.249
+- Wand of the War Mage, +1, +2, or +3 - SRD p.249
+- Wand of Web - SRD p.249
+- Wand of Wonder - SRD p.249
+- Weapon, +1, +2, or +3 - SRD p.250
+- Well of Many Worlds - SRD p.250
+- Wind Fan - SRD p.250
+- Winged Boots - SRD p.251
+- Wings of Flying - SRD p.251
+
+## Named artifacts/special items (1)
+
+- Orb of Dragonkind - SRD p.252
+
+## Extraction notes
+
+- Mundane records require a visible cost-and-weight table row.
+- Sentient-item rules are not individual item records.
+- Artifact extraction includes only named entries.

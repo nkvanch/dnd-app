@@ -92,12 +92,16 @@ export function encodeRoomCode(ip: string): string {
 }
 
 /**
- * Decodes a 7-character room code back to an IPv4 address and the sync port.
+ * Decodes a 7-character room code back to an IPv4 address and a port.
+ * The code only ever encodes the IP (see `encodeRoomCode`); the port is
+ * supplied by the caller since the same code shape is shared by the legacy
+ * campaign sync (port 7742) and the newer session layer (port 7743) — pass
+ * `SESSION_PORT` explicitly when decoding for the live-session join flow.
  * Throws if the code format is invalid.
  *
- * Example: 'BW1G039' → { ip: '192.168.1.42', port: 7742 }
+ * Example: decodeRoomCode('BW1G039') → { ip: '192.168.1.42', port: 7742 }
  */
-export function decodeRoomCode(code: string): { ip: string; port: number } {
+export function decodeRoomCode(code: string, port: number = SYNC_PORT): { ip: string; port: number } {
   const clean = code.trim().toUpperCase();
   if (!/^[0-9A-Z]{7}$/.test(clean)) {
     throw new Error(
@@ -111,5 +115,5 @@ export function decodeRoomCode(code: string): { ip: string; port: number } {
     (n >>>  8) & 0xff,
      n         & 0xff,
   ].join('.');
-  return { ip, port: SYNC_PORT };
+  return { ip, port };
 }

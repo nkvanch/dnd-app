@@ -29,4 +29,9 @@ describe('scrollBottomPadding', () => {
   it('accepts an explicit visualSpacing override for a caller with different base spacing than Spacing.xxl', () => {
     expect(scrollBottomPadding(30, Spacing.lg)).toBe(Spacing.lg + 30);
   });
+
+  it('keeps a bottom-anchored CTA\'s existing footer spacing and adds the system inset', () => {
+    expect(scrollBottomPadding(0, Spacing.md)).toBe(Spacing.md);
+    expect(scrollBottomPadding(133, Spacing.md)).toBe(Spacing.md + 133);
+  });
 });

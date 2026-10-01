@@ -39,7 +39,7 @@ export default function AboutScreen() {
           Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC and available
           at{' '}
           <Text style={styles.link} onPress={() => Linking.openURL(SRD_URL)}>
-            dnd.wizards.com/resources/systems-reference-document
+            https://dnd.wizards.com/resources/systems-reference-document
           </Text>
           . The SRD 5.1 is licensed under the Creative Commons Attribution
           4.0 International License, available at{' '}
@@ -47,7 +47,7 @@ export default function AboutScreen() {
             style={styles.link}
             onPress={() => Linking.openURL('https://creativecommons.org/licenses/by/4.0/legalcode')}
           >
-            creativecommons.org/licenses/by/4.0
+            https://creativecommons.org/licenses/by/4.0/legalcode
           </Text>
           .
         </Text>

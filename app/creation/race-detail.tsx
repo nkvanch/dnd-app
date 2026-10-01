@@ -23,6 +23,7 @@ import {
   SubraceOwnTrait, SUBRACE_OWN_TRAIT_LABELS, subraceOwnTraits, subraceSortOptions,
 } from '../../src/content/races/subraceBrowse';
 import { sortByOption } from '../../src/content/contentQuery';
+import { currentContentExposure, exposedSubraces } from '../../src/content/contentExposure';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 
@@ -104,6 +105,9 @@ function clearRaceFeatures(entity: Entity): Entity {
     ),
   };
 }
+
+// Build mode is fixed for the app's lifetime; same module-level read the Compendium uses.
+const CONTENT_EXPOSURE = currentContentExposure();
 
 export default function RaceDetailScreen() {
   const router   = useRouter();
@@ -221,9 +225,11 @@ export default function RaceDetailScreen() {
     const newId = usePendingSelectionStore.getState().consumePending('subrace_picker');
     if (newId) setSubRaceId(newId);
   }, [pendingSubrace]);
-  const allSubraces      = race?.subraces ?? [];
   const isHomebrewSubrace = (sr: { id: string }) =>
     !!race && (homebrewRaceIds.includes(race.id) || standaloneHomebrewSubraceIds.has(sr.id));
+  // SRD-only builds list only SRD-tagged subraces of an otherwise-public race
+  // (shared rule in contentExposure.ts); full builds and homebrew are unchanged.
+  const allSubraces      = exposedSubraces(race?.subraces, CONTENT_EXPOSURE, isHomebrewSubrace);
   const availableSubraceTraits = Array.from(new Set(allSubraces.flatMap(sr => Array.from(subraceOwnTraits(sr)))))
     .map(t => ({ id: t, label: SUBRACE_OWN_TRAIT_LABELS[t] }));
   const subraceSortOpts = subraceSortOptions(isHomebrewSubrace);

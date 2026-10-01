@@ -47,9 +47,14 @@ export async function waitUntil(cond: () => boolean, what: string, ms = 30000): 
   }
 }
 
-/** Fills the join form and joins. Chip states are read from the accessibility label, never assumed. */
+/**
+ * Fills the join form and joins. The name field lives on the Live Session entry page; "Join Campaign"
+ * then opens the join modal, where the rest of the fields live. Chip states are read from the
+ * accessibility label, never assumed.
+ */
 export async function joinSession(phone: Phone, o: { nick: string; address: string; player: boolean; dm: boolean; character?: string }): Promise<void> {
   await phone.typeInto({ id: 'live-nickname' }, o.nick);
+  await phone.tap({ id: 'live-join-campaign' });
   await phone.typeInto({ id: 'live-address' }, o.address);
   await phone.setChip('live-want-player', o.player);
   await phone.setChip('live-want-dm', o.dm);

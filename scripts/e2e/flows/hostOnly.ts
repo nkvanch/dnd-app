@@ -23,6 +23,7 @@ export const hostOnly: Flow = {
 
     step('F-G: start hosting as HOST ONLY with manual DM approval');
     await phone.typeInto({ id: 'live-nickname' }, 'Hosty');
+    await phone.tap({ id: 'live-host-campaign' });
     await phone.setChip('live-role-host', true);
     await phone.setChip('live-policy-manual', true);
     await phone.tap({ id: 'live-start-hosting' });
@@ -80,6 +81,7 @@ export const hostOnly: Flow = {
     await phone.launch(false);
     await phone.tap({ id: 'tab-campaigns' });
     await phone.tap({ id: 'campaigns-open-live' });
+    await phone.tap({ id: 'live-host-campaign' });
     await phone.tap({ id: 'live-resume-hosting' });
     await phone.waitFor({ id: 'host-status' }, 20000);
     await dm.peer.connect();

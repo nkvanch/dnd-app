@@ -56,7 +56,7 @@ Every large picker in the app (character creation, live "Add Spell"/"Add Feat"/"
 
 ## Content library
 
-Full SRD-derived coverage: every official race, class, subclass, feat, and background, plus a complete monster library (all 321 canonical SRD monsters, verified against the source list programmatically) and a broad spell/item catalog. Extensive UA (Unearthed Arcana) and partially-official content on top.
+Full SRD-derived coverage: every official race, class, subclass, feat, and background, plus a complete monster library (322 monster templates, all tagged SRD: the SRD 5.1 stat blocks as this repo counts them, where a few variants such as Giant Rat (Diseased) are separate entries, so the raw count can differ by one or two from other stated SRD totals; cross-checked against the official SRD 5.1 PDF, no non-SRD monster found) and a broad spell/item catalog. Extensive UA (Unearthed Arcana) and partially-official content on top.
 
 ## Running the table (DM)
 

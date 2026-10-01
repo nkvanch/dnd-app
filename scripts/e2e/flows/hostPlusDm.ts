@@ -22,6 +22,7 @@ export const hostPlusDm: Flow = {
 
     step('start hosting as HOST + DM');
     await phone.typeInto({ id: 'live-nickname' }, 'Tater');
+    await phone.tap({ id: 'live-host-campaign' });
     await phone.setChip('live-role-hostdm', true);
     await phone.setChip('live-policy-manual', true);
     await phone.tap({ id: 'live-start-hosting' });

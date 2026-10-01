@@ -13,10 +13,10 @@ import {
   Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 
 import { Alert } from '../../src/utils/alert';
+import { QrScannerModal } from '../../src/components/QrScannerModal';
 import { useCampaignStore }  from '../../src/store/campaignStore';
 import { useSessionStore }   from '../../src/store/sessionStore';
 import { useCharacterStore } from '../../src/store/characterStore';
@@ -28,7 +28,8 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { Quest, SessionLogEntry, Campaign } from '../../src/engine/types';
 import { InstalledPack, loadInstalledPacks } from '../../src/db/packRegistryRepo';
 import { useSessionRuntime } from '../../src/session/runtime';
-import { capabilityLabel } from '../../src/session/routing';
+import { LiveSessionStart } from '../../src/components/live/LiveSessionStart';
+import { LiveSessionStatus } from '../../src/components/live/LiveSessionStatus';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -56,69 +57,6 @@ function showError(title: string, message: string) {
     Alert.alert(title, message);
   }
 }
-
-// ── QR Scanner Modal ──────────────────────────────────────────────────────────
-
-function QrScannerModal({
-  visible, onScan, onClose,
-}: { visible: boolean; onScan: (code: string) => void; onClose: () => void }) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
-
-  useEffect(() => {
-    if (visible && !permission?.granted) requestPermission();
-    if (!visible) setScanned(false);
-  }, [visible, permission?.granted, requestPermission]);
-
-  function handleBarcode(result: BarcodeScanningResult) {
-    if (scanned) return;
-    const raw = result.data?.trim().toUpperCase() ?? '';
-    if (/^[0-9A-Z]{7}$/.test(raw)) { setScanned(true); onScan(raw); }
-  }
-
-  if (!visible) return null;
-  return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
-      <View style={scanStyles.container}>
-        {!permission?.granted ? (
-          <View style={scanStyles.center}>
-            <Text style={scanStyles.permTxt}>Camera permission required to scan QR codes.</Text>
-            <Pressable style={scanStyles.permBtn} onPress={requestPermission}>
-              <Text style={scanStyles.permBtnTxt}>Grant Permission</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <>
-            <CameraView style={scanStyles.camera} facing="back"
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={handleBarcode} />
-            <View style={scanStyles.overlay}>
-              <View style={scanStyles.frame} />
-              <Text style={scanStyles.hint}>Point at the DM's QR code</Text>
-            </View>
-          </>
-        )}
-        <Pressable style={scanStyles.closeBtn} onPress={onClose}>
-          <Text style={scanStyles.closeTxt}>✕ Cancel</Text>
-        </Pressable>
-      </View>
-    </Modal>
-  );
-}
-
-const scanStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  camera:    { flex: 1 },
-  center:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 },
-  permTxt:   { color: '#fff', textAlign: 'center', fontSize: 16 },
-  permBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: 24, paddingVertical: 12 },
-  permBtnTxt:{ color: Colors.bg, fontWeight: FontWeight.bold, fontSize: 16 },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  frame:   { width: 220, height: 220, borderWidth: 3, borderColor: Colors.gold, borderRadius: Radius.lg },
-  hint:    { color: '#fff', marginTop: 20, fontSize: 14, textAlign: 'center' },
-  closeBtn:{ position: 'absolute', top: 52, right: 20, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, padding: 12 },
-  closeTxt:{ color: '#fff', fontWeight: FontWeight.bold, fontSize: 16 },
-});
 
 // ── Create/Join Campaign Modals ───────────────────────────────────────────────
 
@@ -1045,9 +983,7 @@ export default function CampaignsScreen() {
   const session        = useSessionStore(s => s.session);
   const setNickname    = useSessionStore(s => s.setNickname);
   const { action }     = useLocalSearchParams<{ action?: string }>();
-  const router         = useRouter();
   const liveMode       = useSessionRuntime(s => s.mode);
-  const liveCaps       = useSessionRuntime(s => s.capabilities);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen,   setJoinOpen]   = useState(false);
@@ -1077,16 +1013,22 @@ export default function CampaignsScreen() {
         <Text style={styles.title}>Campaigns</Text>
       </View>
 
-      {/* Live Session (Host / DM / Player as separate roles) — additive to the campaign flow below. */}
-      <Pressable
-        style={styles.liveEntry} onPress={() => router.push('/live' as never)}
-        testID="campaigns-open-live" accessibilityRole="button" accessibilityLabel="Live Session: Host, DM or Player"
-      >
-        <Text style={styles.liveEntryTitle}>Live Session · Host, DM or Player</Text>
-        <Text style={styles.liveEntrySub}>
-          {liveMode === 'idle' ? 'Prepare a campaign offline, host a table, or join one →' : `In a session as ${capabilityLabel(liveCaps)} →`}
-        </Text>
-      </Pressable>
+      {/* Live Session (Host / DM / Player as separate roles) — a real section of this page, not a
+          separate screen you navigate away to: a name field plus Plan/Host/Join buttons, same
+          pattern as Create/Join Campaign below. The header keeps its own testID for compatibility
+          with existing automation, which taps it as a reliable "the live session UI is on screen"
+          step; it has no expand/collapse state of its own since the body is always shown. */}
+      <View style={styles.liveSection}>
+        <Pressable
+          style={styles.liveEntry} onPress={() => {}}
+          testID="campaigns-open-live" accessibilityRole="button" accessibilityLabel="Live Session: Host, DM or Player"
+        >
+          <Text style={styles.liveEntryTitle}>Live Session · Host, DM or Player</Text>
+        </Pressable>
+        <View style={styles.liveBody}>
+          {liveMode === 'idle' ? <LiveSessionStart /> : <LiveSessionStatus />}
+        </View>
+      </View>
 
       {activeCampaign ? (
         isDm ? <DmActiveView /> : <PlayerActiveView />
@@ -1116,12 +1058,14 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
 
-  liveEntry: {
-    marginHorizontal: Spacing.md, marginTop: Spacing.sm, padding: Spacing.sm,
+  liveSection: {
+    marginHorizontal: Spacing.md, marginTop: Spacing.sm,
     backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.goldDim,
+    overflow: 'hidden',
   },
+  liveEntry: { padding: Spacing.sm, paddingBottom: 0 },
   liveEntryTitle: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
-  liveEntrySub:   { color: Colors.textSecondary, fontSize: FontSize.xs, marginTop: 2 },
+  liveBody: { padding: Spacing.sm, gap: Spacing.sm },
 
   scroll:        { flex: 1 },
   content:       { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },

@@ -167,7 +167,7 @@ overwritten.
 
 ### 3.4 Monster library (`app/dm/monsters.tsx`)
 
-Browse the full SRD monster list (321 monsters — the complete SRD 5.1 set)
+Browse the full SRD monster list (322 monster templates — the SRD 5.1 set, with a few variants counted as separate entries)
 plus any homebrew monsters, merged with homebrew taking precedence on a
 shared id. Search by name, filter by CR range, preview the full stat block,
 and spawn directly into the current encounter (`spawnMonster()` turns the

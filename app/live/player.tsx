@@ -3,7 +3,7 @@
 // the effects you are subject to, and the table's public state. Requires the player capability.
 import { useState } from 'react';
 import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime';
-import { describeChanges } from '../../src/session/roles';
+import { describeChanges, describeRewardKind } from '../../src/session/roles';
 import { describeEffectComponent, parseSignedInt } from '../../src/session/prepEdit';
 import { ChangeRequest, CharacterChange, PublicPersona } from '../../src/session/types';
 import { LiveScreen, Section, Card, Btn, Field, Row, Badge, Muted, Body, NotCapable, Chip } from '../../src/components/live/LiveUi';
@@ -47,6 +47,21 @@ function PersonaEditor({ real, initial, onSave, onCancel }: {
   );
 }
 
+/** Free-text counter-proposal for a Reward's modify response (RewardKind has nothing numeric to
+ *  edit like a ChangeRequest's amounts — see Reward's own doc comment in types.ts). */
+function RewardModifyEditor({ onSubmit, onCancel }: { onSubmit: (note: string) => void; onCancel: () => void }) {
+  const [note, setNote] = useState('');
+  return (
+    <Card testID="player-reward-modify-editor">
+      <Field label="Your version" value={note} onChangeText={setNote} multiline testID="player-reward-modify-text" />
+      <Row wrap>
+        <Btn small label="Accept with my note" disabled={!note.trim()} testID="player-reward-modify-submit" onPress={() => onSubmit(note.trim())} />
+        <Btn small kind="ghost" label="Cancel" onPress={onCancel} />
+      </Row>
+    </Card>
+  );
+}
+
 // temp_hp carries `amount` (never negative, 5e doesn't stack it); every other kind carries
 // `delta`. These two keep the editor below generic over both instead of assuming `.delta` everywhere.
 function amountOf(c: CharacterChange): number { return c.kind === 'temp_hp' ? c.amount : c.delta; }
@@ -81,6 +96,7 @@ export default function PlayerScreen() {
   const runtime = getSessionRuntime();
   const peer = runtime.currentPeer;
   const [modifying, setModifying] = useState<string | null>(null);
+  const [modifyingReward, setModifyingReward] = useState<string | null>(null);
   const [editingPersona, setEditingPersona] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestRule, setSuggestRule] = useState('');
@@ -100,6 +116,10 @@ export default function PlayerScreen() {
   const effects = peer.visibleEffects();
   const encounters = Object.values(view?.encounters ?? {}).filter(e => e.active);
   const mySuggestions = Object.values(view?.ruleSuggestions ?? {});
+  const myRewards = Object.values(view?.rewards ?? {});
+  const pendingRewards = myRewards.filter(r => r.status === 'PENDING');
+  const resolvedRewards = myRewards.filter(r => r.status !== 'PENDING');
+  const rewardLabelOf = (id: string): string => myRewards.find(x => x.id === id)?.label ?? id;
   const party = peer.partyView();
   const persona = character?.persona;
   const offline = rt.status !== 'connected';
@@ -200,6 +220,42 @@ export default function PlayerScreen() {
             </Card>
           );
         })}
+      </Section>
+
+      <Section title={`Rewards (${pendingRewards.length} pending)`} hint="The DM proposed these. Nothing changes until you respond.">
+        {pendingRewards.length === 0 && <Muted>Nothing waiting for you.</Muted>}
+        {pendingRewards.map(r => (
+          <Card key={r.id} testID={`player-reward-${r.label}`}>
+            <Row wrap><Body bold>{r.label}</Body><Badge label={describeRewardKind(r.kind)} /></Row>
+            {!!r.description && <Body>{r.description}</Body>}
+            {!!r.tierTrack && <Muted>Tier track: {r.tierTrack}</Muted>}
+            {modifyingReward === r.id ? (
+              <RewardModifyEditor onCancel={() => setModifyingReward(null)}
+                onSubmit={(note) => { send(() => peer.respondReward(r.id, 'modify', note)); setModifyingReward(null); }} />
+            ) : (
+              <Row wrap>
+                <Btn small label="Accept" disabled={offline} testID={`player-reward-accept-${r.label}`} onPress={() => send(() => peer.respondReward(r.id, 'accept'))} />
+                <Btn small kind="ghost" label="Modify" disabled={offline} onPress={() => setModifyingReward(r.id)} testID={`player-reward-modify-${r.label}`} />
+                <Btn small kind="danger" label="Reject" disabled={offline} onPress={() => send(() => peer.respondReward(r.id, 'reject'))} testID={`player-reward-reject-${r.label}`} />
+              </Row>
+            )}
+          </Card>
+        ))}
+        {resolvedRewards.length > 0 && (
+          <>
+            <Muted>Resolved:</Muted>
+            {resolvedRewards.map(r => (
+              <Card key={r.id} testID={`player-reward-resolved-${r.label}`}>
+                <Row wrap>
+                  <Body bold>{r.label}</Body>
+                  <Badge label={r.status.toLowerCase()} tone={r.status === 'ACCEPTED' || r.status === 'MODIFIED' ? 'good' : r.status === 'SUPERSEDED' ? 'default' : 'bad'} />
+                </Row>
+                {!!r.playerNote && <Muted>Your note: {r.playerNote}</Muted>}
+                {r.status === 'SUPERSEDED' && r.supersededBy && <Muted>Replaced by: {rewardLabelOf(r.supersededBy)}</Muted>}
+              </Card>
+            ))}
+          </>
+        )}
       </Section>
 
       <Section title={`Effects on you (${effects.filter(e => e.app.targetId === me).length})`}>

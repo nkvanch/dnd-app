@@ -220,6 +220,55 @@ export type RuleSuggestion = {
   resolvedAtRevision:  number | null;
 };
 
+// ── Rewards (DM_SCREEN_SPEC.md item 13) ───────────────────────────────────────
+// A structured grant/decision record, same shape of compromise as RuleSuggestion just above:
+// "stored homebrew feature", "resource", "proficiency" and "campaign boon" have nowhere on the
+// wire to mechanically attach themselves to (CharacterAdapter.applyChanges only understands
+// numeric hp/maxHp/exhaustion/ability/temp_hp deltas — see CharacterChange). Granting a Reward
+// therefore records WHAT the DM gave and WHETHER the player accepted it, visible to both sides;
+// actually adding the granted feature/proficiency/boon to the character sheet happens on the
+// player's own device the same way any homebrew content gets added today, outside this wire.
+// "permanent_modifier" is the one kind a DM could alternatively express as an ordinary
+// dm.request_change (an ability-score or max-HP delta) — Rewards exists for the other five kinds
+// that request_change categorically cannot carry, and permanent_modifier is included here only so
+// a single "Grant Reward" action can cover the whole DM_SCREEN_SPEC list without the DM needing to
+// know which of two forms to reach for.
+//
+// Always routed through Player accept/modify/reject, never auto-applied: CAMPAIGN_DM_AUTHORITY_
+// RULES.md's "Apply Automatically" policy option would need a live CampaignPolicy field this wire
+// format doesn't carry (see RuleSuggestion's own doc comment for the identical gap) — disclosed,
+// not silently assumed.
+
+export type RewardKind = 'homebrew_feature' | 'resource' | 'proficiency' | 'reward_tier' | 'permanent_modifier' | 'campaign_boon';
+
+export type RewardStatus = 'PENDING' | 'ACCEPTED' | 'MODIFIED' | 'REJECTED' | 'CANCELLED' | 'SUPERSEDED';
+
+export type Reward = {
+  id:           string;
+  requesterId:  ParticipantId;      // the DM participant
+  targetId:     ParticipantId;      // the player participant
+  kind:         RewardKind;
+  label:        string;
+  description:  string | null;
+  /** Only meaningful for kind === 'reward_tier' — an upgrade-track name (e.g. "Mark of the
+   *  Forge"), so a later tier granted in the same track can supersede this one on acceptance. Two
+   *  rewards share a track only when both are 'reward_tier' and this string matches exactly. */
+  tierTrack:    string | null;
+  status:       RewardStatus;
+  /** The player's own wording when status === MODIFIED; null otherwise (RuleSuggestion's
+   *  dmResponse, mirrored in the other direction — here the PLAYER is the one responding). */
+  playerNote:   string | null;
+  /** Set once a newer reward_tier grant in the same tierTrack is accepted — see host.ts's
+   *  respond_reward. The superseded record is kept, never deleted, preserving upgrade history
+   *  (CAMPAIGN_DM_AUTHORITY_RULES.md item 18); "preserve spent uses" from the spec is NOT
+   *  mechanically tracked (no resource/uses-remaining model exists on this wire at all — see this
+   *  type's own doc comment) and is left as a note in `description` for the DM to carry forward by
+   *  hand when granting the next tier. */
+  supersededBy: string | null;
+  createdAtRevision:  number;
+  resolvedAtRevision: number | null;
+};
+
 // ── Audit / timeline ─────────────────────────────────────────────────────────
 
 export type AuditEntry = {
@@ -292,6 +341,7 @@ export type LiveState = {
   requests:        Record<string, ChangeRequest>;
   ruleSuggestions: Record<string, RuleSuggestion>;
   characters:      Record<ParticipantId, ReportedCharacter>;
+  rewards:         Record<string, Reward>;
   audit:           AuditEntry[];
 };
 
@@ -299,7 +349,7 @@ export function emptyLiveState(sessionId: string, roomName: string | null = null
   return {
     sessionId, roomName, maxParticipants, revision: 0, ended: false,
     participants: {}, campaign: null, encounters: {}, effects: {},
-    requests: {}, ruleSuggestions: {}, characters: {}, audit: [],
+    requests: {}, ruleSuggestions: {}, characters: {}, rewards: {}, audit: [],
   };
 }
 
@@ -329,6 +379,9 @@ export type LiveEventBody =
   | { t: 'rule_suggestion_resolved'; suggestionId: string; status: RuleSuggestionStatus; dmResponse: string | null }
   | { t: 'character_reported';  character: ReportedCharacter }
   | { t: 'persona_set';         participantId: ParticipantId; persona: PublicPersona }
+  | { t: 'reward_granted';      reward: Reward }
+  | { t: 'reward_resolved';     rewardId: string; status: RewardStatus; playerNote: string | null }
+  | { t: 'reward_superseded';   rewardId: string; supersededBy: string }
   | { t: 'session_ended' };
 
 export type LiveEvent = {
@@ -382,6 +435,10 @@ export type OpBody =
   | { kind: 'player.set_persona';    persona: PublicPersona }
   | { kind: 'player.suggest_rule';   suggestionId: string; rule: string; proposedValue: string; note: string }
   | { kind: 'dm.resolve_rule_suggestion'; suggestionId: string; decision: 'accept' | 'modify' | 'reject'; dmResponse?: string }
+  | { kind: 'dm.grant_reward';      rewardId: string; targetId: ParticipantId; rewardKind: RewardKind;
+      label: string; description?: string | null; tierTrack?: string | null }
+  | { kind: 'dm.cancel_reward';     rewardId: string }
+  | { kind: 'player.respond_reward'; rewardId: string; decision: 'accept' | 'reject' | 'modify'; note?: string }
   | { kind: 'host.assign_capabilities'; participantId: ParticipantId; capabilities: Capability[] }
   | { kind: 'host.end_session' };
 

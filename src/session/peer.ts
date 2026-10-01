@@ -13,6 +13,7 @@ import {
   Capability, CharacterAdapter, CharacterChange, ClientMessage, Op, OpBody, OpResult, ParticipantId,
   ServerMessage, ViewState, LiveEvent, ChangeRequest, LiveEffect, EffectApplication, SecretEffectMeta,
   EffectComponent, EffectDuration, EffectDefinitionInput, MonsterVisibility, PublicPersona, ReportedCharacter,
+  RewardKind,
 } from './types';
 import { applyEvent } from './state';
 import { ClientTransport, Connection, decodeFrame, encodeFrame } from './transport';
@@ -488,6 +489,26 @@ export class SessionPeer {
     return this.sendRaw({ kind: 'dm.resolve_rule_suggestion', suggestionId, decision, ...(dmResponse ? { dmResponse } : {}) });
   }
 
+  /** DM_SCREEN_SPEC.md item 13 — always gated behind the Player's own accept/modify/reject; see
+   *  Reward's own doc comment for why there's no auto-apply path on this wire. */
+  grantReward(targetId: ParticipantId, kind: RewardKind, label: string,
+    opts: { description?: string; tierTrack?: string } = {}): { opId: string; rewardId: string } {
+    this.need('dm');
+    const rewardId = this.id('rwd');
+    const opId = this.sendRaw({
+      kind: 'dm.grant_reward', rewardId, targetId, rewardKind: kind, label,
+      ...(opts.description !== undefined ? { description: opts.description } : {}),
+      ...(opts.tierTrack !== undefined ? { tierTrack: opts.tierTrack } : {}),
+    });
+    return { opId, rewardId };
+  }
+
+  /** Withdraws a reward still PENDING the Player's response. */
+  cancelReward(rewardId: string): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.cancel_reward', rewardId });
+  }
+
   /** Effects as the DM sees them, with secret identity joined in from the local vault. */
   dmEffects(): { effectId: string; displayName: string; secret: SecretEffectMeta | null; effect: LiveEffect }[] {
     return Object.entries(this.view?.effects ?? {}).map(([effectId, effect]) => {
@@ -540,6 +561,12 @@ export class SessionPeer {
     this.need('player');
     const suggestionId = this.id('sug');
     return this.sendRaw({ kind: 'player.suggest_rule', suggestionId, rule, proposedValue, note });
+  }
+
+  /** Accept/modify/reject a DM-granted Reward (DM_SCREEN_SPEC.md item 13). */
+  respondReward(rewardId: string, decision: 'accept' | 'reject' | 'modify', note?: string): string {
+    this.need('player');
+    return this.sendRaw({ kind: 'player.respond_reward', rewardId, decision, ...(note !== undefined ? { note } : {}) });
   }
 
   /** What this player may see about active effects (mechanics only for secret ones). */

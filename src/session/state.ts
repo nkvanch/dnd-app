@@ -7,7 +7,7 @@
 import {
   Capability, ParticipantId, LiveState, LiveEvent, ViewState, AuditEntry,
   EffectApplication, LiveEffect, PublicParticipant, LiveCombatant, LiveEncounter,
-  ReportedCharacter, CharacterSummary,
+  ReportedCharacter, CharacterSummary, Reward,
 } from './types';
 
 // ── Viewers ──────────────────────────────────────────────────────────────────
@@ -175,6 +175,23 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
       if (c) c.persona = b.persona;
       break;
     }
+    case 'reward_granted':
+      s.rewards[b.reward.id] = b.reward;
+      break;
+    case 'reward_resolved': {
+      const r = s.rewards[b.rewardId];
+      if (r) {
+        r.status = b.status;
+        r.playerNote = b.playerNote;
+        r.resolvedAtRevision = ev.revision;
+      }
+      break;
+    }
+    case 'reward_superseded': {
+      const r = s.rewards[b.rewardId];
+      if (r) { r.status = 'SUPERSEDED'; r.supersededBy = b.supersededBy; }
+      break;
+    }
     case 'session_ended':
       s.ended = true;
       break;
@@ -265,7 +282,7 @@ export function projectState(state: LiveState, viewer: Viewer): ViewState {
     sessionId: state.sessionId, roomName: state.roomName, maxParticipants: state.maxParticipants,
     revision: state.revision, ended: state.ended,
     participants: clone(state.participants), campaign: state.campaign ? { ...state.campaign } : null,
-    encounters: {}, effects: {}, requests: {}, ruleSuggestions: {}, characters: {},
+    encounters: {}, effects: {}, requests: {}, ruleSuggestions: {}, characters: {}, rewards: {},
     audit: state.audit.filter(a => auditVisible(a, viewer)).map(a => clone(a)),
   };
   if (level === 'dm') {
@@ -274,6 +291,7 @@ export function projectState(state: LiveState, viewer: Viewer): ViewState {
     out.requests = clone(state.requests);
     out.ruleSuggestions = clone(state.ruleSuggestions);
     out.characters = clone(state.characters);
+    out.rewards = clone(state.rewards);
   } else if (level === 'player') {
     for (const [id, enc] of Object.entries(state.encounters)) out.encounters[id] = encounterForPlayer(clone(enc));
     for (const [id, eff] of Object.entries(state.effects)) {
@@ -285,6 +303,9 @@ export function projectState(state: LiveState, viewer: Viewer): ViewState {
     }
     for (const [id, s] of Object.entries(state.ruleSuggestions)) {
       if (s.playerId === viewer.id) out.ruleSuggestions[id] = clone(s);
+    }
+    for (const [id, rw] of Object.entries(state.rewards)) {
+      if (rw.targetId === viewer.id) out.rewards[id] = clone(rw);
     }
     // Own character: full, authoritative, unfiltered. Every OTHER player's character: only their
     // current public projection (real summary, or persona if enabled) — never the authoritative
@@ -420,6 +441,19 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
       // update to the now-current public projection, same redirection as above.
       const rc = after.characters[b.participantId];
       return rc ? keep({ t: 'character_reported', character: publicCharacterOf(rc) }) : null;
+    }
+
+    case 'reward_granted':
+      if (level === 'host') return null;
+      if (level === 'dm' || b.reward.targetId === viewer.id) return keep(b);
+      return null;
+
+    case 'reward_resolved':
+    case 'reward_superseded': {
+      if (level === 'host') return null;
+      if (level === 'dm') return keep(b);
+      const rw = after.rewards[b.rewardId];
+      return rw && rw.targetId === viewer.id ? keep(b) : null;
     }
   }
 }

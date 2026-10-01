@@ -15,7 +15,7 @@ import {
   Capability, ClientMessage, ServerMessage, Op, OpBody, OpResult, LiveState, LiveEvent, LiveEventBody,
   emptyLiveState, PublicParticipant, ParticipantId, EffectApplication, EffectDefinition, AuditEntry,
   ChangeRequest, LiveEncounter, ReportedCharacter, CharacterChange, RuleSuggestion, RuleSuggestionStatus,
-  STANDARD_MONSTER_VISIBILITY, MonsterVisibility, PublicPersona,
+  STANDARD_MONSTER_VISIBILITY, MonsterVisibility, PublicPersona, Reward, RewardKind, RewardStatus,
 } from './types';
 import { applyEvent, projectEvent, projectState, Viewer } from './state';
 import { Connection, ServerTransport, decodeFrame, encodeFrame } from './transport';
@@ -63,6 +63,10 @@ function optStr(x: unknown): x is string | null {
 }
 function int(x: unknown): x is number {
   return typeof x === 'number' && Number.isInteger(x);
+}
+const REWARD_KINDS = new Set<RewardKind>(['homebrew_feature', 'resource', 'proficiency', 'reward_tier', 'permanent_modifier', 'campaign_boon']);
+function rewardKind(x: unknown): x is RewardKind {
+  return typeof x === 'string' && REWARD_KINDS.has(x as RewardKind);
 }
 
 export class SessionHost {
@@ -658,6 +662,35 @@ export class SessionHost {
         return done('applied');
       }
 
+      case 'dm.grant_reward': {
+        if (!str(body.rewardId) || !str(body.targetId) || !rewardKind(body.rewardKind) || !str(body.label)) return done('rejected', 'malformed');
+        if (body.description !== undefined && !optStr(body.description)) return done('rejected', 'malformed');
+        if (body.tierTrack !== undefined && body.tierTrack !== null && !str(body.tierTrack)) return done('rejected', 'malformed');
+        if (this.state.rewards[body.rewardId]) return done('rejected', 'reward-exists');
+        const target = this.state.participants[body.targetId];
+        if (!target || !target.capabilities.includes('player')) return done('rejected', 'unknown-target');
+        const reward: Reward = {
+          id: body.rewardId, requesterId: pid, targetId: body.targetId, kind: body.rewardKind,
+          label: body.label, description: body.description ?? null, tierTrack: body.tierTrack ?? null,
+          status: 'PENDING', playerNote: null, supersededBy: null,
+          createdAtRevision: this.state.revision + 1, resolvedAtRevision: null,
+        };
+        this.commit({ t: 'reward_granted', reward }, pid,
+          { kind: 'reward', text: `DM granted ${this.nick(target.id)} a reward: "${reward.label}"`, scope: 'participants', participantIds: [target.id], refId: reward.id });
+        return done('applied');
+      }
+
+      case 'dm.cancel_reward': {
+        const r = this.state.rewards[body.rewardId];
+        if (!r) return done('rejected', 'unknown-reward');
+        if (r.status !== 'PENDING') return done('rejected', 'already-resolved');
+        this.commit({ t: 'reward_resolved', rewardId: r.id, status: 'CANCELLED', playerNote: null }, pid,
+          { kind: 'reward', text: `DM withdrew the reward "${r.label}"`, scope: 'participants', participantIds: [r.targetId], refId: r.id });
+        return done('applied');
+      }
+
+      case 'player.respond_reward': return this.respondReward(pid, actor, op, body);
+
       case 'host.assign_capabilities': {
         const target = this.state.participants[body.participantId];
         if (!target) return done('rejected', 'unknown-participant');
@@ -810,6 +843,45 @@ export class SessionHost {
     const finalApplied = JSON.parse(JSON.stringify(req.original)) as CharacterChange[];
     this.commit({ t: 'request_resolved', requestId: req.id, status: 'ACCEPTED', finalApplied, playerModified: null, acknowledgedStale: isStale }, pid,
       { kind: 'request', text: `${actor.nickname} accepted "${req.label}": ${describeChanges(finalApplied)}${isStale ? ' (acknowledged the character had changed)' : ''}`, ...audienceScope });
+    return done('applied');
+  }
+
+  private respondReward(pid: ParticipantId, actor: PublicParticipant, op: Op, body: Extract<OpBody, { kind: 'player.respond_reward' }>): OpResult {
+    const done = (status: OpResult['status'], reason?: string): OpResult =>
+      ({ opId: op.opId, status, ...(reason ? { reason } : {}), revision: this.state.revision });
+    const reward = this.state.rewards[body.rewardId];
+    if (!reward) return done('rejected', 'unknown-reward');
+    if (reward.targetId !== pid) return done('forbidden', 'not-your-reward');
+    if (reward.status !== 'PENDING') return done('rejected', 'already-resolved');
+    if (body.decision !== 'accept' && body.decision !== 'reject' && body.decision !== 'modify') return done('rejected', 'malformed');
+    if (body.note !== undefined && (typeof body.note !== 'string' || body.note.length > 2000)) return done('rejected', 'malformed');
+    const audienceScope = { scope: 'participants' as const, participantIds: [reward.targetId], refId: reward.id };
+
+    if (body.decision === 'reject') {
+      this.commit({ t: 'reward_resolved', rewardId: reward.id, status: 'REJECTED', playerNote: body.note ?? null }, pid,
+        { kind: 'reward', text: `${actor.nickname} declined the reward "${reward.label}"`, ...audienceScope });
+      return done('applied');
+    }
+
+    if (body.decision === 'modify' && !str(body.note)) return done('rejected', 'malformed');
+    const status: RewardStatus = body.decision === 'modify' ? 'MODIFIED' : 'ACCEPTED';
+    const playerNote = body.decision === 'modify' ? body.note! : (body.note ?? null);
+    this.commit({ t: 'reward_resolved', rewardId: reward.id, status, playerNote }, pid,
+      { kind: 'reward', text: `${actor.nickname} accepted the reward "${reward.label}"${status === 'MODIFIED' ? ' (with their own note)' : ''}`, ...audienceScope });
+
+    // Tiered rewards replace the previous tier in the same track (DM_SCREEN_SPEC.md item 13) —
+    // the OLD tier is kept, only marked SUPERSEDED, never deleted (see Reward's own doc comment
+    // for why "preserve spent uses" stays a DM-carried note rather than a tracked number).
+    if (reward.kind === 'reward_tier' && reward.tierTrack) {
+      const prior = Object.values(this.state.rewards).find(r =>
+        r.id !== reward.id && r.targetId === reward.targetId && r.kind === 'reward_tier' &&
+        r.tierTrack === reward.tierTrack && (r.status === 'ACCEPTED' || r.status === 'MODIFIED'));
+      if (prior) {
+        this.commit({ t: 'reward_superseded', rewardId: prior.id, supersededBy: reward.id }, pid,
+          { kind: 'reward', text: `"${reward.label}" supersedes the previous ${reward.tierTrack} tier`, ...audienceScope });
+      }
+    }
+
     return done('applied');
   }
 }

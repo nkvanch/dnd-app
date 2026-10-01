@@ -5,27 +5,26 @@
 // local vault and never leaves this device.
 //
 // Phase 1 (reorganize into tabs, Party Dashboard fast actions, session overview, alerts queue,
-// campaign rules quick panel, DM-only notes) and Phase 2 (initiative/turn tracking) are done.
-// Phase 3, in progress: Quick Override (item 12) is built below, on the existing dm.apply_effect
-// op (peer.applyQuickEffect) — no new wire protocol needed, just a faster UI than pre-authoring
-// in DM Preparation. Rule suggestions, monster visibility controls, player-to-player visibility
-// ("Public Persona"), and Rewards each need real new wire protocol of their own and are NOT in
-// this pass. Full character data isn't available here either — only what a Player's device
-// reports (ReportedCharacter.summary: name/hp/maxHp/ac) — so "DM Character View" is scoped to
-// that, not a full sheet mirror; disclosed inline rather than silently pretending otherwise.
+// campaign rules quick panel, DM-only notes), Phase 2 (initiative/turn tracking) and Phase 3
+// (Quick Override, monster visibility controls, player-to-player visibility / "Public Persona",
+// rule suggestions, and Rewards) are all done. Full character data isn't available here either —
+// only what a Player's device reports (ReportedCharacter.summary: name/hp/maxHp/ac) — so "DM
+// Character View" is scoped to that, not a full sheet mirror; disclosed inline rather than
+// silently pretending otherwise.
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime';
 import { CampaignPrep } from '../../src/session/prep';
 import { addNote, describeDuration, describeEffectComponent, parseSignedInt, removeItem } from '../../src/session/prepEdit';
-import { describeChanges } from '../../src/session/roles';
-import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility } from '../../src/session/types';
+import { describeChanges, describeRewardKind } from '../../src/session/roles';
+import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility, RewardKind } from '../../src/session/types';
 import { SessionPeer } from '../../src/session/peer';
 import { LiveScreen, Section, Card, Btn, Chip, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
 import { Alert } from '../../src/utils/alert';
 
-type Tab = 'dashboard' | 'encounter' | 'effects' | 'requests' | 'suggestions' | 'notes';
+type Tab = 'dashboard' | 'encounter' | 'effects' | 'requests' | 'suggestions' | 'rewards' | 'notes';
 type FastAction = { participantId: string; kind: 'hp_damage' | 'hp_heal' | 'temp_hp' | 'max_hp' };
+const REWARD_KINDS: RewardKind[] = ['homebrew_feature', 'resource', 'proficiency', 'reward_tier', 'permanent_modifier', 'campaign_boon'];
 
 export default function DmLiveScreen() {
   const router = useRouter();
@@ -45,6 +44,12 @@ export default function DmLiveScreen() {
   const [quickOverrideOpen, setQuickOverrideOpen] = useState(false);
   const [modifyingSuggestion, setModifyingSuggestion] = useState<string | null>(null);
   const [modifyText, setModifyText] = useState('');
+  const [grantingReward, setGrantingReward] = useState(false);
+  const [rewardTarget, setRewardTarget] = useState<string | null>(null);
+  const [rewardKind, setRewardKind] = useState<RewardKind>('homebrew_feature');
+  const [rewardLabel, setRewardLabel] = useState('');
+  const [rewardDescription, setRewardDescription] = useState('');
+  const [rewardTierTrack, setRewardTierTrack] = useState('');
 
   const linked = rt.view?.campaign?.campaignId ?? null;
 
@@ -82,8 +87,10 @@ export default function DmLiveScreen() {
   const activeEncounter = Object.values(view?.encounters ?? {}).find(e => e.active) ?? null;
   const ruleSuggestions = Object.values(view?.ruleSuggestions ?? {});
   const pendingSuggestions = ruleSuggestions.filter(s => s.status === 'PENDING');
+  const rewards = Object.values(view?.rewards ?? {});
+  const pendingRewards = rewards.filter(r => r.status === 'PENDING');
 
-  const alertCount = pendingRequests.length + dueEffects.length + disconnectedPlayers.length + pendingSuggestions.length;
+  const alertCount = pendingRequests.length + dueEffects.length + disconnectedPlayers.length + pendingSuggestions.length + pendingRewards.length;
 
   // Fast-action change requests (DM_SCREEN_SPEC.md item 2) — same consent flow as every other
   // CharacterChange: this sends a request, it does not apply anything unilaterally.
@@ -149,6 +156,7 @@ export default function DmLiveScreen() {
               {dueEffects.length > 0 && <Muted>• {dueEffects.length} effect{dueEffects.length === 1 ? '' : 's'} due to end</Muted>}
               {disconnectedPlayers.length > 0 && <Muted>• {disconnectedPlayers.map(p => p.nickname).join(', ')} disconnected</Muted>}
               {pendingSuggestions.length > 0 && <Muted>• {pendingSuggestions.length} rule suggestion{pendingSuggestions.length === 1 ? '' : 's'} pending</Muted>}
+              {pendingRewards.length > 0 && <Muted>• {pendingRewards.length} reward{pendingRewards.length === 1 ? '' : 's'} awaiting response</Muted>}
             </Section>
           )}
 
@@ -357,6 +365,59 @@ export default function DmLiveScreen() {
               </Card>
             );
           })}
+        </Section>
+      )}
+
+      {tab === 'rewards' && (
+        <Section title={`Rewards (${pendingRewards.length} pending)`} hint="Always goes through the Player's own accept/modify/reject — a reward never applies itself. Granting another tier in the same track automatically supersedes the previous one once accepted.">
+          {grantingReward ? (
+            <Card testID="dm-reward-editor">
+              <Muted>Target</Muted>
+              <Row wrap>
+                {players.map(p => <Chip key={p.id} label={p.nickname} active={rewardTarget === p.id} onPress={() => setRewardTarget(p.id)} testID={`dm-reward-target-${p.nickname}`} />)}
+              </Row>
+              <Muted>Kind</Muted>
+              <Row wrap>
+                {REWARD_KINDS.map(k => <Chip key={k} label={describeRewardKind(k)} active={rewardKind === k} onPress={() => setRewardKind(k)} testID={`dm-reward-kind-${k}`} />)}
+              </Row>
+              <Field label="Label" value={rewardLabel} onChangeText={setRewardLabel} placeholder="Ember Sight" testID="dm-reward-label" />
+              <Field label="Description (optional)" value={rewardDescription} onChangeText={setRewardDescription} multiline testID="dm-reward-description" />
+              {rewardKind === 'reward_tier' && (
+                <Field label="Tier track" value={rewardTierTrack} onChangeText={setRewardTierTrack} placeholder="Forge-Blessing"
+                  testID="dm-reward-tier-track" />
+              )}
+              <Row wrap>
+                <Btn small label="Grant" disabled={!rewardTarget || !rewardLabel.trim() || offline} testID="dm-reward-send"
+                  onPress={() => {
+                    run(() => dmPeer.grantReward(rewardTarget!, rewardKind, rewardLabel.trim(), {
+                      ...(rewardDescription.trim() ? { description: rewardDescription.trim() } : {}),
+                      ...(rewardKind === 'reward_tier' && rewardTierTrack.trim() ? { tierTrack: rewardTierTrack.trim() } : {}),
+                    }));
+                    setGrantingReward(false); setRewardTarget(null); setRewardLabel(''); setRewardDescription(''); setRewardTierTrack('');
+                  }} />
+                <Btn small kind="ghost" label="Cancel" onPress={() => setGrantingReward(false)} />
+              </Row>
+            </Card>
+          ) : (
+            <Btn small label="+ Grant a reward" onPress={() => setGrantingReward(true)} testID="dm-reward-open" />
+          )}
+          {rewards.length === 0 && <Muted>No rewards granted yet.</Muted>}
+          {rewards.map(r => (
+            <Card key={r.id} testID={`dm-reward-card-${r.label}`}>
+              <Row wrap>
+                <Body bold>{r.label}</Body>
+                <Badge label={r.status.toLowerCase()} tone={r.status === 'ACCEPTED' || r.status === 'MODIFIED' ? 'good' : r.status === 'PENDING' ? 'warn' : r.status === 'SUPERSEDED' ? 'default' : 'bad'} />
+                <Muted>for {nameOf(r.targetId)}</Muted>
+              </Row>
+              <Muted>{describeRewardKind(r.kind)}{r.tierTrack ? ` · track: ${r.tierTrack}` : ''}</Muted>
+              {!!r.description && <Muted>{r.description}</Muted>}
+              {!!r.playerNote && <Muted>Player's note: {r.playerNote}</Muted>}
+              {r.status === 'SUPERSEDED' && r.supersededBy && <Muted>Replaced by: {rewards.find(x => x.id === r.supersededBy)?.label ?? r.supersededBy}</Muted>}
+              {r.status === 'PENDING' && (
+                <Btn small kind="danger" label="Withdraw" disabled={offline} testID={`dm-reward-cancel-${r.label}`} onPress={() => run(() => dmPeer.cancelReward(r.id))} />
+              )}
+            </Card>
+          ))}
         </Section>
       )}
 

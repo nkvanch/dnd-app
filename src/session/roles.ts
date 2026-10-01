@@ -3,7 +3,7 @@
 // Capability model + op authorization. This is enforced by the Host core on
 // every op; the UI hiding buttons is a convenience, never the security boundary.
 // ============================================================================
-import { Capability, CharacterChange, OpBody } from './types';
+import { Capability, CharacterChange, OpBody, RewardKind } from './types';
 
 export const ALL_CAPABILITIES: Capability[] = ['host', 'dm', 'player'];
 /** Capabilities that can be granted/requested over the network. `host` never is. */
@@ -51,6 +51,13 @@ export function describeChange(c: CharacterChange): string {
 export function describeChanges(changes: CharacterChange[]): string {
   return changes.map(describeChange).join(', ');
 }
+
+const REWARD_KIND_LABEL: Record<RewardKind, string> = {
+  homebrew_feature: 'Homebrew feature', resource: 'Resource', proficiency: 'Proficiency',
+  reward_tier: 'Reward tier', permanent_modifier: 'Permanent modifier', campaign_boon: 'Campaign boon',
+};
+
+export function describeRewardKind(kind: RewardKind): string { return REWARD_KIND_LABEL[kind]; }
 
 /** Structural validation of untrusted change lists. */
 export function validChanges(changes: unknown): changes is CharacterChange[] {

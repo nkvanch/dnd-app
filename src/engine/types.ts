@@ -1051,6 +1051,8 @@ export type CustomResource = {
   maximum:  number;
   /** Authoritative maximum before source-owned upgrades are applied. */
   baseMaximum?: number;
+  /** See ResourceGrant.rechargeAmount. */
+  rechargeAmount?: string;
   /** True while the mode option that owns this pool is not the active one: its spent amount is kept, but it is hidden and unusable. */
   inactive?: boolean;
   recharge: 'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
@@ -1703,6 +1705,15 @@ export type Effect = {
    */
   situational?: { id: string; question: string } | null;
   /**
+   * Resource-threshold gate: the effect applies only while the named resource
+   * (CustomResource id) sits within [min, max] — e.g. a monster's Pressure
+   * 1 ("Strained": -1 AC, -10 speed) vs 0 ("Depressurized"). Evaluated live
+   * from the resource's current value every recompute, so crossing a
+   * threshold in EITHER direction applies/removes the effect with no event to
+   * miss. A missing resource counts as not in range.
+   */
+  requiresResource?: ResourceRange;
+  /**
    * Re-audit A19: gates an item-sourced effect on "no OTHER currently
    * equipped item is armor or a shield" — the real equipment predicate
    * Bracers of Defense's own RAW text requires ("+2 AC while you are
@@ -1734,6 +1745,38 @@ export type Effect = {
   // ── grant_movement-specific fields ───────────────────────────────────────────
   movementType?:  'fly' | 'swim' | 'climb' | 'burrow';
   movementRange?: number;
+};
+
+/** An inclusive range test on one CustomResource's current value. Omitted bounds are open. */
+export type ResourceRange = { resourceId: string; min?: number; max?: number };
+
+/**
+ * "When this creature is reduced to 0 HP": a Death Burst, Pressure Collapse.
+ * Grimoire cannot apply damage to creatures around the dying one (no battle
+ * map, table-first), so the trigger does what it honestly can: the moment HP
+ * hits 0 it queues a PendingTrigger carrying the rendered rules text and, if
+ * `dice` is set, one ready-made damage roll for the DM to apply; `selfEffects`
+ * (set a flag, apply a condition to the creature itself) ARE applied.
+ */
+export type ZeroHpTrigger = {
+  text:        string;
+  area?:       string;
+  dice?:       string;
+  damageType?: string;
+  save?:       { ability: Ability; dc: number; onSuccess: 'half' | 'none' };
+  selfEffects?: AbilityEffect[];
+};
+
+/** A fired trigger waiting for the table to resolve it (dismissed by hand). */
+export type PendingTrigger = {
+  id:        string;
+  featureId: string;
+  name:      string;
+  text:      string;
+  area?:     string;
+  rolled?:   { dice: string; total: number; damageType?: string };
+  save?:     ZeroHpTrigger['save'];
+  firedAt:   string;
 };
 
 /**
@@ -1973,6 +2016,8 @@ export type Feature = {
    * alongside the existing UniversalActionsSection.
    */
   trigger?: string;
+  /** Fires when the holder is reduced to 0 HP. See ZeroHpTrigger. */
+  onZeroHp?: ZeroHpTrigger;
   /**
    * Makes this feature the CARRIER of a mode group: a named set of options of
    * which exactly one is active at a time, each with its own level-gated
@@ -2392,6 +2437,8 @@ export type Entity = {
    * History is never deleted — a replaced tier stays visible as 'replaced'.
    */
   featureGrants?: FeatureGrantRecord[];
+  /** Zero-HP triggers that fired and have not been resolved at the table yet. */
+  pendingTriggers?: PendingTrigger[];
   /** Live state of each mode group this creature carries (scope 'self'), keyed by group id. */
   modeStates?: Record<string, ModeState>;
   /** Holder-side rosters for target-scope mode groups, keyed by group id. */
@@ -2584,6 +2631,13 @@ export type ResourceGrant = {
   maximum:    number;
   /** Charges the pool starts with when first granted (default: `maximum`). */
   starting?:  number;
+  /**
+   * Dice expression for HOW MUCH the pool regains when its recharge event
+   * happens ("1d3" at dawn). Absent → refill to full (every existing pool).
+   * Rolled by the engine at the event (takeDawn / takeRest); the result is
+   * added to the current value, capped at the maximum.
+   */
+  rechargeAmount?: string;
   /** `string` covers a homebrew-authored custom recharge description (see
    * DraftTrait's 'other' recharge option) — displayed as-is by CustomResource,
    * which already allows the same free-text escape hatch. */
@@ -2714,6 +2768,8 @@ export type FeatureActivation = {
   resourceCost: ResourceCost | null;
   range:        string | null;   // "self", "30 feet", "touch", etc.
   target:       'self' | 'single' | 'area' | 'multiple';
+  /** Usable only while a resource is within range (Abrasive Jet: not at 0 Pressure). `reason` is shown when blocked. */
+  requiresResource?: ResourceRange & { reason?: string };
   /**
    * 'ki_save_dc' parallels 'spell_save_dc' for Monk's ki-fueled abilities
    * (Stunning Strike, etc.) — Monk has no entity.spellcasting block, so

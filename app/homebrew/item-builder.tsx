@@ -634,6 +634,14 @@ export default function ItemBuilderScreen() {
               <TextInput style={styles.input} value={charges.rechargeOther} onChangeText={v => patchCharges({ rechargeOther: v })}
                 placeholder="e.g. when you win a duel" placeholderTextColor={Colors.textDim} />
             )}
+            {charges.recharge !== 'other' && charges.recharge !== 'never' && (
+              <>
+                <Text style={styles.fieldLabel}>Regains (dice — blank = all charges)</Text>
+                <TextInput style={styles.input} value={charges.rechargeDice ?? ''} onChangeText={v => patchCharges({ rechargeDice: v })}
+                  placeholder="e.g. 1d3" placeholderTextColor={Colors.textDim} autoCapitalize="none" />
+                <Text style={styles.hint}>With dice set, each recharge rolls them and adds that many charges (up to the max) instead of refilling.</Text>
+              </>
+            )}
             {charges.recharge === 'dawn' && <Text style={styles.hint}>Restored by the sheet's ☀ Dawn button, not by a rest.</Text>}
             {charges.recharge === 'other' && <Text style={styles.hint}>Not restored automatically: tap + on the sheet when it recharges.</Text>}
             {category !== 'weapon' && (

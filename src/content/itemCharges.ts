@@ -20,10 +20,12 @@ export type ItemChargesDraft = {
   cost:          string;
   /** How the charge-spending use is taken (non-weapon items). */
   actionType:    'action' | 'bonus_action' | 'reaction' | 'free';
+  /** Regain-amount dice for the recharge event ("1d3" at dawn). Blank = refill to full. */
+  rechargeDice?: string;
 };
 
 export function newItemChargesDraft(): ItemChargesDraft {
-  return { enabled: false, max: '3', starting: '', recharge: 'dawn', rechargeOther: '', cost: '1', actionType: 'action' };
+  return { enabled: false, max: '3', starting: '', recharge: 'dawn', rechargeOther: '', cost: '1', actionType: 'action', rechargeDice: '' };
 }
 
 const toPosInt = (s: string, fallback: number) => {
@@ -43,9 +45,11 @@ export function buildItemCharges(
   const startingRaw = draft.starting.trim() === '' ? maximum : toPosInt(draft.starting, maximum);
   const resourceId = itemChargeResourceId(itemId);
   const recharge = draft.recharge === 'other' ? (draft.rechargeOther.trim() || 'other') : draft.recharge;
+  const dice = /^\d+d\d+([+-]\d+)?$/i.test(draft.rechargeDice?.trim() ?? '') ? draft.rechargeDice!.trim() : undefined;
   const resource: ResourceGrant = {
     resourceId, name: `${itemName || 'Item'} (Charges)`, maximum, recharge,
     ...(startingRaw < maximum ? { starting: startingRaw } : {}),
+    ...(dice ? { rechargeAmount: dice } : {}),
   };
   return { resource, resourceId, cost: Math.max(1, toPosInt(draft.cost, 1)), actionType: draft.actionType };
 }

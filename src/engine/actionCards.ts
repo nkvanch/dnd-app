@@ -9,6 +9,7 @@
 // Passive features (no activation field) are never given cards.
 // ============================================================================
 
+import { resourceInRange } from './resourceGates';
 import {
   Feature, Entity, ActionCard, ActionCardType, ActionCardColor,
   AbilityEffect, FeatureActivation, Spell, OutcomeKey,
@@ -1072,6 +1073,13 @@ function resourceAndEconomyLegal(
     }
   }
 
+  // Resource-threshold gate (Abrasive Jet: "cannot be used at 0 Pressure").
+  const gate = feature.activation?.requiresResource;
+  if (gate && !resourceInRange(entity, gate)) {
+    const gr = entity.resources.custom.find(r => r.id === gate.resourceId);
+    return { legal: false, reason: gate.reason ?? `${gr?.name ?? gate.resourceId} is not in the required range (${gr ? `${gr.current}/${gr.maximum}` : 'missing'}).` };
+  }
+
   const options = feature.activation?.options;
   if (options?.length) {
     const legal = options.some(option => resourceAndEconomyLegal({
@@ -1101,7 +1109,7 @@ function resourceAndEconomyLegal(
   }
 
   const resource = entity.resources.custom.find(r => r.id === cost.resourceId);
-  if (!resource) {
+  if (!resource || resource.inactive) {
     return { legal: false, reason: `Resource "${cost.resourceId}" not found.` };
   }
   if (resource.current < cost.quantity) {

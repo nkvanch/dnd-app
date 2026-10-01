@@ -10,6 +10,7 @@ import { longRestRestoresAllHitDice } from './houseRules';
 import { DEFAULT_RULES } from '../store/characterStore';
 import { getClassLevels } from './multiclass';
 import { pactSlotTableFor } from '../content/classes/spellSlotTables';
+import { rollExpression } from './dice';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -24,6 +25,23 @@ import { pactSlotTableFor } from '../content/classes/spellSlotTables';
  * the final decision already made — see longRest's own doc comment for why
  * that ordering is what keeps this atomic.
  */
+/**
+ * One resource's recharge at its event: refill to full, or — when the pool
+ * has a `rechargeAmount` dice expression ("1d3") — roll it and regain that
+ * many, capped at the maximum. Returns the roll for display.
+ */
+function rechargeResource<T extends { current: number; maximum: number; rechargeAmount?: string; name: string }>(r: T): { resource: T; rolled?: { dice: string; total: number } } {
+  if (!r.rechargeAmount) return { resource: { ...r, current: r.maximum } };
+  let total = 0;
+  // An expression the dice engine cannot parse is left for the player to
+  // restore by hand (+ control) — never silently turned into a full refill.
+  try { total = Math.max(0, rollExpression(r.rechargeAmount, `${r.name} recharge`).total); }
+  catch { return { resource: r }; }
+  return { resource: { ...r, current: Math.min(r.maximum, r.current + total) }, rolled: { dice: r.rechargeAmount, total } };
+}
+
+export type DawnResult = { entity: Entity; rolls: { name: string; dice: string; total: number; before: number; after: number }[] };
+
 /** True when the character has at least one resource that recharges at dawn and is not full. */
 export function hasSpentDawnResources(entity: Entity): boolean {
   return entity.resources.custom.some(r => r.recharge === 'dawn' && r.current < r.maximum);
@@ -37,15 +55,26 @@ export function hasSpentDawnResources(entity: Entity): boolean {
  * never, or free text are untouched.
  */
 export function takeDawn(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity {
-  if (!hasSpentDawnResources(entity)) return entity;
+  return takeDawnDetailed(entity, rules).entity;
+}
+
+/** takeDawn, plus the dice it rolled so the UI can say "Standard of the Unyielding Line: 1d3 → +2". */
+export function takeDawnDetailed(entity: Entity, rules: CampaignRules = DEFAULT_RULES): DawnResult {
+  if (!hasSpentDawnResources(entity)) return { entity, rolls: [] };
+  const rolls: DawnResult['rolls'] = [];
   const refreshed: Entity = {
     ...entity,
     resources: {
       ...entity.resources,
-      custom: entity.resources.custom.map(r => (r.recharge === 'dawn' ? { ...r, current: r.maximum } : r)),
+      custom: entity.resources.custom.map(r => {
+        if (r.recharge !== 'dawn' || r.inactive) return r;
+        const { resource, rolled } = rechargeResource(r);
+        if (rolled) rolls.push({ name: r.name, dice: rolled.dice, total: rolled.total, before: r.current, after: resource.current });
+        return resource;
+      }),
     },
   };
-  return recomputeDerived(refreshed, rules);
+  return { entity: recomputeDerived(refreshed, rules), rolls };
 }
 
 export function takeRest(
@@ -77,7 +106,7 @@ function shortRest(entity: Entity): Entity {
   // either rest policy.
   const rechargedResources = entity.resources.custom.map(r => {
     if (r.recharge === 'short_rest') {
-      return { ...r, current: r.maximum };
+      return rechargeResource(r).resource;
     }
     return r;
   });
@@ -162,6 +191,9 @@ function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES, hitDiceA
     resources: {
       ...updated.resources,
       hp: {
+        // Spread keeps hp.bonusMax (the max_hp-effect portion of maximum) —
+        // dropping it would make the next recompute add that bonus a second time.
+        ...updated.resources.hp,
         current: updated.resources.hp.maximum,
         maximum: updated.resources.hp.maximum,
         temp:    0,
@@ -183,7 +215,7 @@ function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES, hitDiceA
     resources: {
       ...updated.resources,
       custom: updated.resources.custom.map(r =>
-        (r.recharge === 'short_rest' || r.recharge === 'long_rest') ? { ...r, current: r.maximum } : r
+        (r.recharge === 'short_rest' || r.recharge === 'long_rest') ? rechargeResource(r).resource : r
       ),
     },
   };

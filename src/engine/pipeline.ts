@@ -23,6 +23,7 @@ import { effectiveItemFeatures, effectiveWeaponAttackFeatures, isItemMechanicall
 import { getClassEntry } from './multiclass';
 import { selfAuraGrants } from './allyAuras';
 import { reconcileModes } from './modes';
+import { resourceInRange } from './resourceGates';
 import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -535,6 +536,9 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
       // a bonus. See Effect.situational's own doc comment.
       if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
 
+      // Gate: resource-threshold effect (Pressure tiers) — see Effect.requiresResource.
+      if (effect.requiresResource && !resourceInRange(entity, effect.requiresResource)) continue;
+
       // Gate: skip if this feature's source condition has its effects suppressed
       if (fi.source.kind === 'condition') {
         const sourceCond = entity.conditions.find(c => c.id === fi.source.refId);
@@ -589,6 +593,7 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
         }
         if (effect.requiresNoArmorOrShield && anyArmorOrShieldEquipped) continue;
         if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
+        if (effect.requiresResource && !resourceInRange(entity, effect.requiresResource)) continue;
         effects.push({
           effect,
           sourceName: fi.name,

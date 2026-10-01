@@ -134,6 +134,7 @@ export function applyGrant(
             id: r.resourceId, name: r.name,
             current: Math.max(0, Math.min(r.maximum, r.starting ?? r.maximum)), maximum: r.maximum,
             recharge: r.recharge,
+            ...(r.rechargeAmount ? { rechargeAmount: r.rechargeAmount } : {}),
             sourceKind: resolvedSource?.kind,
             sourceId:   resolvedSource?.id,
           }]

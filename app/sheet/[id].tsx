@@ -15,7 +15,7 @@ import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
 import { useCombatTurnStore } from '../../src/store/combatTurnStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn, endConcentration } from '../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn, endConcentration, dismissPendingTrigger } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { equipItem, unequipItem, toggleAttunement, generateItemInstanceId, isStatefulItem, applyItemInfusion, removeItemInfusion } from '../../src/engine/inventory';
@@ -30,6 +30,7 @@ import { spellIdsOnEntity } from '../../src/content/spellRepo.types';
 import { getInfusion, maxInfusedItems } from '../../src/content/infusions';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
 import { TabExploration } from '../../src/components/sheet/TabExploration';
+import { PendingTriggersBanner } from '../../src/components/PendingTriggersBanner';
 import { syncAllyGrantsInStore } from '../../src/store/allyGrantSync';
 import { TabActions }   from '../../src/components/sheet/TabActions';
 import { TabAbilities } from '../../src/components/sheet/TabAbilities';
@@ -746,6 +747,7 @@ export default function CharacterSheetScreen() {
           different character or switching tabs always gets a fresh
           boundary — a crash on one tab doesn't leave every other tab (or
           every other character) stuck showing the same stale fallback. */}
+      <PendingTriggersBanner entity={entity} onDismiss={tid => mutate(e => dismissPendingTrigger(e, tid), 'Resolved trigger', 'combat')} />
       <ErrorBoundary key={`${entity.id}_${activeTab}`}>
       <View style={styles.tabContent}>
         {activeTab === 'character' && (

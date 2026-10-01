@@ -97,7 +97,7 @@ function registerItemResources(entity: Entity, itemId: string, itemDef: Item | u
         custom: [...owned.resources.custom, {
           id: r.resourceId, name: r.name,
           current: Math.max(0, Math.min(r.maximum, r.starting ?? r.maximum)), maximum: r.maximum,
-          recharge: r.recharge, sourceKind: 'item' as const, sourceId: itemId,
+          recharge: r.recharge, ...(r.rechargeAmount ? { rechargeAmount: r.rechargeAmount } : {}), sourceKind: 'item' as const, sourceId: itemId,
         }],
       },
     };

@@ -136,7 +136,7 @@ export function reconcileModes(entity: Entity): Entity {
     resourcesChanged = true;
     custom.push({
       id: want.id, name: want.grant.name, current: Math.max(0, Math.min(want.grant.maximum, want.grant.starting ?? want.grant.maximum)),
-      maximum: want.grant.maximum, recharge: want.grant.recharge, sourceKind: 'mode', sourceId: want.owner,
+      maximum: want.grant.maximum, recharge: want.grant.recharge, ...(want.grant.rechargeAmount ? { rechargeAmount: want.grant.rechargeAmount } : {}), sourceKind: 'mode', sourceId: want.owner,
     });
   }
 

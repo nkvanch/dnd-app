@@ -108,6 +108,10 @@ function shortRest(entity: Entity): Entity {
     if (r.recharge === 'short_rest') {
       return rechargeResource(r).resource;
     }
+    // Tireless Command: finishing a short rest with the pool EMPTY regains a few.
+    if (r.shortRestIfEmpty && r.current === 0 && entity.identity.level >= r.shortRestIfEmpty.minLevel) {
+      return { ...r, current: Math.min(r.maximum, r.shortRestIfEmpty.amount) };
+    }
     return r;
   });
 
@@ -116,7 +120,8 @@ function shortRest(entity: Entity): Entity {
   // recover spell slots on a short rest. All other spellcasting classes use
   // long rest recovery.
   const classes    = getClassLevels(entity);
-  const isPactCaster = classes.some(c => pactSlotTableFor(c.classId, c.subclassId));
+  const isPactCaster = entity.spellcasting?.shortRestSlots === true
+    || classes.some(c => pactSlotTableFor(c.classId, c.subclassId));
   const multiclassed = classes.length > 1;
   let rechargedSpellcasting = entity.spellcasting;
   if (entity.spellcasting && isPactCaster) {
@@ -124,9 +129,11 @@ function shortRest(entity: Entity): Entity {
     // ONLY the pact pool, leaving the combined non-pact `.slots` alone.
     // Solo pact caster (never multiclassed): pact slots live in `.slots`
     // directly, exactly as before this change — same recharge call.
+    // A solo pact caster built by levelUpClass keeps its slots in `.pactSlots`
+    // (with `.slots` empty); older saves kept them in `.slots`. Recover both.
     rechargedSpellcasting = (multiclassed && entity.spellcasting.pactSlots)
       ? rechargePactSlots(entity.spellcasting)
-      : rechargeSlots(entity.spellcasting);
+      : rechargePactSlots(rechargeSlots(entity.spellcasting));
   }
 
   return {

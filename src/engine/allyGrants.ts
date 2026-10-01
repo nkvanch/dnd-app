@@ -18,7 +18,7 @@ import {
 } from './allyAuras';
 
 export { tickReceivedGrants };
-export { listAllyGrantSources, isAuraProjecting, auraKey, auraRangeFeet } from './allyAuras';
+export { listAllyGrantSources, isAuraProjecting, auraKey, auraRangeFeet, grantRangeFeet } from './allyAuras';
 export type { AllyGrantSource } from './allyAuras';
 
 function abilityMod(e: Entity, a: Ability): number {
@@ -48,7 +48,7 @@ export function syncAllyGrants(
   const desired = new Map<string, ReceivedGrant[]>();
   for (const holder of roster) {
     for (const src of listAllyGrantSources(holder, homebrewItems)) {
-      if (src.spec.mode !== 'aura' || !isAuraProjecting(holder, src.spec)) continue;
+      if (src.spec.mode !== 'aura' || src.spec.selfOnly || !isAuraProjecting(holder, src.spec)) continue;
       const members = new Set(holder.auraMembers?.[auraKey(src.feature.id, src.spec.id)] ?? []);
       members.delete(holder.id); // the holder's own aura (includeSelf) is applied inside recomputeDerived
       for (const memberId of members) {
@@ -79,6 +79,8 @@ export function syncAllyGrants(
       }
     }
   }
+  // Two sources producing the same grant id (e.g. a duplicated feature) must not double-apply.
+  for (const [k, list] of desired) desired.set(k, list.filter((g, i) => list.findIndex(x => x.id === g.id) === i));
   const synced = (g: ReceivedGrant, e: Entity) => g.mode === 'mode' || (g.mode === 'aura' && g.sourceEntityId !== e.id);
   return roster.map(e => {
     const want = desired.get(e.id) ?? [];
@@ -112,7 +114,17 @@ export function applyChosenGrant(
   };
   const t = source.spec.tempHp;
   if (t) {
-    const amount = (t.flat ?? 0) + (t.addProficiency ? holder.derived.proficiencyBonus : 0)
+    let rolled = 0;
+    if (t.dice) {
+      let size = t.dice;
+      const m = t.dice.match(/^(\d*)d(\d+)$/i);
+      if (m && t.diceSizeByLevel?.length) {
+        const bySize = [...t.diceSizeByLevel].sort((x, y) => x.level - y.level).filter(r => holder.identity.level >= r.level).pop();
+        if (bySize) size = `${m[1] || 1}${bySize.size}`;
+      }
+      try { rolled = rollExpression(size, source.spec.label).total; } catch { rolled = 0; }
+    }
+    const amount = (t.flat ?? 0) + (t.addLevel ? holder.identity.level : 0) + rolled + (t.addProficiency ? holder.derived.proficiencyBonus : 0)
       + (t.addAbilityMod ? abilityMod(holder, t.addAbilityMod) : 0);
     if (amount > 0) grant.tempHpGranted = amount;
   }

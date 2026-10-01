@@ -289,11 +289,18 @@ const PACT_SLOT_TABLES: Record<string, SpellSlotRow[]> = {
   abyss_knight: ABYSS_KNIGHT_SLOTS,
 };
 
-export function pactSlotTableFor(classId: string, subclassId: string | null): SpellSlotRow[] | null {
+export function pactSlotTableFor(
+  classId: string, subclassId: string | null,
+  /** Content definitions: a class that declares spellcastingStyle 'pact' opts in (with its own pactSlotTable, else the Warlock one) — no class-id check needed. */
+  definitions?: readonly { id: string; spellcastingStyle?: string; pactSlotTable?: SpellSlotRow[] }[],
+): SpellSlotRow[] | null {
   if (classId === 'blood_hunter') {
     return subclassId === 'profane_soul' ? PROFANE_SOUL_SLOTS : null;
   }
-  return PACT_SLOT_TABLES[classId] ?? null;
+  const official = PACT_SLOT_TABLES[classId];
+  if (official) return official;
+  const def = definitions?.find(d => d.id === classId);
+  return def?.spellcastingStyle === 'pact' ? (def.pactSlotTable ?? WARLOCK_SLOTS) : null;
 }
 
 /**

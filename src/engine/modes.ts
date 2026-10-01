@@ -81,14 +81,20 @@ export function reconcileModes(entity: Entity): Entity {
       const isActive = active?.id === option.id;
       const idMap = new Map<string, string>();
       for (const entry of option.entries) for (const r of entry.resources ?? []) idMap.set(r.resourceId, modeResourceId(group.id, option.id, r.resourceId));
-      for (const entry of option.entries) {
+      for (const entry of [...option.entries].sort((a, b) => a.level - b.level)) {
         const unlocked = level >= entry.level;
         for (const r of entry.resources ?? []) {
           pools.push({ grant: r, id: idMap.get(r.resourceId)!, active: isActive && unlocked, owner: `${group.id}:${option.id}` });
         }
         if (!isActive || !unlocked) continue;
+        // A later (higher-level) entry that re-declares a feature id REPLACES the
+        // earlier one — "Firing Squad: 4d6 at 1st, 6d6 at 5th" is one feature
+        // that improves, never two that stack.
         for (const f of entry.features ?? []) {
           const remapped = remapResourceIds(f, idMap);
+          const replaceId = modeFeatureId(group.id, option.id, f.id);
+          const existingAt = desiredFeatures.findIndex(d => d.id === replaceId);
+          if (existingAt >= 0) desiredFeatures.splice(existingAt, 1);
           desiredFeatures.push({
             ...remapped, id: modeFeatureId(group.id, option.id, f.id), level: entry.level, isActive: true,
             source: { kind: 'mode', refId: `${group.id}:${option.id}` }, sourceLabel: group.optionLabel, choices: [],
@@ -116,7 +122,9 @@ export function reconcileModes(entity: Entity): Entity {
   const featuresSame = nextFeatures.length === entity.features.length && nextFeatures.every((f, i) => f === entity.features[i]);
 
   // Resources
-  const wantById = new Map(pools.map(p => [p.id, p]));
+  // Same replace-by-id rule for pools: a higher-level entry's declaration (a bigger maximum) wins.
+  const wantById = new Map<string, PoolWant>();
+  for (const p of pools) { const prev = wantById.get(p.id); if (!prev || p.active || !prev.active) wantById.set(p.id, p); }
   let resourcesChanged = false;
   const custom: CustomResource[] = [];
   for (const r of entity.resources.custom) {
@@ -131,7 +139,7 @@ export function reconcileModes(entity: Entity): Entity {
     resourcesChanged = true;
     custom.push({ ...r, inactive, maximum, current, name: want.grant.name, recharge: want.grant.recharge });
   }
-  for (const want of pools) {
+  for (const want of wantById.values()) {
     if (!want.active || custom.some(c => c.id === want.id)) continue;      // never create a pool for an option that was never active
     resourcesChanged = true;
     custom.push({

@@ -67,12 +67,12 @@ function makeAsiChoice(id: string): ChoiceDefinition {
 
 /** Resolves the slot table rows for a spellcastingStyle. */
 function slotTableForStyle(
-  style: 'full' | 'half' | 'pact',
+  style: 'full' | 'half' | 'pact', cls?: Pick<CharClass, 'pactSlotTable'>,
 ): { level: number; slots: number[] }[] {
   switch (style) {
     case 'full': return FULL_CASTER_SLOTS;
     case 'half': return HALF_CASTER_SLOTS;
-    case 'pact': return WARLOCK_SLOTS;
+    case 'pact': return cls?.pactSlotTable ?? WARLOCK_SLOTS;
   }
 }
 
@@ -96,7 +96,7 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
   // its slot table.
   const hasSpellcasting = !!cls.spellcastingAbility || (cls.spellcastingAbilityOptions?.length ?? 0) > 0;
   const slotTable = (hasSpellcasting && cls.spellcastingStyle)
-    ? slotTableForStyle(cls.spellcastingStyle)
+    ? slotTableForStyle(cls.spellcastingStyle, cls)
     : null;
   const spellStartLevel = cls.spellcastingStartLevel ?? 1;
 
@@ -181,7 +181,7 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
       if (level === spellStartLevel) {
         grants.push({
           kind:  'init_spellcasting',
-          value: { ability: singleAbility },
+          value: { ability: singleAbility, ...(cls.spellcastingStyle === 'pact' ? { pact: true } : {}) },
         });
       }
       // Emit spell_slots every level at or above start level so the slot

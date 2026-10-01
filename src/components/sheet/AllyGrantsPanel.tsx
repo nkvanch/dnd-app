@@ -10,7 +10,7 @@ import { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Modal, ScrollView } from 'react-native';
 import { Entity, CampaignRules } from '../../engine/types';
 import {
-  listAllyGrantSources, isAuraProjecting, auraKey, auraRangeFeet, setAuraMember, applyChosenGrant,
+  listAllyGrantSources, isAuraProjecting, auraKey, grantRangeFeet, setAuraMember, applyChosenGrant,
   dismissReceivedGrant, spendGrantDie, spendGrantToken, AllyGrantSource,
 } from '../../engine/allyGrants';
 import { useCharacterStore, DEFAULT_RULES } from '../../store/characterStore';
@@ -23,7 +23,7 @@ export function AuraChecklistPanel({ entity, onEntityUpdate }: { entity: Entity;
   const homebrewItems = useHomebrewStore(s => s.items);
   const characters = useCharacterStore(s => s.characters);
   const auras = useMemo(
-    () => listAllyGrantSources(entity, homebrewItems).filter(s => s.spec.mode === 'aura'),
+    () => listAllyGrantSources(entity, homebrewItems).filter(s => s.spec.mode === 'aura' && !s.spec.selfOnly),
     [entity, homebrewItems]);
   const others = characters.filter(c => c.id !== entity.id && c.kind === 'character');
   if (auras.length === 0) return null;
@@ -40,10 +40,19 @@ export function AuraChecklistPanel({ entity, onEntityUpdate }: { entity: Entity;
       {auras.map(src => {
         const projecting = isAuraProjecting(entity, src.spec);
         const members = entity.auraMembers?.[auraKey(src.feature.id, src.spec.id)] ?? [];
-        const range = auraRangeFeet(src.spec, entity.identity.level);
+        const range = grantRangeFeet(src.spec, entity);
         return (
           <View key={`${src.feature.id}:${src.spec.id}`} style={styles.block}>
             <Text style={styles.name}>{src.spec.label}{range ? ` · ${range} ft` : ''}</Text>
+            {src.spec.activeWhileFlag && (
+              <Pressable style={styles.btnGhost} onPress={() => {
+                const flag = src.spec.activeWhileFlag!;
+                const on = entity.conditionMonitor.flags[flag] === true;
+                onEntityUpdate?.({ ...entity, conditionMonitor: { ...entity.conditionMonitor, flags: { ...entity.conditionMonitor.flags, [flag]: !on } } });
+              }}>
+                <Text style={styles.btnGhostTxt}>{entity.conditionMonitor.flags[src.spec.activeWhileFlag] === true ? 'Active — tap to end' : 'Inactive — tap to start'}</Text>
+              </Pressable>
+            )}
             {!projecting && (
               <Text style={styles.hint}>
                 {src.spec.activeWhileFlag ? `Not active — turn on "${src.spec.activeWhileFlag.replace(/_/g, ' ')}" first.` : 'Not active (you are incapacitated).'}
@@ -123,22 +132,27 @@ export function AllyGrantTargetModal({ holder, sources, onClose, onHolderUpdate 
 }) {
   const characters = useCharacterStore(s => s.characters);
   const updateCharacter = useCharacterStore(s => s.updateCharacter);
-  const [index] = useState(0);
+  const [picked, setPicked] = useState<string[]>([]);
   if (!holder || sources.length === 0) return null;
-  const src = sources[index];
+  const src = sources[0];
+  const many = src.spec.targets === 'many';
   const others = characters.filter(c => c.id !== holder.id && c.kind === 'character');
+  const options = [{ id: holder.id, name: 'Yourself', entity: holder }, ...others.map(o => ({ id: o.id, name: o.identity.name || 'Unnamed', entity: o }))];
 
-  function give(target: Entity) {
+  function give(targets: Entity[]) {
     let h = holder!;
-    for (const s of sources) {
-      const res = applyChosenGrant(h, target.id === h.id ? h : target, s);
-      h = res.holder;
-      if (target.id !== holder!.id) {
-        const grantedTarget = res.target;
-        updateCharacter(target.id, () => grantedTarget, `${s.spec.label} granted`);
+    for (const target of targets) {
+      for (const s of sources) {
+        const res = applyChosenGrant(h, target.id === h.id ? h : target, s);
+        h = res.holder;
+        if (target.id !== holder!.id) {
+          const grantedTarget = res.target;
+          updateCharacter(target.id, () => grantedTarget, `${s.spec.label} granted`);
+        }
       }
     }
     onHolderUpdate(h);
+    setPicked([]);
     onClose();
   }
 
@@ -148,17 +162,27 @@ export function AllyGrantTargetModal({ holder, sources, onClose, onHolderUpdate 
         <View style={styles.sheet}>
           <Text style={styles.title}>{src.spec.label}</Text>
           <Text style={styles.hint}>
-            Choose who receives it{src.spec.rangeFeet ? ` (within ${src.spec.rangeFeet} ft — range is table-resolved)` : ''}. {src.spec.note ?? ''}
+            {many ? 'Tick everyone who receives it' : 'Choose who receives it'}
+            {grantRangeFeet(src.spec, holder) ? ` (within ${grantRangeFeet(src.spec, holder)} ft — range is table-resolved)` : ''}. {src.spec.note ?? ''}
           </Text>
           <ScrollView style={{ maxHeight: 320 }}>
-            <Pressable style={styles.btn} onPress={() => give(holder)}><Text style={styles.btnTxt}>Yourself</Text></Pressable>
-            {others.map(o => (
-              <Pressable key={o.id} style={[styles.btn, { marginTop: Spacing.xs }]} onPress={() => give(o)}>
-                <Text style={styles.btnTxt}>{o.identity.name || 'Unnamed'}</Text>
-              </Pressable>
-            ))}
+            {options.map(o => {
+              const on = picked.includes(o.id);
+              return (
+                <Pressable key={o.id} style={[many ? styles.chip : styles.btn, many && on && styles.chipOn, { marginTop: Spacing.xs }]}
+                  onPress={() => many ? setPicked(p => on ? p.filter(x => x !== o.id) : [...p, o.id]) : give([o.entity])}>
+                  <Text style={many ? [styles.chipTxt, on && styles.chipTxtOn] : styles.btnTxt}>{many && on ? '✓ ' : ''}{o.name}</Text>
+                </Pressable>
+              );
+            })}
             {others.length === 0 && <Text style={styles.hint}>No other characters on this device — an ally on another phone applies it by hand.</Text>}
           </ScrollView>
+          {many && (
+            <Pressable style={[styles.btn, picked.length === 0 && { opacity: 0.4 }]} disabled={picked.length === 0}
+              onPress={() => give(options.filter(o => picked.includes(o.id)).map(o => o.entity))}>
+              <Text style={styles.btnTxt}>Grant to {picked.length}</Text>
+            </Pressable>
+          )}
           <Pressable style={styles.btnGhost} onPress={onClose}><Text style={styles.btnGhostTxt}>Skip (table resolves it)</Text></Pressable>
         </View>
       </View>

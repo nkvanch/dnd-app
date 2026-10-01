@@ -21,7 +21,7 @@ const ENTITLEMENT_KINDS = new Set([
 ]);
 const SOURCE_KINDS = new Set([
   'race', 'class', 'subclass', 'background', 'feat', 'feature', 'item',
-  'spell', 'condition', 'campaign', 'manual', 'legacy',
+  'spell', 'condition', 'campaign', 'manual', 'mode', 'legacy',
 ]);
 
 type Obj = Record<string, unknown>;

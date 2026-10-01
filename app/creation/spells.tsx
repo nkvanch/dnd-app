@@ -182,7 +182,8 @@ export default function SpellsScreen() {
       const spell = mergeSpellIndex(useHomebrewStore.getState().spells).find(s => s.id === newId);
       if (!spell) return;
       const classId = currentDraft.identity.classId;
-      const eligibleForClass = !spell.classes || spell.classes.length === 0 || spell.classes.includes(classId);
+      const listClassId = useHomebrewStore.getState().classes.find(c => c.id === classId)?.spellListClassId ?? classId;
+      const eligibleForClass = !spell.classes || spell.classes.length === 0 || spell.classes.includes(listClassId);
       const targets = SPELLS_AT_L1[classId] ?? { cantrips: 0, spells: 0 };
       if (!eligibleForClass) {
         Alert.alert('Not added', `"${spell.name}" isn't on ${classId}'s spell list, so it wasn't added to your picks. It's saved and available from "+ Add extra from another class."`);
@@ -290,6 +291,8 @@ export default function SpellsScreen() {
   if (!draft) return null;
 
   const classId       = draft.identity.classId;
+  const homebrewClassDefs = useHomebrewStore(s => s.classes);
+  const spellListClassId = homebrewClassDefs.find(c => c.id === classId)?.spellListClassId ?? classId;
   const isSpellcaster = !!draft.spellcasting || spellChoices.length > 0;
   // CREATION-FILTERS-4 (item 8/9): was a manually inline-duplicated
   // official+homebrew merge — replaced with the already-shared
@@ -304,7 +307,7 @@ export default function SpellsScreen() {
   // The "add extra from another class" toggle bypasses this restriction entirely.
   const classSpells = otherClasses
     ? allSpells
-    : allSpells.filter(s => !s.classes || s.classes.length === 0 || s.classes.includes(classId));
+    : allSpells.filter(s => !s.classes || s.classes.length === 0 || s.classes.includes(spellListClassId));
 
   // "+ Add Additional Spell" — writes directly into spellcasting.cantrips/
   // .known (mirroring the pre-existing "externally granted" spell pattern

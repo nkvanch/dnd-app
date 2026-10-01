@@ -1,4 +1,4 @@
-import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
+import { Entity, Grant, ChoiceOption, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
          KnownSpellsGrant, asSubclassId, asClassId, Background, SkillName,
          CharClass, ItemFilterConstraint, BACKGROUND_CHOICE_PREFIX,
@@ -7,6 +7,7 @@ import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers, effe
 import { getSpellSlotsForClassLevel, multiclassCasterLevel, MULTICLASS_SPELLCASTER_SLOTS,
          pactSlotTableFor, slotsForLevel, slotsFromCountArray } from '../content/classes/spellSlotTables';
 import { ALL_CHAR_CLASSES } from '../content/classes';
+import { spellRepo } from '../content/spellRepo';
 import { getProgressionForClass } from '../content/classes/progressions';
 import { WARLOCK_SLOTS } from '../content/classes/spellSlotTables';
 import { itemMatchesConstraint } from '../content/items/itemBrowse';
@@ -135,6 +136,8 @@ export function applyGrant(
             current: Math.max(0, Math.min(r.maximum, r.starting ?? r.maximum)), maximum: r.maximum,
             recharge: r.recharge,
             ...(r.rechargeAmount ? { rechargeAmount: r.rechargeAmount } : {}),
+            ...(r.scalesWith ? { scalesWith: r.scalesWith } : {}),
+            ...(r.shortRestIfEmpty ? { shortRestIfEmpty: r.shortRestIfEmpty } : {}),
             sourceKind: resolvedSource?.kind,
             sourceId:   resolvedSource?.id,
           }]
@@ -272,11 +275,11 @@ export function applyGrant(
       // block with a default ability (CON), this UPGRADES the ability to the
       // class's real casting ability (e.g. Abyss Knight CHA) while preserving
       // any cantrips/known spells the racial grant already added.
-      const sc = grant.value as { ability: Ability };
+      const sc = grant.value as { ability: Ability; pact?: boolean };
       if (entity.spellcasting) {
         return {
           ...entity,
-          spellcasting: { ...entity.spellcasting, ability: sc.ability },
+          spellcasting: { ...entity.spellcasting, ability: sc.ability, ...(sc.pact ? { shortRestSlots: true } : {}) },
         };
       }
       const emptySlots = Object.fromEntries(
@@ -286,6 +289,7 @@ export function applyGrant(
         ...entity,
         spellcasting: {
           ability:       sc.ability,
+          ...(sc.pact ? { shortRestSlots: true } : {}),
           slots:         emptySlots,
           cantrips:      [],
           known:         [],
@@ -984,9 +988,7 @@ export function applyPoolChoiceToEntity(
   let updated = entity;
   for (const optId of selectedOptionIds) {
     const option = pending.definition.pool.find(o => o.id === optId);
-    if (option?.value) {
-      updated = applyGrant(updated, { kind: 'feature', value: option.value as Feature }, pending.grantedAt);
-    }
+    if (option?.value) updated = applyPoolOption(updated, option, pending.grantedAt);
   }
   updated = {
     ...updated,
@@ -995,6 +997,71 @@ export function applyPoolChoiceToEntity(
     ),
   };
   return recomputeDerived(updated, rules);
+}
+
+/** Grants one feature_pool option: its Feature, plus any pools it brings, owned by that Feature so removing the Feature removes them. */
+function applyPoolOption(entity: Entity, option: ChoiceOption, atLevel: number): Entity {
+  const feature = option.value as Feature;
+  let next = applyGrant(entity, { kind: 'feature', value: feature }, atLevel);
+  for (const r of option.resources ?? []) {
+    next = applyGrant(next, { kind: 'resource', value: r }, atLevel, undefined, { kind: 'feature', id: feature.id });
+  }
+  return next;
+}
+
+/**
+ * Replaces one already-chosen option of a swappable feature_pool choice with a
+ * different option from the same pool ("whenever you gain a level, you may
+ * replace one Edict you know"). The old option's Feature and the pools it
+ * brought are removed, the new one's are granted, and the swap is recorded on
+ * the choice (ChoiceState.swaps) — the original pick stays visible in history.
+ *
+ * Refused (entity returned unchanged) when: the choice is not a resolved,
+ * swappable feature_pool; `fromOptionId` is not currently held there;
+ * `toOptionId` is not in the pool or is already known (any choice of the same
+ * swap group); or this swap group has already used its `perLevel` swaps at
+ * the character's current level.
+ */
+export function swapPoolChoice(
+  entity: Entity, choiceId: string, fromOptionId: string, toOptionId: string,
+  rules: CampaignRules, now: string = new Date().toISOString(),
+): Entity {
+  const choice = entity.choices.find(c => c.id === choiceId);
+  const def = choice?.definition;
+  if (!choice || !def || !choice.resolved || def.kind !== 'feature_pool' || !def.swappable || !Array.isArray(def.pool)) return entity;
+  if (!choice.selections.includes(fromOptionId) || fromOptionId === toOptionId) return entity;
+  const from = def.pool.find(o => o.id === fromOptionId);
+  const to   = def.pool.find(o => o.id === toOptionId);
+  if (!from?.value || !to?.value) return entity;
+  const group = def.swappable.group;
+  const sameGroup = entity.choices.filter(c => c.definition.kind === 'feature_pool' && c.definition.swappable?.group === group);
+  const toFeatureId = (to.value as Feature).id;
+  if (entity.features.some(f => f.id === toFeatureId)) return entity;                       // already known
+  const level = entity.identity.level;
+  const usedThisLevel = sameGroup.reduce((n, c) => n + (c.swaps ?? []).filter(sw => sw.atLevel === level).length, 0);
+  if (usedThisLevel >= def.swappable.perLevel) return entity;
+
+  let next = removeFeature(entity, (from.value as Feature).id);
+  next = applyPoolOption(next, to, choice.grantedAt);
+  next = {
+    ...next,
+    choices: next.choices.map(c => c.id !== choiceId ? c : {
+      ...c,
+      selections: c.selections.map(id => id === fromOptionId ? toOptionId : id),
+      swaps: [...(c.swaps ?? []), { from: fromOptionId, to: toOptionId, atLevel: level, at: now }],
+    }),
+  };
+  return recomputeDerived(next, rules);
+}
+
+/** How many swaps this swap group may still make at the character's current level. */
+export function swapsRemainingThisLevel(entity: Entity, group: string): number {
+  const sample = entity.choices.find(c => c.definition.kind === 'feature_pool' && c.definition.swappable?.group === group);
+  if (!sample) return 0;
+  const used = entity.choices
+    .filter(c => c.definition.kind === 'feature_pool' && c.definition.swappable?.group === group)
+    .reduce((n, c) => n + (c.swaps ?? []).filter(sw => sw.atLevel === entity.identity.level).length, 0);
+  return Math.max(0, sample.definition.swappable!.perLevel - used);
 }
 
 // ── canAutoResolve ────────────────────────────────────────────────────────────
@@ -1232,6 +1299,28 @@ export function applySpellChoiceToEntity(
   const spellSource: { kind: EntitlementSourceKind; id?: string } = pending?.sourceKind
     ? { kind: pending.sourceKind, id: pending.sourceId }
     : { kind: 'manual', id: undefined };
+  // Mystic-Arcanum-style pick: the spell is NOT added to the ordinary known
+  // list (that would demand a slot of its level). A feature casts it from the
+  // dedicated pool instead.
+  if (pending?.definition.arcanum) {
+    const { resourceId } = pending.definition.arcanum;
+    let withArcanum: Entity = entity;
+    for (const id of spellIds) {
+      const name = spellRepo.getSpellSync(id)?.name ?? id;
+      withArcanum = applyGrant(withArcanum, { kind: 'feature', value: {
+        id: `${choiceId.replace(/[^a-z0-9_]+/gi, '_')}__arcanum_${id}`, name: `Arcanum: ${name}`,
+        description: `Cast ${name} once, without a spell slot, then it must recharge.`,
+        source: { kind: spellSource.kind === 'manual' ? 'class' : (spellSource.kind as Feature['source']['kind']), refId: spellSource.id ?? 'arcanum' },
+        level: pending.grantedAt, effects: [], actions: [], choices: [], passive: false,
+        activation: { actionType: 'action', resourceCost: { resourceId, quantity: 1 }, range: 'self', target: 'single', requiresSave: null },
+        abilityEffects: [{ type: 'cast_spell', spellId: id }],
+      } as Feature }, pending.grantedAt);
+    }
+    return recomputeDerived({
+      ...withArcanum,
+      choices: withArcanum.choices.map(c => c.id === choiceId ? { ...c, resolved: true, selections: spellIds } : c),
+    }, rules);
+  }
   let updated: Entity = grantEntitlements(entity, [
     ...newCantrips.map(key => ({ kind: 'cantrip_access' as const, key, sourceKind: spellSource.kind, sourceId: spellSource.id, choiceId })),
     ...newKnown.map(key    => ({ kind: 'spell_access'   as const, key, sourceKind: spellSource.kind, sourceId: spellSource.id, choiceId })),
@@ -1736,7 +1825,7 @@ export function levelUpClass(
     const oldNormal = oldPactOnly ? undefined : entity.spellcasting?.slots;
     const oldPact = entity.spellcasting?.pactSlots ?? (oldPactOnly ? entity.spellcasting?.slots : undefined);
     const pactClass = definitions.find(c => c.spellcastingStyle === 'pact' || pactSlotTableFor(c.classId, c.subclassId));
-    const pactTable = pactClass ? pactSlotTableFor(pactClass.classId, pactClass.subclassId) ?? WARLOCK_SLOTS : null;
+    const pactTable = pactClass ? pactSlotTableFor(pactClass.classId, pactClass.subclassId, classDefinitions) ?? WARLOCK_SLOTS : null;
     let normalMax: SpellSlots;
     if (finalClasses.length > 1) {
       const casterLevel = multiclassCasterLevel(definitions);

@@ -152,6 +152,24 @@ function refreshSelfAuras(entity: Entity, homebrewItems: readonly import('./type
   return { ...entity, receivedGrants: [...rest, ...fresh] };
 }
 
+/**
+ * Resources whose maximum tracks the proficiency bonus (Command Dice = PB):
+ * rewrites `maximum` to the current PB, preserving what has been spent.
+ * Returns the same object when nothing changes.
+ */
+function scaleProficiencyResources(entity: Entity): Entity {
+  if (!entity.resources.custom.some(r => r.scalesWith === 'proficiency')) return entity;
+  const pb = proficiencyBonus(entity.identity.level);
+  let changed = false;
+  const custom = entity.resources.custom.map(r => {
+    if (r.scalesWith !== 'proficiency' || r.maximum === pb) return r;
+    changed = true;
+    const spent = Math.max(0, r.maximum - r.current);
+    return { ...r, maximum: pb, current: Math.max(0, Math.min(pb, pb - spent)) };
+  });
+  return changed ? { ...entity, resources: { ...entity.resources, custom } } : entity;
+}
+
 // ── Main pipeline ─────────────────────────────────────────────────────────────
 
 /**
@@ -177,7 +195,7 @@ export function recomputeDerived(
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
 ): Entity {
   // Use a mutable local reference so we can apply grant_proficiency effects
-  let entity = refreshSelfAuras(recomputeResourceMaximums(reconcileModes(initializeEntitlementInputs(entityParam, content.homebrewSpells))), content.items);
+  let entity = refreshSelfAuras(scaleProficiencyResources(recomputeResourceMaximums(reconcileModes(initializeEntitlementInputs(entityParam, content.homebrewSpells)))), content.items);
 
   const allEffects    = collectAllEffects(entity, content.items);
   let effectiveStats = applyStatModifiers(entity.stats, allEffects);
@@ -227,11 +245,22 @@ export function recomputeDerived(
   for (const a of entDerived.armor)     if (!newGrantedArmor.some(x => x.toLowerCase() === a.toLowerCase()))   newGrantedArmor.push(a);
   for (const l of entDerived.languages) if (!newGrantedLanguages.some(x => x.toLowerCase() === l.toLowerCase())) newGrantedLanguages.push(l);
 
-  for (const ae of profEffects) {
+  // "Gain proficiency — or expertise if you already have it" effects
+  // (expertiseIfProficient) are resolved AFTER every other source has been
+  // counted, so the answer never depends on effect order: already trained from
+  // an entitlement or another effect → expertise; otherwise → proficiency.
+  const orderedProfEffects = [
+    ...profEffects.filter(ae => !ae.effect.expertiseIfProficient),
+    ...profEffects.filter(ae => ae.effect.expertiseIfProficient),
+  ];
+  for (const ae of orderedProfEffects) {
     // target format: 'skill:perception', 'skill:athletics', etc.
     if (ae.effect.target.startsWith('skill:')) {
       const skillName = ae.effect.target.slice(6) as SkillName;
-      if (ae.effect.operation === 'add') newGrantedSkills.add(skillName);
+      if (ae.effect.expertiseIfProficient && ae.effect.operation === 'add') {
+        if (newGrantedSkills.has(skillName)) newExpertiseSkills.add(skillName);
+        else newGrantedSkills.add(skillName);
+      } else if (ae.effect.operation === 'add') newGrantedSkills.add(skillName);
       else if (ae.effect.operation === 'multiply') { newGrantedSkills.add(skillName); newExpertiseSkills.add(skillName); }
     }
     // target format: 'tool:thieves_tools', 'tool:herbalism_kit', etc.

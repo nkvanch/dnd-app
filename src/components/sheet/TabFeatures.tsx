@@ -10,6 +10,8 @@ import { Alert } from '../../utils/alert';
 import { AuraChecklistPanel, ReceivedGrantsPanel } from './AllyGrantsPanel';
 import { GrantFeatureModal, FeatureGrantLedger } from './GrantFeatureModal';
 import { ModeGroupPanels } from './ModeGroupPanel';
+import { ActiveStatesPanel } from './ActiveStatesPanel';
+import { SwapChoicePanel } from './SwapChoicePanel';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { SubclassPicker } from '../SubclassPicker';
 import { InfusionPicker } from '../InfusionPicker';
@@ -261,7 +263,9 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
+      <ActiveStatesPanel entity={entity} onEntityUpdate={onEntityUpdate} />
       <ModeGroupPanels entity={entity} rules={rules} onEntityUpdate={onEntityUpdate} />
+      <SwapChoicePanel entity={entity} rules={rules} onEntityUpdate={onEntityUpdate} />
       <ReceivedGrantsPanel entity={entity} rules={rules} onEntityUpdate={onEntityUpdate} />
       <AuraChecklistPanel entity={entity} onEntityUpdate={onEntityUpdate} />
 

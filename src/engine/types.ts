@@ -415,6 +415,8 @@ export type CharClass  = {
   name:        string;
   /** Singular noun for this class's subclass choice in pickers ("Bound Spirit"). Absent → "Subclass". */
   subclassLabel?: string;
+  /** Draw spell choices from another class's spell list (an Emperor Warlock picks from the Warlock list). Absent → this class's own id. */
+  spellListClassId?: string;
   hitDie:      number;
   features:    Feature[];     // level-1 features (backward-compat; Phase 2 uses levelFeatures)
   description?: string;
@@ -452,6 +454,13 @@ export type CharClass  = {
    */
   spellcastingAbilityOptions?: Ability[];
   spellcastingStyle?:     'full' | 'half' | 'pact'; // slot table to use
+  /**
+   * Pact-style classes only: the class's OWN slot progression (level → slots
+   * per tier, all slots one tier, short-rest recovery). Absent → the standard
+   * Warlock table. This is how a homebrew class opts into pact magic with its
+   * own numbers instead of a hardcoded class-id check.
+   */
+  pactSlotTable?:         SpellSlotRow[];
   /**
    * Rules-engine blocker closure (prepared-spell legality, re-audit): which
    * preparation model this class uses for its LEVELED spells (cantrips are
@@ -1053,6 +1062,10 @@ export type CustomResource = {
   baseMaximum?: number;
   /** See ResourceGrant.rechargeAmount. */
   rechargeAmount?: string;
+  /** Maximum tracks the character's proficiency bonus (Command Dice = PB). Recomputed each pass; spent uses are preserved. */
+  scalesWith?: 'proficiency';
+  /** Short rest: if the pool is EMPTY, regain `amount` — once character level >= minLevel (Tireless Command). */
+  shortRestIfEmpty?: { amount: number; minLevel: number };
   /** True while the mode option that owns this pool is not the active one: its spent amount is kept, but it is hidden and unusable. */
   inactive?: boolean;
   recharge: 'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
@@ -1278,6 +1291,8 @@ export type ChoiceOption = {
   id:    string;
   label: string;
   value: unknown;
+  /** feature_pool options: limited-use pools the option's Feature brings with it (created on pick, removed when the option is swapped away). */
+  resources?: ResourceGrant[];
   /**
    * STARTING-EQUIPMENT-1: when present, selecting this option ALSO requires
    * picking `quantity` real items matching `constraint` from the shared Item
@@ -1327,6 +1342,21 @@ export type ChoiceDefinition = {
   equipmentStyle?: 'exact_options' | 'bundle_options' | 'filtered_item';
   /** Only used when equipmentStyle === 'filtered_item'. */
   itemFilter?: ItemFilterConstraint;
+  /**
+   * feature_pool only: a pick made here can later be REPLACED by a different
+   * option from the pool (Imperial Edicts: "whenever you gain a level, you may
+   * replace one Edict you know"). `group` ties several choices that share one
+   * pool together; `perLevel` caps swaps per group at each character level.
+   * See swapPoolChoice (leveling.ts).
+   */
+  swappable?: { group: string; perLevel: number };
+  /**
+   * spell only: a Mystic-Arcanum-style pick — one spell of exactly
+   * `spellLevel`, cast once per recharge from the named pool instead of
+   * spending a slot (and so not limited by the highest slot tier you have).
+   * Resolving it adds a feature that casts the spell from the pool.
+   */
+  arcanum?: { spellLevel: number; resourceId: string };
   /** Free-text display grouping for the Starting Equipment progress panel
    *  (e.g. "Armor", "Weapons", "Pack") — purely presentational, never used
    *  for legality/matching. Undefined groups under a generic "Equipment"
@@ -1372,6 +1402,8 @@ export type ChoiceState = {
    * tracked per-instance provenance it never recorded).
    */
   grantedItemInstanceIds?: string[];
+  /** feature_pool choices: replacements made after the original pick, oldest first (see swapPoolChoice). */
+  swaps?: { from: string; to: string; atLevel: number; at: string }[];
 };
 
 export type SlotEntry   = { total: number; used: number };
@@ -1391,6 +1423,13 @@ export type SpellcastingBlock = {
    * entities are unaffected.
    */
   pactSlots?:    SpellSlots;
+  /**
+   * True for a pact-style caster built from content (CharClass.spellcastingStyle
+   * 'pact'): its slots recover on a SHORT rest (rest.ts). Set by the class's
+   * init_spellcasting grant, so no hardcoded class id is involved. Official
+   * Warlock-family saves that predate it are still recognized by id.
+   */
+  shortRestSlots?: boolean;
   cantrips:      string[];
   known:         string[];
   prepared:      string[];
@@ -1714,6 +1753,12 @@ export type Effect = {
    */
   requiresResource?: ResourceRange;
   /**
+   * grant_proficiency (skill, operation 'add') only: "gain this proficiency —
+   * or expertise in it if you already have proficiency from any other source."
+   * Resolved every recompute after all other sources are counted.
+   */
+  expertiseIfProficient?: boolean;
+  /**
    * Re-audit A19: gates an item-sourced effect on "no OTHER currently
    * equipped item is armor or a shield" — the real equipment predicate
    * Bracers of Defense's own RAW text requires ("+2 AC while you are
@@ -1928,12 +1973,14 @@ export type AllyGrantSpec = {
   rangeFeet?: number | null;
   /** Range grows with the holder's total level (Aura Improvements: 10 → 30 ft at 18). */
   rangeByLevel?: { level: number; feet: number }[];
+  /** Range becomes `feet` while the holder has this active feature (an Edict that extends it). */
+  rangeWithFeature?: { featureId: string; feet: number }[];
   /** Passive effects the recipient gains while the grant lasts. */
   effects?:   Effect[];
   /** Replace each numeric effect value with this ability's modifier (min applied) when snapshotting. */
   valueFromAbilityMod?: { ability: Ability; min?: number };
   /** Temp HP given the moment a chosen grant lands (the larger pool wins, per RAW). */
-  tempHp?:    { flat?: number; addProficiency?: boolean; addAbilityMod?: Ability };
+  tempHp?:    { flat?: number; addLevel?: boolean; addProficiency?: boolean; addAbilityMod?: Ability; dice?: string; diceSizeByLevel?: { level: number; size: string }[] };
   /** A consumable die the recipient may spend on a roll (Command Die). Size can scale with the holder's total level. */
   die?:       { size: string; count?: number; sizeByLevel?: { level: number; size: string }[]; usableOn: string };
   /** Note-only token with N uses the recipient spends by hand ("may reroll one failed save"). */
@@ -1946,6 +1993,12 @@ export type AllyGrantSpec = {
   activeWhileFlag?: string;
   /** Aura only: the holder gets it too (Aura of Protection: "you and friendly creatures"). */
   includeSelf?: boolean;
+  /** Aura only: affects ONLY the holder (a bonus computed from the holder's own ability mod, e.g. "+CHA to initiative"). No ally checklist. */
+  selfOnly?: boolean;
+  /** Chosen only: the picker lets the holder tick several recipients at once ("allies of your choice within 30 ft"). */
+  targets?: 'one' | 'many';
+  /** Replace each numeric effect value with the holder's proficiency bonus (or half, rounded down) when snapshotting. */
+  valueFromProficiency?: 'full' | 'half';
 };
 
 /** A grant currently held by a creature, given by another creature's feature. */
@@ -2638,6 +2691,10 @@ export type ResourceGrant = {
    * added to the current value, capped at the maximum.
    */
   rechargeAmount?: string;
+  /** Maximum tracks the character's proficiency bonus (Command Dice = PB). `maximum` is then only a floor/initial value. */
+  scalesWith?: 'proficiency';
+  /** Short rest: if the pool is EMPTY, regain `amount` — once character level >= minLevel (Tireless Command). */
+  shortRestIfEmpty?: { amount: number; minLevel: number };
   /** `string` covers a homebrew-authored custom recharge description (see
    * DraftTrait's 'other' recharge option) — displayed as-is by CustomResource,
    * which already allows the same free-text escape hatch. */

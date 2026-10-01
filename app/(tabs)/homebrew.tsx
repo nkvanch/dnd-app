@@ -4,12 +4,15 @@
 // existing content) and the INSTALLED PACKAGES list moved to
 // Compendium → Homebrew / Compendium → Packages; this screen keeps small
 // shortcuts to them and redirects the old `?view=library|packages` links.
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { useCustomRuleProfileStore } from '../../src/store/customRuleProfileStore';
 import { useCompendiumModeStore } from '../../src/store/compendiumModeStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { EMPEROR_WARLOCK } from '../../src/content/homebrewDemo/emperorWarlock';
+import { Alert } from '../../src/utils/alert';
 import { compendiumHref, legacyHomebrewViewRedirect, CompendiumMode } from '../../src/content/compendiumModes';
 
 // ── Create Panel ──────────────────────────────────────────────────────────────
@@ -58,6 +61,33 @@ function CreatePanel() {
 
 // ── Homebrew Screen ───────────────────────────────────────────────────────────
 
+// ── Playtest content ──────────────────────────────────────────────────────────
+// The Emperor Warlock demo class (docs/homebrew/EMPEROR_WARLOCK_DEMO.md): one
+// self-contained class carrying its twelve Bound Spirits and seventeen Imperial
+// Edicts. Installing it adds an ordinary homebrew class you can edit, export as
+// a package, or delete like any other.
+function PlaytestPanel() {
+  const classes = useHomebrewStore(s => s.classes);
+  const saveItem = useHomebrewStore(s => s.saveItem);
+  const [busy, setBusy] = useState(false);
+  const installed = classes.some(c => c.id === EMPEROR_WARLOCK.id);
+  async function install() {
+    setBusy(true);
+    try { await saveItem('class', EMPEROR_WARLOCK); Alert.alert('Installed', 'Emperor Warlock (playtest) is now in your homebrew classes. Choose it at character creation; its Bound Spirits are managed from the Features tab.'); }
+    catch (e) { Alert.alert('Could not install', e instanceof Error ? e.message : 'Something went wrong.'); }
+    finally { setBusy(false); }
+  }
+  return (
+    <View style={styles.panel}>
+      <Text style={styles.panelTitle}>🧪 Playtest content</Text>
+      <Text style={styles.panelSub}>Emperor Warlock — a battlefield-commander class with monthly Legacy Binding (twelve Bound Spirits), Command Dice, Imperial Edicts and Pact Magic. What the app automates and what stays at the table is written into each feature.</Text>
+      <Pressable style={styles.linkBtn} disabled={busy || installed} onPress={() => { void install(); }}>
+        <Text style={styles.linkBtnTxt}>{installed ? '✓ Emperor Warlock installed' : busy ? 'Installing…' : 'Install Emperor Warlock (playtest)'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function HomebrewScreen() {
   const router = useRouter();
   const { view } = useLocalSearchParams<{ view?: string }>();
@@ -86,6 +116,7 @@ export default function HomebrewScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <CreatePanel />
+        <PlaytestPanel />
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>📚 Your content</Text>
           <Text style={styles.panelSub}>Browse, edit, export and delete what you've made — and manage installed packages — in the Compendium.</Text>

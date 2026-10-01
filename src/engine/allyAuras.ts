@@ -46,6 +46,15 @@ export function auraRangeFeet(spec: AllyGrantSpec, level: number): number | null
   return feet;
 }
 
+/** Printed reach of a spec for this holder: level table, then any extending feature they have. */
+export function grantRangeFeet(spec: AllyGrantSpec, holder: Entity): number | null {
+  let feet = auraRangeFeet(spec, holder.identity.level);
+  for (const r of spec.rangeWithFeature ?? []) {
+    if (holder.features.some(f => f.isActive && f.id === r.featureId)) feet = Math.max(feet ?? 0, r.feet);
+  }
+  return feet;
+}
+
 export function sizeForLevel(die: NonNullable<AllyGrantSpec['die']>, level: number): string {
   let size = die.size;
   for (const row of [...(die.sizeByLevel ?? [])].sort((x, y) => x.level - y.level)) if (level >= row.level) size = row.size;
@@ -55,9 +64,10 @@ export function sizeForLevel(die: NonNullable<AllyGrantSpec['die']>, level: numb
 const mod = (score: number) => Math.floor((score - 10) / 2);
 
 /** Resolve the spec's effects against the holder's ability scores into plain Effects. */
-export function snapshotEffects(spec: AllyGrantSpec, scores: AbilityScores): Effect[] {
+export function snapshotEffects(spec: AllyGrantSpec, scores: AbilityScores, proficiencyBonus = 2): Effect[] {
   const v = spec.valueFromAbilityMod;
-  const fixed = v ? Math.max(v.min ?? Number.NEGATIVE_INFINITY, mod(scores[v.ability])) : null;
+  let fixed: number | null = v ? Math.max(v.min ?? Number.NEGATIVE_INFINITY, mod(scores[v.ability])) : null;
+  if (spec.valueFromProficiency) fixed = spec.valueFromProficiency === 'half' ? Math.floor(proficiencyBonus / 2) : proficiencyBonus;
   return (spec.effects ?? []).map(e => fixed !== null && typeof e.value === 'number' ? { ...e, value: fixed } : { ...e });
 }
 
@@ -68,7 +78,7 @@ export function buildGrant(
   return {
     id, mode: spec.mode, sourceEntityId: holder.id, sourceName: holder.identity.name || 'Ally',
     sourceFeatureId: feature.id, specId: spec.id, label: spec.label,
-    effects: snapshotEffects(spec, scores),
+    effects: snapshotEffects(spec, scores, holder.derived.proficiencyBonus),
     note: spec.note,
     die: spec.die ? { size: sizeForLevel(spec.die, holder.identity.level), remaining: spec.die.count ?? 1, usableOn: spec.die.usableOn } : undefined,
     token: spec.token ? { text: spec.token.text, remaining: spec.token.uses } : undefined,
@@ -81,7 +91,7 @@ export function buildGrant(
 export function selfAuraGrants(holder: Entity, scores: AbilityScores, homebrewItems: readonly Item[] = []): ReceivedGrant[] {
   const out: ReceivedGrant[] = [];
   for (const src of listAllyGrantSources(holder, homebrewItems)) {
-    if (src.spec.mode !== 'aura' || !src.spec.includeSelf || !isAuraProjecting(holder, src.spec)) continue;
+    if (src.spec.mode !== 'aura' || !(src.spec.includeSelf || src.spec.selfOnly) || !isAuraProjecting(holder, src.spec)) continue;
     out.push(buildGrant(holder, src, scores, auraGrantId(holder.id, src.feature.id, src.spec.id), 'self'));
   }
   return out;

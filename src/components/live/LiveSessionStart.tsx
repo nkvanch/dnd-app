@@ -18,6 +18,7 @@ import { EntityAdapter } from '../../session/entityAdapter';
 import { parseAddress, SESSION_PORT } from '../../session/lanTransport';
 import { decodeRoomCode } from '../../sync/discovery';
 import { Capability, PeekResult } from '../../session/types';
+import { StoredIdentity } from '../../session/peer';
 import { checkCampaignCompatibility, CompatibilityIssue } from '../../engine/campaignCompatibility';
 import { loadInstalledPacks, InstalledPack } from '../../db/packRegistryRepo';
 import { Chip, Field, Row, Muted, Card, Badge, Body } from './LiveUi';
@@ -193,10 +194,12 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
   const [peek, setPeek] = useState<PeekResult | null>(null);
   const [target, setTarget] = useState<{ host: string; port: number } | null>(null);
   const [installedPacks, setInstalledPacks] = useState<InstalledPack[]>([]);
+  const [storedIdentity, setStoredIdentity] = useState<StoredIdentity | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
     if (visible) return;
-    setStep('find'); setPeek(null); setPeekError(null); setTarget(null);
+    setStep('find'); setPeek(null); setPeekError(null); setTarget(null); setStoredIdentity(null);
     setCode(''); setIp(''); setAdvancedOpen(false); setCharacterId(null);
   }, [visible]);
 
@@ -230,11 +233,31 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
     try {
       const result = await getSessionRuntime().peekRoom(candidate.host, candidate.port);
       if (result.ended) { Alert.alert('Session ended', 'This room has already ended.'); return; }
-      setPeek(result); setTarget(candidate); setStep('confirm');
+      // The room code only says which room; a stored identity (if any) says who this device
+      // already is there — a purely local lookup, no network round trip of its own.
+      const identity = await getSessionRuntime().findStoredIdentity(candidate.host, candidate.port);
+      setPeek(result); setTarget(candidate); setStoredIdentity(identity); setStep('confirm');
     } catch (e) {
       setPeekError((e as Error).message);
     } finally {
       setPeeking(false);
+    }
+  }
+
+  async function reconnectAsStored() {
+    if (!target || !storedIdentity) return;
+    setReconnecting(true);
+    try {
+      const adapter = storedIdentity.characterId ? await adapterFor(storedIdentity.characterId) : undefined;
+      await getSessionRuntime().join({
+        host: target.host, port: target.port, nickname: storedIdentity.nickname, wants: storedIdentity.capabilities,
+        ...(adapter && storedIdentity.characterId ? { character: adapter, characterId: storedIdentity.characterId } : {}),
+      });
+      onClose();
+    } catch (e) {
+      Alert.alert('Could not reconnect', (e as Error).message);
+    } finally {
+      setReconnecting(false);
     }
   }
 
@@ -311,8 +334,22 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
                   <Muted>{peek.campaign ? `Campaign attached: ${peek.campaign.name}` : 'No campaign attached yet'}</Muted>
                   <Muted>{peek.participantCount} participant{peek.participantCount === 1 ? '' : 's'} connected</Muted>
                 </Card>
-                <Pressable style={m.primaryBtn} onPress={() => setStep('role')} testID="live-join-confirm-continue">
-                  <Text style={m.primaryBtnTxt}>Continue</Text>
+
+                {storedIdentity && (
+                  <Card testID="live-join-reconnect">
+                    <Body bold>Previous participant found</Body>
+                    {storedIdentity.characterId && (
+                      <Muted>Character: {characters.find(c => c.id === storedIdentity.characterId)?.identity.name ?? 'Unknown character'}</Muted>
+                    )}
+                    <Muted>Role: {roleLabel(storedIdentity.capabilities)}</Muted>
+                    <Pressable style={[m.primaryBtn, reconnecting && m.btnDisabled]} onPress={() => { void reconnectAsStored(); }} disabled={reconnecting} testID="live-join-reconnect-confirm">
+                      {reconnecting ? <ActivityIndicator color={Colors.bg} /> : <Text style={m.primaryBtnTxt}>Reconnect as {storedIdentity.nickname}</Text>}
+                    </Pressable>
+                  </Card>
+                )}
+
+                <Pressable style={storedIdentity ? m.ghostBtn : m.primaryBtn} onPress={() => setStep('role')} testID="live-join-confirm-continue">
+                  <Text style={storedIdentity ? m.ghostBtnTxt : m.primaryBtnTxt}>{storedIdentity ? 'Join as someone else' : 'Continue'}</Text>
                 </Pressable>
                 <Pressable style={m.ghostBtn} onPress={() => setStep('find')} testID="live-join-confirm-back">
                   <Text style={m.ghostBtnTxt}>Back</Text>
@@ -356,6 +393,15 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
       </Modal>
     </>
   );
+}
+
+function roleLabel(capabilities: Capability[]): string {
+  const player = capabilities.includes('player');
+  const dm = capabilities.includes('dm');
+  if (player && dm) return 'Player + DM';
+  if (dm) return 'DM';
+  if (player) return 'Player';
+  return 'Observer';
 }
 
 function CharacterPicker({ characters, value, onChange }: {

@@ -53,6 +53,37 @@ type PeerPersisted = {
   view:            ViewState | null;
 };
 
+/** The storage key a join() at host:port persists its identity under — exported so callers can
+ *  look up a PRIOR join's identity without connecting (see loadStoredIdentity below) using the
+ *  exact same key join() itself will use, rather than a second, driftable copy of this format. */
+export function peerStorageKey(participantId: ParticipantId, host: string, port: number): string {
+  return `session.peer.${participantId}@${host}:${port}`;
+}
+
+export type StoredIdentity = {
+  nickname:     string;
+  capabilities: Capability[];
+  characterId:  string | null;
+};
+
+/**
+ * Reads the last-known identity for a PRIOR join to host:port, without connecting or affecting
+ * this device's actual connection state — the Join modal's reconnect-by-token screen
+ * (JOIN_SESSION_FLOW_SPEC.md: "Previous participant found... Reconnect"). The room code only
+ * tells the app which room; this is what tells it who the device already is there. Returns null
+ * if this device never joined that exact address, or has no view yet to recover an identity from
+ * (e.g. it joined but disconnected before ever receiving a welcome).
+ */
+export async function loadStoredIdentity(
+  kv: KeyValueStore, participantId: ParticipantId, host: string, port: number,
+): Promise<StoredIdentity | null> {
+  const saved = await kv.get<PeerPersisted>(peerStorageKey(participantId, host, port));
+  if (!saved || saved.participantId !== participantId || !saved.view) return null;
+  const me = saved.view.participants[participantId];
+  if (!me) return null;
+  return { nickname: me.nickname, capabilities: me.capabilities, characterId: me.characterId };
+}
+
 export class NotCapableError extends Error {
   constructor(cap: Capability) { super(`This participant lacks the ${cap} capability`); }
 }

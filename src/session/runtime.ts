@@ -8,7 +8,7 @@
 // ============================================================================
 import { create } from 'zustand';
 import { SessionHost, DmPolicy, HostPersisted } from './host';
-import { SessionPeer, PeerStatus } from './peer';
+import { SessionPeer, PeerStatus, peerStorageKey, loadStoredIdentity, StoredIdentity } from './peer';
 import { PrepService, SecretVault } from './prep';
 import { KeyValueStore } from './kv';
 import { ClientTransport, Connection, ServerTransport } from './transport';
@@ -169,6 +169,13 @@ export class SessionRuntime {
     return peekRoom(this.deps.remoteClient(host, port ?? this.deps.port));
   }
 
+  /** Who this device already was, last time it joined host:port — a local KV lookup, no network
+   *  involved. See loadStoredIdentity's own doc comment. */
+  async findStoredIdentity(host: string, port?: number): Promise<StoredIdentity | null> {
+    const participantId = await this.deviceParticipantId();
+    return loadStoredIdentity(this.deps.kv, participantId, host, port ?? this.deps.port);
+  }
+
   async join(opts: {
     host:        string;
     port?:       number;
@@ -185,7 +192,7 @@ export class SessionRuntime {
       const peer = await SessionPeer.create({
         participantId, nickname: opts.nickname, requestedCapabilities: opts.wants,
         transport: this.deps.remoteClient(opts.host, port), kv: this.deps.kv,
-        storageKey: `session.peer.${participantId}@${opts.host}:${port}`,
+        storageKey: peerStorageKey(participantId, opts.host, port),
         prep: new PrepService(this.deps.kv), vault: new SecretVault(this.deps.kv),
         newId: p => `${p}_${this.deps.newId()}`, installedPacks: loadInstalledPacks,
         ...(opts.character ? { character: opts.character, characterId: opts.characterId ?? opts.character.characterId } : {}),

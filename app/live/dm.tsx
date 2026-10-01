@@ -16,8 +16,8 @@ import { useRouter } from 'expo-router';
 import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime';
 import { CampaignPrep } from '../../src/session/prep';
 import { addNote, describeDuration, describeEffectComponent, parseSignedInt, removeItem } from '../../src/session/prepEdit';
-import { describeChanges, describeRewardKind } from '../../src/session/roles';
-import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility, RewardKind } from '../../src/session/types';
+import { describeChanges, describeRewardKind, describeSessionLogKind } from '../../src/session/roles';
+import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility, RewardKind, SessionLogKind } from '../../src/session/types';
 import { SessionPeer } from '../../src/session/peer';
 import { LiveScreen, Section, Card, Btn, Chip, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
 import { Alert } from '../../src/utils/alert';
@@ -25,6 +25,7 @@ import { Alert } from '../../src/utils/alert';
 type Tab = 'dashboard' | 'encounter' | 'effects' | 'requests' | 'suggestions' | 'rewards' | 'notes';
 type FastAction = { participantId: string; kind: 'hp_damage' | 'hp_heal' | 'temp_hp' | 'max_hp' };
 const REWARD_KINDS: RewardKind[] = ['homebrew_feature', 'resource', 'proficiency', 'reward_tier', 'permanent_modifier', 'campaign_boon'];
+const SESSION_LOG_KINDS: SessionLogKind[] = ['major_event', 'encounter_outcome', 'npc_death', 'quest_outcome', 'reward', 'milestone', 'rule_change', 'custom_note'];
 
 export default function DmLiveScreen() {
   const router = useRouter();
@@ -50,6 +51,9 @@ export default function DmLiveScreen() {
   const [rewardLabel, setRewardLabel] = useState('');
   const [rewardDescription, setRewardDescription] = useState('');
   const [rewardTierTrack, setRewardTierTrack] = useState('');
+  const [addingLogEntry, setAddingLogEntry] = useState(false);
+  const [logEntryKind, setLogEntryKind] = useState<SessionLogKind>('major_event');
+  const [logEntryText, setLogEntryText] = useState('');
 
   const linked = rt.view?.campaign?.campaignId ?? null;
 
@@ -443,7 +447,29 @@ export default function DmLiveScreen() {
         </Section>
       )}
 
-      <Section title="Session log">
+      <Section title="Session log" hint="Narrative campaign history, curated by you — never auto-added for a roll or HP change. Visible to every Player too.">
+        {addingLogEntry ? (
+          <Card testID="dm-log-editor">
+            <Row wrap>
+              {SESSION_LOG_KINDS.map(k => <Chip key={k} label={describeSessionLogKind(k)} active={logEntryKind === k} onPress={() => setLogEntryKind(k)} testID={`dm-log-kind-${k}`} />)}
+            </Row>
+            <Field label="What happened" value={logEntryText} onChangeText={setLogEntryText} multiline placeholder="Baron Verrick fell in the throne room." testID="dm-log-text" />
+            <Row wrap>
+              <Btn small label="Add to Session Log" disabled={!logEntryText.trim() || offline} testID="dm-log-send"
+                onPress={() => { run(() => dmPeer.addSessionLog(logEntryKind, logEntryText.trim())); setAddingLogEntry(false); setLogEntryText(''); }} />
+              <Btn small kind="ghost" label="Cancel" onPress={() => setAddingLogEntry(false)} />
+            </Row>
+          </Card>
+        ) : (
+          <Btn small label="+ Add to Session Log" onPress={() => setAddingLogEntry(true)} testID="dm-log-open" />
+        )}
+        {(view?.sessionLog ?? []).length === 0 && <Muted>Nothing logged yet.</Muted>}
+        {[...(view?.sessionLog ?? [])].reverse().slice(0, 12).map(e => (
+          <Muted key={e.id}>{describeSessionLogKind(e.kind)}: {e.text}</Muted>
+        ))}
+      </Section>
+
+      <Section title="Activity log" hint="Automatic technical history — every resolved request, suggestion, reward and rule change. Separate from the narrative Session log above.">
         {(view?.audit ?? []).slice(-12).reverse().map((a, i) => <Muted key={`${a.revision}-${i}`}>#{a.revision} {a.text}</Muted>)}
       </Section>
     </LiveScreen>

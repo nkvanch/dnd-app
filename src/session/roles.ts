@@ -3,7 +3,7 @@
 // Capability model + op authorization. This is enforced by the Host core on
 // every op; the UI hiding buttons is a convenience, never the security boundary.
 // ============================================================================
-import { Capability, CharacterChange, OpBody, RewardKind } from './types';
+import { Capability, CharacterChange, OpBody, RewardKind, SessionLogKind } from './types';
 
 export const ALL_CAPABILITIES: Capability[] = ['host', 'dm', 'player'];
 /** Capabilities that can be granted/requested over the network. `host` never is. */
@@ -58,6 +58,14 @@ const REWARD_KIND_LABEL: Record<RewardKind, string> = {
 };
 
 export function describeRewardKind(kind: RewardKind): string { return REWARD_KIND_LABEL[kind]; }
+
+const SESSION_LOG_KIND_LABEL: Record<SessionLogKind, string> = {
+  major_event: 'Major event', encounter_outcome: 'Encounter outcome', npc_death: 'NPC death',
+  quest_outcome: 'Quest outcome', reward: 'Reward', milestone: 'Milestone',
+  rule_change: 'Rule change', custom_note: 'Custom note',
+};
+
+export function describeSessionLogKind(kind: SessionLogKind): string { return SESSION_LOG_KIND_LABEL[kind]; }
 
 /** Structural validation of untrusted change lists. */
 export function validChanges(changes: unknown): changes is CharacterChange[] {

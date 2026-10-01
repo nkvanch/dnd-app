@@ -16,6 +16,7 @@ import {
   emptyLiveState, PublicParticipant, ParticipantId, EffectApplication, EffectDefinition, AuditEntry,
   ChangeRequest, LiveEncounter, ReportedCharacter, CharacterChange, RuleSuggestion, RuleSuggestionStatus,
   STANDARD_MONSTER_VISIBILITY, MonsterVisibility, PublicPersona, Reward, RewardKind, RewardStatus,
+  SessionLogEntry, SessionLogKind,
 } from './types';
 import { applyEvent, projectEvent, projectState, Viewer } from './state';
 import { Connection, ServerTransport, decodeFrame, encodeFrame } from './transport';
@@ -67,6 +68,14 @@ function int(x: unknown): x is number {
 const REWARD_KINDS = new Set<RewardKind>(['homebrew_feature', 'resource', 'proficiency', 'reward_tier', 'permanent_modifier', 'campaign_boon']);
 function rewardKind(x: unknown): x is RewardKind {
   return typeof x === 'string' && REWARD_KINDS.has(x as RewardKind);
+}
+const SESSION_LOG_KINDS = new Set<SessionLogKind>(['major_event', 'encounter_outcome', 'npc_death', 'quest_outcome', 'reward', 'milestone', 'rule_change', 'custom_note']);
+function sessionLogKind(x: unknown): x is SessionLogKind {
+  return typeof x === 'string' && SESSION_LOG_KINDS.has(x as SessionLogKind);
+}
+/** Session log text is narrative prose, not a short label — same ceiling as a RuleSuggestion note. */
+function logText(x: unknown): x is string {
+  return typeof x === 'string' && x.length > 0 && x.length <= 2000;
 }
 
 export class SessionHost {
@@ -690,6 +699,19 @@ export class SessionHost {
       }
 
       case 'player.respond_reward': return this.respondReward(pid, actor, op, body);
+
+      case 'dm.add_session_log': {
+        if (!str(body.entryId) || !sessionLogKind(body.logKind) || !logText(body.text)) return done('rejected', 'malformed');
+        if (this.state.sessionLog.some(e => e.id === body.entryId)) return done('rejected', 'entry-exists');
+        const entry: SessionLogEntry = {
+          id: body.entryId, kind: body.logKind, text: body.text, actorId: pid,
+          at: this.now(), createdAtRevision: this.state.revision + 1,
+        };
+        // No audit scope entitles a Host-only viewer to this ('session_log' isn't in HOST_AUDIT_
+        // KINDS) — matches sessionLog itself being withheld from that level in state.ts.
+        this.commit({ t: 'session_log_added', entry }, pid, { kind: 'session_log', text: `Session log: ${entry.text}`, scope: 'all' });
+        return done('applied');
+      }
 
       case 'host.assign_capabilities': {
         const target = this.state.participants[body.participantId];

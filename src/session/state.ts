@@ -192,6 +192,9 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
       if (r) { r.status = 'SUPERSEDED'; r.supersededBy = b.supersededBy; }
       break;
     }
+    case 'session_log_added':
+      s.sessionLog.push(b.entry);
+      break;
     case 'session_ended':
       s.ended = true;
       break;
@@ -283,6 +286,7 @@ export function projectState(state: LiveState, viewer: Viewer): ViewState {
     revision: state.revision, ended: state.ended,
     participants: clone(state.participants), campaign: state.campaign ? { ...state.campaign } : null,
     encounters: {}, effects: {}, requests: {}, ruleSuggestions: {}, characters: {}, rewards: {},
+    sessionLog: level === 'host' ? [] : clone(state.sessionLog),
     audit: state.audit.filter(a => auditVisible(a, viewer)).map(a => clone(a)),
   };
   if (level === 'dm') {
@@ -455,6 +459,11 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
       const rw = after.rewards[b.rewardId];
       return rw && rw.targetId === viewer.id ? keep(b) : null;
     }
+
+    case 'session_log_added':
+      // Table-wide narrative recap (see SessionLogEntry's own doc comment) — never secret, just
+      // never shown to a Host-only participant, same carve-out as everything else gameplay-shaped.
+      return level === 'host' ? null : keep(b);
   }
 }
 

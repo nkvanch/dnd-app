@@ -13,7 +13,7 @@ import {
   Capability, CharacterAdapter, CharacterChange, ClientMessage, Op, OpBody, OpResult, ParticipantId,
   ServerMessage, ViewState, LiveEvent, ChangeRequest, LiveEffect, EffectApplication, SecretEffectMeta,
   EffectComponent, EffectDuration, EffectDefinitionInput, MonsterVisibility, PublicPersona, ReportedCharacter,
-  RewardKind,
+  RewardKind, SessionLogKind,
 } from './types';
 import { applyEvent } from './state';
 import { ClientTransport, Connection, decodeFrame, encodeFrame } from './transport';
@@ -507,6 +507,13 @@ export class SessionPeer {
   cancelReward(rewardId: string): string {
     this.need('dm');
     return this.sendRaw({ kind: 'dm.cancel_reward', rewardId });
+  }
+
+  /** DM_SCREEN_SPEC.md item 14 — the explicit "Add to Session Log" control. Always manual: see
+   *  SessionLogEntry's own doc comment for why nothing ever appends to this automatically. */
+  addSessionLog(kind: SessionLogKind, text: string): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.add_session_log', entryId: this.id('log'), logKind: kind, text });
   }
 
   /** Effects as the DM sees them, with secret identity joined in from the local vault. */

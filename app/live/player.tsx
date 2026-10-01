@@ -3,7 +3,7 @@
 // the effects you are subject to, and the table's public state. Requires the player capability.
 import { useState } from 'react';
 import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime';
-import { describeChanges, describeRewardKind } from '../../src/session/roles';
+import { describeChanges, describeRewardKind, describeSessionLogKind } from '../../src/session/roles';
 import { describeEffectComponent, parseSignedInt } from '../../src/session/prepEdit';
 import { ChangeRequest, CharacterChange, PublicPersona } from '../../src/session/types';
 import { LiveScreen, Section, Card, Btn, Field, Row, Badge, Muted, Body, NotCapable, Chip } from '../../src/components/live/LiveUi';
@@ -311,6 +311,14 @@ export default function PlayerScreen() {
           <Btn small kind="ghost" label="+ Suggest a rule change" onPress={() => setSuggestOpen(true)} testID="player-suggest-open" />
         )}
       </Section>
+
+      {(view?.sessionLog ?? []).length > 0 && (
+        <Section title="Session log" hint="The DM's narrative recap of major events.">
+          {[...(view?.sessionLog ?? [])].reverse().slice(0, 12).map(e => (
+            <Muted key={e.id}>{describeSessionLogKind(e.kind)}: {e.text}</Muted>
+          ))}
+        </Section>
+      )}
     </LiveScreen>
   );
 }

@@ -40,26 +40,52 @@ function resolveJoinTarget(text: string): { host: string; port: number } | null 
   return null;
 }
 
-export function LiveSessionStart({ onOpenPrepare, onOpenE2e }: { onOpenPrepare?: () => void; onOpenE2e?: () => void }) {
+/**
+ * The permanent "Live Session" card for the Campaigns page (idle state — no session yet).
+ * Host/Join Session open the role-and-connection modals; "Advanced" is a quiet escape hatch to
+ * a direct IP connect, so a raw address is available without making it the normal path. The
+ * campaign itself is untouched by any of this — see the modals' own doc comments.
+ */
+export function LiveSessionCard({ onOpenE2e }: { onOpenE2e?: () => void }) {
   const router = useRouter();
   const rt = useSessionRuntime();
   const [nickname, setNickname] = useState(rt.nickname);
   const [hostOpen, setHostOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [ip, setIp] = useState('');
+
+  async function connectByIp() {
+    const target = parseAddress(ip);
+    if (!target) { Alert.alert('Address needed', 'Enter the Host address, e.g. 192.168.1.20 (or 192.168.1.20:7743).'); return; }
+    await getSessionRuntime().join({ host: target.host, port: target.port, nickname: nickname.trim() || 'Player', wants: ['player'] });
+  }
 
   return (
-    <View style={m.wrap}>
+    <View style={m.card}>
+      <Text style={m.cardTitle}>Live Session</Text>
+      <Muted>Run this campaign in a local multiplayer session. Your campaign stays available offline and isn't owned by the Host.</Muted>
+
       <Field label="Your name" value={nickname} onChangeText={setNickname} placeholder="Name shown to the table" testID="live-nickname" />
 
-      <Pressable style={m.pillTxt} onPress={() => (onOpenPrepare ? onOpenPrepare() : router.push('/live/prepare'))} testID="live-open-prepare">
-        <Text style={m.pillTxtLabel}>📖  Plan Campaign</Text>
-      </Pressable>
       <Pressable style={m.pill} onPress={() => setHostOpen(true)} testID="live-host-campaign">
-        <Text style={m.pillLabel}>👑  Host Campaign</Text>
+        <Text style={m.pillLabel}>Host Session</Text>
       </Pressable>
       <Pressable style={[m.pill, m.pillAlt]} onPress={() => setJoinOpen(true)} testID="live-join-campaign">
-        <Text style={[m.pillLabel, m.pillAltLabel]}>🗡  Join Campaign</Text>
+        <Text style={[m.pillLabel, m.pillAltLabel]}>Join Session</Text>
       </Pressable>
+
+      <Pressable style={m.advancedToggle} onPress={() => setAdvancedOpen(o => !o)} testID="live-advanced-toggle">
+        <Text style={m.advancedToggleTxt}>Advanced {advancedOpen ? '▴' : '▾'}</Text>
+      </Pressable>
+      {advancedOpen && (
+        <View style={m.advancedBody}>
+          <Field label="Connect by IP" value={ip} onChangeText={setIp} placeholder="192.168.1.20" autoCapitalize="none" testID="live-advanced-ip" />
+          <Pressable style={m.ghostBtn} onPress={() => { void connectByIp(); }} testID="live-advanced-connect">
+            <Text style={m.ghostBtnTxt}>Connect</Text>
+          </Pressable>
+        </View>
+      )}
 
       {E2E_ENABLED && (
         <Pressable style={m.pillGhost} onPress={() => (onOpenE2e ? onOpenE2e() : router.push('/live/e2e'))} testID="live-open-e2e">
@@ -76,7 +102,7 @@ export function LiveSessionStart({ onOpenPrepare, onOpenE2e }: { onOpenPrepare?:
 
 // ── Host Campaign modal ──────────────────────────────────────────────────────
 
-function HostModal({ visible, onClose, nickname }: { visible: boolean; onClose: () => void; nickname: string }) {
+export function HostModal({ visible, onClose, nickname }: { visible: boolean; onClose: () => void; nickname: string }) {
   const rt = useSessionRuntime();
   const characters = useCharacterStore(s => s.characters).filter(c => c.kind === 'character');
   const [hostRole, setHostRole] = useState<HostRole>('host');
@@ -149,7 +175,7 @@ function HostModal({ visible, onClose, nickname }: { visible: boolean; onClose: 
 
 // ── Join Campaign modal ──────────────────────────────────────────────────────
 
-function JoinModal({ visible, onClose, nickname }: { visible: boolean; onClose: () => void; nickname: string }) {
+export function JoinModal({ visible, onClose, nickname }: { visible: boolean; onClose: () => void; nickname: string }) {
   const rt = useSessionRuntime();
   const characters = useCharacterStore(s => s.characters).filter(c => c.kind === 'character');
   const [address, setAddress] = useState('');
@@ -232,26 +258,35 @@ function CharacterPicker({ characters, value, onChange }: {
 const m = StyleSheet.create({
   wrap: { gap: Spacing.sm },
 
+  card: {
+    backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.md, gap: Spacing.sm, marginHorizontal: Spacing.md, marginTop: Spacing.sm,
+  },
+  cardTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  advancedToggle: { paddingVertical: Spacing.xs },
+  advancedToggleTxt: { color: Colors.textDim, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+  advancedBody: { gap: Spacing.sm },
+
   pill: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
   pillLabel: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   pillAlt: { backgroundColor: Colors.surfaceHigh, borderWidth: 1, borderColor: Colors.border },
   pillAltLabel: { color: Colors.textPrimary },
-  pillTxt: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
-  pillTxtLabel: { color: Colors.textPrimary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   pillGhost: { alignItems: 'center', paddingVertical: Spacing.xs },
   pillGhostLabel: { color: Colors.textDim, fontSize: FontSize.xs, fontWeight: FontWeight.bold },
 
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: '#000000bb', justifyContent: 'flex-end' },
   backdropTapArea: StyleSheet.absoluteFill,
   sheet: {
     backgroundColor: Colors.surfaceHigh, borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg,
     padding: Spacing.lg, gap: Spacing.sm, maxHeight: '85%',
   },
-  title: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
+  // One gold primary action per modal, same as Create/Join Campaign — everything else (title,
+  // secondary actions) stays neutral so gold reads as "the button to press," not decoration.
+  title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
   primaryBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', marginTop: Spacing.xs },
   primaryBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   btnDisabled: { opacity: 0.5 },
-  ghostBtn: { borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center' },
+  ghostBtn: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center' },
   ghostBtnTxt: { color: Colors.textPrimary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
   cancelBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
   cancelTxt: { color: Colors.textDim, fontSize: FontSize.sm },

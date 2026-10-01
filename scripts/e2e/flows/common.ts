@@ -32,10 +32,14 @@ export type Flow = {
   run(ctx: FlowCtx): Promise<void>;
 };
 
+/**
+ * The Campaigns tab's "no active campaign" view IS the live-session entry (Create/Join/Plan
+ * Campaign buttons) — no separate reveal tap needed to reach it, unlike the previous floating
+ * banner this replaced.
+ */
 export async function openLiveHub(phone: Phone): Promise<void> {
   await phone.tap({ id: 'tab-campaigns' });
-  await phone.tap({ id: 'campaigns-open-live' });
-  await phone.waitFor({ text: 'Live Session' });
+  await phone.waitFor({ id: 'live-host-campaign' });
 }
 
 /** Signals from the table side that the phone flow waits for. */

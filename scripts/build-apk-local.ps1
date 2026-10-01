@@ -48,6 +48,29 @@ $env:GRADLE_OPTS = "-Djava.io.tmpdir=$tmp"
 if (-not $FullContent) { $env:EXPO_PUBLIC_SRD_ONLY = 'true' }
 $env:NODE_ENV = 'production'
 
+# Keep the private development seed intact: public release inputs are staged
+# only while Gradle packages the APK, then restored in the outer finally.
+$publicStage = $null
+$savedContentDb = $null
+$savedContentVersion = $null
+if (-not $FullContent) {
+  $publicStage = Join-Path $tmp ('grimoire-public-content-' + [guid]::NewGuid().ToString())
+  New-Item -ItemType Directory -Force -Path $publicStage | Out-Null
+  $savedContentDb = Join-Path $publicStage 'content.db.private'
+  $savedContentVersion = Join-Path $publicStage 'contentDbVersion.ts.private'
+  Copy-Item 'assets\content.db' $savedContentDb
+  Copy-Item 'src\content\contentDbVersion.ts' $savedContentVersion
+  $env:CONTENT_DB_OUT_PATH = Join-Path $publicStage 'content.db.public'
+  $env:CONTENT_DB_VERSION_OUT_PATH = Join-Path $publicStage 'contentDbVersion.ts.public'
+  npx tsx scripts/generate-public-content-snapshot.ts
+  npx tsx scripts/generate-content-db.mjs
+  if ($LASTEXITCODE -ne 0) { throw "public content generation failed ($LASTEXITCODE)" }
+  Copy-Item $env:CONTENT_DB_OUT_PATH 'assets\content.db' -Force
+  Copy-Item $env:CONTENT_DB_VERSION_OUT_PATH 'src\content\contentDbVersion.ts' -Force
+  Remove-Item Env:CONTENT_DB_OUT_PATH
+  Remove-Item Env:CONTENT_DB_VERSION_OUT_PATH
+}
+
 if (-not (Test-Path 'node_modules')) { npm ci }
 if ($Prebuild -or -not (Test-Path 'android\gradlew.bat')) {
   npx expo prebuild --platform android --no-install
@@ -69,12 +92,23 @@ if ($KeystorePath) {
   )
 }
 
-Push-Location android
+$androidPushed = $false
 try {
+  Push-Location android
+  $androidPushed = $true
   if ($Clean) { .\gradlew.bat clean }
-  .\gradlew.bat assembleRelease "-PreactNativeArchitectures=$abis" @signArgs --no-daemon
+  # The public database is staged immediately before this invocation. Force
+  # asset/bundle tasks to observe it instead of reusing a prior full-content
+  # Gradle output from the same checkout.
+  $releaseArgs = @('assembleRelease', "-PreactNativeArchitectures=$abis") + $signArgs + @('--no-daemon')
+  if (-not $FullContent) { $releaseArgs += '--rerun-tasks' }
+  .\gradlew.bat @releaseArgs
   if ($LASTEXITCODE -ne 0) { throw "gradle failed ($LASTEXITCODE)" }
-} finally { Pop-Location }
+} finally {
+  if ($androidPushed) { Pop-Location }
+  if ($savedContentDb) { Copy-Item $savedContentDb (Join-Path $repo 'assets\content.db') -Force }
+  if ($savedContentVersion) { Copy-Item $savedContentVersion (Join-Path $repo 'src\content\contentDbVersion.ts') -Force }
+}
 
 $apk = Get-ChildItem 'android\app\build\outputs\apk\release\*.apk' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $apk) { throw 'Build finished but no APK was found.' }

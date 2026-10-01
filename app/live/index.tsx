@@ -6,8 +6,8 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { useSessionRuntime } from '../../src/session/runtime';
 import { primaryDestination, DESTINATION_PATH, capabilityLabel } from '../../src/session/routing';
-import { LiveScreen } from '../../src/components/live/LiveUi';
-import { LiveSessionStart } from '../../src/components/live/LiveSessionStart';
+import { LiveScreen, Btn } from '../../src/components/live/LiveUi';
+import { LiveSessionCard } from '../../src/components/live/LiveSessionStart';
 import { LiveSessionStatus } from '../../src/components/live/LiveSessionStatus';
 
 export default function LiveHub() {
@@ -34,7 +34,8 @@ export default function LiveHub() {
 
   return (
     <LiveScreen title="Live Session" subtitle="Host, DM and Player are separate roles" backTo="/(tabs)/campaigns">
-      <LiveSessionStart />
+      <Btn label="DM preparation (offline)" kind="ghost" onPress={() => router.push('/live/prepare')} testID="live-open-prepare" />
+      <LiveSessionCard />
     </LiveScreen>
   );
 }

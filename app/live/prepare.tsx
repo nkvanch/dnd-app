@@ -72,7 +72,7 @@ export default function PrepareScreen() {
               <Body bold>{c.name}</Body>
               <Muted>Preparation revision {c.campaignRevision}</Muted>
               <Row>
-                <Btn small label="Open" onPress={() => { void refresh(c.campaignId); }} testID={`prep-open-${c.name}`} />
+                <Btn small kind="ghost" label="Open" onPress={() => { void refresh(c.campaignId); }} testID={`prep-open-${c.name}`} />
                 <Btn small kind="danger" label="Delete" onPress={() => Alert.alert(`Delete "${c.name}"?`, 'This removes its preparation from this device.', [
                   { text: 'Cancel', style: 'cancel' },
                   { text: 'Delete', style: 'destructive', onPress: () => { void runtime.prep.remove(c.campaignId).then(() => refresh()); } },
@@ -103,7 +103,7 @@ export default function PrepareScreen() {
           </Card>
         ))}
         <Row wrap>
-          <Btn small label="＋ Encounter" onPress={() => setForm(form === 'encounter' ? null : 'encounter')} testID="prep-add-encounter" />
+          <Btn small kind="ghost" label="＋ Encounter" onPress={() => setForm(form === 'encounter' ? null : 'encounter')} testID="prep-add-encounter" />
           {planned.length > 0 && <Btn small kind="ghost" label="Import from Encounter Planner" onPress={() => setForm(form === 'import' ? null : 'import')} testID="prep-import-planner" />}
         </Row>
         {form === 'encounter' && <EncounterForm onSave={(v) => { void edit(x => addEncounter(x, { id: uid('enc'), ...v })); }} />}
@@ -122,7 +122,7 @@ export default function PrepareScreen() {
             <Btn small kind="danger" label="Remove" onPress={() => { void edit(x => removeItem(x, 'effects', f.id)); }} />
           </Card>
         ))}
-        <Btn small label="＋ Effect" onPress={() => setForm(form === 'effect' ? null : 'effect')} testID="prep-add-effect" />
+        <Btn small kind="ghost" label="＋ Effect" onPress={() => setForm(form === 'effect' ? null : 'effect')} testID="prep-add-effect" />
         {form === 'effect' && <EffectForm onSave={(v) => { void edit(x => addEffect(x, { id: uid('fx'), ...v })); }} />}
       </Section>
 
@@ -134,7 +134,7 @@ export default function PrepareScreen() {
             <Btn small kind="danger" label="Remove" onPress={() => { void edit(x => removeItem(x, 'templates', t.id)); }} />
           </Card>
         ))}
-        <Btn small label="＋ Change template" onPress={() => setForm(form === 'template' ? null : 'template')} testID="prep-add-template" />
+        <Btn small kind="ghost" label="＋ Change template" onPress={() => setForm(form === 'template' ? null : 'template')} testID="prep-add-template" />
         {form === 'template' && <TemplateForm onSave={(label, changes) => { void edit(x => addTemplate(x, { id: uid('tpl'), label, changes })); }} />}
       </Section>
 
@@ -145,7 +145,7 @@ export default function PrepareScreen() {
             <Btn small kind="danger" label="Remove" onPress={() => { void edit(x => removeItem(x, 'notes', n.id)); }} />
           </Card>
         ))}
-        <Btn small label="＋ Note" onPress={() => setForm(form === 'note' ? null : 'note')} testID="prep-add-note" />
+        <Btn small kind="ghost" label="＋ Note" onPress={() => setForm(form === 'note' ? null : 'note')} testID="prep-add-note" />
         {form === 'note' && <NoteForm onSave={(text) => { void edit(x => addNote(x, { id: uid('note'), text })); }} />}
       </Section>
 
@@ -161,7 +161,7 @@ export default function PrepareScreen() {
             <Btn small kind="danger" label="Remove plan" onPress={() => { void edit(x => removeItem(x, 'plans', pl.id)); }} />
           </Card>
         ))}
-        <Btn small label="＋ Session plan" onPress={() => setForm(form === 'plan' ? null : 'plan')} testID="prep-add-plan" />
+        <Btn small kind="ghost" label="＋ Session plan" onPress={() => setForm(form === 'plan' ? null : 'plan')} testID="prep-add-plan" />
         {form === 'plan' && <NoteForm label="Plan name" onSave={(name) => { void edit(x => addPlan(x, { id: uid('plan'), name })); }} />}
       </Section>
 

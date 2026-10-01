@@ -28,7 +28,7 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { Quest, SessionLogEntry, Campaign } from '../../src/engine/types';
 import { InstalledPack, loadInstalledPacks } from '../../src/db/packRegistryRepo';
 import { useSessionRuntime } from '../../src/session/runtime';
-import { LiveSessionStart } from '../../src/components/live/LiveSessionStart';
+import { LiveSessionCard } from '../../src/components/live/LiveSessionStart';
 import { LiveSessionStatus } from '../../src/components/live/LiveSessionStatus';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -59,6 +59,11 @@ function showError(title: string, message: string) {
 }
 
 // ── Create/Join Campaign Modals ───────────────────────────────────────────────
+// Restored: these drive the persistent, DM-owned legacy campaign (rules sync, the DM
+// dashboard/encounter tracker under app/dm/*) — a different, independent concern from the
+// Live Session card below, which is the temporary Host/DM/Player network room. A campaign is
+// not owned by a Host; keeping these two entry points separate (instead of merging Create
+// Campaign into Host Session) is what keeps that distinction real instead of just documented.
 
 function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [name,    setName]    = useState('');
@@ -913,10 +918,10 @@ function SavedCampaignsList() {
 // ── No Campaign View ──────────────────────────────────────────────────────────
 
 function NoCampaignView({
-  nickname, onNicknameChange, onCreate, onJoin,
+  nickname, onNicknameChange, onCreate, onJoin, onPlan,
 }: {
   nickname: string; onNicknameChange: (n: string) => void;
-  onCreate: () => void; onJoin: () => void;
+  onCreate: () => void; onJoin: () => void; onPlan: () => void;
 }) {
   // Campaign hosting/joining uses a raw TCP socket over the local WiFi network.
   // Browsers have no API for raw TCP sockets (only HTTP/WebSocket to a server
@@ -957,6 +962,11 @@ function NoCampaignView({
                 🗡 Join Campaign (Player)
               </Text>
             </Pressable>
+            <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onPlan} testID="live-open-prepare">
+              <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>
+                📖 Plan Campaign
+              </Text>
+            </Pressable>
           </View>
 
           <SavedCampaignsList />
@@ -988,6 +998,7 @@ export default function CampaignsScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen,   setJoinOpen]   = useState(false);
   const [nickname,   setLocalNick]  = useState(session?.nickname ?? '');
+  const router = useRouter();
 
   const actionHandled = useRef(false);
   useEffect(() => {
@@ -1013,22 +1024,10 @@ export default function CampaignsScreen() {
         <Text style={styles.title}>Campaigns</Text>
       </View>
 
-      {/* Live Session (Host / DM / Player as separate roles) — a real section of this page, not a
-          separate screen you navigate away to: a name field plus Plan/Host/Join buttons, same
-          pattern as Create/Join Campaign below. The header keeps its own testID for compatibility
-          with existing automation, which taps it as a reliable "the live session UI is on screen"
-          step; it has no expand/collapse state of its own since the body is always shown. */}
-      <View style={styles.liveSection}>
-        <Pressable
-          style={styles.liveEntry} onPress={() => {}}
-          testID="campaigns-open-live" accessibilityRole="button" accessibilityLabel="Live Session: Host, DM or Player"
-        >
-          <Text style={styles.liveEntryTitle}>Live Session · Host, DM or Player</Text>
-        </Pressable>
-        <View style={styles.liveBody}>
-          {liveMode === 'idle' ? <LiveSessionStart /> : <LiveSessionStatus />}
-        </View>
-      </View>
+      {/* Live Session — a permanent section of this page, independent of whether a (legacy,
+          DM-owned, rules-syncing) campaign is active below. A campaign isn't owned by a Host:
+          campaignId != sessionId != roomCode. */}
+      {liveMode === 'idle' ? <LiveSessionCard /> : <View style={styles.liveStatusWrap}><LiveSessionStatus /></View>}
 
       {activeCampaign ? (
         isDm ? <DmActiveView /> : <PlayerActiveView />
@@ -1038,11 +1037,12 @@ export default function CampaignsScreen() {
           onNicknameChange={handleNicknameChange}
           onCreate={() => setCreateOpen(true)}
           onJoin={() => setJoinOpen(true)}
+          onPlan={() => router.push('/live/prepare')}
         />
       )}
 
       <CreateModal visible={createOpen} onClose={() => setCreateOpen(false)} />
-      <JoinModal   visible={joinOpen}   onClose={() => setJoinOpen(false)} />
+      <JoinModal visible={joinOpen} onClose={() => setJoinOpen(false)} />
     </View>
   );
 }
@@ -1058,14 +1058,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
 
-  liveSection: {
-    marginHorizontal: Spacing.md, marginTop: Spacing.sm,
-    backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.goldDim,
-    overflow: 'hidden',
-  },
-  liveEntry: { padding: Spacing.sm, paddingBottom: 0 },
-  liveEntryTitle: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
-  liveBody: { padding: Spacing.sm, gap: Spacing.sm },
+  liveStatusWrap: { padding: Spacing.md },
 
   scroll:        { flex: 1 },
   content:       { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },
@@ -1268,9 +1261,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
     padding: Spacing.md, fontSize: FontSize.md, color: Colors.textPrimary,
   },
-  codeInput:     { textAlign: 'center', fontSize: FontSize.xl, letterSpacing: 8, fontWeight: FontWeight.bold },
   primaryBtn:    { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   secondaryBtn:  { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+  codeInput:     { textAlign: 'center', fontSize: FontSize.xl, letterSpacing: 8, fontWeight: FontWeight.bold },
   btnDisabled:   { opacity: 0.4 },
   primaryBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   cancelBtn:     { alignItems: 'center', padding: Spacing.sm, flex: 1 },

@@ -33,7 +33,7 @@ describe('the test-only E2E switch is not a production backdoor', () => {
     // The hub link lives in LiveSessionStart, the shared idle-state form rendered both by the
     // standalone /live route and inline on the Campaigns page — one guard covers both entry points.
     const hubEntry = fs.readFileSync(path.join(root, 'src/components/live/LiveSessionStart.tsx'), 'utf8');
-    expect(hubEntry).toMatch(/E2E_ENABLED && </);
+    expect(hubEntry).toMatch(/E2E_ENABLED && \(?\s*</);
     // Nothing in the session core may read the flag: authorization must behave identically in test builds.
     for (const f of ['host.ts', 'peer.ts', 'roles.ts', 'state.ts', 'runtime.ts']) {
       expect(fs.readFileSync(path.join(root, 'src/session', f), 'utf8')).not.toMatch(/E2E_ENABLED|EXPO_PUBLIC_E2E/);

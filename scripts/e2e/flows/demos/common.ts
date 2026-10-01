@@ -41,7 +41,6 @@ export async function importDemoPack(phone: Phone, filename: string, expectName:
 export async function buildAutomationCampaignPrep(phone: Phone): Promise<void> {
   await toTabs(phone);
   await phone.tap({ id: 'tab-campaigns' });
-  await phone.tap({ id: 'campaigns-open-live' });
   await phone.tap({ id: 'live-open-prepare' });
   if (phone.visible({ id: 'prep-campaign-Automation Campaign' })) return;   // already built (idempotent)
 

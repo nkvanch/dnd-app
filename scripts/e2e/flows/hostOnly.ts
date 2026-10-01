@@ -14,7 +14,6 @@ export const hostOnly: Flow = {
 
     await phone.launch();
     await phone.tap({ id: 'tab-campaigns' });
-    await phone.tap({ id: 'campaigns-open-live' });
     step('clean slate for live-session test data (test build fixture)');
     await phone.tap({ id: 'live-open-e2e' });
     await phone.tap({ id: 'e2e-wipe' });
@@ -80,7 +79,6 @@ export const hostOnly: Flow = {
     phone.stopApp();
     await phone.launch(false);
     await phone.tap({ id: 'tab-campaigns' });
-    await phone.tap({ id: 'campaigns-open-live' });
     await phone.tap({ id: 'live-host-campaign' });
     await phone.tap({ id: 'live-resume-hosting' });
     await phone.waitFor({ id: 'host-status' }, 20000);

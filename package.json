@@ -55,6 +55,7 @@
     "test:watch": "jest --watch",
     "generate:srd-items": "py scripts/extract-srd-items.py && tsx scripts/generate-srd-canonical-map.ts && tsx scripts/generate-srd-public-items.ts && tsx scripts/audit-item-provenance.ts",
     "postinstall": "node scripts/fix-android-manifests.js && patch-package",
+    "eas-build-post-install": "node scripts/prepare-public-distribution.mjs",
     "build:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-apk-local.ps1"
   },
   "expo": {

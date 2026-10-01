@@ -36,7 +36,6 @@ export const playerPhone: Flow = {
     const before = await homeStats(phone);
     check(before.ac === 10, `Fixture Hero starts with AC 10 (was ${before.ac})`);
     await phone.tap({ id: 'tab-campaigns' });
-    await phone.tap({ id: 'campaigns-open-live' });
 
     step('the phone joins as a PLAYER only, with its character');
     await joinSession(phone, { nick: 'Hero Player', address: '127.0.0.1', player: true, dm: false, character: HERO });
@@ -65,7 +64,6 @@ export const playerPhone: Flow = {
     step('DM sends a max-HP request; the phone player MODIFIES it and accepts');
     await toTabs(phone);
     await phone.tap({ id: 'tab-campaigns' });
-    await phone.tap({ id: 'campaigns-open-live' });
     await phone.tap({ id: 'live-open-player' });
     const r1 = dm().requestChange(me, 'Curse of the Well', [{ kind: 'max_hp', delta: -4 }]);
     await phone.assertPresent({ id: 'player-request-Curse of the Well' });
@@ -83,7 +81,6 @@ export const playerPhone: Flow = {
     T().proxy!.block(true);
     await toTabs(phone);
     await phone.tap({ id: 'tab-campaigns' });
-    await phone.tap({ id: 'campaigns-open-live' });
     await phone.tap({ id: 'live-open-player' });
     await phone.assertPresent({ textContains: 'You are offline' }, 40000);
     const r2 = dm().requestChange(me, 'Boon of the Well', [{ kind: 'max_hp', delta: 3 }]);
@@ -110,7 +107,6 @@ export const playerPhone: Flow = {
     check((await homeStats(phone)).ac === 9, 'a new curse lowers AC again');
     await toTabs(phone);
     await phone.tap({ id: 'tab-campaigns' });
-    await phone.tap({ id: 'campaigns-open-live' });
     await phone.tap({ id: 'live-leave' });
     await phone.pause(1500);
     check((await homeStats(phone)).ac === 10, 'AC is back to 10 after leaving the session');

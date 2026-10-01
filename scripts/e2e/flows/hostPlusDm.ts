@@ -12,7 +12,6 @@ export const hostPlusDm: Flow = {
 
     await phone.launch();
     await phone.tap({ id: 'tab-campaigns' });
-    await phone.tap({ id: 'campaigns-open-live' });
     step('fixtures: wipe live-session data, seed the Automation Campaign (test build only)');
     await phone.tap({ id: 'live-open-e2e' });
     await phone.tap({ id: 'e2e-wipe' });

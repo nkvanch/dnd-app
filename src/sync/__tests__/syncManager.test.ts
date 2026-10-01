@@ -236,7 +236,7 @@ describe('syncManager.startAsClient — onEntitySnapshot does not persist direct
       onSyncEvent:           () => {},
     });
 
-    await syncManager.startAsClient('0000001', 'dev1', 'Nick', 'char1');
+    await syncManager.startAsClient('AAAAAAA', 'dev1', 'Nick', 'char1');
     expect(capturedClientCallbacks).not.toBeNull();
 
     const fakeEntity = { id: 'char1', kind: 'character' } as unknown as import('../../engine/types').Entity;

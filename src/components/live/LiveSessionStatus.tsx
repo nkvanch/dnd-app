@@ -31,7 +31,7 @@ function rolesOf(p: PublicParticipant): string {
  * identities. Per CAMPAIGN_DM_AUTHORITY_RULES.md §32, every connected state should show a room
  * code, not just the Host's.
  */
-function codeFromAddress(address: string | null): string | null {
+export function codeFromAddress(address: string | null): string | null {
   if (!address) return null;
   const host = address.split(':')[0];
   try { return encodeRoomCode(host); } catch { return null; }

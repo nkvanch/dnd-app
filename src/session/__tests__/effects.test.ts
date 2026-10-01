@@ -201,3 +201,81 @@ describe('secret effects', () => {
     expect(bob.peer.view!.revision).toBe(rig.host.debugState().revision);   // still in lock-step via ticks
   });
 });
+
+// DM_SCREEN_SPEC.md item 8's "add target" — widening an already-applied effect to one more
+// target, distinct from dm.apply_effect (which always creates a brand-new effect id and rejects
+// reusing one — see "rejects reusing an existing effect id" above).
+describe('dm.add_effect_target', () => {
+  it('rejects an unknown effect', async () => {
+    const { rig, dm } = await table();
+    const opId = dm.peer.addEffectTarget('nope', 'alice');
+    await rig.settle();
+    expect(dm.peer.resultOf(opId)).toMatchObject({ status: 'rejected', reason: 'unknown-effect' });
+  });
+
+  it('rejects a non-player target', async () => {
+    const { rig, dm } = await table();
+    const { effectId } = dm.peer.applyQuickEffect({ name: 'Ward', visibility: 'target', components: [], duration: { unit: 'manual' } }, ['alice']);
+    await rig.settle();
+    const opId = dm.peer.addEffectTarget(effectId, 'host1');
+    await rig.settle();
+    expect(dm.peer.resultOf(opId)).toMatchObject({ status: 'rejected', reason: 'unknown-target' });
+  });
+
+  it('rejects re-adding an already-active target', async () => {
+    const { rig, dm } = await table();
+    const { effectId } = dm.peer.applyQuickEffect({ name: 'Ward', visibility: 'target', components: [], duration: { unit: 'manual' } }, ['alice']);
+    await rig.settle();
+    const opId = dm.peer.addEffectTarget(effectId, 'alice');
+    await rig.settle();
+    expect(dm.peer.resultOf(opId)).toMatchObject({ status: 'rejected', reason: 'already-targeted' });
+  });
+
+  it('a NEW target who never previously saw this target-visibility effect learns about it (full resync)', async () => {
+    const { rig, dm, alice, bob } = await table();
+    const { effectId } = dm.peer.applyQuickEffect(
+      { name: 'Ward', description: 'blocks one hit', visibility: 'target', components: [{ stat: 'ac', operation: 'add', value: 2 }], duration: { unit: 'manual' } },
+      ['alice'],
+    );
+    await rig.settle();
+    expect(bob.peer.visibleEffects()).toHaveLength(0);   // bob was never a target, never saw it
+
+    const opId = dm.peer.addEffectTarget(effectId, 'bob');
+    await rig.settle();
+    expect(dm.peer.resultOf(opId)?.status).toBe('applied');
+
+    expect(bob.peer.visibleEffects()).toHaveLength(1);
+    expect(bob.peer.visibleEffects()[0]).toMatchObject({ label: 'Ward', app: { targetId: 'bob', state: 'ACTIVE' } });
+    expect(alice.peer.visibleEffects()).toHaveLength(1);   // alice's own application is untouched
+  });
+
+  it('adding a target to a public effect is visible to every other player via the ordinary incremental event', async () => {
+    const { rig, dm, alice, bob, cara } = await table();
+    const { effectId } = await dm.peer.applyPreparedEffect('camp-auto', 'fx-blessing', ['alice']);
+    await rig.settle();
+    dm.peer.addEffectTarget(effectId, 'bob');
+    await rig.settle();
+    expect(cara.peer.visibleEffects().map(v => v.app.targetId).sort()).toEqual(['alice', 'bob']);
+  });
+
+  it('adding a target to a secret effect never leaks identity to the new target or anyone else', async () => {
+    const { rig, dm, bob } = await table();
+    const { effectId } = await dm.peer.applyPreparedEffect('camp-auto', 'fx-curse', ['alice']);
+    await rig.settle();
+    dm.peer.addEffectTarget(effectId, 'bob');
+    await rig.settle();
+    const bobWire = rig.net.receivedBy('bob').join('\n');
+    expect(bobWire).not.toContain('Hidden Curse');
+    expect(bobWire).not.toContain('cursed');
+    expect(bob.peer.visibleEffects()[0]).toMatchObject({ label: null, app: { targetId: 'bob' } });
+  });
+
+  it('the DM always sees the widened application directly', async () => {
+    const { rig, dm } = await table();
+    const { effectId } = dm.peer.applyQuickEffect({ name: 'Ward', visibility: 'target', components: [], duration: { unit: 'manual' } }, ['alice']);
+    await rig.settle();
+    dm.peer.addEffectTarget(effectId, 'bob');
+    await rig.settle();
+    expect(Object.keys(dm.peer.view!.effects[effectId].applications).sort()).toEqual([`${effectId}:alice`, `${effectId}:bob`]);
+  });
+});

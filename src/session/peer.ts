@@ -516,6 +516,20 @@ export class SessionPeer {
     return this.sendRaw({ kind: 'dm.add_session_log', entryId: this.id('log'), logKind: kind, text });
   }
 
+  /** DM_SCREEN_SPEC.md item 16's "disconnect campaign from live room" — the room itself keeps
+   *  running; only the attached CampaignPolicy is cleared. */
+  unlinkCampaign(): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.unlink_campaign' });
+  }
+
+  /** Widens an already-applied effect to one more target (DM_SCREEN_SPEC.md item 8's "add
+   *  target") — distinct from dm.apply_effect, which always creates a brand-new effect id. */
+  addEffectTarget(effectId: string, targetId: ParticipantId): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.add_effect_target', effectId, targetId });
+  }
+
   /** Effects as the DM sees them, with secret identity joined in from the local vault. */
   dmEffects(): { effectId: string; displayName: string; secret: SecretEffectMeta | null; effect: LiveEffect }[] {
     return Object.entries(this.view?.effects ?? {}).map(([effectId, effect]) => {

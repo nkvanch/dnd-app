@@ -713,6 +713,36 @@ export class SessionHost {
         return done('applied');
       }
 
+      case 'dm.unlink_campaign': {
+        if (!this.state.campaign) return done('rejected', 'no-campaign-linked');
+        const name = this.state.campaign.name;
+        this.commit({ t: 'campaign_unlinked' }, pid, { kind: 'campaign', text: `Campaign "${name}" unlinked from this room`, scope: 'all' });
+        return done('applied');
+      }
+
+      case 'dm.add_effect_target': {
+        const eff = this.state.effects[body.effectId];
+        if (!eff) return done('rejected', 'unknown-effect');
+        const target = this.state.participants[body.targetId];
+        if (!target || !target.capabilities.includes('player')) return done('rejected', 'unknown-target');
+        const already = Object.values(eff.applications).some(a => a.targetId === body.targetId && a.state !== 'ENDED');
+        if (already) return done('rejected', 'already-targeted');
+        const def = eff.definition;
+        const application: EffectApplication = {
+          id: `${def.id}:${body.targetId}`, effectId: def.id, targetId: body.targetId, state: 'ACTIVE',
+          remaining: def.duration.unit === 'rounds' ? def.duration.remaining : null,
+          appliedAtRevision: this.state.revision + 1, endedAtRevision: null,
+        };
+        this.commit({ t: 'effect_target_added', effectId: def.id, application }, pid,
+          this.effectAudit(def, [body.targetId], 'added as a target of', 'effect_apply'));
+        // The added target may never have seen this effect before (e.g. a 'target'-visibility
+        // effect they weren't originally part of) — their replica would have nothing to attach
+        // the new application to from the narrow event alone. A full resync is cheap and correct
+        // regardless; same lesson as Monster Visibility's dm.set_combatant_visibility.
+        this.sendSnapshot(body.targetId);
+        return done('applied');
+      }
+
       case 'host.assign_capabilities': {
         const target = this.state.participants[body.participantId];
         if (!target) return done('rejected', 'unknown-participant');

@@ -411,6 +411,8 @@ export type LiveEventBody =
   | { t: 'reward_resolved';     rewardId: string; status: RewardStatus; playerNote: string | null }
   | { t: 'reward_superseded';   rewardId: string; supersededBy: string }
   | { t: 'session_log_added';   entry: SessionLogEntry }
+  | { t: 'campaign_unlinked' }
+  | { t: 'effect_target_added'; effectId: string; application: EffectApplication }
   | { t: 'session_ended' };
 
 export type LiveEvent = {
@@ -469,6 +471,8 @@ export type OpBody =
   | { kind: 'dm.cancel_reward';     rewardId: string }
   | { kind: 'player.respond_reward'; rewardId: string; decision: 'accept' | 'reject' | 'modify'; note?: string }
   | { kind: 'dm.add_session_log';   entryId: string; logKind: SessionLogKind; text: string }
+  | { kind: 'dm.unlink_campaign' }
+  | { kind: 'dm.add_effect_target'; effectId: string; targetId: ParticipantId }
   | { kind: 'host.assign_capabilities'; participantId: ParticipantId; capabilities: Capability[] }
   | { kind: 'host.end_session' };
 

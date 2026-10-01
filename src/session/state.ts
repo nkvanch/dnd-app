@@ -195,6 +195,14 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
     case 'session_log_added':
       s.sessionLog.push(b.entry);
       break;
+    case 'campaign_unlinked':
+      s.campaign = null;
+      break;
+    case 'effect_target_added': {
+      const eff = s.effects[b.effectId];
+      if (eff) eff.applications[b.application.id] = b.application;
+      break;
+    }
     case 'session_ended':
       s.ended = true;
       break;
@@ -335,6 +343,7 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
   switch (b.t) {
     case 'participant_upsert':
     case 'campaign_linked':
+    case 'campaign_unlinked':
     case 'session_ended':
       return keep(b);
 
@@ -381,6 +390,21 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
         ? { ...b.definition, name: null, description: null, source: null }
         : b.definition;
       return keep({ t: 'effect_applied', definition, applications: apps });
+    }
+
+    case 'effect_target_added': {
+      // Forwarded for a viewer who may already have this effect's definition (public, or an
+      // existing target) — but a Player being added to a 'target'-visibility effect for the FIRST
+      // time has no definition in their replica to attach this application to yet (applyEvent's
+      // `s.effects[b.effectId]` lookup would just no-op). host.ts's dm.add_effect_target handler
+      // covers that by also sending that one participant a full resync, same lesson as Monster
+      // Visibility and Public Persona.
+      if (level === 'host') return null;
+      if (level === 'dm') return keep(b);
+      const eff = after.effects[b.effectId];
+      if (!eff) return null;
+      const visible = eff.definition.visibility === 'public' || b.application.targetId === viewer.id;
+      return visible ? keep(b) : null;
     }
 
     case 'applications_due':

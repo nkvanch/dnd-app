@@ -20,6 +20,8 @@ import { describeChanges, describeRewardKind, describeSessionLogKind } from '../
 import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility, RewardKind, SessionLogKind } from '../../src/session/types';
 import { SessionPeer } from '../../src/session/peer';
 import { LiveScreen, Section, Card, Btn, Chip, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
+import { RoomCodeCard } from '../../src/components/live/RoomCodeCard';
+import { codeFromAddress } from '../../src/components/live/LiveSessionStatus';
 import { Alert } from '../../src/utils/alert';
 
 type Tab = 'dashboard' | 'encounter' | 'effects' | 'requests' | 'suggestions' | 'rewards' | 'notes';
@@ -87,6 +89,9 @@ export default function DmLiveScreen() {
   const participants = Object.values(view?.participants ?? {});
   const players = participants.filter(p => p.capabilities.includes('player'));
   const nameOf = (id: string) => view?.participants[id]?.nickname ?? id;
+  const isHost = rt.capabilities.includes('host');
+  const hostParticipant = participants.find(p => p.capabilities.includes('host'));
+  const joinedRoomCode = !isHost ? codeFromAddress(rt.address) : null;
   const run = (fn: () => unknown) => {
     try { void Promise.resolve(fn()).catch((e: Error) => Alert.alert('Not sent', e.message)); }
     catch (e) { Alert.alert('Not sent', (e as Error).message); }
@@ -104,8 +109,9 @@ export default function DmLiveScreen() {
   const pendingSuggestions = ruleSuggestions.filter(s => s.status === 'PENDING');
   const rewards = Object.values(view?.rewards ?? {});
   const pendingRewards = rewards.filter(r => r.status === 'PENDING');
+  const zeroHpPlayers = Object.values(view?.characters ?? {}).filter(c => c.summary.hp <= 0);
 
-  const alertCount = pendingRequests.length + dueEffects.length + disconnectedPlayers.length + pendingSuggestions.length + pendingRewards.length;
+  const alertCount = pendingRequests.length + dueEffects.length + disconnectedPlayers.length + pendingSuggestions.length + pendingRewards.length + zeroHpPlayers.length;
 
   // Fast-action change requests (DM_SCREEN_SPEC.md item 2) — same consent flow as every other
   // CharacterChange: this sends a request, it does not apply anything unilaterally.
@@ -155,6 +161,10 @@ export default function DmLiveScreen() {
         {offline && <Muted>You are disconnected. Your preparation is safe on this device; reconnect to keep playing.</Muted>}
         {offline && rt.mode === 'joined' && <Btn small label="Reconnect" kind="ghost" onPress={() => { void runtime.reconnect(); }} testID="dm-reconnect" />}
         <Muted>Players: {players.map(p => `${p.nickname}${p.connected ? '' : ' (offline)'}`).join(', ') || 'none yet'}</Muted>
+        {!isHost && !!hostParticipant && <Muted>Host: {hostParticipant.nickname}{hostParticipant.connected ? '' : ' (disconnected)'}</Muted>}
+        {!!rt.roomCode && <RoomCodeCard code={rt.roomCode} />}
+        {!!joinedRoomCode && <Muted>Room: {joinedRoomCode}</Muted>}
+        {isHost && <Btn small kind="ghost" label="Open Host view" onPress={() => router.push('/live/host')} testID="dm-open-host" />}
       </Card>
 
       <Row wrap>
@@ -172,6 +182,7 @@ export default function DmLiveScreen() {
               {disconnectedPlayers.length > 0 && <Muted>• {disconnectedPlayers.map(p => p.nickname).join(', ')} disconnected</Muted>}
               {pendingSuggestions.length > 0 && <Muted>• {pendingSuggestions.length} rule suggestion{pendingSuggestions.length === 1 ? '' : 's'} pending</Muted>}
               {pendingRewards.length > 0 && <Muted>• {pendingRewards.length} reward{pendingRewards.length === 1 ? '' : 's'} awaiting response</Muted>}
+              {zeroHpPlayers.length > 0 && <Muted>• {zeroHpPlayers.map(c => c.summary.name).join(', ')} at 0 HP</Muted>}
             </Section>
           )}
 
@@ -203,7 +214,14 @@ export default function DmLiveScreen() {
                 <Muted>Ruleset: {view.campaign.rulesetId ?? 'any'}</Muted>
                 <Muted>Max level: {view.campaign.maxLevel ?? 'uncapped'}</Muted>
                 <Muted>Banned packs: {view.campaign.bannedPackIds.length} · Banned subclasses: {view.campaign.bannedSubclassIds.length} · Required packs: {view.campaign.requiredPacks.length}</Muted>
-                <Btn small kind="ghost" label="Edit in DM Preparation" onPress={() => router.push('/live/prepare')} testID="dm-edit-policy" />
+                <Row wrap>
+                  <Btn small kind="ghost" label="Edit in DM Preparation" onPress={() => router.push('/live/prepare')} testID="dm-edit-policy" />
+                  <Btn small kind="danger" label="Disconnect campaign" disabled={offline} testID="dm-unlink-campaign"
+                    onPress={() => Alert.alert('Disconnect campaign?', 'The room stays open; only the attached campaign rules are cleared.', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Disconnect', style: 'destructive', onPress: () => run(() => peer.unlinkCampaign()) },
+                    ])} />
+                </Row>
               </Card>
             </Section>
           )}
@@ -213,6 +231,7 @@ export default function DmLiveScreen() {
               const expanded = expandedChar === c.participantId;
               const theirRequests = requests.filter(r => r.targetId === c.participantId);
               const theirEffects = peer.dmEffects().filter(({ effect }) => Object.values(effect.applications).some(a => a.targetId === c.participantId && a.state !== 'ENDED'));
+              const theirRewards = rewards.filter(r => r.targetId === c.participantId);
               return (
                 <Card key={c.participantId} testID={`dm-party-${c.summary.name}`}>
                   <Row wrap>
@@ -249,11 +268,12 @@ export default function DmLiveScreen() {
                   {expanded && (
                     <>
                       <Muted>Only what this player's device reports is visible here — name, HP, AC. The full character sheet stays on their device.</Muted>
-                      {theirEffects.length === 0 && theirRequests.length === 0 && <Muted>No active effects or requests.</Muted>}
+                      {theirEffects.length === 0 && theirRequests.length === 0 && theirRewards.length === 0 && <Muted>No active effects, requests, or rewards.</Muted>}
                       {theirEffects.map(({ effectId, displayName, effect }) => (
                         <Muted key={effectId}>Effect: {displayName} ({effect.definition.components.map(describeEffectComponent).join(', ') || 'no numeric change'})</Muted>
                       ))}
                       {theirRequests.map(r => <Muted key={r.id}>Request: {r.label} — {r.status.toLowerCase()}</Muted>)}
+                      {theirRewards.map(r => <Muted key={r.id}>Reward: {r.label} ({describeRewardKind(r.kind)}) — {r.status.toLowerCase()}</Muted>)}
                     </>
                   )}
                 </Card>
@@ -272,6 +292,7 @@ export default function DmLiveScreen() {
                 <Card key={e.id} testID={`dm-prepared-encounter-${e.name}`}>
                   <Body bold>⚔ {e.name}</Body>
                   <Muted>{e.combatants.filter(c => !c.hidden).map(c => c.name).join(', ') || 'no visible combatants'}</Muted>
+                  {!!e.dmNotes && <Muted>🔒 {e.dmNotes}</Muted>}
                   <Row wrap>
                     <Btn small label="Start encounter" disabled={offline}
                       onPress={() => { setLastActivatedPrepEncounter(e); run(() => peer.activateEncounter(prep.campaignId, e.id)); }} testID={`dm-start-${e.name}`} />
@@ -320,12 +341,12 @@ export default function DmLiveScreen() {
 
           <Section title="Public effects">
             {peer.dmEffects().filter(({ effect }) => effect.definition.visibility !== 'secret').map(({ effectId, displayName, effect }) => (
-              <EffectCard key={effectId} effectId={effectId} displayName={displayName} secret={null} effect={effect} nameOf={nameOf} offline={offline} peer={peer} run={run} />
+              <EffectCard key={effectId} effectId={effectId} displayName={displayName} secret={null} effect={effect} players={players} nameOf={nameOf} offline={offline} peer={peer} run={run} />
             ))}
           </Section>
           <Section title="Secret effects" hint="DM-only identity — players see only the mechanical consequence.">
             {peer.dmEffects().filter(({ effect }) => effect.definition.visibility === 'secret').map(({ effectId, displayName, secret, effect }) => (
-              <EffectCard key={effectId} effectId={effectId} displayName={displayName} secret={secret} effect={effect} nameOf={nameOf} offline={offline} peer={peer} run={run} />
+              <EffectCard key={effectId} effectId={effectId} displayName={displayName} secret={secret} effect={effect} players={players} nameOf={nameOf} offline={offline} peer={peer} run={run} />
             ))}
           </Section>
           {peer.dmEffects().some(e => Object.values(e.effect.applications).some(a => a.remaining !== null && a.state === 'ACTIVE')) && (
@@ -616,6 +637,8 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run, 
   const [exactHpEditing, setExactHpEditing] = useState<string | null>(null);
   const [exactHpCurrent, setExactHpCurrent] = useState('');
   const [exactHpMax, setExactHpMax] = useState('');
+  const [monsterDelta, setMonsterDelta] = useState<{ combatantId: string; kind: 'damage' | 'heal' } | null>(null);
+  const [monsterDeltaAmount, setMonsterDeltaAmount] = useState('');
 
   const actors = [
     ...encounter.combatants.map(c => ({ id: c.id, label: c.name })),
@@ -691,6 +714,28 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run, 
               <Btn small kind="ghost" label="Cycle HP" disabled={offline} onPress={() => run(() => peer.setCombatantHpState(encounter.id, c.id, HP_CYCLE[hp]))} testID={`dm-cycle-hp-${c.name}`} />
               <Btn small kind="danger" label="Remove" disabled={offline} onPress={() => run(() => peer.removeCombatant(encounter.id, c.id))} testID={`dm-remove-combatant-${c.name}`} />
             </Row>
+            {c.exactHp && (
+              monsterDelta?.combatantId === c.id ? (
+                <Row wrap>
+                  <Field label="Amount" value={monsterDeltaAmount} onChangeText={setMonsterDeltaAmount} keyboardType="number-pad" testID={`dm-monster-delta-amount-${c.name}`} />
+                  <Btn small label="Apply" disabled={offline || !monsterDeltaAmount.trim()} testID={`dm-monster-delta-apply-${c.name}`}
+                    onPress={() => {
+                      const n = Math.abs(Number(monsterDeltaAmount.trim()));
+                      const { current, max } = c.exactHp!;
+                      if (!Number.isFinite(n)) { Alert.alert('Invalid amount', 'Enter a whole number.'); return; }
+                      const next = Math.max(0, Math.min(max, monsterDelta.kind === 'damage' ? current - n : current + n));
+                      run(() => peer.setCombatantExactHp(encounter.id, c.id, next, max));
+                      setMonsterDelta(null); setMonsterDeltaAmount('');
+                    }} />
+                  <Btn small kind="ghost" label="Cancel" onPress={() => { setMonsterDelta(null); setMonsterDeltaAmount(''); }} />
+                </Row>
+              ) : (
+                <Row wrap>
+                  <Btn small kind="danger" label="Damage" disabled={offline} onPress={() => { setMonsterDelta({ combatantId: c.id, kind: 'damage' }); setMonsterDeltaAmount(''); }} testID={`dm-monster-damage-${c.name}`} />
+                  <Btn small label="Heal" disabled={offline} onPress={() => { setMonsterDelta({ combatantId: c.id, kind: 'heal' }); setMonsterDeltaAmount(''); }} testID={`dm-monster-heal-${c.name}`} />
+                </Row>
+              )
+            )}
             <Muted>Visible to players:</Muted>
             <Row wrap>
               {(['hidden', 'minimal', 'standard', 'full'] as const).map(p => (
@@ -747,16 +792,21 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run, 
 
 // ── Effect card (shared by the public/secret effect lists) ───────────────────
 
-function EffectCard({ effectId, displayName, secret, effect, nameOf, offline, peer, run }: {
+function EffectCard({ effectId, displayName, secret, effect, players, nameOf, offline, peer, run }: {
   effectId: string;
   displayName: string;
   secret: { description: string; notes: string } | null;
   effect: LiveEffect;
+  players: PublicParticipant[];
   nameOf: (id: string) => string;
   offline: boolean;
   peer: SessionPeer;
   run: (fn: () => unknown) => void;
 }) {
+  const [addingTarget, setAddingTarget] = useState(false);
+  const alreadyTargeted = new Set(Object.values(effect.applications).filter(a => a.state !== 'ENDED').map(a => a.targetId));
+  const addable = players.filter(p => !alreadyTargeted.has(p.id));
+
   return (
     <Card tone={effect.definition.visibility === 'secret' ? 'secret' : 'default'} testID={`dm-live-effect-${displayName}`}>
       <Row wrap>
@@ -764,6 +814,7 @@ function EffectCard({ effectId, displayName, secret, effect, nameOf, offline, pe
         <Badge label={effect.definition.visibility} tone={effect.definition.visibility === 'secret' ? 'secret' : 'default'} />
       </Row>
       {secret && <Muted>DM only: {secret.description}{secret.notes ? ` · ${secret.notes}` : ''}</Muted>}
+      {!!effect.definition.source && <Muted>Source: {effect.definition.source}</Muted>}
       <Muted>{effect.definition.components.map(describeEffectComponent).join(', ') || 'no numeric change'}</Muted>
       {Object.values(effect.applications).map(a => (
         <Row wrap key={a.id}>
@@ -776,6 +827,18 @@ function EffectCard({ effectId, displayName, secret, effect, nameOf, offline, pe
       ))}
       {Object.values(effect.applications).filter(a => a.state !== 'ENDED').length > 1 && (
         <Btn small kind="danger" label="End for everyone" disabled={offline} onPress={() => run(() => peer.endEffect(effectId))} testID={`dm-end-all-${displayName}`} />
+      )}
+      {addable.length > 0 && (
+        addingTarget ? (
+          <Row wrap>
+            {addable.map(p => (
+              <Chip key={p.id} label={p.nickname} onPress={() => { run(() => peer.addEffectTarget(effectId, p.id)); setAddingTarget(false); }} testID={`dm-add-target-${displayName}-${p.nickname}`} />
+            ))}
+            <Btn small kind="ghost" label="Cancel" onPress={() => setAddingTarget(false)} />
+          </Row>
+        ) : (
+          <Btn small kind="ghost" label="+ Add target" disabled={offline} onPress={() => setAddingTarget(true)} testID={`dm-add-target-open-${displayName}`} />
+        )
       )}
     </Card>
   );

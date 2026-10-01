@@ -148,7 +148,7 @@ export function reconcileModes(entity: Entity): Entity {
     });
   }
 
-  let next: Entity = (featuresSame && !resourcesChanged) ? entity : {
+  const next: Entity = (featuresSame && !resourcesChanged) ? entity : {
     ...entity,
     features: featuresSame ? entity.features : nextFeatures,
     resources: resourcesChanged ? { ...entity.resources, custom } : entity.resources,

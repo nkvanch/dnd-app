@@ -291,8 +291,7 @@ export default function SpellsScreen() {
   if (!draft) return null;
 
   const classId       = draft.identity.classId;
-  const homebrewClassDefs = useHomebrewStore(s => s.classes);
-  const spellListClassId = homebrewClassDefs.find(c => c.id === classId)?.spellListClassId ?? classId;
+  const spellListClassId = useHomebrewStore.getState().classes.find(c => c.id === classId)?.spellListClassId ?? classId;
   const isSpellcaster = !!draft.spellcasting || spellChoices.length > 0;
   // CREATION-FILTERS-4 (item 8/9): was a manually inline-duplicated
   // official+homebrew merge — replaced with the already-shared

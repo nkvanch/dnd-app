@@ -1,5 +1,6 @@
 import type { Background, ChoiceDefinition, DraftTrait, Feature, Grant, Item, LevelEntry, ResourceGrant } from './types';
 import { buildTraitFeature } from '../content/traitCompiler';
+import type { ItemChargesDraft } from '../content/itemCharges';
 import type { DraftChoice } from '../content/choiceDefinitionCompiler';
 import { definitionToDraftChoice, draftChoiceToDefinition } from '../content/choiceDefinitionCompiler';
 
@@ -204,7 +205,7 @@ export function serializeBackgroundFeatures(original: Background | null | undefi
   return { features, owners };
 }
 
-export type ItemBuilderDraft = { description: string; category: string; rarity: string | null; armorCategory: string; weaponProps: string[]; extraProps: string; weaponDamage: unknown[]; weaponClass: string | null; weaponRangeSel: string | null; acValue: string; acAddsDex: boolean; trait: DraftTrait; editorFeatureId?: string };
+export type ItemBuilderDraft = { description: string; category: string; rarity: string | null; armorCategory: string; weaponProps: string[]; extraProps: string; weaponDamage: unknown[]; weaponClass: string | null; weaponRangeSel: string | null; acValue: string; acAddsDex: boolean; trait: DraftTrait; charges?: ItemChargesDraft; editorFeatureId?: string };
 export function hydrateItemBuilder(item: Item): { draft: ItemBuilderDraft | null; editorFeature: Feature | null } {
   const draft = item.homebrewDraft as ItemBuilderDraft | undefined;
   const marker = draft?.editorFeatureId;

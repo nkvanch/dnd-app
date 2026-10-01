@@ -6,6 +6,7 @@
 // definition via itemRepo, which is I/O and stays in the UI layer).
 import { Entity, Item, ItemInstance, CampaignRules, Feature } from './types';
 import { recomputeDerived } from './pipeline';
+import { grantEntitlement } from './entitlements';
 import { DEFAULT_RULES } from '../store/characterStore';
 import { hydrateItemInstanceDefinitionFacts, generateItemInstanceId } from './itemMechanics';
 
@@ -74,7 +75,33 @@ export function equipItem(
       equipped: [...entity.inventory.equipped, hydrated],
     },
   };
-  return recomputeDerived(updated, rules);
+  return recomputeDerived(registerItemResources(updated, itemId, itemDef), rules);
+}
+
+/**
+ * Registers an item's charge pools (Item.resources) on first equip. Same
+ * provenance (a `resource_grant` entitlement, sourceKind 'item') and same
+ * CustomResource shape applyGrant's "resource" case produces for class/race
+ * pools, written here directly because leveling.ts already imports this
+ * file. An existing pool is never reset — equip/unequip cycles can't
+ * refill spent charges.
+ */
+function registerItemResources(entity: Entity, itemId: string, itemDef: Item | undefined): Entity {
+  return (itemDef?.resources ?? []).reduce((e, r) => {
+    const owned = grantEntitlement(e, { kind: 'resource_grant', key: r.resourceId, sourceKind: 'item', sourceId: itemId });
+    if (owned.resources.custom.some(c => c.id === r.resourceId)) return owned;
+    return {
+      ...owned,
+      resources: {
+        ...owned.resources,
+        custom: [...owned.resources.custom, {
+          id: r.resourceId, name: r.name,
+          current: Math.max(0, Math.min(r.maximum, r.starting ?? r.maximum)), maximum: r.maximum,
+          recharge: r.recharge, sourceKind: 'item' as const, sourceId: itemId,
+        }],
+      },
+    };
+  }, entity);
 }
 
 /**

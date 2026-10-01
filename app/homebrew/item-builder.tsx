@@ -22,6 +22,7 @@ import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal, EFFECT_KIND_LABELS as TRAIT_KIND_LABELS } from '../../src/components/homebrew/TraitEditor';
+import { newItemChargesDraft, buildItemCharges, chargeActivation, ItemChargesDraft } from '../../src/content/itemCharges';
 import { mechanicsLabel } from '../../src/content/featureMechanics';
 import { simulate } from '../../src/engine/simulate';
 import { equipItem } from '../../src/engine/inventory';
@@ -126,6 +127,11 @@ export default function ItemBuilderScreen() {
   const [trait, setTrait]     = useState<DraftTrait>(() => newDraftTrait('Effect'));
   const [traitOpen, setTraitOpen] = useState(false);
   const [mechanicsTouched, setMechanicsTouched] = useState(false);
+  const [charges, setCharges] = useState<ItemChargesDraft>(() => newItemChargesDraft());
+  function patchCharges(patch: Partial<ItemChargesDraft>) {
+    setMechanicsTouched(true);
+    setCharges(c => ({ ...c, ...patch }));
+  }
 
   useEffect(() => {
     if (!editing) return;
@@ -150,6 +156,7 @@ export default function ItemBuilderScreen() {
       );
       setAcValue(String(draft.acValue ?? ''));
       setAcAddsDex(!!draft.acAddsDex);
+      setCharges({ ...newItemChargesDraft(), ...((draft.charges as Partial<ItemChargesDraft>) ?? {}) });
       // The compiled Feature can't be losslessly reversed back into a
       // DraftTrait (effects are already-compiled Effect objects) — edit mode
       // falls back to "Flavor only" with a generic description, same
@@ -274,11 +281,24 @@ export default function ItemBuilderScreen() {
     const { feature: traitFeature } = buildTraitFeature(trait, { idPrefix: id, sourceKind: 'item', sourceRefId: id, level: null });
     effects.push(...traitFeature.effects);
 
+    const pool = buildItemCharges(id, name.trim(), charges);
     if (weaponEffects.length > 0) {
+      const weaponActivation = { actionType: 'action' as const, range: '5 feet', target: 'single' as const, requiresSave: null };
       return {
         ...base, effects,
         abilityEffects: weaponEffects,
-        activation: { actionType: 'action', resourceCost: null, range: '5 feet', target: 'single', requiresSave: null },
+        // A charged weapon spends its charge(s) on each attack it makes.
+        activation: pool
+          ? chargeActivation(weaponActivation, pool.resourceId, pool.cost)
+          : { ...weaponActivation, resourceCost: null },
+      };
+    }
+    if (pool) {
+      // A non-weapon charged item becomes a tappable, charge-spending ability.
+      return {
+        ...base, effects, passive: false,
+        activation: chargeActivation(
+          { actionType: pool.actionType, range: 'self', target: 'single', requiresSave: null }, pool.resourceId, pool.cost),
       };
     }
     return { ...base, effects };
@@ -309,11 +329,13 @@ export default function ItemBuilderScreen() {
 
   function buildItem(id: string): Item {
     const feature = buildFeature(id)!;
+    const poolForItem = buildItemCharges(id, name.trim(), charges);
     const originalDraft = editing ? hydrateItemBuilder(editing).draft : null;
-    const draft = { description, category, rarity, armorCategory, weaponProps, extraProps, weaponDamage, weaponClass, weaponRangeSel, acValue, acAddsDex, trait };
+    const draft = { description, category, rarity, armorCategory, weaponProps, extraProps, weaponDamage, weaponClass, weaponRangeSel, acValue, acAddsDex, trait, charges };
     const mechanicsChanged = !editing || mechanicsTouched || (originalDraft !== null && JSON.stringify(draft) !== JSON.stringify({ ...originalDraft, editorFeatureId: undefined }));
     const built = mergeHomebrewDefinition(editing, { id, name: name.trim(), weight: parseFloat(weight) || 0, cost: cost.trim() || '-',
-      properties: buildProperties(), features: [feature], imageUri, rulesetId, homebrewDraft: draft });
+      properties: buildProperties(), features: [feature], imageUri, rulesetId, homebrewDraft: draft,
+      resources: poolForItem ? [poolForItem.resource] : undefined });
     return serializeItemBuilder(editing, built, draft, mechanicsChanged);
   }
 
@@ -579,6 +601,60 @@ export default function ItemBuilderScreen() {
           <Text style={styles.effectCardName}>Edit Effect</Text>
           <Text style={styles.effectCardDesc}>{trait.effectKind === 'none' && trait.mechanicsSummary ? trait.mechanicsSummary : (EFFECT_KIND_LABELS[trait.effectKind] ?? TRAIT_KIND_LABELS[trait.effectKind])}</Text>
         </Pressable>
+
+        <Text style={styles.fieldLabel}>Charges (optional)</Text>
+        <Pressable style={[styles.toggle, charges.enabled && styles.toggleActive]} onPress={() => patchCharges({ enabled: !charges.enabled })}>
+          <Text style={[styles.toggleTxt, charges.enabled && styles.toggleTxtActive]}>{charges.enabled ? 'Item has a charge pool' : 'No charges'}</Text>
+        </Pressable>
+        {charges.enabled && (
+          <View style={styles.effectPanel}>
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Max charges</Text>
+                <TextInput style={styles.input} value={charges.max} onChangeText={v => patchCharges({ max: v })} keyboardType="numeric" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Starting (blank = full)</Text>
+                <TextInput style={styles.input} value={charges.starting} onChangeText={v => patchCharges({ starting: v })} keyboardType="numeric" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Cost per use</Text>
+                <TextInput style={styles.input} value={charges.cost} onChangeText={v => patchCharges({ cost: v })} keyboardType="numeric" />
+              </View>
+            </View>
+            <Text style={styles.fieldLabel}>Recharge</Text>
+            <View style={styles.chipWrap}>
+              {([['short_rest', 'Short rest'], ['long_rest', 'Long rest'], ['dawn', 'Dawn'], ['never', 'Never'], ['other', 'Other']] as const).map(([key, label]) => (
+                <Pressable key={key} style={[styles.chip, charges.recharge === key && styles.chipActive]} onPress={() => patchCharges({ recharge: key })}>
+                  <Text style={[styles.chipTxt, charges.recharge === key && styles.chipTxtActive]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {charges.recharge === 'other' && (
+              <TextInput style={styles.input} value={charges.rechargeOther} onChangeText={v => patchCharges({ rechargeOther: v })}
+                placeholder="e.g. when you win a duel" placeholderTextColor={Colors.textDim} />
+            )}
+            {charges.recharge === 'dawn' && <Text style={styles.hint}>Restored by the sheet's ☀ Dawn button, not by a rest.</Text>}
+            {charges.recharge === 'other' && <Text style={styles.hint}>Not restored automatically: tap + on the sheet when it recharges.</Text>}
+            {category !== 'weapon' && (
+              <>
+                <Text style={styles.fieldLabel}>Using the item takes</Text>
+                <View style={styles.chipWrap}>
+                  {([['action', 'Action'], ['bonus_action', 'Bonus action'], ['reaction', 'Reaction'], ['free', 'Free']] as const).map(([key, label]) => (
+                    <Pressable key={key} style={[styles.chip, charges.actionType === key && styles.chipActive]} onPress={() => patchCharges({ actionType: key })}>
+                      <Text style={[styles.chipTxt, charges.actionType === key && styles.chipTxtActive]}>{label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+            <Text style={styles.hint}>
+              {category === 'weapon'
+                ? 'Each attack with this weapon spends the cost in charges.'
+                : 'Adds a tappable ability to the sheet that spends the cost in charges. What the ability does is up to the table — the app tracks the charges.'}
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       <SafeBottomView>

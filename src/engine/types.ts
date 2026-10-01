@@ -651,6 +651,16 @@ export type Item = {
   cost:       string;
   properties: string[];
   features:   Feature[];
+  /**
+   * Charge pools this item carries (a homebrew item's "3 charges, regains
+   * some at dawn"). Registered on the wearer the first time the item is
+   * equipped — same ResourceGrant → CustomResource path class/race resources
+   * use — and referenced by a feature's `activation.resourceCost.resourceId`.
+   * The pool is deliberately NOT removed on unequip, so swapping an item
+   * off and on can't refill spent charges. Two copies of one item share
+   * the pool (the resourceId is per item definition).
+   */
+  resources?: ResourceGrant[];
   /** Same rationale as Race.homebrewDraft — lossless edit-mode round-tripping. */
   homebrewDraft?: Record<string, unknown>;
   /**
@@ -2326,6 +2336,8 @@ export type ResourceGrant = {
   resourceId: string;
   name:       string;
   maximum:    number;
+  /** Charges the pool starts with when first granted (default: `maximum`). */
+  starting?:  number;
   /** `string` covers a homebrew-authored custom recharge description (see
    * DraftTrait's 'other' recharge option) — displayed as-is by CustomResource,
    * which already allows the same free-text escape hatch. */

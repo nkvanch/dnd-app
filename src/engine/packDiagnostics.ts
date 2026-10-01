@@ -56,12 +56,13 @@ export type HomebrewContentSlice = {
   feats:       { id: string; rulesetId?: string }[];
   monsters:    { id: string; rulesetId?: string }[];
   conditions:  { id: string; rulesetId?: string }[];
+  spellLists:  { id: string; rulesetId?: string }[];
 };
 
 const CONTENT_TYPE_TO_STORE_KEY: Record<ContentCacheType, keyof HomebrewContentSlice> = {
   race: 'races', subrace: 'subraces', class: 'classes', subclass: 'subclasses',
   spell: 'spells', background: 'backgrounds', feature: 'features', item: 'items',
-  feat: 'feats', monster: 'monsters', condition: 'conditions',
+  feat: 'feats', monster: 'monsters', condition: 'conditions', spellList: 'spellLists',
 };
 
 function resolveRef(ref: PackItemRef, homebrew: HomebrewContentSlice) {

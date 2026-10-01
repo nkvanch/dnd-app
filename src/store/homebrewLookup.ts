@@ -12,13 +12,13 @@ export type HomebrewArrays = {
   races: HomebrewContent[]; subraces: HomebrewContent[]; classes: HomebrewContent[];
   subclasses: HomebrewContent[]; spells: HomebrewContent[]; backgrounds: HomebrewContent[];
   features: HomebrewContent[]; items: HomebrewContent[]; feats: HomebrewContent[];
-  monsters: HomebrewContent[]; conditions: HomebrewContent[];
+  monsters: HomebrewContent[]; conditions: HomebrewContent[]; spellLists: HomebrewContent[];
 };
 
 const TYPE_TO_KEY: Record<ContentCacheType, keyof HomebrewArrays> = {
   race: 'races', subrace: 'subraces', class: 'classes', subclass: 'subclasses',
   spell: 'spells', background: 'backgrounds', feature: 'features', item: 'items',
-  feat: 'feats', monster: 'monsters', condition: 'conditions',
+  feat: 'feats', monster: 'monsters', condition: 'conditions', spellList: 'spellLists',
 };
 
 /** {type,id} -> the actual local item, or undefined if none exists with that id. */

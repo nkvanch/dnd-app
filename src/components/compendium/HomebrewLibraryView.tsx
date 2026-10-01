@@ -48,6 +48,7 @@ export function HomebrewLibraryView() {
   const feats       = useHomebrewStore(s => s.feats);
   const monsters    = useHomebrewStore(s => s.monsters);
   const conditions  = useHomebrewStore(s => s.conditions);
+  const spellLists  = useHomebrewStore(s => s.spellLists);
   const deleteItem  = useHomebrewStore(s => s.deleteItem);
   const characters  = useCharacterStore(s => s.characters);
 
@@ -65,10 +66,10 @@ export function HomebrewLibraryView() {
 
   const entries = useMemo(
     () => buildLibraryEntries(
-      { races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions },
+      { races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, spellLists },
       parents.races, parents.classes,
     ),
-    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, parents],
+    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, spellLists, parents],
   );
 
   // Per-mode UI state, restored once (lazy) and written back on change.
@@ -416,6 +417,7 @@ const styles = StyleSheet.create({
   accent_subclass:   { borderLeftColor: Colors.gold },
   accent_feat:       { borderLeftColor: Colors.gold },
   accent_spell:      { borderLeftColor: Colors.blue },
+  accent_spellList:  { borderLeftColor: Colors.blue },
   accent_condition:  { borderLeftColor: Colors.blue },
   accent_background: { borderLeftColor: Colors.purple },
   accent_item:       { borderLeftColor: Colors.red },

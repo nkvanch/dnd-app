@@ -30,7 +30,7 @@
 // bloat packages with content the recipient may never actually need. This
 // matches the spec's own allowance for "required vs optional" — pool
 // references are treated as optional/unbundled, not required.
-import { Feature, Effect, Grant, KnownSpellsGrant, Subrace, HomebrewSubclass, CharClass, DraftTrait } from './types';
+import { Feature, Effect, Grant, KnownSpellsGrant, Subrace, HomebrewSubclass, CharClass, DraftTrait, SpellList } from './types';
 import { ContentCacheType, HomebrewContent } from '../db/contentCacheRepo';
 
 export type DependencyRef = { type: ContentCacheType; id: string };
@@ -134,6 +134,9 @@ export function collectContentDependencies(type: ContentCacheType, item: Homebre
     }
     case 'spell':
       // Spells carry no cross-content reference fields of their own.
+      break;
+    case 'spellList':
+      for (const id of (item as SpellList).spellIds ?? []) refs.push({ type: 'spell', id });
       break;
   }
 

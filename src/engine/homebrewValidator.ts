@@ -2,7 +2,7 @@
 // FILE: src/engine/homebrewValidator.ts
 // Validates homebrew content before it enters the content database.
 // ============================================================================
-import { Race, CharClass, Spell, Feature, Background, Feat, HomebrewSubclass, Item } from './types';
+import { Race, CharClass, Spell, Feature, Background, Feat, HomebrewSubclass, Item, SpellList } from './types';
 import { MonsterTemplate } from '../content/monsters/types';
 import { validateEntityDeep } from './entityValidation';
 
@@ -279,9 +279,37 @@ export function validateMonster(data: unknown): ValidationResult {
 
 // ── Generic content validator ─────────────────────────────────────────────────
 
+/** A SpellList's own cross-reference (which spells it names) can't be checked here — this
+ *  function has no content database in scope — so it only validates its own shape (name +
+ *  a non-empty spellIds array). Unresolvable spell ids are instead caught the same way every
+ *  other dangling content reference is: validateEntity's missing_spell Issue, at the point a
+ *  character actually tries to use one. */
+export function validateSpellList(data: unknown): ValidationResult {
+  const errors:   string[] = [];
+  const warnings: string[] = [];
+
+  if (!data || typeof data !== 'object') {
+    return { valid: false, errors: ['Root: not an object'], warnings: [] };
+  }
+  const list = data as Partial<SpellList>;
+
+  if (!list.id   || typeof list.id   !== 'string') errors.push('id: required string');
+  if (!list.name || typeof list.name !== 'string') errors.push('name: required string');
+  if (!Array.isArray(list.spellIds)) {
+    errors.push('spellIds: must be an array');
+  } else if (list.spellIds.length === 0) {
+    warnings.push('spellIds: empty — this list grants no spells yet');
+  } else if (!list.spellIds.every(id => typeof id === 'string')) {
+    errors.push('spellIds: every entry must be a string id');
+  }
+  if (list.classId !== undefined && typeof list.classId !== 'string') errors.push('classId: must be a string if present');
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
 export function validateContent(
   type: 'race' | 'subrace' | 'class' | 'subclass' | 'spell' | 'background'
-      | 'feature' | 'feat' | 'item' | 'monster' | 'condition',
+      | 'feature' | 'feat' | 'item' | 'monster' | 'condition' | 'spellList',
   data: unknown
 ): ValidationResult {
   switch (type) {
@@ -296,6 +324,7 @@ export function validateContent(
     case 'feat':       return validateFeat(data);
     case 'item':       return validateItem(data);
     case 'monster':    return validateMonster(data);
+    case 'spellList':  return validateSpellList(data);
     default:           return { valid: false, errors: [`Unknown type: ${type}`], warnings: [] };
   }
 }

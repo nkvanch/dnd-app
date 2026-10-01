@@ -31,21 +31,21 @@ export type PackageLookup = (ref: DependencyRef) => (HomebrewContent & { ruleset
 export const PACKAGE_CATEGORY_KEY: Record<ContentCacheType, keyof GrimoirePackHomebrew> = {
   race: 'races', subrace: 'subraces', class: 'classes', subclass: 'subclasses',
   spell: 'spells', background: 'backgrounds', feature: 'features', item: 'items',
-  feat: 'feats', monster: 'monsters', condition: 'conditions',
+  feat: 'feats', monster: 'monsters', condition: 'conditions', spellList: 'spellLists',
 };
 
 /** Every content type a package can carry (the taxonomy the pack format itself supports). */
 export const PACKAGE_CONTENT_TYPES = Object.keys(PACKAGE_CATEGORY_KEY) as ContentCacheType[];
 
 export const PACKAGE_TYPE_ORDER: ContentCacheType[] = [
-  'race', 'subrace', 'class', 'subclass', 'background', 'feat', 'feature', 'spell', 'item', 'monster', 'condition',
+  'race', 'subrace', 'class', 'subclass', 'background', 'feat', 'feature', 'spell', 'spellList', 'item', 'monster', 'condition',
 ];
 
 export const PACKAGE_TYPE_LABELS: Record<ContentCacheType, [string, string]> = {
   race: ['Species', 'Species'], subrace: ['Subrace', 'Subraces'], class: ['Class', 'Classes'],
   subclass: ['Subclass', 'Subclasses'], background: ['Background', 'Backgrounds'], feat: ['Feat', 'Feats'],
   feature: ['Feature', 'Features'], spell: ['Spell', 'Spells'], item: ['Item', 'Items'],
-  monster: ['Monster', 'Monsters'], condition: ['Condition', 'Conditions'],
+  monster: ['Monster', 'Monsters'], condition: ['Condition', 'Conditions'], spellList: ['Spell List', 'Spell Lists'],
 };
 
 export const refKey = (r: DependencyRef): string => `${r.type}:${r.id}`;

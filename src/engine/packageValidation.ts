@@ -14,7 +14,7 @@ import { findDuplicateIdsInPackage, flattenPackageContents } from './packageConf
 import { buildDependencyClosure, DependencyRef } from './contentDependencies';
 
 const KNOWN_HOMEBREW_KEYS: Set<keyof GrimoirePackHomebrew> = new Set([
-  'races', 'subraces', 'classes', 'subclasses', 'spells', 'backgrounds', 'features', 'items', 'feats', 'monsters', 'conditions',
+  'races', 'subraces', 'classes', 'subclasses', 'spells', 'backgrounds', 'features', 'items', 'feats', 'monsters', 'conditions', 'spellLists',
 ]);
 
 // HOMEBREW-PACKAGE-1 item 36: a generous but real ceiling on the number of

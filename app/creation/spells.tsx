@@ -19,6 +19,7 @@ import { Entity, Spell } from '../../src/engine/types';
 import { spellRepo } from '../../src/content/spellRepo';
 import type { SpellIndexEntry } from '../../src/content/spellRepo.types';
 import { mergeSpellIndex } from '../../src/content/contentResolution';
+import { spellListsForClass, filterSpellsForClass } from '../../src/content/spellLists';
 import { AddSpellModal } from '../../src/components/sheet/AddSpellModal';
 import { actionType, ACTION_TYPES } from '../../src/content/spellFilterUtils';
 import { spellSortOptions } from '../../src/content/spells/spellBrowse';
@@ -107,6 +108,7 @@ export default function SpellsScreen() {
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
   const homebrewSpells = useHomebrewStore(s => s.spells);
+  const spellLists      = useHomebrewStore(s => s.spellLists);
 
   // ── ALL hooks first — before any conditional return ──
   // Redirect to name if no draft — must be in useEffect, not render
@@ -276,16 +278,20 @@ export default function SpellsScreen() {
   // "pick an extra spell from another class" case (a feat, a homebrew rule,
   // etc.) rather than silently letting every class pick from everything.
   const [otherClasses,   setOtherClasses]   = useState(!!savedFilters.otherClasses);
+  // Which spell list this picker draws from — null means the normal official
+  // class-tag pool. Only meaningful when this class has at least one homebrew
+  // SpellList suggested for it (see the Spell Source filter below).
+  const [activeSpellListId, setActiveSpellListId] = useState<string | null>((savedFilters.activeSpellListId as string) ?? null);
   useEffect(() => {
     setBrowseState(SCREEN_KEY, {
       search, sort: spellSort,
       filters: {
         schoolFilter, castFilter, actionFilter, officialFilter, rulesetFilter,
-        componentFilter: Array.from(componentFilter), otherClasses,
+        componentFilter: Array.from(componentFilter), otherClasses, activeSpellListId,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, spellSort, schoolFilter, castFilter, actionFilter, officialFilter, rulesetFilter, componentFilter, otherClasses]);
+  }, [search, spellSort, schoolFilter, castFilter, actionFilter, officialFilter, rulesetFilter, componentFilter, otherClasses, activeSpellListId]);
 
   if (!draft) return null;
 
@@ -299,12 +305,14 @@ export default function SpellsScreen() {
   const allSpells: SpellIndexEntry[] = mergeSpellIndex(homebrewSpells);
   const homebrewSpellIds = new Set(homebrewSpells.map(s => s.id));
 
-  // Filter by class — only show spells tagged for this class.
+  // Filter by class — only show spells tagged for this class, OR, if a homebrew Spell List is
+  // active for this picker, exactly that list's spells instead (see content/spellLists.ts).
   // If a spell has no `classes` tag at all (legacy), include it so nothing disappears.
-  // The "add extra from another class" toggle bypasses this restriction entirely.
+  // The "add extra from another class" toggle bypasses both of those restrictions entirely.
+  const classSpellLists = spellListsForClass(spellLists, classId);
   const classSpells = otherClasses
     ? allSpells
-    : allSpells.filter(s => !s.classes || s.classes.length === 0 || s.classes.includes(classId));
+    : filterSpellsForClass(allSpells, classId, activeSpellListId, spellLists);
 
   // "+ Add Additional Spell" — writes directly into spellcasting.cantrips/
   // .known (mirroring the pre-existing "externally granted" spell pattern
@@ -793,6 +801,18 @@ export default function SpellsScreen() {
               <FilterSection label="Official / Homebrew">
                 <OfficialHomebrewChipRow value={officialFilter} onChange={setOfficialFilter} />
               </FilterSection>
+              {classSpellLists.length > 0 && (
+                <FilterSection label="Spell Source">
+                  {/* FilterChipRow hides itself at <=1 option, so "Official" is always an
+                      explicit option here — otherwise a class with exactly one Spell List
+                      would render zero chips and have no way back to the normal pool. */}
+                  <FilterChipRow
+                    options={[{ id: 'official', label: 'Official' }, ...classSpellLists.map(l => ({ id: l.id, label: l.name }))]}
+                    value={activeSpellListId ?? 'official'}
+                    onChange={id => setActiveSpellListId(!id || id === 'official' ? null : id)}
+                  />
+                </FilterSection>
+              )}
               {availableRulesets.length > 1 && (
                 <FilterSection label="Ruleset">
                   <FilterChipRow

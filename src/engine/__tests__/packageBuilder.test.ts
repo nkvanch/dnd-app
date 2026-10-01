@@ -124,7 +124,7 @@ describe('Export Package — several chosen entries, one file', () => {
 
   it('every portable content type the format supports can be part of a package', () => {
     expect(PACKAGE_CONTENT_TYPES.sort()).toEqual(
-      ['background', 'class', 'condition', 'feat', 'feature', 'item', 'monster', 'race', 'spell', 'subclass', 'subrace'],
+      ['background', 'class', 'condition', 'feat', 'feature', 'item', 'monster', 'race', 'spell', 'spellList', 'subclass', 'subrace'],
     );
     expect(new Set(Object.values(PACKAGE_CATEGORY_KEY)).size).toBe(PACKAGE_CONTENT_TYPES.length);
   });

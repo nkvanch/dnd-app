@@ -22,6 +22,7 @@ export const EDIT_ROUTES: Partial<Record<ContentCacheType, string>> = {
   feat: '/homebrew/feat-builder',
   monster: '/homebrew/monster-builder',
   condition: '/homebrew/condition-builder',
+  spellList: '/homebrew/spell-list-builder',
 };
 
 export function editHrefFor(type: ContentCacheType, id: string): string | null {
@@ -38,6 +39,7 @@ export const LIBRARY_CATEGORIES: { id: ContentCacheType | 'all'; label: string }
   { id: 'background', label: 'Backgrounds' },
   { id: 'item',       label: 'Items' },
   { id: 'spell',      label: 'Spells' },
+  { id: 'spellList',  label: 'Spell Lists' },
   { id: 'feature',    label: 'Features' },
   { id: 'feat',       label: 'Feats' },
   { id: 'monster',    label: 'Monsters' },
@@ -68,6 +70,7 @@ export function buildLibraryEntries(
     ...hb.feats.map(item => ({ type: 'feat' as const, item })),
     ...hb.monsters.map(item => ({ type: 'monster' as const, item })),
     ...hb.conditions.map(item => ({ type: 'condition' as const, item })),
+    ...hb.spellLists.map(item => ({ type: 'spellList' as const, item })),
   ];
 }
 

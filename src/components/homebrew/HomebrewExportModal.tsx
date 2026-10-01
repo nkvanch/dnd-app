@@ -40,9 +40,10 @@ export function HomebrewExportModal({ visible, entry, onClose }: Props) {
   const feats       = useHomebrewStore(s => s.feats);
   const monsters    = useHomebrewStore(s => s.monsters);
   const conditions  = useHomebrewStore(s => s.conditions);
+  const spellLists  = useHomebrewStore(s => s.spellLists);
   const lookup = useMemo(
-    () => makeHomebrewLookup({ races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions }),
-    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions],
+    () => makeHomebrewLookup({ races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, spellLists }),
+    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, spellLists],
   );
   const [exporting, setExporting] = useState(false);
 

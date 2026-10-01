@@ -7,7 +7,7 @@ import { Entity } from '../types';
 function emptyHomebrew(): HomebrewContentSlice {
   return {
     races: [], subraces: [], classes: [], subclasses: [], spells: [],
-    backgrounds: [], features: [], items: [], feats: [], monsters: [], conditions: [],
+    backgrounds: [], features: [], items: [], feats: [], monsters: [], conditions: [], spellLists: [],
   };
 }
 

@@ -55,6 +55,7 @@ export function InstalledPackagesView() {
   const feats       = useHomebrewStore(s => s.feats);
   const monsters    = useHomebrewStore(s => s.monsters);
   const conditions  = useHomebrewStore(s => s.conditions);
+  const spellLists  = useHomebrewStore(s => s.spellLists);
   const characters  = useCharacterStore(s => s.characters);
 
   const selectedPackId = useCompendiumModeStore(s => s.selectedPackId);
@@ -74,8 +75,8 @@ export function InstalledPackagesView() {
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
   const homebrew = useMemo(
-    () => ({ races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions }),
-    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions],
+    () => ({ races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, spellLists }),
+    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, spellLists],
   );
   const lookup = useMemo(() => makeHomebrewLookup(homebrew), [homebrew]);
 

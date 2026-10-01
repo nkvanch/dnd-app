@@ -9,7 +9,7 @@
 // Designed once now so the bigger import pipeline doesn't need a new file
 // format later — exactly what the roadmap asked for.
 //
-import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Background, Feature, Feat, Condition, RulesetId } from './types';
+import { Entity, Race, Subrace, CharClass, HomebrewSubclass, Item, Spell, Background, Feature, Feat, Condition, SpellList, RulesetId } from './types';
 import { MonsterTemplate } from '../content/monsters/types';
 import { ContentCacheType } from '../db/contentCacheRepo';
 import { validateContent, validateFeature, validateEntityShape } from './homebrewValidator';
@@ -38,6 +38,7 @@ export type GrimoirePackHomebrew = {
   feats?:       Feat[];
   monsters?:    MonsterTemplate[];
   conditions?:  Condition[];
+  spellLists?:  SpellList[];
 };
 
 /**
@@ -264,6 +265,7 @@ export function validatePackContents(pack: GrimoirePack): string[] {
     { key: 'feats',       type: 'feat' },
     { key: 'monsters',    type: 'monster' },
     { key: 'conditions',  type: 'condition' },
+    { key: 'spellLists',  type: 'spellList' },
   ];
   const hb = pack.homebrew;
   if (hb) {

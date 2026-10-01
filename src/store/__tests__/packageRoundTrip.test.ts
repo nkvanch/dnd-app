@@ -35,13 +35,13 @@ import type { CharClass, Feature } from '../../engine/types';
 
 const EMPTY: HomebrewArrays = {
   races: [], subraces: [], classes: [], subclasses: [], spells: [],
-  backgrounds: [], features: [], items: [], feats: [], monsters: [], conditions: [],
+  backgrounds: [], features: [], items: [], feats: [], monsters: [], conditions: [], spellLists: [],
 };
 
 const CATEGORY_KEY: Record<ContentCacheType, keyof GrimoirePackHomebrew> = {
   race: 'races', subrace: 'subraces', class: 'classes', subclass: 'subclasses',
   spell: 'spells', background: 'backgrounds', feature: 'features', item: 'items',
-  feat: 'feats', monster: 'monsters', condition: 'conditions',
+  feat: 'feats', monster: 'monsters', condition: 'conditions', spellList: 'spellLists',
 };
 
 /** One minimal-but-structurally-plausible fixture per supported content
@@ -66,11 +66,12 @@ function fixtureFor(type: ContentCacheType): HomebrewContent {
     case 'monster': return { id: 'rt_monster', name: 'RT Monster', cr: 1, size: 'medium', type: 'beast', alignment: 'unaligned', stats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, hp: { dice: '2d8', average: 9 }, ac: { value: 12, source: 'natural armor' }, speed: 30, features: [], savingThrows: [], skills: {}, senses: [], languages: [] } as unknown as HomebrewContent;
     case 'condition': return { id: 'rt_condition', name: 'RT Condition', description: '', features: [] } as unknown as HomebrewContent;
     case 'feature': return { id: 'rt_feature', name: 'RT Feature', description: '', source: { kind: 'race', refId: 'rt_race' }, level: null, effects: [], actions: [], choices: [], passive: true } as unknown as HomebrewContent;
+    case 'spellList': return { id: 'rt_spellList', name: 'RT Spell List', classId: 'rt_class', spellIds: ['rt_spell'] } as unknown as HomebrewContent;
   }
 }
 
 const ALL_TYPES: ContentCacheType[] = [
-  'race', 'subrace', 'class', 'subclass', 'background', 'feat', 'spell', 'item', 'monster', 'condition',
+  'race', 'subrace', 'class', 'subclass', 'background', 'feat', 'spell', 'item', 'monster', 'condition', 'spellList',
 ];
 
 function resetStore() {
@@ -153,6 +154,13 @@ describe('full package round trip — every supported content type (item 5)', ()
       // Real path: compendium.tsx/dm/monsters.tsx's resolveMonsterById/mergeMonsterIndex — monsters aren't part of ContentDB.
       useHomebrewStore.setState(state => ({ monsters: [...state.monsters, toSave[0].item as never] }));
       const resolved = resolveMonsterById(fixture.id, useHomebrewStore.getState().monsters);
+      expect(resolved).toBeDefined();
+      expect(resolved!.name).toBe(fixture.name);
+    } else if (type === 'spellList') {
+      // Spell lists are deliberately NOT part of ContentDB/getMergedContentDB — they're a
+      // standalone side list consumed directly from the store (see content/spellLists.ts).
+      useHomebrewStore.setState(state => ({ spellLists: [...state.spellLists, toSave[0].item as never] }));
+      const resolved = useHomebrewStore.getState().spellLists.find(sl => sl.id === fixture.id);
       expect(resolved).toBeDefined();
       expect(resolved!.name).toBe(fixture.name);
     } else {

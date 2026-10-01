@@ -9,7 +9,7 @@ import type { HomebrewContent } from '../../db/contentCacheRepo';
 const c = (o: Record<string, unknown>) => o as unknown as HomebrewContent;
 const empty = (): HomebrewArrays => ({
   races: [], subraces: [], classes: [], subclasses: [], spells: [], backgrounds: [],
-  features: [], items: [], feats: [], monsters: [], conditions: [],
+  features: [], items: [], feats: [], monsters: [], conditions: [], spellLists: [],
 });
 
 function sample(): HomebrewArrays {
@@ -78,7 +78,7 @@ describe('Homebrew library search / filter / sort', () => {
 
   it('offers a category for every content type the store holds', () => {
     expect(LIBRARY_CATEGORIES.map(x => x.id)).toEqual(
-      ['all', 'race', 'subrace', 'class', 'subclass', 'background', 'item', 'spell', 'feature', 'feat', 'monster', 'condition'],
+      ['all', 'race', 'subrace', 'class', 'subclass', 'background', 'item', 'spell', 'spellList', 'feature', 'feat', 'monster', 'condition'],
     );
   });
 });

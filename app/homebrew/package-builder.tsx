@@ -50,6 +50,7 @@ export default function PackageBuilderScreen() {
   const feats       = useHomebrewStore(s => s.feats);
   const monsters    = useHomebrewStore(s => s.monsters);
   const conditions  = useHomebrewStore(s => s.conditions);
+  const spellLists  = useHomebrewStore(s => s.spellLists);
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
   const { explicit, step, name, version, author, description, search, category } = usePackageBuilderStore();
@@ -57,8 +58,8 @@ export default function PackageBuilderScreen() {
   const [exporting, setExporting] = useState(false);
 
   const homebrew = useMemo(
-    () => ({ races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions }),
-    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions],
+    () => ({ races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, spellLists }),
+    [races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, conditions, spellLists],
   );
   const lookup = useMemo(() => makeHomebrewLookup(homebrew), [homebrew]);
 

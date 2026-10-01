@@ -28,11 +28,11 @@ export const CONTENT_TYPE_PLURALS: Record<ContentCacheType, [string, string]> = 
   race: ['race', 'races'], subrace: ['subrace', 'subraces'], class: ['class', 'classes'],
   subclass: ['subclass', 'subclasses'], spell: ['spell', 'spells'], background: ['background', 'backgrounds'],
   feature: ['feature', 'features'], item: ['item', 'items'], feat: ['feat', 'feats'],
-  monster: ['monster', 'monsters'], condition: ['condition', 'conditions'],
+  monster: ['monster', 'monsters'], condition: ['condition', 'conditions'], spellList: ['spell list', 'spell lists'],
 };
 
 export const CONTENT_TYPE_ORDER: ContentCacheType[] = [
-  'race', 'subrace', 'class', 'subclass', 'background', 'feat', 'spell', 'item', 'feature', 'monster', 'condition',
+  'race', 'subrace', 'class', 'subclass', 'background', 'feat', 'spell', 'spellList', 'item', 'feature', 'monster', 'condition',
 ];
 
 export type CompositionPart = { type: ContentCacheType; count: number };

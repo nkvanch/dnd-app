@@ -8,7 +8,7 @@ import type { DependencyRef } from '../../engine/contentDependencies';
 const hb = (o: Record<string, unknown>) => o as unknown as HomebrewContent;
 const R = (type: string, id: string): DependencyRef => ({ type: type as DependencyRef['type'], id });
 const empty = (): HomebrewArrays => ({
-  races: [], subraces: [], classes: [], subclasses: [], spells: [], backgrounds: [], features: [], items: [], feats: [], monsters: [], conditions: [],
+  races: [], subraces: [], classes: [], subclasses: [], spells: [], backgrounds: [], features: [], items: [], feats: [], monsters: [], conditions: [], spellLists: [],
 });
 
 beforeEach(() => usePackageBuilderStore.getState().reset());

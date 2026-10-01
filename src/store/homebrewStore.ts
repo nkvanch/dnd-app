@@ -11,7 +11,7 @@
 // ============================================================================
 import { create } from 'zustand';
 import {
-  Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, Feat, Condition, ContentDB,
+  Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, Feat, Condition, SpellList, ContentDB,
   RulesetId, matchesRuleset,
 } from '../engine/types';
 import { MonsterTemplate } from '../content/monsters/types';
@@ -73,6 +73,7 @@ type HomebrewStore = {
   feats:       Feat[];
   monsters:    MonsterTemplate[];
   conditions:  Condition[];
+  spellLists:  SpellList[];
   isLoading:   boolean;
 
   /** Load all homebrew from SQLite and merge built-in homebrew. */
@@ -165,6 +166,7 @@ function applyOneItem(state: HomebrewStore, type: ContentCacheType, item: Homebr
     case 'feat':       return { feats:       [...state.feats.filter(f => f.id !== (item as Feat).id),           item as Feat] };
     case 'monster':    return { monsters:    [...state.monsters.filter(m => m.id !== (item as MonsterTemplate).id), item as MonsterTemplate] };
     case 'condition':  return { conditions:  [...state.conditions.filter(c => c.id !== (item as Condition).id), item as Condition] };
+    case 'spellList':  return { spellLists:  [...state.spellLists.filter(sl => sl.id !== (item as SpellList).id), item as SpellList] };
     default:           return state;
   }
 }
@@ -181,6 +183,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
   feats:       [],
   monsters:    [],
   conditions:  [],
+  spellLists:  [],
   isLoading:   false,
 
   loadHomebrew: async () => {
@@ -220,6 +223,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         feats:       (all.feat       ?? []) as Feat[],
         monsters:    (all.monster    ?? []) as MonsterTemplate[],
         conditions:  (all.condition  ?? []) as Condition[],
+        spellLists:  (all.spellList  ?? []) as SpellList[],
         isLoading:   false,
       });
     } catch (e) {
@@ -331,6 +335,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'feat':       return { feats:       state.feats.filter(f => f.id !== id) };
         case 'monster':    return { monsters:    state.monsters.filter(m => m.id !== id) };
         case 'condition':  return { conditions:  state.conditions.filter(c => c.id !== id) };
+        case 'spellList':  return { spellLists:  state.spellLists.filter(sl => sl.id !== id) };
         default:           return state;
       }
     });
@@ -358,6 +363,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         case 'feat':       return { feats:       [...state.feats.filter(f => f.id !== id),              restored as Feat] };
         case 'monster':    return { monsters:    [...state.monsters.filter(m => m.id !== id),           restored as MonsterTemplate] };
         case 'condition':  return { conditions:  [...state.conditions.filter(c => c.id !== id),         restored as Condition] };
+        case 'spellList':  return { spellLists:  [...state.spellLists.filter(sl => sl.id !== id),       restored as SpellList] };
         default:           return state;
       }
     });

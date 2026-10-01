@@ -26,6 +26,7 @@ function CreatePanel() {
     { label: '🧰  New Item',         route: '/homebrew/item-builder'  },
     { label: '💎  Rare Items',       route: '/homebrew/rare-items'    },
     { label: '✨  New Spell',        route: '/homebrew/spell-builder' },
+    { label: '📗  New Spell List',   route: '/homebrew/spell-list-builder' },
     { label: '📖  New Feature',      route: '/homebrew/feature-editor' },
     { label: '🌟  New Feat',         route: '/homebrew/feat-builder' },
     { label: '🐉  New Monster',      route: '/homebrew/monster-builder' },

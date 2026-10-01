@@ -1431,6 +1431,29 @@ export type Spell = {
   rulesetId?:               RulesetId;
 };
 
+/**
+ * A named, author-curated collection of spell ids — homebrew content in its
+ * own right (create/export/import like any other builder type), distinct
+ * from `Spell.classes` (which just tags which official classes a single
+ * spell belongs to). A SpellList exists to give a class an ALTERNATE pool to
+ * draw from — most commonly a homebrew class with no official spell list of
+ * its own, or an optional/variant list for an existing class — without
+ * having to retag every individual spell's `classes` field. `classId` is the
+ * suggested/default class this list is for; it does not restrict who can
+ * pick the list (see filterSpellsForClass in content/spellLists.ts), since
+ * nothing stops a DM from offering the same curated list to more than one
+ * class at their table.
+ */
+export type SpellList = {
+  id:          string;
+  name:        string;
+  description?: string;
+  classId?:    string;
+  spellIds:    string[];
+  srd?:        boolean;
+  rulesetId?:  RulesetId;
+};
+
 export type Currency     = { pp: number; gp: number; ep: number; sp: number; cp: number };
 
 /**

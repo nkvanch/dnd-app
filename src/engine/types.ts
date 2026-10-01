@@ -995,6 +995,14 @@ export type HPBlock = {
   current: number;
   maximum: number;
   temp:    number;
+  /**
+   * The part of `maximum` that comes from `max_hp` effects (a mid-campaign
+   * reward feature's "+5 maximum HP"). recomputeDerived reconciles it: when
+   * the resolved bonus changes, `maximum` moves by the difference (current HP
+   * rises with a gain, is only clamped on a loss) — so replacing a +5 grant
+   * with a +10 one nets +10 total, never +15. Absent/0 for everyone else.
+   */
+  bonusMax?: number;
 };
 
 /** One die-size's own total/remaining count within a mixed hit-dice pool. */
@@ -1722,6 +1730,23 @@ export type Effect = {
   movementRange?: number;
 };
 
+/** One row of an entity's mid-campaign feature-grant ledger. */
+export type FeatureGrantRecord = {
+  id:         string;
+  /** Grants sharing a lineageId are successive tiers of one reward; a new one REPLACES the active one. */
+  lineageId:  string;
+  label:      string;
+  tier?:      number;
+  featureIds: string[];
+  resourceIds: string[];
+  grantedAt:  string;
+  grantedBy:  string;
+  note?:      string;
+  status:     'active' | 'replaced' | 'revoked';
+  replacedAt?: string;
+  replacedBy?: string;
+};
+
 /**
  * An effect a Feature gives to OTHER creatures. Two modes:
  *
@@ -2240,6 +2265,12 @@ export type Entity = {
   /** Once initialized, entitlements and current source definitions are the
    * authoritative grant inputs. Flat proficiency/spell arrays are output only. */
   entitlementInputsVersion?: 1;
+  /**
+   * Ledger of mid-campaign feature grants (a DM reward, a boon): who/when,
+   * which lineage, which tier, and what it replaced. See featureGrants.ts.
+   * History is never deleted — a replaced tier stays visible as 'replaced'.
+   */
+  featureGrants?: FeatureGrantRecord[];
   /** Grants this creature holds from OTHER creatures' features (auras and chosen grants). See AllyGrantSpec. */
   receivedGrants?: ReceivedGrant[];
   /**

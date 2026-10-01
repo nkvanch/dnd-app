@@ -462,7 +462,23 @@ export function recomputeDerived(
       : current + override.value;
   }
 
-  const withDerived = { ...entity, derived };
+  // Maximum-HP bonus effects (target 'max_hp'): reconcile the delta against
+  // what is already baked into hp.maximum (see HPBlock.bonusMax).
+  const maxHpBonus = resolveEffectsForTarget('max_hp', allEffects, rules) as number;
+  const previousBonus = entity.resources.hp.bonusMax ?? 0;
+  let hpBlock = entity.resources.hp;
+  if (maxHpBonus !== previousBonus) {
+    const delta = maxHpBonus - previousBonus;
+    const maximum = Math.max(1, hpBlock.maximum + delta);
+    hpBlock = {
+      ...hpBlock, maximum, bonusMax: maxHpBonus,
+      // A gain never revives a creature at 0 HP; it only raises a living one.
+      current: delta > 0 && hpBlock.current > 0 ? Math.min(maximum, hpBlock.current + delta) : Math.min(maximum, hpBlock.current),
+    };
+  }
+  const withDerived = hpBlock === entity.resources.hp
+    ? { ...entity, derived }
+    : { ...entity, derived, resources: { ...entity.resources, hp: hpBlock } };
 
   // Action cards depend on the just-computed `derived` (available-slot
   // checks, etc.) and on entity.features/inventory — compute them once,

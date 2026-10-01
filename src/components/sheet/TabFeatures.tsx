@@ -8,6 +8,7 @@ import { recomputeDerived } from '../../engine/pipeline';
 import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from '../../engine/choiceEligibility';
 import { Alert } from '../../utils/alert';
 import { AuraChecklistPanel, ReceivedGrantsPanel } from './AllyGrantsPanel';
+import { GrantFeatureModal, FeatureGrantLedger } from './GrantFeatureModal';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { SubclassPicker } from '../SubclassPicker';
 import { InfusionPicker } from '../InfusionPicker';
@@ -127,6 +128,7 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
 }) {
   const { features, spellcasting, derived } = entity;
   const [skillSelections, setSkillSelections] = useState<Record<string, string[]>>({});
+  const [grantRewardOpen, setGrantRewardOpen] = useState(false);
   const [asiChoiceOpen, setAsiChoiceOpen] = useState<string | null>(null);
   const [subclassChoiceOpen, setSubclassChoiceOpen] = useState<string | null>(null);
   const [infusionChoiceOpen, setInfusionChoiceOpen] = useState<string | null>(null);
@@ -281,6 +283,12 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
           </Pressable>
         </View>
       )}
+      {canResolve && (
+        <Pressable style={styles.addFeatBtn} onPress={() => setGrantRewardOpen(true)}>
+          <Text style={styles.addFeatBtnTxt}>🎁 Grant Reward Feature (DM)</Text>
+        </Pressable>
+      )}
+      <FeatureGrantLedger entity={entity} rules={rules} onEntityUpdate={onEntityUpdate} />
 
       {/* Pending level-up / creation choices */}
       {pendingChoices.length > 0 && (
@@ -574,6 +582,16 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
           <Text style={styles.emptyIcon}>📜</Text>
           <Text style={styles.emptyTxt}>No features yet.</Text>
         </View>
+      )}
+
+      {rules && onEntityUpdate && (
+        <GrantFeatureModal
+          visible={grantRewardOpen}
+          entity={entity}
+          rules={rules}
+          onConfirm={updated => { onEntityUpdate(updated); setGrantRewardOpen(false); }}
+          onCancel={() => setGrantRewardOpen(false)}
+        />
       )}
 
       {/* ASI / Feat resolution modal — REPEATED-CHOICE-1: chains through every

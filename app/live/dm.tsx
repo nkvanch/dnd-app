@@ -18,7 +18,7 @@ import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime'
 import { CampaignPrep } from '../../src/session/prep';
 import { addNote, describeDuration, describeEffectComponent, parseSignedInt, removeItem } from '../../src/session/prepEdit';
 import { describeChanges } from '../../src/session/roles';
-import { CharacterChange, LiveEffect } from '../../src/session/types';
+import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant } from '../../src/session/types';
 import { SessionPeer } from '../../src/session/peer';
 import { LiveScreen, Section, Card, Btn, Chip, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
 import { Alert } from '../../src/utils/alert';
@@ -239,12 +239,7 @@ export default function DmLiveScreen() {
           )}
           <Section title="Active encounter">
             {Object.values(view?.encounters ?? {}).filter(e => e.active).map(e => (
-              <Card key={e.id} testID={`dm-live-encounter-${e.name}`}>
-                <Body bold>⚔ {e.name} (live)</Body>
-                <Muted>{e.combatants.map(c => c.name).join(', ')}</Muted>
-                <Muted>Initiative/turn tracking isn't built yet — track order at the table for now.</Muted>
-                <Btn small kind="danger" label="End encounter" disabled={offline} onPress={() => run(() => peer.endEncounter(e.id))} testID={`dm-end-encounter-${e.name}`} />
-              </Card>
+              <ActiveEncounterPanel key={e.id} encounter={e} players={players} nameOf={nameOf} offline={offline} peer={dmPeer} run={run} />
             ))}
             {!activeEncounter && <Muted>No active encounter.</Muted>}
           </Section>
@@ -335,6 +330,111 @@ export default function DmLiveScreen() {
         {(view?.audit ?? []).slice(-12).reverse().map((a, i) => <Muted key={`${a.revision}-${i}`}>#{a.revision} {a.text}</Muted>)}
       </Section>
     </LiveScreen>
+  );
+}
+
+// ── Active encounter panel (initiative/turn tracking — DM_SCREEN_SPEC.md item 6) ─────────────
+// No numeric initiative is tracked on the wire; the DM rolls/tracks it at the table and taps
+// actors here in the resulting order. turnOrder entries are either a LiveCombatant id or a
+// ParticipantId — a player's own character takes a turn too, not just monsters.
+
+function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run }: {
+  encounter: LiveEncounter;
+  players: PublicParticipant[];
+  nameOf: (id: string) => string;
+  offline: boolean;
+  peer: SessionPeer;
+  run: (fn: () => unknown) => void;
+}) {
+  const [settingOrder, setSettingOrder] = useState(false);
+  const [orderDraft, setOrderDraft] = useState<string[]>([]);
+  const [addingCombatant, setAddingCombatant] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newAc, setNewAc] = useState('');
+
+  const actors = [
+    ...encounter.combatants.map(c => ({ id: c.id, label: c.name })),
+    ...players.map(p => ({ id: p.id, label: p.nickname })),
+  ];
+  const labelOf = (id: string) => actors.find(a => a.id === id)?.label ?? nameOf(id);
+  const toggleDraft = (id: string) => setOrderDraft(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const HP_CYCLE: Record<LiveEncounter['combatants'][number]['hpState'], LiveEncounter['combatants'][number]['hpState']> = {
+    healthy: 'bloodied', bloodied: 'down', down: 'healthy',
+  };
+
+  return (
+    <Card testID={`dm-live-encounter-${encounter.name}`}>
+      <Row wrap>
+        <Body bold>⚔ {encounter.name} (live)</Body>
+        {encounter.currentTurnIndex !== null && <Badge label={`Round ${encounter.round}`} tone="good" />}
+      </Row>
+
+      {encounter.turnOrder.length > 0 ? (
+        <>
+          <Row wrap>
+            {encounter.turnOrder.map((id, i) => (
+              <Badge key={id} label={`${i === encounter.currentTurnIndex ? '▶ ' : ''}${labelOf(id)}`} tone={i === encounter.currentTurnIndex ? 'good' : 'default'} />
+            ))}
+          </Row>
+          <Row wrap>
+            <Btn small kind="ghost" label="◂ Previous" disabled={offline} onPress={() => run(() => peer.previousTurn(encounter.id))} testID={`dm-prev-turn-${encounter.name}`} />
+            <Btn small label="Next ▸" disabled={offline} onPress={() => run(() => peer.nextTurn(encounter.id))} testID={`dm-next-turn-${encounter.name}`} />
+          </Row>
+        </>
+      ) : (
+        <Muted>No turn order set yet.</Muted>
+      )}
+
+      {settingOrder ? (
+        <>
+          <Muted>Tap in turn order (the order you rolled at the table). Tap again to remove.</Muted>
+          <Row wrap>
+            {actors.map(a => {
+              const pos = orderDraft.indexOf(a.id);
+              return <Chip key={a.id} label={pos === -1 ? a.label : `${pos + 1}. ${a.label}`} active={pos !== -1} onPress={() => toggleDraft(a.id)} testID={`dm-order-pick-${a.label}`} />;
+            })}
+          </Row>
+          <Row>
+            <Btn small label="Set order" disabled={orderDraft.length === 0 || offline} testID={`dm-order-confirm-${encounter.name}`}
+              onPress={() => { run(() => peer.setTurnOrder(encounter.id, orderDraft)); setSettingOrder(false); setOrderDraft([]); }} />
+            <Btn small kind="ghost" label="Cancel" onPress={() => { setSettingOrder(false); setOrderDraft([]); }} />
+          </Row>
+        </>
+      ) : (
+        <Btn small kind="ghost" label={encounter.turnOrder.length > 0 ? 'Change turn order' : 'Set turn order'}
+          onPress={() => { setSettingOrder(true); setOrderDraft(encounter.turnOrder); }} testID={`dm-order-open-${encounter.name}`} />
+      )}
+
+      <Muted>Combatants:</Muted>
+      {encounter.combatants.map(c => (
+        <Row wrap key={c.id}>
+          <Body>{c.name}</Body>
+          <Badge label={c.hpState} tone={c.hpState === 'healthy' ? 'good' : c.hpState === 'bloodied' ? 'warn' : 'bad'} />
+          <Btn small kind="ghost" label="Cycle HP" disabled={offline} onPress={() => run(() => peer.setCombatantHpState(encounter.id, c.id, HP_CYCLE[c.hpState]))} testID={`dm-cycle-hp-${c.name}`} />
+          <Btn small kind="danger" label="Remove" disabled={offline} onPress={() => run(() => peer.removeCombatant(encounter.id, c.id))} testID={`dm-remove-combatant-${c.name}`} />
+        </Row>
+      ))}
+      {encounter.combatants.length === 0 && <Muted>No combatants left.</Muted>}
+
+      {addingCombatant ? (
+        <Row wrap>
+          <Field label="Name" value={newName} onChangeText={setNewName} testID={`dm-newcombatant-name-${encounter.name}`} />
+          <Field label="AC (optional)" value={newAc} onChangeText={setNewAc} keyboardType="number-pad" testID={`dm-newcombatant-ac-${encounter.name}`} />
+          <Btn small label="Add" disabled={!newName.trim() || offline} testID={`dm-newcombatant-confirm-${encounter.name}`}
+            onPress={() => {
+              const ac = newAc.trim() ? Number(newAc.trim()) : undefined;
+              run(() => peer.addCombatant(encounter.id, { id: `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`, name: newName.trim(), ...(ac !== undefined && Number.isFinite(ac) ? { ac } : {}) }));
+              setAddingCombatant(false); setNewName(''); setNewAc('');
+            }} />
+          <Btn small kind="ghost" label="Cancel" onPress={() => setAddingCombatant(false)} />
+        </Row>
+      ) : (
+        <Btn small kind="ghost" label="+ Add combatant" onPress={() => setAddingCombatant(true)} testID={`dm-add-combatant-${encounter.name}`} />
+      )}
+
+      <Btn small kind="danger" label="End encounter" disabled={offline} onPress={() => run(() => peer.endEncounter(encounter.id))} testID={`dm-end-encounter-${encounter.name}`} />
+    </Card>
   );
 }
 

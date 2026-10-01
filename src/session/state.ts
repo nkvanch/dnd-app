@@ -56,6 +56,44 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
       if (enc) enc.active = false;
       break;
     }
+    case 'turn_order_set': {
+      const enc = s.encounters[b.encounterId];
+      if (enc) enc.turnOrder = b.order;
+      break;
+    }
+    case 'turn_advanced': {
+      const enc = s.encounters[b.encounterId];
+      if (enc) { enc.currentTurnIndex = b.currentTurnIndex; enc.round = b.round; }
+      break;
+    }
+    case 'combatant_added': {
+      const enc = s.encounters[b.encounterId];
+      if (enc) enc.combatants.push(b.combatant);
+      break;
+    }
+    case 'combatant_removed': {
+      const enc = s.encounters[b.encounterId];
+      if (enc) {
+        enc.combatants = enc.combatants.filter(c => c.id !== b.combatantId);
+        const removedIdx = enc.turnOrder.indexOf(b.combatantId);
+        enc.turnOrder = enc.turnOrder.filter(id => id !== b.combatantId);
+        // Keep "whose turn it is" stable across the removal: an entry before the current turn
+        // shifts the index down by one; removing the current turn's own entry leaves the index
+        // pointing at what now occupies that slot (the next combatant), same as advancing.
+        if (enc.currentTurnIndex !== null && removedIdx !== -1 && removedIdx < enc.currentTurnIndex) {
+          enc.currentTurnIndex -= 1;
+        }
+        if (enc.turnOrder.length === 0) enc.currentTurnIndex = null;
+        else if (enc.currentTurnIndex !== null) enc.currentTurnIndex = Math.min(enc.currentTurnIndex, enc.turnOrder.length - 1);
+      }
+      break;
+    }
+    case 'combatant_hp_state_set': {
+      const enc = s.encounters[b.encounterId];
+      const c = enc?.combatants.find(x => x.id === b.combatantId);
+      if (c) c.hpState = b.hpState;
+      break;
+    }
     case 'effect_applied': {
       const existing = s.effects[b.definition.id];
       const applications: Record<string, EffectApplication> = existing ? { ...existing.applications } : {};
@@ -199,6 +237,11 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
 
     case 'encounter_activated':
     case 'encounter_ended':
+    case 'turn_order_set':
+    case 'turn_advanced':
+    case 'combatant_added':
+    case 'combatant_removed':
+    case 'combatant_hp_state_set':
       return level === 'host' ? null : keep(b);
 
     case 'effect_applied': {

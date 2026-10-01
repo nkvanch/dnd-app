@@ -73,12 +73,22 @@ export default function PlayerScreen() {
         {offline && <Btn small kind="ghost" label="Reconnect" onPress={() => { void runtime.reconnect(); }} testID="player-reconnect" />}
       </Card>
 
-      {encounters.map(e => (
-        <Card key={e.id} testID={`player-encounter-${e.name}`}>
-          <Body bold>⚔ {e.name}</Body>
-          <Muted>{e.combatants.map(c => `${c.name}${c.hpState !== 'healthy' ? ` (${c.hpState})` : ''}`).join(', ')}</Muted>
-        </Card>
-      ))}
+      {encounters.map(e => {
+        const nameOf = (id: string) => e.combatants.find(c => c.id === id)?.name ?? view?.participants[id]?.nickname ?? id;
+        const myTurn = e.currentTurnIndex !== null && e.turnOrder[e.currentTurnIndex] === me;
+        return (
+          <Card key={e.id} tone={myTurn ? 'warn' : 'default'} testID={`player-encounter-${e.name}`}>
+            <Body bold>⚔ {e.name}</Body>
+            <Muted>{e.combatants.map(c => `${c.name}${c.hpState !== 'healthy' ? ` (${c.hpState})` : ''}`).join(', ')}</Muted>
+            {e.currentTurnIndex !== null && (
+              <Row wrap>
+                <Badge label={`Round ${e.round}`} />
+                <Badge label={myTurn ? "It's your turn!" : `${nameOf(e.turnOrder[e.currentTurnIndex])}'s turn`} tone={myTurn ? 'good' : 'default'} />
+              </Row>
+            )}
+          </Card>
+        );
+      })}
 
       <Section title={`DM requests (${pending.length})`} hint="Your character stays yours. Nothing changes until you accept.">
         {pending.length === 0 && <Muted>Nothing waiting for you.</Muted>}

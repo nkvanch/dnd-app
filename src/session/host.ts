@@ -414,6 +414,7 @@ export class SessionHost {
             hpState: c.hpState === 'down' || c.hpState === 'bloodied' ? c.hpState : 'healthy',
             ...(typeof c.ac === 'number' ? { ac: c.ac } : {}),
           })),
+          turnOrder: [], currentTurnIndex: null, round: 1,
         };
         this.commit({ t: 'encounter_activated', encounter: enc }, pid,
           { kind: 'encounter', text: `Encounter "${enc.name}" started`, scope: 'all', refId: enc.id });
@@ -425,6 +426,80 @@ export class SessionHost {
         if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
         this.commit({ t: 'encounter_ended', encounterId: enc.id }, pid,
           { kind: 'encounter', text: `Encounter "${enc.name}" ended`, scope: 'all', refId: enc.id });
+        return done('applied');
+      }
+
+      case 'dm.set_turn_order': {
+        const enc = this.state.encounters[body.encounterId];
+        if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
+        const order = body.order;
+        if (!Array.isArray(order) || order.length === 0 || !order.every((id: unknown) => typeof id === 'string')) {
+          return done('rejected', 'malformed');
+        }
+        if (new Set(order).size !== order.length) return done('rejected', 'duplicate-entry');
+        const combatantIds = new Set(enc.combatants.map(c => c.id));
+        if (!order.every(id => combatantIds.has(id) || !!this.state.participants[id])) return done('rejected', 'unknown-entry');
+        this.commit({ t: 'turn_order_set', encounterId: enc.id, order }, pid,
+          { kind: 'encounter', text: `Turn order set for "${enc.name}"`, scope: 'all', refId: enc.id });
+        return done('applied');
+      }
+
+      case 'dm.next_turn':
+      case 'dm.previous_turn': {
+        const enc = this.state.encounters[body.encounterId];
+        if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
+        if (enc.turnOrder.length === 0) return done('rejected', 'no-turn-order');
+        const forward = body.kind === 'dm.next_turn';
+        let idx = enc.currentTurnIndex;
+        let round = enc.round;
+        if (idx === null) {
+          idx = forward ? 0 : enc.turnOrder.length - 1;
+        } else if (forward) {
+          idx += 1;
+          if (idx >= enc.turnOrder.length) { idx = 0; round += 1; }
+        } else {
+          idx -= 1;
+          if (idx < 0) { idx = enc.turnOrder.length - 1; round = Math.max(1, round - 1); }
+        }
+        this.commit({ t: 'turn_advanced', encounterId: enc.id, currentTurnIndex: idx, round }, pid,
+          { kind: 'encounter', text: `Round ${round}, turn ${idx + 1}/${enc.turnOrder.length} in "${enc.name}"`, scope: 'all', refId: enc.id });
+        return done('applied');
+      }
+
+      case 'dm.add_combatant': {
+        const enc = this.state.encounters[body.encounterId];
+        if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
+        const c = body.combatant;
+        if (!isObj(c) || !str(c.id) || !str(c.name)) return done('rejected', 'malformed');
+        if (enc.combatants.some(x => x.id === c.id)) return done('rejected', 'combatant-exists');
+        const combatant = {
+          id: c.id, name: c.name,
+          hpState: c.hpState === 'down' || c.hpState === 'bloodied' ? c.hpState : 'healthy' as const,
+          ...(typeof c.ac === 'number' ? { ac: c.ac } : {}),
+        };
+        this.commit({ t: 'combatant_added', encounterId: enc.id, combatant }, pid,
+          { kind: 'encounter', text: `${combatant.name} joined "${enc.name}"`, scope: 'all', refId: enc.id });
+        return done('applied');
+      }
+
+      case 'dm.remove_combatant': {
+        const enc = this.state.encounters[body.encounterId];
+        if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
+        const target = enc.combatants.find(c => c.id === body.combatantId);
+        if (!target) return done('rejected', 'unknown-combatant');
+        this.commit({ t: 'combatant_removed', encounterId: enc.id, combatantId: target.id }, pid,
+          { kind: 'encounter', text: `${target.name} left "${enc.name}"`, scope: 'all', refId: enc.id });
+        return done('applied');
+      }
+
+      case 'dm.set_combatant_hp': {
+        const enc = this.state.encounters[body.encounterId];
+        if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
+        const target = enc.combatants.find(c => c.id === body.combatantId);
+        if (!target) return done('rejected', 'unknown-combatant');
+        if (body.hpState !== 'healthy' && body.hpState !== 'bloodied' && body.hpState !== 'down') return done('rejected', 'malformed');
+        this.commit({ t: 'combatant_hp_state_set', encounterId: enc.id, combatantId: target.id, hpState: body.hpState }, pid,
+          { kind: 'encounter', text: `${target.name} is now ${body.hpState}`, scope: 'all', refId: enc.id });
         return done('applied');
       }
 

@@ -127,6 +127,18 @@ export type LiveEncounter = {
   name:       string;
   combatants: LiveCombatant[];
   active:     boolean;
+  /**
+   * Turn order as a flat list of ids — EITHER a LiveCombatant.id (a monster/NPC) OR a
+   * ParticipantId (a player's own character acts in initiative order too). No numeric
+   * initiative score is tracked on the wire; the DM rolls/tracks initiative at the table and
+   * tells the app the resulting order via dm.set_turn_order. Empty until the DM sets it —
+   * activating an encounter does not imply an order.
+   */
+  turnOrder:        string[];
+  /** Index into turnOrder whose turn it currently is, or null before the DM has started turns. */
+  currentTurnIndex: number | null;
+  /** Starts at 1 on activation; increments when dm.next_turn wraps past the end of turnOrder. */
+  round:            number;
 };
 
 // ── Change requests ──────────────────────────────────────────────────────────
@@ -220,6 +232,11 @@ export type LiveEventBody =
   | { t: 'campaign_linked';    policy: CampaignPolicy }
   | { t: 'encounter_activated'; encounter: LiveEncounter }
   | { t: 'encounter_ended';     encounterId: string }
+  | { t: 'turn_order_set';         encounterId: string; order: string[] }
+  | { t: 'turn_advanced';          encounterId: string; currentTurnIndex: number; round: number }
+  | { t: 'combatant_added';        encounterId: string; combatant: LiveCombatant }
+  | { t: 'combatant_removed';      encounterId: string; combatantId: string }
+  | { t: 'combatant_hp_state_set'; encounterId: string; combatantId: string; hpState: LiveCombatant['hpState'] }
   | { t: 'effect_applied';      definition: EffectDefinition; applications: EffectApplication[] }
   | { t: 'applications_due';    applicationIds: string[]; ticked?: { applicationId: string; remaining: number }[] }
   | { t: 'applications_ended';  applicationIds: string[] }
@@ -261,6 +278,12 @@ export type OpBody =
   | { kind: 'dm.select_campaign';    campaignRevision: number; policy: CampaignPolicy }
   | { kind: 'dm.activate_encounter'; encounter: LiveEncounterInput }
   | { kind: 'dm.end_encounter';      encounterId: string }
+  | { kind: 'dm.set_turn_order';   encounterId: string; order: string[] }
+  | { kind: 'dm.next_turn';        encounterId: string }
+  | { kind: 'dm.previous_turn';    encounterId: string }
+  | { kind: 'dm.add_combatant';    encounterId: string; combatant: { id: string; name: string; hpState: LiveCombatant['hpState']; ac?: number } }
+  | { kind: 'dm.remove_combatant'; encounterId: string; combatantId: string }
+  | { kind: 'dm.set_combatant_hp'; encounterId: string; combatantId: string; hpState: LiveCombatant['hpState'] }
   | { kind: 'dm.apply_effect';       effect: EffectDefinitionInput; targets: ParticipantId[] }
   | { kind: 'dm.mark_due';           applicationId: string }
   | { kind: 'dm.tick_rounds';        rounds: number }

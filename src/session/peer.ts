@@ -360,6 +360,39 @@ export class SessionPeer {
     return this.sendRaw({ kind: 'dm.end_encounter', encounterId });
   }
 
+  /** `order` may mix LiveCombatant ids and ParticipantIds — a player's own character takes a
+   *  turn in initiative too. No numeric initiative is tracked on the wire; roll/track it at the
+   *  table and send the resulting order. */
+  setTurnOrder(encounterId: string, order: string[]): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.set_turn_order', encounterId, order });
+  }
+
+  nextTurn(encounterId: string): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.next_turn', encounterId });
+  }
+
+  previousTurn(encounterId: string): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.previous_turn', encounterId });
+  }
+
+  addCombatant(encounterId: string, combatant: { id: string; name: string; hpState?: 'healthy' | 'bloodied' | 'down'; ac?: number }): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.add_combatant', encounterId, combatant: { hpState: 'healthy', ...combatant } });
+  }
+
+  removeCombatant(encounterId: string, combatantId: string): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.remove_combatant', encounterId, combatantId });
+  }
+
+  setCombatantHpState(encounterId: string, combatantId: string, hpState: 'healthy' | 'bloodied' | 'down'): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.set_combatant_hp', encounterId, combatantId, hpState });
+  }
+
   /** Prepared effect -> live applications. Secret identity stays in the local vault. */
   async applyPreparedEffect(campaignId: string, prepEffectId: string, targets: ParticipantId[]): Promise<{ opId: string; effectId: string }> {
     this.need('dm');

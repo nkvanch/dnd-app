@@ -1723,6 +1723,74 @@ export type Effect = {
 };
 
 /**
+ * An effect a Feature gives to OTHER creatures. Two modes:
+ *
+ *  - 'aura': ongoing while the holder's feature is active (and the holder is
+ *    not incapacitated, and `activeWhileFlag` — if set — is on). Grimoire has
+ *    no battle map, so "within N feet" is NOT computed: the holder (or DM)
+ *    ticks which allies are currently in the aura from a checklist, and the
+ *    effects are re-synced to exactly that set (syncAllyGrants). `rangeFeet`
+ *    is the printed range shown next to the checklist; membership is
+ *    table-resolved.
+ *  - 'chosen': a deliberate one-shot grant — using the feature opens a target
+ *    picker (the holder or one other character) and gives that creature
+ *    `effects` / a resource `die` / temp HP / a note-only token for a
+ *    duration. Nothing is cast "in range" automatically either.
+ *
+ * Grants are SNAPSHOTS stored on the recipient (Entity.receivedGrants):
+ * numeric values (ability mod, proficiency bonus) are resolved from the
+ * holder when the grant is made/synced. Recipients must be characters on this
+ * device; an ally on another phone is table-resolved.
+ */
+export type AllyGrantSpec = {
+  /** Unique within its Feature. */
+  id:         string;
+  mode:       'aura' | 'chosen';
+  /** Short name shown on the recipient ("Standard's +1 AC"). */
+  label:      string;
+  /** Printed range, display only (aura radius / grant reach). */
+  rangeFeet?: number | null;
+  /** Range grows with the holder's total level (Aura Improvements: 10 → 30 ft at 18). */
+  rangeByLevel?: { level: number; feet: number }[];
+  /** Passive effects the recipient gains while the grant lasts. */
+  effects?:   Effect[];
+  /** Replace each numeric effect value with this ability's modifier (min applied) when snapshotting. */
+  valueFromAbilityMod?: { ability: Ability; min?: number };
+  /** Temp HP given the moment a chosen grant lands (the larger pool wins, per RAW). */
+  tempHp?:    { flat?: number; addProficiency?: boolean; addAbilityMod?: Ability };
+  /** A consumable die the recipient may spend on a roll (Command Die). Size can scale with the holder's total level. */
+  die?:       { size: string; count?: number; sizeByLevel?: { level: number; size: string }[]; usableOn: string };
+  /** Note-only token with N uses the recipient spends by hand ("may reroll one failed save"). */
+  token?:     { text: string; uses: number };
+  /** Plain-language description of what the recipient gets, for anything the engine does not model. */
+  note?:      string;
+  /** null/undefined = lasts until dismissed (or, for an aura, until membership/activation changes). */
+  duration?:  DurationTracker | null;
+  /** Aura only: the holder's conditionMonitor flag that must be on ("standard_planted"). */
+  activeWhileFlag?: string;
+  /** Aura only: the holder gets it too (Aura of Protection: "you and friendly creatures"). */
+  includeSelf?: boolean;
+};
+
+/** A grant currently held by a creature, given by another creature's feature. */
+export type ReceivedGrant = {
+  id:              string;
+  mode:            'aura' | 'chosen';
+  sourceEntityId:  string;
+  sourceName:      string;
+  sourceFeatureId: string;
+  specId:          string;
+  label:           string;
+  effects:         Effect[];
+  note?:           string;
+  die?:            { size: string; remaining: number; usableOn: string };
+  token?:          { text: string; remaining: number };
+  tempHpGranted?:  number;
+  duration:        DurationTracker | null;
+  grantedAt:       string;
+};
+
+/**
  * A Feature is the universal rule container.
  * Everything in the system grants features: races, classes, backgrounds,
  * items, spells, conditions, and homebrew content.
@@ -1769,6 +1837,12 @@ export type Feature = {
    * alongside the existing UniversalActionsSection.
    */
   trigger?: string;
+  /**
+   * Effects this feature gives to creatures OTHER than its holder — an
+   * ongoing aura or a one-shot grant to a chosen target. See AllyGrantSpec.
+   * Absent on every feature that only affects its own holder (almost all).
+   */
+  allyGrants?: AllyGrantSpec[];
   /** Player-set: marks this feature as exploration-relevant for the Exploration view filter. */
   explorationTag?: boolean;
   /**
@@ -2166,6 +2240,15 @@ export type Entity = {
   /** Once initialized, entitlements and current source definitions are the
    * authoritative grant inputs. Flat proficiency/spell arrays are output only. */
   entitlementInputsVersion?: 1;
+  /** Grants this creature holds from OTHER creatures' features (auras and chosen grants). See AllyGrantSpec. */
+  receivedGrants?: ReceivedGrant[];
+  /**
+   * Holder side of an aura: which other creatures (entity ids) are currently
+   * inside each aura, keyed `${featureId}:${specId}`. Ticked by hand — there
+   * is no battle map. Re-synced into those creatures' receivedGrants by
+   * syncAllyGrants.
+   */
+  auraMembers?: Record<string, string[]>;
 };
 
 /**
@@ -2438,7 +2521,8 @@ export type AuditSourceKind =
   | 'campaign'
   | 'manual'
   | 'dm_override'
-  | 'character_override';
+  | 'character_override'
+  | 'ally_grant';
 
 /** One contribution to a derived value. */
 export type AuditEntry = {

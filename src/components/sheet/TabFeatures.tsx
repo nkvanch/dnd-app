@@ -7,6 +7,7 @@ import { resolveChoice, applyExpertiseChoiceToEntity, applyToolChoiceToEntity, a
 import { recomputeDerived } from '../../engine/pipeline';
 import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from '../../engine/choiceEligibility';
 import { Alert } from '../../utils/alert';
+import { AuraChecklistPanel, ReceivedGrantsPanel } from './AllyGrantsPanel';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { SubclassPicker } from '../SubclassPicker';
 import { InfusionPicker } from '../InfusionPicker';
@@ -255,6 +256,9 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      <ReceivedGrantsPanel entity={entity} rules={rules} onEntityUpdate={onEntityUpdate} />
+      <AuraChecklistPanel entity={entity} onEntityUpdate={onEntityUpdate} />
 
       {/* Header-level identity action — changes the whole background, not
           one feature, so it's kept visually separate from the feature-list

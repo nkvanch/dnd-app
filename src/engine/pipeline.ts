@@ -21,6 +21,7 @@ import { itemRepo } from '../content/itemRepo';
 import { isMartialWeapon } from '../content/items/itemBrowse';
 import { effectiveItemFeatures, effectiveWeaponAttackFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition } from './itemMechanics';
 import { getClassEntry } from './multiclass';
+import { selfAuraGrants } from './allyAuras';
 import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -120,6 +121,35 @@ export function effectiveAbilityScores(entity: Entity): Entity['stats'] {
   return scores;
 }
 
+/**
+ * Re-derives the holder's OWN aura grants (an `includeSelf` AllyGrantSpec:
+ * Aura of Protection's "you and friendly creatures"). Computed here rather
+ * than by the roster-wide syncAllyGrants so the holder is never stale. The
+ * ability score used is read with the self-aura grants stripped, which
+ * avoids a feedback loop when a grant itself modifies that ability.
+ * Returns the same object when nothing changes.
+ */
+function refreshSelfAuras(entity: Entity, homebrewItems: readonly import('./types').Item[] = []): Entity {
+  const existing = entity.receivedGrants ?? [];
+  const hadSelf = existing.some(g => g.mode === 'aura' && g.sourceEntityId === entity.id);
+  const hasSource = entity.features.some(f => f.allyGrants?.length)
+    || entity.inventory.equipped.some(i => i.features.some(f => f.allyGrants?.length));
+  if (!hadSelf && !hasSource) return entity;
+  const stripped: Entity = hadSelf
+    ? { ...entity, receivedGrants: existing.filter(g => !(g.mode === 'aura' && g.sourceEntityId === entity.id)) }
+    : entity;
+  const scores = applyStatModifiers(stripped.stats, collectAllEffects(stripped, homebrewItems));
+  const fresh = selfAuraGrants(stripped, scores, homebrewItems);
+  if (fresh.length === 0 && !hadSelf) return entity;
+  const old = existing.filter(g => g.mode === 'aura' && g.sourceEntityId === entity.id);
+  if (old.length === fresh.length && fresh.every(f => {
+    const o = old.find(x => x.id === f.id);
+    return o && o.label === f.label && JSON.stringify(o.effects) === JSON.stringify(f.effects);
+  })) return entity;
+  const rest = existing.filter(g => !(g.mode === 'aura' && g.sourceEntityId === entity.id));
+  return { ...entity, receivedGrants: [...rest, ...fresh] };
+}
+
 // ── Main pipeline ─────────────────────────────────────────────────────────────
 
 /**
@@ -145,7 +175,7 @@ export function recomputeDerived(
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
 ): Entity {
   // Use a mutable local reference so we can apply grant_proficiency effects
-  let entity = recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells));
+  let entity = refreshSelfAuras(recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells)), content.items);
 
   const allEffects    = collectAllEffects(entity, content.items);
   let effectiveStats = applyStatModifiers(entity.stats, allEffects);
@@ -584,6 +614,16 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
       for (const t of form.damageResistances ?? [])    pushDefense(t, 'resistance');
       for (const t of form.damageImmunities ?? [])      pushDefense(t, 'immunity');
       for (const t of form.damageVulnerabilities ?? []) pushDefense(t, 'vulnerability');
+    }
+  }
+
+  // 4. Grants received from OTHER creatures' features (auras / chosen grants —
+  //    see AllyGrantSpec). Effects were snapshotted onto this entity when the
+  //    grant landed; they apply exactly like any other effect and vanish when
+  //    the grant is dismissed, expires, or the aura source stops granting.
+  for (const g of entity.receivedGrants ?? []) {
+    for (const effect of g.effects) {
+      effects.push({ effect, sourceName: `${g.label} (${g.sourceName})`, sourceId: g.id, appliedAt: 0, sourceKind: 'ally_grant' });
     }
   }
 

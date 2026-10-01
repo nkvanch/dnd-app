@@ -2,6 +2,7 @@
 // FILE: src/engine/combat.ts
 // PROJECT: Initiative Tracker, Concentration Gate & Combat Clock
 // ============================================================================
+import { INCAPACITATING_CONDITION_IDS } from './allyAuras';
 import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect, DurationTracker, FeatureActivation, CustomResource } from './types';
 import { recomputeDerived, collectAllEffects } from './pipeline';
 import { resolveResistance } from './resolver';
@@ -245,7 +246,7 @@ export function endTurn(
 
   // Tick durations on the entity whose turn just ended
   const durationTicked = entities.map(e =>
-    e.id === current.entityId ? tickConcentrationDuration(tickDurations(e, rules), rules) : e
+    e.id === current.entityId ? tickReceivedGrants(tickConcentrationDuration(tickDurations(e, rules), rules), rules) : e
   );
 
   // Advance turn pointer; wrap around at the end of the order
@@ -276,6 +277,24 @@ export function endTurn(
     },
     entities: updatedEntities,
   };
+}
+
+/**
+ * Ticks round-based durations on CHOSEN grants (called at the end of the
+ * recipient's turn, alongside condition durations). Approximation: RAW
+ * durations like "until the start of your next turn" are measured from the
+ * holder's turn; Grimoire counts the recipient's own turn ends. Dismiss by
+ * hand when the table says otherwise. Aura grants have no duration.
+ */
+export function tickReceivedGrants(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity {
+  const grants = entity.receivedGrants;
+  if (!grants?.some(g => g.duration?.unit === 'rounds')) return entity;
+  const next = grants.flatMap(g => {
+    if (g.duration?.unit !== 'rounds') return [g];
+    const remaining = g.duration.remaining - 1;
+    return remaining <= 0 ? [] : [{ ...g, duration: { ...g.duration, remaining } }];
+  });
+  return recomputeDerived({ ...entity, receivedGrants: next }, rules);
 }
 
 /** Ends the encounter and resets combat state. */
@@ -739,7 +758,6 @@ export function recordDeathSave(
  * this also doubles as a fixed priority when more than one is active at
  * once (deterministic, not "whichever happened to be pushed last").
  */
-const INCAPACITATING_CONDITION_IDS: readonly string[] = ['unconscious', 'paralyzed', 'stunned', 'petrified', 'incapacitated'];
 
 /**
  * True if the entity is incapacitated for normal gameplay ActionCard use —

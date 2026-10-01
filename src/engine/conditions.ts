@@ -23,7 +23,10 @@ export function isImmuneToCondition(entity: Entity, conditionId: string): boolea
       e.type === 'condition_immunity' &&
       e.target === conditionId
     )
-  );
+  )
+  // …or an ally's aura currently covering this creature (Aura of Courage).
+  || (entity.receivedGrants ?? []).some(g =>
+    g.effects.some(e => e.type === 'condition_immunity' && e.target === conditionId));
 }
 
 // ── Suppression ───────────────────────────────────────────────────────────────

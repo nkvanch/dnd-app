@@ -84,7 +84,12 @@ export default function PlayerScreen() {
         return (
           <Card key={e.id} tone={myTurn ? 'warn' : 'default'} testID={`player-encounter-${e.name}`}>
             <Body bold>⚔ {e.name}</Body>
-            <Muted>{e.combatants.map(c => `${c.name}${c.hpState !== 'healthy' ? ` (${c.hpState})` : ''}`).join(', ')}</Muted>
+            <Muted>{e.combatants.map(c => {
+              const hp = c.hpState && c.hpState !== 'healthy' ? ` (${c.hpState})` : '';
+              const ac = c.ac !== undefined ? ` AC ${c.ac}` : '';
+              const exact = c.exactHp ? ` ${c.exactHp.current}/${c.exactHp.max} HP` : '';
+              return `${c.name}${hp}${ac}${exact}`;
+            }).join(', ')}</Muted>
             {e.currentTurnIndex !== null && (
               <Row wrap>
                 <Badge label={`Round ${e.round}`} />

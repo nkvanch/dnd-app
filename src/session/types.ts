@@ -114,13 +114,38 @@ export type SecretEffectMeta = {
 
 // ── Encounters (public projection only) ──────────────────────────────────────
 
+/**
+ * Per-field reveal state for one combatant (DM_SCREEN_SPEC.md item 9). Lives on the canonical
+ * LiveCombatant and is sent to every viewer unchanged — knowing WHICH fields are currently gated
+ * isn't itself sensitive, only the gated VALUES are. The DM's own view always has every field
+ * populated regardless of these flags; a Player's projected copy (see state.ts's
+ * combatantForPlayer) omits/substitutes whatever is set to false here.
+ */
+export type MonsterVisibility = {
+  name:    boolean;
+  hpState: boolean;
+  exactHp: boolean;
+  ac:      boolean;
+};
+
 export type LiveCombatant = {
   id:      string;
   name:    string;
-  /** Deliberately coarse: exact HP stays DM-side unless the DM chooses to send it. */
-  hpState: 'healthy' | 'bloodied' | 'down';
+  /** Deliberately coarse: exact HP stays DM-side unless the DM chooses to send it (exactHp
+   *  below). Always populated on the canonical Host state; optional ONLY because a Player's
+   *  projected copy omits it when visibility.hpState is false. */
+  hpState?: 'healthy' | 'bloodied' | 'down';
   ac?:     number;
+  /** Real numbers, opt-in — most tables never need this; see hpState's own doc comment for why
+   *  it stays coarse by default. */
+  exactHp?: { current: number; max: number };
+  /** Defaults to {name:true, hpState:true, exactHp:false, ac:true} on creation — matches what a
+   *  combatant already showed before this field existed, so nothing already in play silently
+   *  loses information the instant this ships. */
+  visibility: MonsterVisibility;
 };
+
+export const STANDARD_MONSTER_VISIBILITY: MonsterVisibility = { name: true, hpState: true, exactHp: false, ac: true };
 
 export type LiveEncounter = {
   id:         string;
@@ -265,7 +290,9 @@ export type LiveEventBody =
   | { t: 'turn_advanced';          encounterId: string; currentTurnIndex: number; round: number }
   | { t: 'combatant_added';        encounterId: string; combatant: LiveCombatant }
   | { t: 'combatant_removed';      encounterId: string; combatantId: string }
-  | { t: 'combatant_hp_state_set'; encounterId: string; combatantId: string; hpState: LiveCombatant['hpState'] }
+  | { t: 'combatant_hp_state_set'; encounterId: string; combatantId: string; hpState: 'healthy' | 'bloodied' | 'down' }
+  | { t: 'combatant_exact_hp_set'; encounterId: string; combatantId: string; current: number; max: number }
+  | { t: 'combatant_visibility_set'; encounterId: string; combatantId: string; visibility: MonsterVisibility }
   | { t: 'effect_applied';      definition: EffectDefinition; applications: EffectApplication[] }
   | { t: 'applications_due';    applicationIds: string[]; ticked?: { applicationId: string; remaining: number }[] }
   | { t: 'applications_ended';  applicationIds: string[] }
@@ -312,9 +339,11 @@ export type OpBody =
   | { kind: 'dm.set_turn_order';   encounterId: string; order: string[] }
   | { kind: 'dm.next_turn';        encounterId: string }
   | { kind: 'dm.previous_turn';    encounterId: string }
-  | { kind: 'dm.add_combatant';    encounterId: string; combatant: { id: string; name: string; hpState: LiveCombatant['hpState']; ac?: number } }
+  | { kind: 'dm.add_combatant';    encounterId: string; combatant: { id: string; name: string; hpState: 'healthy' | 'bloodied' | 'down'; ac?: number } }
   | { kind: 'dm.remove_combatant'; encounterId: string; combatantId: string }
-  | { kind: 'dm.set_combatant_hp'; encounterId: string; combatantId: string; hpState: LiveCombatant['hpState'] }
+  | { kind: 'dm.set_combatant_hp'; encounterId: string; combatantId: string; hpState: 'healthy' | 'bloodied' | 'down' }
+  | { kind: 'dm.set_combatant_exact_hp'; encounterId: string; combatantId: string; current: number; max: number }
+  | { kind: 'dm.set_combatant_visibility'; encounterId: string; combatantId: string; visibility: MonsterVisibility }
   | { kind: 'dm.apply_effect';       effect: EffectDefinitionInput; targets: ParticipantId[] }
   | { kind: 'dm.mark_due';           applicationId: string }
   | { kind: 'dm.tick_rounds';        rounds: number }

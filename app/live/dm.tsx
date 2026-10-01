@@ -19,7 +19,7 @@ import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime'
 import { CampaignPrep } from '../../src/session/prep';
 import { addNote, describeDuration, describeEffectComponent, parseSignedInt, removeItem } from '../../src/session/prepEdit';
 import { describeChanges } from '../../src/session/roles';
-import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration } from '../../src/session/types';
+import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility } from '../../src/session/types';
 import { SessionPeer } from '../../src/session/peer';
 import { LiveScreen, Section, Card, Btn, Chip, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
 import { Alert } from '../../src/utils/alert';
@@ -453,6 +453,23 @@ function QuickOverrideForm({ players, offline, peer, run, onDone }: {
 // actors here in the resulting order. turnOrder entries are either a LiveCombatant id or a
 // ParticipantId — a player's own character takes a turn too, not just monsters.
 
+// Monster visibility presets (item 9) — a DM-UI convenience over MonsterVisibility; not a wire
+// concept of their own, just named shortcuts for dm.set_combatant_visibility.
+const VISIBILITY_PRESETS: Record<'hidden' | 'minimal' | 'standard' | 'full', MonsterVisibility> = {
+  hidden:   { name: false, hpState: false, exactHp: false, ac: false },
+  minimal:  { name: true,  hpState: false, exactHp: false, ac: false },
+  standard: { name: true,  hpState: true,  exactHp: false, ac: true },
+  full:     { name: true,  hpState: true,  exactHp: true,  ac: true },
+};
+function presetOfVisibility(v: MonsterVisibility): 'hidden' | 'minimal' | 'standard' | 'full' | null {
+  for (const [name, preset] of Object.entries(VISIBILITY_PRESETS)) {
+    if (preset.name === v.name && preset.hpState === v.hpState && preset.exactHp === v.exactHp && preset.ac === v.ac) {
+      return name as 'hidden' | 'minimal' | 'standard' | 'full';
+    }
+  }
+  return null;   // a custom combination the DM reached some other way
+}
+
 function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run }: {
   encounter: LiveEncounter;
   players: PublicParticipant[];
@@ -466,6 +483,9 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run }
   const [addingCombatant, setAddingCombatant] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAc, setNewAc] = useState('');
+  const [exactHpEditing, setExactHpEditing] = useState<string | null>(null);
+  const [exactHpCurrent, setExactHpCurrent] = useState('');
+  const [exactHpMax, setExactHpMax] = useState('');
 
   const actors = [
     ...encounter.combatants.map(c => ({ id: c.id, label: c.name })),
@@ -474,7 +494,7 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run }
   const labelOf = (id: string) => actors.find(a => a.id === id)?.label ?? nameOf(id);
   const toggleDraft = (id: string) => setOrderDraft(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  const HP_CYCLE: Record<LiveEncounter['combatants'][number]['hpState'], LiveEncounter['combatants'][number]['hpState']> = {
+  const HP_CYCLE: Record<'healthy' | 'bloodied' | 'down', 'healthy' | 'bloodied' | 'down'> = {
     healthy: 'bloodied', bloodied: 'down', down: 'healthy',
   };
 
@@ -521,15 +541,54 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run }
           onPress={() => { setSettingOrder(true); setOrderDraft(encounter.turnOrder); }} testID={`dm-order-open-${encounter.name}`} />
       )}
 
-      <Muted>Combatants:</Muted>
-      {encounter.combatants.map(c => (
-        <Row wrap key={c.id}>
-          <Body>{c.name}</Body>
-          <Badge label={c.hpState} tone={c.hpState === 'healthy' ? 'good' : c.hpState === 'bloodied' ? 'warn' : 'bad'} />
-          <Btn small kind="ghost" label="Cycle HP" disabled={offline} onPress={() => run(() => peer.setCombatantHpState(encounter.id, c.id, HP_CYCLE[c.hpState]))} testID={`dm-cycle-hp-${c.name}`} />
-          <Btn small kind="danger" label="Remove" disabled={offline} onPress={() => run(() => peer.removeCombatant(encounter.id, c.id))} testID={`dm-remove-combatant-${c.name}`} />
-        </Row>
-      ))}
+      <Muted>Combatants — tap a preset to change what players see:</Muted>
+      {encounter.combatants.map(c => {
+        const hp = c.hpState ?? 'healthy';
+        const preset = presetOfVisibility(c.visibility);
+        const editingHp = exactHpEditing === c.id;
+        return (
+          <Card key={c.id}>
+            <Row wrap>
+              <Body bold>{c.name}</Body>
+              <Badge label={hp} tone={hp === 'healthy' ? 'good' : hp === 'bloodied' ? 'warn' : 'bad'} />
+              {c.ac !== undefined && <Muted>AC {c.ac}</Muted>}
+              {c.exactHp && <Muted>{c.exactHp.current}/{c.exactHp.max} HP</Muted>}
+            </Row>
+            <Row wrap>
+              <Btn small kind="ghost" label="Cycle HP" disabled={offline} onPress={() => run(() => peer.setCombatantHpState(encounter.id, c.id, HP_CYCLE[hp]))} testID={`dm-cycle-hp-${c.name}`} />
+              <Btn small kind="danger" label="Remove" disabled={offline} onPress={() => run(() => peer.removeCombatant(encounter.id, c.id))} testID={`dm-remove-combatant-${c.name}`} />
+            </Row>
+            <Muted>Visible to players:</Muted>
+            <Row wrap>
+              {(['hidden', 'minimal', 'standard', 'full'] as const).map(p => (
+                <Chip key={p} label={p === 'full' ? 'Full Reveal' : p[0].toUpperCase() + p.slice(1)} active={preset === p}
+                  onPress={() => run(() => peer.setCombatantVisibility(encounter.id, c.id, VISIBILITY_PRESETS[p]))} testID={`dm-vis-${p}-${c.name}`} />
+              ))}
+            </Row>
+            {editingHp ? (
+              <Row wrap>
+                <Field label="Current HP" value={exactHpCurrent} onChangeText={setExactHpCurrent} keyboardType="number-pad" testID={`dm-exacthp-current-${c.name}`} />
+                <Field label="Max HP" value={exactHpMax} onChangeText={setExactHpMax} keyboardType="number-pad" testID={`dm-exacthp-max-${c.name}`} />
+                <Btn small label="Set" disabled={offline || !exactHpCurrent.trim() || !exactHpMax.trim()} testID={`dm-exacthp-save-${c.name}`}
+                  onPress={() => {
+                    const current = Number(exactHpCurrent.trim()); const max = Number(exactHpMax.trim());
+                    if (Number.isFinite(current) && Number.isFinite(max) && max >= 1 && current >= 0 && current <= max) {
+                      run(() => peer.setCombatantExactHp(encounter.id, c.id, current, max));
+                      setExactHpEditing(null);
+                    } else {
+                      Alert.alert('Invalid HP', 'Current HP must be between 0 and Max HP.');
+                    }
+                  }} />
+                <Btn small kind="ghost" label="Cancel" onPress={() => setExactHpEditing(null)} />
+              </Row>
+            ) : (
+              <Btn small kind="ghost" label={c.exactHp ? 'Change exact HP' : 'Set exact HP'}
+                onPress={() => { setExactHpEditing(c.id); setExactHpCurrent(String(c.exactHp?.current ?? '')); setExactHpMax(String(c.exactHp?.max ?? '')); }}
+                testID={`dm-exacthp-open-${c.name}`} />
+            )}
+          </Card>
+        );
+      })}
       {encounter.combatants.length === 0 && <Muted>No combatants left.</Muted>}
 
       {addingCombatant ? (

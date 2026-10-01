@@ -15,6 +15,7 @@ import {
   Capability, ClientMessage, ServerMessage, Op, OpBody, OpResult, LiveState, LiveEvent, LiveEventBody,
   emptyLiveState, PublicParticipant, ParticipantId, EffectApplication, EffectDefinition, AuditEntry,
   ChangeRequest, LiveEncounter, ReportedCharacter, CharacterChange, RuleSuggestion, RuleSuggestionStatus,
+  STANDARD_MONSTER_VISIBILITY, MonsterVisibility,
 } from './types';
 import { applyEvent, projectEvent, projectState, Viewer } from './state';
 import { Connection, ServerTransport, decodeFrame, encodeFrame } from './transport';
@@ -412,6 +413,7 @@ export class SessionHost {
           combatants: e.combatants.map(c => ({
             id: String(c.id), name: String(c.name),
             hpState: c.hpState === 'down' || c.hpState === 'bloodied' ? c.hpState : 'healthy',
+            visibility: { ...STANDARD_MONSTER_VISIBILITY },
             ...(typeof c.ac === 'number' ? { ac: c.ac } : {}),
           })),
           turnOrder: [], currentTurnIndex: null, round: 1,
@@ -475,6 +477,7 @@ export class SessionHost {
         const combatant = {
           id: c.id, name: c.name,
           hpState: c.hpState === 'down' || c.hpState === 'bloodied' ? c.hpState : 'healthy' as const,
+          visibility: { ...STANDARD_MONSTER_VISIBILITY },
           ...(typeof c.ac === 'number' ? { ac: c.ac } : {}),
         };
         this.commit({ t: 'combatant_added', encounterId: enc.id, combatant }, pid,
@@ -500,6 +503,39 @@ export class SessionHost {
         if (body.hpState !== 'healthy' && body.hpState !== 'bloodied' && body.hpState !== 'down') return done('rejected', 'malformed');
         this.commit({ t: 'combatant_hp_state_set', encounterId: enc.id, combatantId: target.id, hpState: body.hpState }, pid,
           { kind: 'encounter', text: `${target.name} is now ${body.hpState}`, scope: 'all', refId: enc.id });
+        return done('applied');
+      }
+
+      case 'dm.set_combatant_exact_hp': {
+        const enc = this.state.encounters[body.encounterId];
+        if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
+        const target = enc.combatants.find(c => c.id === body.combatantId);
+        if (!target) return done('rejected', 'unknown-combatant');
+        if (!int(body.current) || !int(body.max) || body.current < 0 || body.max < 1 || body.current > body.max) return done('rejected', 'malformed');
+        this.commit({ t: 'combatant_exact_hp_set', encounterId: enc.id, combatantId: target.id, current: body.current, max: body.max }, pid,
+          { kind: 'encounter', text: `${target.name}'s exact HP set to ${body.current}/${body.max}`, scope: 'dm', refId: enc.id });
+        return done('applied');
+      }
+
+      case 'dm.set_combatant_visibility': {
+        const enc = this.state.encounters[body.encounterId];
+        if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
+        const target = enc.combatants.find(c => c.id === body.combatantId);
+        if (!target) return done('rejected', 'unknown-combatant');
+        const v = body.visibility;
+        if (!isObj(v) || typeof v.name !== 'boolean' || typeof v.hpState !== 'boolean'
+          || typeof v.exactHp !== 'boolean' || typeof v.ac !== 'boolean') return done('rejected', 'malformed');
+        const visibility: MonsterVisibility = { name: v.name, hpState: v.hpState, exactHp: v.exactHp, ac: v.ac };
+        this.commit({ t: 'combatant_visibility_set', encounterId: enc.id, combatantId: target.id, visibility }, pid,
+          { kind: 'encounter', text: `${target.name}'s visibility changed`, scope: 'dm', refId: enc.id });
+        // The event alone only carries the new flags, not whatever field values just became
+        // newly visible (or need to stop being shown) — a Player's replica never stored a
+        // gated field's value while it was hidden, and hiding it again doesn't erase a value
+        // already known from before. A full resync brings every connected viewer back in line
+        // with "what SHOULD currently be visible," correct in both directions.
+        for (const [otherId, entry] of this.entries) {
+          if (entry.conn) this.sendSnapshot(otherId);
+        }
         return done('applied');
       }
 

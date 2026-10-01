@@ -10,7 +10,7 @@
 // ============================================================================
 import {
   CharacterChange, EffectComponent, EffectDefinitionInput, EffectDuration, EffectVisibility,
-  LiveCombatant, LiveEncounterInput, SecretEffectMeta, CampaignPolicy,
+  LiveCombatant, LiveEncounterInput, SecretEffectMeta, CampaignPolicy, STANDARD_MONSTER_VISIBILITY,
 } from './types';
 import { KeyValueStore } from './kv';
 import { RulesetId } from '../engine/types';
@@ -180,7 +180,8 @@ export function toLiveEncounterInput(enc: PrepEncounter, liveId: string): LiveEn
   return {
     id: liveId, name: enc.name,
     combatants: enc.combatants.filter(c => !c.hidden).map(c => ({
-      id: c.id, name: c.name, hpState: c.hpState, ...(c.ac !== undefined ? { ac: c.ac } : {}),
+      id: c.id, name: c.name, hpState: c.hpState, visibility: STANDARD_MONSTER_VISIBILITY,
+      ...(c.ac !== undefined ? { ac: c.ac } : {}),
     })),
   };
 }

@@ -12,7 +12,7 @@
 import {
   Capability, CharacterAdapter, CharacterChange, ClientMessage, Op, OpBody, OpResult, ParticipantId,
   ServerMessage, ViewState, LiveEvent, ChangeRequest, LiveEffect, EffectApplication, SecretEffectMeta,
-  EffectComponent, EffectDuration, EffectDefinitionInput,
+  EffectComponent, EffectDuration, EffectDefinitionInput, MonsterVisibility,
 } from './types';
 import { applyEvent } from './state';
 import { ClientTransport, Connection, decodeFrame, encodeFrame } from './transport';
@@ -392,6 +392,19 @@ export class SessionPeer {
   setCombatantHpState(encounterId: string, combatantId: string, hpState: 'healthy' | 'bloodied' | 'down'): string {
     this.need('dm');
     return this.sendRaw({ kind: 'dm.set_combatant_hp', encounterId, combatantId, hpState });
+  }
+
+  /** Real numbers, opt-in — see MonsterVisibility's own doc comment for why this stays separate
+   *  from the coarse hpState. */
+  setCombatantExactHp(encounterId: string, combatantId: string, current: number, max: number): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.set_combatant_exact_hp', encounterId, combatantId, current, max });
+  }
+
+  /** Per-field reveal state (DM_SCREEN_SPEC.md item 9) — see MonsterVisibility's own doc comment. */
+  setCombatantVisibility(encounterId: string, combatantId: string, visibility: MonsterVisibility): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.set_combatant_visibility', encounterId, combatantId, visibility });
   }
 
   /** Prepared effect -> live applications. Secret identity stays in the local vault. */

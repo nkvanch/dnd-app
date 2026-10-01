@@ -6,7 +6,7 @@
 // ============================================================================
 import {
   Capability, ParticipantId, LiveState, LiveEvent, ViewState, AuditEntry,
-  EffectApplication, LiveEffect, PublicParticipant,
+  EffectApplication, LiveEffect, PublicParticipant, LiveCombatant, LiveEncounter,
 } from './types';
 
 // ── Viewers ──────────────────────────────────────────────────────────────────
@@ -92,6 +92,18 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
       const enc = s.encounters[b.encounterId];
       const c = enc?.combatants.find(x => x.id === b.combatantId);
       if (c) c.hpState = b.hpState;
+      break;
+    }
+    case 'combatant_exact_hp_set': {
+      const enc = s.encounters[b.encounterId];
+      const c = enc?.combatants.find(x => x.id === b.combatantId);
+      if (c) c.exactHp = { current: b.current, max: b.max };
+      break;
+    }
+    case 'combatant_visibility_set': {
+      const enc = s.encounters[b.encounterId];
+      const c = enc?.combatants.find(x => x.id === b.combatantId);
+      if (c) c.visibility = b.visibility;
       break;
     }
     case 'effect_applied': {
@@ -200,6 +212,28 @@ function effectForPlayer(effect: LiveEffect, viewer: Viewer): LiveEffect | null 
   return { definition, applications };
 }
 
+/**
+ * Per-field reveal (DM_SCREEN_SPEC.md item 9) — unlike effect secrecy, nothing here needs to be
+ * null'd out defensively on the Host: a combatant's gated fields are real, ordinary values, not
+ * an identity that must never have existed on the wire. A hidden name becomes a generic
+ * placeholder (never null) so every existing name-is-a-string call site stays correct; hpState/
+ * ac/exactHp are simply omitted (they were already optional) rather than null'd.
+ */
+function combatantForPlayer(c: LiveCombatant): LiveCombatant {
+  return {
+    id: c.id,
+    name: c.visibility.name ? c.name : 'Unknown Creature',
+    visibility: c.visibility,
+    ...(c.visibility.hpState && c.hpState ? { hpState: c.hpState } : {}),
+    ...(c.visibility.ac && c.ac !== undefined ? { ac: c.ac } : {}),
+    ...(c.visibility.exactHp && c.exactHp ? { exactHp: c.exactHp } : {}),
+  };
+}
+
+function encounterForPlayer(e: LiveEncounter): LiveEncounter {
+  return { ...e, combatants: e.combatants.map(combatantForPlayer) };
+}
+
 /** The complete state a viewer is entitled to see. */
 export function projectState(state: LiveState, viewer: Viewer): ViewState {
   const level = viewLevel(viewer);
@@ -217,7 +251,7 @@ export function projectState(state: LiveState, viewer: Viewer): ViewState {
     out.ruleSuggestions = clone(state.ruleSuggestions);
     out.characters = clone(state.characters);
   } else if (level === 'player') {
-    out.encounters = clone(state.encounters);
+    for (const [id, enc] of Object.entries(state.encounters)) out.encounters[id] = encounterForPlayer(clone(enc));
     for (const [id, eff] of Object.entries(state.effects)) {
       const e = effectForPlayer(eff, viewer);
       if (e) out.effects[id] = clone(e);
@@ -251,14 +285,38 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
     case 'session_ended':
       return keep(b);
 
-    case 'encounter_activated':
     case 'encounter_ended':
     case 'turn_order_set':
     case 'turn_advanced':
-    case 'combatant_added':
     case 'combatant_removed':
-    case 'combatant_hp_state_set':
+    case 'combatant_visibility_set':   // the gating STATE is safe to show everyone; only gated values are not
       return level === 'host' ? null : keep(b);
+
+    case 'encounter_activated': {
+      if (level === 'host') return null;
+      if (level === 'dm') return keep(b);
+      return keep({ t: 'encounter_activated', encounter: encounterForPlayer(b.encounter) });
+    }
+
+    case 'combatant_added': {
+      if (level === 'host') return null;
+      if (level === 'dm') return keep(b);
+      return keep({ t: 'combatant_added', encounterId: b.encounterId, combatant: combatantForPlayer(b.combatant) });
+    }
+
+    case 'combatant_hp_state_set': {
+      if (level === 'host') return null;
+      if (level === 'dm') return keep(b);
+      const c = after.encounters[b.encounterId]?.combatants.find(x => x.id === b.combatantId);
+      return c && c.visibility.hpState ? keep(b) : null;
+    }
+
+    case 'combatant_exact_hp_set': {
+      if (level === 'host') return null;
+      if (level === 'dm') return keep(b);
+      const c = after.encounters[b.encounterId]?.combatants.find(x => x.id === b.combatantId);
+      return c && c.visibility.exactHp ? keep(b) : null;
+    }
 
     case 'effect_applied': {
       if (level === 'host') return null;

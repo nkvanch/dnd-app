@@ -167,6 +167,34 @@ export type ChangeRequest = {
   staleAgainst:  number | null;
 };
 
+// ── Rule suggestions (DM_SCREEN_SPEC.md item 5) ───────────────────────────────
+// Deliberately a structured proposal/decision record, NOT an auto-applying rule patcher — the
+// live CampaignPolicy only carries a handful of fields (ruleset, max level, banned packs/
+// subclasses, required packs); most real house rules (hp mode, multiclass, ability generation,
+// table variants) have nowhere on the wire to auto-apply to. This matches the spec's own
+// allowance ("whether it can be mechanically enforced or is reminder-only") — accepting a
+// suggestion records the DM's decision and is visible to the table; actually changing campaign
+// configuration (when the rule IS one of CampaignPolicy's fields) stays a manual DM action in DM
+// Preparation, same as every other campaign-config edit.
+
+export type RuleSuggestionStatus = 'PENDING' | 'ACCEPTED' | 'MODIFIED' | 'REJECTED';
+
+export type RuleSuggestion = {
+  id:                 string;
+  playerId:           ParticipantId;
+  /** Short label for what's being proposed, e.g. "Flanking" or "Critical hit table". */
+  rule:               string;
+  /** What the player wants changed to, in their own words. */
+  proposedValue:      string;
+  /** The player's reasoning — optional context, not re-validated. */
+  note:                string;
+  status:              RuleSuggestionStatus;
+  /** The DM's own wording when status === MODIFIED; null otherwise. */
+  dmResponse:          string | null;
+  createdAtRevision:   number;
+  resolvedAtRevision:  number | null;
+};
+
 // ── Audit / timeline ─────────────────────────────────────────────────────────
 
 export type AuditEntry = {
@@ -213,6 +241,7 @@ export type LiveState = {
   encounters:      Record<string, LiveEncounter>;
   effects:         Record<string, LiveEffect>;
   requests:        Record<string, ChangeRequest>;
+  ruleSuggestions: Record<string, RuleSuggestion>;
   characters:      Record<ParticipantId, ReportedCharacter>;
   audit:           AuditEntry[];
 };
@@ -221,7 +250,7 @@ export function emptyLiveState(sessionId: string, roomName: string | null = null
   return {
     sessionId, roomName, maxParticipants, revision: 0, ended: false,
     participants: {}, campaign: null, encounters: {}, effects: {},
-    requests: {}, characters: {}, audit: [],
+    requests: {}, ruleSuggestions: {}, characters: {}, audit: [],
   };
 }
 
@@ -245,6 +274,8 @@ export type LiveEventBody =
       finalApplied: CharacterChange[] | null; playerModified: CharacterChange[] | null;
       acknowledgedStale: boolean }
   | { t: 'request_stale_flag';  requestId: string; staleAgainst: number }
+  | { t: 'rule_suggestion_created';  suggestion: RuleSuggestion }
+  | { t: 'rule_suggestion_resolved'; suggestionId: string; status: RuleSuggestionStatus; dmResponse: string | null }
   | { t: 'character_reported';  character: ReportedCharacter }
   | { t: 'session_ended' };
 
@@ -294,6 +325,8 @@ export type OpBody =
   | { kind: 'player.respond';        requestId: string; decision: 'accept' | 'reject' | 'modify';
       modified?: CharacterChange[]; currentRevision: number; acknowledgeStale?: boolean }
   | { kind: 'player.report_character'; characterId: string; revision: number; summary: CharacterSummary }
+  | { kind: 'player.suggest_rule';   suggestionId: string; rule: string; proposedValue: string; note: string }
+  | { kind: 'dm.resolve_rule_suggestion'; suggestionId: string; decision: 'accept' | 'modify' | 'reject'; dmResponse?: string }
   | { kind: 'host.assign_capabilities'; participantId: ParticipantId; capabilities: Capability[] }
   | { kind: 'host.end_session' };
 

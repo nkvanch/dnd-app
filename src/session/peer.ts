@@ -469,6 +469,12 @@ export class SessionPeer {
     return this.sendRaw({ kind: 'dm.cancel_request', requestId });
   }
 
+  /** `dmResponse` is required for 'modify', ignored otherwise. */
+  resolveRuleSuggestion(suggestionId: string, decision: 'accept' | 'modify' | 'reject', dmResponse?: string): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.resolve_rule_suggestion', suggestionId, decision, ...(dmResponse ? { dmResponse } : {}) });
+  }
+
   /** Effects as the DM sees them, with secret identity joined in from the local vault. */
   dmEffects(): { effectId: string; displayName: string; secret: SecretEffectMeta | null; effect: LiveEffect }[] {
     return Object.entries(this.view?.effects ?? {}).map(([effectId, effect]) => {
@@ -500,6 +506,14 @@ export class SessionPeer {
 
   pendingRequests(): ChangeRequest[] {
     return Object.values(this.view?.requests ?? {}).filter(r => r.status === 'PENDING' && r.targetId === this.cfg.participantId);
+  }
+
+  /** DM_SCREEN_SPEC.md item 5 — Players can suggest campaign-rule changes by default. See
+   *  RuleSuggestion's own doc comment for why accepting one doesn't auto-apply anything. */
+  suggestRule(rule: string, proposedValue: string, note = ''): string {
+    this.need('player');
+    const suggestionId = this.id('sug');
+    return this.sendRaw({ kind: 'player.suggest_rule', suggestionId, rule, proposedValue, note });
   }
 
   /** What this player may see about active effects (mechanics only for secret ones). */

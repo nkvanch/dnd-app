@@ -24,7 +24,7 @@ import { SessionPeer } from '../../src/session/peer';
 import { LiveScreen, Section, Card, Btn, Chip, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
 import { Alert } from '../../src/utils/alert';
 
-type Tab = 'dashboard' | 'encounter' | 'effects' | 'requests' | 'notes';
+type Tab = 'dashboard' | 'encounter' | 'effects' | 'requests' | 'suggestions' | 'notes';
 type FastAction = { participantId: string; kind: 'hp_damage' | 'hp_heal' | 'temp_hp' | 'max_hp' };
 
 export default function DmLiveScreen() {
@@ -43,6 +43,8 @@ export default function DmLiveScreen() {
   const [fastAmount, setFastAmount] = useState('');
   const [noteText, setNoteText] = useState('');
   const [quickOverrideOpen, setQuickOverrideOpen] = useState(false);
+  const [modifyingSuggestion, setModifyingSuggestion] = useState<string | null>(null);
+  const [modifyText, setModifyText] = useState('');
 
   const linked = rt.view?.campaign?.campaignId ?? null;
 
@@ -78,8 +80,10 @@ export default function DmLiveScreen() {
   const dueEffects = peer.dmEffects().flatMap(e => Object.values(e.effect.applications).filter(a => a.state === 'DUE_TO_END'));
   const disconnectedPlayers = players.filter(p => !p.connected);
   const activeEncounter = Object.values(view?.encounters ?? {}).find(e => e.active) ?? null;
+  const ruleSuggestions = Object.values(view?.ruleSuggestions ?? {});
+  const pendingSuggestions = ruleSuggestions.filter(s => s.status === 'PENDING');
 
-  const alertCount = pendingRequests.length + dueEffects.length + disconnectedPlayers.length;
+  const alertCount = pendingRequests.length + dueEffects.length + disconnectedPlayers.length + pendingSuggestions.length;
 
   // Fast-action change requests (DM_SCREEN_SPEC.md item 2) — same consent flow as every other
   // CharacterChange: this sends a request, it does not apply anything unilaterally.
@@ -132,7 +136,7 @@ export default function DmLiveScreen() {
       </Card>
 
       <Row wrap>
-        {(['dashboard', 'encounter', 'effects', 'requests', 'notes'] as Tab[]).map(t => (
+        {(['dashboard', 'encounter', 'effects', 'requests', 'suggestions', 'notes'] as Tab[]).map(t => (
           <Chip key={t} label={t === 'dashboard' ? 'Dashboard' : t[0].toUpperCase() + t.slice(1)} active={tab === t} onPress={() => setTab(t)} testID={`dm-tab-${t}`} />
         ))}
       </Row>
@@ -144,6 +148,7 @@ export default function DmLiveScreen() {
               {pendingRequests.length > 0 && <Muted>• {pendingRequests.length} pending request{pendingRequests.length === 1 ? '' : 's'}{staleRequests.length > 0 ? ` (${staleRequests.length} stale)` : ''}</Muted>}
               {dueEffects.length > 0 && <Muted>• {dueEffects.length} effect{dueEffects.length === 1 ? '' : 's'} due to end</Muted>}
               {disconnectedPlayers.length > 0 && <Muted>• {disconnectedPlayers.map(p => p.nickname).join(', ')} disconnected</Muted>}
+              {pendingSuggestions.length > 0 && <Muted>• {pendingSuggestions.length} rule suggestion{pendingSuggestions.length === 1 ? '' : 's'} pending</Muted>}
             </Section>
           )}
 
@@ -311,6 +316,41 @@ export default function DmLiveScreen() {
               {r.status === 'PENDING' && <Btn small kind="danger" label="Cancel request" disabled={offline} onPress={() => run(() => peer.cancelRequest(r.id))} />}
             </Card>
           ))}
+        </Section>
+      )}
+
+      {tab === 'suggestions' && (
+        <Section title={`Rule suggestions (${pendingSuggestions.length} pending)`} hint="Accepting or modifying records the decision for the table — campaign configuration itself is still edited in DM Preparation.">
+          {ruleSuggestions.length === 0 && <Muted>No suggestions yet.</Muted>}
+          {ruleSuggestions.map(s => {
+            const modifying = modifyingSuggestion === s.id;
+            return (
+              <Card key={s.id} testID={`dm-suggestion-card-${s.rule}`}>
+                <Row wrap><Body bold>{s.rule}</Body><Badge label={s.status.toLowerCase()} tone={s.status === 'ACCEPTED' || s.status === 'MODIFIED' ? 'good' : s.status === 'PENDING' ? 'warn' : 'bad'} /><Muted>from {nameOf(s.playerId)}</Muted></Row>
+                <Muted>Proposed: {s.proposedValue}</Muted>
+                {!!s.note && <Muted>Note: {s.note}</Muted>}
+                {s.dmResponse && <Muted>DM's version: {s.dmResponse}</Muted>}
+                {s.status === 'PENDING' && (
+                  modifying ? (
+                    <>
+                      <Field label="Your version" value={modifyText} onChangeText={setModifyText} testID={`dm-suggestion-modify-text-${s.rule}`} />
+                      <Row>
+                        <Btn small label="Send" disabled={!modifyText.trim() || offline} testID={`dm-suggestion-modify-send-${s.rule}`}
+                          onPress={() => { run(() => peer.resolveRuleSuggestion(s.id, 'modify', modifyText.trim())); setModifyingSuggestion(null); setModifyText(''); }} />
+                        <Btn small kind="ghost" label="Cancel" onPress={() => setModifyingSuggestion(null)} />
+                      </Row>
+                    </>
+                  ) : (
+                    <Row wrap>
+                      <Btn small label="Accept" disabled={offline} testID={`dm-suggestion-accept-${s.rule}`} onPress={() => run(() => peer.resolveRuleSuggestion(s.id, 'accept'))} />
+                      <Btn small kind="ghost" label="Modify" disabled={offline} testID={`dm-suggestion-modify-${s.rule}`} onPress={() => { setModifyingSuggestion(s.id); setModifyText(s.proposedValue); }} />
+                      <Btn small kind="danger" label="Reject" disabled={offline} testID={`dm-suggestion-reject-${s.rule}`} onPress={() => run(() => peer.resolveRuleSuggestion(s.id, 'reject'))} />
+                    </Row>
+                  )
+                )}
+              </Card>
+            );
+          })}
         </Section>
       )}
 

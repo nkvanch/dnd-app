@@ -43,6 +43,10 @@ export default function PlayerScreen() {
   const runtime = getSessionRuntime();
   const peer = runtime.currentPeer;
   const [modifying, setModifying] = useState<string | null>(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestRule, setSuggestRule] = useState('');
+  const [suggestValue, setSuggestValue] = useState('');
+  const [suggestNote, setSuggestNote] = useState('');
 
   if (!rt.capabilities.includes('player') || !peer) {
     return <LiveScreen title="Player"><NotCapable needs="a Player" /></LiveScreen>;
@@ -56,6 +60,7 @@ export default function PlayerScreen() {
   const character = view?.characters[me];
   const effects = peer.visibleEffects();
   const encounters = Object.values(view?.encounters ?? {}).filter(e => e.active);
+  const mySuggestions = Object.values(view?.ruleSuggestions ?? {});
   const offline = rt.status !== 'connected';
   const send = (fn: () => unknown) => { try { fn(); } catch (e) { Alert.alert('Not sent', (e as Error).message); } };
 
@@ -141,6 +146,33 @@ export default function PlayerScreen() {
           ))}
         </Section>
       )}
+
+      <Section title="Rule suggestions" hint="Propose a house-rule change for the DM to review.">
+        {mySuggestions.map(s => (
+          <Card key={s.id} testID={`player-suggestion-${s.rule}`}>
+            <Row wrap><Body bold>{s.rule}</Body><Badge label={s.status.toLowerCase()} tone={s.status === 'ACCEPTED' || s.status === 'MODIFIED' ? 'good' : s.status === 'PENDING' ? 'warn' : 'bad'} /></Row>
+            <Muted>Proposed: {s.proposedValue}</Muted>
+            {s.dmResponse && <Muted>DM's version: {s.dmResponse}</Muted>}
+          </Card>
+        ))}
+        {suggestOpen ? (
+          <>
+            <Field label="Rule" value={suggestRule} onChangeText={setSuggestRule} placeholder="Flanking" testID="player-suggest-rule" />
+            <Field label="Proposed change" value={suggestValue} onChangeText={setSuggestValue} placeholder="Grant advantage when flanking" testID="player-suggest-value" />
+            <Field label="Why (optional)" value={suggestNote} onChangeText={setSuggestNote} multiline testID="player-suggest-note" />
+            <Row>
+              <Btn small label="Send" disabled={!suggestRule.trim() || !suggestValue.trim() || offline} testID="player-suggest-send"
+                onPress={() => {
+                  send(() => peer.suggestRule(suggestRule.trim(), suggestValue.trim(), suggestNote.trim()));
+                  setSuggestOpen(false); setSuggestRule(''); setSuggestValue(''); setSuggestNote('');
+                }} />
+              <Btn small kind="ghost" label="Cancel" onPress={() => setSuggestOpen(false)} />
+            </Row>
+          </>
+        ) : (
+          <Btn small kind="ghost" label="+ Suggest a rule change" onPress={() => setSuggestOpen(true)} testID="player-suggest-open" />
+        )}
+      </Section>
     </LiveScreen>
   );
 }

@@ -14,7 +14,7 @@
 import {
   Capability, ClientMessage, ServerMessage, Op, OpBody, OpResult, LiveState, LiveEvent, LiveEventBody,
   emptyLiveState, PublicParticipant, ParticipantId, EffectApplication, EffectDefinition, AuditEntry,
-  ChangeRequest, LiveEncounter, ReportedCharacter, CharacterChange,
+  ChangeRequest, LiveEncounter, ReportedCharacter, CharacterChange, RuleSuggestion, RuleSuggestionStatus,
 } from './types';
 import { applyEvent, projectEvent, projectState, Viewer } from './state';
 import { Connection, ServerTransport, decodeFrame, encodeFrame } from './transport';
@@ -576,6 +576,33 @@ export class SessionHost {
           summary: { name: s.name, hp: s.hp, maxHp: s.maxHp, ac: s.ac },
         };
         this.commit({ t: 'character_reported', character }, pid, null);
+        return done('applied');
+      }
+
+      case 'player.suggest_rule': {
+        if (!str(body.suggestionId) || !str(body.rule) || !str(body.proposedValue)) return done('rejected', 'malformed');
+        if (typeof body.note !== 'string' || body.note.length > 2000) return done('rejected', 'malformed');
+        if (this.state.ruleSuggestions[body.suggestionId]) return done('rejected', 'suggestion-exists');
+        const suggestion: RuleSuggestion = {
+          id: body.suggestionId, playerId: pid, rule: body.rule, proposedValue: body.proposedValue, note: body.note,
+          status: 'PENDING', dmResponse: null,
+          createdAtRevision: this.state.revision + 1, resolvedAtRevision: null,
+        };
+        this.commit({ t: 'rule_suggestion_created', suggestion }, pid,
+          { kind: 'rule_suggestion', text: `${this.nick(pid)} suggested a rule change: "${suggestion.rule}"`, scope: 'participants', participantIds: [pid] });
+        return done('applied');
+      }
+
+      case 'dm.resolve_rule_suggestion': {
+        const sug = this.state.ruleSuggestions[body.suggestionId];
+        if (!sug) return done('rejected', 'unknown-suggestion');
+        if (sug.status !== 'PENDING') return done('rejected', 'already-resolved');
+        if (body.decision !== 'accept' && body.decision !== 'modify' && body.decision !== 'reject') return done('rejected', 'malformed');
+        if (body.decision === 'modify' && !str(body.dmResponse)) return done('rejected', 'malformed');
+        const status: RuleSuggestionStatus = body.decision === 'accept' ? 'ACCEPTED' : body.decision === 'modify' ? 'MODIFIED' : 'REJECTED';
+        const dmResponse = body.decision === 'modify' ? body.dmResponse! : null;
+        this.commit({ t: 'rule_suggestion_resolved', suggestionId: sug.id, status, dmResponse }, pid,
+          { kind: 'rule_suggestion', text: `DM ${body.decision === 'accept' ? 'accepted' : body.decision === 'modify' ? 'modified' : 'rejected'} "${sug.rule}"`, scope: 'participants', participantIds: [sug.playerId] });
         return done('applied');
       }
 

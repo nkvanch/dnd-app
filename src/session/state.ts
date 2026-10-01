@@ -142,6 +142,18 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
       if (r) r.staleAgainst = b.staleAgainst;
       break;
     }
+    case 'rule_suggestion_created':
+      s.ruleSuggestions[b.suggestion.id] = b.suggestion;
+      break;
+    case 'rule_suggestion_resolved': {
+      const sug = s.ruleSuggestions[b.suggestionId];
+      if (sug) {
+        sug.status = b.status;
+        sug.dmResponse = b.dmResponse;
+        sug.resolvedAtRevision = ev.revision;
+      }
+      break;
+    }
     case 'character_reported':
       s.characters[b.character.participantId] = b.character;
       break;
@@ -195,13 +207,14 @@ export function projectState(state: LiveState, viewer: Viewer): ViewState {
     sessionId: state.sessionId, roomName: state.roomName, maxParticipants: state.maxParticipants,
     revision: state.revision, ended: state.ended,
     participants: clone(state.participants), campaign: state.campaign ? { ...state.campaign } : null,
-    encounters: {}, effects: {}, requests: {}, characters: {},
+    encounters: {}, effects: {}, requests: {}, ruleSuggestions: {}, characters: {},
     audit: state.audit.filter(a => auditVisible(a, viewer)).map(a => clone(a)),
   };
   if (level === 'dm') {
     out.encounters = clone(state.encounters);
     out.effects = clone(state.effects);
     out.requests = clone(state.requests);
+    out.ruleSuggestions = clone(state.ruleSuggestions);
     out.characters = clone(state.characters);
   } else if (level === 'player') {
     out.encounters = clone(state.encounters);
@@ -211,6 +224,9 @@ export function projectState(state: LiveState, viewer: Viewer): ViewState {
     }
     for (const [id, r] of Object.entries(state.requests)) {
       if (r.targetId === viewer.id) out.requests[id] = clone(r);
+    }
+    for (const [id, s] of Object.entries(state.ruleSuggestions)) {
+      if (s.playerId === viewer.id) out.ruleSuggestions[id] = clone(s);
     }
     const own = state.characters[viewer.id];
     if (own) out.characters[viewer.id] = clone(own);
@@ -287,6 +303,18 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
       if (level === 'dm') return keep(b);
       const req = after.requests[b.requestId];
       return req && req.targetId === viewer.id ? keep(b) : null;
+    }
+
+    case 'rule_suggestion_created':
+      if (level === 'host') return null;
+      if (level === 'dm' || b.suggestion.playerId === viewer.id) return keep(b);
+      return null;
+
+    case 'rule_suggestion_resolved': {
+      if (level === 'host') return null;
+      if (level === 'dm') return keep(b);
+      const sug = after.ruleSuggestions[b.suggestionId];
+      return sug && sug.playerId === viewer.id ? keep(b) : null;
     }
 
     case 'character_reported':

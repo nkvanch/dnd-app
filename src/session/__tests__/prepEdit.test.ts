@@ -1,7 +1,7 @@
 import { newCampaignPrep, findLiveFields, toLiveEncounterInput } from '../prep';
 import {
   addEncounter, addEffect, addTemplate, addNote, addPlan, togglePlanItem, removeItem, importPlannerEncounter,
-  parseCombatants, parseSignedInt, describeEffectComponent, describeDuration,
+  parseCombatants, parseSignedInt, describeEffectComponent, describeDuration, describeNoteCategory,
 } from '../prepEdit';
 
 const fresh = () => newCampaignPrep('c', 'Camp', 1);
@@ -36,9 +36,22 @@ describe('prepEdit helpers', () => {
     p = addTemplate(p, { id: 't', label: ' Drain ', changes: [{ kind: 'max_hp', delta: -3 }] });
     p = addNote(p, { id: 'n', text: ' remember ' });
     p = addPlan(p, { id: 'pl', name: 'S1' });
-    expect(p.notes[0]).toEqual({ id: 'n', text: 'remember', dmOnly: true });
+    expect(p.notes[0]).toEqual({ id: 'n', text: 'remember', dmOnly: true, category: 'session' });
     expect(p.templates[0].label).toBe('Drain');
     expect(findLiveFields(p)).toEqual([]);
+  });
+
+  it('notes carry an optional category and subject (DM_SCREEN_SPEC.md item 15)', () => {
+    let p = fresh();
+    p = addNote(p, { id: 'n1', text: 'Alice suspects the mayor', category: 'player', subject: ' Alice ' });
+    p = addNote(p, { id: 'n2', text: 'is secretly a doppelganger', category: 'monster', subject: 'Bandit Captain' });
+    p = addNote(p, { id: 'n3', text: 'remember to resolve last session’s cliffhanger' });   // no category given
+    expect(p.notes[0]).toEqual({ id: 'n1', text: 'Alice suspects the mayor', dmOnly: true, category: 'player', subject: 'Alice' });
+    expect(p.notes[1]).toMatchObject({ category: 'monster', subject: 'Bandit Captain' });
+    expect(p.notes[2]).toEqual({ id: 'n3', text: 'remember to resolve last session’s cliffhanger', dmOnly: true, category: 'session' });
+    expect(findLiveFields(p)).toEqual([]);
+    expect(describeNoteCategory('player')).toBe('Player');
+    expect(describeNoteCategory(undefined)).toBe('Session');   // missing category reads as the pre-existing default
   });
 
   it('plan membership toggles and removing an item cleans plan references', () => {

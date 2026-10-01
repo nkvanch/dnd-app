@@ -14,8 +14,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime';
-import { CampaignPrep } from '../../src/session/prep';
-import { addNote, describeDuration, describeEffectComponent, parseSignedInt, removeItem } from '../../src/session/prepEdit';
+import { CampaignPrep, NoteCategory, PrepEncounter } from '../../src/session/prep';
+import { addNote, describeDuration, describeEffectComponent, describeNoteCategory, parseSignedInt, removeItem } from '../../src/session/prepEdit';
 import { describeChanges, describeRewardKind, describeSessionLogKind } from '../../src/session/roles';
 import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility, RewardKind, SessionLogKind } from '../../src/session/types';
 import { SessionPeer } from '../../src/session/peer';
@@ -26,6 +26,7 @@ type Tab = 'dashboard' | 'encounter' | 'effects' | 'requests' | 'suggestions' | 
 type FastAction = { participantId: string; kind: 'hp_damage' | 'hp_heal' | 'temp_hp' | 'max_hp' };
 const REWARD_KINDS: RewardKind[] = ['homebrew_feature', 'resource', 'proficiency', 'reward_tier', 'permanent_modifier', 'campaign_boon'];
 const SESSION_LOG_KINDS: SessionLogKind[] = ['major_event', 'encounter_outcome', 'npc_death', 'quest_outcome', 'reward', 'milestone', 'rule_change', 'custom_note'];
+const NOTE_CATEGORIES: NoteCategory[] = ['session', 'encounter', 'player', 'monster', 'reminder'];
 
 export default function DmLiveScreen() {
   const router = useRouter();
@@ -54,6 +55,16 @@ export default function DmLiveScreen() {
   const [addingLogEntry, setAddingLogEntry] = useState(false);
   const [logEntryKind, setLogEntryKind] = useState<SessionLogKind>('major_event');
   const [logEntryText, setLogEntryText] = useState('');
+  const [noteCategory, setNoteCategory] = useState<NoteCategory>('session');
+  const [noteSubject, setNoteSubject] = useState('');
+  const [noteFilter, setNoteFilter] = useState<NoteCategory | null>(null);
+  // The prepared encounter the DM most recently activated — threaded into the live panel purely
+  // local to this device so its dmNotes/combatant dmNotes (never sent over the wire) can surface
+  // during play without any wire change. Only one encounter is assumed active at a time (same
+  // assumption the Dashboard's own `activeEncounter` already makes); a reconnect/remount loses
+  // this and the bonus notes just stop showing until the DM starts an encounter again — disclosed,
+  // not silently papered over.
+  const [lastActivatedPrepEncounter, setLastActivatedPrepEncounter] = useState<PrepEncounter | null>(null);
 
   const linked = rt.view?.campaign?.campaignId ?? null;
 
@@ -262,7 +273,8 @@ export default function DmLiveScreen() {
                   <Body bold>⚔ {e.name}</Body>
                   <Muted>{e.combatants.filter(c => !c.hidden).map(c => c.name).join(', ') || 'no visible combatants'}</Muted>
                   <Row wrap>
-                    <Btn small label="Start encounter" disabled={offline} onPress={() => run(() => peer.activateEncounter(prep.campaignId, e.id))} testID={`dm-start-${e.name}`} />
+                    <Btn small label="Start encounter" disabled={offline}
+                      onPress={() => { setLastActivatedPrepEncounter(e); run(() => peer.activateEncounter(prep.campaignId, e.id)); }} testID={`dm-start-${e.name}`} />
                     <Btn small kind="ghost" label="Edit in DM Preparation" onPress={() => router.push('/live/prepare')} />
                   </Row>
                 </Card>
@@ -272,7 +284,8 @@ export default function DmLiveScreen() {
           )}
           <Section title="Active encounter">
             {Object.values(view?.encounters ?? {}).filter(e => e.active).map(e => (
-              <ActiveEncounterPanel key={e.id} encounter={e} players={players} nameOf={nameOf} offline={offline} peer={dmPeer} run={run} />
+              <ActiveEncounterPanel key={e.id} encounter={e} players={players} nameOf={nameOf} offline={offline} peer={dmPeer} run={run}
+                prepEncounter={lastActivatedPrepEncounter} />
             ))}
             {!activeEncounter && <Muted>No active encounter.</Muted>}
           </Section>
@@ -428,19 +441,40 @@ export default function DmLiveScreen() {
       {tab === 'notes' && (
         <Section title="DM-only notes" hint="Never sent to the Host or any player. Shared with DM Preparation (offline).">
           {!prep && <Muted>Link a campaign first — notes live with its preparation.</Muted>}
-          {prep && prep.notes.map(n => (
+          {prep && (
+            <Row wrap>
+              <Chip label="All" active={noteFilter === null} onPress={() => setNoteFilter(null)} testID="dm-note-filter-all" />
+              {NOTE_CATEGORIES.map(c => <Chip key={c} label={describeNoteCategory(c)} active={noteFilter === c} onPress={() => setNoteFilter(c)} testID={`dm-note-filter-${c}`} />)}
+            </Row>
+          )}
+          {prep && prep.notes.filter(n => noteFilter === null || (n.category ?? 'session') === noteFilter).map(n => (
             <Card key={n.id}>
+              <Row wrap>
+                <Badge label={describeNoteCategory(n.category)} />
+                {!!n.subject && <Muted>{n.subject}</Muted>}
+              </Row>
               <Body>{n.text}</Body>
               <Btn small kind="danger" label="Remove" onPress={() => { void runtime.prep.edit(prep.campaignId, x => removeItem(x, 'notes', n.id)).then(setPrep); }} />
             </Card>
           ))}
+          {prep && prep.notes.length === 0 && <Muted>No notes yet.</Muted>}
           {prep && (
             <>
-              <Field label="New note" value={noteText} onChangeText={setNoteText} placeholder="Reminder, NPC detail, anything…" testID="dm-note-text" />
+              <Muted>New note:</Muted>
+              <Row wrap>
+                {NOTE_CATEGORIES.map(c => <Chip key={c} label={describeNoteCategory(c)} active={noteCategory === c} onPress={() => setNoteCategory(c)} testID={`dm-note-category-${c}`} />)}
+              </Row>
+              {(noteCategory === 'player' || noteCategory === 'monster') && (
+                <Field label={noteCategory === 'player' ? 'Player/character name' : 'Monster/NPC name'} value={noteSubject} onChangeText={setNoteSubject} testID="dm-note-subject" />
+              )}
+              <Field label="Note" value={noteText} onChangeText={setNoteText} multiline placeholder="Reminder, NPC detail, anything…" testID="dm-note-text" />
               <Btn small label="Add note" disabled={!noteText.trim()} testID="dm-note-add"
                 onPress={() => {
-                  void runtime.prep.edit(prep.campaignId, x => addNote(x, { id: `note_${Date.now().toString(36)}`, text: noteText.trim() })).then(setPrep);
-                  setNoteText('');
+                  void runtime.prep.edit(prep.campaignId, x => addNote(x, {
+                    id: `note_${Date.now().toString(36)}`, text: noteText.trim(), category: noteCategory,
+                    ...(noteSubject.trim() ? { subject: noteSubject.trim() } : {}),
+                  })).then(setPrep);
+                  setNoteText(''); setNoteSubject('');
                 }} />
             </>
           )}
@@ -563,13 +597,16 @@ function presetOfVisibility(v: MonsterVisibility): 'hidden' | 'minimal' | 'stand
   return null;   // a custom combination the DM reached some other way
 }
 
-function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run }: {
+function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run, prepEncounter }: {
   encounter: LiveEncounter;
   players: PublicParticipant[];
   nameOf: (id: string) => string;
   offline: boolean;
   peer: SessionPeer;
   run: (fn: () => unknown) => void;
+  /** The prepared encounter this was activated from, if known on this device right now — see its
+   *  own doc comment at the call site for why this is best-effort, not a wire-backed link. */
+  prepEncounter: PrepEncounter | null;
 }) {
   const [settingOrder, setSettingOrder] = useState(false);
   const [orderDraft, setOrderDraft] = useState<string[]>([]);
@@ -597,6 +634,7 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run }
         <Body bold>⚔ {encounter.name} (live)</Body>
         {encounter.currentTurnIndex !== null && <Badge label={`Round ${encounter.round}`} tone="good" />}
       </Row>
+      {!!prepEncounter?.dmNotes && <Muted>🔒 {prepEncounter.dmNotes}</Muted>}
 
       {encounter.turnOrder.length > 0 ? (
         <>
@@ -639,6 +677,7 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run }
         const hp = c.hpState ?? 'healthy';
         const preset = presetOfVisibility(c.visibility);
         const editingHp = exactHpEditing === c.id;
+        const prepNotes = prepEncounter?.combatants.find(pc => pc.id === c.id)?.dmNotes;
         return (
           <Card key={c.id}>
             <Row wrap>
@@ -647,6 +686,7 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run }
               {c.ac !== undefined && <Muted>AC {c.ac}</Muted>}
               {c.exactHp && <Muted>{c.exactHp.current}/{c.exactHp.max} HP</Muted>}
             </Row>
+            {!!prepNotes && <Muted>🔒 {prepNotes}</Muted>}
             <Row wrap>
               <Btn small kind="ghost" label="Cycle HP" disabled={offline} onPress={() => run(() => peer.setCombatantHpState(encounter.id, c.id, HP_CYCLE[hp]))} testID={`dm-cycle-hp-${c.name}`} />
               <Btn small kind="danger" label="Remove" disabled={offline} onPress={() => run(() => peer.removeCombatant(encounter.id, c.id))} testID={`dm-remove-combatant-${c.name}`} />

@@ -5,7 +5,7 @@
 // caller persists it through PrepService.edit, which advances the CampaignRevision.
 // ============================================================================
 import {
-  CampaignPrep, PrepChangeTemplate, PrepCombatant, PrepEffect, PrepEncounter, PrepNote, SessionPlan,
+  CampaignPrep, NoteCategory, PrepChangeTemplate, PrepCombatant, PrepEffect, PrepEncounter, PrepNote, SessionPlan,
 } from './prep';
 import { CharacterChange, EffectComponent, EffectDuration, EffectVisibility } from './types';
 
@@ -62,8 +62,11 @@ export function addTemplate(prep: CampaignPrep, input: { id: string; label: stri
   return { ...prep, templates: [...prep.templates, t] };
 }
 
-export function addNote(prep: CampaignPrep, input: { id: string; text: string }): CampaignPrep {
-  const n: PrepNote = { id: input.id, text: input.text.trim(), dmOnly: true };
+export function addNote(prep: CampaignPrep, input: { id: string; text: string; category?: NoteCategory; subject?: string }): CampaignPrep {
+  const n: PrepNote = {
+    id: input.id, text: input.text.trim(), dmOnly: true, category: input.category ?? 'session',
+    ...(input.subject?.trim() ? { subject: input.subject.trim() } : {}),
+  };
   return { ...prep, notes: [...prep.notes, n] };
 }
 
@@ -116,4 +119,12 @@ export function describeEffectComponent(c: EffectComponent): string {
 
 export function describeDuration(d: EffectDuration): string {
   return d.unit === 'manual' ? 'Manual' : `${d.remaining}/${d.total} rounds`;
+}
+
+const NOTE_CATEGORY_LABEL: Record<NoteCategory, string> = {
+  session: 'Session', encounter: 'Encounter', player: 'Player', monster: 'Monster/NPC', reminder: 'Reminder',
+};
+
+export function describeNoteCategory(category?: NoteCategory): string {
+  return NOTE_CATEGORY_LABEL[category ?? 'session'];
 }

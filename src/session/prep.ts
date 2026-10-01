@@ -52,7 +52,25 @@ export type PrepChangeTemplate = {
   changes: CharacterChange[];
 };
 
-export type PrepNote = { id: string; text: string; dmOnly: boolean };
+// DM_SCREEN_SPEC.md item 15's five note kinds. 'encounter' and 'monster' notes tied to a SPECIFIC
+// prepared encounter/combatant already have a dedicated home (PrepEncounter.dmNotes and
+// PrepCombatant.dmNotes below) — these categories are for the general case: a session-wide
+// encounter thought not yet pinned to one prepared encounter, or an NPC/monster that isn't part
+// of any prepared encounter at all.
+export type NoteCategory = 'session' | 'encounter' | 'player' | 'monster' | 'reminder';
+
+export type PrepNote = {
+  id:     string;
+  text:   string;
+  dmOnly: boolean;
+  /** Optional for backward compatibility with notes saved before this field existed; treat a
+   *  missing category as 'session' at display time rather than migrating old data on load. */
+  category?: NoteCategory;
+  /** Free-text subject for 'player' (character/player name) or 'monster' (NPC/monster name)
+   *  notes — not a foreign key into `party` or a monster database entry, since this is meant to
+   *  stay a quick jotting tool, not a relational one. Ignored for the other three categories. */
+  subject?: string;
+};
 
 export type SessionPlan = {
   id:          string;

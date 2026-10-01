@@ -10,8 +10,8 @@ describe('peekRoom', () => {
     const rig = await newRig({ dmPolicy: 'auto-first' });
     const result = await Promise.all([peekRoom(rig.net.client('peeker')), rig.settle()]).then(([r]) => r);
     expect(result).toEqual({
-      sessionId: 'sess1', hostNickname: 'Host', campaign: null,
-      participantCount: 1, dmApprovalRequired: false, ended: false,
+      sessionId: 'sess1', hostNickname: 'Host', roomName: null, campaign: null,
+      participantCount: 1, maxParticipants: null, dmApprovalRequired: false, ended: false,
     });
   });
 

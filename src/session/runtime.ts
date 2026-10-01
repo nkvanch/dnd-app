@@ -119,6 +119,10 @@ export class SessionRuntime {
     resume?:     boolean;
     characterId?: string | null;
     character?:  CharacterAdapter;
+    /** HOST_SESSION_FLOW_SPEC.md's room config extras — both optional, set once here, ignored on
+     *  a resume (the restored room keeps whatever it was originally started with). */
+    roomName?:        string | null;
+    maxParticipants?: number | null;
   }): Promise<void> {
     if (this.peer || this.host) await this.leave();
     this.setBusy(true);
@@ -128,6 +132,7 @@ export class SessionRuntime {
       const host = new SessionHost({
         sessionId: `sess_${this.deps.newId()}`,
         dmPolicy: opts.dmPolicy ?? 'manual',
+        roomName: opts.roomName, maxParticipants: opts.maxParticipants,
         newToken: () => `tok_${this.deps.newId()}_${this.deps.newId()}`,
         persist: p => { void this.deps.kv.set(KEY_HOST_SNAPSHOT, p); },
         ...(snapshot ? { restoreFrom: snapshot } : {}),

@@ -98,6 +98,8 @@ export function HostModal({ visible, onClose, nickname, initialRole }: { visible
   const [autoDm, setAutoDm] = useState(false);
   const [characterId, setCharacterId] = useState<string | null>(null);
   const [resumable, setResumable] = useState(false);
+  const [roomName, setRoomName] = useState('');
+  const [maxParticipants, setMaxParticipants] = useState('');
 
   useEffect(() => {
     if (!visible) return;
@@ -120,8 +122,11 @@ export function HostModal({ visible, onClose, nickname, initialRole }: { visible
       // Resolve the adapter BEFORE building the options object: an `await` inside an object spread was
       // observed (on device, Hermes + Babel async transform) to silently drop the spread's properties.
       const adapter = hostRole === 'host+player' ? await adapterFor(characterId) : undefined;
+      const maxN = maxParticipants.trim() ? Number(maxParticipants.trim()) : null;
       await getSessionRuntime().startHosting({
         nickname: nickname.trim() || 'Host', extraCaps: extra, dmPolicy: autoDm ? 'auto-first' : 'manual', resume,
+        roomName: roomName.trim() || null,
+        maxParticipants: maxN !== null && Number.isFinite(maxN) && maxN > 0 ? Math.floor(maxN) : null,
         ...(adapter && characterId ? { character: adapter, characterId } : {}),
       });
       onClose();
@@ -146,6 +151,9 @@ export function HostModal({ visible, onClose, nickname, initialRole }: { visible
             <Chip label="Approve DMs manually" active={!autoDm} onPress={() => setAutoDm(false)} testID="live-policy-manual" />
             <Chip label="First DM joins automatically" active={autoDm} onPress={() => setAutoDm(true)} testID="live-policy-auto" />
           </Row>
+          <Field label="Room name (optional)" value={roomName} onChangeText={setRoomName} placeholder="Tuesday Table" testID="live-room-name" />
+          <Field label="Max participants (optional)" value={maxParticipants} onChangeText={setMaxParticipants}
+            placeholder="Uncapped" keyboardType="number-pad" testID="live-max-participants" />
           {hostRole === 'host+player' && <CharacterPicker characters={characters} value={characterId} onChange={setCharacterId} />}
           <Pressable style={[m.primaryBtn, rt.busy && m.btnDisabled]} onPress={() => { void startHosting(false); }} disabled={rt.busy} testID="live-start-hosting">
             {rt.busy ? <ActivityIndicator color={Colors.bg} /> : <Text style={m.primaryBtnTxt}>Start hosting</Text>}
@@ -325,14 +333,19 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
 
             {step === 'confirm' && peek && (
               <>
-                <Text style={m.title}>Room Found</Text>
+                <Text style={m.title}>{peek.roomName ?? 'Room Found'}</Text>
                 <Card testID="live-join-confirm">
                   <Row wrap>
                     <Body bold>{peek.hostNickname ?? 'Unknown Host'}</Body>
                     <Badge label={peek.dmApprovalRequired ? 'DM approval required' : 'DM joins freely'} tone={peek.dmApprovalRequired ? 'warn' : 'good'} />
+                    {peek.maxParticipants !== null && peek.participantCount >= peek.maxParticipants && (
+                      <Badge label="Room full" tone="bad" />
+                    )}
                   </Row>
                   <Muted>{peek.campaign ? `Campaign attached: ${peek.campaign.name}` : 'No campaign attached yet'}</Muted>
-                  <Muted>{peek.participantCount} participant{peek.participantCount === 1 ? '' : 's'} connected</Muted>
+                  <Muted>
+                    {peek.participantCount}{peek.maxParticipants !== null ? ` / ${peek.maxParticipants}` : ''} participant{peek.participantCount === 1 ? '' : 's'} connected
+                  </Muted>
                 </Card>
 
                 {storedIdentity && (

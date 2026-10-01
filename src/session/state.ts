@@ -154,7 +154,8 @@ function effectForPlayer(effect: LiveEffect, viewer: Viewer): LiveEffect | null 
 export function projectState(state: LiveState, viewer: Viewer): ViewState {
   const level = viewLevel(viewer);
   const out: ViewState = {
-    sessionId: state.sessionId, revision: state.revision, ended: state.ended,
+    sessionId: state.sessionId, roomName: state.roomName, maxParticipants: state.maxParticipants,
+    revision: state.revision, ended: state.ended,
     participants: clone(state.participants), campaign: state.campaign ? { ...state.campaign } : null,
     encounters: {}, effects: {}, requests: {}, characters: {},
     audit: state.audit.filter(a => auditVisible(a, viewer)).map(a => clone(a)),

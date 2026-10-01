@@ -39,7 +39,10 @@ export type Actor = {
   label: string;
 };
 
-export async function newRig(opts: { dmPolicy?: DmPolicy; hostCapabilities?: Capability[]; sessionId?: string } = {}): Promise<Rig> {
+export async function newRig(opts: {
+  dmPolicy?: DmPolicy; hostCapabilities?: Capability[]; sessionId?: string;
+  roomName?: string | null; maxParticipants?: number | null;
+} = {}): Promise<Rig> {
   const net = new InMemoryNetwork();
   let t = 1000;
   const now = () => (t += 10);
@@ -47,6 +50,7 @@ export async function newRig(opts: { dmPolicy?: DmPolicy; hostCapabilities?: Cap
   const hostSnapshots: HostPersisted[] = [];
   const host = new SessionHost({
     sessionId: opts.sessionId ?? 'sess1', now, dmPolicy: opts.dmPolicy ?? 'auto-first', newToken: tokens,
+    roomName: opts.roomName, maxParticipants: opts.maxParticipants,
     persist: p => { hostSnapshots.push(p); },
   });
   await host.start(net.server());

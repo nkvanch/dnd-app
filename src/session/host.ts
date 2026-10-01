@@ -31,6 +31,13 @@ export type HostPersisted = {
 
 export type HostOptions = {
   sessionId:    string;
+  /** HOST_SESSION_FLOW_SPEC.md's "room name, optional" — set once at hosting start, immutable
+   *  for the room's lifetime. Distinct from any campaign attached later. */
+  roomName?:    string | null;
+  /** HOST_SESSION_FLOW_SPEC.md's "maximum participants, optional" — null/omitted = uncapped.
+   *  Enforced only against a brand-new participant (see onHello) — never against a reconnect,
+   *  and never against the Host's own local registerLocalHost. */
+  maxParticipants?: number | null;
   now?:         () => number;
   dmPolicy?:    DmPolicy;
   newToken?:    () => string;
@@ -92,7 +99,7 @@ export class SessionHost {
         this.entries.set(p.id, { conn: null });
       }
     } else {
-      this.state = emptyLiveState(opts.sessionId);
+      this.state = emptyLiveState(opts.sessionId, opts.roomName ?? null, opts.maxParticipants ?? null);
     }
   }
 
@@ -226,6 +233,11 @@ export class SessionHost {
       this.commit({ t: 'participant_upsert', participant: upserted }, pid,
         { kind: 'participant', text: `${msg.nickname} reconnected`, scope: 'all' }, conn);
     } else {
+      if (this.state.maxParticipants !== null && this.connectedCount() >= this.state.maxParticipants) {
+        this.send(conn, { type: 'error', message: 'This room is full.' });
+        conn.close();
+        return;
+      }
       token = this.newToken();
       this.tokens[pid] = token;
       const requested = sanitizeRequested(msg.requestedCapabilities);
@@ -258,15 +270,20 @@ export class SessionHost {
   }
 
   /** Answers a room-info query without registering a participant — see ClientMessage's 'peek'. */
+  private connectedCount(): number {
+    return Object.values(this.state.participants).filter(p => p.connected).length;
+  }
+
   private onPeek(conn: Connection): void {
     const host = Object.values(this.state.participants).find(p => p.capabilities.includes('host'));
-    const participantCount = Object.values(this.state.participants).filter(p => p.connected).length;
     this.send(conn, {
       type: 'peek_result',
       sessionId: this.state.sessionId,
       hostNickname: host?.nickname ?? null,
+      roomName: this.state.roomName,
       campaign: this.state.campaign,
-      participantCount,
+      participantCount: this.connectedCount(),
+      maxParticipants: this.state.maxParticipants,
       // 'auto-first' is the only policy where a DM can join without the Host acting — every
       // other policy ('manual', 'never') means SOME participant request needs Host attention,
       // which is what "approval required" means to a prospective joiner.

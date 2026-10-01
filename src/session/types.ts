@@ -178,21 +178,28 @@ export type { CampaignPolicy } from '../engine/campaignCompatibility';
 import type { CampaignPolicy } from '../engine/campaignCompatibility';
 
 export type LiveState = {
-  sessionId:    string;
-  revision:     number;              // LiveSessionRevision
-  ended:        boolean;
-  participants: Record<ParticipantId, PublicParticipant>;
-  campaign:     CampaignPolicy | null;
-  encounters:   Record<string, LiveEncounter>;
-  effects:      Record<string, LiveEffect>;
-  requests:     Record<string, ChangeRequest>;
-  characters:   Record<ParticipantId, ReportedCharacter>;
-  audit:        AuditEntry[];
+  sessionId:       string;
+  /** Set once at hosting start (HostOptions.roomName), never changed after — a temporary room's
+   *  own label, distinct from any attached campaign's name. Optional per HOST_SESSION_FLOW_SPEC.md. */
+  roomName:        string | null;
+  /** Set once at hosting start (HostOptions.maxParticipants) — null means uncapped. Enforced in
+   *  host.ts's onHello for a brand-new participant only; a RECONNECTING known participant is
+   *  never refused on this, since they already hold a seat. */
+  maxParticipants: number | null;
+  revision:        number;              // LiveSessionRevision
+  ended:           boolean;
+  participants:    Record<ParticipantId, PublicParticipant>;
+  campaign:        CampaignPolicy | null;
+  encounters:      Record<string, LiveEncounter>;
+  effects:         Record<string, LiveEffect>;
+  requests:        Record<string, ChangeRequest>;
+  characters:      Record<ParticipantId, ReportedCharacter>;
+  audit:           AuditEntry[];
 };
 
-export function emptyLiveState(sessionId: string): LiveState {
+export function emptyLiveState(sessionId: string, roomName: string | null = null, maxParticipants: number | null = null): LiveState {
   return {
-    sessionId, revision: 0, ended: false,
+    sessionId, roomName, maxParticipants, revision: 0, ended: false,
     participants: {}, campaign: null, encounters: {}, effects: {},
     requests: {}, characters: {}, audit: [],
   };
@@ -293,16 +300,18 @@ export type ClientMessage =
 export type ViewState = LiveState;
 
 /** Everything a 'peek' may answer with, per CAMPAIGN_DM_AUTHORITY_RULES.md's room-code-is-not-
- *  identity rule — deliberately NOT a room name (no such field exists on LiveState yet; that's
- *  tracked separately under Host room config) and deliberately nothing privileged: a Player
- *  scanning a QR still learns nothing more than an unprivileged participant eventually would. */
+ *  identity rule — deliberately nothing privileged: a Player scanning a QR still learns nothing
+ *  more than an unprivileged participant eventually would. */
 export type PeekResult = {
   sessionId:          string;
   hostNickname:       string | null;
+  roomName:           string | null;
   /** Full policy (not just the name) so a Player can check character compatibility before
    *  committing to anything — see CampaignPolicy's own doc comment. */
   campaign:           CampaignPolicy | null;
   participantCount:   number;
+  /** null = uncapped. A peeker can see the room is already full before even trying to join. */
+  maxParticipants:    number | null;
   dmApprovalRequired: boolean;
   ended:              boolean;
 };

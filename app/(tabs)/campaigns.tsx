@@ -16,7 +16,6 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 
 import { Alert } from '../../src/utils/alert';
-import { QrScannerModal } from '../../src/components/QrScannerModal';
 import { useCampaignStore }  from '../../src/store/campaignStore';
 import { useSessionStore }   from '../../src/store/sessionStore';
 import { useCharacterStore } from '../../src/store/characterStore';
@@ -27,7 +26,7 @@ import { SyncStatusDot }     from '../../src/components/SyncStatusDot';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { Quest, SessionLogEntry, Campaign } from '../../src/engine/types';
 import { InstalledPack, loadInstalledPacks } from '../../src/db/packRegistryRepo';
-import { HostModal } from '../../src/components/live/LiveSessionStart';
+import { HostModal, JoinModal as LiveJoinModal } from '../../src/components/live/LiveSessionStart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -107,83 +106,12 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
   );
 }
 
-function JoinModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [code,       setCode]       = useState('');
-  const [loading,    setLoading]    = useState(false);
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const joinCampaign = useCampaignStore(s => s.joinCampaign);
-  const session      = useSessionStore(s => s.session);
-
-  async function handleJoin(rawCode?: string) {
-    const trimmed = (rawCode ?? code).trim().toUpperCase();
-    if (trimmed.length !== 7 || !session) return;
-    // JOIN-CONFIRM-1: joinCampaign() calls syncManager.startAsClient(),
-    // which itself calls stopAll() first — if this device is currently
-    // hosting a campaign with players connected, they're silently dropped
-    // mid-session with zero warning. Owning a DM campaign must not BLOCK
-    // joining another (per the app's own campaign-role rules — role is
-    // per-campaign, not per-device), but the DM should at least be told
-    // what's about to happen before it does.
-    const status = useSyncStore.getState().status;
-    if (status.role === 'dm' && status.clientCount > 0) {
-      const proceed = await new Promise<boolean>(resolve => {
-        Alert.alert(
-          'Leave current campaign?',
-          `You're hosting a campaign with ${status.clientCount} player${status.clientCount === 1 ? '' : 's'} connected. Joining a different campaign will disconnect them.`,
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Join Anyway', style: 'destructive', onPress: () => resolve(true) },
-          ],
-        );
-      });
-      if (!proceed) return;
-    }
-    setLoading(true); setScannerOpen(false);
-    try {
-      // joinCampaign now opens the LAN client connection itself, so we must NOT
-      // also call startAsClient here (that would open a second connection).
-      await joinCampaign(trimmed);
-      setCode(''); onClose();
-    } catch (e) { showError('Connection failed', String(e)); }
-    finally { setLoading(false); }
-  }
-
-  return (
-    <>
-      <QrScannerModal visible={scannerOpen}
-        onScan={c => { setCode(c); setScannerOpen(false); handleJoin(c); }}
-        onClose={() => setScannerOpen(false)} />
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-        <KeyboardAvoidingView
-          style={styles.backdrop}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <Pressable style={styles.backdropTapArea} onPress={onClose} />
-          <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Join Campaign</Text>
-            <Text style={styles.modalSub}>Enter the 7-character room code or scan the DM's QR.</Text>
-            <TextInput style={[styles.input, styles.codeInput]} value={code}
-              onChangeText={t => setCode(t.toUpperCase().slice(0, 7))}
-              placeholder="XXXXXXX" placeholderTextColor={Colors.textDim}
-              autoCapitalize="characters" maxLength={7} autoFocus />
-            {Platform.OS !== 'web' && (
-              <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={() => setScannerOpen(true)} disabled={loading}>
-                <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>📷  Scan QR Code</Text>
-              </Pressable>
-            )}
-            <Pressable style={[styles.primaryBtn, (code.length !== 7 || loading) && styles.btnDisabled]}
-              onPress={() => handleJoin()} disabled={code.length !== 7 || loading}>
-              {loading ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.primaryBtnTxt}>Join</Text>}
-            </Pressable>
-            <Pressable style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelTxt}>Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
-    </>
-  );
-}
+// Joining is now exclusively through Live Session (see LiveJoinModal, wired below) — a Player
+// no longer attaches directly to a DM's persistent campaignStore campaign by room code. They
+// join the temporary live room, and get that campaign's content once the DM attaches it there
+// (CAMPAIGN_DM_AUTHORITY_RULES.md / JOIN_SESSION_FLOW_SPEC.md). The old per-campaign join modal
+// that lived here is gone; CreateModal above is unaffected since campaign creation/management is
+// still local-first and independent of any live room.
 
 // ── Campaign Overview Sections ────────────────────────────────────────────────
 // Used by both DM and Player views; editable=true only for the DM.
@@ -525,6 +453,8 @@ function DmActiveView() {
   const leaveCampaign  = useCampaignStore(s => s.leaveCampaign);
   const updateCampaign = useCampaignStore(s => s.updateCampaign);
   const syncStatus     = useSyncStore(s => s.status);
+  const liveNickname   = useSessionStore(s => s.session?.nickname ?? '');
+  const [hostOpen, setHostOpen] = useState(false);
 
   if (!activeCampaign) return null;
 
@@ -614,7 +544,20 @@ function DmActiveView() {
         <Pressable style={styles.dmBtn} onPress={() => router.push('/dm/dashboard' as any)}>
           <Text style={styles.dmBtnTxt}>🎲 Open DM Dashboard</Text>
         </Pressable>
+        <Pressable style={[styles.dmBtn, styles.dmBtnSecondary]} onPress={() => setHostOpen(true)} testID="campaign-host-live-session">
+          <Text style={[styles.dmBtnTxt, { color: Colors.textPrimary }]}>🛰 Host Live Session</Text>
+        </Pressable>
       </View>
+
+      {/*
+        Per HOST_SESSION_FLOW_SPEC.md: "Create Campaign = persistent DM workspace. Host Session =
+        temporary live room." This campaign's own room code above is the legacy system; a Live
+        Session is the separate, newer Host/DM/Player layer (room code on a different port). This
+        is where that temporary room is started from inside an already-open campaign, pre-set to
+        Host + DM since a campaign is already in hand. Attaching THIS campaign's content to the
+        room is then done from the DM screen's own link-campaign action once hosting starts.
+      */}
+      <HostModal visible={hostOpen} onClose={() => setHostOpen(false)} nickname={liveNickname} initialRole="host+dm" />
 
       {/* Overview sections */}
       <NotesSection
@@ -848,28 +791,25 @@ function PlayerActiveView() {
   );
 }
 
-// ── Saved Campaigns List ──────────────────────────────────────────────────────
-// A DM can own/keep several campaigns but only hosts one at a time — this is
-// how they get back to a campaign they left without deleting it (see
-// campaignStore's switchToCampaign/leaveCampaign — leaving used to
-// permanently delete a DM's campaign, so this list previously had nothing to
-// show). Also lists campaigns this device has joined as a player, for the
-// same "get back in" purpose.
+// ── Open Existing Campaign ────────────────────────────────────────────────────
+// Per CAMPAIGN_PAGE_MODEL_SPEC.md: "Continue one of your existing campaigns" — a DM can own/keep
+// several but only hosts one at a time, and this is also how a device gets back to a campaign it
+// was playing in as a Player (campaignStore's switchToCampaign/leaveCampaign — leaving used to
+// permanently delete a DM's campaign, so this had nothing to show before that was fixed).
 
-function SavedCampaignsList() {
-  const campaigns        = useCampaignStore(s => s.campaigns);
-  const switchToCampaign = useCampaignStore(s => s.switchToCampaign);
-  const deleteCampaign   = useCampaignStore(s => s.deleteCampaignPermanently);
+function OpenCampaignModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const campaigns         = useCampaignStore(s => s.campaigns);
+  const switchToCampaign  = useCampaignStore(s => s.switchToCampaign);
+  const deleteCampaign    = useCampaignStore(s => s.deleteCampaignPermanently);
   const session           = useSessionStore(s => s.session);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
-
-  if (campaigns.length === 0) return null;
 
   async function handleResume(id: string) {
     if (switchingId) return;
     setSwitchingId(id);
     try {
       await switchToCampaign(id);
+      onClose();
     } catch (e: any) {
       Alert.alert('Couldn’t open campaign', e?.message ?? String(e));
     } finally {
@@ -885,42 +825,51 @@ function SavedCampaignsList() {
   }
 
   return (
-    <View style={[styles.howItWorks, { alignSelf: 'stretch' }]}>
-      <Text style={styles.howTitle}>YOUR CAMPAIGNS</Text>
-      {campaigns.map(c => {
-        const isDm = session?.deviceId === c.dmDeviceId;
-        return (
-          <View key={c.id} style={styles.savedRow}>
-            <Pressable
-              style={{ flex: 1 }}
-              onPress={() => { void handleResume(c.id); }}
-              disabled={switchingId !== null}
-            >
-              <Text style={styles.savedRowName}>{c.name}</Text>
-              <Text style={styles.savedRowMeta}>{isDm ? '👑 You DM this' : '🗡 You play in this'}</Text>
-            </Pressable>
-            {switchingId === c.id ? (
-              <ActivityIndicator color={Colors.gold} />
-            ) : (
-              <Pressable style={styles.savedRowDelete} onPress={() => confirmDelete(c)} hitSlop={8}>
-                <Text style={styles.savedRowDeleteTxt}>🗑</Text>
-              </Pressable>
-            )}
-          </View>
-        );
-      })}
-    </View>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <Pressable style={styles.backdropTapArea} onPress={onClose} />
+        <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
+          <Text style={styles.modalTitle}>Open Existing Campaign</Text>
+          {campaigns.length === 0 ? (
+            <Text style={styles.emptyNote}>No saved campaigns yet — create one first.</Text>
+          ) : (
+            campaigns.map(c => {
+              const isDm = session?.deviceId === c.dmDeviceId;
+              return (
+                <View key={c.id} style={styles.savedRow}>
+                  <Pressable style={{ flex: 1 }} onPress={() => { void handleResume(c.id); }} disabled={switchingId !== null}>
+                    <Text style={styles.savedRowName}>{c.name}</Text>
+                    <Text style={styles.savedRowMeta}>{isDm ? '👑 You DM this' : '🗡 You play in this'}</Text>
+                  </Pressable>
+                  {switchingId === c.id ? (
+                    <ActivityIndicator color={Colors.gold} />
+                  ) : (
+                    <Pressable style={styles.savedRowDelete} onPress={() => confirmDelete(c)} hitSlop={8}>
+                      <Text style={styles.savedRowDeleteTxt}>🗑</Text>
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })
+          )}
+          <Pressable style={styles.cancelBtn} onPress={onClose}>
+            <Text style={styles.cancelTxt}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
 // ── No Campaign View ──────────────────────────────────────────────────────────
 
 function NoCampaignView({
-  nickname, onNicknameChange, onCreate, onHost, onJoin,
+  nickname, onNicknameChange, onCreate, onOpenExisting, onJoinLive,
 }: {
   nickname: string; onNicknameChange: (n: string) => void;
-  onCreate: () => void; onHost: () => void; onJoin: () => void;
+  onCreate: () => void; onOpenExisting: () => void; onJoinLive: () => void;
 }) {
+  const router = useRouter();
   // Campaign hosting/joining uses a raw TCP socket over the local WiFi network.
   // Browsers have no API for raw TCP sockets (only HTTP/WebSocket to a server
   // you don't control), so this is not something we can fix in JS — it's a
@@ -953,30 +902,39 @@ function NoCampaignView({
 
           <View style={styles.actionGroup}>
             <Pressable style={styles.primaryBtn} onPress={onCreate}>
-              <Text style={styles.primaryBtnTxt}>👑 Create Campaign (DM)</Text>
+              <Text style={styles.primaryBtnTxt}>👑 Create Campaign</Text>
             </Pressable>
-            <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onHost} testID="live-host-campaign">
+            <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onOpenExisting} testID="campaign-open-existing">
               <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>
-                Host Campaign
+                Open Existing Campaign
               </Text>
             </Pressable>
-            <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onJoin}>
+            <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={onJoinLive} testID="live-join-campaign">
               <Text style={[styles.primaryBtnTxt, { color: Colors.textPrimary }]}>
-                🗡 Join Campaign (Player)
+                🗡 Join Live Session
               </Text>
             </Pressable>
           </View>
 
-          <SavedCampaignsList />
+          {/*
+            Host-only (no campaign attached) is deliberately not one of the three primary
+            actions above — per CAMPAIGN_PAGE_MODEL_SPEC.md, Host belongs either inside an
+            existing campaign (Host + DM, see DmActiveView) or, for a Host with no campaign at
+            all, its own Live Session screen rather than campaign creation.
+          */}
+          <Pressable style={styles.liveHostLink} onPress={() => router.push('/live' as any)} testID="live-open-standalone">
+            <Text style={styles.liveHostLinkTxt}>Hosting without a campaign? Open Live Session →</Text>
+          </Pressable>
         </>
       )}
 
       <View style={styles.howItWorks}>
         <Text style={styles.howTitle}>How it works</Text>
-        <Text style={styles.howItem}>• DM creates a campaign — gets a room code + QR</Text>
-        <Text style={styles.howItem}>• Players type the code or scan the QR on the same WiFi</Text>
-        <Text style={styles.howItem}>• HP, conditions, and overrides sync in real time</Text>
-        <Text style={styles.howItem}>• Everything persists offline — no internet required</Text>
+        <Text style={styles.howItem}>• Create or open a campaign to prepare and manage it offline</Text>
+        <Text style={styles.howItem}>• Start a Live Session only when you want to play over LAN</Text>
+        <Text style={styles.howItem}>• Players or DMs join with a 7-character room code or QR</Text>
+        <Text style={styles.howItem}>• HP, effects, conditions, and approved live changes sync during the session</Text>
+        <Text style={styles.howItem}>• Campaigns and characters persist offline — no internet required</Text>
       </View>
     </ScrollView>
   );
@@ -992,16 +950,16 @@ export default function CampaignsScreen() {
   const setNickname    = useSessionStore(s => s.setNickname);
   const { action }     = useLocalSearchParams<{ action?: string }>();
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [hostOpen,   setHostOpen]   = useState(false);
-  const [joinOpen,   setJoinOpen]   = useState(false);
-  const [nickname,   setLocalNick]  = useState(session?.nickname ?? '');
+  const [createOpen,       setCreateOpen]       = useState(false);
+  const [openExistingOpen, setOpenExistingOpen] = useState(false);
+  const [joinLiveOpen,     setJoinLiveOpen]     = useState(false);
+  const [nickname,         setLocalNick]        = useState(session?.nickname ?? '');
 
   const actionHandled = useRef(false);
   useEffect(() => {
     if (action === 'join' && !actionHandled.current) {
       actionHandled.current = true;
-      setJoinOpen(true);
+      setJoinLiveOpen(true);
     }
   }, [action]);
 
@@ -1028,14 +986,14 @@ export default function CampaignsScreen() {
           nickname={nickname}
           onNicknameChange={handleNicknameChange}
           onCreate={() => setCreateOpen(true)}
-          onHost={() => setHostOpen(true)}
-          onJoin={() => setJoinOpen(true)}
+          onOpenExisting={() => setOpenExistingOpen(true)}
+          onJoinLive={() => setJoinLiveOpen(true)}
         />
       )}
 
       <CreateModal visible={createOpen} onClose={() => setCreateOpen(false)} />
-      <HostModal visible={hostOpen} onClose={() => setHostOpen(false)} nickname={nickname} />
-      <JoinModal visible={joinOpen} onClose={() => setJoinOpen(false)} />
+      <OpenCampaignModal visible={openExistingOpen} onClose={() => setOpenExistingOpen(false)} />
+      <LiveJoinModal visible={joinLiveOpen} onClose={() => setJoinLiveOpen(false)} nickname={nickname} />
     </View>
   );
 }
@@ -1193,6 +1151,7 @@ const styles = StyleSheet.create({
   noNetworkTxt:      { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', lineHeight: 19 },
   qrContainer:       { alignItems: 'center', padding: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg },
   dmBtn:             { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  dmBtnSecondary:    { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   dmBtnTxt:          { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 
   // Leave/end button
@@ -1213,6 +1172,8 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, fontSize: FontSize.md, color: Colors.textPrimary,
   },
   actionGroup: { gap: Spacing.sm, alignSelf: 'stretch' },
+  liveHostLink: { alignSelf: 'center', paddingVertical: Spacing.sm, marginTop: Spacing.xs },
+  liveHostLinkTxt: { fontSize: FontSize.sm, color: Colors.textDim, fontWeight: FontWeight.bold },
   howItWorks: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,
     borderWidth: 1, borderColor: Colors.border,

@@ -88,17 +88,19 @@ export function LiveSessionCard({ onOpenE2e }: { onOpenE2e?: () => void }) {
 
 // ── Host Campaign modal ──────────────────────────────────────────────────────
 
-export function HostModal({ visible, onClose, nickname }: { visible: boolean; onClose: () => void; nickname: string }) {
+export function HostModal({ visible, onClose, nickname, initialRole }: { visible: boolean; onClose: () => void; nickname: string; initialRole?: HostRole }) {
   const rt = useSessionRuntime();
   const characters = useCharacterStore(s => s.characters).filter(c => c.kind === 'character');
-  const [hostRole, setHostRole] = useState<HostRole>('host');
+  const [hostRole, setHostRole] = useState<HostRole>(initialRole ?? 'host');
   const [autoDm, setAutoDm] = useState(false);
   const [characterId, setCharacterId] = useState<string | null>(null);
   const [resumable, setResumable] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
+    setHostRole(initialRole ?? 'host');
     void getSessionRuntime().hasResumableHostSession().then(setResumable).catch(() => setResumable(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   async function adapterFor(id: string | null): Promise<EntityAdapter | undefined> {

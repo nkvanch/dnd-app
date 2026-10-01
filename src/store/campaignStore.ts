@@ -3,7 +3,7 @@
 // Campaign + DM identity state management.
 // ============================================================================
 import { create } from 'zustand';
-import { Campaign, CampaignRules, DeviceSession } from '../engine/types';
+import { Campaign, CampaignRules, DeviceSession, RulesetId } from '../engine/types';
 import { saveCampaign, loadAllCampaigns, deleteCampaign, loadCampaign } from '../db/campaignRepo';
 import { getMeta, setMeta } from '../db/appMetaRepo';
 import { useSessionStore } from './sessionStore';
@@ -83,9 +83,14 @@ type CampaignStore = {
 
   /**
    * Create a new campaign. The caller must be the DM device.
-   * Sets activeCampaign and persists to SQLite.
+   * Sets activeCampaign and persists to SQLite. `rules`, when given, becomes the campaign's own
+   * persistent effective configuration (e.g. copied from a chosen CustomRuleProfile by the
+   * caller) — editing the original profile later never silently rewrites it.
    */
-  createCampaign: (name: string) => Promise<Campaign>;
+  createCampaign: (opts: {
+    name: string; description?: string; rulesetId?: RulesetId;
+    rules?: CampaignRules; bannedPackIds?: string[];
+  }) => Promise<Campaign>;
 
   /**
    * Join an existing campaign via 7-character code.
@@ -185,20 +190,23 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     }
   },
 
-  createCampaign: async (name) => {
+  createCampaign: async (opts) => {
     const session = useSessionStore.getState().session;
     if (!session) throw new Error('No device session. Call initSession() first.');
 
     const campaign: Campaign = {
       id:           genId(),
-      name,
+      name:         opts.name,
       dmDeviceId:   session.deviceId,
       joinCode:     '',  // assigned from the real LAN room code below, before persisting
-      rules:        { ...DEFAULT_RULES },
+      rules:        opts.rules ? { ...opts.rules } : { ...DEFAULT_RULES },
       playerIds:    [],
       characterIds: [],
       notes:        '',
       createdAt:    Date.now(),
+      ...(opts.description?.trim() ? { description: opts.description.trim() } : {}),
+      ...(opts.rulesetId ? { rulesetId: opts.rulesetId } : {}),
+      ...(opts.bannedPackIds && opts.bannedPackIds.length > 0 ? { bannedPackIds: opts.bannedPackIds } : {}),
     };
 
     // Start hosting (DM role). This is CampaignHost — a session/role concept

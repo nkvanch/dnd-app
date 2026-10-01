@@ -2858,6 +2858,11 @@ export type Campaign = {
    * every existing campaign parses unchanged and is fully unrestricted.
    */
   bannedPackIds?: string[];
+  /** Optional free-text blurb set at creation (CREATE_CAMPAIGN_FLOW_SPEC.md's Basics step). */
+  description?:   string;
+  /** The ruleset this campaign is built for. Optional — undefined means no restriction, same
+   *  "unset = unrestricted" convention as everywhere else a RulesetId is optional in this file. */
+  rulesetId?:     RulesetId;
 };
 
 // ── Prepared Encounters ──────────────────────────────────────────────────────

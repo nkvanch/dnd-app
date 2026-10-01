@@ -270,16 +270,49 @@ describe('campaignStore', () => {
     });
   });
 
+  describe('createCampaign — Create Campaign wizard options (CREATE_CAMPAIGN_FLOW_SPEC.md)', () => {
+    it('persists description, rulesetId and bannedPackIds when given, and omits them when not', async () => {
+      const full = await useCampaignStore.getState().createCampaign({
+        name: 'Full Campaign', description: 'A tale of woe', rulesetId: 'dnd5e-2024' as never, bannedPackIds: ['pack1'],
+      });
+      expect(full.description).toBe('A tale of woe');
+      expect(full.rulesetId).toBe('dnd5e-2024');
+      expect(full.bannedPackIds).toEqual(['pack1']);
+
+      const bare = await useCampaignStore.getState().createCampaign({ name: 'Bare Campaign' });
+      expect(bare.description).toBeUndefined();
+      expect(bare.rulesetId).toBeUndefined();
+      expect(bare.bannedPackIds).toBeUndefined();
+    });
+
+    it('uses a given `rules` object verbatim instead of DEFAULT_RULES — the wizard\'s chosen profile is copied in, not referenced', async () => {
+      const customRules = { ...DEFAULT_RULES, maxLevel: 10, allowMulticlass: true, customRules: { lockPlayerFreeEdit: true } };
+      const campaign = await useCampaignStore.getState().createCampaign({ name: 'Low Level', rules: customRules });
+      expect(campaign.rules).toEqual(customRules);
+      expect(campaign.rules).not.toBe(customRules);   // saved via the normal campaign object, not aliased
+    });
+
+    it('with no `rules` given, falls back to DEFAULT_RULES exactly as before', async () => {
+      const campaign = await useCampaignStore.getState().createCampaign({ name: 'Defaults Only' });
+      expect(campaign.rules).toEqual(DEFAULT_RULES);
+    });
+
+    it('trims a blank description down to omitted rather than storing whitespace', async () => {
+      const campaign = await useCampaignStore.getState().createCampaign({ name: 'Blank Desc', description: '   ' });
+      expect(campaign.description).toBeUndefined();
+    });
+  });
+
   describe('ARCH-4 — startAsServer gets a fresh sessionId, distinct from deviceId', () => {
     it('createCampaign passes a sessionId different from deviceId', async () => {
-      await useCampaignStore.getState().createCampaign('New Campaign');
+      await useCampaignStore.getState().createCampaign({ name: 'New Campaign' });
       const [, sessionId, deviceId] = startAsServerSpy.mock.calls[0];
       expect(sessionId).not.toBe(deviceId);
       expect(deviceId).toBe('dm-device');
     });
 
     it('two separate hosting runs (e.g. createCampaign then a re-host) get different sessionIds', async () => {
-      await useCampaignStore.getState().createCampaign('Campaign A');
+      await useCampaignStore.getState().createCampaign({ name: 'Campaign A' });
       const firstSessionId = startAsServerSpy.mock.calls[0][1];
 
       const campaignB = makeCampaign({ id: 'campB' });

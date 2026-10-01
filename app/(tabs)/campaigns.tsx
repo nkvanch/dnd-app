@@ -18,13 +18,17 @@ import QRCode from 'react-native-qrcode-svg';
 import { Alert } from '../../src/utils/alert';
 import { useCampaignStore }  from '../../src/store/campaignStore';
 import { useSessionStore }   from '../../src/store/sessionStore';
-import { useCharacterStore } from '../../src/store/characterStore';
+import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
+import { useCustomRuleProfileStore } from '../../src/store/customRuleProfileStore';
 import { useSyncStore }      from '../../src/store/syncStore';
 import { syncManager }       from '../../src/sync/syncManager';
 import { decodeRoomCode }    from '../../src/sync/discovery';
+import { profilesForRuleset, sanitizeProfileRules } from '../../src/engine/customRuleProfiles';
 import { SyncStatusDot }     from '../../src/components/SyncStatusDot';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
-import { Quest, SessionLogEntry, Campaign } from '../../src/engine/types';
+import { Quest, SessionLogEntry, Campaign, CampaignRules, RulesetId } from '../../src/engine/types';
 import { InstalledPack, loadInstalledPacks } from '../../src/db/packRegistryRepo';
 import { HostModal, JoinModal as LiveJoinModal } from '../../src/components/live/LiveSessionStart';
 
@@ -62,11 +66,111 @@ function showError(title: string, message: string) {
 // not owned by a Host; keeping these two entry points separate (instead of merging Create
 // Campaign into Host Session) is what keeps that distinction real instead of just documented.
 
+// ── Wizard primitives ─────────────────────────────────────────────────────────
+
+function WizChip({ label, active, onPress, testID }: { label: string; active: boolean; onPress: () => void; testID?: string }) {
+  return (
+    <Pressable style={[styles.wizChip, active && styles.wizChipActive]} onPress={onPress} testID={testID}>
+      <Text style={[styles.wizChipTxt, active && styles.wizChipTxtActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function WizToggle({ label, hint, value, onChange, testID }: { label: string; hint?: string; value: boolean; onChange: (v: boolean) => void; testID?: string }) {
+  return (
+    <Pressable style={styles.wizToggleRow} onPress={() => onChange(!value)} testID={testID}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.wizToggleLabel}>{label}</Text>
+        {hint && <Text style={styles.wizToggleHint}>{hint}</Text>}
+      </View>
+      <View style={[styles.wizSwitch, value && styles.wizSwitchOn]}>
+        <View style={[styles.wizSwitchKnob, value && styles.wizSwitchKnobOn]} />
+      </View>
+    </Pressable>
+  );
+}
+
+// ── Create Campaign wizard (CREATE_CAMPAIGN_FLOW_SPEC.md) ────────────────────
+// 5 steps: Basics -> Rules -> Permissions -> Content -> Review. Per the spec's own "important
+// rules": never creates a Host session or room code here beyond what createCampaign() already
+// does (persistent campaign object first, live session is a separate later attachment — see
+// DmActiveView's own "Host Live Session" button), and the chosen rule profile is COPIED into
+// the campaign's own `rules`, not referenced — editing the original profile later never
+// silently rewrites an existing campaign (createCampaign already enforces this; the wizard just
+// decides what to copy in).
+const WIZ_STEPS = ['Basics', 'Rules', 'Permissions', 'Content', 'Review'] as const;
+type WizStep = typeof WIZ_STEPS[number];
+
 function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [name,    setName]    = useState('');
-  const [loading, setLoading] = useState(false);
   const createCampaign = useCampaignStore(s => s.createCampaign);
   const session        = useSessionStore(s => s.session);
+  const profiles        = useCustomRuleProfileStore(s => s.profiles);
+  const loadProfiles    = useCustomRuleProfileStore(s => s.load);
+
+  const [step, setStep] = useState<WizStep>('Basics');
+  const [loading, setLoading] = useState(false);
+
+  // Step 1 — Basics
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(undefined);
+
+  // Step 2 — Rules
+  const [profileId, setProfileId] = useState<string | null>(null);   // null = Defaults
+  const [maxLevel, setMaxLevel] = useState<number | null>(DEFAULT_RULES.maxLevel);
+  const [allowMulticlass, setAllowMulticlass] = useState(DEFAULT_RULES.allowMulticlass);
+
+  // Step 3 — Permissions. ruleSuggestionsEnabled and permanentRewardsAutomatic are real values
+  // stored on the campaign, but disclosed here rather than silently: nothing on the DM/live
+  // side reads either yet (Rule Suggestions and Rewards are both still-unbuilt DM cockpit
+  // subsystems) — Player Free Edit (customRules.lockPlayerFreeEdit) is the one of the three with
+  // a real, already-wired consumer (houseRules.ts's canPlayerFreeEdit()).
+  const [ruleSuggestions,   setRuleSuggestions]   = useState(true);
+  const [rewardsAutomatic,  setRewardsAutomatic]  = useState(false);
+  const [playerFreeEdit,    setPlayerFreeEdit]    = useState(true);
+
+  // Step 4 — Content
+  const [installedPacks, setInstalledPacks] = useState<InstalledPack[]>([]);
+  const [bannedPackIds, setBannedPackIds] = useState<string[]>([]);
+  const [homebrewNeedsApproval, setHomebrewNeedsApproval] = useState(false);
+
+  useEffect(() => { if (visible) { void loadProfiles(); void loadInstalledPacks().then(setInstalledPacks); } }, [visible, loadProfiles]);
+  useEffect(() => {
+    if (!visible) {
+      setStep('Basics'); setName(''); setDescription(''); setRulesetId(undefined);
+      setProfileId(null); setMaxLevel(DEFAULT_RULES.maxLevel); setAllowMulticlass(DEFAULT_RULES.allowMulticlass);
+      setRuleSuggestions(true); setRewardsAutomatic(false); setPlayerFreeEdit(true);
+      setBannedPackIds([]); setHomebrewNeedsApproval(false);
+    }
+  }, [visible]);
+
+  const compatibleProfiles = profilesForRuleset(profiles, rulesetId);
+  // Picking a profile pre-fills the quick toggles from it; the DM can still adjust them after —
+  // this effect only fires on profile CHANGE, never overwriting a toggle the DM already touched
+  // for the currently-selected profile.
+  useEffect(() => {
+    const profile = profileId ? profiles.find(p => p.id === profileId) : null;
+    const resolved = profile ? sanitizeProfileRules(profile.rules) : {};
+    setMaxLevel(resolved.maxLevel !== undefined ? resolved.maxLevel : DEFAULT_RULES.maxLevel);
+    setAllowMulticlass(resolved.allowMulticlass ?? DEFAULT_RULES.allowMulticlass);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId]);
+
+  function buildRules(): CampaignRules {
+    const profile = profileId ? profiles.find(p => p.id === profileId) : null;
+    const resolved = profile ? sanitizeProfileRules(profile.rules) : {};
+    return {
+      ...DEFAULT_RULES, ...resolved,
+      maxLevel, allowMulticlass,
+      customRules: {
+        ...DEFAULT_RULES.customRules, ...(resolved.customRules ?? {}),
+        lockPlayerFreeEdit: !playerFreeEdit,
+        ruleSuggestionsEnabled: ruleSuggestions,
+        permanentRewardsAutomatic: rewardsAutomatic,
+        homebrewNeedsApproval,
+      },
+    };
+  }
 
   async function handleCreate() {
     const trimmed = name.trim();
@@ -76,11 +180,19 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
       // createCampaign now starts the LAN server itself and stores the real
       // room code, so we must NOT also call startAsServer here (that would bind
       // the port twice and overwrite the code).
-      await createCampaign(trimmed);
-      setName(''); onClose();
+      await createCampaign({
+        name: trimmed, description, rulesetId, rules: buildRules(),
+        bannedPackIds,
+      });
+      onClose();
     } catch (e) { showError('Error', String(e)); }
     finally { setLoading(false); }
   }
+
+  const stepIndex = WIZ_STEPS.indexOf(step);
+  const canNext = step !== 'Basics' || !!name.trim();
+  function goNext() { if (canNext) setStep(WIZ_STEPS[Math.min(stepIndex + 1, WIZ_STEPS.length - 1)]); }
+  function goBack() { setStep(WIZ_STEPS[Math.max(stepIndex - 1, 0)]); }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -88,19 +200,115 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
         style={styles.backdrop}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable style={styles.backdropTapArea} onPress={onClose} />
-        <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
-          <Text style={styles.modalTitle}>New Campaign</Text>
-          <TextInput style={styles.input} value={name} onChangeText={setName}
-            placeholder="Campaign name…" placeholderTextColor={Colors.textDim} autoFocus />
-          <Pressable style={[styles.primaryBtn, (!name.trim() || loading) && styles.btnDisabled]}
-            onPress={handleCreate} disabled={!name.trim() || loading}>
-            {loading ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.primaryBtnTxt}>Create Campaign</Text>}
-          </Pressable>
+        <Pressable style={styles.backdropTapArea} onPress={onClose} accessible={false} />
+        <View style={[styles.modalSheet, styles.wizSheet]}>
+          <Text style={styles.wizStepLabel}>Step {stepIndex + 1} of {WIZ_STEPS.length}</Text>
+          <Text style={styles.modalTitle}>{step === 'Basics' ? 'New Campaign' : step}</Text>
+
+          <ScrollView style={styles.wizScroll} keyboardShouldPersistTaps="handled">
+            {step === 'Basics' && (
+              <View style={{ gap: Spacing.sm }}>
+                <TextInput style={styles.input} value={name} onChangeText={setName}
+                  placeholder="Campaign name…" placeholderTextColor={Colors.textDim} autoFocus testID="wiz-name" />
+                <TextInput style={[styles.input, styles.notesInput]} value={description} onChangeText={setDescription}
+                  placeholder="Description (optional)…" placeholderTextColor={Colors.textDim} multiline textAlignVertical="top" testID="wiz-description" />
+                <Text style={styles.wizFieldLabel}>Ruleset (optional)</Text>
+                <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(rulesetId)} />
+              </View>
+            )}
+
+            {step === 'Rules' && (
+              <View style={{ gap: Spacing.sm }}>
+                <Text style={styles.wizFieldLabel}>Rule profile</Text>
+                <View style={styles.wizChipRow}>
+                  <WizChip label="Defaults" active={profileId === null} onPress={() => setProfileId(null)} testID="wiz-profile-default" />
+                  {compatibleProfiles.map(p => (
+                    <WizChip key={p.id} label={p.name} active={profileId === p.id} onPress={() => setProfileId(p.id)} testID={`wiz-profile-${p.name}`} />
+                  ))}
+                </View>
+                {compatibleProfiles.length === 0 && <Text style={styles.wizHint}>No saved rule profiles for this ruleset yet — build one under Homebrew → Custom Rule Profile.</Text>}
+
+                <Text style={styles.wizFieldLabel}>Max level</Text>
+                <View style={styles.wizChipRow}>
+                  {[null, 5, 10, 15, 20].map(lvl => (
+                    <WizChip key={String(lvl)} label={lvl === null ? 'Uncapped' : `Lv ${lvl}`} active={maxLevel === lvl} onPress={() => setMaxLevel(lvl)} testID={`wiz-maxlevel-${lvl ?? 'uncapped'}`} />
+                  ))}
+                </View>
+                <WizToggle label="Allow multiclassing" value={allowMulticlass} onChange={setAllowMulticlass} testID="wiz-multiclass" />
+              </View>
+            )}
+
+            {step === 'Permissions' && (
+              <View style={{ gap: Spacing.sm }}>
+                <WizToggle label="Player rule suggestions" hint="Players can propose house-rule changes for you to review." value={ruleSuggestions} onChange={setRuleSuggestions} testID="wiz-rule-suggestions" />
+                <WizToggle label="Player Free Edit" hint="Players can freely edit their own sheet without DM approval." value={playerFreeEdit} onChange={setPlayerFreeEdit} testID="wiz-free-edit" />
+                <Text style={styles.wizFieldLabel}>Permanent DM rewards</Text>
+                <View style={styles.wizChipRow}>
+                  <WizChip label="Needs approval" active={!rewardsAutomatic} onPress={() => setRewardsAutomatic(false)} testID="wiz-rewards-approval" />
+                  <WizChip label="Automatic" active={rewardsAutomatic} onPress={() => setRewardsAutomatic(true)} testID="wiz-rewards-automatic" />
+                </View>
+              </View>
+            )}
+
+            {step === 'Content' && (
+              <View style={{ gap: Spacing.sm }}>
+                <WizToggle label="Homebrew needs DM approval" hint="Off: a player's homebrew content is allowed automatically." value={homebrewNeedsApproval} onChange={setHomebrewNeedsApproval} testID="wiz-homebrew-approval" />
+                {installedPacks.length > 0 && (
+                  <>
+                    <Text style={styles.wizFieldLabel}>Allowed homebrew packs</Text>
+                    {installedPacks.map(pack => {
+                      const banned = bannedPackIds.includes(pack.id);
+                      return (
+                        <Pressable key={pack.id} style={styles.packRow}
+                          onPress={() => setBannedPackIds(ids => banned ? ids.filter(id => id !== pack.id) : [...ids, pack.id])}>
+                          <View style={{ flex: 1 }}><Text style={styles.packName}>{pack.name}</Text></View>
+                          <View style={[styles.packToggle, banned && styles.packToggleBanned]}>
+                            <Text style={[styles.packToggleTxt, banned && styles.packToggleTxtBanned]}>{banned ? 'Banned' : 'Allowed'}</Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </>
+                )}
+                {installedPacks.length === 0 && <Text style={styles.wizHint}>No homebrew packs installed on this device yet.</Text>}
+              </View>
+            )}
+
+            {step === 'Review' && (
+              <View style={{ gap: Spacing.sm }}>
+                <Text style={styles.wizReviewLine}><Text style={styles.wizReviewLabel}>Name: </Text>{name.trim() || '(not set)'}</Text>
+                {!!description.trim() && <Text style={styles.wizReviewLine}><Text style={styles.wizReviewLabel}>Description: </Text>{description.trim()}</Text>}
+                <Text style={styles.wizReviewLine}><Text style={styles.wizReviewLabel}>Ruleset: </Text>{rulesetId ?? 'Any'}</Text>
+                <Text style={styles.wizReviewLine}><Text style={styles.wizReviewLabel}>Rule profile: </Text>{profileId ? (profiles.find(p => p.id === profileId)?.name ?? 'Custom') : 'Defaults'}</Text>
+                <Text style={styles.wizReviewLine}><Text style={styles.wizReviewLabel}>Max level: </Text>{maxLevel ?? 'Uncapped'} · <Text style={styles.wizReviewLabel}>Multiclass: </Text>{allowMulticlass ? 'Allowed' : 'Off'}</Text>
+                <Text style={styles.wizReviewLine}><Text style={styles.wizReviewLabel}>Rule suggestions: </Text>{ruleSuggestions ? 'On' : 'Off'} · <Text style={styles.wizReviewLabel}>Free Edit: </Text>{playerFreeEdit ? 'On' : 'Off'}</Text>
+                <Text style={styles.wizReviewLine}><Text style={styles.wizReviewLabel}>Permanent rewards: </Text>{rewardsAutomatic ? 'Automatic' : 'Needs approval'}</Text>
+                <Text style={styles.wizReviewLine}><Text style={styles.wizReviewLabel}>Homebrew: </Text>{homebrewNeedsApproval ? 'Needs approval' : 'Automatically allowed'}{bannedPackIds.length > 0 ? ` · ${bannedPackIds.length} pack(s) banned` : ''}</Text>
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={styles.wizFooter}>
+            {step !== 'Basics' && (
+              <Pressable style={styles.cancelBtn} onPress={goBack} testID="wiz-back">
+                <Text style={styles.cancelTxt}>Back</Text>
+              </Pressable>
+            )}
+            {step !== 'Review' ? (
+              <Pressable style={[styles.primaryBtn, { flex: 2 }, !canNext && styles.btnDisabled]} onPress={goNext} disabled={!canNext} testID="wiz-next">
+                <Text style={styles.primaryBtnTxt}>Next</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={[styles.primaryBtn, { flex: 2 }, (!name.trim() || loading) && styles.btnDisabled]}
+                onPress={handleCreate} disabled={!name.trim() || loading} testID="wiz-create">
+                {loading ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.primaryBtnTxt}>Create Campaign</Text>}
+              </Pressable>
+            )}
+          </View>
           <Pressable style={styles.cancelBtn} onPress={onClose}>
             <Text style={styles.cancelTxt}>Cancel</Text>
           </Pressable>
-        </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -1221,4 +1429,35 @@ const styles = StyleSheet.create({
   primaryBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
   cancelBtn:     { alignItems: 'center', padding: Spacing.sm, flex: 1 },
   cancelTxt:     { color: Colors.textSecondary, fontSize: FontSize.md },
+
+  // Create Campaign wizard
+  wizSheet:      { maxHeight: '88%' },
+  wizStepLabel:  { fontSize: FontSize.xs, color: Colors.textDim, textAlign: 'center', letterSpacing: 1, fontWeight: FontWeight.bold },
+  wizScroll:     { flexGrow: 0, marginTop: Spacing.sm },
+  wizFieldLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, letterSpacing: 1, fontWeight: FontWeight.bold, marginTop: Spacing.xs },
+  wizHint:       { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
+  wizChipRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  wizChip: {
+    backgroundColor: Colors.surface, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 8,
+  },
+  wizChipActive:    { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
+  wizChipTxt:       { fontSize: FontSize.sm, color: Colors.textSecondary },
+  wizChipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
+  wizToggleRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  wizToggleLabel: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  wizToggleHint:  { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 2 },
+  wizSwitch: {
+    width: 44, height: 26, borderRadius: Radius.full, backgroundColor: Colors.surface,
+    borderWidth: 1, borderColor: Colors.border, padding: 2, justifyContent: 'center',
+  },
+  wizSwitchOn:      { backgroundColor: Colors.gold + '44', borderColor: Colors.gold },
+  wizSwitchKnob:    { width: 20, height: 20, borderRadius: Radius.full, backgroundColor: Colors.textDim },
+  wizSwitchKnobOn:  { backgroundColor: Colors.gold, alignSelf: 'flex-end' },
+  wizReviewLine:    { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 20 },
+  wizReviewLabel:   { color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  wizFooter:        { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
 });

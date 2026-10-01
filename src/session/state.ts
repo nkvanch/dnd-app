@@ -46,7 +46,7 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
       s.participants[b.participant.id] = b.participant;
       break;
     case 'campaign_linked':
-      s.campaign = { campaignId: b.campaignId, name: b.name };
+      s.campaign = b.policy;
       break;
     case 'encounter_activated':
       s.encounters[b.encounter.id] = { ...b.encounter, active: true };

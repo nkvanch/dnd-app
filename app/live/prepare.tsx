@@ -2,7 +2,7 @@
 // DM PREPARATION. Persistent, owned by the DM, and fully usable with no Host and no network.
 // Everything here is a definition or template. Nothing becomes live until the DM activates it
 // from the DM Live screen while connected to a Host. Campaign revision advances on every edit.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getSessionRuntime } from '../../src/session/runtime';
 import { CampaignPrep } from '../../src/session/prep';
 import {
@@ -14,6 +14,9 @@ import { EffectComponent, EffectVisibility, CharacterChange } from '../../src/se
 import { useEncounterStore } from '../../src/store/encounterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { resolveMonsterById } from '../../src/content/contentResolution';
+import { subclassEntriesForClassMerged } from '../../src/content/subclasses/subclassBrowse';
+import { loadInstalledPacks, InstalledPack } from '../../src/db/packRegistryRepo';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
 import { LiveScreen, Section, Card, Btn, Chip, Field, Row, Badge, Muted, Body } from '../../src/components/live/LiveUi';
 import { Alert } from '../../src/utils/alert';
 
@@ -35,6 +38,17 @@ export default function PrepareScreen() {
   const [form, setForm] = useState<Form>(null);
   const planned = useEncounterStore(s => s.encounters);
   const homebrewMonsters = useHomebrewStore(s => s.monsters);
+  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  const [installedPacks, setInstalledPacks] = useState<InstalledPack[]>([]);
+  const [subclassSearch, setSubclassSearch] = useState('');
+
+  useEffect(() => { void loadInstalledPacks().then(setInstalledPacks); }, []);
+
+  const allSubclasses = useMemo(() => {
+    const classes = getMergedContentDB().classes;
+    return classes.flatMap(c => subclassEntriesForClassMerged(c.id, homebrewSubclasses).map(e => ({ id: e.id, name: e.name, className: c.name })));
+  }, [getMergedContentDB, homebrewSubclasses]);
 
   const refresh = useCallback(async (id?: string) => {
     setCampaigns(await runtime.prep.list());
@@ -165,11 +179,77 @@ export default function PrepareScreen() {
         {form === 'plan' && <NoteForm label="Plan name" onSave={(name) => { void edit(x => addPlan(x, { id: uid('plan'), name })); }} />}
       </Section>
 
-      <Section title="Content" hint="Homebrew packs banned from this campaign are managed in Campaigns → Content restrictions.">
-        <Muted>{p.contentManifest.bannedPackIds.length} banned pack(s) recorded in this preparation.</Muted>
+      <Section title="Content Policy" hint="Published to the room the moment you link this campaign — a joining Player sees it before committing to anything (Join Session's confirmation screen).">
+        <Body bold>Ruleset</Body>
+        <GameRulesetPicker
+          value={p.contentManifest.rulesetId}
+          onChange={v => { void edit(x => ({ ...x, contentManifest: { ...x.contentManifest, rulesetId: v } })); }}
+        />
+        <Muted>Leave unset to allow any ruleset.</Muted>
+
+        <Body bold>Max level</Body>
+        <Row wrap>
+          {[null, 5, 10, 15, 20].map(lvl => (
+            <Chip key={String(lvl)} label={lvl === null ? 'Uncapped' : `Lv ${lvl}`}
+              active={(p.contentManifest.maxLevel ?? null) === lvl}
+              onPress={() => { void edit(x => ({ ...x, contentManifest: { ...x.contentManifest, maxLevel: lvl } })); }}
+              testID={`prep-maxlevel-${lvl ?? 'uncapped'}`} />
+          ))}
+        </Row>
+
+        {installedPacks.length > 0 && (
+          <>
+            <Body bold>Homebrew packs</Body>
+            <Muted>Tap to cycle: Allowed → Banned → Required → Allowed.</Muted>
+            {installedPacks.map(pack => {
+              const banned = p.contentManifest.bannedPackIds.includes(pack.id);
+              const required = p.contentManifest.requiredPackIds.includes(pack.id);
+              const label = required ? 'Required' : banned ? 'Banned' : 'Allowed';
+              return (
+                <Card key={pack.id} testID={`prep-pack-${pack.name}`}>
+                  <Row wrap>
+                    <Body>{pack.name}</Body>
+                    <Badge label={label} tone={required ? 'good' : banned ? 'bad' : 'default'} />
+                  </Row>
+                  <Btn small kind="ghost" label="Cycle policy" onPress={() => { void edit(x => cyclePackPolicy(x, pack.id)); }} />
+                </Card>
+              );
+            })}
+          </>
+        )}
+
+        <Body bold>Banned subclasses</Body>
+        <Field label="Search" value={subclassSearch} onChangeText={setSubclassSearch} placeholder="Subclass name…" testID="prep-subclass-search" />
+        <Row wrap>
+          {allSubclasses
+            .filter(s => !subclassSearch.trim() || s.name.toLowerCase().includes(subclassSearch.trim().toLowerCase()))
+            .slice(0, 40)
+            .map(s => (
+              <Chip key={s.id} label={`${s.name} (${s.className})`}
+                active={p.contentManifest.bannedSubclassIds.includes(s.id)}
+                onPress={() => { void edit(x => ({ ...x, contentManifest: { ...x.contentManifest, bannedSubclassIds: toggleId(x.contentManifest.bannedSubclassIds, s.id) } })); }}
+                testID={`prep-subclass-${s.id}`} />
+            ))}
+        </Row>
       </Section>
     </LiveScreen>
   );
+}
+
+function toggleId(ids: string[], id: string): string[] {
+  return ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id];
+}
+
+/** Allowed -> Banned -> Required -> Allowed. A pack is never in both lists at once. */
+function cyclePackPolicy(p: CampaignPrep, packId: string): CampaignPrep {
+  const banned = p.contentManifest.bannedPackIds.includes(packId);
+  const required = p.contentManifest.requiredPackIds.includes(packId);
+  const next = banned
+    ? { bannedPackIds: p.contentManifest.bannedPackIds.filter(id => id !== packId), requiredPackIds: [...p.contentManifest.requiredPackIds, packId] }
+    : required
+    ? { bannedPackIds: p.contentManifest.bannedPackIds, requiredPackIds: p.contentManifest.requiredPackIds.filter(id => id !== packId) }
+    : { bannedPackIds: [...p.contentManifest.bannedPackIds, packId], requiredPackIds: p.contentManifest.requiredPackIds };
+  return { ...p, contentManifest: { ...p.contentManifest, ...next } };
 }
 
 // ── Forms ────────────────────────────────────────────────────────────────────

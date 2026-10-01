@@ -10,7 +10,7 @@ describe('peekRoom', () => {
     const rig = await newRig({ dmPolicy: 'auto-first' });
     const result = await Promise.all([peekRoom(rig.net.client('peeker')), rig.settle()]).then(([r]) => r);
     expect(result).toEqual({
-      sessionId: 'sess1', hostNickname: 'Host', campaignName: null,
+      sessionId: 'sess1', hostNickname: 'Host', campaign: null,
       participantCount: 1, dmApprovalRequired: false, ended: false,
     });
   });
@@ -26,7 +26,7 @@ describe('peekRoom', () => {
     await rig.settle();
 
     const result = await Promise.all([peekRoom(rig.net.client('peeker')), rig.settle()]).then(([r]) => r);
-    expect(result.campaignName).toBe('Automation Campaign');
+    expect(result.campaign?.name).toBe('Automation Campaign');
     expect(result.participantCount).toBe(3);          // host + dm + alice
     expect(result.dmApprovalRequired).toBe(true);
   });

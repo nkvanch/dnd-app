@@ -9,7 +9,7 @@
 // route — same testIDs either way, so existing automation flows are
 // unaffected by where it's mounted.
 // ============================================================================
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, Modal, KeyboardAvoidingView, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSessionRuntime, getSessionRuntime } from '../../session/runtime';
@@ -18,6 +18,8 @@ import { EntityAdapter } from '../../session/entityAdapter';
 import { parseAddress, SESSION_PORT } from '../../session/lanTransport';
 import { decodeRoomCode } from '../../sync/discovery';
 import { Capability, PeekResult } from '../../session/types';
+import { checkCampaignCompatibility, CompatibilityIssue } from '../../engine/campaignCompatibility';
+import { loadInstalledPacks, InstalledPack } from '../../db/packRegistryRepo';
 import { Chip, Field, Row, Muted, Card, Badge, Body } from './LiveUi';
 import { Alert } from '../../utils/alert';
 import { E2E_ENABLED } from '../../session/e2e';
@@ -190,12 +192,30 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
   const [peekError, setPeekError] = useState<string | null>(null);
   const [peek, setPeek] = useState<PeekResult | null>(null);
   const [target, setTarget] = useState<{ host: string; port: number } | null>(null);
+  const [installedPacks, setInstalledPacks] = useState<InstalledPack[]>([]);
 
   useEffect(() => {
     if (visible) return;
     setStep('find'); setPeek(null); setPeekError(null); setTarget(null);
     setCode(''); setIp(''); setAdvancedOpen(false); setCharacterId(null);
   }, [visible]);
+
+  // Loaded once the role step can actually use it (compatibility checking below) — no-op on web
+  // or when nothing is installed, same as every other installed-pack consumer in this app.
+  useEffect(() => {
+    if (step !== 'role') return;
+    void loadInstalledPacks().then(setInstalledPacks);
+  }, [step]);
+
+  // JOIN_SESSION_FLOW_SPEC.md: "show whether that character is compatible... before joining
+  // rather than silently rewriting anything." Never blocks — see checkCampaignCompatibility's
+  // own doc comment for why this is advisory, not a gate.
+  const compatIssues: CompatibilityIssue[] = useMemo(() => {
+    if (!wantPlayer || !characterId || !peek?.campaign) return [];
+    const entity = characters.find(c => c.id === characterId);
+    if (!entity) return [];
+    return checkCampaignCompatibility(entity, peek.campaign, installedPacks);
+  }, [wantPlayer, characterId, peek, characters, installedPacks]);
 
   async function adapterFor(id: string | null): Promise<EntityAdapter | undefined> {
     if (!id) return undefined;
@@ -288,7 +308,7 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
                     <Body bold>{peek.hostNickname ?? 'Unknown Host'}</Body>
                     <Badge label={peek.dmApprovalRequired ? 'DM approval required' : 'DM joins freely'} tone={peek.dmApprovalRequired ? 'warn' : 'good'} />
                   </Row>
-                  <Muted>{peek.campaignName ? `Campaign attached: ${peek.campaignName}` : 'No campaign attached yet'}</Muted>
+                  <Muted>{peek.campaign ? `Campaign attached: ${peek.campaign.name}` : 'No campaign attached yet'}</Muted>
                   <Muted>{peek.participantCount} participant{peek.participantCount === 1 ? '' : 's'} connected</Muted>
                 </Card>
                 <Pressable style={m.primaryBtn} onPress={() => setStep('role')} testID="live-join-confirm-continue">
@@ -312,8 +332,15 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
                   <Chip label="DM" active={wantDm} onPress={() => setWantDm(!wantDm)} testID="live-want-dm" />
                 </Row>
                 {wantPlayer && <CharacterPicker characters={characters} value={characterId} onChange={setCharacterId} />}
+                {compatIssues.length > 0 && (
+                  <Card tone="warn" testID="live-join-compat-issues">
+                    <Body bold>This character doesn't fully match the campaign's rules</Body>
+                    {compatIssues.map((issue, i) => <Muted key={i}>• {issue.message}</Muted>)}
+                    <Muted>You can still join — the DM can review this once you're in.</Muted>
+                  </Card>
+                )}
                 <Pressable style={[m.primaryBtn, rt.busy && m.btnDisabled]} onPress={() => { void join(); }} disabled={rt.busy} testID="live-join">
-                  {rt.busy ? <ActivityIndicator color={Colors.bg} /> : <Text style={m.primaryBtnTxt}>Join session</Text>}
+                  {rt.busy ? <ActivityIndicator color={Colors.bg} /> : <Text style={m.primaryBtnTxt}>{compatIssues.length > 0 ? 'Join anyway' : 'Join session'}</Text>}
                 </Pressable>
                 <Pressable style={m.ghostBtn} onPress={() => setStep('confirm')}>
                   <Text style={m.ghostBtnTxt}>Back</Text>

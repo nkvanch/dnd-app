@@ -10,9 +10,10 @@
 // ============================================================================
 import {
   CharacterChange, EffectComponent, EffectDefinitionInput, EffectDuration, EffectVisibility,
-  LiveCombatant, LiveEncounterInput, SecretEffectMeta,
+  LiveCombatant, LiveEncounterInput, SecretEffectMeta, CampaignPolicy,
 } from './types';
 import { KeyValueStore } from './kv';
+import { RulesetId } from '../engine/types';
 
 export type PrepCombatant = {
   id:      string;
@@ -62,6 +63,22 @@ export type SessionPlan = {
   notes:       string;
 };
 
+/**
+ * The join-compatibility policy a DM sets while preparing, carried on every `CampaignPrep` and
+ * sent to the Host (and from there to a peeking/joining Player — see types.ts's CampaignPolicy,
+ * dm.select_campaign, and LiveState.campaign) the moment the DM links this campaign to a live
+ * room. `requiredPackIds` stays id-only here (same as `bannedPackIds`) since the DM's own device
+ * — the one setting this policy — always has the pack installed to name it from; see
+ * toLivePolicyInput below for where a human-readable name gets attached for the wire.
+ */
+export type ContentManifest = {
+  bannedPackIds:      string[];
+  bannedSubclassIds:  string[];
+  requiredPackIds:    string[];
+  rulesetId?:         RulesetId;
+  maxLevel?:          number | null;
+};
+
 export type CampaignPrep = {
   schema:           1;
   campaignId:       string;
@@ -74,7 +91,7 @@ export type CampaignPrep = {
   templates:        PrepChangeTemplate[];
   notes:            PrepNote[];
   plans:            SessionPlan[];
-  contentManifest:  { bannedPackIds: string[] };
+  contentManifest:  ContentManifest;
   party:            { name: string }[];
 };
 
@@ -82,7 +99,7 @@ export function newCampaignPrep(campaignId: string, name: string, now: number): 
   return {
     schema: 1, campaignId, name, campaignRevision: 1, updatedAt: now,
     encounters: [], effects: [], templates: [], notes: [], plans: [],
-    contentManifest: { bannedPackIds: [] }, party: [],
+    contentManifest: { bannedPackIds: [], bannedSubclassIds: [], requiredPackIds: [] }, party: [],
   };
 }
 
@@ -189,6 +206,27 @@ export function toEffectInput(fx: PrepEffect, liveId: string): { input: EffectDe
       ? { effectId: liveId, name: fx.name, description: fx.description, source: fx.source,
           notes: fx.notes, hiddenDurationReason: fx.hiddenDurationReason }
       : null,
+  };
+}
+
+/**
+ * Prepared policy -> the wire shape a joining Player actually sees (CampaignPolicy). Pack names
+ * for `requiredPackIds` are resolved HERE, from the DM's own installed-pack list — a joining
+ * device may not have that pack at all, so it can't resolve a name for it itself; the DM's
+ * device always can, since it's the one that set the requirement from its own pack list.
+ */
+export function toLivePolicyInput(
+  prep: CampaignPrep, campaignId: string, name: string, installedPacks: { id: string; name: string }[],
+): CampaignPolicy {
+  const cm = prep.contentManifest;
+  const packName = (id: string) => installedPacks.find(p => p.id === id)?.name ?? id;
+  return {
+    campaignId, name,
+    ...(cm.rulesetId ? { rulesetId: cm.rulesetId } : {}),
+    ...(cm.maxLevel !== undefined ? { maxLevel: cm.maxLevel } : {}),
+    bannedPackIds: cm.bannedPackIds,
+    bannedSubclassIds: cm.bannedSubclassIds,
+    requiredPacks: cm.requiredPackIds.map(id => ({ id, name: packName(id) })),
   };
 }
 

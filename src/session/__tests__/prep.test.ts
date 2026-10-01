@@ -77,7 +77,10 @@ describe('prepared content is not live content', () => {
     await rig.settle();
 
     const s = rig.host.debugState();
-    expect(s.campaign).toEqual({ campaignId: 'camp-auto', name: 'Automation Campaign' });
+    expect(s.campaign).toEqual({
+      campaignId: 'camp-auto', name: 'Automation Campaign',
+      bannedPackIds: [], bannedSubclassIds: [], requiredPacks: [],
+    });
     expect(s.encounters).toEqual({});
     expect(s.effects).toEqual({});
     expect(s.requests).toEqual({});

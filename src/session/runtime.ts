@@ -14,6 +14,7 @@ import { KeyValueStore } from './kv';
 import { ClientTransport, Connection, ServerTransport } from './transport';
 import { Capability, CharacterAdapter, ViewState, ParticipantId, PeekResult } from './types';
 import { peekRoom } from './roomPeek';
+import { loadInstalledPacks } from '../db/packRegistryRepo';
 import type { ActiveComponents } from './effectBridge';
 
 // ── Store mirrored for React ──────────────────────────────────────────────────
@@ -139,7 +140,7 @@ export class SessionRuntime {
         initialToken: token, transport: local.client, kv: this.deps.kv,
         storageKey: `session.peer.${participantId}@local`,
         prep: new PrepService(this.deps.kv), vault: new SecretVault(this.deps.kv),
-        newId: p => `${p}_${this.deps.newId()}`,
+        newId: p => `${p}_${this.deps.newId()}`, installedPacks: loadInstalledPacks,
         ...(opts.character ? { character: opts.character, characterId: opts.characterId ?? opts.character.characterId } : {}),
       });
       this.host = host;
@@ -186,7 +187,7 @@ export class SessionRuntime {
         transport: this.deps.remoteClient(opts.host, port), kv: this.deps.kv,
         storageKey: `session.peer.${participantId}@${opts.host}:${port}`,
         prep: new PrepService(this.deps.kv), vault: new SecretVault(this.deps.kv),
-        newId: p => `${p}_${this.deps.newId()}`,
+        newId: p => `${p}_${this.deps.newId()}`, installedPacks: loadInstalledPacks,
         ...(opts.character ? { character: opts.character, characterId: opts.characterId ?? opts.character.characterId } : {}),
       });
       this.attach(peer, 'joined');

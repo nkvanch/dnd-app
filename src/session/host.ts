@@ -265,7 +265,7 @@ export class SessionHost {
       type: 'peek_result',
       sessionId: this.state.sessionId,
       hostNickname: host?.nickname ?? null,
-      campaignName: this.state.campaign?.name ?? null,
+      campaign: this.state.campaign,
       participantCount,
       // 'auto-first' is the only policy where a DM can join without the Host acting — every
       // other policy ('manual', 'never') means SOME participant request needs Host attention,
@@ -378,9 +378,11 @@ export class SessionHost {
 
     switch (body.kind) {
       case 'dm.select_campaign': {
-        if (!str(body.campaignId) || !str(body.name)) return done('rejected', 'malformed');
-        this.commit({ t: 'campaign_linked', campaignId: body.campaignId, name: body.name }, pid,
-          { kind: 'campaign', text: `Campaign "${body.name}" linked`, scope: 'all' });
+        const p = body.policy;
+        if (!isObj(p) || !str(p.campaignId) || !str(p.name) || !Array.isArray(p.bannedPackIds)
+          || !Array.isArray(p.bannedSubclassIds) || !Array.isArray(p.requiredPacks)) return done('rejected', 'malformed');
+        this.commit({ t: 'campaign_linked', policy: p }, pid,
+          { kind: 'campaign', text: `Campaign "${p.name}" linked`, scope: 'all' });
         return done('applied');
       }
 

@@ -16,7 +16,7 @@ import {
 import { applyEvent } from './state';
 import { ClientTransport, Connection, decodeFrame, encodeFrame } from './transport';
 import { KeyValueStore } from './kv';
-import { PrepService, SecretVault, toEffectInput, toLiveEncounterInput } from './prep';
+import { PrepService, SecretVault, toEffectInput, toLiveEncounterInput, toLivePolicyInput } from './prep';
 
 export type PeerStatus = 'disconnected' | 'connecting' | 'connected';
 
@@ -36,6 +36,12 @@ export type PeerConfig = {
   character?:            CharacterAdapter;
   prep?:                 PrepService;
   vault?:                SecretVault;
+  /** Installed-pack names, for resolving a prepared campaign's requiredPackIds into human-readable
+   *  CampaignPolicy.requiredPacks (see prep.ts's toLivePolicyInput). Injected rather than imported
+   *  directly — this is DB-backed (native-only) and the deterministic test harness (testing/
+   *  harness.ts) never initializes a real db; omitted = no required-pack names resolved (empty list),
+   *  never a runtime failure. */
+  installedPacks?:       () => Promise<{ id: string; name: string }[]>;
 };
 
 type PeerPersisted = {
@@ -304,7 +310,9 @@ export class SessionPeer {
     this.need('dm');
     const prep = await this.cfg.prep?.load(campaignId);
     if (!prep) throw new Error(`No preparation for campaign ${campaignId}`);
-    return this.sendRaw({ kind: 'dm.select_campaign', campaignId, name: prep.name, campaignRevision: prep.campaignRevision });
+    const installedPacks = (await this.cfg.installedPacks?.()) ?? [];
+    const policy = toLivePolicyInput(prep, campaignId, prep.name, installedPacks);
+    return this.sendRaw({ kind: 'dm.select_campaign', campaignRevision: prep.campaignRevision, policy });
   }
 
   /** Prepared encounter -> live. Only the public projection leaves the device. */

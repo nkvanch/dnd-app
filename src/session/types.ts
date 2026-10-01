@@ -170,12 +170,19 @@ export type ReportedCharacter = {
   summary:       CharacterSummary;
 };
 
+// CampaignPolicy (what a linked campaign publishes to the room — see its own doc comment) lives
+// in engine/campaignCompatibility.ts, alongside the checker that consumes it, and is re-exported
+// here since it's also part of this layer's own wire shapes (LiveState.campaign, the
+// dm.select_campaign op, the campaign_linked event, and the unauthenticated 'peek' reply).
+export type { CampaignPolicy } from '../engine/campaignCompatibility';
+import type { CampaignPolicy } from '../engine/campaignCompatibility';
+
 export type LiveState = {
   sessionId:    string;
   revision:     number;              // LiveSessionRevision
   ended:        boolean;
   participants: Record<ParticipantId, PublicParticipant>;
-  campaign:     { campaignId: string; name: string } | null;
+  campaign:     CampaignPolicy | null;
   encounters:   Record<string, LiveEncounter>;
   effects:      Record<string, LiveEffect>;
   requests:     Record<string, ChangeRequest>;
@@ -195,7 +202,7 @@ export function emptyLiveState(sessionId: string): LiveState {
 
 export type LiveEventBody =
   | { t: 'participant_upsert'; participant: PublicParticipant }
-  | { t: 'campaign_linked';    campaignId: string; name: string }
+  | { t: 'campaign_linked';    policy: CampaignPolicy }
   | { t: 'encounter_activated'; encounter: LiveEncounter }
   | { t: 'encounter_ended';     encounterId: string }
   | { t: 'effect_applied';      definition: EffectDefinition; applications: EffectApplication[] }
@@ -236,7 +243,7 @@ export type LiveEncounterInput = {
 };
 
 export type OpBody =
-  | { kind: 'dm.select_campaign';    campaignId: string; name: string; campaignRevision: number }
+  | { kind: 'dm.select_campaign';    campaignRevision: number; policy: CampaignPolicy }
   | { kind: 'dm.activate_encounter'; encounter: LiveEncounterInput }
   | { kind: 'dm.end_encounter';      encounterId: string }
   | { kind: 'dm.apply_effect';       effect: EffectDefinitionInput; targets: ParticipantId[] }
@@ -292,7 +299,9 @@ export type ViewState = LiveState;
 export type PeekResult = {
   sessionId:          string;
   hostNickname:       string | null;
-  campaignName:       string | null;
+  /** Full policy (not just the name) so a Player can check character compatibility before
+   *  committing to anything — see CampaignPolicy's own doc comment. */
+  campaign:           CampaignPolicy | null;
   participantCount:   number;
   dmApprovalRequired: boolean;
   ended:              boolean;

@@ -36,7 +36,7 @@ export const hostOnly: Flow = {
     await phone.assertPresent({ id: 'host-participant-Node DM' });
     await phone.assertPresent({ textContains: 'wants DM' });
     check(dm.peer.capabilities.length === 0, 'the DM holds no capability until the Host approves');
-    let forged = dm.peer.sendRaw({ kind: 'dm.select_campaign', campaignId: 'x', name: 'x', campaignRevision: 1 });
+    let forged = dm.peer.sendRaw({ kind: 'dm.select_campaign', campaignRevision: 1, policy: { campaignId: 'x', name: 'x', bannedPackIds: [], bannedSubclassIds: [], requiredPacks: [] } });
     await waitUntil(() => dm.peer.resultOf(forged) !== undefined, 'phone Host answers the unapproved DM op');
     check(dm.peer.resultOf(forged)!.status === 'forbidden', 'the phone Host refuses a DM op from an unapproved participant');
 

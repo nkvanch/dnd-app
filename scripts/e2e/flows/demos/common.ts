@@ -2,7 +2,7 @@
 // (no EXPO_PUBLIC_E2E fixtures — the frozen Creator Alpha build doesn't have that screen at all), using
 // the same uiautomator/adb driver (scripts/e2e/adb.ts) as the acceptance-test flows.
 import { Phone } from '../../adb';
-import { toTabs } from '../common';
+import { toTabs, toLiveHub } from '../common';
 
 /** Opens the Android system file picker via "Choose Package File…" and picks a file from /sdcard/Download
  *  by name. The picker is outside the app (no stable resource-ids), so this matches on visible text only,
@@ -40,7 +40,7 @@ export async function importDemoPack(phone: Phone, filename: string, expectName:
  *  built here with the production build's own UI (app/live/prepare.tsx is not E2E-gated). */
 export async function buildAutomationCampaignPrep(phone: Phone): Promise<void> {
   await toTabs(phone);
-  await phone.tap({ id: 'tab-campaigns' });
+  await toLiveHub(phone);
   await phone.tap({ id: 'live-open-prepare' });
   if (phone.visible({ id: 'prep-campaign-Automation Campaign' })) return;   // already built (idempotent)
 

@@ -1,6 +1,6 @@
 // The PHONE is an explicit Host + DM combination (the classic "one phone runs the table" setup, now a chosen
 // combination of two capabilities rather than an implicit identity). A Node Player dials it over TCP.
-import { Flow, waitUntil } from './common';
+import { Flow, waitUntil, toLiveHub } from './common';
 
 export const hostPlusDm: Flow = {
   name: 'host-plus-dm',
@@ -11,7 +11,7 @@ export const hostPlusDm: Flow = {
     const T = () => ctx.table!;
 
     await phone.launch();
-    await phone.tap({ id: 'tab-campaigns' });
+    await toLiveHub(phone);
     step('fixtures: wipe live-session data, seed the Automation Campaign (test build only)');
     await phone.tap({ id: 'live-open-e2e' });
     await phone.tap({ id: 'e2e-wipe' });

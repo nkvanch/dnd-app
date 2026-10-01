@@ -33,12 +33,23 @@ export type Flow = {
 };
 
 /**
- * The Campaigns tab's "no active campaign" view IS the live-session entry (Create/Join/Plan
- * Campaign buttons) — no separate reveal tap needed to reach it, unlike the previous floating
- * banner this replaced.
+ * The Campaigns tab's top-level buttons are now Create Campaign / Open Existing Campaign / Join
+ * Live Session (CAMPAIGN_PAGE_MODEL_SPEC.md) — Host is no longer inline there. The standalone
+ * /live screen (still the full original Host/Join/Advanced card, untouched) is one quiet link
+ * away ("Hosting without a campaign? Open Live Session ->", testID live-open-standalone) and is
+ * also where an already-connected device's live status (LiveSessionStatus — live-open-player,
+ * live-open-host, live-leave, etc.) is shown, since the Campaigns tab itself only reflects the
+ * separate, persistent campaignStore campaign now, not the temporary live session. Every flow
+ * that needs the Host/Join card OR a connected session's status goes through here.
  */
-export async function openLiveHub(phone: Phone): Promise<void> {
+export async function toLiveHub(phone: Phone): Promise<void> {
   await phone.tap({ id: 'tab-campaigns' });
+  await phone.tap({ id: 'live-open-standalone' });
+}
+
+/** @deprecated kept as an alias — use toLiveHub; name predates the Campaigns-page restructure that moved Host off the tab itself. */
+export async function openLiveHub(phone: Phone): Promise<void> {
+  await toLiveHub(phone);
   await phone.waitFor({ id: 'live-host-campaign' });
 }
 

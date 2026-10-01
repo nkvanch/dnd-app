@@ -1,7 +1,7 @@
 // The PHONE is a Player with a real character. The Host and the DM run on the PC over real TCP
 // (through a fault proxy). Proves DM change requests (modify), secret-effect isolation on a real
 // device, real derived-number changes on the sheet, and exactly-once application across a reconnect.
-import { Flow, openLiveHub, waitUntil, joinSession, toTabs } from './common';
+import { Flow, openLiveHub, toLiveHub, waitUntil, joinSession, toTabs } from './common';
 import { AUTOMATION_CAMPAIGN_ID } from '../../../src/session/fixtures';
 import type { Phone } from '../adb';
 
@@ -35,7 +35,7 @@ export const playerPhone: Flow = {
     await phone.assertPresent({ textContains: 'Fixture Hero' });
     const before = await homeStats(phone);
     check(before.ac === 10, `Fixture Hero starts with AC 10 (was ${before.ac})`);
-    await phone.tap({ id: 'tab-campaigns' });
+    await toLiveHub(phone);
 
     step('the phone joins as a PLAYER only, with its character');
     await joinSession(phone, { nick: 'Hero Player', address: '127.0.0.1', player: true, dm: false, character: HERO });
@@ -63,7 +63,7 @@ export const playerPhone: Flow = {
 
     step('DM sends a max-HP request; the phone player MODIFIES it and accepts');
     await toTabs(phone);
-    await phone.tap({ id: 'tab-campaigns' });
+    await toLiveHub(phone);
     await phone.tap({ id: 'live-open-player' });
     const r1 = dm().requestChange(me, 'Curse of the Well', [{ kind: 'max_hp', delta: -4 }]);
     await phone.assertPresent({ id: 'player-request-Curse of the Well' });
@@ -80,7 +80,7 @@ export const playerPhone: Flow = {
     step('phone loses the network; DM sends another request; reconnect delivers it exactly once');
     T().proxy!.block(true);
     await toTabs(phone);
-    await phone.tap({ id: 'tab-campaigns' });
+    await toLiveHub(phone);
     await phone.tap({ id: 'live-open-player' });
     await phone.assertPresent({ textContains: 'You are offline' }, 40000);
     const r2 = dm().requestChange(me, 'Boon of the Well', [{ kind: 'max_hp', delta: 3 }]);
@@ -106,7 +106,7 @@ export const playerPhone: Flow = {
     await phone.pause(2500);
     check((await homeStats(phone)).ac === 9, 'a new curse lowers AC again');
     await toTabs(phone);
-    await phone.tap({ id: 'tab-campaigns' });
+    await toLiveHub(phone);
     await phone.tap({ id: 'live-leave' });
     await phone.pause(1500);
     check((await homeStats(phone)).ac === 10, 'AC is back to 10 after leaving the session');

@@ -1,7 +1,7 @@
 // The PHONE is a Host-only device (Emulator A in the original topology). A Node DM and Node Players dial
 // it over real TCP (`adb forward`). Proves: Host != DM on a real device, protocol-level refusal of forged
 // DM ops by the phone's Host core, Host privacy, DM approval, Host restart persistence.
-import { Flow, waitUntil } from './common';
+import { Flow, waitUntil, toLiveHub } from './common';
 import { AUTOMATION_CAMPAIGN_ID } from '../../../src/session/fixtures';
 
 export const hostOnly: Flow = {
@@ -13,7 +13,7 @@ export const hostOnly: Flow = {
     const T = () => ctx.table!;
 
     await phone.launch();
-    await phone.tap({ id: 'tab-campaigns' });
+    await toLiveHub(phone);
     step('clean slate for live-session test data (test build fixture)');
     await phone.tap({ id: 'live-open-e2e' });
     await phone.tap({ id: 'e2e-wipe' });
@@ -78,7 +78,7 @@ export const hostOnly: Flow = {
     for (const p of [dm.peer, alice.peer, T().players.get('bob')!.peer]) p.disconnect();
     phone.stopApp();
     await phone.launch(false);
-    await phone.tap({ id: 'tab-campaigns' });
+    await toLiveHub(phone);
     await phone.tap({ id: 'live-host-campaign' });
     await phone.tap({ id: 'live-resume-hosting' });
     await phone.waitFor({ id: 'host-status' }, 20000);

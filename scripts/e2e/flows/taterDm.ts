@@ -2,7 +2,7 @@
 // The PHONE is the DM. The Host and the two Players are genuine remote peers on the PC. Paced for a <= 170 s
 // recording: real behaviour, deliberate pauses on meaningful states, no editing.
 import { projectState } from '../../../src/session/state';
-import { Flow, FlowCtx, joinSession, toTabs, waitUntil } from './common';
+import { Flow, FlowCtx, joinSession, toTabs, toLiveHub, waitUntil } from './common';
 
 const SECRETS = ['Hidden Curse', 'DMONLY', 'amulet', 'reveal at level 5', 'until remove curse'];
 
@@ -23,7 +23,7 @@ export const taterDm: Flow = {
 
     // ── setup (not the story): fixtures are seeded and the app is started clean before the story begins ──
     await phone.launch();
-    await phone.tap({ id: 'tab-campaigns' });
+    await toLiveHub(phone);
     await phone.tap({ id: 'live-open-e2e' });
     await phone.tap({ id: 'e2e-wipe' });
     await phone.tap({ id: 'e2e-seed-campaign' });
@@ -35,7 +35,7 @@ export const taterDm: Flow = {
 
     // 1. DM opens Grimoire OFFLINE (no Host exists) and opens the prepared campaign
     step('1-4: OFFLINE: open the prepared Automation Campaign; Bridge Ambush and the effects are prepared');
-    await phone.tap({ id: 'tab-campaigns' });
+    await toLiveHub(phone);
     await dwell();
     await phone.tap({ id: 'live-open-prepare' });
     await phone.tap({ id: 'prep-open-Automation Campaign' });

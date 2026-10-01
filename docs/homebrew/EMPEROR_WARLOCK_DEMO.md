@@ -525,3 +525,5 @@ Do not fake automation for:
 - terrain judgment
 - forced-movement paths
 - linked summon armies if the engine lacks authoritative linked-creature support
+
+> **Implementation update:** the real Legacy Binding (monthly d12, Council of Spirits, Two Voices, Crown of Legends), Command Dice, Imperial Edicts with level-up swapping, Pact Magic and all twelve Bound Spirits are implemented in `src/content/homebrewDemo/` — no longer the subclass workaround. What stays table-resolved is listed per feature and in [../ENGINE_UNBLOCK_EMPEROR_WARLOCK.md](../ENGINE_UNBLOCK_EMPEROR_WARLOCK.md).

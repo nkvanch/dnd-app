@@ -14,6 +14,8 @@ import { DiceRoll } from '../../engine/types';
 import { ManualRollInput } from '../ManualRollInput';
 import { Alert } from '../../utils/alert';
 import { useHomebrewStore } from '../../store/homebrewStore';
+import { AllyGrantTargetModal, chosenSourcesForFeature } from './AllyGrantsPanel';
+import type { AllyGrantSource } from '../../engine/allyGrants';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 /**
@@ -640,6 +642,16 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
   // closure 2F: carries the bypass/context decision ALONGSIDE the card, not
   // just the card alone — see PendingActionUse's own doc comment.
   const [pendingUse, setPendingUse] = useState<PendingActionUse | null>(null);
+  // Ally-targeting: a just-used feature with a chosen grant (Imperial
+  // Command, Hold Fast …) opens a target picker for the recipient.
+  const [pendingAllyGrant, setPendingAllyGrant] = useState<{ holder: Entity; sources: AllyGrantSource[] } | null>(null);
+  const homebrewItemsForGrants = useHomebrewStore(s => s.items);
+  const afterUse = useCallback((updated: Entity, card: ActionCard) => {
+    onEntityUpdate?.(updated);
+    setActiveCard(card);
+    const sources = chosenSourcesForFeature(updated, card.featureId, homebrewItemsForGrants);
+    if (sources.length > 0) setPendingAllyGrant({ holder: updated, sources });
+  }, [onEntityUpdate, homebrewItemsForGrants]);
   // Extra Attack sequence closure: which attack of the CURRENT Attack action
   // sequence comes next, plus the opaque `sequenceId` token correlating every
   // call in this sequence — transient UI-only state, never persisted (the
@@ -803,8 +815,7 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     if (castMode === 'ritual') {
       const updated = applyActionCardUse(entity, card, rules, undefined, undefined, bypassSpellPreparation, selectedSpellCastingContext, cardContent, bypassIncapacitated, castMode);
       if (updated === entity) return;
-      onEntityUpdate(updated);
-      setActiveCard(card);
+      afterUse(updated, card);
       return;
     }
     // Always run applyActionCardUse, even for cost-less cards (cantrips,
@@ -816,10 +827,9 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     requestPayment(card, undefined, payment => {
       const updated = applyActionCardUse(entity, card, rules, undefined, payment, bypassSpellPreparation, selectedSpellCastingContext, cardContent, bypassIncapacitated);
       if (updated === entity) return;
-      onEntityUpdate(updated);
-      setActiveCard(card);
+      afterUse(updated, card);
     });
-  }, [entity, rules, onEntityUpdate, requestPayment, cardContent]);
+  }, [entity, rules, onEntityUpdate, requestPayment, cardContent, afterUse]);
 
   const handleChooseOption = useCallback((option: ActivationOption) => {
     const pending = pendingUse;
@@ -830,17 +840,15 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
     if (castMode === 'ritual') {
       const updated = applyActionCardUse(entity, card, rules, option, undefined, bypassSpellPreparation, selectedSpellCastingContext, cardContent, bypassIncapacitated, castMode);
       if (updated === entity) return;
-      onEntityUpdate(updated);
-      setActiveCard(card);
+      afterUse(updated, card);
       return;
     }
     requestPayment(card, option, payment => {
       const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, cardContent, bypassIncapacitated);
       if (updated === entity) return;
-      onEntityUpdate(updated);
-      setActiveCard(card);
+      afterUse(updated, card);
     });
-  }, [entity, rules, onEntityUpdate, pendingUse, requestPayment, cardContent]);
+  }, [entity, rules, onEntityUpdate, pendingUse, requestPayment, cardContent, afterUse]);
 
   const handleToggleFavorite = useCallback((card: ActionCard) => {
     if (onEntityUpdate) onEntityUpdate(toggleFavoriteTag(entity, card));
@@ -933,6 +941,12 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
         onChoose={handleChooseOption}
         onClose={() => setPendingUse(null)}
         bypassIncapacitated={pendingUse?.bypassIncapacitated}
+      />
+      <AllyGrantTargetModal
+        holder={pendingAllyGrant?.holder ?? null}
+        sources={pendingAllyGrant?.sources ?? []}
+        onClose={() => setPendingAllyGrant(null)}
+        onHolderUpdate={e => onEntityUpdate?.(e)}
       />
     </ScrollView>
   );

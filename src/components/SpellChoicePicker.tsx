@@ -47,7 +47,9 @@ export function SpellChoicePicker({
   const homebrewSpells = useHomebrewStore(s => s.spells);
 
   const isCantripChoice = choice.definition.id.includes('cantrip');
-  const classId = entity.identity.classId;
+  const homebrewClasses = useHomebrewStore(s => s.classes);
+  const ownClassId = entity.identity.classId;
+  const classId = homebrewClasses.find(c => c.id === ownClassId)?.spellListClassId ?? ownClassId;
   const spellcasting = entity.spellcasting;
 
   // Highest spell slot tier this entity currently has any slots in — caps
@@ -98,7 +100,10 @@ export function SpellChoicePicker({
       } else {
         return false;
       }
-      if (isCantripChoice) {
+      if (choice.definition.arcanum) {
+        // Arcanum pick: exactly one spell level, regardless of the slot tiers you have.
+        if (s.level !== choice.definition.arcanum.spellLevel) return false;
+      } else if (isCantripChoice) {
         if (s.level !== 0) return false;
       } else {
         if (s.level === 0 || s.level > maxCastableLevel) return false;

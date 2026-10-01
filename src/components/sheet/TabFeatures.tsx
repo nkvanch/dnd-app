@@ -7,6 +7,11 @@ import { resolveChoice, applyExpertiseChoiceToEntity, applyToolChoiceToEntity, a
 import { recomputeDerived } from '../../engine/pipeline';
 import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from '../../engine/choiceEligibility';
 import { Alert } from '../../utils/alert';
+import { AuraChecklistPanel, ReceivedGrantsPanel } from './AllyGrantsPanel';
+import { GrantFeatureModal, FeatureGrantLedger } from './GrantFeatureModal';
+import { ModeGroupPanels } from './ModeGroupPanel';
+import { ActiveStatesPanel } from './ActiveStatesPanel';
+import { SwapChoicePanel } from './SwapChoicePanel';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { SubclassPicker } from '../SubclassPicker';
 import { InfusionPicker } from '../InfusionPicker';
@@ -24,7 +29,7 @@ import { LANGUAGE_CATEGORY_LABELS, LANGUAGE_CATEGORY_ORDER } from '../../content
 import { ALL_SKILL_OPTIONS } from '../../content/skills';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
-const SOURCE_ORDER = ['race','class','subclass','background','feat','item','spell','condition','campaign','manual'] as const;
+const SOURCE_ORDER = ['race','class','subclass','mode','background','feat','item','spell','condition','campaign','manual'] as const;
 const SOURCE_LABELS: Record<string, string> = {
   race: 'Race', class: 'Class', subclass: 'Subclass',
   background: 'Background', feat: 'Feat', item: 'Item',
@@ -34,6 +39,7 @@ const SOURCE_LABELS: Record<string, string> = {
   // features (TabCharacter.tsx), which are always-overwritten single slots,
   // not many independently-removable entries like 'manual' features are.
   manual: 'Manual',
+  mode: 'Active Mode',
 };
 
 // ALL_SKILL_OPTIONS now comes from ../../content/skills — some subclass
@@ -126,6 +132,7 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
 }) {
   const { features, spellcasting, derived } = entity;
   const [skillSelections, setSkillSelections] = useState<Record<string, string[]>>({});
+  const [grantRewardOpen, setGrantRewardOpen] = useState(false);
   const [asiChoiceOpen, setAsiChoiceOpen] = useState<string | null>(null);
   const [subclassChoiceOpen, setSubclassChoiceOpen] = useState<string | null>(null);
   const [infusionChoiceOpen, setInfusionChoiceOpen] = useState<string | null>(null);
@@ -256,6 +263,12 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
+      <ActiveStatesPanel entity={entity} onEntityUpdate={onEntityUpdate} />
+      <ModeGroupPanels entity={entity} rules={rules} onEntityUpdate={onEntityUpdate} />
+      <SwapChoicePanel entity={entity} rules={rules} onEntityUpdate={onEntityUpdate} />
+      <ReceivedGrantsPanel entity={entity} rules={rules} onEntityUpdate={onEntityUpdate} />
+      <AuraChecklistPanel entity={entity} onEntityUpdate={onEntityUpdate} />
+
       {/* Header-level identity action — changes the whole background, not
           one feature, so it's kept visually separate from the feature-list
           actions below (Phase 4 of live editing). */}
@@ -277,6 +290,12 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
           </Pressable>
         </View>
       )}
+      {canResolve && (
+        <Pressable style={styles.addFeatBtn} onPress={() => setGrantRewardOpen(true)}>
+          <Text style={styles.addFeatBtnTxt}>🎁 Grant Reward Feature (DM)</Text>
+        </Pressable>
+      )}
+      <FeatureGrantLedger entity={entity} rules={rules} onEntityUpdate={onEntityUpdate} />
 
       {/* Pending level-up / creation choices */}
       {pendingChoices.length > 0 && (
@@ -492,9 +511,17 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
       )}
 
       {/* Feature groups */}
-      {SOURCE_ORDER.filter(k => groups.has(k)).map(kind => (
-        <CollapsibleGroup key={kind} title={SOURCE_LABELS[kind] ?? kind}>
-          {groups.get(kind)!.map(f => (
+      {SOURCE_ORDER.filter(k => groups.has(k)).flatMap(kind => {
+        // Mode-granted features are headed by their group's own noun
+        // ("Bound Spirit"), one section per label — never the generic word.
+        const parts: { key: string; title: string; list: FeatureInstance[] }[] = kind === 'mode'
+          ? Array.from(new Set(groups.get(kind)!.map(f => f.sourceLabel ?? SOURCE_LABELS.mode))).map(label => ({
+              key: `mode:${label}`, title: label.toUpperCase(), list: groups.get(kind)!.filter(f => (f.sourceLabel ?? SOURCE_LABELS.mode) === label) }))
+          : [{ key: kind, title: SOURCE_LABELS[kind] ?? kind, list: groups.get(kind)! }];
+        return parts;
+      }).map(part => (
+        <CollapsibleGroup key={part.key} title={part.title}>
+          {part.list.map(f => (
             <FeatureRow
               key={f.id}
               feature={f}
@@ -570,6 +597,16 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
           <Text style={styles.emptyIcon}>📜</Text>
           <Text style={styles.emptyTxt}>No features yet.</Text>
         </View>
+      )}
+
+      {rules && onEntityUpdate && (
+        <GrantFeatureModal
+          visible={grantRewardOpen}
+          entity={entity}
+          rules={rules}
+          onConfirm={updated => { onEntityUpdate(updated); setGrantRewardOpen(false); }}
+          onCancel={() => setGrantRewardOpen(false)}
+        />
       )}
 
       {/* ASI / Feat resolution modal — REPEATED-CHOICE-1: chains through every

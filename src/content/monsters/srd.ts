@@ -8866,6 +8866,8 @@ export const monsterDustMephit: MonsterTemplate = {
       description: 'When the mephit dies, it explodes in a burst of dust. Each creature within 5 ft. must succeed a DC 10 CON save or be blinded for 1 minute (repeatable each turn, ending on a success).',
       source: { kind: 'race', refId: 'dust_mephit' }, level: null,
       effects: [], actions: [], choices: [], passive: true,
+      // Fires when the creature drops to 0 HP: queues the burst (with a ready damage roll) for the DM to apply.
+      onZeroHp: { text: 'each creature within 5 ft: DC 10 CON save or blinded for 1 minute (repeats the save each turn)', area: '5 ft', save: { ability: 'con', dc: 10, onSuccess: 'none' } },
     },
     {
       id: 'dust_mephit_innate_spellcasting', name: 'Innate Spellcasting',
@@ -8909,6 +8911,8 @@ export const monsterIceMephit: MonsterTemplate = {
       description: 'When the mephit dies, it explodes in a burst of jagged ice. Each creature within 5 ft. must make a DC 10 DEX save, taking 4 (1d8) slashing damage on a failure, half on a success.',
       source: { kind: 'race', refId: 'ice_mephit' }, level: null,
       effects: [], actions: [], choices: [], passive: true,
+      // Fires when the creature drops to 0 HP: queues the burst (with a ready damage roll) for the DM to apply.
+      onZeroHp: { text: 'each creature within 5 ft: DC 10 DEX save, 1d8 slashing on a failure, half on a success', area: '5 ft', dice: '1d8', damageType: 'slashing', save: { ability: 'dex', dc: 10, onSuccess: 'half' } },
     },
     {
       id: 'ice_mephit_false_appearance', name: 'False Appearance',
@@ -8961,6 +8965,8 @@ export const monsterMagmaMephit: MonsterTemplate = {
       description: 'When the mephit dies, it explodes in a burst of lava. Each creature within 5 ft. must make a DC 11 DEX save, taking 7 (2d6) fire damage on a failure, half on a success.',
       source: { kind: 'race', refId: 'magma_mephit' }, level: null,
       effects: [], actions: [], choices: [], passive: true,
+      // Fires when the creature drops to 0 HP: queues the burst (with a ready damage roll) for the DM to apply.
+      onZeroHp: { text: 'each creature within 5 ft: DC 11 DEX save, 2d6 fire on a failure, half on a success', area: '5 ft', dice: '2d6', damageType: 'fire', save: { ability: 'dex', dc: 11, onSuccess: 'half' } },
     },
     {
       id: 'magma_mephit_false_appearance', name: 'False Appearance',
@@ -9013,6 +9019,8 @@ export const monsterSteamMephit: MonsterTemplate = {
       description: 'When the mephit dies, it explodes in a cloud of steam. Each creature within 5 ft. must succeed a DC 10 DEX save or take 4 (1d8) fire damage.',
       source: { kind: 'race', refId: 'steam_mephit' }, level: null,
       effects: [], actions: [], choices: [], passive: true,
+      // Fires when the creature drops to 0 HP: queues the burst (with a ready damage roll) for the DM to apply.
+      onZeroHp: { text: 'each creature within 5 ft: DC 10 DEX save or take 1d8 fire', area: '5 ft', dice: '1d8', damageType: 'fire', save: { ability: 'dex', dc: 10, onSuccess: 'none' } },
     },
     {
       id: 'steam_mephit_innate_spellcasting', name: 'Innate Spellcasting',
@@ -13058,6 +13066,8 @@ export const monsterMagmin: MonsterTemplate = {
       description: 'When the magmin dies, it explodes in a burst of fire and magma. Each creature within 10 ft. must make a DC 11 DEX save, taking 7 (2d6) fire damage on a failure, half on a success. Unattended flammable objects in the area ignite.',
       source: { kind: 'race', refId: 'magmin' }, level: null,
       effects: [], actions: [], choices: [], passive: true,
+      // Fires when the creature drops to 0 HP: queues the burst (with a ready damage roll) for the DM to apply.
+      onZeroHp: { text: 'each creature within 10 ft: DC 11 DEX save, 2d6 fire on a failure, half on a success; unattended flammable objects ignite', area: '10 ft', dice: '2d6', damageType: 'fire', save: { ability: 'dex', dc: 11, onSuccess: 'half' } },
     },
     {
       id: 'magmin_ignited_illumination', name: 'Ignited Illumination',

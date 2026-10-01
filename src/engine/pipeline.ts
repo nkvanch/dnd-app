@@ -21,6 +21,9 @@ import { itemRepo } from '../content/itemRepo';
 import { isMartialWeapon } from '../content/items/itemBrowse';
 import { effectiveItemFeatures, effectiveWeaponAttackFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition } from './itemMechanics';
 import { getClassEntry } from './multiclass';
+import { selfAuraGrants } from './allyAuras';
+import { reconcileModes } from './modes';
+import { resourceInRange } from './resourceGates';
 import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -120,6 +123,53 @@ export function effectiveAbilityScores(entity: Entity): Entity['stats'] {
   return scores;
 }
 
+/**
+ * Re-derives the holder's OWN aura grants (an `includeSelf` AllyGrantSpec:
+ * Aura of Protection's "you and friendly creatures"). Computed here rather
+ * than by the roster-wide syncAllyGrants so the holder is never stale. The
+ * ability score used is read with the self-aura grants stripped, which
+ * avoids a feedback loop when a grant itself modifies that ability.
+ * Returns the same object when nothing changes.
+ */
+function refreshSelfAuras(entity: Entity, homebrewItems: readonly import('./types').Item[] = []): Entity {
+  const existing = entity.receivedGrants ?? [];
+  const hadSelf = existing.some(g => g.mode === 'aura' && g.sourceEntityId === entity.id);
+  const hasSource = entity.features.some(f => f.allyGrants?.length)
+    || entity.inventory.equipped.some(i => i.features.some(f => f.allyGrants?.length));
+  if (!hadSelf && !hasSource) return entity;
+  const stripped: Entity = hadSelf
+    ? { ...entity, receivedGrants: existing.filter(g => !(g.mode === 'aura' && g.sourceEntityId === entity.id)) }
+    : entity;
+  const scores = applyStatModifiers(stripped.stats, collectAllEffects(stripped, homebrewItems));
+  const fresh = selfAuraGrants(stripped, scores, homebrewItems);
+  if (fresh.length === 0 && !hadSelf) return entity;
+  const old = existing.filter(g => g.mode === 'aura' && g.sourceEntityId === entity.id);
+  if (old.length === fresh.length && fresh.every(f => {
+    const o = old.find(x => x.id === f.id);
+    return o && o.label === f.label && JSON.stringify(o.effects) === JSON.stringify(f.effects);
+  })) return entity;
+  const rest = existing.filter(g => !(g.mode === 'aura' && g.sourceEntityId === entity.id));
+  return { ...entity, receivedGrants: [...rest, ...fresh] };
+}
+
+/**
+ * Resources whose maximum tracks the proficiency bonus (Command Dice = PB):
+ * rewrites `maximum` to the current PB, preserving what has been spent.
+ * Returns the same object when nothing changes.
+ */
+function scaleProficiencyResources(entity: Entity): Entity {
+  if (!entity.resources.custom.some(r => r.scalesWith === 'proficiency')) return entity;
+  const pb = proficiencyBonus(entity.identity.level);
+  let changed = false;
+  const custom = entity.resources.custom.map(r => {
+    if (r.scalesWith !== 'proficiency' || r.maximum === pb) return r;
+    changed = true;
+    const spent = Math.max(0, r.maximum - r.current);
+    return { ...r, maximum: pb, current: Math.max(0, Math.min(pb, pb - spent)) };
+  });
+  return changed ? { ...entity, resources: { ...entity.resources, custom } } : entity;
+}
+
 // ── Main pipeline ─────────────────────────────────────────────────────────────
 
 /**
@@ -145,7 +195,7 @@ export function recomputeDerived(
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
 ): Entity {
   // Use a mutable local reference so we can apply grant_proficiency effects
-  let entity = recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells));
+  let entity = refreshSelfAuras(scaleProficiencyResources(recomputeResourceMaximums(reconcileModes(initializeEntitlementInputs(entityParam, content.homebrewSpells)))), content.items);
 
   const allEffects    = collectAllEffects(entity, content.items);
   let effectiveStats = applyStatModifiers(entity.stats, allEffects);
@@ -195,11 +245,22 @@ export function recomputeDerived(
   for (const a of entDerived.armor)     if (!newGrantedArmor.some(x => x.toLowerCase() === a.toLowerCase()))   newGrantedArmor.push(a);
   for (const l of entDerived.languages) if (!newGrantedLanguages.some(x => x.toLowerCase() === l.toLowerCase())) newGrantedLanguages.push(l);
 
-  for (const ae of profEffects) {
+  // "Gain proficiency — or expertise if you already have it" effects
+  // (expertiseIfProficient) are resolved AFTER every other source has been
+  // counted, so the answer never depends on effect order: already trained from
+  // an entitlement or another effect → expertise; otherwise → proficiency.
+  const orderedProfEffects = [
+    ...profEffects.filter(ae => !ae.effect.expertiseIfProficient),
+    ...profEffects.filter(ae => ae.effect.expertiseIfProficient),
+  ];
+  for (const ae of orderedProfEffects) {
     // target format: 'skill:perception', 'skill:athletics', etc.
     if (ae.effect.target.startsWith('skill:')) {
       const skillName = ae.effect.target.slice(6) as SkillName;
-      if (ae.effect.operation === 'add') newGrantedSkills.add(skillName);
+      if (ae.effect.expertiseIfProficient && ae.effect.operation === 'add') {
+        if (newGrantedSkills.has(skillName)) newExpertiseSkills.add(skillName);
+        else newGrantedSkills.add(skillName);
+      } else if (ae.effect.operation === 'add') newGrantedSkills.add(skillName);
       else if (ae.effect.operation === 'multiply') { newGrantedSkills.add(skillName); newExpertiseSkills.add(skillName); }
     }
     // target format: 'tool:thieves_tools', 'tool:herbalism_kit', etc.
@@ -432,7 +493,23 @@ export function recomputeDerived(
       : current + override.value;
   }
 
-  const withDerived = { ...entity, derived };
+  // Maximum-HP bonus effects (target 'max_hp'): reconcile the delta against
+  // what is already baked into hp.maximum (see HPBlock.bonusMax).
+  const maxHpBonus = resolveEffectsForTarget('max_hp', allEffects, rules) as number;
+  const previousBonus = entity.resources.hp.bonusMax ?? 0;
+  let hpBlock = entity.resources.hp;
+  if (maxHpBonus !== previousBonus) {
+    const delta = maxHpBonus - previousBonus;
+    const maximum = Math.max(1, hpBlock.maximum + delta);
+    hpBlock = {
+      ...hpBlock, maximum, bonusMax: maxHpBonus,
+      // A gain never revives a creature at 0 HP; it only raises a living one.
+      current: delta > 0 && hpBlock.current > 0 ? Math.min(maximum, hpBlock.current + delta) : Math.min(maximum, hpBlock.current),
+    };
+  }
+  const withDerived = hpBlock === entity.resources.hp
+    ? { ...entity, derived }
+    : { ...entity, derived, resources: { ...entity.resources, hp: hpBlock } };
 
   // Action cards depend on the just-computed `derived` (available-slot
   // checks, etc.) and on entity.features/inventory — compute them once,
@@ -488,6 +565,9 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
       // a bonus. See Effect.situational's own doc comment.
       if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
 
+      // Gate: resource-threshold effect (Pressure tiers) — see Effect.requiresResource.
+      if (effect.requiresResource && !resourceInRange(entity, effect.requiresResource)) continue;
+
       // Gate: skip if this feature's source condition has its effects suppressed
       if (fi.source.kind === 'condition') {
         const sourceCond = entity.conditions.find(c => c.id === fi.source.refId);
@@ -542,6 +622,7 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
         }
         if (effect.requiresNoArmorOrShield && anyArmorOrShieldEquipped) continue;
         if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
+        if (effect.requiresResource && !resourceInRange(entity, effect.requiresResource)) continue;
         effects.push({
           effect,
           sourceName: fi.name,
@@ -584,6 +665,16 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
       for (const t of form.damageResistances ?? [])    pushDefense(t, 'resistance');
       for (const t of form.damageImmunities ?? [])      pushDefense(t, 'immunity');
       for (const t of form.damageVulnerabilities ?? []) pushDefense(t, 'vulnerability');
+    }
+  }
+
+  // 4. Grants received from OTHER creatures' features (auras / chosen grants —
+  //    see AllyGrantSpec). Effects were snapshotted onto this entity when the
+  //    grant landed; they apply exactly like any other effect and vanish when
+  //    the grant is dismissed, expires, or the aura source stops granting.
+  for (const g of entity.receivedGrants ?? []) {
+    for (const effect of g.effects) {
+      effects.push({ effect, sourceName: `${g.label} (${g.sourceName})`, sourceId: g.id, appliedAt: 0, sourceKind: 'ally_grant' });
     }
   }
 

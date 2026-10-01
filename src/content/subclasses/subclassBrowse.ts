@@ -166,6 +166,20 @@ export function subclassEntriesForClassMerged(classId: string, homebrew: Homebre
   return [...officialEntries, ...homebrewEntries];
 }
 
+/**
+ * The noun the UI uses for one subclass of `classId`: a homebrew subclass's own
+ * displayLabel, else the class's subclassLabel, else "Subclass". Shared by
+ * every picker so a class that calls them "Bound Spirits" never shows
+ * "Subclass" anywhere.
+ */
+export function subclassLabelFor(
+  classId: string | null | undefined, homebrew: HomebrewSubclass[], classes: readonly { id: string; subclassLabel?: string }[] = [],
+): string {
+  if (!classId) return 'Subclass';
+  const own = homebrew.find(s => s.classId === classId && s.displayLabel)?.displayLabel;
+  return own ?? classes.find(c => c.id === classId)?.subclassLabel ?? 'Subclass';
+}
+
 /** Look up a single subclass entry (official or homebrew) by classId + subclass id. */
 export function getSubclassEntryMerged(classId: string, subclassId: string, homebrew: HomebrewSubclass[], activeRuleset?: RulesetId): SubclassEntry | null {
   return subclassEntriesForClassMerged(classId, homebrew, activeRuleset).find(s => s.id === subclassId) ?? null;

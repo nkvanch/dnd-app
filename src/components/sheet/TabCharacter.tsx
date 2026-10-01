@@ -19,7 +19,8 @@ import { rollDie } from '../../engine/leveling';
 import { levelUp, levelUpClass, calculateLevelUpHpGain, isValidHpRoll } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
 import { getClassLevels } from '../../engine/multiclass';
-import { spendHitDie, spendHitDieManual, currentHitDieSize, spendableHitDicePools, hasSpentDawnResources, takeDawn } from '../../engine/rest';
+import { spendHitDie, spendHitDieManual, currentHitDieSize, spendableHitDicePools, hasSpentDawnResources, takeDawnDetailed } from '../../engine/rest';
+import { Alert } from '../../utils/alert';
 import { rollExpression, doubleDiceCount } from '../../engine/dice';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
@@ -1691,16 +1692,20 @@ function TabCharacterInner({
       )}
 
       {/* Resources */}
-      {resources.custom.length > 0 && (
+      {resources.custom.some(r => !r.inactive) && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>RESOURCES</Text>
           {/* Dawn is an explicit event, not a rest: only offered when a dawn resource is spent. */}
           {hasSpentDawnResources(entity) && (
-            <Pressable style={styles.dawnBtn} onPress={() => onEntityUpdate(takeDawn(entity, rules))} accessibilityLabel="Dawn: restore resources that recharge at dawn">
+            <Pressable style={styles.dawnBtn} onPress={() => {
+              const { entity: next, rolls } = takeDawnDetailed(entity, rules);
+              onEntityUpdate(next);
+              if (rolls.length) Alert.alert('Dawn', rolls.map(r => `${r.name}: rolled ${r.dice} = ${r.total} (${r.before} → ${r.after})`).join('\n'));
+            }} accessibilityLabel="Dawn: restore resources that recharge at dawn">
               <Text style={styles.dawnBtnTxt}>☀ Dawn — restore dawn resources</Text>
             </Pressable>
           )}
-          {resources.custom.map(r => {
+          {resources.custom.filter(r => !r.inactive).map(r => {
             // Table-first recharge: the +/- controls below are already the
             // PRIMARY "mark recharged" path (a DM/player just taps + after
             // rolling physically). This adds only the secondary "Roll

@@ -15,7 +15,7 @@ import { useCampaignStore } from '../../src/store/campaignStore';
 import { useSessionStore }  from '../../src/store/sessionStore';
 import { useCombatTurnStore } from '../../src/store/combatTurnStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn, endConcentration } from '../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn, endConcentration, dismissPendingTrigger } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { equipItem, unequipItem, toggleAttunement, generateItemInstanceId, isStatefulItem, applyItemInfusion, removeItemInfusion } from '../../src/engine/inventory';
@@ -30,6 +30,8 @@ import { spellIdsOnEntity } from '../../src/content/spellRepo.types';
 import { getInfusion, maxInfusedItems } from '../../src/content/infusions';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
 import { TabExploration } from '../../src/components/sheet/TabExploration';
+import { PendingTriggersBanner } from '../../src/components/PendingTriggersBanner';
+import { syncAllyGrantsInStore } from '../../src/store/allyGrantSync';
 import { TabActions }   from '../../src/components/sheet/TabActions';
 import { TabAbilities } from '../../src/components/sheet/TabAbilities';
 import { TabFeatures }  from '../../src/components/sheet/TabFeatures';
@@ -128,6 +130,30 @@ export default function CharacterSheetScreen() {
     })();
     return () => { cancelled = true; };
   }, [entity, getMergedContentDB, homebrewSubclasses]);
+
+  // Ally auras: when this character's aura state changes (a checklist tick,
+  // a planted-standard flag, dropping to 0 HP, gaining/losing an aura
+  // feature), re-sync every aura across the characters on this device. The
+  // signature keeps this from firing on unrelated edits; the sync itself only
+  // writes characters whose receivedGrants actually changed.
+  const auraSignature = entity
+    ? JSON.stringify([
+        entity.auraMembers ?? null,
+        entity.targetModes ?? null,
+        entity.features.filter(f => f.modeGroup?.scope === 'target').map(f => f.id),
+        entity.conditionMonitor.flags,
+        entity.resources.hp.current === 0,
+        entity.conditions.map(c => c.id),
+        entity.features.filter(f => f.allyGrants?.length).map(f => f.id),
+        entity.inventory.equipped.map(i => [i.id, i.attuned]),
+        entity.receivedGrants?.some(g => g.sourceEntityId === entity.id) ?? false,
+      ])
+    : '';
+  useEffect(() => {
+    if (!entity) return;
+    syncAllyGrantsInStore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auraSignature]);
 
   // Track "last opened" explicitly — the Home screen's old heuristic
   // (last entry in the in-memory characters array) reflected creation
@@ -721,6 +747,7 @@ export default function CharacterSheetScreen() {
           different character or switching tabs always gets a fresh
           boundary — a crash on one tab doesn't leave every other tab (or
           every other character) stuck showing the same stale fallback. */}
+      <PendingTriggersBanner entity={entity} onDismiss={tid => mutate(e => dismissPendingTrigger(e, tid), 'Resolved trigger', 'combat')} />
       <ErrorBoundary key={`${entity.id}_${activeTab}`}>
       <View style={styles.tabContent}>
         {activeTab === 'character' && (

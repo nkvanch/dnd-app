@@ -13,7 +13,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { useSessionStore }   from '../../src/store/sessionStore';
 import { useEncounterStore } from '../../src/store/encounterStore';
 import { useHomebrewStore }  from '../../src/store/homebrewStore';
-import { applyDamage, applyHealing, applyWildShapeDamage, endWildShape } from '../../src/engine/combat';
+import { applyDamage, applyHealing, applyWildShapeDamage, endWildShape, dismissPendingTrigger } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
 import { generateActionCard } from '../../src/engine/actionCards';
 import { applyActionCardUse } from '../../src/engine/actionUse';
@@ -25,6 +25,7 @@ import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { Entity, CampaignRules, ActionCard, ActivationOption } from '../../src/engine/types';
 import { deepDiff, deepMerge } from '../../src/sync/diff';
+import { PendingTriggersBanner } from '../../src/components/PendingTriggersBanner';
 import { InitiativeEntry, rollInitiativeValue, rollRecharge, findRechargeableFeatures } from '../../src/engine/combat';
 import { DEFAULT_RULES } from '../../src/store/characterStore';
 import { ConcentrationModal } from '../../src/components/sheet/ConcentrationModal';
@@ -257,6 +258,7 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
         </Text>
         <Pressable onPress={onClose}><Text style={styles.closeTxt}>✕</Text></Pressable>
       </View>
+      <PendingTriggersBanner entity={entity} onDismiss={tid => onUpdate(dismissPendingTrigger(entity, tid), `${entity.identity.name}: trigger resolved`)} />
 
       {/* Action buttons */}
       <View style={styles.quickBtns}>

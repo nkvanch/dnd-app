@@ -2,7 +2,9 @@
 // FILE: src/engine/combat.ts
 // PROJECT: Initiative Tracker, Concentration Gate & Combat Clock
 // ============================================================================
-import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect, DurationTracker, FeatureActivation, CustomResource } from './types';
+import { rollExpression } from './dice';
+import { INCAPACITATING_CONDITION_IDS } from './allyAuras';
+import { Entity, CampaignRules, PendingTrigger, Spell, FeatureInstance, AbilityEffect, DurationTracker, FeatureActivation, CustomResource } from './types';
 import { recomputeDerived, collectAllEffects } from './pipeline';
 import { resolveResistance } from './resolver';
 import { tickDurations, applyCondition, removeCondition } from './conditions';
@@ -245,7 +247,7 @@ export function endTurn(
 
   // Tick durations on the entity whose turn just ended
   const durationTicked = entities.map(e =>
-    e.id === current.entityId ? tickConcentrationDuration(tickDurations(e, rules), rules) : e
+    e.id === current.entityId ? tickReceivedGrants(tickConcentrationDuration(tickDurations(e, rules), rules), rules) : e
   );
 
   // Advance turn pointer; wrap around at the end of the order
@@ -276,6 +278,24 @@ export function endTurn(
     },
     entities: updatedEntities,
   };
+}
+
+/**
+ * Ticks round-based durations on CHOSEN grants (called at the end of the
+ * recipient's turn, alongside condition durations). Approximation: RAW
+ * durations like "until the start of your next turn" are measured from the
+ * holder's turn; Grimoire counts the recipient's own turn ends. Dismiss by
+ * hand when the table says otherwise. Aura grants have no duration.
+ */
+export function tickReceivedGrants(entity: Entity, rules: CampaignRules = DEFAULT_RULES): Entity {
+  const grants = entity.receivedGrants;
+  if (!grants?.some(g => g.duration?.unit === 'rounds')) return entity;
+  const next = grants.flatMap(g => {
+    if (g.duration?.unit !== 'rounds') return [g];
+    const remaining = g.duration.remaining - 1;
+    return remaining <= 0 ? [] : [{ ...g, duration: { ...g.duration, remaining } }];
+  });
+  return recomputeDerived({ ...entity, receivedGrants: next }, rules);
 }
 
 /** Ends the encounter and resets combat state. */
@@ -662,7 +682,40 @@ export function applyDamage(
 
   // Concentration check is the player's responsibility via the UI modal.
   // Do NOT call concentrationCheck here — it would run twice alongside the UI roll.
+  //
+  // Dropping to 0 HP (from above 0) fires the creature's onZeroHp triggers.
+  if (newCurrent === 0 && !wasAtZero) return fireZeroHpTriggers(recomputeDerived(updated, rules), rules);
   return recomputeDerived(updated, rules);
+}
+
+/**
+ * Fires every active feature's ZeroHpTrigger: queues a PendingTrigger (rules
+ * text plus one ready damage roll if the trigger has dice) for the table to
+ * resolve, and applies the trigger's selfEffects to the creature itself.
+ * Damage to OTHER creatures is never applied here — see ZeroHpTrigger.
+ */
+export function fireZeroHpTriggers(entity: Entity, rules: CampaignRules = DEFAULT_RULES, now: string = new Date().toISOString()): Entity {
+  const sources = entity.features.filter(f => f.isActive && f.onZeroHp);
+  if (sources.length === 0) return entity;
+  const queued: PendingTrigger[] = sources.map(f => {
+    const t = f.onZeroHp!;
+    let rolled: PendingTrigger['rolled'];
+    if (t.dice) {
+      try { rolled = { dice: t.dice, total: rollExpression(t.dice, f.name).total, damageType: t.damageType }; } catch { rolled = undefined; }
+    }
+    return { id: `${f.id}:${now}`, featureId: f.id, name: f.name, text: t.text, area: t.area, rolled, save: t.save, firedAt: now };
+  });
+  let next: Entity = { ...entity, pendingTriggers: [...(entity.pendingTriggers ?? []), ...queued] };
+  for (const f of sources) {
+    if (f.onZeroHp!.selfEffects?.length) next = applyAbilityEffects(next, f.onZeroHp!.selfEffects, rules);
+  }
+  return next;
+}
+
+/** The table resolved a fired trigger (applied the damage, ruled on it) — drop it from the queue. */
+export function dismissPendingTrigger(entity: Entity, triggerId: string): Entity {
+  if (!(entity.pendingTriggers ?? []).some(t => t.id === triggerId)) return entity;
+  return { ...entity, pendingTriggers: entity.pendingTriggers!.filter(t => t.id !== triggerId) };
 }
 
 /** Heals an entity, capped at maximum HP. Any healing above 0 HP clears death saves. */
@@ -739,7 +792,6 @@ export function recordDeathSave(
  * this also doubles as a fixed priority when more than one is active at
  * once (deterministic, not "whichever happened to be pushed last").
  */
-const INCAPACITATING_CONDITION_IDS: readonly string[] = ['unconscious', 'paralyzed', 'stunned', 'petrified', 'incapacitated'];
 
 /**
  * True if the entity is incapacitated for normal gameplay ActionCard use —

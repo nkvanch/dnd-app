@@ -48,3 +48,5 @@ Checked and confirmed working, not assumed, so a future review doesn't waste tim
 - **Powers not being forced through the spell system.** `Feature.activation` and `Feature.abilityEffects` are the general-purpose mechanism every content type already uses — a psionic-style power can be an ordinary Feature with its own resource cost, no need to route through `Spell`.
 - **Companion actions on the owner's sheet.** `CompanionSection.tsx` renders real `companion.actionCards` with working `Pressable` triggers, not just a status display.
 - **Attack, save, and damage auto-resolution — disclosed, not a gap in this investigation.** Grimoire computes the numbers a feature produces but never rolls dice or resolves outcomes; this is an existing, disclosed design decision that applies equally to every class, not something new found here.
+
+> **Update (engine unblock branch):** item charges, ally-targeting effects, mid-campaign tiered grants, mode groups, dice recharge amounts, threshold effects and death triggers are now implemented — see [ENGINE_UNBLOCK_EMPEROR_WARLOCK.md](ENGINE_UNBLOCK_EMPEROR_WARLOCK.md).

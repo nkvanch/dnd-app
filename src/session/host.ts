@@ -551,6 +551,17 @@ export class SessionHost {
         return done('applied');
       }
 
+      case 'dm.set_combatant_conditions': {
+        const enc = this.state.encounters[body.encounterId];
+        if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
+        const target = enc.combatants.find(c => c.id === body.combatantId);
+        if (!target) return done('rejected', 'unknown-combatant');
+        if (!Array.isArray(body.conditions) || body.conditions.length > 20 || !body.conditions.every(c => str(c))) return done('rejected', 'malformed');
+        this.commit({ t: 'combatant_conditions_set', encounterId: enc.id, combatantId: target.id, conditions: body.conditions }, pid,
+          { kind: 'encounter', text: `${target.name}'s conditions updated`, scope: 'dm', refId: enc.id });
+        return done('applied');
+      }
+
       case 'dm.set_combatant_visibility': {
         const enc = this.state.encounters[body.encounterId];
         if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
@@ -558,8 +569,8 @@ export class SessionHost {
         if (!target) return done('rejected', 'unknown-combatant');
         const v = body.visibility;
         if (!isObj(v) || typeof v.name !== 'boolean' || typeof v.hpState !== 'boolean'
-          || typeof v.exactHp !== 'boolean' || typeof v.ac !== 'boolean') return done('rejected', 'malformed');
-        const visibility: MonsterVisibility = { name: v.name, hpState: v.hpState, exactHp: v.exactHp, ac: v.ac };
+          || typeof v.exactHp !== 'boolean' || typeof v.ac !== 'boolean' || typeof v.conditions !== 'boolean') return done('rejected', 'malformed');
+        const visibility: MonsterVisibility = { name: v.name, hpState: v.hpState, exactHp: v.exactHp, ac: v.ac, conditions: v.conditions };
         this.commit({ t: 'combatant_visibility_set', encounterId: enc.id, combatantId: target.id, visibility }, pid,
           { kind: 'encounter', text: `${target.name}'s visibility changed`, scope: 'dm', refId: enc.id });
         // The event alone only carries the new flags, not whatever field values just became

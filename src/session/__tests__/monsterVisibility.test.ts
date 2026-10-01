@@ -43,7 +43,7 @@ describe('default visibility matches pre-existing behavior (no regression)', () 
 describe('dm.set_combatant_visibility', () => {
   it('Hidden preset: name replaced with a placeholder, hpState/ac/exactHp all omitted', async () => {
     const { rig, dm, alice, encounterId, combatantId } = await tableWithEncounter();
-    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: false, hpState: false, exactHp: false, ac: false });
+    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: false, hpState: false, exactHp: false, ac: false, conditions: false });
     await rig.settle();
     const seen = alice.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!;
     expect(seen.name).toBe('Unknown Creature');
@@ -54,7 +54,7 @@ describe('dm.set_combatant_visibility', () => {
 
   it('the DM\'s own view is never redacted, regardless of visibility settings', async () => {
     const { rig, dm, encounterId, combatantId } = await tableWithEncounter();
-    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: false, hpState: false, exactHp: false, ac: false });
+    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: false, hpState: false, exactHp: false, ac: false, conditions: false });
     await rig.settle();
     const seen = dm.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!;
     expect(seen.name).not.toBe('Unknown Creature');
@@ -65,7 +65,7 @@ describe('dm.set_combatant_visibility', () => {
     const { rig, dm, alice, encounterId, combatantId } = await tableWithEncounter();
     // Standard already reveals ac; confirm the player has it, then hide everything.
     expect(alice.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!.ac).toBeDefined();
-    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: true, exactHp: false, ac: false });
+    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: true, exactHp: false, ac: false, conditions: false });
     await rig.settle();
     const seen = alice.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!;
     expect(seen.ac).toBeUndefined();   // not still lingering from before the visibility change
@@ -77,7 +77,7 @@ describe('dm.set_combatant_visibility', () => {
     await rig.settle();
     expect(alice.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!.exactHp).toBeUndefined();
 
-    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: true, exactHp: true, ac: true });
+    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: true, exactHp: true, ac: true, conditions: true });
     await rig.settle();
     const seen = alice.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!;
     expect(seen.exactHp).toEqual({ current: 12, max: 20 });   // the resync caught them up
@@ -92,7 +92,7 @@ describe('dm.set_combatant_visibility', () => {
 
   it('rejects an unknown combatant', async () => {
     const { rig, dm, encounterId } = await tableWithEncounter();
-    const opId = dm.peer.setCombatantVisibility(encounterId, 'nope', { name: true, hpState: true, exactHp: true, ac: true });
+    const opId = dm.peer.setCombatantVisibility(encounterId, 'nope', { name: true, hpState: true, exactHp: true, ac: true, conditions: true });
     await rig.settle();
     expect(dm.peer.resultOf(opId)?.status).toBe('rejected');
   });
@@ -101,7 +101,7 @@ describe('dm.set_combatant_visibility', () => {
 describe('dm.set_combatant_exact_hp', () => {
   it('sets real numbers, delivered live to a player who can already see exactHp', async () => {
     const { rig, dm, alice, encounterId, combatantId } = await tableWithEncounter();
-    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: true, exactHp: true, ac: true });
+    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: true, exactHp: true, ac: true, conditions: true });
     await rig.settle();
     dm.peer.setCombatantExactHp(encounterId, combatantId, 8, 20);
     await rig.settle();
@@ -133,7 +133,7 @@ describe('incremental event redaction, not just full-snapshot redaction', () => 
 
     dm.peer.addCombatant(encounterId, { id: 'sneaky', name: 'Assassin' });
     await rig.settle();
-    dm.peer.setCombatantVisibility(encounterId, 'sneaky', { name: false, hpState: false, exactHp: false, ac: false });
+    dm.peer.setCombatantVisibility(encounterId, 'sneaky', { name: false, hpState: false, exactHp: false, ac: false, conditions: false });
     await rig.settle();
     const seen = alice.peer.view!.encounters[encounterId].combatants.find(c => c.id === 'sneaky')!;
     expect(seen.name).toBe('Unknown Creature');
@@ -141,7 +141,7 @@ describe('incremental event redaction, not just full-snapshot redaction', () => 
 
   it('combatant_hp_state_set is suppressed entirely for a player when hpState is not visible', async () => {
     const { rig, dm, alice, encounterId, combatantId } = await tableWithEncounter();
-    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: false, exactHp: false, ac: false });
+    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: false, exactHp: false, ac: false, conditions: false });
     await rig.settle();
     dm.peer.setCombatantHpState(encounterId, combatantId, 'bloodied');
     await rig.settle();
@@ -155,5 +155,59 @@ describe('visibility: a Host-only participant sees none of this', () => {
   it('combatants are absent from the Host-only view regardless of per-field visibility', async () => {
     const { rig } = await tableWithEncounter();
     expect(rig.hostPeer.view!.encounters).toEqual({});
+  });
+});
+
+// Monster conditions (DM_SCREEN_SPEC.md items 6/9) — gated by the SAME MonsterVisibility.conditions
+// flag as hpState/ac/exactHp, deliberately NOT routed through the Effect/EffectApplication system
+// (see LiveCombatant.conditions's own doc comment in types.ts for why).
+describe('dm.set_combatant_conditions', () => {
+  it('a player who can see conditions (Standard preset) sees them live', async () => {
+    const { rig, dm, alice, encounterId, combatantId } = await tableWithEncounter();
+    dm.peer.setCombatantConditions(encounterId, combatantId, ['poisoned', 'prone']);
+    await rig.settle();
+    expect(alice.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!.conditions).toEqual(['poisoned', 'prone']);
+  });
+
+  it('a player who cannot see conditions never receives them, even though the Host/DM state is real', async () => {
+    const { rig, dm, alice, encounterId, combatantId } = await tableWithEncounter();
+    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: true, exactHp: false, ac: true, conditions: false });
+    await rig.settle();
+    dm.peer.setCombatantConditions(encounterId, combatantId, ['poisoned']);
+    await rig.settle();
+    expect(alice.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!.conditions).toBeUndefined();
+    expect(rig.host.debugState().encounters[encounterId].combatants.find(c => c.id === combatantId)!.conditions).toEqual(['poisoned']);
+  });
+
+  it('the DM always sees the real conditions regardless of the visibility flag', async () => {
+    const { rig, dm, encounterId, combatantId } = await tableWithEncounter();
+    dm.peer.setCombatantVisibility(encounterId, combatantId, { name: true, hpState: true, exactHp: false, ac: true, conditions: false });
+    await rig.settle();
+    dm.peer.setCombatantConditions(encounterId, combatantId, ['poisoned']);
+    await rig.settle();
+    expect(dm.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!.conditions).toEqual(['poisoned']);
+  });
+
+  it('setting an empty array clears conditions', async () => {
+    const { rig, dm, alice, encounterId, combatantId } = await tableWithEncounter();
+    dm.peer.setCombatantConditions(encounterId, combatantId, ['poisoned']);
+    await rig.settle();
+    dm.peer.setCombatantConditions(encounterId, combatantId, []);
+    await rig.settle();
+    expect(alice.peer.view!.encounters[encounterId].combatants.find(c => c.id === combatantId)!.conditions).toEqual([]);
+  });
+
+  it('rejects a non-array or non-string-element payload', async () => {
+    const { rig, dm, encounterId, combatantId } = await tableWithEncounter();
+    const opId = dm.peer.sendRaw({ kind: 'dm.set_combatant_conditions', encounterId, combatantId, conditions: [{ bad: true }] as never });
+    await rig.settle();
+    expect(dm.peer.resultOf(opId)?.status).toBe('rejected');
+  });
+
+  it('rejects an unknown combatant', async () => {
+    const { rig, dm, encounterId } = await tableWithEncounter();
+    const opId = dm.peer.setCombatantConditions(encounterId, 'nope', ['poisoned']);
+    await rig.settle();
+    expect(dm.peer.resultOf(opId)?.status).toBe('rejected');
   });
 });

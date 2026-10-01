@@ -402,6 +402,14 @@ export class SessionPeer {
     return this.sendRaw({ kind: 'dm.set_combatant_exact_hp', encounterId, combatantId, current, max });
   }
 
+  /** DM_SCREEN_SPEC.md items 6/9's monster conditions — full replace, not add/remove ops, same as
+   *  how this op's validation is simplest to reason about; see LiveCombatant.conditions's own doc
+   *  comment for why this isn't routed through the Effect system. */
+  setCombatantConditions(encounterId: string, combatantId: string, conditions: string[]): string {
+    this.need('dm');
+    return this.sendRaw({ kind: 'dm.set_combatant_conditions', encounterId, combatantId, conditions });
+  }
+
   /** Per-field reveal state (DM_SCREEN_SPEC.md item 9) — see MonsterVisibility's own doc comment. */
   setCombatantVisibility(encounterId: string, combatantId: string, visibility: MonsterVisibility): string {
     this.need('dm');

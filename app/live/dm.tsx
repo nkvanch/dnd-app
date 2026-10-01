@@ -655,14 +655,14 @@ function QuickOverrideForm({ players, offline, peer, run, onDone }: {
 // Monster visibility presets (item 9) — a DM-UI convenience over MonsterVisibility; not a wire
 // concept of their own, just named shortcuts for dm.set_combatant_visibility.
 const VISIBILITY_PRESETS: Record<'hidden' | 'minimal' | 'standard' | 'full', MonsterVisibility> = {
-  hidden:   { name: false, hpState: false, exactHp: false, ac: false },
-  minimal:  { name: true,  hpState: false, exactHp: false, ac: false },
-  standard: { name: true,  hpState: true,  exactHp: false, ac: true },
-  full:     { name: true,  hpState: true,  exactHp: true,  ac: true },
+  hidden:   { name: false, hpState: false, exactHp: false, ac: false, conditions: false },
+  minimal:  { name: true,  hpState: false, exactHp: false, ac: false, conditions: false },
+  standard: { name: true,  hpState: true,  exactHp: false, ac: true,  conditions: true },
+  full:     { name: true,  hpState: true,  exactHp: true,  ac: true,  conditions: true },
 };
 function presetOfVisibility(v: MonsterVisibility): 'hidden' | 'minimal' | 'standard' | 'full' | null {
   for (const [name, preset] of Object.entries(VISIBILITY_PRESETS)) {
-    if (preset.name === v.name && preset.hpState === v.hpState && preset.exactHp === v.exactHp && preset.ac === v.ac) {
+    if (preset.name === v.name && preset.hpState === v.hpState && preset.exactHp === v.exactHp && preset.ac === v.ac && preset.conditions === v.conditions) {
       return name as 'hidden' | 'minimal' | 'standard' | 'full';
     }
   }
@@ -690,6 +690,7 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run, 
   const [exactHpMax, setExactHpMax] = useState('');
   const [monsterDelta, setMonsterDelta] = useState<{ combatantId: string; kind: 'damage' | 'heal' } | null>(null);
   const [monsterDeltaAmount, setMonsterDeltaAmount] = useState('');
+  const [addingMonsterCondition, setAddingMonsterCondition] = useState<string | null>(null);
 
   const actors = [
     ...encounter.combatants.map(c => ({ id: c.id, label: c.name })),
@@ -786,6 +787,27 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run, 
                   <Btn small label="Heal" disabled={offline} onPress={() => { setMonsterDelta({ combatantId: c.id, kind: 'heal' }); setMonsterDeltaAmount(''); }} testID={`dm-monster-heal-${c.name}`} />
                 </Row>
               )
+            )}
+            {(c.conditions ?? []).length > 0 && (
+              <Row wrap>
+                {(c.conditions ?? []).map(cond => (
+                  <Chip key={cond} label={formatContentId(cond)} active
+                    onPress={() => run(() => peer.setCombatantConditions(encounter.id, c.id, (c.conditions ?? []).filter(x => x !== cond)))}
+                    testID={`dm-monster-condition-${c.name}-${cond}`} />
+                ))}
+              </Row>
+            )}
+            {addingMonsterCondition === c.id ? (
+              <Row wrap>
+                {SRD_CONDITIONS.filter(cond => !(c.conditions ?? []).includes(cond)).map(cond => (
+                  <Chip key={cond} label={formatContentId(cond)}
+                    onPress={() => { run(() => peer.setCombatantConditions(encounter.id, c.id, [...(c.conditions ?? []), cond])); setAddingMonsterCondition(null); }}
+                    testID={`dm-monster-addcondition-${c.name}-${cond}`} />
+                ))}
+                <Btn small kind="ghost" label="Cancel" onPress={() => setAddingMonsterCondition(null)} />
+              </Row>
+            ) : (
+              <Btn small kind="ghost" label="+ Condition" disabled={offline} onPress={() => setAddingMonsterCondition(c.id)} testID={`dm-monster-addcondition-open-${c.name}`} />
             )}
             <Muted>Visible to players:</Muted>
             <Row wrap>

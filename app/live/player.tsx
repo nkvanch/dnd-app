@@ -3,7 +3,7 @@
 // the effects you are subject to, and the table's public state. Requires the player capability.
 import { useState } from 'react';
 import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime';
-import { describeChanges, describeRewardKind, describeSessionLogKind } from '../../src/session/roles';
+import { describeChanges, describeRewardKind, describeSessionLogKind, formatContentId } from '../../src/session/roles';
 import { describeEffectComponent, parseSignedInt } from '../../src/session/prepEdit';
 import { ChangeRequest, CharacterChange, PublicPersona } from '../../src/session/types';
 import { LiveScreen, Section, Card, Btn, Field, Row, Badge, Muted, Body, NotCapable, Chip } from '../../src/components/live/LiveUi';
@@ -201,7 +201,8 @@ export default function PlayerScreen() {
               const hp = c.hpState && c.hpState !== 'healthy' ? ` (${c.hpState})` : '';
               const ac = c.ac !== undefined ? ` AC ${c.ac}` : '';
               const exact = c.exactHp ? ` ${c.exactHp.current}/${c.exactHp.max} HP` : '';
-              return `${c.name}${hp}${ac}${exact}`;
+              const conditions = c.conditions && c.conditions.length > 0 ? ` [${c.conditions.map(formatContentId).join(', ')}]` : '';
+              return `${c.name}${hp}${ac}${exact}${conditions}`;
             }).join(', ')}</Muted>
             {e.currentTurnIndex !== null && (
               <Row wrap>

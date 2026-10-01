@@ -101,6 +101,12 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
       if (c) c.exactHp = { current: b.current, max: b.max };
       break;
     }
+    case 'combatant_conditions_set': {
+      const enc = s.encounters[b.encounterId];
+      const c = enc?.combatants.find(x => x.id === b.combatantId);
+      if (c) c.conditions = b.conditions;
+      break;
+    }
     case 'combatant_visibility_set': {
       const enc = s.encounters[b.encounterId];
       const c = enc?.combatants.find(x => x.id === b.combatantId);
@@ -261,6 +267,7 @@ function combatantForPlayer(c: LiveCombatant): LiveCombatant {
     ...(c.visibility.hpState && c.hpState ? { hpState: c.hpState } : {}),
     ...(c.visibility.ac && c.ac !== undefined ? { ac: c.ac } : {}),
     ...(c.visibility.exactHp && c.exactHp ? { exactHp: c.exactHp } : {}),
+    ...(c.visibility.conditions && c.conditions ? { conditions: c.conditions } : {}),
   };
 }
 
@@ -378,6 +385,13 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
       if (level === 'dm') return keep(b);
       const c = after.encounters[b.encounterId]?.combatants.find(x => x.id === b.combatantId);
       return c && c.visibility.exactHp ? keep(b) : null;
+    }
+
+    case 'combatant_conditions_set': {
+      if (level === 'host') return null;
+      if (level === 'dm') return keep(b);
+      const c = after.encounters[b.encounterId]?.combatants.find(x => x.id === b.combatantId);
+      return c && c.visibility.conditions ? keep(b) : null;
     }
 
     case 'effect_applied': {

@@ -159,10 +159,11 @@ export type SecretEffectMeta = {
  * combatantForPlayer) omits/substitutes whatever is set to false here.
  */
 export type MonsterVisibility = {
-  name:    boolean;
-  hpState: boolean;
-  exactHp: boolean;
-  ac:      boolean;
+  name:       boolean;
+  hpState:    boolean;
+  exactHp:    boolean;
+  ac:         boolean;
+  conditions: boolean;
 };
 
 export type LiveCombatant = {
@@ -176,13 +177,26 @@ export type LiveCombatant = {
   /** Real numbers, opt-in — most tables never need this; see hpState's own doc comment for why
    *  it stays coarse by default. */
   exactHp?: { current: number; max: number };
-  /** Defaults to {name:true, hpState:true, exactHp:false, ac:true} on creation — matches what a
-   *  combatant already showed before this field existed, so nothing already in play silently
-   *  loses information the instant this ships. */
+  /**
+   * Active condition ids (DM_SCREEN_SPEC.md items 6/9's "conditions" on a monster) — raw content
+   * ids, same tradeoff as CharacterVitals.conditions (DM-side resolves the display name; no
+   * shared content registry assumed over the wire). Deliberately NOT routed through the Effect/
+   * EffectApplication system: that system models PLAYER-relevant numeric derived-stat changes
+   * (EffectComponent's ac/speed/initiative/save/spell_attack/spell_dc), and a LiveCombatant has no
+   * derived-stat model for those to attach to beyond the bare `ac` field above — a monster
+   * "condition" here is DM-tracked narrative/mechanical bookkeeping, gated the same way hpState/
+   * exactHp/ac already are, not a parallel effects pipeline. Always populated (possibly empty) on
+   * the canonical Host state; optional ONLY because a Player's projected copy omits it entirely
+   * when visibility.conditions is false (see combatantForPlayer).
+   */
+  conditions?: string[];
+  /** Defaults to {name:true, hpState:true, exactHp:false, ac:true, conditions:true} on creation —
+   *  matches what a combatant already showed before this field existed, so nothing already in
+   *  play silently loses information the instant this ships. */
   visibility: MonsterVisibility;
 };
 
-export const STANDARD_MONSTER_VISIBILITY: MonsterVisibility = { name: true, hpState: true, exactHp: false, ac: true };
+export const STANDARD_MONSTER_VISIBILITY: MonsterVisibility = { name: true, hpState: true, exactHp: false, ac: true, conditions: true };
 
 export type LiveEncounter = {
   id:         string;
@@ -433,6 +447,7 @@ export type LiveEventBody =
   | { t: 'combatant_removed';      encounterId: string; combatantId: string }
   | { t: 'combatant_hp_state_set'; encounterId: string; combatantId: string; hpState: 'healthy' | 'bloodied' | 'down' }
   | { t: 'combatant_exact_hp_set'; encounterId: string; combatantId: string; current: number; max: number }
+  | { t: 'combatant_conditions_set'; encounterId: string; combatantId: string; conditions: string[] }
   | { t: 'combatant_visibility_set'; encounterId: string; combatantId: string; visibility: MonsterVisibility }
   | { t: 'effect_applied';      definition: EffectDefinition; applications: EffectApplication[] }
   | { t: 'applications_due';    applicationIds: string[]; ticked?: { applicationId: string; remaining: number }[] }
@@ -491,6 +506,7 @@ export type OpBody =
   | { kind: 'dm.remove_combatant'; encounterId: string; combatantId: string }
   | { kind: 'dm.set_combatant_hp'; encounterId: string; combatantId: string; hpState: 'healthy' | 'bloodied' | 'down' }
   | { kind: 'dm.set_combatant_exact_hp'; encounterId: string; combatantId: string; current: number; max: number }
+  | { kind: 'dm.set_combatant_conditions'; encounterId: string; combatantId: string; conditions: string[] }
   | { kind: 'dm.set_combatant_visibility'; encounterId: string; combatantId: string; visibility: MonsterVisibility }
   | { kind: 'dm.apply_effect';       effect: EffectDefinitionInput; targets: ParticipantId[] }
   | { kind: 'dm.mark_due';           applicationId: string }

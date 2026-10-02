@@ -14,6 +14,7 @@ import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
   Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus, AuditSourceKind,
 } from './types';
+import { tierHpBonus, hitDieTierFromEffects } from './hitDieTier';
 import { resolveEffectsForTarget, resolveBinary, resolveCombine, resolveExtraAttack, resolveScaleFactor, applyScale } from './resolver';
 import { ALL_BEAST_FORMS } from '../content/beastforms';
 import { generateAllActionCards, CardGenOptions } from './actionCards';
@@ -148,6 +149,24 @@ export function recomputeDerived(
   let entity = recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells));
 
   const allEffects    = collectAllEffects(entity, content.items);
+
+  // ── Derived max-HP bonus ("+5 maximum hit points" as an effect on target 'max_hp') ──
+  // resources.hp.maximum is a STORED value (set by leveling, adjusted by CON changes), so a bonus
+  // can't simply be summed into it on every recompute. HPBlock.bonusApplied records how much of
+  // `maximum` the effects currently account for; only the difference is applied, which is what
+  // makes a tier that REPLACES +5 with +10 net +5, and removing the feature take its bonus back.
+  // Plus whatever a hit-die tier effect (hitDieTier.ts) is worth across the character's levels.
+  const hpBonus = Math.trunc(resolveEffectsForTarget('max_hp', allEffects, rules) as number)
+    + tierHpBonus(entity.resources.hitDice, hitDieTierFromEffects(allEffects, rules));
+  const hpApplied = entity.resources.hp.bonusApplied ?? 0;
+  if (hpBonus !== hpApplied) {
+    const delta = hpBonus - hpApplied;
+    const hp = entity.resources.hp;
+    const maximum = Math.max(1, hp.maximum + delta);
+    const current = delta > 0 ? hp.current + delta : Math.min(hp.current, maximum);
+    entity = { ...entity, resources: { ...entity.resources, hp: { ...hp, maximum, current, bonusApplied: hpBonus } } };
+  }
+
   let effectiveStats = applyStatModifiers(entity.stats, allEffects);
   const profBonus     = proficiencyBonus(entity.identity.level);
 

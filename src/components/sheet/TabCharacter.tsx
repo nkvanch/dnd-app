@@ -19,7 +19,8 @@ import { rollDie } from '../../engine/leveling';
 import { levelUp, levelUpClass, calculateLevelUpHpGain, isValidHpRoll } from '../../engine/leveling';
 import { simulate } from '../../engine/simulate';
 import { getClassLevels } from '../../engine/multiclass';
-import { spendHitDie, spendHitDieManual, currentHitDieSize, spendableHitDicePools, hasSpentDawnResources, takeDawn } from '../../engine/rest';
+import { spendHitDie, spendHitDieManual, currentHitDieSize, entityHitDieTier, spendableHitDicePools, hasSpentDawnResources, takeDawn } from '../../engine/rest';
+import { bumpedHitDie } from '../../engine/hitDieTier';
 import { rollExpression, doubleDiceCount } from '../../engine/dice';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
@@ -1198,7 +1199,7 @@ function TabCharacterInner({
   }
   function submitHitDieEntry() {
     if (effectiveHitDieSize === null) return;
-    const dieSize = currentHitDieSize(entity, effectiveHitDieSize);
+    const dieSize = currentHitDieSize(entity, effectiveHitDieSize, rules);
     const roll = parseInt(hitDieDraft, 10);
     if (isNaN(roll) || roll < 1 || roll > dieSize) return;
     const before  = resources.hp.current;
@@ -1497,7 +1498,7 @@ function TabCharacterInner({
                 onPress={() => setSelectedHitDieSize(p.die)}
               >
                 <Text style={selectedHitDieSize === p.die ? styles.hitDieUseTxt : styles.useHitDieTxt}>
-                  d{p.die} ({p.remaining} left)
+                  d{bumpedHitDie(p.die, entityHitDieTier(entity, rules))} ({p.remaining} left)
                 </Text>
               </Pressable>
             ))}
@@ -1505,7 +1506,7 @@ function TabCharacterInner({
         )}
         {hitDieEntry ? (
           <View style={styles.hitDieEntryRow}>
-            <Text style={styles.hitDieEntryLabel}>Rolled (1–d{currentHitDieSize(entity, effectiveHitDieSize ?? undefined)}):</Text>
+            <Text style={styles.hitDieEntryLabel}>Rolled (1–d{currentHitDieSize(entity, effectiveHitDieSize ?? undefined, rules)}):</Text>
             <TextInput
               style={styles.hitDieEntryInput}
               value={hitDieDraft}

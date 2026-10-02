@@ -9,6 +9,7 @@ import { dropConcentration } from './combat';
 import { longRestRestoresAllHitDice } from './houseRules';
 import { DEFAULT_RULES } from '../store/characterStore';
 import { getClassLevels } from './multiclass';
+import { bumpedHitDie, hitDieTierFromEffects } from './hitDieTier';
 import { pactSlotTableFor } from '../content/classes/spellSlotTables';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -162,6 +163,7 @@ function longRest(entity: Entity, rules: CampaignRules = DEFAULT_RULES, hitDiceA
     resources: {
       ...updated.resources,
       hp: {
+        ...updated.resources.hp,   // keeps HPBlock.bonusApplied (see types.ts) across the rest
         current: updated.resources.hp.maximum,
         maximum: updated.resources.hp.maximum,
         temp:    0,
@@ -423,12 +425,19 @@ export function hitDiceRecoveryNeedsAllocation(entity: Entity, rules: CampaignRu
  * made an explicit choice yet — spendHitDie/spendHitDieManual below never
  * accept that same ambiguity silently; they require the explicit choice.
  */
-export function currentHitDieSize(entity: Entity, dieSize?: number): number {
+export function currentHitDieSize(entity: Entity, dieSize?: number, rules: CampaignRules = DEFAULT_RULES): number {
   const { pools, die } = entity.resources.hitDice;
-  if (dieSize !== undefined) return dieSize;
-  if (!pools) return die;
+  // The die FACES a spend rolls (a hit-die-tier effect — hitDieTier.ts — can bump the stored die).
+  const faces = (stored: number) => bumpedHitDie(stored, entityHitDieTier(entity, rules));
+  if (dieSize !== undefined) return faces(dieSize);
+  if (!pools) return faces(die);
   const spendable = [...pools].filter(p => p.remaining > 0).sort((a, b) => b.die - a.die);
-  return spendable[0]?.die ?? die;
+  return faces(spendable[0]?.die ?? die);
+}
+
+/** Die-size steps granted by active hit-die-tier effects (0 for almost every character). */
+export function entityHitDieTier(entity: Entity, rules: CampaignRules = DEFAULT_RULES): number {
+  return hitDieTierFromEffects(collectAllEffects(entity), rules);
 }
 
 /** Shared final mutation for both hit-die paths below — spend one die
@@ -480,7 +489,7 @@ export function spendHitDie(
   if (entity.resources.hitDice.remaining <= 0) return entity;
   const spent = spendFromHitDicePools(entity.resources.hitDice, dieSize);
   if (!spent) return entity; // ambiguous (2+ pools, no explicit choice) or an invalid/exhausted dieSize — refuse, never guess
-  const roll = Math.floor(Math.random() * spent.die) + 1;
+  const roll = Math.floor(Math.random() * bumpedHitDie(spent.die, entityHitDieTier(entity, rules))) + 1;
   return healFromSpentHitDie(entity, roll, spent.hitDice, rules);
 }
 

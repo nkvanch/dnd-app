@@ -464,6 +464,9 @@ export function applyHP(
     resources: {
       ...entity.resources,
       hp: {
+        // Spread first: carries HPBlock.bonusApplied across, so a max_hp-effect bonus isn't
+        // forgotten (and then re-added on the next recompute) just because the character levelled.
+        ...entity.resources.hp,
         current: entity.resources.hp.current + gain,
         maximum: entity.resources.hp.maximum + gain,
         temp:    entity.resources.hp.temp
@@ -714,8 +717,14 @@ export function applyFeatToEntity(
    * removeFeature() can sweep any still-unresolved ones if the feat is
    * later removed live. */
   pendingChoices?: ChoiceDefinition[],
+  /** Feat.resources — pools this feat grants. Tagged sourceKind 'feature' + this feat's feature
+   * id, which is exactly what removeFeature's revokeResourceSource(…, 'feature', id) sweeps. */
+  resources?: ResourceGrant[],
 ): Entity {
   let updated = applyGrant(entity, { kind: 'feature', value: featFeature }, grantedAt);
+  for (const r of resources ?? []) {
+    updated = applyGrant(updated, { kind: 'resource', value: r }, grantedAt, undefined, { kind: 'feature', id: featFeature.id });
+  }
   updated = {
     ...updated,
     choices: updated.choices.map(c =>

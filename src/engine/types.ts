@@ -698,6 +698,14 @@ export type Feat = {
    */
   abilityChoice?: { options: Ability[]; amount: number; grantsSaveProficiency?: boolean };
   /**
+   * Limited-use resource pools this feat grants (e.g. Anchor of Command's once-per-long-rest
+   * Hold Fast). Applied by leveling.ts's applyFeatToEntity via the same `resource` grant races
+   * and classes use, tagged with sourceKind 'feature' + this feat's feature id so removeFeature's
+   * existing revokeResourceSource cleanup covers it with no extra wiring. A feature's activation
+   * references the pool by `resourceId`.
+   */
+  resources?: ResourceGrant[];
+  /**
    * Skill-granting feats (Skill Expert, Skilled, Prodigy). Each entry is one
    * pick the player must make; the picker injects a grant_proficiency effect
    * (operation 'add' = proficiency, 'multiply' = expertise) for the chosen
@@ -985,6 +993,14 @@ export type HPBlock = {
   current: number;
   maximum: number;
   temp:    number;
+  /**
+   * How much of `maximum` currently comes from effects targeting 'max_hp' (a feature's
+   * "+5 maximum hit points"). recomputeDerived resolves the CURRENT bonus from active effects
+   * and applies only the DIFFERENCE to `maximum`/`current`, so a tiered reward that REPLACES
+   * +5 with +10 nets +5 (never +15) and removing the feature takes its bonus back out.
+   * Absent on characters saved before this field existed — read as 0, so nothing changes for them.
+   */
+  bonusApplied?: number;
 };
 
 /** One die-size's own total/remaining count within a mixed hit-dice pool. */

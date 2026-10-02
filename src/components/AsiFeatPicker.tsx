@@ -392,7 +392,7 @@ export function AsiFeatPicker({
         },
       };
     }
-    const updated = applyFeatToEntity(baseEntity, choice.id, choice.grantedAt, featureToApply(feat), feat.id, rules, feat.pendingChoices);
+    const updated = applyFeatToEntity(baseEntity, choice.id, choice.grantedAt, featureToApply(feat), feat.id, rules, feat.pendingChoices, feat.resources);
     setOverridePrompt(null);
     setPendingFeat({ before: originalEntity, after: updated, feat });
   }

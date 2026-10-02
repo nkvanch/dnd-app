@@ -9,8 +9,9 @@ import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, CampaignRules } from '../../engine/types';
 import {
   takeRest, HitDiceRecoveryAllocation, hitDiceRecoveryNeedsAllocation,
-  hitDiceRecoveryBudget, expendedHitDicePools,
+  hitDiceRecoveryBudget, expendedHitDicePools, entityHitDieTier,
 } from '../../engine/rest';
+import { bumpedHitDie } from '../../engine/hitDieTier';
 import { expireOverrides } from '../../engine/dmOverride';
 import { endWildShape } from '../../engine/combat';
 import { simulate } from '../../engine/simulate';
@@ -183,7 +184,7 @@ export function RestPreviewModal({ visible, kind, entity, rules, onConfirm, onCa
                 const chosen = allocation[p.die] ?? 0;
                 return (
                   <View key={p.die} style={styles.hitDieAllocRow}>
-                    <Text style={styles.rowTxt}>d{p.die}: {used} expended</Text>
+                    <Text style={styles.rowTxt}>d{bumpedHitDie(p.die, entityHitDieTier(entity, rules))}: {used} expended</Text>
                     <View style={styles.hitDieAllocStepper}>
                       <Pressable style={styles.hitDieAllocBtn} onPress={() => adjust(p.die, -1)} disabled={chosen <= 0}>
                         <Text style={styles.hitDieAllocBtnTxt}>−</Text>

@@ -505,14 +505,15 @@ const _rawSpellLibrary: Spell[] = [
 // precedence over the later vault-sourced duplicate.
 const _seenSpellIds = new Set<string>();
 // The Emperor Warlock (built-in homebrew, both versions) draws on an existing spell list it does not own,
-// so the spells on that list gain its class ids here. A spell with no `classes` tag is already offered to
+// so the spells on that list gain its class ids here — the spec's own list PLUS the whole Warlock list. A spell with no `classes` tag is already offered to
 // every class and is left alone — tagging it would have narrowed it.
 const _emperorSpellIds = new Set(EMPEROR_CLASS_SPELLS);
+const _isEmperorSpell = (s: Spell) => _emperorSpellIds.has(s.id) || !!s.classes?.includes('warlock');
 export const FULL_SPELL_LIBRARY: Spell[] = _rawSpellLibrary.filter(s => {
   if (_seenSpellIds.has(s.id)) return false;
   _seenSpellIds.add(s.id);
   return true;
-}).map(s => _emperorSpellIds.has(s.id) && s.classes && s.classes.length > 0
+}).map(s => _isEmperorSpell(s) && s.classes && s.classes.length > 0
   ? { ...s, classes: [...s.classes, 'emperor_warlock', 'emperor_warlock_demo'] }
   : s);
 

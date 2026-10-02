@@ -76,6 +76,15 @@ describe('content shape', () => {
     expect(ALL_EMPEROR_SPELL_IDS.filter(id => !have.has(id))).toEqual([]);
   });
 
+  it('every spell on the standard Warlock list is also on the Emperor Warlock list', () => {
+    const warlock = FULL_SPELL_LIBRARY.filter(s => s.classes?.includes('warlock'));
+    expect(warlock.length).toBeGreaterThan(30);
+    expect(warlock.filter(s => !s.classes!.includes('emperor_warlock'))).toEqual([]);
+    const arc9 = emperorWarlockClass.rawProgression!.entries.find(e => e.level === 17)!.choices.find(c => c.id.includes('legacy_arcanum_9'))!;
+    const ids = (arc9.pool as { id: string }[]).map(o => o.id);
+    for (const sp of warlock.filter(x => x.level === 9)) expect(ids).toContain(`arcanum_9_${sp.id}`);
+  });
+
   it('the class spell list is tagged onto library spells for both class ids', () => {
     const blast = FULL_SPELL_LIBRARY.find(s => s.id === 'eldritch_blast')!;
     expect(blast.classes).toEqual(expect.arrayContaining(['emperor_warlock', 'emperor_warlock_demo']));

@@ -43,6 +43,9 @@ export default function SpellListBuilderScreen() {
   const [spellIds,    setSpellIds]    = useState<string[]>([]);
   const [search,       setSearch]     = useState('');
   const [saving,       setSaving]     = useState(false);
+  // The full library is ~490 spells; mounting every row at once is what made this screen slow to open.
+  // Render a page at a time and let the player ask for more (searching narrows the list first).
+  const [shown, setShown] = useState(40);
 
   useEffect(() => {
     if (!editing) return;
@@ -62,6 +65,9 @@ export default function SpellListBuilderScreen() {
       .filter(s => !q || s.name.toLowerCase().includes(q))
       .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
   }, [allSpells, q]);
+
+  useEffect(() => { setShown(40); }, [q]);
+  const pageOfSpells = useMemo(() => visibleSpells.slice(0, shown), [visibleSpells, shown]);
 
   function toggleSpell(id: string) {
     setSpellIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -170,7 +176,7 @@ export default function SpellListBuilderScreen() {
           <TextInput style={styles.input} value={search} onChangeText={setSearch}
             placeholder="Search spells…" placeholderTextColor={Colors.textDim} />
           <View style={styles.spellList}>
-            {visibleSpells.map(s => {
+            {pageOfSpells.map(s => {
               const on = spellIds.includes(s.id);
               return (
                 <Pressable key={s.id} style={[styles.spellRow, on && styles.spellRowActive]} onPress={() => toggleSpell(s.id)}>
@@ -181,6 +187,11 @@ export default function SpellListBuilderScreen() {
                 </Pressable>
               );
             })}
+            {visibleSpells.length > shown && (
+              <Pressable style={styles.chip} onPress={() => setShown(n => n + 60)}>
+                <Text style={styles.chipTxt}>Show more ({visibleSpells.length - shown} more)</Text>
+              </Pressable>
+            )}
             {visibleSpells.length === 0 && <Text style={styles.emptyNote}>No spells match "{search}".</Text>}
           </View>
         </View>

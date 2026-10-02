@@ -323,6 +323,8 @@ export default function RootLayout() {
         <Stack.Screen name="homebrew/monster-builder"    options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/condition-builder"  options={{ headerShown: false }} />
         <Stack.Screen name="homebrew/import-package"     options={{ headerShown: false }} />
+        {/* Same DUPLICATE-HEADER-1 fix: this screen draws its own header, so the native one must be off. */}
+        <Stack.Screen name="homebrew/spell-list-builder" options={{ headerShown: false }} />
         <Stack.Screen name="settings"                      options={{ headerShown: false }} />
         <Stack.Screen name="about"                         options={{ headerShown: false }} />
         <Stack.Screen name="backup"                        options={{ headerShown: false }} />

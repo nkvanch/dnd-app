@@ -17,6 +17,7 @@ import { feature, activation, adv, stat } from '../../homebrewPack/helpers';
 import { edictPool } from './edicts';
 import { LEGACY_ARCANUM } from './spellData';
 import { SPIRIT_TABLE_ORDER, spiritId } from './spirits';
+import { FULL_SPELL_LIBRARY } from '../../spells/index';
 
 export type EmperorVariant = 'demo' | 'true';
 
@@ -89,7 +90,8 @@ export function buildEmperorProgression(classId: string, variant: EmperorVariant
     id: `${classId}_legacy_arcanum_${a.spellLevel}`,
     prompt: `Legacy Arcanum: choose one ${a.spellLevel}th-level spell (castable once per Long Rest). Favorites are marked with a star.`,
     kind: 'feature_pool', count: 1, grants: [], required: true, resolved: false,
-    pool: a.spells.map(spell => ({
+    // The spec's list, plus every spell on the standard Warlock list of that level.
+    pool: [...new Set([...a.spells, ...FULL_SPELL_LIBRARY.filter(sp => sp.level === a.spellLevel && sp.classes?.includes('warlock')).map(sp => sp.id)])].map(spell => ({
       id: `arcanum_${a.spellLevel}_${spell}`,
       label: `${a.favorites.includes(spell) ? '★ ' : ''}${label(spell)}`,
       value: feature({

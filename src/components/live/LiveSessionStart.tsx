@@ -137,7 +137,7 @@ export function HostModal({ visible, onClose, nickname, initialRole }: { visible
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={m.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={m.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={m.backdropTapArea} onPress={onClose} />
         <Pressable style={m.sheet} onPress={e => e.stopPropagation()}>
           <Text style={m.title}>Host Campaign</Text>
@@ -293,7 +293,7 @@ export function JoinModal({ visible, onClose, nickname }: { visible: boolean; on
         onScan={scanned => { setScannerOpen(false); setCode(scanned); void findRoom(targetFromCode(scanned)); }}
         onClose={() => setScannerOpen(false)} />
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-        <KeyboardAvoidingView style={m.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <KeyboardAvoidingView style={m.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Pressable style={m.backdropTapArea} onPress={onClose} />
           <Pressable style={m.sheet} onPress={e => e.stopPropagation()}>
 
@@ -465,6 +465,6 @@ const m = StyleSheet.create({
   btnDisabled: { opacity: 0.5 },
   ghostBtn: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center' },
   ghostBtnTxt: { color: Colors.textPrimary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
-  cancelBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
+  cancelBtn: { alignItems: 'center', paddingVertical: Spacing.sm, marginBottom: 10 },
   cancelTxt: { color: Colors.textDim, fontSize: FontSize.sm },
 });

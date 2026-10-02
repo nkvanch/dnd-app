@@ -198,7 +198,7 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.backdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <Pressable style={styles.backdropTapArea} onPress={onClose} accessible={false} />
         <View style={[styles.modalSheet, styles.wizSheet]}>
@@ -447,7 +447,7 @@ function QuestsSection({ quests, editable, onUpdate }: {
       <Modal visible={addModal} transparent animationType="slide" onRequestClose={() => setAddModal(false)}>
         <KeyboardAvoidingView
           style={styles.backdrop}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <Pressable style={styles.backdropTapArea} onPress={() => setAddModal(false)} />
           <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
@@ -539,7 +539,7 @@ function SessionLogSection({ log, editable, onUpdate }: {
       <Modal visible={addModal} transparent animationType="slide" onRequestClose={() => setAddModal(false)}>
         <KeyboardAvoidingView
           style={styles.backdrop}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <Pressable style={styles.backdropTapArea} onPress={() => setAddModal(false)} />
           <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
@@ -1034,7 +1034,7 @@ function OpenCampaignModal({ visible, onClose }: { visible: boolean; onClose: ()
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.backdropTapArea} onPress={onClose} />
         <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
           <Text style={styles.modalTitle}>Open Existing Campaign</Text>

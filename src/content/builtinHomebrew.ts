@@ -20,6 +20,8 @@ import type { HomebrewSubclass } from '../engine/types';
 import { abyssKnightProgression } from './classes/abyssKnight';
 import { bloodHunterProgression } from './classes/bloodHunter';
 import { raceSkeleton } from './races/index';
+import { raceBallast, raceBallastLesser } from './homebrewPack/ballast';
+import { monsterGlassback, glassbackFracturedCondition, glassbackCompressedCondition } from './homebrewPack/glassback';
 import {
   anchorOfCommand, takeABrace, bracedCondition, heldFastCondition, commandTheField,
   standardOfTheUnyieldingLine, weightOfAuthorityTiers,
@@ -74,12 +76,12 @@ const bloodHunterClass: CharClass = {
 /** All built-in homebrew, grouped by content type for seeding. */
 export const BUILTIN_HOMEBREW = {
   classes:    [abyssKnightClass, bloodHunterClass] as CharClass[],
-  races:      [raceSkeleton]     as Race[],
+  races:      [raceSkeleton, raceBallast, raceBallastLesser] as Race[],
   subclasses: [] as HomebrewSubclass[],
   feats:      [anchorOfCommand, takeABrace] as Feat[],
   items:      [standardOfTheUnyieldingLine] as Item[],
-  monsters:   [] as MonsterTemplate[],
-  conditions: [bracedCondition, heldFastCondition] as Condition[],
+  monsters:   [monsterGlassback] as MonsterTemplate[],
+  conditions: [bracedCondition, heldFastCondition, glassbackFracturedCondition, glassbackCompressedCondition] as Condition[],
   spells:     [commandTheField] as Spell[],
   features:   weightOfAuthorityTiers as Feature[],
 };

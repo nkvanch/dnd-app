@@ -467,6 +467,36 @@ export function recomputeDerived(
 // ── Effect collection ─────────────────────────────────────────────────────────
 
 /**
+ * Whether an effect's `condition` gate is satisfied. A condition is one of:
+ *   - a runtime flag name ("rage_active") that is currently true,
+ *   - an active condition id ("poisoned"), or
+ *   - a resource threshold: `resource:<resourceId><op><n>` with op one of <= >= < > == (e.g.
+ *     "resource:glassback_pressure<=1" — true while that pool's CURRENT value is 1 or less). This
+ *     is how a state meter (Glassback's Pressure) drives tiered penalties with no new state: the
+ *     effects simply switch on and off as the resource moves, and a missing pool is false.
+ */
+export function effectConditionActive(
+  condition: string,
+  flags: Record<string, boolean>,
+  activeConditionIds: ReadonlySet<string>,
+  entity: Entity,
+): boolean {
+  if (flags[condition] === true || activeConditionIds.has(condition)) return true;
+  const m = /^resource:([A-Za-z0-9_]+)(<=|>=|==|<|>)(-?\d+)$/.exec(condition);
+  if (!m) return false;
+  const pool = entity.resources.custom.find(r => r.id === m[1]);
+  if (!pool) return false;
+  const n = parseInt(m[3], 10);
+  switch (m[2]) {
+    case '<=': return pool.current <= n;
+    case '>=': return pool.current >= n;
+    case '<':  return pool.current <  n;
+    case '>':  return pool.current >  n;
+    default:   return pool.current === n;
+  }
+}
+
+/**
  * Collects all active passive Effects from every source on the entity:
  * features, equipped items, and condition-sourced features.
  *
@@ -494,11 +524,7 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
 
     for (const effect of fi.effects) {
       // Gate: skip if effect requires a flag or condition that is not active
-      if (effect.condition !== null) {
-        const flagActive      = activeFlags[effect.condition] === true;
-        const conditionActive = activeConditionIds.has(effect.condition);
-        if (!flagActive && !conditionActive) continue;
-      }
+      if (effect.condition !== null && !effectConditionActive(effect.condition, activeFlags, activeConditionIds, entity)) continue;
 
       // Gate: skip a situational effect (item 9 — a real-world fact the
       // engine can't observe, e.g. "an ally within 5 feet") unless the
@@ -554,11 +580,7 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
     const itemFeatures = effectiveItemFeatures(item, definition);
     for (const fi of itemFeatures) {
       for (const effect of fi.effects) {
-        if (effect.condition !== null) {
-          const flagActive      = activeFlags[effect.condition] === true;
-          const conditionActive = activeConditionIds.has(effect.condition);
-          if (!flagActive && !conditionActive) continue;
-        }
+        if (effect.condition !== null && !effectConditionActive(effect.condition, activeFlags, activeConditionIds, entity)) continue;
         if (effect.requiresNoArmorOrShield && anyArmorOrShieldEquipped) continue;
         if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
         effects.push({

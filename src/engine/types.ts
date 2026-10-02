@@ -365,7 +365,9 @@ export type Race = {
        * Half-Elf's unrestricted any-ability picker). Undefined = any
        * ability, preserving every existing race's unrestricted behavior.
        */
-      | { kind: 'two_one_or_three_one'; restrictTo?: Ability[] };
+      | { kind: 'two_one_or_three_one'; restrictTo?: Ability[] }
+      /** Exactly "one ability +2 and a different ability +1" — no three-way alternative (Ballast). */
+      | { kind: 'two_and_one' };
   };
   /** Same as Subrace.pendingChoices — see that field's doc comment. */
   pendingChoices?: ChoiceDefinition[];
@@ -2934,6 +2936,8 @@ export type PreparedCombatant = {
   groupId?:    string;              // EncounterGroup.id — DM-UI organization only
   waveId?:     string;              // EncounterWave.id — undefined means "present from the start"
   startingConditionIds?: string[];  // Condition ids applied at instantiation
+  /** Resource pool id -> current value to start at (e.g. Glassback's Pressure at 2 rather than its maximum of 3). Clamped to 0..maximum. */
+  startingResources?: Record<string, number>;
   notes?:      string;
   hidden?:     boolean;             // DM-only — not yet revealed to players
   initiativePreference?: number;    // fixed initiative instead of rolling, if set
@@ -2965,6 +2969,8 @@ export type EncounterEnvironmentEntry = {
   id:          string;
   label:       string;        // "Difficult terrain", "Darkness", "Poison gas", or custom text
   description?: string;
+  /** 'secret' = DM-only (never shown to players, e.g. a hidden Collapse Counter hazard); undefined/'public' = visible to all. */
+  visibility?: 'public' | 'secret';
   /** Optional link to a real Condition for an actual mechanical effect
    *  (e.g. an environmental hazard that behaves like a Condition already
    *  in the compendium). Left unset, this stays purely descriptive — never

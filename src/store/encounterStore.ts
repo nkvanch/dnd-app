@@ -7,6 +7,8 @@ import { create } from 'zustand';
 import { PreparedEncounter } from '../engine/types';
 import { saveEncounter, loadAllEncounters, deleteEncounter } from '../db/encounterRepo';
 import { newPreparedEncounter, hasInvalidManualHp } from '../engine/preparedEncounter';
+import { getMeta, setMeta } from '../db/appMetaRepo';
+import { pressureVaultEncounter, PRESSURE_VAULT_ID } from '../content/homebrewPack/pressureVault';
 
 type EncounterStore = {
   encounters: PreparedEncounter[];
@@ -37,6 +39,30 @@ type EncounterStore = {
   deleteEncounterPermanently: (id: string) => Promise<void>;
 };
 
+const BUILTIN_ENCOUNTERS_SEEDED_KEY = 'builtin_encounters_seeded_v1';
+
+/**
+ * Adds the built-in prepared-encounter templates (The Pressure Vault) the first time the app
+ * loads. Guarded by an app_meta flag so a template the user deletes stays deleted, and an
+ * existing row with the same id is never overwritten. A failure is logged and never blocks load.
+ */
+async function seedBuiltinEncounters(existing: PreparedEncounter[]): Promise<PreparedEncounter[]> {
+  try {
+    if (await getMeta(BUILTIN_ENCOUNTERS_SEEDED_KEY)) return existing;
+    if (existing.some(e => e.id === PRESSURE_VAULT_ID)) {
+      await setMeta(BUILTIN_ENCOUNTERS_SEEDED_KEY, '1');
+      return existing;
+    }
+    const vault = pressureVaultEncounter();
+    await saveEncounter(vault);
+    await setMeta(BUILTIN_ENCOUNTERS_SEEDED_KEY, '1');
+    return [vault, ...existing];
+  } catch (e) {
+    console.error('[encounterStore] seeding built-in encounters failed:', e);
+    return existing;
+  }
+}
+
 export const useEncounterStore = create<EncounterStore>((set, get) => ({
   encounters: [],
   isLoading:  false,
@@ -44,7 +70,8 @@ export const useEncounterStore = create<EncounterStore>((set, get) => ({
   loadEncounters: async () => {
     set({ isLoading: true });
     try {
-      const encounters = await loadAllEncounters();
+      let encounters = await loadAllEncounters();
+      encounters = await seedBuiltinEncounters(encounters);
       set({ encounters, isLoading: false });
     } catch (e) {
       console.error('[encounterStore] loadEncounters failed:', e);

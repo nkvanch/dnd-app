@@ -16,6 +16,7 @@ import { MonsterTemplate } from '../content/monsters/types';
 import { spawnMonster, isValidManualHp } from './monsterFactory';
 import { resolveMonsterById } from '../content/contentResolution';
 import { applyCondition } from './conditions';
+import { recomputeDerived } from './pipeline';
 import { lookupCondition } from '../content/conditions/index';
 
 function genId(prefix: string): string {
@@ -160,6 +161,19 @@ function spawnPreparedCombatant(
   for (const conditionId of combatant.startingConditionIds ?? []) {
     const condition = lookupCondition(conditionId);
     entity = applyCondition(entity, conditionId, 'prepared_encounter', rules, condition?.features);
+  }
+
+  const starts = combatant.startingResources;
+  if (starts) {
+    entity = {
+      ...entity,
+      resources: {
+        ...entity.resources,
+        custom: entity.resources.custom.map(r =>
+          starts[r.id] === undefined ? r : { ...r, current: Math.max(0, Math.min(r.maximum, Math.trunc(starts[r.id]))) }),
+      },
+    };
+    entity = recomputeDerived(entity, rules);
   }
 
   entity = withPrepMetadata(entity, combatant, groups);

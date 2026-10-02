@@ -557,6 +557,17 @@ export default function EncounterBuilderScreen() {
             <View key={e.id} style={styles.waveCard}>
               <TextInput style={styles.input} value={e.label} onChangeText={t => patchEnvironment(e.id, { label: t })} />
               <TextInput style={[styles.input, styles.textArea]} value={e.description ?? ''} onChangeText={t => patchEnvironment(e.id, { description: t })} placeholder="Effect, description…" placeholderTextColor={Colors.textDim} multiline />
+              <Text style={styles.fieldLabel}>Visibility</Text>
+              <View style={styles.chipRow}>
+                {(['public', 'secret'] as const).map(v => {
+                  const active = (e.visibility ?? 'public') === v;
+                  return (
+                    <Pressable key={v} style={[styles.chip, active && styles.chipActive]} onPress={() => patchEnvironment(e.id, { visibility: v })}>
+                      <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{v === 'public' ? 'Public (players see it)' : 'Secret (DM only)'}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
               <Text style={styles.fieldLabel}>Linked condition (optional mechanical effect)</Text>
               <View style={styles.chipRow}>
                 <Pressable style={[styles.chip, !e.conditionId && styles.chipActive]} onPress={() => patchEnvironment(e.id, { conditionId: undefined })}>

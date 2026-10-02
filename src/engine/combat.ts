@@ -604,10 +604,18 @@ export function applyDamage(
 
   let resolvedDamage = damage;
   if (damageType) {
-    const response = resolveResistance(damageType, collectAllEffects(entity));
+    const effects = collectAllEffects(entity);
+    const response = resolveResistance(damageType, effects);
     if (response === 'immunity') return entity;
     if (response === 'resistance') resolvedDamage = Math.floor(damage / 2);
     else if (response === 'vulnerability') resolvedDamage = damage * 2;
+    // Flat per-hit reduction ("reduces slashing damage it takes by 2 from each hit" — Glassback's
+    // Ceramic Shell): an `add` stat_modifier on target `damage_reduction:<type>`, taken off after
+    // resistance/vulnerability, never below 0.
+    const flat = effects.reduce((sum, ae) =>
+      ae.effect.target === `damage_reduction:${damageType}` && ae.effect.operation === 'add' && typeof ae.effect.value === 'number'
+        ? sum + ae.effect.value : sum, 0);
+    if (flat > 0) resolvedDamage = Math.max(0, resolvedDamage - flat);
   }
 
   const { hp } = entity.resources;

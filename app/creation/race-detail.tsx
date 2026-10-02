@@ -262,7 +262,7 @@ export default function RaceDetailScreen() {
   const [flexSubMode, setFlexSubMode] = useState<'2_1' | '3x1'>('2_1');
   const [flexPicks, setFlexPicks] = useState<Ability[]>([]);
   const flexRequiredCount = !flexAsi ? 0
-    : flexAsi.mode.kind === 'two_distinct_plus_one' ? 2
+    : flexAsi.mode.kind === 'two_distinct_plus_one' || flexAsi.mode.kind === 'two_and_one' ? 2
     : flexSubMode === '2_1' ? 2 : 3;
   const flexComplete = !flexAsi || flexPicks.length === flexRequiredCount;
   const flexExcluded = flexAsi?.mode.kind === 'two_distinct_plus_one' ? (flexAsi.mode.exclude ?? []) : [];
@@ -276,6 +276,7 @@ export default function RaceDetailScreen() {
   function flexAmountFor(idx: number): number {
     if (!flexAsi) return 0;
     if (flexAsi.mode.kind === 'two_distinct_plus_one') return 1;
+    if (flexAsi.mode.kind === 'two_and_one') return idx === 0 ? 2 : 1;
     return flexSubMode === '3x1' ? 1 : (idx === 0 ? 2 : 1);
   }
   const canSelect        = (!hasSubraces || subRaceId !== null || subracesOptional)

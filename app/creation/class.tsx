@@ -1,5 +1,8 @@
 // app/creation/class.tsx
 // Class list — tap row to navigate to detail, chevron to expand description.
+import { rulesetLabel } from '../../src/content/rulesets';
+import { suggestFirst } from '../../src/content/rulesetSuggestion';
+import { useCharacterStore as useCreationDraftStore } from '../../src/store/characterStore';
 import { View, Text, FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -112,7 +115,8 @@ export default function ClassScreen() {
   const availableWeapons = Array.from(new Set(globalContentDB.classes.flatMap(c => c.weaponProfs ?? [])))
     .map(w => ({ id: w, label: WEAPON_LABELS[w] ?? w }));
 
-  const classes = officialFilter === 'homebrew' ? [] : sortByOption(globalContentDB.classes.filter(c =>
+  const suggestedRuleset = useCreationDraftStore.getState().draft?.rulesetId;
+  const classes = officialFilter === 'homebrew' ? [] : suggestFirst(sortByOption(globalContentDB.classes.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) &&
     (!casterFilter || (CASTER_TYPE[c.id] ?? 'Martial') === casterFilter) &&
     (!hitDieFilter || c.hitDie === hitDieFilter) &&
@@ -120,7 +124,7 @@ export default function ClassScreen() {
     (saveFilter.size === 0 || Array.from(saveFilter).some(a => c.savingThrows?.includes(a))) &&
     (armorFilter.size === 0 || Array.from(armorFilter).some(a => c.armorProfs?.includes(a))) &&
     (weaponFilter.size === 0 || Array.from(weaponFilter).some(w => c.weaponProfs?.includes(w)))
-  ), sortOptions, sort);
+  ), sortOptions, sort), suggestedRuleset);
   const filteredHomebrewClasses = officialFilter === 'official' ? [] : homebrewClasses.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -143,6 +147,7 @@ export default function ClassScreen() {
   const listHeader = (
     <>
       <Text style={styles.heading}>Select Class</Text>
+      {suggestedRuleset ? <Text style={{ textAlign: 'center', color: Colors.textDim, fontSize: FontSize.xs, marginTop: -Spacing.sm, marginBottom: Spacing.sm }}>{rulesetLabel(suggestedRuleset)} content is listed first.</Text> : null}
       <View style={styles.divider} />
 
       <View style={styles.searchRow}>

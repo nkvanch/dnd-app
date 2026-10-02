@@ -1,5 +1,8 @@
 // app/creation/background.tsx
 // Background list + detail page with personality trait selectors.
+import { rulesetLabel } from '../../src/content/rulesets';
+import { suggestFirst } from '../../src/content/rulesetSuggestion';
+import { useCharacterStore as useCreationDraftStore } from '../../src/store/characterStore';
 import { View, Text, FlatList, Pressable, StyleSheet, TextInput, ScrollView } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -204,12 +207,13 @@ export default function BackgroundScreen() {
   const availableTools = Array.from(new Set(globalContentDB.backgrounds.flatMap(b => b.toolProficiencies ?? [])))
     .sort().map(t => ({ id: t, label: t }));
 
-  const backgrounds = officialFilter === 'homebrew' ? [] : sortByOption(globalContentDB.backgrounds.filter(b =>
+  const suggestedRuleset = useCreationDraftStore.getState().draft?.rulesetId;
+  const backgrounds = officialFilter === 'homebrew' ? [] : suggestFirst(sortByOption(globalContentDB.backgrounds.filter(b =>
     b.name.toLowerCase().includes(search.toLowerCase()) &&
     (!rulesetFilter || b.rulesetId === rulesetFilter) &&
     (skillFilter.size === 0 || Array.from(skillFilter).some(s => backgroundSkillGrants(b).includes(s))) &&
     (toolFilter.size === 0 || Array.from(toolFilter).some(t => (b.toolProficiencies ?? []).includes(t)))
-  ), sortOptions, sort);
+  ), sortOptions, sort), suggestedRuleset);
   const filteredHomebrewBackgrounds = officialFilter === 'official' ? [] : sortByOption(homebrewBackgrounds.filter(b =>
     b.name.toLowerCase().includes(search.toLowerCase()) &&
     (skillFilter.size === 0 || Array.from(skillFilter).some(s => backgroundSkillGrants(b).includes(s))) &&
@@ -231,6 +235,7 @@ export default function BackgroundScreen() {
   const listHeader = (
     <>
       <Text style={styles.heading}>Select Background</Text>
+      {suggestedRuleset ? <Text style={{ textAlign: 'center', color: Colors.textDim, fontSize: FontSize.xs, marginTop: -Spacing.sm, marginBottom: Spacing.sm }}>{rulesetLabel(suggestedRuleset)} content is listed first.</Text> : null}
       <View style={styles.divider} />
 
       <View style={styles.searchRow}>

@@ -1,5 +1,8 @@
 // app/creation/race.tsx
 // Race list — tap row to navigate to detail, long-press chevron to expand description.
+import { rulesetLabel } from '../../src/content/rulesets';
+import { suggestFirst } from '../../src/content/rulesetSuggestion';
+import { useCharacterStore as useCreationDraftStore } from '../../src/store/characterStore';
 import { View, Text, FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -97,14 +100,15 @@ export default function RaceScreen() {
   const availableRulesets = Array.from(new Set(globalContentDB.races.map(r => r.rulesetId).filter((r): r is NonNullable<typeof r> => !!r)))
     .map(String).sort().map(r => ({ id: r, label: r }));
 
-  const races = officialFilter === 'homebrew' ? [] : sortByOption(globalContentDB.races.filter(r =>
+  const suggestedRuleset = useCreationDraftStore.getState().draft?.rulesetId;
+  const races = officialFilter === 'homebrew' ? [] : suggestFirst(sortByOption(globalContentDB.races.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase()) &&
     (!sizeFilter || r.size === sizeFilter) &&
     (!darkvisionOnly || hasDarkvision(r)) &&
     (movementFilter.size === 0 || Array.from(movementFilter).some(m => raceMovementTypes(r).includes(m))) &&
     (!rulesetFilter || r.rulesetId === rulesetFilter) &&
     (!hasSubracesOnly || hasSubraces(r))
-  ), sortOptions, sort);
+  ), sortOptions, sort), suggestedRuleset);
   const filteredHomebrewRaces = officialFilter === 'official' ? [] : homebrewRaces.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -128,6 +132,7 @@ export default function RaceScreen() {
   const listHeader = (
     <>
       <Text style={styles.heading}>Select Race</Text>
+      {suggestedRuleset ? <Text style={{ textAlign: 'center', color: Colors.textDim, fontSize: FontSize.xs, marginTop: -Spacing.sm, marginBottom: Spacing.sm }}>{rulesetLabel(suggestedRuleset)} content is listed first.</Text> : null}
       <View style={styles.divider} />
 
       <View style={styles.searchRow}>

@@ -9,6 +9,7 @@ import { useCharacterStore, makeEmptyEntity } from '../../src/store/characterSto
 import { RulesetId } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
+import { RulesSourcePicker, RulesChoice, rulesChoiceFromDraft } from '../../src/components/RulesSourcePicker';
 
 const LEVEL_OPTIONS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
 
@@ -40,6 +41,7 @@ export default function NameScreen() {
   const [name,     setName]     = useState(existingDraft?.identity.name ?? '');
   const [level,    setLevel]    = useState(existingBasics?.targetLevel ?? 1);
   const [campaign, setCampaign] = useState(existingBasics?.campaign ?? '');
+  const [rulesChoice, setRulesChoice] = useState<RulesChoice>(() => rulesChoiceFromDraft(existingDraft));
 
   function handleContinue() {
     const trimmed = name.trim();
@@ -66,7 +68,10 @@ export default function NameScreen() {
       // asks for. Existing (already-saved) untagged characters are
       // deliberately NOT touched by this — see loadCharacters()'s own
       // comment for why a blanket migration isn't done.
-      rulesetId: 'dnd5e-2014' as RulesetId,
+      // The player's Rules choice (campaign / custom / official preset) decides the ruleset and the
+      // rule-profile overlay; the default is the same 2014 baseline as before.
+      rulesetId: rulesChoice.rulesetId as RulesetId,
+      customRuleProfileId: rulesChoice.profileId,
     };
 
     setDraft(entity);
@@ -134,6 +139,9 @@ export default function NameScreen() {
             returnKeyType="done"
           />
         </View>
+
+        {/* Rules source: campaign setting / custom / official 5e & 5.5e. Drives the ruleset and what content is suggested first. */}
+        <RulesSourcePicker value={rulesChoice} onChange={setRulesChoice} />
 
         {/* Campaign Settings — lives here in Character Basics, not in the creation flow */}
         <Pressable style={styles.campaignSettingsCard} onPress={() => router.push('/creation/rules')}>

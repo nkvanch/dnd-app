@@ -194,7 +194,7 @@ export type CustomRuleProfile = {
   gameId: GameId;
   baseRulesetId: RulesetId;
   rules: Partial<CampaignRules> & { customRules?: Record<string, unknown> };
-  source: { kind: 'local' | 'imported'; label?: string };
+  source: { kind: 'local' | 'imported' | 'preset'; label?: string };
   createdAt: number;
   updatedAt: number;
 };

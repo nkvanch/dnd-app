@@ -1,3 +1,4 @@
+import { suggestFirst } from '../../src/content/rulesetSuggestion';
 import { grantEntitlements, grantEntitlement, revokeEntitlementsFromChoice } from '../../src/engine/entitlements';
 // app/creation/spells.tsx
 // Step 8: Spell selection for spellcasting classes.
@@ -657,7 +658,7 @@ export default function SpellsScreen() {
   const matchesComponents = (s: SpellIndexEntry) =>
     componentFilter.size === 0 || Array.from(componentFilter).some(c => (s.components ?? []).includes(c));
   const spellSortOpts = spellSortOptions(s => homebrewSpellIds.has(s.id));
-  const sortSpells = (list: SpellIndexEntry[]) => sortByOption(list, spellSortOpts, spellSort);
+  const sortSpells = (list: SpellIndexEntry[]) => suggestFirst(sortByOption(list, spellSortOpts, spellSort), draft?.rulesetId);
   // Excludes anything already granted before this screen (e.g. a Divine
   // Domain's "always prepared" spells) — nothing to pick here, it's already
   // on the sheet, and letting it show as pickable would let a player select

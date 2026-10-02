@@ -46,7 +46,7 @@ export function applyGrant(
       const f = grant.value as FeatureInstance;
       let next: Entity = {
         ...entity,
-        features: [...entity.features, {
+        features: [...(f.upgradeOf ? entity.features.filter(x => x.id !== f.upgradeOf) : entity.features), {
           ...f,
           source: f.source ?? { kind: "class", refId: classId ?? entity.identity.classId },
           level:  atLevel,
@@ -140,6 +140,7 @@ export function applyGrant(
             id: r.resourceId, name: r.name,
             current: r.maximum, maximum: r.maximum,
             recharge: r.recharge,
+            ...(r.perProficiencyBonus ? { perProficiencyBonus: true } : {}),
             sourceKind: resolvedSource?.kind,
             sourceId:   resolvedSource?.id,
           }]

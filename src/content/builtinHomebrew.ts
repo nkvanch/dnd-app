@@ -21,6 +21,9 @@ import { abyssKnightProgression } from './classes/abyssKnight';
 import { bloodHunterProgression } from './classes/bloodHunter';
 import { raceSkeleton } from './races/index';
 import { raceBallast, raceBallastLesser } from './homebrewPack/ballast';
+import {
+  emperorWarlockClass, emperorWarlockDemoClass, emperorWarlockSpirits, emperorWarlockConditions, emperorWarlockSummons,
+} from './classes/emperorWarlock';
 import { monsterGlassback, glassbackFracturedCondition, glassbackCompressedCondition } from './homebrewPack/glassback';
 import {
   anchorOfCommand, takeABrace, bracedCondition, heldFastCondition, commandTheField,
@@ -75,13 +78,13 @@ const bloodHunterClass: CharClass = {
 
 /** All built-in homebrew, grouped by content type for seeding. */
 export const BUILTIN_HOMEBREW = {
-  classes:    [abyssKnightClass, bloodHunterClass] as CharClass[],
+  classes:    [abyssKnightClass, bloodHunterClass, emperorWarlockClass, emperorWarlockDemoClass] as CharClass[],
   races:      [raceSkeleton, raceBallast, raceBallastLesser] as Race[],
-  subclasses: [] as HomebrewSubclass[],
+  subclasses: emperorWarlockSpirits as HomebrewSubclass[],
   feats:      [anchorOfCommand, takeABrace] as Feat[],
   items:      [standardOfTheUnyieldingLine] as Item[],
-  monsters:   [monsterGlassback] as MonsterTemplate[],
-  conditions: [bracedCondition, heldFastCondition, glassbackFracturedCondition, glassbackCompressedCondition] as Condition[],
+  monsters:   [monsterGlassback, ...emperorWarlockSummons] as MonsterTemplate[],
+  conditions: [bracedCondition, heldFastCondition, glassbackFracturedCondition, glassbackCompressedCondition, ...emperorWarlockConditions] as Condition[],
   spells:     [commandTheField] as Spell[],
   features:   weightOfAuthorityTiers as Feature[],
 };

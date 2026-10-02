@@ -45,6 +45,7 @@ import { NEW_LEVEL8 }    from './level8';
 import { NEW_LEVEL9 }    from './level9';
 import { ALL_VAULT_SPELLS } from './generated';
 import srdClassification from './srdClassification.json';
+import { EMPEROR_CLASS_SPELLS } from '../classes/emperorWarlock/spellData';
 
 // Vault spells carry no srd field in generated.ts itself (see that file's
 // header) — classification is merged in here, at load time, from the small
@@ -503,11 +504,17 @@ const _rawSpellLibrary: Spell[] = [
 // carry homebrew edits like Green-Flame Blade's Abyss Knight text) takes
 // precedence over the later vault-sourced duplicate.
 const _seenSpellIds = new Set<string>();
+// The Emperor Warlock (built-in homebrew, both versions) draws on an existing spell list it does not own,
+// so the spells on that list gain its class ids here. A spell with no `classes` tag is already offered to
+// every class and is left alone — tagging it would have narrowed it.
+const _emperorSpellIds = new Set(EMPEROR_CLASS_SPELLS);
 export const FULL_SPELL_LIBRARY: Spell[] = _rawSpellLibrary.filter(s => {
   if (_seenSpellIds.has(s.id)) return false;
   _seenSpellIds.add(s.id);
   return true;
-});
+}).map(s => _emperorSpellIds.has(s.id) && s.classes && s.classes.length > 0
+  ? { ...s, classes: [...s.classes, 'emperor_warlock', 'emperor_warlock_demo'] }
+  : s);
 
 /**
  * True only on the EAS `production` build profile (see eas.json). Personal,

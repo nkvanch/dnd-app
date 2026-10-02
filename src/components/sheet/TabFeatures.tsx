@@ -344,7 +344,7 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
                     disabled={!canResolve}
                     onPress={() => setSubclassChoiceOpen(c.id)}
                   >
-                    <Text style={styles.resolveBtnTxt}>Resolve — Choose Subclass →</Text>
+                    <Text style={styles.resolveBtnTxt}>Resolve — Choose {def.subclassLabel ?? 'Subclass'} →</Text>
                   </Pressable>
                 )}
 

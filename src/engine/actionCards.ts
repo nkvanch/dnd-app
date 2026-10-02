@@ -26,6 +26,7 @@ import { CampaignRules } from './types';
 import { ALL_CHAR_CLASSES } from '../content/classes';
 import { ALL_RACES } from '../content/races';
 import { getClassLevels } from './multiclass';
+import { spellRangeOverride, spellDamageBonus } from './spellModifiers';
 
 // ── Large-creature weapon dice (house rule) ──────────────────────────
 
@@ -860,14 +861,18 @@ export function buildLayer2ForSpell(spell: Spell, entity?: Entity, classDefs: re
   // Extract damage dice pattern from description
   const diceMatch = spell.description.match(/(\d+d\d+)\s+(\w+)\s+damage/i);
   if (diceMatch) {
-    parts.push(`${diceMatch[1]} ${capitalize(diceMatch[2])}`);
+    const bonus = entity ? spellDamageBonus(entity, spell.id) : 0;
+    parts.push(`${diceMatch[1]}${bonus ? (bonus > 0 ? `+${bonus}` : `${bonus}`) : ''} ${capitalize(diceMatch[2])}`);
   } else if (spell.description.toLowerCase().includes('heal') || spell.description.toLowerCase().includes('hit points')) {
     const healMatch = spell.description.match(/(\d+d\d+(?:\s*\+\s*\d+)?)/);
     if (healMatch) parts.push(`Heal ${healMatch[1]}`);
   }
 
-  // Range info
-  if (spell.range && spell.range !== 'Self') {
+  // Range info (an active spell_range effect, e.g. Long-Range Artillery, overrides the printed range)
+  const rangeOverride = entity ? spellRangeOverride(entity, spell.id) : null;
+  if (rangeOverride !== null) {
+    parts.push(`${rangeOverride} feet`);
+  } else if (spell.range && spell.range !== 'Self') {
     parts.push(spell.range);
   }
 
@@ -1249,10 +1254,11 @@ export function generateSpellCard(
     : spell.castingTime.includes('reaction')                    ? 'reaction'
     : 'action';
 
+  const spellRange = spellRangeOverride(entity, spell.id) !== null ? `${spellRangeOverride(entity, spell.id)} feet` : spell.range;
   const activation: FeatureActivation = {
     actionType,
     resourceCost: cost,
-    range:        spell.range,
+    range:        spellRange,
     target:       spell.range.includes('cone') || spell.range.includes('radius') || spell.range.includes('cube') ? 'area' : 'single',
     requiresSave: null,
   };

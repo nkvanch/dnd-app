@@ -235,6 +235,9 @@ const SLOT_TABLES: Record<string, SpellSlotRow[]> = {
   ranger:   HALF_CASTER_SLOTS,
   warlock:  WARLOCK_SLOTS,
   abyss_knight: ABYSS_KNIGHT_SLOTS,
+  // Emperor Warlock (both versions): the spec says only "Warlock-style Pact Magic", so it uses the standard Warlock table.
+  emperor_warlock: WARLOCK_SLOTS,
+  emperor_warlock_demo: WARLOCK_SLOTS,
   artificer: ARTIFICER_SLOTS,
 };
 
@@ -281,12 +284,16 @@ export const CASTER_TYPE: Record<string, CasterType> = {
   warlock:  'pact',
   blood_hunter: 'none',   // Profane Soul order grants its own pact magic — see below
   abyss_knight: 'pact',
+  emperor_warlock: 'pact',
+  emperor_warlock_demo: 'pact',
 };
 
 /** classIds whose pact-magic table lives outside WARLOCK_SLOTS (order/patron-gated). */
 const PACT_SLOT_TABLES: Record<string, SpellSlotRow[]> = {
   warlock:      WARLOCK_SLOTS,
   abyss_knight: ABYSS_KNIGHT_SLOTS,
+  emperor_warlock:      WARLOCK_SLOTS,
+  emperor_warlock_demo: WARLOCK_SLOTS,
 };
 
 export function pactSlotTableFor(classId: string, subclassId: string | null): SpellSlotRow[] | null {

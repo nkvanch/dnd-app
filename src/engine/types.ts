@@ -412,6 +412,48 @@ export type Race = {
   /** Which ruleset this race belongs to. Undefined = available under every ruleset (every race authored before this field existed, including all official 5e content). See the ContentHeader comment near the top of this file. */
   rulesetId?: RulesetId;
 };
+/**
+ * One switchable set of options ("modes") for a class. The app never rolls for the player: a
+ * `selector.table` maps the result of the player's OWN physical die to an option, and there is no
+ * calendar, so a "period" (an in-game month) ends only when the player presses the change button.
+ */
+export type ModeGroup = {
+  id:          string;
+  /** Name of the feature that owns it, e.g. 'Legacy Binding'. */
+  name:        string;
+  /** What one option is called to the player, e.g. 'Bound Spirit'. */
+  optionLabel: string;
+  /** What one period is called, e.g. 'month'. */
+  periodLabel: string;
+  classId:     string;
+  /** HomebrewSubclass ids of this class that are the options of the group. */
+  optionIds:   string[];
+  selector: {
+    die:   number;
+    table: { value: number; optionId: string }[];
+    /** Dice rolled per period by class level; the player picks which result answers. Default 1. */
+    diceAtLevel?: { level: number; dice: number }[];
+    /** Resource spent to throw a roll away and roll again (Council of Spirits), usable from this class level. */
+    rerollResourceId?: string;
+    rerollFromLevel?: number;
+    /** From this class level the player simply chooses any option (Crown of Legends). */
+    freeChoiceFromLevel?: number;
+  };
+  /** Resources made available again whenever a new period starts (Council of Spirits' once-per-month reroll). */
+  restoreOnSwitch?: string[];
+};
+
+/**
+ * Per-character state for one Mode Group. `stash` holds the current value of the resources an
+ * option granted at the moment the character left it, keyed by option id, so returning to the
+ * option later finds them spent or unspent exactly as they were — "mode-owned persistent state".
+ */
+export type ModeState = {
+  stash:    Record<string, Record<string, number>>;
+  /** How many times the group has changed option since it was first set; informational. */
+  changes:  number;
+};
+
 export type CharClass  = {
   id:          string;
   name:        string;
@@ -554,6 +596,13 @@ export type CharClass  = {
    * the import pipeline — and editing such a class in the builder will drop it.
    */
   rawProgression?:        ClassProgression;
+  /**
+   * Mode Groups: sets of mutually exclusive, switchable options this class's character holds one
+   * of at a time (Emperor Warlock's monthly Bound Spirit). Each option is a HomebrewSubclass of this
+   * class, so switching reuses the subclass apply/strip machinery and the option's level-gated
+   * progression (see engine/modes.ts). Built-in/imported content only; the builders do not author this.
+   */
+  modeGroups?:            ModeGroup[];
   /**
    * PHB "Multiclassing Proficiencies" table entry for this class when taken
    * as a SECOND-OR-LATER class (not your starting class) — applied instead
@@ -1060,6 +1109,8 @@ export type CustomResource = {
   /** Authoritative maximum before source-owned upgrades are applied. */
   baseMaximum?: number;
   recharge: 'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
+  /** Maximum equals the character's proficiency bonus ("PB uses per Long Rest"); kept in step on every recompute. */
+  perProficiencyBonus?: boolean;
   /** What granted this resource — lets clearClassData (app/creation/class-
    * detail.tsx) tell a class-owned resource pool apart from a racial one and
    * wipe only the former on class (re)selection. Optional so resources on
@@ -1316,6 +1367,12 @@ export type ChoiceDefinition = {
    * stays valid without edits.
    */
   forClassId?: string;
+  /**
+   * Player-facing noun for a `kind: 'subclass'` choice that is not conventionally a subclass
+   * (Emperor Warlock's "Bound Spirit"). The picker heading, the Features tab button and the
+   * creation hub all use it instead of "Subclass". Undefined = "Subclass".
+   */
+  subclassLabel?: string;
   /**
    * STARTING-EQUIPMENT-1: only meaningful for kind:'equipment'. Undefined
    * (every existing equipment choice literal across src/content) means
@@ -1745,6 +1802,16 @@ export type Effect = {
   requiresNoArmorOrShield?: boolean;
   formulaAbilities?: Ability[];
   /**
+   * "Add your Charisma modifier to X": on a numeric `add` stat_modifier, this ability's final
+   * modifier is added to `value` (which may be 0/omitted) when derived stats are computed.
+   */
+  addAbilityModifier?: Ability;
+  /**
+   * On a `set` of an ability score: a floor ("becomes 24 if lower", "rise to at least 22") applied
+   * after every other effect, so it can raise the score but never lower a higher one.
+   */
+  atLeast?: boolean;
+  /**
    * Per-ability cap applied AFTER the modifier is computed, for medium armor.
    * e.g. { dex: 2 } means "add DEX modifier but cap it at +2".
    * Only meaningful when the ability appears in formulaAbilities.
@@ -1823,6 +1890,12 @@ export type Feature = {
    * instead of stacking with it. See engine/rewardTracks.ts.
    */
   rewardTrack?: { trackId: string; tier: number; trackName: string };
+  /**
+   * Id of an earlier feature this one REPLACES when granted: the old feature object is removed first
+   * so no stale duplicate lingers ("Firing Squad becomes 6d6", "Imperial Command's die becomes a d8").
+   * Resource pools are not touched — they are granted separately and keep their spent state.
+   */
+  upgradeOf?: string;
   /** Player-set: marks this feature as exploration-relevant for the Exploration view filter. */
   explorationTag?: boolean;
   /**
@@ -2171,6 +2244,8 @@ export type Entity = {
    * existing saved entities parse unchanged.
    */
   situationalAnswers?: Record<string, boolean>;
+  /** Mode Group state by group id (engine/modes.ts). Absent for every character with no mode group. */
+  modeState?: Record<string, ModeState>;
   /**
    * Item 13 (build comparison/checkpoints/loadouts) — named, saved
    * equipment + prepared-spell configurations a player can swap between
@@ -2394,6 +2469,8 @@ export type ResourceGrant = {
    * DraftTrait's 'other' recharge option) — displayed as-is by CustomResource,
    * which already allows the same free-text escape hatch. */
   recharge:   'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
+  /** When true `maximum` is only the starting value: the pool's maximum tracks the proficiency bonus (Command Dice, "PB uses per Long Rest"). */
+  perProficiencyBonus?: boolean;
 };
 
 export type ResourceUpgrade = {

@@ -56,6 +56,8 @@ export function SubclassPicker({
   // classId for single-class characters and pre-existing choices without
   // the tag, so nothing changes for the common case.
   const forClassId = choice.definition.forClassId ?? entity.identity.classId;
+  // "Bound Spirit" etc. — a class whose subclass-style choice is not conventionally a subclass names it itself.
+  const noun = choice.definition.subclassLabel ?? 'Subclass';
 
   // LIVE-RULESET-2/3 (items 4, 7): subclassEntriesForClassMerged now carries
   // real ruleset filtering for BOTH official and homebrew subclasses (see
@@ -123,7 +125,7 @@ export function SubclassPicker({
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.headerRow}>
-        <Text style={styles.heading}>Choose Your Subclass</Text>
+        <Text style={styles.heading}>Choose Your {noun}</Text>
         {onClose && (
           <Pressable onPress={onClose} hitSlop={8}>
             <Text style={styles.close}>✕</Text>
@@ -132,13 +134,13 @@ export function SubclassPicker({
       </View>
       <Text style={styles.sub}>
         {choice.resolved
-          ? 'Pick a different subclass to change your selection.'
+          ? `Pick a different ${noun.toLowerCase()} to change your selection.`
           : choice.definition.prompt}
       </Text>
 
       {onCreateNewSubclass && (
         <Pressable style={styles.createNewBtn} onPress={onCreateNewSubclass}>
-          <Text style={styles.createNewTxt}>+ Create New Homebrew Subclass</Text>
+          <Text style={styles.createNewTxt}>+ Create New Homebrew {noun}</Text>
         </Pressable>
       )}
 
@@ -147,7 +149,7 @@ export function SubclassPicker({
           <View style={styles.searchRow}>
             <TextInput
               style={[styles.search, styles.searchFlex]}
-              placeholder={`Search ${options.length} subclasses…`}
+              placeholder={`Search ${options.length} ${noun.toLowerCase()}s…`}
               placeholderTextColor={Colors.textDim}
               value={search}
               onChangeText={setSearch}

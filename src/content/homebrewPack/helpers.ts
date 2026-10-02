@@ -31,6 +31,7 @@ export interface FeatureOpts {
   trigger?: string;
   resources?: ResourceGrant[];
   rewardTrack?: Feature['rewardTrack'];
+  upgradeOf?: string;
   choices?: Feature['choices'];
 }
 
@@ -46,6 +47,7 @@ export function feature(o: FeatureOpts): Feature {
     ...(o.trigger ? { trigger: o.trigger } : {}),
     ...(o.resources ? { resources: o.resources } : {}),
     ...(o.rewardTrack ? { rewardTrack: o.rewardTrack } : {}),
+    ...(o.upgradeOf ? { upgradeOf: o.upgradeOf } : {}),
   };
 }
 

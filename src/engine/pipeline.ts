@@ -91,10 +91,18 @@ export function applyStatModifiers(
   const abilities: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
   const result = { ...base };
   for (const ab of abilities) {
-    const relevant = effects.filter(
+    const allForAbility = effects.filter(
       ae => ae.effect.type === 'stat_modifier' && ae.effect.target === ab
     );
-    if (relevant.length === 0) continue;
+    // "Your score becomes N if it is lower" (Wisdom of the Sultan, Avatar of Tenochtitlan): an
+    // `atLeast` set is a floor applied AFTER everything else, never a replacement that could lower
+    // a higher score, so it is kept out of the ordinary set/add resolution below.
+    const floors   = allForAbility.filter(ae => ae.effect.atLeast && ae.effect.operation === 'set' && typeof ae.effect.value === 'number');
+    const relevant = allForAbility.filter(ae => !floors.includes(ae));
+    if (relevant.length === 0) {
+      if (floors.length) result[ab] = Math.max(result[ab], ...floors.map(f => f.effect.value as number));
+      continue;
+    }
     // Bug fix: this used to pick the 'set' effect by array order ("last
     // one wins"), which is order-dependent — shuffling collectAllEffects's
     // iteration order could change which 'set' effect won, and therefore
@@ -109,6 +117,7 @@ export function applyStatModifiers(
     const resolved = resolveCombine(relevant);
     // 'scale' ("double your Strength") multiplies the fully resolved score, after set/add.
     result[ab] = applyScale(hasSet ? resolved : base[ab] + resolved, resolveScaleFactor(relevant));
+    if (floors.length) result[ab] = Math.max(result[ab], ...floors.map(f => f.effect.value as number));
   }
   return result;
 }
@@ -141,14 +150,28 @@ export function effectiveAbilityScores(entity: Entity): Entity['stats'] {
  * unchanged, falling back to the deterministic official-only catalogs each
  * of those functions already defaults to.
  */
+/** Keeps every `perProficiencyBonus` pool's maximum equal to the current proficiency bonus, preserving what was spent. */
+function syncProficiencyResources(entity: Entity): Entity {
+  if (!entity.resources.custom.some(r => r.perProficiencyBonus)) return entity;
+  const pb = proficiencyBonus(entity.identity.level);
+  let changed = false;
+  const custom = entity.resources.custom.map(r => {
+    if (!r.perProficiencyBonus || r.maximum === pb) return r;
+    changed = true;
+    const spent = Math.max(0, r.maximum - r.current);
+    return { ...r, maximum: pb, baseMaximum: pb, current: Math.max(0, pb - spent) };
+  });
+  return changed ? { ...entity, resources: { ...entity.resources, custom } } : entity;
+}
+
 export function recomputeDerived(
   entityParam: Entity, rules: CampaignRules,
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
 ): Entity {
   // Use a mutable local reference so we can apply grant_proficiency effects
-  let entity = recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells));
+  let entity = syncProficiencyResources(recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells)));
 
-  const allEffects    = collectAllEffects(entity, content.items);
+  let allEffects      = collectAllEffects(entity, content.items);
 
   // ── Derived max-HP bonus ("+5 maximum hit points" as an effect on target 'max_hp') ──
   // resources.hp.maximum is a STORED value (set by leveling, adjusted by CON changes), so a bonus
@@ -194,6 +217,15 @@ export function recomputeDerived(
     effectiveStats[ability] = override.operation === 'set' ? override.value : effectiveStats[ability] + override.value;
   }
 
+  // "Add your Charisma modifier to initiative" (Effect.addAbilityModifier): fold the final ability
+  // modifier into the effect's own value now that every ability score is settled, so every consumer
+  // (initiative, AC, saves, ...) just sees an ordinary numeric bonus.
+  if (allEffects.some(ae => ae.effect.addAbilityModifier)) {
+    allEffects = allEffects.map(ae => ae.effect.addAbilityModifier
+      ? { ...ae, effect: { ...ae.effect, value: (typeof ae.effect.value === 'number' ? ae.effect.value : 0) + modifier(effectiveStats[ae.effect.addAbilityModifier]) } }
+      : ae);
+  }
+
   // Authoritative inputs: persisted entitlements and currently active effects.
   // Every flat grant field below is compatibility output, never an ownership oracle.
   const profEffects = allEffects.filter(ae => ae.effect.type === 'grant_proficiency');
@@ -218,7 +250,9 @@ export function recomputeDerived(
     // target format: 'skill:perception', 'skill:athletics', etc.
     if (ae.effect.target.startsWith('skill:')) {
       const skillName = ae.effect.target.slice(6) as SkillName;
-      if (ae.effect.operation === 'add') newGrantedSkills.add(skillName);
+      // 'add' with the value 'expertise_if_proficient' is applied in the second pass below, once every
+      // plain proficiency source has been counted ("gain proficiency; if already proficient, expertise").
+      if (ae.effect.operation === 'add' && ae.effect.value !== 'expertise_if_proficient') newGrantedSkills.add(skillName);
       else if (ae.effect.operation === 'multiply') { newGrantedSkills.add(skillName); newExpertiseSkills.add(skillName); }
     }
     // target format: 'tool:thieves_tools', 'tool:herbalism_kit', etc.
@@ -236,6 +270,15 @@ export function recomputeDerived(
       const armorName = ae.effect.target.slice(6).replace(/_/g, ' ');
       if (!newGrantedArmor.some(a => a.toLowerCase() === armorName.toLowerCase())) newGrantedArmor.push(armorName);
     }
+  }
+
+  // Second pass: "proficiency, or expertise if you already have it" (Emperor Warlock's Scholar of Empires).
+  // Sequential on purpose — two such effects naming the same skill make the second one expertise.
+  for (const ae of profEffects) {
+    if (ae.effect.operation !== 'add' || ae.effect.value !== 'expertise_if_proficient' || !ae.effect.target.startsWith('skill:')) continue;
+    const skillName = ae.effect.target.slice(6) as SkillName;
+    if (newGrantedSkills.has(skillName) || newExpertiseSkills.has(skillName)) newExpertiseSkills.add(skillName);
+    newGrantedSkills.add(skillName);
   }
 
   // Skills: project current authoritative grants.

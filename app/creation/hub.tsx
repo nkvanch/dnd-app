@@ -136,7 +136,7 @@ export default function HubScreen() {
   let sections = baseSections;
   if (subclassChoices.length > 0) {
     const classIdx = sections.findIndex(s => s.key === 'class');
-    sections = [...sections.slice(0, classIdx + 1), SUBCLASS_SECTION, ...sections.slice(classIdx + 1)];
+    sections = [...sections.slice(0, classIdx + 1), { ...SUBCLASS_SECTION, label: subclassChoices[0].definition.subclassLabel ?? SUBCLASS_SECTION.label }, ...sections.slice(classIdx + 1)];
   }
 
   // Conditionally include ASI section only when there are pending ASI choices

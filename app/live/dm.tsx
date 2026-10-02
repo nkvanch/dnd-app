@@ -189,7 +189,7 @@ export default function DmLiveScreen() {
       </Card>
 
       <Row wrap>
-        {(['dashboard', 'encounter', 'effects', 'requests', 'suggestions', 'notes'] as Tab[]).map(t => (
+        {(['dashboard', 'encounter', 'effects', 'requests', 'suggestions', 'rewards', 'notes'] as Tab[]).map(t => (
           <Chip key={t} label={t === 'dashboard' ? 'Dashboard' : t[0].toUpperCase() + t.slice(1)} active={tab === t} onPress={() => setTab(t)} testID={`dm-tab-${t}`} />
         ))}
       </Row>

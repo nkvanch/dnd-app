@@ -1,5 +1,7 @@
 # Emperor Warlock — Playtest v1
 
+> **Built 2 October 2026** as the class *Emperor Warlock* (true monthly Legacy Binding) and *Emperor Warlock (Demo)*. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). The paragraph below describes the earlier state.
+
 Reference copy of the class as designed, 22 September 2026. This is a design document, not an in-app build — see [MODE_TRANSFORMATION_LAYER_PROPOSAL.md](../MODE_TRANSFORMATION_LAYER_PROPOSAL.md) for why the class as a whole cannot be built in Grimoire today, and [HOMEBREW_AUTHORING_LIMITS.md](../HOMEBREW_AUTHORING_LIMITS.md) for the specific gaps.
 
 Not for outreach in this form — too large for a creator stress-test pack (see the outreach guide's 5–6 entry rule). A small slice of it may still go out; that is a separate decision.

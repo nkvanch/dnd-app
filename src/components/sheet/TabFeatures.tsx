@@ -16,6 +16,7 @@ import { RepeatedChoicePicker, RepeatedChoiceOption } from '../RepeatedChoicePic
 import { RemoveFeatureModal } from './RemoveFeatureModal';
 import { AddCustomFeatureModal } from './AddCustomFeatureModal';
 import { GrantRewardModal } from './GrantRewardModal';
+import { ModeGroupPanel } from './ModeGroupPanel';
 import { ChangeBackgroundModal } from './ChangeBackgroundModal';
 import { spellRepo } from '../../content/spellRepo';
 import { spellProgressFor, groupPendingSpellChoices } from '../../content/creationProgress';
@@ -257,6 +258,11 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      {/* Mode Groups (Legacy Binding / Bound Spirit): the active option and its change flow. */}
+      {canResolve && onEntityUpdate && (
+        <ModeGroupPanel entity={entity} rules={rules ?? DEFAULT_RULES} onEntityUpdate={onEntityUpdate} />
+      )}
 
       {/* Header-level identity action — changes the whole background, not
           one feature, so it's kept visually separate from the feature-list

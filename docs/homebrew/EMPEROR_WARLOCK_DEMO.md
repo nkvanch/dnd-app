@@ -1,5 +1,7 @@
 # Emperor Warlock
 
+> **Built 2 October 2026** as *Emperor Warlock (Demo)*, alongside the full monthly version. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
+
 ## Playtest / Demo-Pack Class
 
 A battlefield commander whose power comes from the memories, ambitions, tactics, legends, and magical echoes of great historical or mythological figures.

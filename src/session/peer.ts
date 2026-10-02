@@ -13,7 +13,7 @@ import {
   Capability, CharacterAdapter, CharacterChange, ClientMessage, Op, OpBody, OpResult, ParticipantId,
   ServerMessage, ViewState, LiveEvent, ChangeRequest, LiveEffect, EffectApplication, SecretEffectMeta,
   EffectComponent, EffectDuration, EffectDefinitionInput, MonsterVisibility, PublicPersona, ReportedCharacter,
-  RewardKind, SessionLogKind, CombatantResource,
+  RewardKind, SessionLogKind, CombatantResource, EffectVisibility,
 } from './types';
 import { applyEvent } from './state';
 import { ClientTransport, Connection, decodeFrame, encodeFrame } from './transport';
@@ -543,6 +543,37 @@ export class SessionPeer {
   addEffectTarget(effectId: string, targetId: ParticipantId): string {
     this.need('dm');
     return this.sendRaw({ kind: 'dm.add_effect_target', effectId, targetId });
+  }
+
+  /**
+   * DM_SCREEN_SPEC.md item 8's "convert public <-> secret where appropriate". Converting TO
+   * secret needs no new identity — the OUTGOING identity (still plainly visible on this device's
+   * own replica, since it wasn't secret) is stashed into the local vault first, so the DM keeps
+   * seeing it afterward the same way any other secret effect's identity is recalled. Converting
+   * AWAY from secret needs identity supplied — pulled from the vault if it was previously secret,
+   * or from `newIdentity` for a fresh name/description/source (e.g. revealing a secret effect
+   * under a new in-fiction name the DM wants to announce).
+   */
+  convertEffectVisibility(effectId: string, visibility: EffectVisibility, newIdentity?: { name?: string; description?: string; source?: string }): string {
+    this.need('dm');
+    const current = this.view?.effects[effectId]?.definition;
+    if (visibility === 'secret') {
+      if (current && current.visibility !== 'secret') {
+        const secret: SecretEffectMeta = {
+          effectId, name: current.name ?? effectId, description: current.description ?? '',
+          source: current.source ?? '', notes: this.secretCache[effectId]?.notes ?? '',
+          hiddenDurationReason: this.secretCache[effectId]?.hiddenDurationReason ?? '',
+        };
+        this.secretCache[effectId] = secret;
+        if (this.cfg.vault) void this.cfg.vault.put(secret);
+      }
+      return this.sendRaw({ kind: 'dm.convert_effect_visibility', effectId, visibility, identity: { name: null, description: null, source: null } });
+    }
+    const cached = this.secretCache[effectId];
+    const name = newIdentity?.name ?? cached?.name ?? current?.name ?? effectId;
+    const description = newIdentity?.description ?? cached?.description ?? current?.description ?? '';
+    const source = newIdentity?.source ?? cached?.source ?? current?.source ?? '';
+    return this.sendRaw({ kind: 'dm.convert_effect_visibility', effectId, visibility, identity: { name, description, source } });
   }
 
   /** Effects as the DM sees them, with secret identity joined in from the local vault. */

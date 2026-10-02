@@ -763,6 +763,29 @@ export class SessionHost {
         return done('applied');
       }
 
+      case 'dm.convert_effect_visibility': {
+        const eff = this.state.effects[body.effectId];
+        if (!eff) return done('rejected', 'unknown-effect');
+        if (body.visibility !== 'public' && body.visibility !== 'target' && body.visibility !== 'secret') return done('rejected', 'bad-visibility');
+        const id = body.identity;
+        if (!isObj(id) || !optStr(id.name) || !optStr(id.description) || !optStr(id.source)) return done('rejected', 'malformed');
+        if (body.visibility === 'secret' && (id.name !== null || id.description !== null || id.source !== null)) {
+          return done('rejected', 'secret-metadata-not-allowed');
+        }
+        if (body.visibility !== 'secret' && id.name === null) return done('rejected', 'malformed');
+        this.commit({ t: 'effect_visibility_converted', effectId: eff.definition.id, visibility: body.visibility, name: id.name, description: id.description, source: id.source }, pid,
+          { kind: 'effect_convert', text: `${id.name ?? eff.definition.id} is now ${body.visibility}`, scope: 'dm', refId: eff.definition.id });
+        // Converting visibility can change WHO is entitled to see this effect at all (e.g. public
+        // -> secret means non-targets must stop seeing it entirely; secret -> public means
+        // everyone should start seeing identity they never had) — a narrow event can't express
+        // that for a replica that has nothing, or too much, already. Full resync for everyone,
+        // same fix as dm.set_combatant_visibility above.
+        for (const [otherId, entry] of this.entries) {
+          if (entry.conn) this.sendSnapshot(otherId);
+        }
+        return done('applied');
+      }
+
       case 'dm.unlink_campaign': {
         if (!this.state.campaign) return done('rejected', 'no-campaign-linked');
         const name = this.state.campaign.name;

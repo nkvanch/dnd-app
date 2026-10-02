@@ -916,18 +916,56 @@ function EffectCard({ effectId, displayName, secret, effect, players, nameOf, of
   run: (fn: () => unknown) => void;
 }) {
   const [addingTarget, setAddingTarget] = useState(false);
+  const [revealing, setRevealing] = useState<'public' | 'target' | null>(null);
+  const [revealName, setRevealName] = useState('');
+  const [revealDescription, setRevealDescription] = useState('');
   const alreadyTargeted = new Set(Object.values(effect.applications).filter(a => a.state !== 'ENDED').map(a => a.targetId));
   const addable = players.filter(p => !alreadyTargeted.has(p.id));
+  const visibility = effect.definition.visibility;
 
   return (
-    <Card tone={effect.definition.visibility === 'secret' ? 'secret' : 'default'} testID={`dm-live-effect-${displayName}`}>
+    <Card tone={visibility === 'secret' ? 'secret' : 'default'} testID={`dm-live-effect-${displayName}`}>
       <Row wrap>
-        <Body bold>{effect.definition.visibility === 'secret' ? '🔒 ' : ''}{displayName}</Body>
-        <Badge label={effect.definition.visibility} tone={effect.definition.visibility === 'secret' ? 'secret' : 'default'} />
+        <Body bold>{visibility === 'secret' ? '🔒 ' : ''}{displayName}</Body>
+        <Badge label={visibility} tone={visibility === 'secret' ? 'secret' : 'default'} />
       </Row>
       {secret && <Muted>DM only: {secret.description}{secret.notes ? ` · ${secret.notes}` : ''}</Muted>}
       {!!effect.definition.source && <Muted>Source: {effect.definition.source}</Muted>}
       <Muted>{effect.definition.components.map(describeEffectComponent).join(', ') || 'no numeric change'}</Muted>
+
+      {revealing ? (
+        <Card testID={`dm-reveal-editor-${displayName}`}>
+          <Muted>Reveal as {revealing === 'public' ? 'public' : 'target-only'} — confirm or edit the identity everyone{revealing === 'target' ? ' who is a target' : ''} will now see.</Muted>
+          <Field label="Name" value={revealName} onChangeText={setRevealName} testID={`dm-reveal-name-${displayName}`} />
+          <Field label="Description (optional)" value={revealDescription} onChangeText={setRevealDescription} multiline testID={`dm-reveal-description-${displayName}`} />
+          <Row wrap>
+            <Btn small label="Reveal" disabled={offline || !revealName.trim()} testID={`dm-reveal-confirm-${displayName}`}
+              onPress={() => {
+                run(() => peer.convertEffectVisibility(effectId, revealing, { name: revealName.trim(), description: revealDescription.trim() }));
+                setRevealing(null);
+              }} />
+            <Btn small kind="ghost" label="Cancel" onPress={() => setRevealing(null)} />
+          </Row>
+        </Card>
+      ) : (
+        <Row wrap>
+          <Muted>Visibility:</Muted>
+          <Chip label="Public" active={visibility === 'public'} testID={`dm-convert-public-${displayName}`}
+            onPress={() => {
+              if (visibility === 'public') return;
+              if (visibility === 'secret') { setRevealing('public'); setRevealName(displayName); setRevealDescription(secret?.description ?? ''); }
+              else run(() => peer.convertEffectVisibility(effectId, 'public'));
+            }} />
+          <Chip label="Target only" active={visibility === 'target'} testID={`dm-convert-target-${displayName}`}
+            onPress={() => {
+              if (visibility === 'target') return;
+              if (visibility === 'secret') { setRevealing('target'); setRevealName(displayName); setRevealDescription(secret?.description ?? ''); }
+              else run(() => peer.convertEffectVisibility(effectId, 'target'));
+            }} />
+          <Chip label="Secret" active={visibility === 'secret'} testID={`dm-convert-secret-${displayName}`}
+            onPress={() => { if (visibility !== 'secret') run(() => peer.convertEffectVisibility(effectId, 'secret')); }} />
+        </Row>
+      )}
       {Object.values(effect.applications).map(a => (
         <Row wrap key={a.id}>
           <Body>{nameOf(a.targetId)}</Body>

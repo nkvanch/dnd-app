@@ -207,6 +207,11 @@ export function applyEvent(prev: LiveState, ev: LiveEvent): LiveState {
     case 'session_log_added':
       s.sessionLog.push(b.entry);
       break;
+    case 'effect_visibility_converted': {
+      const eff = s.effects[b.effectId];
+      if (eff) eff.definition = { ...eff.definition, visibility: b.visibility, name: b.name, description: b.description, source: b.source };
+      break;
+    }
     case 'campaign_unlinked':
       s.campaign = null;
       break;
@@ -514,6 +519,12 @@ export function projectEvent(after: LiveState, ev: LiveEvent, viewer: Viewer): L
       // Table-wide narrative recap (see SessionLogEntry's own doc comment) — never secret, just
       // never shown to a Host-only participant, same carve-out as everything else gameplay-shaped.
       return level === 'host' ? null : keep(b);
+
+    case 'effect_visibility_converted':
+      // A Player always gets a forced full resync from host.ts right after this commits (see the
+      // event's own doc comment) — converting visibility can change WHO can see the effect at
+      // all, not just redact one field, so there is no safe narrow projection to compute here.
+      return level === 'dm' ? keep(b) : null;
   }
 }
 

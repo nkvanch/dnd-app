@@ -482,6 +482,13 @@ export type LiveEventBody =
   | { t: 'reward_resolved';     rewardId: string; status: RewardStatus; playerNote: string | null }
   | { t: 'reward_superseded';   rewardId: string; supersededBy: string }
   | { t: 'session_log_added';   entry: SessionLogEntry }
+  /** DM_SCREEN_SPEC.md item 8's "convert public <-> secret where appropriate". Carries the FULL
+   *  resulting identity (null for 'secret') rather than a delta — host.ts's dm.convert_effect_
+   *  visibility always forces a full resync afterward anyway (the same lesson as Monster
+   *  Visibility: a Player's replica may have never had this effect's definition at all, or may
+   *  need to stop seeing it entirely), so there is no narrower shape worth optimizing for. */
+  | { t: 'effect_visibility_converted'; effectId: string; visibility: EffectVisibility;
+      name: string | null; description: string | null; source: string | null }
   | { t: 'campaign_unlinked' }
   | { t: 'effect_target_added'; effectId: string; application: EffectApplication }
   | { t: 'session_ended' };
@@ -544,6 +551,8 @@ export type OpBody =
   | { kind: 'dm.cancel_reward';     rewardId: string }
   | { kind: 'player.respond_reward'; rewardId: string; decision: 'accept' | 'reject' | 'modify'; note?: string }
   | { kind: 'dm.add_session_log';   entryId: string; logKind: SessionLogKind; text: string }
+  | { kind: 'dm.convert_effect_visibility'; effectId: string; visibility: EffectVisibility;
+      identity: { name: string | null; description: string | null; source: string | null } }
   | { kind: 'dm.unlink_campaign' }
   | { kind: 'dm.add_effect_target'; effectId: string; targetId: ParticipantId }
   | { kind: 'host.assign_capabilities'; participantId: ParticipantId; capabilities: Capability[] }

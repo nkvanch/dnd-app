@@ -13,7 +13,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-
 import { applySpellChoiceToEntity } from '../engine/leveling';
 import type { SpellIndexEntry } from '../content/spellRepo.types';
 import { mergeSpellIndex } from '../content/contentResolution';
-import { spellListsForClass, filterSpellsForClass } from '../content/spellLists';
+import { spellListsForClass, filterSpellsForClass, spellSourceLabel } from '../content/spellLists';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { Entity, ChoiceState, CampaignRules } from '../engine/types';
 import { SortOption, nameSortOptions, sortByOption } from '../content/contentQuery';
@@ -93,9 +93,11 @@ export function SpellChoicePicker({
   ], [isCantripChoice]);
 
   const classSpellLists = useMemo(() => spellListsForClass(spellLists, classId), [spellLists, classId]);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  const classSpellSource = useMemo(() => getMergedContentDB().classes.find(c => c.id === classId)?.spellListSource, [getMergedContentDB, classId]);
   const classFiltered = useMemo(
-    () => filterSpellsForClass(allSpells, classId, activeSpellListId, spellLists),
-    [allSpells, classId, activeSpellListId, spellLists],
+    () => filterSpellsForClass(allSpells, classId, activeSpellListId, spellLists, classSpellSource),
+    [allSpells, classId, activeSpellListId, spellLists, classSpellSource],
   );
 
   const preFilterOptions = useMemo(() => {
@@ -192,12 +194,12 @@ export function SpellChoicePicker({
               onChange={v => setCastFilter(v ?? 'all')}
             />
           </FilterSection>
-          {classSpellLists.length > 0 && (
+          {(classSpellLists.length > 0 || !!classSpellSource) && (
             <FilterSection label="Spell Source">
               {/* "Official" is always an explicit option — FilterChipRow hides itself at <=1
                   option, so a class with exactly one Spell List would otherwise show nothing. */}
               <FilterChipRow
-                options={[{ id: 'official', label: 'Official' }, ...classSpellLists.map(l => ({ id: l.id, label: l.name }))]}
+                options={[{ id: 'official', label: classSpellSource ? `Class default · ${spellSourceLabel(classSpellSource, spellLists, getMergedContentDB().classes) ?? ''}` : 'Official' }, ...classSpellLists.map(l => ({ id: l.id, label: l.name }))]}
                 value={activeSpellListId ?? 'official'}
                 onChange={id => setActiveSpellListId(!id || id === 'official' ? null : id)}
               />

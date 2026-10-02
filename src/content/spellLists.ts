@@ -4,7 +4,9 @@
 // pick from" into an actual filtered pool, instead of each re-deriving the
 // same `!s.classes || s.classes.includes(classId)` idiom (which is what they
 // did before this file existed, and is still the DEFAULT pool below).
-import { SpellList } from '../engine/types';
+import { SpellList, CharClass } from '../engine/types';
+
+export type SpellListSource = NonNullable<CharClass['spellListSource']>;
 
 /** Every spell list suggested for this class — doesn't restrict who else can pick a list (see
  *  SpellList.classId's own doc comment), just what's offered first/by default for this class. */
@@ -32,6 +34,8 @@ export function filterSpellsForClass<T extends { id: string; classes?: string[] 
   classId: string,
   activeSpellListId: string | null | undefined,
   spellLists: SpellList[],
+  /** The class's own chosen default source (CharClass.spellListSource), used when no list is active. */
+  defaultSource?: SpellListSource | null,
 ): T[] {
   if (activeSpellListId) {
     const list = spellLists.find(l => l.id === activeSpellListId);
@@ -40,5 +44,25 @@ export function filterSpellsForClass<T extends { id: string; classes?: string[] 
       return allSpells.filter(s => idSet.has(s.id));
     }
   }
+  if (defaultSource?.kind === 'list') {
+    const list = spellLists.find(l => l.id === defaultSource.listId);
+    if (list) {
+      const idSet = new Set(list.spellIds);
+      return allSpells.filter(s => idSet.has(s.id));
+    }
+    // The chosen list no longer exists (deleted, or not imported): fall back to the class's own pool.
+  }
+  if (defaultSource?.kind === 'class') return allSpells.filter(s => isSpellInClassPool(s, defaultSource.classId));
   return allSpells.filter(s => isSpellInClassPool(s, classId));
+}
+
+/** Human label for a class's chosen spell source, or null when it uses its own pool. */
+export function spellSourceLabel(
+  source: SpellListSource | null | undefined,
+  spellLists: readonly SpellList[],
+  classes: readonly { id: string; name: string }[],
+): string | null {
+  if (!source) return null;
+  if (source.kind === 'list') return spellLists.find(l => l.id === source.listId)?.name ?? null;
+  return `${classes.find(c => c.id === source.classId)?.name ?? source.classId} spell list`;
 }

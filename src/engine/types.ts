@@ -604,6 +604,12 @@ export type CharClass  = {
    */
   modeGroups?:            ModeGroup[];
   /**
+   * Where this class's spell choices come from by default: an existing homebrew Spell List, or the
+   * spell list of another (official or homebrew) class. Unset = spells tagged for this class's own
+   * id, as before. The picker's "Spell Source" filter can still switch to any other list.
+   */
+  spellListSource?:       { kind: 'class'; classId: string } | { kind: 'list'; listId: string };
+  /**
    * PHB "Multiclassing Proficiencies" table entry for this class when taken
    * as a SECOND-OR-LATER class (not your starting class) — applied instead
    * of the class's normal level-1 proficiency grant by levelUpClass(). A

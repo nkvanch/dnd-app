@@ -216,6 +216,11 @@ export function rewriteContentReferences(type: ContentCacheType, item: HomebrewC
       return {
         ...cls,
         startingEquipment: cls.startingEquipment?.map(id => remapId(remap, 'item', id)),
+        spellListSource: cls.spellListSource
+          ? (cls.spellListSource.kind === 'list'
+              ? { kind: 'list' as const, listId: remapId(remap, 'spellList', cls.spellListSource.listId) }
+              : { kind: 'class' as const, classId: remapId(remap, 'class', cls.spellListSource.classId) })
+          : undefined,
         levelFeatures: (cls.levelFeatures as (DraftTrait & { level: number })[] | undefined)?.map(trait => {
           if (trait.effectKind !== 'spell_grant') return trait;
           return {

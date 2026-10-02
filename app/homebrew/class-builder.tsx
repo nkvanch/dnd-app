@@ -106,6 +106,7 @@ export default function ClassBuilderScreen() {
   const saveItem = useHomebrewStore(s => s.saveItem);
   const homebrewItems = useHomebrewStore(s => s.items);
   const homebrewClasses = useHomebrewStore(s => s.classes);
+  const savedSpellLists = useHomebrewStore(s => s.spellLists);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing = editId ? homebrewClasses.find(c => c.id === editId) ?? null : null;
   const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
@@ -149,6 +150,14 @@ export default function ClassBuilderScreen() {
   const [spellStyle,      setSpellStyle]      = useState<'full'|'half'|'pact'>('full');
   const [spellPrepPolicy, setSpellPrepPolicy] = useState<'known'|'spellbook_prepared'|'full_list_prepared'>('known');
   const [spellStartLevel, setSpellStartLevel] = useState('1');
+  // Where this class's spell choices come from: 'own' (spells tagged for this class), another class's
+  // spell list ('class:<id>'), or one of the player's saved Spell Lists ('list:<id>').
+  const [spellSource, setSpellSource] = useState<string>('own');
+  // Classes whose spell list can be borrowed: every spellcasting class, official or homebrew (not this one).
+  const borrowableClasses = useMemo(() => {
+    const all = [...globalContentDB.classes, ...homebrewClasses.filter(c => !globalContentDB.classes.some(o => o.id === c.id))];
+    return all.filter(c => c.id !== editing?.id && (c.spellcastingAbility || (c.spellcastingAbilityOptions?.length ?? 0) > 0 || c.spellcastingStyle));
+  }, [homebrewClasses, editing?.id]);
 
   // ── Per-level features
   const [levelFeatures, setLevelFeatures] = useState<LevelFeature[]>([]);
@@ -203,6 +212,9 @@ export default function ClassBuilderScreen() {
         ? editing.spellPreparationPolicy : 'known'
     );
     setSpellStartLevel(String(editing.spellcastingStartLevel ?? 1));
+    setSpellSource(editing.spellListSource
+      ? (editing.spellListSource.kind === 'list' ? `list:${editing.spellListSource.listId}` : `class:${editing.spellListSource.classId}`)
+      : 'own');
     setLevelFeatures((editing.levelFeatures ?? []).map(normalizeLevelFeature));
     setAsiLevels(editing.asiLevels ?? [...DEFAULT_ASI_LEVELS]);
     // CHOICE-AUTHORING-1: CharClass.levelChoices stores already-compiled
@@ -339,6 +351,9 @@ export default function ClassBuilderScreen() {
       spellcastingStyle:       isCaster ? spellStyle   : undefined,
       spellPreparationPolicy:  isCaster && spellPrepPolicy !== 'known' ? spellPrepPolicy : undefined,
       spellcastingStartLevel:  isCaster && startLvl > 1 ? startLvl : undefined,
+      spellListSource:         isCaster && spellSource.startsWith('list:') ? { kind: 'list' as const, listId: spellSource.slice(5) }
+                               : isCaster && spellSource.startsWith('class:') ? { kind: 'class' as const, classId: spellSource.slice(6) }
+                               : undefined,
       asiLevels:               JSON.stringify(asiLevels) !== JSON.stringify(DEFAULT_ASI_LEVELS)
                                  ? asiLevels : undefined,
       levelFeatures:           levelFeatures.length > 0 ? levelFeatures : undefined,
@@ -750,6 +765,40 @@ export default function ClassBuilderScreen() {
                 </Pressable>
               );
             })}
+
+            <Text style={styles.fieldLabel}>Spell List</Text>
+            <Text style={styles.hint}>
+              Which spells this class picks from by default. Choose one of your saved Spell Lists or borrow
+              another class's list. (A player can still switch to a different list while picking.)
+            </Text>
+            <View style={styles.chipRow}>
+              <Pressable style={[styles.chip, spellSource === 'own' && styles.chipActive]} onPress={() => setSpellSource('own')}>
+                <Text style={[styles.chipTxt, spellSource === 'own' && styles.chipTxtActive]}>This class's own</Text>
+              </Pressable>
+            </View>
+            {savedSpellLists.length > 0 && (
+              <>
+                <Text style={styles.hint}>Your Spell Lists</Text>
+                <View style={styles.chipRow}>
+                  {savedSpellLists.map(l => (
+                    <Pressable key={l.id} style={[styles.chip, spellSource === `list:${l.id}` && styles.chipActive]} onPress={() => setSpellSource(`list:${l.id}`)}>
+                      <Text style={[styles.chipTxt, spellSource === `list:${l.id}` && styles.chipTxtActive]}>{l.name} ({l.spellIds.length})</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+            <Text style={styles.hint}>Another class's list</Text>
+            <View style={styles.chipRow}>
+              {borrowableClasses.map(c => (
+                <Pressable key={c.id} style={[styles.chip, spellSource === `class:${c.id}` && styles.chipActive]} onPress={() => setSpellSource(`class:${c.id}`)}>
+                  <Text style={[styles.chipTxt, spellSource === `class:${c.id}` && styles.chipTxtActive]}>{c.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {savedSpellLists.length === 0 && (
+              <Text style={styles.hint}>No saved Spell Lists yet. Create one under Homebrew, then pick it here.</Text>
+            )}
 
             <Text style={styles.fieldLabel}>Spellcasting Begins at Level</Text>
             <TextInput

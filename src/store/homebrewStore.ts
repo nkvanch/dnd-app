@@ -21,14 +21,18 @@ import {
   ContentCacheType, HomebrewContent, ContentVersionEntry,
 } from '../db/contentCacheRepo';
 import { getMeta, setMeta } from '../db/appMetaRepo';
-import { BUILTIN_HOMEBREW } from '../content/builtinHomebrew';
+import { BUILTIN_HOMEBREW, BUILTIN_HOMEBREW_IDS } from '../content/builtinHomebrew';
 import { globalContentDB } from '../content/classes/library';
 
 // ids of built-in items for fast lookup
-const BUILTIN_IDS = new Set<string>([
-  ...BUILTIN_HOMEBREW.classes.map(c => c.id),
-  ...BUILTIN_HOMEBREW.races.map(r => r.id),
-]);
+const BUILTIN_IDS = BUILTIN_HOMEBREW_IDS;
+
+/** Built-ins not deleted by the user and not overridden by a user-edited SQLite copy (that copy
+ *  wins), followed by the SQLite entries. Order is irrelevant — every picker dedups by id. */
+function withBuiltins<T extends { id: string }>(builtin: readonly T[], stored: T[], deleted: Set<string>): T[] {
+  const have = new Set(stored.map(x => x.id));
+  return [...builtin.filter(b => !deleted.has(b.id) && !have.has(b.id)), ...stored];
+}
 
 /** Persist the set of deleted built-in ids to app_meta. */
 async function persistDeletedBuiltins(ids: Set<string>): Promise<void> {
@@ -194,35 +198,21 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         loadDeletedBuiltins(),
       ]);
 
-      const sqliteClasses     = (all.class      ?? []) as CharClass[];
-      const sqliteRaces        = (all.race       ?? []) as Race[];
-      const sqliteClassIds    = new Set(sqliteClasses.map(c => c.id));
-      const sqliteRaceIds     = new Set(sqliteRaces.map(r => r.id));
-
-      // Inject built-in homebrew that hasn't been deleted and hasn't been
-      // overridden by a user-edited SQLite copy (SQLite copy takes precedence).
-      const builtinClasses = BUILTIN_HOMEBREW.classes.filter(
-        c => !deletedIds.has(c.id) && !sqliteClassIds.has(c.id)
-      );
-      const builtinRaces = BUILTIN_HOMEBREW.races.filter(
-        r => !deletedIds.has(r.id) && !sqliteRaceIds.has(r.id)
-      );
+      const sqliteClasses = (all.class ?? []) as CharClass[];
+      const sqliteRaces   = (all.race  ?? []) as Race[];
 
       set({
-        // Built-ins first so SQLite copies (edits) appear after and
-        // dedup logic in pickers uses the last occurrence — but since
-        // SQLite copies filtered out by id above, order doesn't matter.
-        classes:     [...builtinClasses, ...sqliteClasses],
-        races:       [...builtinRaces,   ...sqliteRaces],
+        classes:     withBuiltins(BUILTIN_HOMEBREW.classes,    sqliteClasses, deletedIds),
+        races:       withBuiltins(BUILTIN_HOMEBREW.races,      sqliteRaces,   deletedIds),
         subraces:    (all.subrace    ?? []) as Subrace[],
-        subclasses:  (all.subclass   ?? []) as HomebrewSubclass[],
-        spells:      (all.spell      ?? []) as Spell[],
+        subclasses:  withBuiltins(BUILTIN_HOMEBREW.subclasses, (all.subclass ?? []) as HomebrewSubclass[], deletedIds),
+        spells:      withBuiltins(BUILTIN_HOMEBREW.spells,     (all.spell    ?? []) as Spell[],            deletedIds),
         backgrounds: (all.background ?? []) as Background[],
         features:    (all.feature    ?? []) as Feature[],
-        items:       (all.item       ?? []) as Item[],
-        feats:       (all.feat       ?? []) as Feat[],
-        monsters:    (all.monster    ?? []) as MonsterTemplate[],
-        conditions:  (all.condition  ?? []) as Condition[],
+        items:       withBuiltins(BUILTIN_HOMEBREW.items,      (all.item     ?? []) as Item[],             deletedIds),
+        feats:       withBuiltins(BUILTIN_HOMEBREW.feats,      (all.feat     ?? []) as Feat[],             deletedIds),
+        monsters:    withBuiltins(BUILTIN_HOMEBREW.monsters,   (all.monster  ?? []) as MonsterTemplate[],  deletedIds),
+        conditions:  withBuiltins(BUILTIN_HOMEBREW.conditions, (all.condition ?? []) as Condition[],       deletedIds),
         spellLists:  (all.spellList  ?? []) as SpellList[],
         isLoading:   false,
       });

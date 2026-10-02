@@ -14,7 +14,9 @@
 // effect-bearing features), so it carries its full progression in
 // `rawProgression`. getProgressionForClass honours that verbatim.
 // ============================================================================
-import { CharClass, Race } from '../engine/types';
+import { CharClass, Race, Feat, Item, Condition, Spell } from '../engine/types';
+import type { MonsterTemplate } from './monsters/types';
+import type { HomebrewSubclass } from '../engine/types';
 import { abyssKnightProgression } from './classes/abyssKnight';
 import { bloodHunterProgression } from './classes/bloodHunter';
 import { raceSkeleton } from './races/index';
@@ -67,9 +69,21 @@ const bloodHunterClass: CharClass = {
 
 /** All built-in homebrew, grouped by content type for seeding. */
 export const BUILTIN_HOMEBREW = {
-  classes: [abyssKnightClass, bloodHunterClass] as CharClass[],
-  races:   [raceSkeleton]     as Race[],
+  classes:    [abyssKnightClass, bloodHunterClass] as CharClass[],
+  races:      [raceSkeleton]     as Race[],
+  subclasses: [] as HomebrewSubclass[],
+  feats:      [] as Feat[],
+  items:      [] as Item[],
+  monsters:   [] as MonsterTemplate[],
+  conditions: [] as Condition[],
+  spells:     [] as Spell[],
 };
+
+/** Every built-in id across all content types — the store uses this to tell a built-in (whose
+ *  deletion is remembered in app_meta) from a user-created entry (whose deletion hits SQLite). */
+export const BUILTIN_HOMEBREW_IDS: ReadonlySet<string> = new Set(
+  Object.values(BUILTIN_HOMEBREW).flatMap(list => (list as { id: string }[]).map(x => x.id)),
+);
 
 /** Stable list of [type, item] pairs for the seeding loop. */
 export const BUILTIN_HOMEBREW_SEED: Array<

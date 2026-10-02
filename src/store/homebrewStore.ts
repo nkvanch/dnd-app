@@ -23,6 +23,7 @@ import {
 import { getMeta, setMeta } from '../db/appMetaRepo';
 import { BUILTIN_HOMEBREW, BUILTIN_HOMEBREW_IDS } from '../content/builtinHomebrew';
 import { globalContentDB } from '../content/classes/library';
+import { registerHomebrewConditions } from '../content/conditions/index';
 
 // ids of built-in items for fast lookup
 const BUILTIN_IDS = BUILTIN_HOMEBREW_IDS;
@@ -208,7 +209,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
         subclasses:  withBuiltins(BUILTIN_HOMEBREW.subclasses, (all.subclass ?? []) as HomebrewSubclass[], deletedIds),
         spells:      withBuiltins(BUILTIN_HOMEBREW.spells,     (all.spell    ?? []) as Spell[],            deletedIds),
         backgrounds: (all.background ?? []) as Background[],
-        features:    (all.feature    ?? []) as Feature[],
+        features:    withBuiltins(BUILTIN_HOMEBREW.features, (all.feature ?? []) as Feature[], deletedIds),
         items:       withBuiltins(BUILTIN_HOMEBREW.items,      (all.item     ?? []) as Item[],             deletedIds),
         feats:       withBuiltins(BUILTIN_HOMEBREW.feats,      (all.feat     ?? []) as Feat[],             deletedIds),
         monsters:    withBuiltins(BUILTIN_HOMEBREW.monsters,   (all.monster  ?? []) as MonsterTemplate[],  deletedIds),
@@ -359,3 +360,13 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     });
   },
 }));
+
+// Keep the engine-side homebrew condition lookup (content/conditions/index.ts) in step with the
+// store, so an ability that applies a homebrew condition by id attaches that condition's features.
+let lastConditions: Condition[] | null = null;
+useHomebrewStore.subscribe(state => {
+  if (state.conditions !== lastConditions) {
+    lastConditions = state.conditions;
+    registerHomebrewConditions(state.conditions);
+  }
+});

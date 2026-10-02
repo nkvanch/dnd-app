@@ -6,7 +6,7 @@ import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect, DurationT
 import { recomputeDerived, collectAllEffects } from './pipeline';
 import { resolveResistance } from './resolver';
 import { tickDurations, applyCondition, removeCondition } from './conditions';
-import { CONDITIONS_BY_ID } from '../content/conditions/index';
+import { lookupCondition } from '../content/conditions/index';
 import { rollD20 as rollD20Dice } from './dice';
 import { DEFAULT_RULES } from '../store/characterStore';
 import { deathSavesPersist } from './houseRules';
@@ -822,13 +822,11 @@ export function isDead(entity: Entity): boolean {
  * pickers already use — the 40+ real content entries authoring these
  * (monster fear/poison/paralyze attacks, several subclass features) used
  * to display correctly but produce zero actual game-state change (audit
- * finding ARCH-2). Condition features are resolved via CONDITIONS_BY_ID
- * (official content only) — this file lives in src/engine/, which
- * deliberately has no dependency on src/store/* (confirmed elsewhere in
- * this codebase), so a homebrew condition applied this way gets its
- * features attached only if it happens to share an id with a known
- * official one; same disclosed limitation preparedEncounter.ts's own
- * identical CONDITIONS_BY_ID usage already has.
+ * finding ARCH-2). Condition features are resolved via lookupCondition
+ * (official content, then the homebrew conditions the homebrew store
+ * registers — this file lives in src/engine/, which deliberately has no
+ * dependency on src/store/*, so the store pushes them into
+ * content/conditions/index.ts's registry instead).
  *
  * grant_speed and spend_resource (beyond the base activation cost) are
  * still intentionally left for a future pass — not silently claimed as
@@ -884,7 +882,7 @@ export function applyAbilityEffects(
     } else if (effect.type === 'restore_resource') {
       updated = restoreResource(updated, effect.resourceId, effect.amount);
     } else if (effect.type === 'apply_condition' && isSelfAndUnconditional) {
-      const features = CONDITIONS_BY_ID[effect.conditionId]?.features;
+      const features = lookupCondition(effect.conditionId)?.features;
       updated = applyCondition(updated, effect.conditionId, 'ability', rules, features, effect.duration);
     } else if (effect.type === 'remove_condition' && isSelfAndUnconditional) {
       updated = removeCondition(updated, effect.conditionId, rules);

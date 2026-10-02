@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { Entity, ActionCard, CampaignRules, ActivationOption, SpellCastingContext } from '../../engine/types';
 import { endWildShape, endAttackSequence } from '../../engine/combat';
+import { collectAllEffects } from '../../engine/pipeline';
 import { getTriggeredFeatures, isFeatureAvailable, formatCastingContextLabel, CardGenOptions, isContextLegalForCastMode, needsPreparationOverride } from '../../engine/actionCards';
 import { applyActionCardUse } from '../../engine/actionUse';
 import { useSpellPayment } from './SpellPaymentChooser';
@@ -575,8 +576,22 @@ const UNIVERSAL_ACTIONS: { name: string; blurb: string }[] = [
   { name: 'Use an Object', blurb: 'Interact with a second object or feature of the environment this turn, beyond the one free interaction you already get.' },
 ];
 
-function UniversalActionsSection() {
+/** Universal actions a feature/condition forbids: an effect on target `disable_action:<name>`
+ *  (e.g. `disable_action:dash` from the Braced condition) with operation 'set' and a truthy value. */
+function disabledUniversalActions(entity: Entity): Set<string> {
+  const out = new Set<string>();
+  for (const ae of collectAllEffects(entity)) {
+    const e = ae.effect;
+    if (e.operation === 'set' && e.value && e.target.startsWith('disable_action:')) {
+      out.add(e.target.slice('disable_action:'.length).toLowerCase());
+    }
+  }
+  return out;
+}
+
+function UniversalActionsSection({ entity }: { entity: Entity }) {
   const [open, setOpen] = useState(false);
+  const disabled = disabledUniversalActions(entity);
   return (
     <View style={styles.section}>
       <Pressable style={styles.universalHeader} onPress={() => setOpen(o => !o)}>
@@ -585,8 +600,10 @@ function UniversalActionsSection() {
       </Pressable>
       {open && UNIVERSAL_ACTIONS.map(a => (
         <View key={a.name} style={styles.universalRow}>
-          <Text style={styles.universalName}>{a.name}</Text>
-          <Text style={styles.universalBlurb}>{a.blurb}</Text>
+          <Text style={[styles.universalName, disabled.has(a.name.toLowerCase()) && { textDecorationLine: 'line-through', opacity: 0.6 }]}>{a.name}</Text>
+          <Text style={styles.universalBlurb}>
+            {disabled.has(a.name.toLowerCase()) ? "Unavailable right now — an active condition or feature forbids it." : a.blurb}
+          </Text>
         </View>
       ))}
     </View>
@@ -918,7 +935,7 @@ function TabActionsInner({ entity, rules, onEntityUpdate, onEndTurn }: Props) {
       <Section title="BONUS ACTIONS" cards={bonusActions} entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
       <Section title="REACTIONS"     cards={reactions}    entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
       <Section title="FREE (WITH ANOTHER ACTION)" cards={freeActions} entity={entity} onUse={handleUse} onToggleFavorite={handleToggleFavorite} />
-      <UniversalActionsSection />
+      <UniversalActionsSection entity={entity} />
       <TriggeredFeaturesSection entity={entity} />
 
       {paymentChooser}

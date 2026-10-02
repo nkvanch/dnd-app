@@ -16,7 +16,7 @@ import { MonsterTemplate } from '../content/monsters/types';
 import { spawnMonster, isValidManualHp } from './monsterFactory';
 import { resolveMonsterById } from '../content/contentResolution';
 import { applyCondition } from './conditions';
-import { CONDITIONS_BY_ID } from '../content/conditions/index';
+import { lookupCondition } from '../content/conditions/index';
 
 function genId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -158,7 +158,7 @@ function spawnPreparedCombatant(
   entity = { ...entity, identity: { ...entity.identity, name: suffixedName } };
 
   for (const conditionId of combatant.startingConditionIds ?? []) {
-    const condition = CONDITIONS_BY_ID[conditionId];
+    const condition = lookupCondition(conditionId);
     entity = applyCondition(entity, conditionId, 'prepared_encounter', rules, condition?.features);
   }
 

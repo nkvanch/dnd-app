@@ -8,6 +8,7 @@ import { Entity, Item, ItemInstance, CampaignRules, Feature } from './types';
 import { recomputeDerived } from './pipeline';
 import { DEFAULT_RULES } from '../store/characterStore';
 import { hydrateItemInstanceDefinitionFacts, generateItemInstanceId } from './itemMechanics';
+import { applyGrant } from './leveling';
 
 export { generateItemInstanceId } from './itemMechanics';
 
@@ -74,7 +75,14 @@ export function equipItem(
       equipped: [...entity.inventory.equipped, hydrated],
     },
   };
-  return recomputeDerived(updated, rules);
+  // First equip of an item that carries its own limited-use pools (Item.resources): create each
+  // pool once. applyGrant never resets an existing pool's current/maximum, so re-equipping a
+  // half-spent item keeps its remaining charges.
+  const withPools = (itemDef?.resources ?? []).reduce<Entity>(
+    (e, r) => applyGrant(e, { kind: 'resource', value: r }, e.identity.level, undefined, { kind: 'item', id: itemId }),
+    updated,
+  );
+  return recomputeDerived(withPools, rules);
 }
 
 /**

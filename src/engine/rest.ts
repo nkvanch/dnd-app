@@ -11,6 +11,7 @@ import { DEFAULT_RULES } from '../store/characterStore';
 import { getClassLevels } from './multiclass';
 import { bumpedHitDie, hitDieTierFromEffects } from './hitDieTier';
 import { pactSlotTableFor } from '../content/classes/spellSlotTables';
+import { rollExpression } from './dice';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -25,14 +26,26 @@ import { pactSlotTableFor } from '../content/classes/spellSlotTables';
  * the final decision already made — see longRest's own doc comment for why
  * that ordering is what keeps this atomic.
  */
+/**
+ * A dawn recharge is either 'dawn' (refills the pool) or 'dawn:<dice>' — "regains 1d3 expended
+ * charges at dawn" is 'dawn:1d3' (any expression rollExpression accepts, e.g. '1d4+1'). Returns
+ * null for every other recharge string.
+ */
+export function parseDawnRecharge(recharge: string): { dice: string | null } | null {
+  if (recharge === 'dawn') return { dice: null };
+  const m = /^dawn:(.+)$/.exec(recharge);
+  return m ? { dice: m[1].trim() } : null;
+}
+
 /** True when the character has at least one resource that recharges at dawn and is not full. */
 export function hasSpentDawnResources(entity: Entity): boolean {
-  return entity.resources.custom.some(r => r.recharge === 'dawn' && r.current < r.maximum);
+  return entity.resources.custom.some(r => parseDawnRecharge(r.recharge) !== null && r.current < r.maximum);
 }
 
 /**
  * The explicit "a new day begins" event: refills every resource tagged recharge:'dawn' (a magic
- * item's "regains charges at dawn", a homebrew "1/day" ability that renews at dawn). It is
+ * item's "regains charges at dawn", a homebrew "1/day" ability that renews at dawn), and rolls the
+ * dice for a 'dawn:<dice>' pool (regains that many expended uses, up to its maximum). It is
  * deliberately NOT part of a long rest — the app has no clock, so the player says when the day turns
  * — and it changes nothing else (no HP, slots or hit dice). Resources tagged short_rest, long_rest,
  * never, or free text are untouched.
@@ -43,7 +56,13 @@ export function takeDawn(entity: Entity, rules: CampaignRules = DEFAULT_RULES): 
     ...entity,
     resources: {
       ...entity.resources,
-      custom: entity.resources.custom.map(r => (r.recharge === 'dawn' ? { ...r, current: r.maximum } : r)),
+      custom: entity.resources.custom.map(r => {
+        const dawn = parseDawnRecharge(r.recharge);
+        if (!dawn) return r;
+        if (!dawn.dice) return { ...r, current: r.maximum };
+        const regained = Math.max(0, rollExpression(dawn.dice, r.name).total);
+        return { ...r, current: Math.min(r.maximum, r.current + regained) };
+      }),
     },
   };
   return recomputeDerived(refreshed, rules);

@@ -15,6 +15,7 @@ import { SpellChoicePicker } from '../SpellChoicePicker';
 import { RepeatedChoicePicker, RepeatedChoiceOption } from '../RepeatedChoicePicker';
 import { RemoveFeatureModal } from './RemoveFeatureModal';
 import { AddCustomFeatureModal } from './AddCustomFeatureModal';
+import { GrantRewardModal } from './GrantRewardModal';
 import { ChangeBackgroundModal } from './ChangeBackgroundModal';
 import { spellRepo } from '../../content/spellRepo';
 import { spellProgressFor, groupPendingSpellChoices } from '../../content/creationProgress';
@@ -138,6 +139,7 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
   const [removingFeatureId, setRemovingFeatureId] = useState<string | null>(null);
   const [addFeatOpen, setAddFeatOpen] = useState(false);
   const [addCustomFeatureOpen, setAddCustomFeatureOpen] = useState(false);
+  const [grantRewardOpen, setGrantRewardOpen] = useState(false);
   const [changeBackgroundOpen, setChangeBackgroundOpen] = useState(false);
 
   const pendingChoices = entity.choices.filter(c => !c.resolved);
@@ -274,6 +276,9 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
           </Pressable>
           <Pressable style={[styles.addFeatBtn, styles.addFeatBtnHalf]} onPress={() => setAddCustomFeatureOpen(true)}>
             <Text style={styles.addFeatBtnTxt}>+ Custom Feature</Text>
+          </Pressable>
+          <Pressable style={[styles.addFeatBtn, styles.addFeatBtnHalf]} onPress={() => setGrantRewardOpen(true)}>
+            <Text style={styles.addFeatBtnTxt}>+ Reward</Text>
           </Pressable>
         </View>
       )}
@@ -914,6 +919,16 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
           rules={rules ?? DEFAULT_RULES}
           onConfirm={(updated) => { onEntityUpdate?.(updated); setAddCustomFeatureOpen(false); }}
           onCancel={() => setAddCustomFeatureOpen(false)}
+        />
+      )}
+
+      {grantRewardOpen && (
+        <GrantRewardModal
+          visible
+          entity={entity}
+          rules={rules ?? DEFAULT_RULES}
+          onConfirm={(updated) => { onEntityUpdate?.(updated); setGrantRewardOpen(false); }}
+          onCancel={() => setGrantRewardOpen(false)}
         />
       )}
 

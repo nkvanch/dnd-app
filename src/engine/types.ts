@@ -670,6 +670,16 @@ export type Item = {
   imageUri?:  string;
   /** Which ruleset this item belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
   rulesetId?: RulesetId;
+  /**
+   * Limited-use pools this item carries (a wand's charges, a standard's "3 charges, regains 1d3
+   * at dawn"). Granted by inventory.ts's equipItem the first time the item is equipped, with
+   * recharge 'dawn:<dice>' supported for a partial dawn refill (see rest.ts's parseDawnRecharge).
+   * An activation on the item's feature spends the pool through its `resourceCost.resourceId`.
+   * The pool stays with the character when the item is unequipped (charges are not lost by
+   * putting the item away) and is dropped by removeFeature-style provenance cleanup only if the
+   * source is revoked.
+   */
+  resources?: ResourceGrant[];
 };
 
 /**
@@ -1798,6 +1808,19 @@ export type Feature = {
    * alongside the existing UniversalActionsSection.
    */
   trigger?: string;
+  /**
+   * Limited-use pools this feature brings with it (Weight of Authority's reroll uses). Granted by
+   * leveling.ts's applyGrant 'feature' case, tagged sourceKind 'feature' + this feature's id, so
+   * removeFeature's existing resource cleanup removes them with the feature. Features that pair a
+   * separate `resource` grant (every class-progression feature) simply leave this unset.
+   */
+  resources?: ResourceGrant[];
+  /**
+   * Marks this feature as one tier of an upgradeable reward (a DM-granted mid-campaign feature):
+   * granting a higher tier of the same `trackId` REPLACES every lower-tier feature of that track
+   * instead of stacking with it. See engine/rewardTracks.ts.
+   */
+  rewardTrack?: { trackId: string; tier: number; trackName: string };
   /** Player-set: marks this feature as exploration-relevant for the Exploration view filter. */
   explorationTag?: boolean;
   /**

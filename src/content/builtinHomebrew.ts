@@ -14,12 +14,16 @@
 // effect-bearing features), so it carries its full progression in
 // `rawProgression`. getProgressionForClass honours that verbatim.
 // ============================================================================
-import { CharClass, Race, Feat, Item, Condition, Spell } from '../engine/types';
+import { CharClass, Race, Feat, Item, Condition, Spell, Feature } from '../engine/types';
 import type { MonsterTemplate } from './monsters/types';
 import type { HomebrewSubclass } from '../engine/types';
 import { abyssKnightProgression } from './classes/abyssKnight';
 import { bloodHunterProgression } from './classes/bloodHunter';
 import { raceSkeleton } from './races/index';
+import {
+  anchorOfCommand, takeABrace, bracedCondition, heldFastCondition, commandTheField,
+  standardOfTheUnyieldingLine, weightOfAuthorityTiers,
+} from './homebrewPack/stressPack';
 
 /**
  * Abyss Knight as a homebrew CharClass. The simplified fields (savingThrows,
@@ -72,11 +76,12 @@ export const BUILTIN_HOMEBREW = {
   classes:    [abyssKnightClass, bloodHunterClass] as CharClass[],
   races:      [raceSkeleton]     as Race[],
   subclasses: [] as HomebrewSubclass[],
-  feats:      [] as Feat[],
-  items:      [] as Item[],
+  feats:      [anchorOfCommand, takeABrace] as Feat[],
+  items:      [standardOfTheUnyieldingLine] as Item[],
   monsters:   [] as MonsterTemplate[],
-  conditions: [] as Condition[],
-  spells:     [] as Spell[],
+  conditions: [bracedCondition, heldFastCondition] as Condition[],
+  spells:     [commandTheField] as Spell[],
+  features:   weightOfAuthorityTiers as Feature[],
 };
 
 /** Every built-in id across all content types — the store uses this to tell a built-in (whose

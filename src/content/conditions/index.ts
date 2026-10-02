@@ -316,3 +316,19 @@ export const ALL_CONDITIONS: Condition[] = [
 /** Fast lookup by condition id. */
 export const CONDITIONS_BY_ID: Record<string, Condition> =
   Object.fromEntries(ALL_CONDITIONS.map(c => [c.id, c]));
+
+// ── Homebrew condition lookup ────────────────────────────────────────────────
+// The engine (src/engine/*) has no dependency on src/store/*, but an ability that applies a
+// condition by id (combat.ts's applyAbilityEffects, preparedEncounter.ts) must find a HOMEBREW
+// condition's features too, or it applies the condition with no effects. The homebrew store
+// pushes its loaded conditions here; official content always wins on an id clash.
+let homebrewConditionsById: Record<string, Condition> = {};
+
+export function registerHomebrewConditions(list: readonly Condition[]): void {
+  homebrewConditionsById = Object.fromEntries(list.map(c => [c.id, c]));
+}
+
+/** Official condition, else a registered homebrew one. */
+export function lookupCondition(id: string): Condition | undefined {
+  return CONDITIONS_BY_ID[id] ?? homebrewConditionsById[id];
+}

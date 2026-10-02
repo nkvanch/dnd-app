@@ -96,6 +96,12 @@ export function applyGrant(
 
       }
 
+      // Feature-owned resource pools (Feature.resources). Provenance is this feature's own id, so
+      // removeFeature's revokeResourceSource(.., 'feature', id) takes them back out with it.
+      for (const r of f.resources ?? []) {
+        next = applyGrant(next, { kind: 'resource', value: r }, atLevel, classId, { kind: 'feature', id: f.id });
+      }
+
       return next;
     }
 

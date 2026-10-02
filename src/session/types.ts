@@ -214,6 +214,17 @@ export type CombatantResource = {
 
 export const STANDARD_MONSTER_VISIBILITY: MonsterVisibility = { name: true, hpState: true, exactHp: false, ac: true, conditions: true };
 
+/** DM-UI presets (DM_SCREEN_SPEC.md item 9) over MonsterVisibility — named shortcuts, not a wire
+ *  concept of their own. Single source of truth for both the DM screen's per-combatant picker
+ *  (app/live/dm.tsx) and CampaignPrep's "default for new monsters" setting (prep.ts), which
+ *  resolves one of these into the visibility a freshly-activated combatant starts with. */
+export const MONSTER_VISIBILITY_PRESETS: Record<'hidden' | 'minimal' | 'standard' | 'full', MonsterVisibility> = {
+  hidden:   { name: false, hpState: false, exactHp: false, ac: false, conditions: false },
+  minimal:  { name: true,  hpState: false, exactHp: false, ac: false, conditions: false },
+  standard: STANDARD_MONSTER_VISIBILITY,
+  full:     { name: true,  hpState: true,  exactHp: true,  ac: true,  conditions: true },
+};
+
 export type LiveEncounter = {
   id:         string;
   name:       string;
@@ -301,10 +312,11 @@ export type RuleSuggestion = {
 // a single "Grant Reward" action can cover the whole DM_SCREEN_SPEC list without the DM needing to
 // know which of two forms to reach for.
 //
-// Always routed through Player accept/modify/reject, never auto-applied: CAMPAIGN_DM_AUTHORITY_
-// RULES.md's "Apply Automatically" policy option would need a live CampaignPolicy field this wire
-// format doesn't carry (see RuleSuggestion's own doc comment for the identical gap) — disclosed,
-// not silently assumed.
+// Always starts PENDING, routed through Player accept/modify/reject — UNLESS the campaign's
+// Permanent DM Rewards policy (CampaignPolicy.permanentRewardsAutomatic, DM_SCREEN_SPEC.md item
+// 11) is set to apply automatically, in which case host.ts's dm.grant_reward immediately resolves
+// it to ACCEPTED instead. Default false (require approval) when no campaign is linked, or one
+// linked before this field existed.
 
 export type RewardKind = 'homebrew_feature' | 'resource' | 'proficiency' | 'reward_tier' | 'permanent_modifier' | 'campaign_boon';
 

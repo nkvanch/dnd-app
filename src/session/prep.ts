@@ -10,10 +10,29 @@
 // ============================================================================
 import {
   CharacterChange, EffectComponent, EffectDefinitionInput, EffectDuration, EffectVisibility,
-  LiveCombatant, LiveEncounterInput, SecretEffectMeta, CampaignPolicy, STANDARD_MONSTER_VISIBILITY,
+  LiveCombatant, LiveEncounterInput, SecretEffectMeta, CampaignPolicy,
+  MONSTER_VISIBILITY_PRESETS,
 } from './types';
 import { KeyValueStore } from './kv';
 import { RulesetId } from '../engine/types';
+import { MonsterVisibilityPreset } from '../engine/campaignCompatibility';
+
+/** DM_SCREEN_SPEC.md item 11's Campaign Rules quick panel — see CampaignPolicy's own doc comment
+ *  in campaignCompatibility.ts for what's enforced vs. display-only, and why this lives fresh on
+ *  CampaignPrep rather than bridging into the legacy CampaignRules object. */
+export type CampaignPrepRules = {
+  monsterHpVisibilityDefault: MonsterVisibilityPreset;
+  freeEditAllowed:            boolean;
+  homebrewNeedsApproval:      boolean;
+  permanentRewardsAutomatic:  boolean;
+  ruleSuggestionsEnabled:     boolean;
+  combatVariants:             string[];
+};
+
+export const DEFAULT_PREP_RULES: CampaignPrepRules = {
+  monsterHpVisibilityDefault: 'standard', freeEditAllowed: true, homebrewNeedsApproval: false,
+  permanentRewardsAutomatic: false, ruleSuggestionsEnabled: true, combatVariants: [],
+};
 
 export type PrepCombatant = {
   id:      string;
@@ -111,6 +130,9 @@ export type CampaignPrep = {
   plans:            SessionPlan[];
   contentManifest:  ContentManifest;
   party:            { name: string }[];
+  /** Optional for backward compatibility with a prep saved before this field existed — a missing
+   *  value reads as DEFAULT_PREP_RULES at every use site, never a migration. */
+  rules?:           CampaignPrepRules;
 };
 
 export function newCampaignPrep(campaignId: string, name: string, now: number): CampaignPrep {
@@ -118,6 +140,7 @@ export function newCampaignPrep(campaignId: string, name: string, now: number): 
     schema: 1, campaignId, name, campaignRevision: 1, updatedAt: now,
     encounters: [], effects: [], templates: [], notes: [], plans: [],
     contentManifest: { bannedPackIds: [], bannedSubclassIds: [], requiredPackIds: [] }, party: [],
+    rules: { ...DEFAULT_PREP_RULES },
   };
 }
 
@@ -194,11 +217,14 @@ export class PrepService {
 // ── Activation builders (prepared -> live payloads) ─────────────────────────
 
 /** Public projection of a prepared encounter: names/coarse state only, never notes. */
-export function toLiveEncounterInput(enc: PrepEncounter, liveId: string): LiveEncounterInput {
+export function toLiveEncounterInput(
+  enc: PrepEncounter, liveId: string, monsterVisibilityDefault: MonsterVisibilityPreset = DEFAULT_PREP_RULES.monsterHpVisibilityDefault,
+): LiveEncounterInput {
+  const visibility = MONSTER_VISIBILITY_PRESETS[monsterVisibilityDefault];
   return {
     id: liveId, name: enc.name,
     combatants: enc.combatants.filter(c => !c.hidden).map(c => ({
-      id: c.id, name: c.name, hpState: c.hpState, visibility: STANDARD_MONSTER_VISIBILITY,
+      id: c.id, name: c.name, hpState: c.hpState, visibility,
       ...(c.ac !== undefined ? { ac: c.ac } : {}),
     })),
   };
@@ -238,6 +264,7 @@ export function toLivePolicyInput(
   prep: CampaignPrep, campaignId: string, name: string, installedPacks: { id: string; name: string }[],
 ): CampaignPolicy {
   const cm = prep.contentManifest;
+  const rules = prep.rules ?? DEFAULT_PREP_RULES;
   const packName = (id: string) => installedPacks.find(p => p.id === id)?.name ?? id;
   return {
     campaignId, name,
@@ -246,6 +273,12 @@ export function toLivePolicyInput(
     bannedPackIds: cm.bannedPackIds,
     bannedSubclassIds: cm.bannedSubclassIds,
     requiredPacks: cm.requiredPackIds.map(id => ({ id, name: packName(id) })),
+    monsterHpVisibilityDefault: rules.monsterHpVisibilityDefault,
+    freeEditAllowed: rules.freeEditAllowed,
+    homebrewNeedsApproval: rules.homebrewNeedsApproval,
+    permanentRewardsAutomatic: rules.permanentRewardsAutomatic,
+    ruleSuggestionsEnabled: rules.ruleSuggestionsEnabled,
+    combatVariants: rules.combatVariants,
   };
 }
 

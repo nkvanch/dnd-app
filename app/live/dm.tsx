@@ -14,10 +14,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSessionRuntime, getSessionRuntime } from '../../src/session/runtime';
-import { CampaignPrep, NoteCategory, PrepEncounter } from '../../src/session/prep';
+import { CampaignPrep, CampaignPrepRules, DEFAULT_PREP_RULES, NoteCategory, PrepEncounter } from '../../src/session/prep';
 import { addNote, describeDuration, describeEffectComponent, describeNoteCategory, parseSignedInt, removeItem } from '../../src/session/prepEdit';
 import { describeChanges, describeRewardKind, describeSessionLogKind, formatContentId } from '../../src/session/roles';
-import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility, RewardKind, SessionLogKind } from '../../src/session/types';
+import { CharacterChange, LiveEffect, LiveEncounter, PublicParticipant, EffectComponent, EffectDuration, MonsterVisibility, RewardKind, SessionLogKind, MONSTER_VISIBILITY_PRESETS } from '../../src/session/types';
 import { SessionPeer } from '../../src/session/peer';
 import { LiveScreen, Section, Card, Btn, Chip, Field, Row, Badge, Muted, Body, NotCapable } from '../../src/components/live/LiveUi';
 import { RoomCodeCard } from '../../src/components/live/RoomCodeCard';
@@ -68,6 +68,7 @@ export default function DmLiveScreen() {
   const [noteCategory, setNoteCategory] = useState<NoteCategory>('session');
   const [noteSubject, setNoteSubject] = useState('');
   const [noteFilter, setNoteFilter] = useState<NoteCategory | null>(null);
+  const [newCombatVariant, setNewCombatVariant] = useState('');
   // The prepared encounter the DM most recently activated — threaded into the live panel purely
   // local to this device so its dmNotes/combatant dmNotes (never sent over the wire) can surface
   // during play without any wire change. Only one encounter is assumed active at a time (same
@@ -106,6 +107,15 @@ export default function DmLiveScreen() {
     catch (e) { Alert.alert('Not sent', (e as Error).message); }
   };
   const toggleTarget = (id: string) => setTargets(t => t.includes(id) ? t.filter(x => x !== id) : [...t, id]);
+  // DM_SCREEN_SPEC.md item 11's quick panel — edits the offline CampaignPrep then immediately
+  // re-links it so the change takes effect live right away, matching "rules likely to change
+  // during play" rather than requiring a trip to DM Preparation + a manual re-link.
+  const rules = prep?.rules ?? DEFAULT_PREP_RULES;
+  const updateRules = (patch: Partial<CampaignPrepRules>) => {
+    if (!prep) return;
+    void runtime.prep.edit(prep.campaignId, p => ({ ...p, rules: { ...(p.rules ?? DEFAULT_PREP_RULES), ...patch } }))
+      .then(next => { setPrep(next); if (linked === next.campaignId) run(() => peer.selectCampaign(next.campaignId)); });
+  };
   const offline = rt.status !== 'connected';
 
   const requests = Object.values(view?.requests ?? {});
@@ -218,11 +228,57 @@ export default function DmLiveScreen() {
           </Section>
 
           {view?.campaign && (
-            <Section title="Campaign rules" hint="Read-only here — edit in DM Preparation.">
+            <Section title="Campaign rules" hint="Quick toggles for what's likely to change mid-session — content bans/ruleset/level cap still live in DM Preparation.">
               <Card>
                 <Muted>Ruleset: {view.campaign.rulesetId ?? 'any'}</Muted>
                 <Muted>Max level: {view.campaign.maxLevel ?? 'uncapped'}</Muted>
                 <Muted>Banned packs: {view.campaign.bannedPackIds.length} · Banned subclasses: {view.campaign.bannedSubclassIds.length} · Required packs: {view.campaign.requiredPacks.length}</Muted>
+
+                <Muted>Default monster visibility for new combatants:</Muted>
+                <Row wrap>
+                  {(['hidden', 'minimal', 'standard', 'full'] as const).map(p => (
+                    <Chip key={p} label={p === 'full' ? 'Full Reveal' : p[0].toUpperCase() + p.slice(1)} active={rules.monsterHpVisibilityDefault === p}
+                      onPress={() => updateRules({ monsterHpVisibilityDefault: p })} testID={`dm-rules-monsterviz-${p}`} />
+                  ))}
+                </Row>
+
+                <Row wrap>
+                  <Muted>Rule suggestions:</Muted>
+                  <Chip label="Enabled" active={rules.ruleSuggestionsEnabled} onPress={() => updateRules({ ruleSuggestionsEnabled: true })} testID="dm-rules-suggestions-on" />
+                  <Chip label="Disabled" active={!rules.ruleSuggestionsEnabled} onPress={() => updateRules({ ruleSuggestionsEnabled: false })} testID="dm-rules-suggestions-off" />
+                </Row>
+
+                <Row wrap>
+                  <Muted>Permanent DM rewards:</Muted>
+                  <Chip label="Needs approval" active={!rules.permanentRewardsAutomatic} onPress={() => updateRules({ permanentRewardsAutomatic: false })} testID="dm-rules-rewards-approval" />
+                  <Chip label="Automatic" active={rules.permanentRewardsAutomatic} onPress={() => updateRules({ permanentRewardsAutomatic: true })} testID="dm-rules-rewards-auto" />
+                </Row>
+
+                <Row wrap>
+                  <Muted>Free Edit (informational only — not enforced here, see the sheet screen):</Muted>
+                  <Chip label="Allowed" active={rules.freeEditAllowed} onPress={() => updateRules({ freeEditAllowed: true })} testID="dm-rules-freeedit-on" />
+                  <Chip label="Locked" active={!rules.freeEditAllowed} onPress={() => updateRules({ freeEditAllowed: false })} testID="dm-rules-freeedit-off" />
+                </Row>
+
+                <Row wrap>
+                  <Muted>Homebrew approval (informational only — enforced at pack-install time):</Muted>
+                  <Chip label="Required" active={rules.homebrewNeedsApproval} onPress={() => updateRules({ homebrewNeedsApproval: true })} testID="dm-rules-homebrew-required" />
+                  <Chip label="Not required" active={!rules.homebrewNeedsApproval} onPress={() => updateRules({ homebrewNeedsApproval: false })} testID="dm-rules-homebrew-free" />
+                </Row>
+
+                <Muted>Combat variants (table-resolved reminders, e.g. "Flanking: advantage"):</Muted>
+                {rules.combatVariants.map((v, i) => (
+                  <Row wrap key={i}>
+                    <Body>{v}</Body>
+                    <Btn small kind="danger" label="Remove" onPress={() => updateRules({ combatVariants: rules.combatVariants.filter((_, j) => j !== i) })} testID={`dm-rules-variant-remove-${i}`} />
+                  </Row>
+                ))}
+                <Row wrap>
+                  <Field label="New variant" value={newCombatVariant} onChangeText={setNewCombatVariant} placeholder="Flanking: advantage" testID="dm-rules-variant-text" />
+                  <Btn small label="Add" disabled={!newCombatVariant.trim()} testID="dm-rules-variant-add"
+                    onPress={() => { updateRules({ combatVariants: [...rules.combatVariants, newCombatVariant.trim()] }); setNewCombatVariant(''); }} />
+                </Row>
+
                 <Row wrap>
                   <Btn small kind="ghost" label="Edit in DM Preparation" onPress={() => router.push('/live/prepare')} testID="dm-edit-policy" />
                   <Btn small kind="danger" label="Disconnect campaign" disabled={offline} testID="dm-unlink-campaign"
@@ -654,14 +710,8 @@ function QuickOverrideForm({ players, offline, peer, run, onDone }: {
 
 // Monster visibility presets (item 9) — a DM-UI convenience over MonsterVisibility; not a wire
 // concept of their own, just named shortcuts for dm.set_combatant_visibility.
-const VISIBILITY_PRESETS: Record<'hidden' | 'minimal' | 'standard' | 'full', MonsterVisibility> = {
-  hidden:   { name: false, hpState: false, exactHp: false, ac: false, conditions: false },
-  minimal:  { name: true,  hpState: false, exactHp: false, ac: false, conditions: false },
-  standard: { name: true,  hpState: true,  exactHp: false, ac: true,  conditions: true },
-  full:     { name: true,  hpState: true,  exactHp: true,  ac: true,  conditions: true },
-};
 function presetOfVisibility(v: MonsterVisibility): 'hidden' | 'minimal' | 'standard' | 'full' | null {
-  for (const [name, preset] of Object.entries(VISIBILITY_PRESETS)) {
+  for (const [name, preset] of Object.entries(MONSTER_VISIBILITY_PRESETS)) {
     if (preset.name === v.name && preset.hpState === v.hpState && preset.exactHp === v.exactHp && preset.ac === v.ac && preset.conditions === v.conditions) {
       return name as 'hidden' | 'minimal' | 'standard' | 'full';
     }
@@ -852,7 +902,7 @@ function ActiveEncounterPanel({ encounter, players, nameOf, offline, peer, run, 
             <Row wrap>
               {(['hidden', 'minimal', 'standard', 'full'] as const).map(p => (
                 <Chip key={p} label={p === 'full' ? 'Full Reveal' : p[0].toUpperCase() + p.slice(1)} active={preset === p}
-                  onPress={() => run(() => peer.setCombatantVisibility(encounter.id, c.id, VISIBILITY_PRESETS[p]))} testID={`dm-vis-${p}-${c.name}`} />
+                  onPress={() => run(() => peer.setCombatantVisibility(encounter.id, c.id, MONSTER_VISIBILITY_PRESETS[p]))} testID={`dm-vis-${p}-${c.name}`} />
               ))}
             </Row>
             {editingHp ? (

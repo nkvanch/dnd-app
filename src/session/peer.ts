@@ -354,7 +354,7 @@ export class SessionPeer {
     const prep = await this.cfg.prep?.load(campaignId);
     const enc = prep?.encounters.find(e => e.id === prepEncounterId);
     if (!enc) throw new Error(`No prepared encounter ${prepEncounterId}`);
-    return this.sendRaw({ kind: 'dm.activate_encounter', encounter: toLiveEncounterInput(enc, this.id('enc')) });
+    return this.sendRaw({ kind: 'dm.activate_encounter', encounter: toLiveEncounterInput(enc, this.id('enc'), prep?.rules?.monsterHpVisibilityDefault) });
   }
 
   endEncounter(encounterId: string): string {

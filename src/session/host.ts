@@ -15,7 +15,7 @@ import {
   Capability, ClientMessage, ServerMessage, Op, OpBody, OpResult, LiveState, LiveEvent, LiveEventBody,
   emptyLiveState, PublicParticipant, ParticipantId, EffectApplication, EffectDefinition, AuditEntry,
   ChangeRequest, LiveEncounter, ReportedCharacter, CharacterChange, RuleSuggestion, RuleSuggestionStatus,
-  STANDARD_MONSTER_VISIBILITY, MonsterVisibility, PublicPersona, Reward, RewardKind, RewardStatus,
+  STANDARD_MONSTER_VISIBILITY, MONSTER_VISIBILITY_PRESETS, MonsterVisibility, PublicPersona, Reward, RewardKind, RewardStatus,
   SessionLogEntry, SessionLogKind, CharacterVitals,
 } from './types';
 import { applyEvent, projectEvent, projectState, Viewer } from './state';
@@ -64,6 +64,10 @@ function optStr(x: unknown): x is string | null {
 }
 function int(x: unknown): x is number {
   return typeof x === 'number' && Number.isInteger(x);
+}
+function validMonsterVisibility(x: unknown): x is MonsterVisibility {
+  return isObj(x) && typeof x.name === 'boolean' && typeof x.hpState === 'boolean'
+    && typeof x.exactHp === 'boolean' && typeof x.ac === 'boolean' && typeof x.conditions === 'boolean';
 }
 const REWARD_KINDS = new Set<RewardKind>(['homebrew_feature', 'resource', 'proficiency', 'reward_tier', 'permanent_modifier', 'campaign_boon']);
 function rewardKind(x: unknown): x is RewardKind {
@@ -444,10 +448,15 @@ export class SessionHost {
         if (this.state.encounters[e.id]) return done('rejected', 'encounter-exists');
         const enc: LiveEncounter = {
           id: e.id, name: e.name, active: true,
+          // Respects the per-combatant visibility the input actually carries (CampaignPrep's
+          // configurable "default for new monsters" — DM_SCREEN_SPEC.md item 11 — resolved on the
+          // DM's device by prep.ts's toLiveEncounterInput) rather than silently forcing Standard
+          // regardless of what was requested; a malformed visibility object still falls back
+          // safely instead of rejecting the whole encounter over one bad field.
           combatants: e.combatants.map(c => ({
             id: String(c.id), name: String(c.name),
             hpState: c.hpState === 'down' || c.hpState === 'bloodied' ? c.hpState : 'healthy',
-            visibility: { ...STANDARD_MONSTER_VISIBILITY },
+            visibility: validMonsterVisibility(c.visibility) ? c.visibility : { ...STANDARD_MONSTER_VISIBILITY },
             ...(typeof c.ac === 'number' ? { ac: c.ac } : {}),
           })),
           turnOrder: [], currentTurnIndex: null, round: 1,
@@ -508,10 +517,13 @@ export class SessionHost {
         const c = body.combatant;
         if (!isObj(c) || !str(c.id) || !str(c.name)) return done('rejected', 'malformed');
         if (enc.combatants.some(x => x.id === c.id)) return done('rejected', 'combatant-exists');
+        // A monster added mid-encounter gets the campaign's configured default too (DM_SCREEN_
+        // SPEC.md item 11), same as one present when the encounter activated.
+        const defaultPreset = this.state.campaign?.monsterHpVisibilityDefault ?? 'standard';
         const combatant = {
           id: c.id, name: c.name,
           hpState: c.hpState === 'down' || c.hpState === 'bloodied' ? c.hpState : 'healthy' as const,
-          visibility: { ...STANDARD_MONSTER_VISIBILITY },
+          visibility: { ...MONSTER_VISIBILITY_PRESETS[defaultPreset] },
           ...(typeof c.ac === 'number' ? { ac: c.ac } : {}),
         };
         this.commit({ t: 'combatant_added', encounterId: enc.id, combatant }, pid,
@@ -582,10 +594,8 @@ export class SessionHost {
         if (!enc || !enc.active) return done('rejected', 'no-active-encounter');
         const target = enc.combatants.find(c => c.id === body.combatantId);
         if (!target) return done('rejected', 'unknown-combatant');
-        const v = body.visibility;
-        if (!isObj(v) || typeof v.name !== 'boolean' || typeof v.hpState !== 'boolean'
-          || typeof v.exactHp !== 'boolean' || typeof v.ac !== 'boolean' || typeof v.conditions !== 'boolean') return done('rejected', 'malformed');
-        const visibility: MonsterVisibility = { name: v.name, hpState: v.hpState, exactHp: v.exactHp, ac: v.ac, conditions: v.conditions };
+        if (!validMonsterVisibility(body.visibility)) return done('rejected', 'malformed');
+        const visibility: MonsterVisibility = { ...body.visibility };
         this.commit({ t: 'combatant_visibility_set', encounterId: enc.id, combatantId: target.id, visibility }, pid,
           { kind: 'encounter', text: `${target.name}'s visibility changed`, scope: 'dm', refId: enc.id });
         // The event alone only carries the new flags, not whatever field values just became
@@ -695,6 +705,9 @@ export class SessionHost {
       }
 
       case 'player.suggest_rule': {
+        // DM_SCREEN_SPEC.md item 11's "rule suggestions enabled" toggle — ENFORCED (default true:
+        // a campaign linked before this field existed, or with no campaign at all, still allows it).
+        if (this.state.campaign?.ruleSuggestionsEnabled === false) return done('rejected', 'rule-suggestions-disabled');
         if (!str(body.suggestionId) || !str(body.rule) || !str(body.proposedValue)) return done('rejected', 'malformed');
         if (typeof body.note !== 'string' || body.note.length > 2000) return done('rejected', 'malformed');
         if (this.state.ruleSuggestions[body.suggestionId]) return done('rejected', 'suggestion-exists');
@@ -736,6 +749,16 @@ export class SessionHost {
         };
         this.commit({ t: 'reward_granted', reward }, pid,
           { kind: 'reward', text: `DM granted ${this.nick(target.id)} a reward: "${reward.label}"`, scope: 'participants', participantIds: [target.id], refId: reward.id });
+        // DM_SCREEN_SPEC.md item 13's "applies immediately" branch of the Permanent DM Rewards
+        // policy (item 11) — ENFORCED, closing the gap Reward's own doc comment in types.ts
+        // explicitly named ("this wire format doesn't carry [a policy field]... disclosed, not
+        // silently assumed"). Default false (require Player approval, the PENDING status above).
+        if (this.state.campaign?.permanentRewardsAutomatic === true) {
+          const audienceScope = { scope: 'participants' as const, participantIds: [target.id], refId: reward.id };
+          this.commit({ t: 'reward_resolved', rewardId: reward.id, status: 'ACCEPTED', playerNote: null }, pid,
+            { kind: 'reward', text: `"${reward.label}" applied automatically (campaign policy)`, ...audienceScope });
+          this.supersedePriorTier(reward, pid, audienceScope);
+        }
         return done('applied');
       }
 
@@ -994,19 +1017,22 @@ export class SessionHost {
     this.commit({ t: 'reward_resolved', rewardId: reward.id, status, playerNote }, pid,
       { kind: 'reward', text: `${actor.nickname} accepted the reward "${reward.label}"${status === 'MODIFIED' ? ' (with their own note)' : ''}`, ...audienceScope });
 
-    // Tiered rewards replace the previous tier in the same track (DM_SCREEN_SPEC.md item 13) —
-    // the OLD tier is kept, only marked SUPERSEDED, never deleted (see Reward's own doc comment
-    // for why "preserve spent uses" stays a DM-carried note rather than a tracked number).
-    if (reward.kind === 'reward_tier' && reward.tierTrack) {
-      const prior = Object.values(this.state.rewards).find(r =>
-        r.id !== reward.id && r.targetId === reward.targetId && r.kind === 'reward_tier' &&
-        r.tierTrack === reward.tierTrack && (r.status === 'ACCEPTED' || r.status === 'MODIFIED'));
-      if (prior) {
-        this.commit({ t: 'reward_superseded', rewardId: prior.id, supersededBy: reward.id }, pid,
-          { kind: 'reward', text: `"${reward.label}" supersedes the previous ${reward.tierTrack} tier`, ...audienceScope });
-      }
-    }
-
+    this.supersedePriorTier(reward, pid, audienceScope);
     return done('applied');
+  }
+
+  /** Tiered rewards replace the previous tier in the same track (DM_SCREEN_SPEC.md item 13) — the
+   *  OLD tier is kept, only marked SUPERSEDED, never deleted (see Reward's own doc comment for why
+   *  "preserve spent uses" stays a DM-carried note rather than a tracked number). Shared by both
+   *  the Player's own accept/modify and dm.grant_reward's auto-apply path (permanentRewardsAutomatic). */
+  private supersedePriorTier(reward: Reward, pid: ParticipantId, audienceScope: { scope: 'participants'; participantIds: ParticipantId[]; refId: string }): void {
+    if (reward.kind !== 'reward_tier' || !reward.tierTrack) return;
+    const prior = Object.values(this.state.rewards).find(r =>
+      r.id !== reward.id && r.targetId === reward.targetId && r.kind === 'reward_tier' &&
+      r.tierTrack === reward.tierTrack && (r.status === 'ACCEPTED' || r.status === 'MODIFIED'));
+    if (prior) {
+      this.commit({ t: 'reward_superseded', rewardId: prior.id, supersededBy: reward.id }, pid,
+        { kind: 'reward', text: `"${reward.label}" supersedes the previous ${reward.tierTrack} tier`, ...audienceScope });
+    }
   }
 }

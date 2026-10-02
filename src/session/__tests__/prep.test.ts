@@ -80,6 +80,8 @@ describe('prepared content is not live content', () => {
     expect(s.campaign).toEqual({
       campaignId: 'camp-auto', name: 'Automation Campaign',
       bannedPackIds: [], bannedSubclassIds: [], requiredPacks: [],
+      monsterHpVisibilityDefault: 'standard', freeEditAllowed: true, homebrewNeedsApproval: false,
+      permanentRewardsAutomatic: false, ruleSuggestionsEnabled: true, combatVariants: [],
     });
     expect(s.encounters).toEqual({});
     expect(s.effects).toEqual({});

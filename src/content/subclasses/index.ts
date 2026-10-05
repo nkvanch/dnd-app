@@ -23,6 +23,7 @@ import { WARLOCK_SUBCLASSES }   from './warlock';
 import { ARTIFICER_SUBCLASSES } from './artificer';
 import { BLOOD_HUNTER_SUBCLASSES } from './bloodHunter';
 import { ClassProgression }     from '../../engine/types';
+import { SUBCLASSES_2024 }      from '../classes2024';
 
 export type SubclassProgression = ClassProgression & { name: string };
 
@@ -42,6 +43,7 @@ export const FULL_SUBCLASS_LIBRARY: SubclassProgression[] = [
   ...WARLOCK_SUBCLASSES,
   ...ARTIFICER_SUBCLASSES,
   ...BLOOD_HUNTER_SUBCLASSES,
+  ...SUBCLASSES_2024,
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

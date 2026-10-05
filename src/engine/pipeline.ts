@@ -180,6 +180,22 @@ export function foldKnownBonuses(effects: ActiveEffect[], entity: Entity): Activ
   });
 }
 
+/** Keeps `perAbilityModifier` and `perLevel` pools at their formula value (the spent amount is preserved). */
+function syncFormulaResources(entity: Entity, stats: Entity['stats']): Entity {
+  if (!entity.resources.custom.some(r => r.perAbilityModifier || r.perLevel)) return entity;
+  let changed = false;
+  const custom = entity.resources.custom.map(r => {
+    let target: number | null = null;
+    if (r.perAbilityModifier) target = Math.max(1, modifier(stats[r.perAbilityModifier]));
+    else if (r.perLevel) target = Math.max(0, r.perLevel * entity.identity.level);
+    if (target === null || r.maximum === target) return r;
+    changed = true;
+    const spent = Math.max(0, r.maximum - r.current);
+    return { ...r, maximum: target, baseMaximum: target, current: Math.max(0, target - spent) };
+  });
+  return changed ? { ...entity, resources: { ...entity.resources, custom } } : entity;
+}
+
 export function recomputeDerived(
   entityParam: Entity, rules: CampaignRules,
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
@@ -232,6 +248,8 @@ export function recomputeDerived(
     const ability = override.stat as Ability;
     effectiveStats[ability] = override.operation === 'set' ? override.value : effectiveStats[ability] + override.value;
   }
+
+  entity = syncFormulaResources(entity, effectiveStats);
 
   // "Add your Charisma modifier to initiative" (Effect.addAbilityModifier): fold the final ability
   // modifier into the effect's own value now that every ability score is settled, so every consumer

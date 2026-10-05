@@ -46,6 +46,8 @@ import { NEW_LEVEL9 }    from './level9';
 import { ALL_VAULT_SPELLS } from './generated';
 import srdClassification from './srdClassification.json';
 import { EMPEROR_CLASS_SPELLS } from '../classes/emperorWarlock/spellData';
+import { SPELL_LIST_2024 } from '../classes2024/spellLists2024';
+import { NEW_SPELLS_2024 } from '../classes2024/spells2024';
 
 // Vault spells carry no srd field in generated.ts itself (see that file's
 // header) — classification is merged in here, at load time, from the small
@@ -493,6 +495,8 @@ const _rawSpellLibrary: Spell[] = [
   ...NEW_LEVEL9,
   // ── Vault-sourced library (auto-generated content, SRD status merged in) ──
   ...CLASSIFIED_VAULT_SPELLS,
+  // ── Spells that exist only in the 2024 rules ─────────────────────────────
+  ...NEW_SPELLS_2024,
 ];
 
 // The vault import (generated.ts) re-sourced a number of core SRD spells that
@@ -508,14 +512,24 @@ const _seenSpellIds = new Set<string>();
 // so the spells on that list gain its class ids here — the spec's own list PLUS the whole Warlock list. A spell with no `classes` tag is already offered to
 // every class and is left alone — tagging it would have narrowed it.
 const _emperorSpellIds = new Set(EMPEROR_CLASS_SPELLS);
+// The 2024 classes (bard_2024, ...) use the 2024 class spell lists (SRD 5.2.1): a spell on a 2024 list
+// gains that class's 2024 id. As above, an untagged spell is already offered to everyone and is left alone.
+const _classes2024BySpell = new Map<string, string[]>();
+for (const [cls, byLevel] of Object.entries(SPELL_LIST_2024)) {
+  for (const id of Object.values(byLevel).flat()) _classes2024BySpell.set(id, [...(_classes2024BySpell.get(id) ?? []), `${cls}_2024`]);
+}
 const _isEmperorSpell = (s: Spell) => _emperorSpellIds.has(s.id) || !!s.classes?.includes('warlock');
 export const FULL_SPELL_LIBRARY: Spell[] = _rawSpellLibrary.filter(s => {
   if (_seenSpellIds.has(s.id)) return false;
   _seenSpellIds.add(s.id);
   return true;
-}).map(s => _isEmperorSpell(s) && s.classes && s.classes.length > 0
-  ? { ...s, classes: [...s.classes, 'emperor_warlock', 'emperor_warlock_demo'] }
-  : s);
+}).map(s => {
+  let out = s;
+  if (_isEmperorSpell(s) && s.classes && s.classes.length > 0) out = { ...out, classes: [...(out.classes ?? []), 'emperor_warlock', 'emperor_warlock_demo'] };
+  const c24 = _classes2024BySpell.get(s.id);
+  if (c24 && out.classes && out.classes.length > 0) out = { ...out, classes: [...new Set([...(out.classes ?? []), ...c24])] };
+  return out;
+});
 
 /**
  * True only on the EAS `production` build profile (see eas.json). Personal,

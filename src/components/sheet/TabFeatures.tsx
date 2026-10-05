@@ -17,6 +17,7 @@ import { RemoveFeatureModal } from './RemoveFeatureModal';
 import { AddCustomFeatureModal } from './AddCustomFeatureModal';
 import { GrantRewardModal } from './GrantRewardModal';
 import { ModeGroupPanel } from './ModeGroupPanel';
+import { WeaponMasteryPanel } from './WeaponMasteryPanel';
 import { ChangeBackgroundModal } from './ChangeBackgroundModal';
 import { spellRepo } from '../../content/spellRepo';
 import { spellProgressFor, groupPendingSpellChoices } from '../../content/creationProgress';
@@ -262,6 +263,11 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
       {/* Mode Groups (Legacy Binding / Bound Spirit): the active option and its change flow. */}
       {canResolve && onEntityUpdate && (
         <ModeGroupPanel entity={entity} rules={rules ?? DEFAULT_RULES} onEntityUpdate={onEntityUpdate} />
+      )}
+
+      {/* Weapon Mastery (2024): the mastered weapon kinds and what their properties do. Hidden without the feature. */}
+      {canResolve && onEntityUpdate && (
+        <WeaponMasteryPanel entity={entity} onEntityUpdate={onEntityUpdate} />
       )}
 
       {/* Header-level identity action — changes the whole background, not

@@ -27,6 +27,7 @@ import { ALL_CHAR_CLASSES } from '../content/classes';
 import { ALL_RACES } from '../content/races';
 import { getClassLevels } from './multiclass';
 import { spellRangeOverride, spellDamageBonus } from './spellModifiers';
+import { masteryPropertyFor } from './weaponMastery';
 
 // ── Large-creature weapon dice (house rule) ──────────────────────────
 
@@ -626,6 +627,12 @@ export function formatCastingContextLabel(
   const dc = computeSpellSaveDCForAbility(entity, context.castingAbility);
   const dcPart = !context.legal ? ' — Not Prepared' : dc != null ? ` — DC ${dc}` : '';
   return `${className} — ${abilityLabel}${dcPart}`;
+}
+
+/** "Mastery: Topple" for a weapon the character has mastered (2024 Weapon Mastery); null otherwise. */
+function masteryNote(entity: Entity, itemId: string): string | null {
+  const m = masteryPropertyFor(entity, itemId);
+  return m ? `Mastery: ${m[0].toUpperCase()}${m.slice(1)}` : null;
 }
 
 // ── Weapon attack / damage computation ────────────────────────────────────────
@@ -1477,7 +1484,7 @@ export function generateAllActionCards(
           featureId: `${inst.id ?? inst.itemId}_basic_weapon_attack`, name: definition.name,
           cardType: 'damage', color: 'red', layer1: `Action • ${capitalize(attack.type)} Weapon Attack`,
           layer2: `${fmtBonus(attack.bonus)} to hit • ${dice}${attack.damageBonus !== 0 ? fmtBonus(attack.damageBonus) : ''} ${capitalize(attack.damageType)}`,
-          layer3: null, outcomes: [], triggerNote: null, activation, resourceCost: null,
+          layer3: masteryNote(entity, inst.itemId), outcomes: [], triggerNote: null, activation, resourceCost: null,
           tabs: ['actions', 'features'], available: availability.available, unavailableReason: availability.reason,
           incapacitatedOverridable: availability.incapacitatedOverridable,
           isWeaponAttack: true, // Extra Attack / action-structure batch — a real weapon attack, eligible for the Attack action's extra attack opportunities.

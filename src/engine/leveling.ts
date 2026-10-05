@@ -142,6 +142,8 @@ export function applyGrant(
             current: r.maximum, maximum: r.maximum,
             recharge: r.recharge,
             ...(r.perProficiencyBonus ? { perProficiencyBonus: true } : {}),
+            ...(r.perAbilityModifier ? { perAbilityModifier: r.perAbilityModifier } : {}),
+            ...(r.perLevel ? { perLevel: r.perLevel } : {}),
             sourceKind: resolvedSource?.kind,
             sourceId:   resolvedSource?.id,
           }]
@@ -180,7 +182,7 @@ export function applyGrant(
       const withBase = {
         ...entity,
         resources: { ...entity.resources, custom: entity.resources.custom.map(r =>
-          r.id === u.resourceId ? { ...r, baseMaximum } : r) },
+          r.id === u.resourceId ? { ...r, baseMaximum, ...(u.recharge ? { recharge: u.recharge } : {}) } : r) },
         entitlements: withoutSameContribution,
       };
       return recomputeResourceMaximums(grantEntitlement(withBase, {

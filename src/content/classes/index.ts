@@ -2,6 +2,7 @@
 // FILE: src/content/classes/index.ts
 // All 12 PHB classes with full level 1-20 progressions.
 // ============================================================================
+import { CLASSES_2024, PROGRESSIONS_2024 } from '../classes2024';
 import { ClassProgression, LevelEntry, ChoiceDefinition, ChoiceOption } from '../../engine/types';
 import { fighterProgression } from './fighter';
 import { artificerProgression } from './artificer';
@@ -1170,6 +1171,7 @@ export const ALL_CLASS_PROGRESSIONS: ClassProgression[] = [
   sorcererProgression,
   warlockProgression,
   artificerProgression,
+  ...PROGRESSIONS_2024,
 ];
 
 /** Lookup map: classId → ClassProgression. Use this instead of hardcoding class names. */
@@ -1240,6 +1242,7 @@ export const ALL_CHAR_CLASSES_CATALOG = [
     savingThrows: ['wis', 'cha'], armorProfs: ['light'], weaponProfs: ['simple'], spellcastingAbility: 'cha', spellPreparationPolicy: 'known' },
   { id: 'artificer', name: 'Artificer', hitDie: 8,  features: [], multiclassProficiencies: MULTICLASS_PROFICIENCIES.artificer,
     savingThrows: ['con', 'int'], armorProfs: ['light', 'medium', 'shield'], weaponProfs: ['simple'], toolProfs: ["Thieves' Tools", "Tinker's Tools"], spellcastingAbility: 'int', spellPreparationPolicy: 'full_list_prepared', ritualCastingPolicy: 'prepared' },
+  ...CLASSES_2024,
 ] as import('../../engine/types').CharClass[];
 
 /** Exposure policy for public SRD builds. The full catalog remains bundled. */

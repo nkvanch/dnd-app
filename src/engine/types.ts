@@ -1124,6 +1124,10 @@ export type CustomResource = {
   recharge: 'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
   /** Maximum equals the character's proficiency bonus ("PB uses per Long Rest"); kept in step on every recompute. */
   perProficiencyBonus?: boolean;
+  /** Maximum equals this ability's modifier, minimum 1 (Bardic Inspiration: Charisma); kept in step on every recompute. */
+  perAbilityModifier?: Ability;
+  /** Maximum equals the character's level times this (Sorcery Points and Focus Points: 1; Lay on Hands: 5). */
+  perLevel?: number;
   /** What granted this resource — lets clearClassData (app/creation/class-
    * detail.tsx) tell a class-owned resource pool apart from a racial one and
    * wipe only the former on class (re)selection. Optional so resources on
@@ -2263,6 +2267,8 @@ export type Entity = {
   situationalAnswers?: Record<string, boolean>;
   /** Mode Group state by group id (engine/modes.ts). Absent for every character with no mode group. */
   modeState?: Record<string, ModeState>;
+  /** Weapon Mastery (2024): the weapon kinds the player chose to master, as weapon ids. See engine/weaponMastery.ts. */
+  weaponMastery?: { picks: string[] };
   /**
    * Item 13 (build comparison/checkpoints/loadouts) — named, saved
    * equipment + prepared-spell configurations a player can swap between
@@ -2488,11 +2494,17 @@ export type ResourceGrant = {
   recharge:   'short_rest' | 'long_rest' | 'dawn' | 'never' | string;
   /** When true `maximum` is only the starting value: the pool's maximum tracks the proficiency bonus (Command Dice, "PB uses per Long Rest"). */
   perProficiencyBonus?: boolean;
+  /** `maximum` is only the starting value: the maximum tracks this ability's modifier (minimum 1). */
+  perAbilityModifier?: Ability;
+  /** `maximum` is only the starting value: the maximum tracks character level times this. */
+  perLevel?: number;
 };
 
 export type ResourceUpgrade = {
   resourceId: string;
   newMaximum: number;
+  /** Also changes how the pool recharges (Bardic Inspiration returns on a Short Rest from level 5). */
+  recharge?: string;
 };
 
 export type SpellSlotRow = {

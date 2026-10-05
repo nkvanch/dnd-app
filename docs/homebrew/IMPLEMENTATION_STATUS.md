@@ -46,3 +46,12 @@ Written 2 October 2026. Nothing below was checked on a device or an emulator (th
 - **Summon HP formulas** ("30 + 2 x Emperor level", "5 x level") are fixed at the first level the feature exists; enter the real HP when spawning.
 - **Spec gaps filled with plain defaults** (each block says so): ability scores and CR for the summoned units, AC/HP for Prometheus and Heracles, the Pact slot table, spells known.
 - Spell references use the library's ids; in a public SRD-only build a spell that is not in the SRD simply does not resolve, and no spell text is copied into the class.
+
+## 5.5e (2024 rules) content
+
+Built 5 October 2026 from the System Reference Document 5.2.1 (Creative Commons Attribution 4.0; attribution is in About). All of it is tagged `dnd5e-2024`, and `srd: false` because that flag here means SRD 5.1 (what the public build is filtered by).
+
+- **Origin feats are granted for real by the background** (`Background.originFeat`, `engine/originFeat.ts`): the feat's feature, pools and picks come with the background as their source, so changing background takes them out again. Alert (initiative + proficiency bonus), Savage Attacker, Skilled (three skill picks), and Magic Initiate as one feat per list (Cleric, Druid, Wizard) with real cantrip and level-1 spell picks and a once-per-Long-Rest cast.
+- **Backgrounds:** Acolyte, Criminal, Sage, Soldier, each with its directed ability bonus, two skills, tool proficiency and Origin feat. Equipment (package A or 50 GP) is text, not added automatically.
+- **Species:** Dragonborn, Dwarf, Elf, Gnome, Goliath, Halfling, Orc, Tiefling (Human already existed). Level-gated traits (Draconic Flight, Large Form, lineage spells at 3 and 5) unlock at their level; uses equal to the proficiency bonus follow it; Breath Weapon dice scale 1d10 to 4d10; Dwarven Toughness is +1 max HP per level.
+- **Stated gaps:** Elf, Gnome and Tiefling lineage spellcasting ability is fixed (Wisdom, Intelligence, Charisma) instead of a free Intelligence/Wisdom/Charisma choice, and Magic Initiate's is fixed per list (Wisdom for Cleric/Druid, Intelligence for Wizard). The level 3 and 5 lineage spells are castable once per Long Rest from their cards, not also with spell slots. Skilled offers skills only. Human's Versatile feat is still a note, and 2024 classes, Weapon Mastery and Heroic Inspiration are not built.

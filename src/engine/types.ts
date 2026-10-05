@@ -662,6 +662,13 @@ export type Background = {
    */
   flexibleAsi?: Race['flexibleAsi'];
   /**
+   * The Origin feat this background grants (2024: every background names one). Applied for real when the
+   * background is selected, by engine/originFeat.ts: the feat's feature, its limited-use pools and any
+   * picks it asks for (skills, spells) are granted with this background as their source, so changing the
+   * background takes them all back out.
+   */
+  originFeat?: string;
+  /**
    * FILTER-METADATA-2: free-text tool/vehicle proficiency names (e.g.
    * "Thieves' tools", "Vehicles (land)"), sourced from the same PHB text
    * app/creation/background.tsx's BG_DETAIL table already displays.
@@ -1812,6 +1819,10 @@ export type Effect = {
    * modifier is added to `value` (which may be 0/omitted) when derived stats are computed.
    */
   addAbilityModifier?: Ability;
+  /** "Add your proficiency bonus": PB is added to this effect's numeric `value` (Alert's initiative). */
+  addProficiencyBonus?: boolean;
+  /** "...and again whenever you gain a level": this many points per CHARACTER level are added to `value` (Dwarven Toughness: 1). */
+  addPerLevel?: number;
   /**
    * On a `set` of an ability score: a floor ("becomes 24 if lower", "rise to at least 22") applied
    * after every other effect, so it can raise the score but never lower a higher one.
@@ -2686,7 +2697,10 @@ export type ResourceCost = {
  * content-registry id, so it doesn't map cleanly onto one branded type.
  */
 export type AbilityEffect =
-  | { type: 'damage';           dice: string; damageType: string; saveOnSuccess?: 'half' | 'none' }
+  | { type: 'damage';           dice: string; damageType: string; saveOnSuccess?: 'half' | 'none';
+      /** Scaling dice by character level (Dragonborn's Breath Weapon: 1d10, 2d10 at 5, 3d10 at 11, 4d10 at 17): the
+       *  highest tier at or below the character's level replaces `dice` when the card is shown. */
+      diceByLevel?: { level: number; dice: string }[] }
   | { type: 'heal';             dice: string; bonusMod?: Ability }
   | { type: 'apply_condition';  conditionId: string; duration: DurationTracker }
   | { type: 'remove_condition'; conditionId: string }

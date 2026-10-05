@@ -1,5 +1,6 @@
 // app/creation/background.tsx
 // Background list + detail page with personality trait selectors.
+import { applyBackgroundOriginFeat, revokeBackgroundOriginFeat } from '../../src/engine/originFeat';
 import { rulesetLabel } from '../../src/content/rulesets';
 import { suggestFirst } from '../../src/content/rulesetSuggestion';
 import { useCharacterStore as useCreationDraftStore } from '../../src/store/characterStore';
@@ -437,7 +438,7 @@ function BackgroundDetail({ id }: { id: string }) {
     }
 
     let updated = {
-      ...draft!,
+      ...revokeBackgroundOriginFeat(draft!),
       identity: { ...draft!.identity, backgroundId: bg!.id },
       // Remove old background features; new ones applied below.
       features: draft!.features.filter(f => f.source.kind !== 'background'),
@@ -463,6 +464,12 @@ function BackgroundDetail({ id }: { id: string }) {
     // identical pendingChoices handling.
     for (const choice of bg!.pendingChoices ?? []) {
       updated = queueChoice(updated, choice, 0, undefined, { kind: 'background', id: bg!.id });
+    }
+
+    // ...and the Origin feat the (2024) background names: granted for real, with this background as
+    // its source so changing the background removes it again.
+    if (bg!.originFeat) {
+      updated = applyBackgroundOriginFeat(updated, bg!, (getMergedContentDB(updated.rulesetId).feats ?? []).find(f => f.id === bg!.originFeat));
     }
 
     // ...and the flexible ability score choice, compiled into one generated

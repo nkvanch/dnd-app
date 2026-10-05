@@ -799,7 +799,9 @@ export function buildLayer2(feature: Feature, entity?: Entity, opts: CardGenOpti
 
   for (const e of fx) {
     if (e.type === 'damage') {
-      const dice = doubleThisFeature ? doubleDice(e.dice) : e.dice;
+      const tier = (e.diceByLevel ?? []).filter(t => entity && t.level <= entity.identity.level).sort((a, b) => b.level - a.level)[0];
+      const baseDice = tier ? tier.dice : e.dice;
+      const dice = doubleThisFeature ? doubleDice(baseDice) : baseDice;
       // For weapon attacks, show "2d8+8" (dice + ability/magic bonus).
       // Only the FIRST damage effect gets the ability mod (the weapon swing);
       // rider damage (e.g. 3d6 necrotic) is shown without the mod.

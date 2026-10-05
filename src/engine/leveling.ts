@@ -1,4 +1,4 @@
-import { Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
+import { Feat, Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
          KnownSpellsGrant, asSubclassId, asClassId, Background, SkillName,
          CharClass, ItemFilterConstraint, BACKGROUND_CHOICE_PREFIX,
@@ -15,6 +15,7 @@ import { hpMinHalfDie, bonusFeatEveryLevel } from './houseRules';
 import { getClassLevels, syncLegacyIdentity, multiclassProficienciesFor } from './multiclass';
 import { initializeEntitlementInputs, grantEntitlement, grantEntitlements, revokeEntitlementsFromChoice, revokeResourceSource, recomputeResourceMaximums } from './entitlements';
 import { generateItemInstanceId } from './inventory';
+import { applyBackgroundOriginFeat, revokeBackgroundOriginFeat } from './originFeat';
 import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from './choiceEligibility';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -833,12 +834,16 @@ function flexAsiAmountFor(mode: NonNullable<Background['flexibleAsi']>['mode'], 
  * see, defaulting to the computed suggestion for everything else.
  */
 export function swapBackground(
-  entity: Entity,
+  entityBefore: Entity,
   newBackground: Background,
   rules: CampaignRules,
   flexAsiPicks?: Ability[],
   skillRetrainOverrides?: Partial<Record<SkillName, boolean>>,
+  /** The Feat named by newBackground.originFeat, resolved by the caller (the engine has no content store). */
+  originFeat?: Feat,
 ): Entity {
+  // An earlier Origin feat's spells are sourced to the feat, not the background: take them back out first.
+  const entity = revokeBackgroundOriginFeat(entityBefore);
   const oldBgFeatures = entity.features.filter(f => f.source.kind === 'background');
   const otherFeatures = entity.features.filter(f => f.source.kind !== 'background');
 
@@ -909,6 +914,7 @@ export function swapBackground(
   for (const feature of newBackground.features) {
     updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
   }
+  if (newBackground.originFeat) updated = applyBackgroundOriginFeat(updated, newBackground, originFeat);
 
   if (newBackground.flexibleAsi && flexAsiPicks && flexAsiPicks.length > 0) {
     // ABILITY-CAP-1: clamp each pick to remaining headroom under the

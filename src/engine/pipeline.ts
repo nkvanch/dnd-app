@@ -164,6 +164,22 @@ function syncProficiencyResources(entity: Entity): Entity {
   return changed ? { ...entity, resources: { ...entity.resources, custom } } : entity;
 }
 
+/**
+ * Folds the bonuses that depend only on the character's level into each effect's numeric value:
+ * `addProficiencyBonus` (Alert: initiative + PB) and `addPerLevel` (Dwarven Toughness: +1 per level).
+ * Runs before anything reads the effects, so max-HP reconciliation and every stat see plain numbers.
+ */
+export function foldKnownBonuses(effects: ActiveEffect[], entity: Entity): ActiveEffect[] {
+  if (!effects.some(ae => ae.effect.addProficiencyBonus || ae.effect.addPerLevel)) return effects;
+  const pb = proficiencyBonus(entity.identity.level);
+  return effects.map(ae => {
+    const { addProficiencyBonus, addPerLevel } = ae.effect;
+    if (!addProficiencyBonus && !addPerLevel) return ae;
+    const base = typeof ae.effect.value === 'number' ? ae.effect.value : 0;
+    return { ...ae, effect: { ...ae.effect, value: base + (addProficiencyBonus ? pb : 0) + (addPerLevel ? addPerLevel * entity.identity.level : 0) } };
+  });
+}
+
 export function recomputeDerived(
   entityParam: Entity, rules: CampaignRules,
   content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
@@ -171,7 +187,7 @@ export function recomputeDerived(
   // Use a mutable local reference so we can apply grant_proficiency effects
   let entity = syncProficiencyResources(recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells)));
 
-  let allEffects      = collectAllEffects(entity, content.items);
+  let allEffects      = foldKnownBonuses(collectAllEffects(entity, content.items), entity);
 
   // ── Derived max-HP bonus ("+5 maximum hit points" as an effect on target 'max_hp') ──
   // resources.hp.maximum is a STORED value (set by leveling, adjusted by CON changes), so a bonus
@@ -564,6 +580,11 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
   // 1. Features from race, class, background, feats, spells, etc.
   for (const fi of entity.features) {
     if (!fi.isActive) continue;
+    // A RACIAL trait with an authored unlock level (Draconic Flight at 5, Large Form at 5) does nothing
+    // until the character reaches it — the same gate action-card generation already applies. Limited to
+    // race-sourced features on purpose: class/feat/background features are stamped with the level they
+    // were granted at (which is not always <= the character's level in fixtures and mid-creation states).
+    if (fi.source.kind === 'race' && fi.level !== null && fi.level > entity.identity.level) continue;
 
     for (const effect of fi.effects) {
       // Gate: skip if effect requires a flag or condition that is not active

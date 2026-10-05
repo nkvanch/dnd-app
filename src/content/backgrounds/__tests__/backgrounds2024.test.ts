@@ -15,7 +15,7 @@ describe('bgAcolyte2024', () => {
     expect(bgAcolyte2024.flexibleAsi).toBeDefined();
     expect(bgAcolyte2024.flexibleAsi!.mode.kind).toBe('two_one_or_three_one');
     if (bgAcolyte2024.flexibleAsi!.mode.kind === 'two_one_or_three_one') {
-      expect(bgAcolyte2024.flexibleAsi!.mode.restrictTo).toEqual(['wis', 'int', 'cha']);
+      expect(bgAcolyte2024.flexibleAsi!.mode.restrictTo).toEqual(['int', 'wis', 'cha']);
     }
   });
 
@@ -26,9 +26,9 @@ describe('bgAcolyte2024', () => {
     expect(hasStatModifier).toBe(false);
   });
 
-  it('keeps the same Insight/Religion skill proficiencies as classic Acolyte', () => {
+  it('keeps the same Insight/Religion skill proficiencies as classic Acolyte, and now also grants the 2024 tool proficiency', () => {
     const grants = bgAcolyte2024.features.flatMap(f => f.effects).filter(e => e.type === 'grant_proficiency');
     const targets = grants.map(e => e.target).sort();
-    expect(targets).toEqual(['skill:insight', 'skill:religion']);
+    expect(targets).toEqual(['skill:insight', 'skill:religion', 'tool:calligraphers_supplies']);
   });
 });

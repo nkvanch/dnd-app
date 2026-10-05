@@ -2,6 +2,7 @@
 // FILE: src/content/races/index.ts
 // All PHB races expressed as Feature/Effect arrays.
 // ============================================================================
+import { RACES_2024 } from './races2024';
 import { Race, Subrace, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature, Ability, RulesetId } from '../../engine/types';
 
 /**
@@ -3272,6 +3273,7 @@ export const raceWaterGenasi: Race = {
 export const FULL_RACE_LIBRARY: Race[] = [
   raceHuman,
   raceHuman2024,
+  ...RACES_2024,
   raceElf,
   raceDwarf,
   raceHalfling,

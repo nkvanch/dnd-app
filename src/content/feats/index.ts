@@ -9,6 +9,7 @@
 // the player tracks manually — the description states the full benefit.
 // ============================================================================
 import { Feat, Feature, Effect, Ability } from '../../engine/types';
+import { ORIGIN_FEATS_2024 } from './origin2024';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -570,7 +571,7 @@ const allFeatEntries: Feat[] = [
 ];
 
 /** Every feat, unfiltered. Prefer ALL_FEATS below in app code. */
-export const FULL_FEAT_LIBRARY: Feat[] = allFeatEntries;
+export const FULL_FEAT_LIBRARY: Feat[] = [...allFeatEntries, ...ORIGIN_FEATS_2024];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 

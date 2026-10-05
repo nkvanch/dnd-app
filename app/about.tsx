@@ -52,6 +52,13 @@ export default function AboutScreen() {
           .
         </Text>
         <Text style={[styles.body, styles.bodySpaced]}>
+          This work also includes material from the System Reference Document
+          5.2.1 by Wizards of the Coast LLC (the 2024 rules' species,
+          backgrounds and Origin feats), licensed under the Creative Commons
+          Attribution 4.0 International License, available at the same address
+          as above.
+        </Text>
+        <Text style={[styles.body, styles.bodySpaced]}>
           Grimoire is not affiliated with, endorsed by, or sponsored by
           Wizards of the Coast. Dungeons &amp; Dragons and its logo are
           trademarks of Wizards of the Coast LLC, and their use here is

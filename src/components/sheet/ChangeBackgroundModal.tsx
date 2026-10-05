@@ -97,7 +97,7 @@ export function ChangeBackgroundModal({ visible, entity, rules, onConfirm, onCan
   // exactly what WOULD happen, editable from there.
   useEffect(() => {
     if (!selectedBg) return;
-    const defaultResult = swapBackground(entity, selectedBg, rules);
+    const defaultResult = swapBackground(entity, selectedBg, rules, undefined, undefined, selectedBg.originFeat ? (getMergedContentDB(entity.rulesetId).feats ?? []).find(f => f.id === selectedBg.originFeat) : undefined);
     const initial: Partial<Record<SkillName, boolean>> = {};
     for (const skill of oldBgSkills) {
       initial[skill] = defaultResult.skills.skills[skill]?.trained ?? false;
@@ -220,7 +220,8 @@ export function ChangeBackgroundModal({ visible, entity, rules, onConfirm, onCan
 
   const { before, after } = simulate(
     entity,
-    e => swapBackground(e, selectedBg, rules, flexAsi ? flexPicks : undefined, skillChecklist),
+    e => swapBackground(e, selectedBg, rules, flexAsi ? flexPicks : undefined, skillChecklist,
+      selectedBg.originFeat ? (getMergedContentDB(entity.rulesetId).feats ?? []).find(f => f.id === selectedBg.originFeat) : undefined),
     rules,
   );
   const rows = buildFeatureGrantRows(before, after);

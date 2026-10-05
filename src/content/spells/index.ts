@@ -519,12 +519,31 @@ for (const [cls, byLevel] of Object.entries(SPELL_LIST_2024)) {
   for (const id of Object.values(byLevel).flat()) _classes2024BySpell.set(id, [...(_classes2024BySpell.get(id) ?? []), `${cls}_2024`]);
 }
 const _isEmperorSpell = (s: Spell) => _emperorSpellIds.has(s.id) || !!s.classes?.includes('warlock');
+/**
+ * The generated spell data has ten records whose header ran together into `castingTime`
+ * ("1 action **Range**: Touch **Components**: V, S **Duration**: ..."), leaving range and duration empty. This
+ * splits that header back into its fields, and gives Delayed Blast Fireball the duration its record lacks
+ * (SRD 5.1: Concentration, up to 1 minute). A record that is already well formed is returned untouched.
+ */
+const MERGED_HEADER = /^(.*?)\s*\*\*Range\*\*:\s*(.*?)\s*\*\*Components\*\*:\s*(.*?)\s*\*\*Duration\*\*:\s*(.*)$/;
+export function repairSpellHeader(s: Spell): Spell {
+  const m = MERGED_HEADER.exec(s.castingTime ?? '');
+  let out = s;
+  if (m) {
+    const letters = (m[3].match(/\b[VSM]\b/g) ?? []) as string[];
+    out = { ...s, castingTime: m[1].trim(), range: s.range || m[2].trim(), duration: s.duration || m[4].trim(),
+      components: s.components.length > 0 ? s.components : letters };
+  }
+  if (!out.duration && out.id === 'delayed_blast_fireball') out = { ...out, duration: 'Concentration, up to 1 minute' };
+  return out;
+}
+
 export const FULL_SPELL_LIBRARY: Spell[] = _rawSpellLibrary.filter(s => {
   if (_seenSpellIds.has(s.id)) return false;
   _seenSpellIds.add(s.id);
   return true;
 }).map(s => {
-  let out = s;
+  let out = repairSpellHeader(s);
   if (_isEmperorSpell(s) && s.classes && s.classes.length > 0) out = { ...out, classes: [...(out.classes ?? []), 'emperor_warlock', 'emperor_warlock_demo'] };
   const c24 = _classes2024BySpell.get(s.id);
   if (c24 && out.classes && out.classes.length > 0) out = { ...out, classes: [...new Set([...(out.classes ?? []), ...c24])] };

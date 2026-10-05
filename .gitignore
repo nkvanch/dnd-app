@@ -56,3 +56,6 @@ graphify-out/
 # creator outreach drafts (private)
 outreach/private/
 outreach/to-send/
+
+# Generated first-party packs (scripts/build-srd-packs.ts)
+/release/

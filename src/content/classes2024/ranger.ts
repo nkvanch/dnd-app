@@ -3,8 +3,7 @@
 // Ranger (2024 rules), System Reference Document 5.2.1 (Creative Commons Attribution 4.0).
 // Half caster that casts from level 1. Favored Enemy is Hunter's Mark, always prepared and castable
 // free 2/3/4/5/6 times per Long Rest. Weapon Mastery covers any proficient weapon (2 kinds). Roving's Climb
-// and Swim speeds ("equal to your Speed") are described, not applied, because the app's movement speeds
-// are fixed numbers. Subclass: Hunter.
+// and Swim speeds follow the final Speed (movementEqualsSpeed). Subclass: Hunter.
 // ============================================================================
 import { ClassDef, classKit, activation, stat } from './builder';
 import { ARTIFICER_SLOTS } from '../classes/spellSlotTables';
@@ -12,6 +11,8 @@ import { styles } from './fighter';
 import { Effect } from '../../engine/types';
 
 const classId = 'ranger_2024';
+const equalsSpeed = (movementType: 'climb' | 'swim' | 'fly'): Effect =>
+  ({ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType, movementEqualsSpeed: true });
 const k = classKit(classId);
 const FAVORED = (lv: number) => (lv >= 17 ? 6 : lv >= 13 ? 5 : lv >= 9 ? 4 : lv >= 5 ? 3 : 2);
 const blindsight = (range: number): Effect =>
@@ -52,7 +53,8 @@ export const ranger2024: ClassDef = {
         k.expertise('deft_explorer_expertise', 1, 'Deft Explorer: choose one of your skill proficiencies to gain Expertise in.'),
         k.pick('fighting_style', 'Fighting Style: choose a Fighting Style feat, or Druidic Warrior.', 1, [
           ...styles(k),
-          k.option('fighting_style_druidic_warrior', 'Druidic Warrior', 2, 'You learn two Druid cantrips of your choice (Guidance and Starry Wisp are recommended). They count as Ranger spells for you, and Wisdom is your spellcasting ability for them. Whenever you gain a Ranger level, you can replace one of these cantrips with another Druid cantrip. (Add them with + Add Spell on your sheet.)'),
+          k.option('fighting_style_druidic_warrior', 'Druidic Warrior', 2, 'You learn two Druid cantrips of your choice (Guidance and Starry Wisp are recommended). They count as Ranger spells for you, and Wisdom is your spellcasting ability for them. Whenever you gain a Ranger level, you can replace one of these cantrips with another Druid cantrip.',
+            { grantsChoices: [k.spellsFrom('druidic_warrior_cantrips', 2, 'Druidic Warrior: choose two Druid cantrips (Guidance and Starry Wisp are recommended).', { lists: ['druid_2024'], label: 'Druidic Warrior (Druid cantrips)' })] }),
         ]),
       ],
       grants: [
@@ -62,7 +64,7 @@ export const ranger2024: ClassDef = {
     },
     3: { choices: [k.subclassChoice('Ranger Subclass')], grants: [k.g('subclass', 'Ranger Subclass', 3, 'You gain a Ranger subclass of your choice.')] },
     5: { grants: [k.extraAttack(5), k.raise('favored_enemy', FAVORED(5))] },
-    6: { grants: [k.g('roving', 'Roving', 6, 'Your Speed increases by 10 feet while you aren\'t wearing Heavy armor. You also have a Climb Speed and a Swim Speed equal to your Speed (note them on your sheet).', { effects: [stat('speed', 'add', 10)] })] },
+    6: { grants: [k.g('roving', 'Roving', 6, 'Your Speed increases by 10 feet while you aren\'t wearing Heavy armor. You also have a Climb Speed and a Swim Speed equal to your Speed.', { effects: [{ ...stat('speed', 'add', 10), condition: 'worn:not_heavy' }, equalsSpeed('climb'), equalsSpeed('swim')] })] },
     9: { choices: [k.expertise('expertise_9', 2, 'Expertise: choose two of your skill proficiencies with which you lack Expertise.')],
       grants: [k.g('expertise', 'Expertise', 9, 'Choose two of your skill proficiencies with which you lack Expertise. You gain Expertise in those skills.'), k.raise('favored_enemy', FAVORED(9))] },
     10: { grants: [
@@ -89,19 +91,19 @@ export const ranger2024: ClassDef = {
   subclass: {
     id: 'hunter_2024', name: 'Hunter',
     entries: kit => [
-      { level: 3, choices: [kit.pick('hunters_prey', 'Hunter\'s Prey: choose one option. (Whenever you finish a Short or Long Rest you can swap it by removing it on the Features tab and picking the other.)', 1, [
+      { level: 3, choices: [kit.pick('hunters_prey', 'Hunter\'s Prey: choose one option. (Whenever you finish a Short or Long Rest you can swap it on the Features tab.)', 1, [
           kit.option('hunters_prey_colossus_slayer', 'Colossus Slayer', 3, 'Your tenacity can wear down even the most resilient foes. When you hit a creature with a weapon, the weapon deals an extra 1d8 damage to the target if it\'s missing any of its Hit Points. You can deal this extra damage only once per turn.',
             { activation: activation('free', { range: 'weapon', target: 'single' }), abilityEffects: [{ type: 'damage', dice: '1d8', damageType: 'weapon' }], tags: ['damage'] }),
           kit.option('hunters_prey_horde_breaker', 'Horde Breaker', 3, 'Once on each of your turns when you make an attack with a weapon, you can make another attack with the same weapon against a different creature that is within 5 feet of the original target, that is within the weapon\'s range, and that you haven\'t attacked this turn.'),
-        ])],
+        ], { timing: 'rest', rule: 'Whenever you finish a Short or Long Rest, you can replace this with the other option.' })],
         grants: [
           kit.g('hunter_hunters_lore', 'Hunter\'s Lore', 3, 'While a creature is marked by your Hunter\'s Mark, you know whether that creature has any Immunities, Resistances, or Vulnerabilities, and if it has any, you know what they are.'),
           kit.g('hunter_hunters_prey', 'Hunter\'s Prey', 3, 'You gain one of two feature options of your choice: Colossus Slayer or Horde Breaker. Whenever you finish a Short or Long Rest, you can replace the chosen option with the other one.'),
         ] },
-      { level: 7, choices: [kit.pick('defensive_tactics', 'Defensive Tactics: choose one option. (Swap it after a Short or Long Rest by removing it on the Features tab.)', 1, [
+      { level: 7, choices: [kit.pick('defensive_tactics', 'Defensive Tactics: choose one option. (Swap it after a Short or Long Rest on the Features tab.)', 1, [
           kit.option('defensive_tactics_escape_the_horde', 'Escape the Horde', 7, 'Opportunity Attacks have Disadvantage against you.'),
           kit.option('defensive_tactics_multiattack_defense', 'Multiattack Defense', 7, 'When a creature hits you with an attack roll, that creature has Disadvantage on all other attack rolls against you this turn.'),
-        ])],
+        ], { timing: 'rest', rule: 'Whenever you finish a Short or Long Rest, you can replace this with the other option.' })],
         grants: [kit.g('hunter_defensive_tactics', 'Defensive Tactics', 7, 'You gain one of two feature options of your choice: Escape the Horde or Multiattack Defense. Whenever you finish a Short or Long Rest, you can replace the chosen option with the other one.')] },
       { level: 11, grants: [kit.g('hunter_superior_hunters_prey', 'Superior Hunter\'s Prey', 11, 'Once per turn when you deal damage to a creature marked by your Hunter\'s Mark, you can also deal that spell\'s extra damage to a different creature that you can see within 30 feet of the first creature.')] },
       { level: 15, grants: [kit.g('hunter_superior_hunters_defense', 'Superior Hunter\'s Defense', 15, 'When you take damage, you can take a Reaction to give yourself Resistance to that damage and any other damage of the same type until the end of the current turn.',

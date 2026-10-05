@@ -17,7 +17,7 @@ export const LIGHT_MARTIAL_WEAPONS = WEAPON_MASTERY_TABLE.filter(w => w.category
 const k = classKit(classId);
 const FOCUS_DC = { ability: 'wis' as const, dc: { ability: 'wis' as const } };
 const MOVE = (feet: number, extra = '') => `Your speed increases by ${feet} feet while you aren't wearing armor or wielding a Shield.${extra}`;
-const speed = (feet: number): Effect => stat('speed', 'add', feet);
+const speed = (feet: number): Effect => ({ ...stat('speed', 'add', feet), condition: 'worn:no_armor_or_shield' });
 const focus = (extra: object = {}) => activation('free', { resource: 'focus_points', ...extra });
 
 /** Disciplined Survivor: proficiency in the four saves a Monk lacks (Strength and Dexterity are already proficient). */

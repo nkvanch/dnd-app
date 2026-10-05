@@ -55,12 +55,12 @@ export const sorcerer2024: ClassDef = {
       ],
     },
     2: {
-      choices: [k.pick('metamagic_2', 'Metamagic: choose two options.', 2, metamagic(k))],
+      choices: [k.pick('metamagic_2', 'Metamagic: choose two options.', 2, metamagic(k), { timing: 'level_up', rule: 'Whenever you gain a Sorcerer level, you can replace this with a different one.' })],
       grants: [
         k.g('font_of_magic', 'Font of Magic', 2, 'You can tap into the wellspring of magic within yourself, represented by Sorcery Points (a number equal to your Sorcerer level; you regain all of them on a Long Rest). Converting Spell Slots to Sorcery Points: expend a spell slot to gain Sorcery Points equal to the slot\'s level (no action required). Creating Spell Slots: as a Bonus Action, spend Sorcery Points to create a spell slot of level 1 (2 points, from Sorcerer level 2), 2 (3 points, level 3), 3 (5 points, level 5), 4 (6 points, level 7) or 5 (7 points, level 9). Slots created this way vanish when you finish a Long Rest.',
           { activation: activation('bonus_action', { resource: 'sorcery_points' }), tags: ['utility'] }),
         { kind: 'resource', value: { resourceId: 'sorcery_points', name: 'Sorcery Points', maximum: 2, recharge: 'long_rest', perLevel: 1 } },
-        k.g('metamagic', 'Metamagic', 2, 'You gain two Metamagic options of your choice (two more at level 10 and two more at level 17). You can use only one Metamagic option on a spell when you cast it unless otherwise noted. Whenever you gain a Sorcerer level, you can replace one of your Metamagic options with one you don\'t know (remove it on the Features tab and pick another).'),
+        k.g('metamagic', 'Metamagic', 2, 'You gain two Metamagic options of your choice (two more at level 10 and two more at level 17). You can use only one Metamagic option on a spell when you cast it unless otherwise noted. Whenever you gain a Sorcerer level, you can replace one of your Metamagic options with one you don\'t know (swap it on the Features tab).'),
       ],
     },
     3: { choices: [k.subclassChoice('Sorcerer Subclass')], grants: [k.g('subclass', 'Sorcerer Subclass', 3, 'You gain a Sorcerer subclass of your choice.')] },
@@ -68,8 +68,8 @@ export const sorcerer2024: ClassDef = {
       { activation: activation('free', { resource: 'sorcerous_restoration' }), tags: ['utility'] }),
       k.pool('sorcerous_restoration', 'Sorcerous Restoration', 1, 'long_rest')] },
     7: { grants: [k.g('sorcery_incarnate', 'Sorcery Incarnate', 7, 'If you have no uses of Innate Sorcery left, you can use it if you spend 2 Sorcery Points when you take the Bonus Action to activate it. In addition, while your Innate Sorcery feature is active, you can use up to two of your Metamagic options on each spell you cast.')] },
-    10: { choices: [k.pick('metamagic_10', 'Metamagic: choose two more options.', 2, metamagic(k))], grants: [k.g('metamagic_10', 'Metamagic (two more)', 10, 'You gain two more Metamagic options of your choice.')] },
-    17: { choices: [k.pick('metamagic_17', 'Metamagic: choose two more options.', 2, metamagic(k))], grants: [k.g('metamagic_17', 'Metamagic (two more)', 17, 'You gain two more Metamagic options of your choice.')] },
+    10: { choices: [k.pick('metamagic_10', 'Metamagic: choose two more options.', 2, metamagic(k), { timing: 'level_up', rule: 'Whenever you gain a Sorcerer level, you can replace this with a different one.' })], grants: [k.g('metamagic_10', 'Metamagic (two more)', 10, 'You gain two more Metamagic options of your choice.')] },
+    17: { choices: [k.pick('metamagic_17', 'Metamagic: choose two more options.', 2, metamagic(k), { timing: 'level_up', rule: 'Whenever you gain a Sorcerer level, you can replace this with a different one.' })], grants: [k.g('metamagic_17', 'Metamagic (two more)', 17, 'You gain two more Metamagic options of your choice.')] },
     20: { grants: [k.g('arcane_apotheosis', 'Arcane Apotheosis', 20, 'While your Innate Sorcery feature is active, you can use one Metamagic option on each of your turns without spending Sorcery Points on it.')] },
   },
   subclass: {
@@ -92,7 +92,9 @@ export const sorcerer2024: ClassDef = {
       { level: 9, grants: [{ kind: 'known_spells', value: { spellIds: ['legend_lore', 'summon_dragon'] } }] },
       { level: 14, grants: [
         kit.g('draconic_dragon_wings', 'Dragon Wings', 14, 'As a Bonus Action, you can cause draconic wings to appear on your back. The wings last for 1 hour or until you dismiss them (no action required). For the duration, you have a Fly Speed of 60 feet. Once you use this feature, you can\'t use it again until you finish a Long Rest unless you spend 3 Sorcery Points (no action required) to restore your use of it.',
-          { activation: activation('bonus_action', { resource: 'dragon_wings' }), tags: ['movement'] }),
+          { activation: activation('bonus_action', { resource: 'dragon_wings' }), tags: ['movement'],
+            effects: [{ type: 'grant_movement', target: 'movement', operation: 'add', value: null, condition: null, movementType: 'fly', movementRange: 60,
+              situational: { id: 'dragon_wings_out', question: 'Are your draconic wings out?' } }] }),
         { kind: 'resource', value: { resourceId: 'dragon_wings', name: 'Dragon Wings', maximum: 1, recharge: 'long_rest' } },
       ] },
       { level: 18, grants: [

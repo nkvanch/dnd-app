@@ -148,6 +148,24 @@ export function itemRequiresAttunement(item: Pick<Item, 'id' | 'properties'> | u
     || item.properties.some(property => property.toLowerCase().includes('requires attunement'));
 }
 
+/** What the character is wearing, for effects gated on armor ("while you aren't wearing Heavy armor"). */
+export type WornGear = { armor: 'none' | 'light' | 'medium' | 'heavy'; shield: boolean };
+
+export function wornGearOf(equipped: readonly ItemInstance[], resolve: (itemId: string) => Item | undefined): WornGear {
+  const rank = { none: 0, light: 1, medium: 2, heavy: 3 } as const;
+  let armor: WornGear['armor'] = 'none';
+  let shield = false;
+  for (const i of equipped) {
+    // The catalog when it resolves, otherwise the facts hydrated onto the instance when it was equipped.
+    const def = resolve(i.itemId);
+    const entry = def ? toItemIndexEntry(def) : undefined;
+    const w = entry ? armorWeight(entry) : (i.armorWeight ?? null);
+    if (w && rank[w] > rank[armor]) armor = w;
+    if (entry ? isShield(entry) : i.isShield === true) shield = true;
+  }
+  return { armor, shield };
+}
+
 export function itemWearsArmorOrShield(item: Item | undefined): boolean {
   if (!item) return false;
   const entry = toItemIndexEntry(item);
@@ -226,10 +244,14 @@ export function hydrateItemInstanceDefinitionFacts(
   const features = effectiveItemFeatures(instance, definition);
   const requiresAttunement = itemRequiresAttunement(definition);
   const wearsArmorOrShield = itemWearsArmorOrShield(definition);
+  const entry = toItemIndexEntry(definition);
+  const weight = armorWeight(entry) ?? undefined;
+  const shield = isShield(entry);
   if (features === instance.features
     && requiresAttunement === instance.requiresAttunement
-    && wearsArmorOrShield === instance.wearsArmorOrShield) return instance;
-  return { ...instance, features, requiresAttunement, wearsArmorOrShield };
+    && wearsArmorOrShield === instance.wearsArmorOrShield
+    && weight === instance.armorWeight && (shield || undefined) === (instance.isShield || undefined)) return instance;
+  return { ...instance, features, requiresAttunement, wearsArmorOrShield, armorWeight: weight, isShield: shield };
 }
 
 export function hydrateEntityItemDefinitionFacts(entity: Entity): Entity {

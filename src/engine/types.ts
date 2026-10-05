@@ -1348,6 +1348,31 @@ export type ItemFilterConstraint = {
   armorWeight?: 'heavy' | 'medium' | 'light';
 };
 
+/**
+ * A requirement for taking an option, checked by engine/prerequisites.ts (not Warlock-only: any ChoiceOption can carry
+ * them, and so can anything else that wants to ask "does this character qualify").
+ *   level      the character's level, or `classId`'s level, is at least `min`
+ *   has_option the character already holds this pool option (Eldritch Smite needs Pact of the Blade)
+ *   has_feature the character has this feature id
+ *   cantrip    the character knows a cantrip with these traits (Agonizing Blast: one that deals damage)
+ *   spell      the character knows this spell
+ *   excludes   mutually exclusive: not allowed while the character holds any of these options
+ */
+export type Prerequisite =
+  | { kind: 'level';       min: number; classId?: string }
+  | { kind: 'has_option';  optionId: string; label: string }
+  | { kind: 'has_feature'; featureId: string; label: string }
+  | { kind: 'cantrip';     traits: ('damage' | 'attack_roll' | 'range_10_plus')[]; label: string }
+  | { kind: 'spell';       spellId: string; label: string }
+  | { kind: 'excludes';    optionIds: string[]; label: string };
+
+/** When a held option of a `feature_pool` choice may be swapped for another one (Fighting Style on level-up, Hunter's Prey on a rest). */
+export type ChoiceReplacePolicy = {
+  timing: 'level_up' | 'rest' | 'long_rest';
+  /** The rule's own words for the confirm step, e.g. "Whenever you gain a Fighter level". */
+  rule: string;
+};
+
 export type ChoiceOption = {
   id:    string;
   label: string;
@@ -1365,6 +1390,29 @@ export type ChoiceOption = {
    * legal choice).
    */
   itemFilter?: { constraint: ItemFilterConstraint; quantity: number };
+  /** Requirements for taking this option (level, another option, a cantrip, ...). See Prerequisite. */
+  requires?: Prerequisite[];
+};
+
+/**
+ * Narrows (and widens) what a `kind: 'spell'` choice offers, so a feature can let the player pick spells from
+ * lists other than their own class's: Bard Magical Secrets (Bard/Cleric/Druid/Wizard), Paladin Blessed Warrior
+ * (Cleric cantrips), Pact of the Tome (any list, cantrips plus Ritual spells), Mystic Arcanum (Warlock level 6-9).
+ * Absent = the choice's own class list, capped by the character's castable spell level (the original behavior).
+ */
+export type SpellPickFilter = {
+  /** Class ids whose spell lists the spell may come from (a union), or 'any' for every spell. Absent = the character's own class list. */
+  lists?: string[] | 'any';
+  /** Exact spell levels allowed (0 is a cantrip). Absent = cantrips for a cantrip choice, otherwise level 1 up to the castable level. */
+  levels?: number[];
+  schools?: string[];
+  ritualOnly?: boolean;
+  /** A leveled-spell choice that may also take cantrips ("a cantrip or a spell for which you have slots"). */
+  includeCantrips?: boolean;
+  /** Offer levels above what the character can currently cast (Mystic Arcanum picks level 6-9 spells). */
+  ignoreSlotCap?: boolean;
+  /** Short label for the picker heading, e.g. "Cleric cantrips". */
+  label?: string;
 };
 
 export type ChoiceDefinition = {
@@ -1386,6 +1434,10 @@ export type ChoiceDefinition = {
    * stays valid without edits.
    */
   forClassId?: string;
+  /** For `kind: 'feature_pool'`: the held options of this choice can be swapped later. See ChoiceReplacePolicy. */
+  replace?: ChoiceReplacePolicy;
+  /** For `kind: 'spell'`: where the spells may come from and which levels are offered. See SpellPickFilter. */
+  spellFilter?: SpellPickFilter;
   /**
    * Player-facing noun for a `kind: 'subclass'` choice that is not conventionally a subclass
    * (Emperor Warlock's "Bound Spirit"). The picker heading, the Features tab button and the
@@ -1692,6 +1744,9 @@ export type ItemInstance = {
    * requiresAttunement's own — re-equip refreshes it).
    */
   wearsArmorOrShield?: boolean;
+  /** Armor weight and shield-ness, hydrated with the other definition facts, so worn-gear conditions need no catalog lookup. */
+  armorWeight?: 'light' | 'medium' | 'heavy';
+  isShield?: boolean;
 };
 
 export type InventoryBlock = {
@@ -1852,7 +1907,10 @@ export type Effect = {
   senseNote?:  string;
   // ── grant_movement-specific fields ───────────────────────────────────────────
   movementType?:  'fly' | 'swim' | 'climb' | 'burrow';
+  /** Feet. With `movementEqualsSpeed` it is an addition to the Speed (0/absent = exactly the Speed). */
   movementRange?: number;
+  /** "A Climb/Swim/Fly Speed equal to your Speed": the range is the character's final walking Speed. */
+  movementEqualsSpeed?: boolean;
 };
 
 /**
@@ -1874,6 +1932,12 @@ export type Feature = {
   effects:     Effect[];
   actions:     Action[];
   choices:     ChoiceDefinition[];
+  /**
+   * Choices opened when this feature is granted (a Fighting Style option that lets you learn two Cleric cantrips,
+   * Pact of the Tome's cantrips and rituals). Queued once, namespaced to this feature id, and taken back out with it
+   * (removeFeature already strips unresolved choices and revokes resolved ones namespaced `${featureId}:`).
+   */
+  grantsChoices?: ChoiceDefinition[];
   passive:     boolean;
 
   // ── Active ability fields (optional — undefined = passive feature, no card generated) ──
@@ -2273,6 +2337,8 @@ export type Entity = {
   modeState?: Record<string, ModeState>;
   /** Weapon Mastery (2024): the weapon kinds the player chose to master, as weapon ids. See engine/weaponMastery.ts. */
   weaponMastery?: { picks: string[] };
+  /** Heroic Inspiration (2024): whether the character holds it. Never more than one; see engine/heroicInspiration.ts. */
+  heroicInspiration?: boolean;
   /**
    * Item 13 (build comparison/checkpoints/loadouts) — named, saved
    * equipment + prepared-spell configurations a player can swap between

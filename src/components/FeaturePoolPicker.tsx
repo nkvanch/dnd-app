@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { applyPoolChoiceToEntity } from '../engine/leveling';
+import { checkPrerequisites } from '../engine/prerequisites';
 import { Entity, ChoiceState, CampaignRules, Feature } from '../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
@@ -32,17 +33,36 @@ export function FeaturePoolPicker({
   const pool = (Array.isArray(choice.definition.pool) ? choice.definition.pool : [])
     .filter(opt => !knownFeatureIds.has((opt.value as Feature | undefined)?.id ?? ''));
 
+  const classContext = choice.definition.forClassId ?? entity.identity.classId;
+  // What stops an option being taken, given what is already selected in this sitting (an option can need another one
+  // picked alongside it, such as Eldritch Smite with Pact of the Blade).
+  const unmetFor = (optId: string, others: string[]): string[] =>
+    checkPrerequisites(entity, pool.find(o => o.id === optId)?.requires, { alsoHeld: others.filter(x => x !== optId), classId: classContext }).unmet;
+
   function toggle(id: string) {
     setSelected(prev => {
-      if (prev.includes(id)) return prev.filter(x => x !== id);
+      if (prev.includes(id)) {
+        // Dropping an option also drops anything picked only because of it.
+        let next = prev.filter(x => x !== id);
+        let changed = true;
+        while (changed) {
+          const before = next.length;
+          next = next.filter(x => unmetFor(x, next).length === 0);
+          changed = next.length !== before;
+        }
+        return next;
+      }
       if (prev.length >= choice.definition.count) return prev;
+      if (unmetFor(id, prev).length > 0) return prev;
       return [...prev, id];
     });
   }
 
+  const [error, setError] = useState<string | null>(null);
   function commit() {
     if (selected.length !== choice.definition.count) return;
-    onResolved(applyPoolChoiceToEntity(entity, choice.id, selected, rules));
+    try { onResolved(applyPoolChoiceToEntity(entity, choice.id, selected, rules)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'That choice is not allowed.'); }
   }
 
   return (
@@ -62,12 +82,16 @@ export function FeaturePoolPicker({
           const feature = opt.value as Feature;
           const isSel   = selected.includes(opt.id);
           const isReal  = !!feature?.activation;
+          const unmet   = isSel ? [] : unmetFor(opt.id, selected);
           return (
-            <Pressable key={opt.id} style={[styles.row, isSel && styles.rowSelected]} onPress={() => toggle(opt.id)}>
+            <Pressable key={opt.id} style={[styles.row, isSel && styles.rowSelected, unmet.length > 0 && styles.rowLocked]}
+              onPress={() => toggle(opt.id)} disabled={unmet.length > 0}
+              accessibilityState={{ disabled: unmet.length > 0, selected: isSel }}>
               <View style={styles.rowHeader}>
                 <Text style={styles.rowName}>{opt.label}{isSel ? ' ✓' : ''}</Text>
                 {!isReal && <Text style={styles.rowFlavorTag}>flavor-only</Text>}
               </View>
+              {unmet.length > 0 && <Text style={styles.rowUnmet}>Requires: {unmet.join(', ')}</Text>}
               {!!feature?.description && <Text style={styles.rowDesc}>{feature.description}</Text>}
             </Pressable>
           );
@@ -77,6 +101,7 @@ export function FeaturePoolPicker({
         )}
       </View>
 
+      {error && <Text style={styles.rowUnmet}>{error}</Text>}
       <Pressable
         style={[styles.applyBtn, selected.length !== choice.definition.count && styles.applyBtnDisabled]}
         disabled={selected.length !== choice.definition.count}
@@ -103,6 +128,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, padding: Spacing.md,
   },
   rowSelected: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  rowLocked: { opacity: 0.55 },
+  rowUnmet: { fontSize: FontSize.sm, color: Colors.red, marginTop: 4, fontWeight: FontWeight.bold },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rowName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, flexShrink: 1 },
   rowFlavorTag: { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },

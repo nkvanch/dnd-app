@@ -63,7 +63,7 @@ export const barbarian2024: ClassDef = {
     5: { grants: [
       k.raise('rage_pool', RAGES[4]),
       k.extraAttack(5),
-      k.g('fast_movement', 'Fast Movement', 5, 'Your Speed increases by 10 feet while you aren\'t wearing Heavy armor.', { effects: [stat('speed', 'add', 10)] }),
+      k.g('fast_movement', 'Fast Movement', 5, 'Your Speed increases by 10 feet while you aren\'t wearing Heavy armor.', { effects: [{ ...stat('speed', 'add', 10), condition: 'worn:not_heavy' }] }),
     ] },
     6: { grants: [k.raise('rage_pool', RAGES[5])] },
     7: { grants: [

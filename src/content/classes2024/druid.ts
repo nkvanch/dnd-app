@@ -47,11 +47,11 @@ export const druid2024: ClassDef = {
           { id: 'b', label: 'B: 50 GP', items: [] },
         ]),
         k.pick('primal_order', 'Primal Order: choose a sacred role.', 1, [
-          k.option('primal_order_magician', 'Magician', 1, 'You know one extra cantrip from the Druid spell list (choose it below). Your mystical connection to nature gives you a bonus to your Intelligence (Arcana or Nature) checks equal to your Wisdom modifier (minimum +1).'),
+          k.option('primal_order_magician', 'Magician', 1, 'You know one extra cantrip from the Druid spell list (choose it below). Your mystical connection to nature gives you a bonus to your Intelligence (Arcana or Nature) checks equal to your Wisdom modifier (minimum +1).',
+            { grantsChoices: [k.spellsFrom('magician_cantrip', 1, 'Magician: choose one extra Druid cantrip.', { lists: ['druid_2024'], label: 'Magician cantrip' })] }),
           k.option('primal_order_warden', 'Warden', 1, 'Trained for battle, you gain proficiency with Martial weapons and training with Medium armor.',
             { effects: [{ type: 'grant_proficiency', target: 'weapon:martial', operation: 'add', value: null, condition: null }, { type: 'grant_proficiency', target: 'armor:medium', operation: 'add', value: null, condition: null }] }),
         ]),
-        { ...k.spells('magician_cantrip', 1, 'Magician only: choose one extra Druid cantrip.'), required: false },
       ],
       grants: [
         k.g('spellcasting', 'Spellcasting', 1, 'You cast spells through the mystical forces of nature using Wisdom as your spellcasting ability. You know two cantrips from the Druid spell list (a third at level 4, a fourth at level 10) and can replace one whenever you gain a Druid level. You prepare level 1+ spells from the whole Druid list, the number shown in the Prepared Spells column, and can change the list after each Long Rest. You can use a Druidic Focus as a Spellcasting Focus.'),

@@ -124,7 +124,7 @@ export default function SpellsScreen() {
   // (see that table's own comment), so the player landed on "nothing to
   // pick" with no way back to their original choice. Same fix shape as
   // skills.tsx's startEditingSkills / equipment.tsx's startEditingEquipment.
-  const allSpellChoicesForKind = draft ? draft.choices.filter(c => c.definition.kind === 'spell') : [];
+  const allSpellChoicesForKind = draft ? draft.choices.filter(c => c.definition.kind === 'spell' && !c.definition.spellFilter) : [];
   const spellChoices        = allSpellChoicesForKind.filter(c => !c.resolved);
   const resolvedSpellChoices = allSpellChoicesForKind.filter(c =>  c.resolved);
 

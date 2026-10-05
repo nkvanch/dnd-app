@@ -450,9 +450,9 @@ export const raceHuman2024: Race = {
     {
       id: 'human_2024_resourceful',
       name: 'Resourceful',
-      description: 'You gain heroic inspiration whenever you finish a long rest. Spend heroic inspiration to give yourself advantage on one D20 Test. This app has no tracked resource for heroic inspiration yet — track its use manually.',
+      description: 'You gain Heroic Inspiration whenever you finish a Long Rest. If you have Heroic Inspiration, you can expend it to reroll any die immediately after rolling it, and you must use the new roll. You can never have more than one.',
       source: { kind: 'race', refId: 'human_2024' },
-      level: null, effects: [], actions: [], choices: [], passive: true,
+      level: null, effects: [{ type: 'stat_modifier', target: 'heroic_inspiration_on_long_rest', operation: 'set', value: 1, condition: null }], actions: [], choices: [], passive: true,
     },
     {
       id: 'human_2024_skillful',

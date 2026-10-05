@@ -2,6 +2,7 @@
 // FILE: src/engine/rest.ts
 // PROJECT: Short Rest & Long Rest Recovery Engine
 // ============================================================================
+import { applyLongRestHeroicInspiration } from './heroicInspiration';
 import { Entity, SpellcastingBlock, SpellSlots, CampaignRules, HitDiceBlock, HitDicePool } from './types';
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers } from './pipeline';
 import { removeCondition, reduceExhaustion } from './conditions';
@@ -75,7 +76,9 @@ export function takeRest(
   hitDiceAllocation?: HitDiceRecoveryAllocation,
 ): Entity {
   const restored = kind === 'short' ? shortRest(entity) : longRest(entity, rules, hitDiceAllocation);
-  return recomputeDerived(restored, rules);
+  // A refused long rest (hit-dice choice missing) returns the entity unchanged: grant nothing in that case.
+  const rested = kind === 'long' && restored !== entity ? applyLongRestHeroicInspiration(restored) : restored;
+  return recomputeDerived(rested, rules);
 }
 
 // ── Short rest ────────────────────────────────────────────────────────────────

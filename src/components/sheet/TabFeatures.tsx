@@ -18,6 +18,7 @@ import { AddCustomFeatureModal } from './AddCustomFeatureModal';
 import { GrantRewardModal } from './GrantRewardModal';
 import { ModeGroupPanel } from './ModeGroupPanel';
 import { WeaponMasteryPanel } from './WeaponMasteryPanel';
+import { ReplaceChoicePanel } from './ReplaceChoicePanel';
 import { ChangeBackgroundModal } from './ChangeBackgroundModal';
 import { spellRepo } from '../../content/spellRepo';
 import { spellProgressFor, groupPendingSpellChoices } from '../../content/creationProgress';
@@ -270,6 +271,11 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
         <WeaponMasteryPanel entity={entity} onEntityUpdate={onEntityUpdate} />
       )}
 
+      {/* Swappable choices (Fighting Style, Metamagic, Eldritch Invocations, Hunter's Prey, ...): replace one held option. */}
+      {canResolve && onEntityUpdate && (
+        <ReplaceChoicePanel entity={entity} rules={rules ?? DEFAULT_RULES} onEntityUpdate={onEntityUpdate} />
+      )}
+
       {/* Header-level identity action — changes the whole background, not
           one feature, so it's kept visually separate from the feature-list
           actions below (Phase 4 of live editing). */}
@@ -310,16 +316,19 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
             // group (cantrip / known-spell) renders a row — the rest are
             // folded into that row's aggregated count and resolved via the
             // same modal's chaining, never shown individually.
-            if (def.kind === 'spell' && c.id !== cantripPrimaryId && c.id !== knownSpellPrimaryId) {
+            // A spell choice with its own pool rules (Magical Secrets, Blessed Warrior, Pact of the Tome, Mystic
+            // Arcanum) is never folded into the class's cantrip/spell groups: it keeps its own row.
+            const ownSpellPool = def.kind === 'spell' && !!def.spellFilter;
+            if (def.kind === 'spell' && !ownSpellPool && c.id !== cantripPrimaryId && c.id !== knownSpellPrimaryId) {
               return null;
             }
-            const isCantripGroup = def.kind === 'spell' && c.id === cantripPrimaryId;
+            const isCantripGroup = def.kind === 'spell' && !ownSpellPool && c.id === cantripPrimaryId;
             const spellGroupTotal = isCantripGroup ? cantripPendingTotal : knownSpellPendingTotal;
             // spellProgressFor is the same authoritative done/total calculation
             // app/creation/spells.tsx's "Selected X/Y" header uses — reused here
             // so the sheet and creation flow report identical entitlement math,
             // not a second display-only calculation (item 23's own rule).
-            const spellProgress = def.kind === 'spell' ? spellProgressFor(entity) : null;
+            const spellProgress = def.kind === 'spell' && !ownSpellPool ? spellProgressFor(entity) : null;
             const spellGroupProgress = isCantripGroup ? spellProgress?.cantrips : spellProgress?.spells;
             const spellGroupPrompt = def.kind === 'spell' && spellGroupProgress
               ? `Selected ${spellGroupProgress.done} / ${spellGroupProgress.total} ${isCantripGroup ? 'cantrips' : 'known spells'}.`
@@ -328,7 +337,7 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
             return (
               <View key={c.id} style={styles.pendingRow}>
                 <Text style={styles.pendingPrompt}>{spellGroupPrompt}</Text>
-                {def.kind === 'spell' ? (
+                {def.kind === 'spell' && !ownSpellPool ? (
                   <Text style={styles.pendingMeta}>
                     {(isCantripGroup ? cantripPending : knownSpellPending).length > 1
                       ? `Across levels ${(isCantripGroup ? cantripPending : knownSpellPending).map(x => x.grantedAt).join(', ')}`
@@ -387,7 +396,7 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
                     onPress={() => setSpellChoiceOpen(c.id)}
                   >
                     <Text style={styles.resolveBtnTxt}>
-                      Resolve — Choose {def.id.includes('cantrip') ? 'Cantrips' : 'Spells'} →
+                      Resolve — Choose {def.spellFilter?.label ?? (def.id.includes('cantrip') ? 'Cantrips' : 'Spells')} →
                     </Text>
                   </Pressable>
                 )}
@@ -732,7 +741,8 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
             // as the ASI modal's REPEATED-CHOICE-1 chaining above, scoped to
             // one group so a cantrip pick never auto-opens a known-spell pick.
             const wasCantripChoice = ch.definition.id.includes('cantrip');
-            const remainingInGroup = (wasCantripChoice ? cantripPending : knownSpellPending)
+            const wasOwnPool = !!ch.definition.spellFilter;
+            const remainingInGroup = wasOwnPool ? 0 : (wasCantripChoice ? cantripPending : knownSpellPending)
               .filter(c => c.id !== ch.id).length;
             return (
               <SpellChoicePicker
@@ -742,8 +752,8 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
                 onClose={() => setSpellChoiceOpen(null)}
                 onResolved={(updated) => {
                   onEntityUpdate(updated);
-                  const next = updated.choices.find(c =>
-                    !c.resolved && c.definition.kind === 'spell' && c.definition.id.includes('cantrip') === wasCantripChoice,
+                  const next = wasOwnPool ? undefined : updated.choices.find(c =>
+                    !c.resolved && c.definition.kind === 'spell' && !c.definition.spellFilter && c.definition.id.includes('cantrip') === wasCantripChoice,
                   );
                   setSpellChoiceOpen(next ? next.id : null);
                 }}

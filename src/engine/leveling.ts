@@ -1,3 +1,5 @@
+import { checkPrerequisites, heldOptionIds, dependentsOf } from './prerequisites';
+import type { Prerequisite } from './types';
 import { Feat, Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
          KnownSpellsGrant, asSubclassId, asClassId, Background, SkillName,
@@ -95,6 +97,12 @@ export function applyGrant(
           ...(spellIds   ?? []).map(key => ({ kind: 'spell_access'   as const, key, sourceKind: grantedFeature.source.kind, sourceId: grantedFeature.source.refId, ...(eff.minLevel ? { minLevel: eff.minLevel } : {}) })),
         ]);
 
+      }
+
+      // Choices this feature opens (Feature.grantsChoices): queued once, owned by the feature.
+      for (const choice of f.grantsChoices ?? []) {
+        const queuedId = `${f.id}:${choice.id}_${atLevel}`;
+        if (!next.choices.some(c => c.id === queuedId)) next = queueChoice(next, choice, atLevel, f.id, { kind: 'feature', id: f.id });
       }
 
       // Feature-owned resource pools (Feature.resources). Provenance is this feature's own id, so
@@ -1004,6 +1012,16 @@ export function applyPoolChoiceToEntity(
   const pending = entity.choices.find(c => c.id === choiceId);
   if (!pending || !Array.isArray(pending.definition.pool)) return entity;
 
+  // Prerequisites (level, another option, a known cantrip, mutual exclusion) are enforced here, not only in the picker.
+  const classContext = pending.definition.forClassId ?? entity.identity.classId;
+  for (const optId of selectedOptionIds) {
+    const option = pending.definition.pool.find(o => o.id === optId);
+    const check = checkPrerequisites(entity, option?.requires, {
+      alsoHeld: selectedOptionIds.filter(id => id !== optId), classId: classContext,
+    });
+    if (!check.met) throw new Error(`${option?.label ?? optId} requires: ${check.unmet.join(', ')}.`);
+  }
+
   let updated = entity;
   for (const optId of selectedOptionIds) {
     const option = pending.definition.pool.find(o => o.id === optId);
@@ -1018,6 +1036,83 @@ export function applyPoolChoiceToEntity(
     ),
   };
   return recomputeDerived(updated, rules);
+}
+
+/**
+ * Swaps one held option of a replaceable `feature_pool` choice (Fighting Style, Metamagic, Eldritch Invocations,
+ * Hunter's Prey, ...) for another from the same pool, as one atomic step: the old option's feature (and anything it
+ * opened or granted) is taken out, the new one is granted at the same level, and the choice's selections follow.
+ * Refused, with the reason in the error, when the choice is not replaceable, the old option is not held, the new one
+ * is already held or not in the pool, the new one's prerequisites are not met once the old one is gone, or another
+ * held option needs the old one (an invocation that is a prerequisite of another cannot be replaced).
+ */
+export function replacePoolOption(
+  entity:       Entity,
+  choiceId:     string,
+  oldOptionId:  string,
+  newOptionId:  string,
+  rules:        CampaignRules,
+): Entity {
+  const choice = entity.choices.find(c => c.id === choiceId);
+  if (!choice || !choice.resolved || !Array.isArray(choice.definition.pool)) throw new Error('That choice has not been made yet.');
+  if (!choice.definition.replace) throw new Error('This choice cannot be swapped.');
+  const pool = choice.definition.pool;
+  const oldOpt = pool.find(o => o.id === oldOptionId);
+  const newOpt = pool.find(o => o.id === newOptionId);
+  if (!oldOpt || !choice.selections.includes(oldOptionId)) throw new Error('You do not hold that option.');
+  if (!newOpt || !newOpt.value) throw new Error('That option is not available here.');
+  if (oldOptionId === newOptionId) throw new Error('Pick a different option.');
+
+  const held = heldOptionIds(entity);
+  const heldFeatureIds = new Set(entity.features.map(f => f.id));
+  if (held.has(newOptionId) || heldFeatureIds.has((newOpt.value as Feature).id)) throw new Error(`You already have ${newOpt.label}.`);
+
+  const optionsById: Record<string, { requires?: Prerequisite[]; label: string }> = {};
+  for (const c of entity.choices) if (Array.isArray(c.definition.pool)) for (const o of c.definition.pool) optionsById[o.id] = o;
+  const dependents = dependentsOf(oldOptionId, [...held], optionsById);
+  if (dependents.length > 0) {
+    throw new Error(`${oldOpt.label} is a prerequisite of ${dependents.map(id => optionsById[id]?.label ?? id).join(', ')}, so it cannot be replaced.`);
+  }
+
+  const classContext = choice.definition.forClassId ?? entity.identity.classId;
+  const withoutOld = removeFeature(entity, (oldOpt.value as Feature).id);
+  // Check against the character as they will be after the swap: the old option no longer counts as held.
+  const afterRemoval: Entity = { ...withoutOld, choices: withoutOld.choices.map(c => c.id === choiceId ? { ...c, selections: c.selections.filter(id => id !== oldOptionId) } : c) };
+  const check = checkPrerequisites(afterRemoval, newOpt.requires, { classId: classContext });
+  if (!check.met) throw new Error(`${newOpt.label} requires: ${check.unmet.join(', ')}.`);
+
+  let updated = applyGrant(afterRemoval, { kind: 'feature', value: newOpt.value as Feature }, choice.grantedAt);
+  updated = {
+    ...updated,
+    choices: updated.choices.map(c => c.id === choiceId ? { ...c, selections: [...c.selections.filter(id => id !== oldOptionId), newOptionId] } : c),
+  };
+  return recomputeDerived(updated, rules);
+}
+
+/** Held options of a replaceable choice, with the options each could be swapped for (prerequisites already checked). */
+export function replaceableOptions(entity: Entity, choiceId: string): { optionId: string; label: string; blockedBy?: string; candidates: { id: string; label: string; unmet: string[] }[] }[] {
+  const choice = entity.choices.find(c => c.id === choiceId);
+  if (!choice || !choice.resolved || !choice.definition.replace || !Array.isArray(choice.definition.pool)) return [];
+  const pool = choice.definition.pool;
+  const held = heldOptionIds(entity);
+  const heldFeatureIds = new Set(entity.features.map(f => f.id));
+  const optionsById: Record<string, { requires?: Prerequisite[]; label: string }> = {};
+  for (const c of entity.choices) if (Array.isArray(c.definition.pool)) for (const o of c.definition.pool) optionsById[o.id] = o;
+  const classContext = choice.definition.forClassId ?? entity.identity.classId;
+
+  return choice.selections.map(optionId => {
+    const opt = pool.find(o => o.id === optionId);
+    const deps = dependentsOf(optionId, [...held], optionsById);
+    const stripped: Entity = { ...entity, choices: entity.choices.map(c => c.id === choiceId ? { ...c, selections: c.selections.filter(id => id !== optionId) } : c) };
+    const candidates = pool
+      .filter(o => o.id !== optionId && !held.has(o.id) && !heldFeatureIds.has((o.value as Feature | undefined)?.id ?? ''))
+      .map(o => ({ id: o.id, label: o.label, unmet: checkPrerequisites(stripped, o.requires, { classId: classContext }).unmet }));
+    return {
+      optionId, label: opt?.label ?? optionId,
+      ...(deps.length ? { blockedBy: `Needed by ${deps.map(id => optionsById[id]?.label ?? id).join(', ')}` } : {}),
+      candidates,
+    };
+  });
 }
 
 // ── canAutoResolve ────────────────────────────────────────────────────────────

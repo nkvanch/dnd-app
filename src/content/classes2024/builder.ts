@@ -14,7 +14,7 @@
 // ============================================================================
 import {
   Ability, CharClass, ChoiceDefinition, ChoiceOption, ClassProgression, Effect, Feature, FeatureActivation,
-  Grant, LevelEntry, ResourceGrant, RulesetId, AbilityEffect, ActionCardTag,
+  Grant, LevelEntry, ResourceGrant, RulesetId, AbilityEffect, ActionCardTag, SpellPickFilter, Prerequisite, ChoiceReplacePolicy,
 } from '../../engine/types';
 import { feature, activation, stat, adv } from '../homebrewPack/helpers';
 import type { MasteryEligibility } from '../weaponMastery';
@@ -27,7 +27,9 @@ export type SubclassDef = ClassProgression & { name: string; id: string };
 
 type FeatureOpts = {
   effects?: Effect[]; activation?: FeatureActivation; abilityEffects?: AbilityEffect[]; trigger?: string;
-  tags?: ActionCardTag[]; upgradeOf?: string; resources?: ResourceGrant[];
+  tags?: ActionCardTag[]; upgradeOf?: string; resources?: ResourceGrant[]; grantsChoices?: ChoiceDefinition[];
+  /** Only for `option`: requirements for taking it (see Prerequisite). */
+  requires?: Prerequisite[];
 };
 
 /** Makes the feature/grant helpers for one class (so ids and sources are filled in). */
@@ -36,7 +38,8 @@ export function classKit(classId: string, subclassId?: string) {
   // subclass-change flow key on); a class's own features carry the class.
   const source = subclassId ? { kind: 'subclass' as const, refId: subclassId } : { kind: 'class' as const, refId: classId };
   const f = (key: string, name: string, level: number, description: string, o: FeatureOpts = {}): Feature =>
-    feature({ id: `${classId}_${key}`, name, description, level, source, ...o, upgradeOf: o.upgradeOf ? `${classId}_${o.upgradeOf}` : undefined });
+    ({ ...feature({ id: `${classId}_${key}`, name, description, level, source, ...o, upgradeOf: o.upgradeOf ? `${classId}_${o.upgradeOf}` : undefined }),
+      ...(o.grantsChoices ? { grantsChoices: o.grantsChoices } : {}) });
   const g = (key: string, name: string, level: number, description: string, o: FeatureOpts = {}): Grant =>
     ({ kind: 'feature', value: f(key, name, level, description, o) });
   const pool = (resourceId: string, name: string, maximum: number, recharge: ResourceGrant['recharge'] = 'long_rest', perProficiencyBonus = false): Grant =>
@@ -73,16 +76,19 @@ export function classKit(classId: string, subclassId?: string) {
     ({ id: `${classId}_${id}`, prompt, kind: 'expertise', count, pool: 'all', grants: [], required: true, resolved: false });
   const spells = (id: string, count: number, prompt: string): ChoiceDefinition =>
     ({ id: `${classId}_${id}`, prompt, kind: 'spell', count, pool: 'all', grants: [], required: true, resolved: false });
-  const pick = (id: string, prompt: string, count: number, pool: ChoiceOption[]): ChoiceDefinition =>
-    ({ id: `${classId}_${id}`, prompt, kind: 'feature_pool', count, pool, grants: [], required: true, resolved: false });
+  /** A spell choice with its own pool rules: spells from other classes' lists, exact levels, rituals only (see SpellPickFilter). */
+  const spellsFrom = (id: string, count: number, prompt: string, filter: SpellPickFilter, required = true): ChoiceDefinition =>
+    ({ id: `${classId}_${id}`, prompt, kind: 'spell', count, pool: 'all', grants: [], required, resolved: false, spellFilter: filter });
+  const pick = (id: string, prompt: string, count: number, pool: ChoiceOption[], replace?: ChoiceReplacePolicy): ChoiceDefinition =>
+    ({ id: `${classId}_${id}`, prompt, kind: 'feature_pool', count, pool, grants: [], required: true, resolved: false, ...(replace ? { replace } : {}) });
   const option = (key: string, name: string, level: number, description: string, o: FeatureOpts = {}): ChoiceOption =>
-    ({ id: key, label: name, value: f(key, name, level, description, o) });
+    ({ id: key, label: name, value: f(key, name, level, description, o), ...(o.requires ? { requires: o.requires } : {}) });
   const equip = (id: string, prompt: string, options: { id: string; label: string; items: string[] }[]): ChoiceDefinition => ({
     id: `${classId}_equip_${id}`, prompt, kind: 'equipment', count: 1, grants: [], required: true, resolved: false,
     pool: options.map(o => ({ id: o.id, label: o.label, value: o.items })),
   });
 
-  return { source, f, g, pool, raise, mastery, extraAttack, asi, epicBoon, subclassChoice, skills, expertise, spells, pick, option, equip };
+  return { source, f, g, pool, raise, mastery, extraAttack, asi, epicBoon, subclassChoice, skills, expertise, spells, spellsFrom, pick, option, equip };
 }
 
 export type LevelSpec = { grants?: Grant[]; choices?: ChoiceDefinition[] };
@@ -102,6 +108,8 @@ export type CasterSpec = {
   startLevel?: number;
   /** For classes that prepare from a list without picking a count in the creation flow (Cleric/Druid/Paladin/Wizard). */
   pickPrepared?: boolean;
+  /** From this class level on, the prepared-spell picks draw on other lists too (Bard Magical Secrets at 10). */
+  preparedFilterFromLevel?: { level: number; filter: SpellPickFilter };
 };
 
 export type ClassDef = {
@@ -151,7 +159,13 @@ export function buildClass2024(def: ClassDef): { cls: CharClass; subclass: Subcl
       const dc = caster.cantrips[level - 1] - prevC;
       const dp = caster.prepared[level - 1] - prevP;
       if (dc > 0) choices.push(kit.spells(`cantrips_${level}`, dc, level === 1 ? `Choose ${dc} cantrips.` : `Choose ${dc} more cantrip${dc > 1 ? 's' : ''}.`));
-      if (dp > 0 && caster.pickPrepared !== false) choices.push(kit.spells(`spells_${level}`, dp, level === 1 ? `Choose ${dp} level 1 spells to prepare.` : `Choose ${dp} more spell${dp > 1 ? 's' : ''} to prepare.`));
+      if (dp > 0 && caster.pickPrepared !== false) {
+        const pf = caster.preparedFilterFromLevel;
+        const prompt = level === 1 ? `Choose ${dp} level 1 spells to prepare.` : `Choose ${dp} more spell${dp > 1 ? 's' : ''} to prepare.`;
+        choices.push(pf && level >= pf.level
+          ? kit.spellsFrom(`spells_${level}`, dp, `${prompt} ${pf.filter.label ? `(From ${pf.filter.label}.)` : ''}`, pf.filter)
+          : kit.spells(`spells_${level}`, dp, prompt));
+      }
     }
     entries.push({ level, hpDie: def.hitDie, grants, choices });
   }

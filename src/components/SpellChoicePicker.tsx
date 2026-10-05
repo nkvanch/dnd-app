@@ -14,6 +14,7 @@ import { applySpellChoiceToEntity } from '../engine/leveling';
 import type { SpellIndexEntry } from '../content/spellRepo.types';
 import { mergeSpellIndex } from '../content/contentResolution';
 import { spellListsForClass, filterSpellsForClass, spellSourceLabel } from '../content/spellLists';
+import { candidateSpellsForChoice, hasOwnSpellPool } from '../content/spellChoiceFilter';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { Entity, ChoiceState, CampaignRules } from '../engine/types';
 import { SortOption, nameSortOptions, sortByOption } from '../content/contentQuery';
@@ -50,8 +51,11 @@ export function SpellChoicePicker({
   const spellLists = useHomebrewStore(s => s.spellLists);
 
   const isCantripChoice = choice.definition.id.includes('cantrip');
-  const classId = entity.identity.classId;
+  const classId = choice.definition.forClassId ?? entity.identity.classId;
   const spellcasting = entity.spellcasting;
+  // A choice with its own pool rules (Magical Secrets, Blessed Warrior, Pact of the Tome, Mystic Arcanum) ignores
+  // the class-list pickers below and offers exactly what its filter names.
+  const ownPool = hasOwnSpellPool(choice.definition);
 
   // Highest spell slot tier this entity currently has any slots in — caps
   // which leveled spells are choosable (a caster can't learn a spell above
@@ -101,6 +105,10 @@ export function SpellChoicePicker({
   );
 
   const preFilterOptions = useMemo(() => {
+    if (ownPool) {
+      return candidateSpellsForChoice(allSpells, choice.definition, { ownClassId: classId, maxCastableLevel })
+        .filter(s => !known.has(s.id));
+    }
     return classFiltered.filter(s => {
       if (known.has(s.id)) return false;
       if (isCantripChoice) {
@@ -111,7 +119,7 @@ export function SpellChoicePicker({
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classFiltered, isCantripChoice, maxCastableLevel]);
+  }, [classFiltered, isCantripChoice, maxCastableLevel, ownPool, allSpells]);
 
   // School chips reflect only what's actually present in THIS constrained
   // pool (not every school ever) — same "don't show a filter with nothing
@@ -153,7 +161,7 @@ export function SpellChoicePicker({
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.headerRow}>
-        <Text style={styles.heading}>{isCantripChoice ? 'Choose Cantrips' : 'Choose Spells'}</Text>
+        <Text style={styles.heading}>{choice.definition.spellFilter?.label ?? (isCantripChoice ? 'Choose Cantrips' : 'Choose Spells')}</Text>
         {onClose && (
           <Pressable onPress={onClose} hitSlop={8}>
             <Text style={styles.close}>✕</Text>
@@ -194,7 +202,7 @@ export function SpellChoicePicker({
               onChange={v => setCastFilter(v ?? 'all')}
             />
           </FilterSection>
-          {(classSpellLists.length > 0 || !!classSpellSource) && (
+          {!ownPool && (classSpellLists.length > 0 || !!classSpellSource) && (
             <FilterSection label="Spell Source">
               {/* "Official" is always an explicit option — FilterChipRow hides itself at <=1
                   option, so a class with exactly one Spell List would otherwise show nothing. */}

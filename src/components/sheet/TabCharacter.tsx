@@ -33,6 +33,7 @@ import { useHomebrewStore } from '../../store/homebrewStore';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
+import { HeroicInspirationPanel } from './HeroicInspirationPanel';
 import { ConcentrationModal } from './ConcentrationModal';
 import { CompanionSection } from './CompanionSection';
 import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard, actionCardIdentity, ActivationOptionModal, useCardContent } from './TabActions';
@@ -1322,6 +1323,8 @@ function TabCharacterInner({
           onEntityUpdate={onEntityUpdate}
         />
       )}
+
+      <HeroicInspirationPanel entity={entity} onEntityUpdate={onEntityUpdate} />
 
       {/* Stat Row */}
       <View style={styles.statRow}>

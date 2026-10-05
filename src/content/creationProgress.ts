@@ -119,7 +119,7 @@ export type SpellProgress = {
   spells:   { done: number; total: number } | null;
 };
 export function spellProgressFor(entity: Entity): SpellProgress {
-  const spellKindChoices = entity.choices.filter(c => c.definition.kind === 'spell');
+  const spellKindChoices = entity.choices.filter(c => c.definition.kind === 'spell' && !c.definition.spellFilter);
   if (spellKindChoices.length > 0) {
     const isCantripChoice = (id: string) => id.includes('cantrip');
     const cantripGroup = spellKindChoices.filter(c => isCantripChoice(c.id));
@@ -154,7 +154,7 @@ export function groupPendingSpellChoices(pendingChoices: ChoiceState[]): {
   cantripPending: ChoiceState[];
   knownSpellPending: ChoiceState[];
 } {
-  const spellPending = pendingChoices.filter(c => c.definition.kind === 'spell');
+  const spellPending = pendingChoices.filter(c => c.definition.kind === 'spell' && !c.definition.spellFilter);
   const isCantripChoice = (id: string) => id.includes('cantrip');
   return {
     cantripPending: spellPending.filter(c => isCantripChoice(c.definition.id)),

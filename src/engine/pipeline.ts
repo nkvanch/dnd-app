@@ -20,7 +20,7 @@ import { ALL_BEAST_FORMS } from '../content/beastforms';
 import { generateAllActionCards, CardGenOptions } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
 import { isMartialWeapon } from '../content/items/itemBrowse';
-import { effectiveItemFeatures, effectiveWeaponAttackFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition } from './itemMechanics';
+import { effectiveItemFeatures, effectiveWeaponAttackFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition, wornGearOf, WornGear } from './itemMechanics';
 import { getClassEntry } from './multiclass';
 import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
 
@@ -429,11 +429,15 @@ export function recomputeDerived(
   if (!beastForm) {
     for (const ae of moveEffects) {
       const t = ae.effect.movementType;
-      const r = ae.effect.movementRange ?? 0;
+      // "A Climb Speed equal to your Speed" follows the final walking Speed (so Roving's +10 carries into it);
+      // a fixed range, or a bonus on top of the Speed, can be added with movementRange.
+      const r = (ae.effect.movementEqualsSpeed ? finalSpeed : 0) + (ae.effect.movementRange ?? 0);
       if (!t) continue;
       if ((movement[t] ?? 0) < r) movement[t] = r;
     }
   }
+  // A Speed of 0 from a condition (Grappled, Restrained, Stunned, ...) leaves no speed of any kind to move at.
+  if (hasZeroSpeedRestriction) for (const k of Object.keys(movement) as (keyof typeof movement)[]) delete movement[k];
 
   // ── Build derived stats object ────────────────────────────────────────────
   const advDisadvEffects = allEffects.filter(ae =>
@@ -551,14 +555,27 @@ export function recomputeDerived(
  *     "resource:glassback_pressure<=1" — true while that pool's CURRENT value is 1 or less). This
  *     is how a state meter (Glassback's Pressure) drives tiered penalties with no new state: the
  *     effects simply switch on and off as the resource moves, and a missing pool is false.
+ *   - a worn-gear test: `worn:no_armor`, `worn:not_heavy` (no Heavy armor), or `worn:no_armor_or_shield`
+ *     ("while you aren't wearing armor or wielding a Shield"). Needs the worn-gear state, which the
+ *     effect collector computes once from the equipped items.
  */
 export function effectConditionActive(
   condition: string,
   flags: Record<string, boolean>,
   activeConditionIds: ReadonlySet<string>,
   entity: Entity,
+  worn?: WornGear,
 ): boolean {
   if (flags[condition] === true || activeConditionIds.has(condition)) return true;
+  if (condition.startsWith('worn:')) {
+    if (!worn) return false;
+    switch (condition.slice(5)) {
+      case 'no_armor':           return worn.armor === 'none';
+      case 'not_heavy':          return worn.armor !== 'heavy';
+      case 'no_armor_or_shield': return worn.armor === 'none' && !worn.shield;
+      default:                   return false;
+    }
+  }
   const m = /^resource:([A-Za-z0-9_]+)(<=|>=|==|<|>)(-?\d+)$/.exec(condition);
   if (!m) return false;
   const pool = entity.resources.custom.find(r => r.id === m[1]);
@@ -594,6 +611,7 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
   const effects: ActiveEffect[]       = [];
   const activeFlags                   = entity.conditionMonitor.flags;
   const activeConditionIds            = new Set(entity.conditions.map(c => c.id));
+  const worn: WornGear                = wornGearOf(entity.inventory.equipped, id => resolveItemDefinition(id, homebrewItems));
 
   // 1. Features from race, class, background, feats, spells, etc.
   for (const fi of entity.features) {
@@ -607,7 +625,7 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
     for (const effect of fi.effects) {
       if (effect.minLevel && entity.identity.level < effect.minLevel) continue;
       // Gate: skip if effect requires a flag or condition that is not active
-      if (effect.condition !== null && !effectConditionActive(effect.condition, activeFlags, activeConditionIds, entity)) continue;
+      if (effect.condition !== null && !effectConditionActive(effect.condition, activeFlags, activeConditionIds, entity, worn)) continue;
 
       // Gate: skip a situational effect (item 9 — a real-world fact the
       // engine can't observe, e.g. "an ally within 5 feet") unless the
@@ -663,7 +681,7 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
     const itemFeatures = effectiveItemFeatures(item, definition);
     for (const fi of itemFeatures) {
       for (const effect of fi.effects) {
-        if (effect.condition !== null && !effectConditionActive(effect.condition, activeFlags, activeConditionIds, entity)) continue;
+        if (effect.condition !== null && !effectConditionActive(effect.condition, activeFlags, activeConditionIds, entity, worn)) continue;
         if (effect.requiresNoArmorOrShield && anyArmorOrShieldEquipped) continue;
         if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
         effects.push({

@@ -35,9 +35,9 @@ export const cleric2024: ClassDef = {
         k.pick('divine_order', 'Divine Order: choose a sacred role.', 1, [
           k.option('divine_order_protector', 'Protector', 1, 'Trained for battle, you gain proficiency with Martial weapons and training with Heavy armor.',
             { effects: [{ type: 'grant_proficiency', target: 'weapon:martial', operation: 'add', value: null, condition: null }, { type: 'grant_proficiency', target: 'armor:heavy', operation: 'add', value: null, condition: null }] }),
-          k.option('divine_order_thaumaturge', 'Thaumaturge', 1, 'You know one extra cantrip from the Cleric spell list (choose it below). In addition, your mystical connection to the divine gives you a bonus to your Intelligence (Arcana or Religion) checks equal to your Wisdom modifier (minimum of +1).'),
+          k.option('divine_order_thaumaturge', 'Thaumaturge', 1, 'You know one extra cantrip from the Cleric spell list (choose it below). In addition, your mystical connection to the divine gives you a bonus to your Intelligence (Arcana or Religion) checks equal to your Wisdom modifier (minimum of +1).',
+            { grantsChoices: [k.spellsFrom('thaumaturge_cantrip', 1, 'Thaumaturge: choose one extra Cleric cantrip.', { lists: ['cleric_2024'], label: 'Thaumaturge cantrip' })] }),
         ]),
-        { ...k.spells('thaumaturge_cantrip', 1, 'Thaumaturge only: choose one extra Cleric cantrip.'), required: false },
       ],
       grants: [
         k.g('spellcasting', 'Spellcasting', 1, 'You cast spells through prayer and meditation using Wisdom as your spellcasting ability. You know three cantrips from the Cleric spell list (a fourth at level 4, a fifth at level 10) and can replace one whenever you gain a Cleric level. You prepare level 1+ spells from the whole Cleric list, the number shown in the Prepared Spells column, and can change the list after each Long Rest. You can use a Holy Symbol as a Spellcasting Focus.'),

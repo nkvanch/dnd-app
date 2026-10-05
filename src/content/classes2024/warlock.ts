@@ -79,9 +79,9 @@ export const warlock2024: ClassDef = {
     1: {
       choices: [
         k.skills(2, ['arcana', 'deception', 'history', 'intimidation', 'investigation', 'nature', 'religion']),
-        k.equip('start', 'Starting equipment: (A) Leather Armor, Sickle, 2 Daggers, Arcane Focus (orb), Book (occult lore), Scholar\'s Pack, and 15 GP; or (B) 100 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Leather Armor, Sickle, 2 Daggers, Arcane Focus (orb), Scholar\'s Pack, 15 GP', items: ['leather_armor', 'sickle', 'dagger', 'dagger', 'arcane_focus_orb', 'scholars_pack'] },
-          { id: 'b', label: 'B: 100 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Leather Armor, Sickle, 2 Daggers, Arcane Focus (orb), Book (occult lore), Scholar\'s Pack, and 15 GP; or (B) 100 GP.', [
+          { id: 'a', label: 'A: Leather Armor, Sickle, 2 Daggers, Arcane Focus (orb), Book, Scholar\'s Pack, 15 GP', items: ['leather_armor', 'sickle', 'dagger', 'dagger', 'arcane_focus_orb', 'book', 'scholars_pack'], gold: 15 },
+          { id: 'b', label: 'B: 100 GP', items: [], gold: 100 },
         ]),
         invocationChoice(1, 1),
       ],

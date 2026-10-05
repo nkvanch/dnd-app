@@ -216,11 +216,11 @@ function TabSpellsInner({ entity, rules, onEntityUpdate, onEndTurn, onRestoreSlo
   const spellMap = useMemo(() => {
     const map = new Map<string, Spell>();
     for (const card of spellCards) {
-      const sp = resolveSpellById(card.featureId, homebrewSpells);
+      const sp = resolveSpellById(card.featureId, homebrewSpells, entity.rulesetId);
       if (sp) map.set(card.featureId, sp);
     }
     return map;
-  }, [spellCards, homebrewSpells]);
+  }, [spellCards, homebrewSpells, entity.rulesetId]);
 
   // ── Group cards by spell level ────────────────────────────────────────────
   // Level is inferred from resourceCost.spellSlotTier; cantrips have null cost → level 0.

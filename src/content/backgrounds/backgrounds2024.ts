@@ -8,9 +8,10 @@
 // Every 2024 background grants: an ability-score bonus over three named abilities (+2/+1 or +1/+1/+1,
 // Background.flexibleAsi), an ORIGIN FEAT (Background.originFeat, granted for real by
 // engine/originFeat.ts), two skill proficiencies, one tool proficiency, and an equipment choice.
-// Equipment (the A package or 50 GP) is described in the text; the app does not add it automatically.
+// Equipment is a real choice: package A (its items and leftover gold) or B (50 GP), added to the inventory
+// and purse when chosen (`item*N` is N of a stackable item in one row).
 // ============================================================================
-import { Background, Effect, Feature, RulesetId, ChoiceOption, BACKGROUND_CHOICE_PREFIX } from '../../engine/types';
+import { Background, ChoiceDefinition, Effect, Feature, RulesetId, ChoiceOption, BACKGROUND_CHOICE_PREFIX } from '../../engine/types';
 import { ALL_TOOLS } from '../tools';
 
 const RULESET = 'dnd5e-2024' as RulesetId;
@@ -34,12 +35,26 @@ function feat(id: string, featName: string): Feature {
   };
 }
 
+/** The background's starting equipment: package A, or 50 GP instead. */
+function equipment(bgId: string, aLabel: string, items: string[], gold: number): ChoiceDefinition {
+  return {
+    id: `${BACKGROUND_CHOICE_PREFIX}${bgId}_equipment`,
+    prompt: `Starting equipment from your background: (A) ${aLabel}; or (B) 50 GP.`,
+    kind: 'equipment', equipmentStyle: 'exact_options', count: 1, grants: [], required: true, resolved: false,
+    pool: [
+      { id: 'a', label: `A: ${aLabel}`, value: items, gold },
+      { id: 'b', label: 'B: 50 GP', value: [], gold: 50 },
+    ],
+  };
+}
+
 const gamingSets = (): ChoiceOption[] => ALL_TOOLS.filter(t => t.category === 'gaming_set').map(t => ({ id: t.id, label: t.name, value: t.id }));
 
 
 export const bgAcolyte2024: Background = {
   id: 'acolyte_2024', name: 'Acolyte', rulesetId: RULESET, srd: false,
   originFeat: 'magic_initiate_cleric_2024',
+  pendingChoices: [equipment('acolyte_2024', "Calligrapher's Supplies, Book (prayers), Holy Symbol, Parchment (10 sheets), Robe, 8 GP", ['calligrapher_s_supplies', 'book', 'holy_symbol', 'parchment*10', 'robe'], 8)],
   toolProficiencies: ["Calligrapher's Supplies"],
   flexibleAsi: { prompt: 'Choose Intelligence, Wisdom, or Charisma: increase one by 2 and a different one by 1, or increase all three by 1 each.', mode: { kind: 'two_one_or_three_one', restrictTo: ['int', 'wis', 'cha'] } },
   features: [
@@ -52,6 +67,7 @@ export const bgAcolyte2024: Background = {
 export const bgCriminal2024: Background = {
   id: 'criminal_2024', name: 'Criminal', rulesetId: RULESET, srd: false,
   originFeat: 'alert_2024',
+  pendingChoices: [equipment('criminal_2024', "2 Daggers, Thieves' Tools, Crowbar, 2 Pouches, Traveler's Clothes, 16 GP", ['dagger', 'dagger', 'thieves_tools', 'crowbar', 'pouch*2', 'travelers_clothes'], 16)],
   toolProficiencies: ["Thieves' Tools"],
   flexibleAsi: { prompt: 'Choose Dexterity, Constitution, or Intelligence: increase one by 2 and a different one by 1, or increase all three by 1 each.', mode: { kind: 'two_one_or_three_one', restrictTo: ['dex', 'con', 'int'] } },
   features: [
@@ -64,6 +80,7 @@ export const bgCriminal2024: Background = {
 export const bgSage2024: Background = {
   id: 'sage_2024', name: 'Sage', rulesetId: RULESET, srd: false,
   originFeat: 'magic_initiate_wizard_2024',
+  pendingChoices: [equipment('sage_2024', "Quarterstaff, Calligrapher's Supplies, Book (history), Parchment (8 sheets), Robe, 8 GP", ['quarterstaff', 'calligrapher_s_supplies', 'book', 'parchment*8', 'robe'], 8)],
   toolProficiencies: ["Calligrapher's Supplies"],
   flexibleAsi: { prompt: 'Choose Constitution, Intelligence, or Wisdom: increase one by 2 and a different one by 1, or increase all three by 1 each.', mode: { kind: 'two_one_or_three_one', restrictTo: ['con', 'int', 'wis'] } },
   features: [
@@ -81,7 +98,7 @@ export const bgSoldier2024: Background = {
   pendingChoices: [{
     id: `${BACKGROUND_CHOICE_PREFIX}soldier_2024_gaming_set`, prompt: 'Choose one kind of Gaming Set.',
     kind: 'tool', count: 1, pool: gamingSets(), grants: [], required: true, resolved: false,
-  }],
+  }, equipment('soldier_2024', "Spear, Shortbow, 20 Arrows, Gaming Set (the one you chose), Healer's Kit, Quiver, Traveler's Clothes, 14 GP", ['spear', 'shortbow', 'arrows_20', 'gaming_set', 'healers_kit', 'quiver', 'travelers_clothes'], 14)],
   features: [
     proficiencies('soldier_2024', ['athletics', 'intimidation'], null,
       'Skill Proficiencies: Athletics and Intimidation. Tool Proficiency: one kind of Gaming Set (chosen below). Equipment: choose A or B. (A) Spear, Shortbow, 20 Arrows, Gaming Set (same as above), Healer\'s Kit, Quiver, Traveler\'s Clothes, 14 GP; or (B) 50 GP.'),

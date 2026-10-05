@@ -25,9 +25,9 @@ export const barbarian2024: ClassDef = {
     1: {
       choices: [
         k.skills(2, ['animal_handling', 'athletics', 'intimidation', 'nature', 'perception', 'survival']),
-        k.equip('start', 'Starting equipment: (A) Greataxe, 4 Handaxes, Explorer\'s Pack, and 15 GP; or (B) 75 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Greataxe, 4 Handaxes, Explorer\'s Pack, 15 GP', items: ['greataxe', 'handaxe', 'handaxe', 'handaxe', 'handaxe', 'explorers_pack'] },
-          { id: 'b', label: 'B: 75 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Greataxe, 4 Handaxes, Explorer\'s Pack, and 15 GP; or (B) 75 GP.', [
+          { id: 'a', label: 'A: Greataxe, 4 Handaxes, Explorer\'s Pack, 15 GP', items: ['greataxe', 'handaxe', 'handaxe', 'handaxe', 'handaxe', 'explorers_pack'], gold: 15 },
+          { id: 'b', label: 'B: 75 GP', items: [], gold: 75 },
         ]),
       ],
       grants: [

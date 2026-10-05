@@ -34,9 +34,9 @@ export const ranger2024: ClassDef = {
     1: {
       choices: [
         k.skills(3, ['animal_handling', 'athletics', 'insight', 'investigation', 'nature', 'perception', 'stealth', 'survival']),
-        k.equip('start', 'Starting equipment: (A) Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Druidic Focus, Explorer\'s Pack, and 7 GP; or (B) 150 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Studded Leather, Scimitar, Shortsword, Longbow, 20 Arrows, Druidic Focus, Explorer\'s Pack, 7 GP', items: ['studded_leather', 'scimitar', 'shortsword', 'longbow', 'arrows_20', 'druidic_focus', 'explorers_pack'] },
-          { id: 'b', label: 'B: 150 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Druidic Focus, Explorer\'s Pack, and 7 GP; or (B) 150 GP.', [
+          { id: 'a', label: 'A: Studded Leather, Scimitar, Shortsword, Longbow, 20 Arrows, Druidic Focus, Explorer\'s Pack, 7 GP', items: ['studded_leather', 'scimitar', 'shortsword', 'longbow', 'arrows_20', 'quiver', 'druidic_focus', 'explorers_pack'], gold: 7 },
+          { id: 'b', label: 'B: 150 GP', items: [], gold: 150 },
         ]),
       ],
       grants: [

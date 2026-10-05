@@ -1390,6 +1390,8 @@ export type ChoiceOption = {
    * legal choice).
    */
   itemFilter?: { constraint: ItemFilterConstraint; quantity: number };
+  /** Gold pieces this option also grants (a starting-equipment package's leftover coins, or the whole gold alternative). */
+  gold?: number;
   /** Requirements for taking this option (level, another option, a cantrip, ...). See Prerequisite. */
   requires?: Prerequisite[];
 };
@@ -1504,6 +1506,8 @@ export type ChoiceState = {
    * tracked per-instance provenance it never recorded).
    */
   grantedItemInstanceIds?: string[];
+  /** Gold this choice added (a starting-equipment package or the gold alternative), taken back out when the choice is reopened. */
+  grantedGold?: number;
 };
 
 export type SlotEntry   = { total: number; used: number };
@@ -1585,6 +1589,8 @@ export type Spell = {
   srd?:                     boolean;
   /** Which ruleset this spell belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of this file. */
   rulesetId?:               RulesetId;
+  /** The material component's description ("a bell and silver wire"), where the source text states it. */
+  material?:                string;
 };
 
 /**

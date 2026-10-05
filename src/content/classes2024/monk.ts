@@ -37,9 +37,9 @@ export const monk2024: ClassDef = {
         k.skills(2, ['acrobatics', 'athletics', 'history', 'insight', 'religion', 'stealth']),
         { id: `${classId}_tool`, prompt: 'Choose one type of Artisan\'s Tools or one Musical Instrument.', kind: 'tool', count: 1, grants: [], required: true, resolved: false,
           pool: ALL_TOOLS.filter(t => t.category === 'artisan' || t.category === 'musical_instrument').map(t => ({ id: t.id, label: t.name, value: t.id })) },
-        k.equip('start', 'Starting equipment: (A) Spear, 5 Daggers, the tool you chose, Explorer\'s Pack, and 11 GP; or (B) 50 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Spear, 5 Daggers, Explorer\'s Pack, 11 GP', items: ['spear', 'dagger', 'dagger', 'dagger', 'dagger', 'dagger', 'explorers_pack'] },
-          { id: 'b', label: 'B: 50 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Spear, 5 Daggers, the tool you chose, Explorer\'s Pack, and 11 GP; or (B) 50 GP.', [
+          { id: 'a', label: 'A: Spear, 5 Daggers, Artisan\'s Tools or Musical Instrument (the one you chose), Explorer\'s Pack, 11 GP', items: ['spear', 'dagger', 'dagger', 'dagger', 'dagger', 'dagger', 'explorers_pack'], gold: 11, itemFilter: { constraint: { category: 'tool' }, quantity: 1 } },
+          { id: 'b', label: 'B: 50 GP', items: [], gold: 50 },
         ]),
       ],
       grants: [

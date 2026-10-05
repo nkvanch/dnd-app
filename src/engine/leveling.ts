@@ -1986,6 +1986,7 @@ export function resolveChoice(
   // reopenEquipmentChoice can later remove precisely what THIS choice
   // added instead of the first same-itemId row it happens to find.
   const grantedItemInstanceIds: string[] = [];
+  let grantedGold = 0;
 
   for (const selId of selections) {
     if (!Array.isArray(pending.definition.pool)) continue;
@@ -1999,8 +2000,13 @@ export function resolveChoice(
     // Equipment choices: the option's value is an array of item IDs.
     // Add each as a fresh ItemInstance to the carried inventory.
     if (pending.definition.kind === "equipment") {
+      if (option.gold) {
+        grantedGold += option.gold;
+        updated = addGold(updated, option.gold);
+      }
       const itemIds = Array.isArray(option.value) ? (option.value as string[]) : [];
-      for (const itemId of itemIds) {
+      for (const entry of itemIds) {
+        const { itemId, quantity } = parseStartingItem(entry);
         const instanceId = generateItemInstanceId();
         grantedItemInstanceIds.push(instanceId);
         updated = {
@@ -2009,7 +2015,7 @@ export function resolveChoice(
             ...updated.inventory,
             carried: [
               ...updated.inventory.carried,
-              { id: instanceId, itemId, quantity: 1, attuned: false, features: [] },
+              { id: instanceId, itemId, quantity, attuned: false, features: [] },
             ],
           },
         };
@@ -2047,12 +2053,23 @@ export function resolveChoice(
     ...updated,
     choices: updated.choices.map(c =>
       c.id === choiceId
-        ? { ...c, resolved: true, selections, ...(grantedItemInstanceIds.length ? { grantedItemInstanceIds } : {}) }
+        ? { ...c, resolved: true, selections, ...(grantedItemInstanceIds.length ? { grantedItemInstanceIds } : {}), ...(grantedGold ? { grantedGold } : {}) }
         : c
     )
   };
 
   return recomputeDerived(updated, rules);
+}
+
+/** A starting-equipment entry is an item id, or `id*N` for N of a stackable item (`parchment*10`) in one inventory row. */
+export function parseStartingItem(entry: string): { itemId: string; quantity: number } {
+  const m = /^(.+)\*(\d+)$/.exec(entry);
+  return m ? { itemId: m[1], quantity: Math.max(1, Number(m[2])) } : { itemId: entry, quantity: 1 };
+}
+
+/** Adds gold pieces to the character's purse. */
+export function addGold(entity: Entity, gp: number): Entity {
+  return { ...entity, inventory: { ...entity.inventory, currency: { ...entity.inventory.currency, gp: entity.inventory.currency.gp + gp } } };
 }
 
 // ── STARTING-EQUIPMENT-1 ─────────────────────────────────────────────────────
@@ -2098,6 +2115,7 @@ export function resolveEquipmentChoice(
   let fixedItemIds: string[] = [];
   let filteredItemIds: string[] = [];
   let selections: string[] = [];
+  let grantedGold = 0;
 
   if (resolution.style === 'filtered_item') {
     const constraint = pending.definition.itemFilter ?? {};
@@ -2121,28 +2139,30 @@ export function resolveEquipmentChoice(
       filteredItemIds = got;
     }
     selections = [resolution.optionId, ...filteredItemIds];
+    grantedGold = option.gold ?? 0;
   }
 
-  let updated = entity;
+  let updated = grantedGold ? addGold(entity, grantedGold) : entity;
   for (const grant of pending.definition.grants) {
     updated = applyGrant(updated, grant, pending.grantedAt);
   }
   const grantedItemInstanceIds: string[] = [];
-  for (const itemId of [...fixedItemIds, ...filteredItemIds]) {
+  for (const entry of [...fixedItemIds, ...filteredItemIds]) {
+    const { itemId, quantity } = parseStartingItem(entry);
     const instanceId = generateItemInstanceId();
     grantedItemInstanceIds.push(instanceId);
     updated = {
       ...updated,
       inventory: {
         ...updated.inventory,
-        carried: [...updated.inventory.carried, { id: instanceId, itemId, quantity: 1, attuned: false, features: [] }],
+        carried: [...updated.inventory.carried, { id: instanceId, itemId, quantity, attuned: false, features: [] }],
       },
     };
   }
   updated = {
     ...updated,
     choices: updated.choices.map(c => c.id === choiceId
-      ? { ...c, resolved: true, selections, ...(grantedItemInstanceIds.length ? { grantedItemInstanceIds } : {}) }
+      ? { ...c, resolved: true, selections, ...(grantedItemInstanceIds.length ? { grantedItemInstanceIds } : {}), ...(grantedGold ? { grantedGold } : {}) }
       : c),
   };
 

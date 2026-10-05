@@ -47,8 +47,8 @@ export interface SpellRepo {
   getIndex(): SpellIndexEntry[];
   /** Warms the Tier-2 full-record cache for the given ids. Idempotent. */
   ensureLoaded(ids: string[]): Promise<void>;
-  /** Synchronous full-record lookup. Only returns a hit for ids already passed to ensureLoaded(). */
-  getSpellSync(id: string): Spell | undefined;
+  /** Synchronous full-record lookup. Only returns a hit for ids already passed to ensureLoaded(). With a ruleset, a spell that has a version under it (SRD 5.2.1 text for 2024) resolves to that version. */
+  getSpellSync(id: string, rulesetId?: RulesetId | null): Spell | undefined;
 }
 
 /**

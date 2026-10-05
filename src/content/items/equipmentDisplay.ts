@@ -32,19 +32,22 @@ export function describeConstraint(c: ItemFilterConstraint): string {
  *  a pool option id; exact/bundle: [optionId, ...filteredItemIds]; plain
  *  filtered_item: raw item ids) — used to remove exactly those instances
  *  when the player chooses to revisit and change their selection. */
+/** `parchment*10` is ten of one stackable item: the id is what is looked up and removed. */
+const stripQuantity = (entry: string): string => entry.replace(/\*\d+$/, '');
+
 export function itemsGrantedBy(choice: ChoiceState): string[] {
   const style = choice.definition.equipmentStyle;
   const pool: ChoiceOption[] = Array.isArray(choice.definition.pool) ? choice.definition.pool : [];
   if (!style) {
     return choice.selections.flatMap(selId => {
       const opt = pool.find(o => o.id === selId);
-      return Array.isArray(opt?.value) ? opt.value : [];
+      return Array.isArray(opt?.value) ? opt.value.map(stripQuantity) : [];
     });
   }
   if (style === 'filtered_item') return choice.selections;
   const [optionId, ...filteredItemIds] = choice.selections;
   const opt = pool.find(o => o.id === optionId);
-  const fixed = Array.isArray(opt?.value) ? opt.value : [];
+  const fixed = Array.isArray(opt?.value) ? opt.value.map(stripQuantity) : [];
   return [...fixed, ...filteredItemIds];
 }
 
@@ -84,8 +87,9 @@ export function reopenEquipmentChoice(entity: import('../../engine/types').Entit
       if (index >= 0) carried.splice(index, 1);
     }
   }
-  return { ...entity, inventory: { ...entity.inventory, carried }, choices: entity.choices.map(candidate =>
-    candidate.id === choiceId ? { ...candidate, resolved: false, selections: [], grantedItemInstanceIds: undefined } : candidate) };
+  const gp = Math.max(0, entity.inventory.currency.gp - (choice.grantedGold ?? 0));
+  return { ...entity, inventory: { ...entity.inventory, carried, currency: { ...entity.inventory.currency, gp } }, choices: entity.choices.map(candidate =>
+    candidate.id === choiceId ? { ...candidate, resolved: false, selections: [], grantedItemInstanceIds: undefined, grantedGold: undefined } : candidate) };
 }
 
 /** Skipping is a real empty resolution and never creates a placeholder item. */

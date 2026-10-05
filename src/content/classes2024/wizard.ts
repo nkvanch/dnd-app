@@ -32,9 +32,9 @@ export const wizard2024: ClassDef = {
     1: {
       choices: [
         k.skills(2, ['arcana', 'history', 'insight', 'investigation', 'medicine', 'nature', 'religion']),
-        k.equip('start', 'Starting equipment: (A) 2 Daggers, Arcane Focus (Quarterstaff), Robe, Spellbook, Scholar\'s Pack, and 5 GP; or (B) 55 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: 2 Daggers, Quarterstaff, Spellbook, Scholar\'s Pack, 5 GP', items: ['dagger', 'dagger', 'quarterstaff', 'spellbook', 'scholars_pack'] },
-          { id: 'b', label: 'B: 55 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) 2 Daggers, Arcane Focus (Quarterstaff), Robe, Spellbook, Scholar\'s Pack, and 5 GP; or (B) 55 GP.', [
+          { id: 'a', label: 'A: 2 Daggers, Quarterstaff, Robe, Spellbook, Scholar\'s Pack, 5 GP', items: ['dagger', 'dagger', 'quarterstaff', 'robe', 'spellbook', 'scholars_pack'], gold: 5 },
+          { id: 'b', label: 'B: 55 GP', items: [], gold: 55 },
         ]),
         k.spells('spellbook_1', 6, 'Choose six level 1 Wizard spells for your spellbook. (Detect Magic, Feather Fall, Mage Armor, Magic Missile, Sleep and Thunderwave are recommended.)'),
       ],

@@ -38,9 +38,9 @@ export const bard2024: ClassDef = {
         k.skills(3, ALL_SKILLS),
         { id: `${classId}_instruments`, prompt: 'Choose 3 Musical Instruments.', kind: 'tool', count: 3, grants: [], required: true, resolved: false,
           pool: ALL_TOOLS.filter(t => t.category === 'musical_instrument').map(t => ({ id: t.id, label: t.name, value: t.id })) },
-        k.equip('start', 'Starting equipment: (A) Leather Armor, 2 Daggers, a Musical Instrument, Entertainer\'s Pack, and 19 GP; or (B) 90 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Leather Armor, 2 Daggers, Entertainer\'s Pack, 19 GP', items: ['leather_armor', 'dagger', 'dagger', 'entertainers_pack'] },
-          { id: 'b', label: 'B: 90 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Leather Armor, 2 Daggers, a Musical Instrument, Entertainer\'s Pack, and 19 GP; or (B) 90 GP.', [
+          { id: 'a', label: 'A: Leather Armor, 2 Daggers, a Musical Instrument, Entertainer\'s Pack, 19 GP', items: ['leather_armor', 'dagger', 'dagger', 'entertainers_pack'], gold: 19, itemFilter: { constraint: { category: 'tool' }, quantity: 1 } },
+          { id: 'b', label: 'B: 90 GP', items: [], gold: 90 },
         ]),
       ],
       grants: [

@@ -28,9 +28,9 @@ export const cleric2024: ClassDef = {
     1: {
       choices: [
         k.skills(2, ['history', 'insight', 'medicine', 'persuasion', 'religion']),
-        k.equip('start', 'Starting equipment: (A) Chain Shirt, Shield, Mace, Holy Symbol, Priest\'s Pack, and 7 GP; or (B) 110 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Chain Shirt, Shield, Mace, Holy Symbol, Priest\'s Pack, 7 GP', items: ['chain_shirt', 'shield', 'mace', 'holy_symbol', 'priests_pack'] },
-          { id: 'b', label: 'B: 110 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Chain Shirt, Shield, Mace, Holy Symbol, Priest\'s Pack, and 7 GP; or (B) 110 GP.', [
+          { id: 'a', label: 'A: Chain Shirt, Shield, Mace, Holy Symbol, Priest\'s Pack, 7 GP', items: ['chain_shirt', 'shield', 'mace', 'holy_symbol', 'priests_pack'], gold: 7 },
+          { id: 'b', label: 'B: 110 GP', items: [], gold: 110 },
         ]),
         k.pick('divine_order', 'Divine Order: choose a sacred role.', 1, [
           k.option('divine_order_protector', 'Protector', 1, 'Trained for battle, you gain proficiency with Martial weapons and training with Heavy armor.',

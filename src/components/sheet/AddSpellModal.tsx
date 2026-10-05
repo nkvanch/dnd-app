@@ -173,7 +173,7 @@ export function AddSpellModal({ visible, entity, onAdd, onClose, initialOfficial
     let cancelled = false;
     setExpandedSpell(null);
     spellRepo.ensureLoaded([expandedId]).then(() => {
-      if (!cancelled) setExpandedSpell(spellRepo.getSpellSync(expandedId) ?? null);
+      if (!cancelled) setExpandedSpell(spellRepo.getSpellSync(expandedId, entity.rulesetId) ?? null);
     });
     return () => { cancelled = true; };
   }, [expandedId, homebrewSpells]);

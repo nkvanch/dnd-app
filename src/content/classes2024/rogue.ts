@@ -28,9 +28,9 @@ export const rogue2024: ClassDef = {
     1: {
       choices: [
         k.skills(4, ['acrobatics', 'athletics', 'deception', 'insight', 'intimidation', 'investigation', 'perception', 'persuasion', 'sleight_of_hand', 'stealth']),
-        k.equip('start', 'Starting equipment: (A) Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Thieves\' Tools, Burglar\'s Pack, and 8 GP; or (B) 100 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Thieves\' Tools, Burglar\'s Pack, 8 GP', items: ['leather_armor', 'dagger', 'dagger', 'shortsword', 'shortbow', 'arrows_20', 'thieves_tools', 'burglars_pack'] },
-          { id: 'b', label: 'B: 100 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Quiver, Thieves\' Tools, Burglar\'s Pack, and 8 GP; or (B) 100 GP.', [
+          { id: 'a', label: 'A: Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Thieves\' Tools, Burglar\'s Pack, 8 GP', items: ['leather_armor', 'dagger', 'dagger', 'shortsword', 'shortbow', 'arrows_20', 'quiver', 'thieves_tools', 'burglars_pack'], gold: 8 },
+          { id: 'b', label: 'B: 100 GP', items: [], gold: 100 },
         ]),
         k.expertise('expertise_1', 2, 'Expertise: choose two of your skill proficiencies. (Sleight of Hand and Stealth are recommended.)'),
       ],

@@ -1255,7 +1255,7 @@ export function generateSpellCard(
   opts: CardGenOptions = {},
 ): ActionCard | null {
   const homebrewSpells = opts.homebrewSpells ?? [];
-  const spell = spellRepo.getSpellSync(spellId) ?? homebrewSpells.find(s => s.id === spellId);
+  const spell = spellRepo.getSpellSync(spellId, entity.rulesetId) ?? homebrewSpells.find(s => s.id === spellId);
   if (!spell) return null;
 
   const cardType = classifySpell(spell);

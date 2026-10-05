@@ -42,9 +42,9 @@ export const druid2024: ClassDef = {
     1: {
       choices: [
         k.skills(2, ['animal_handling', 'arcana', 'insight', 'medicine', 'nature', 'perception', 'religion', 'survival']),
-        k.equip('start', 'Starting equipment: (A) Leather Armor, Shield, Sickle, Druidic Focus (Quarterstaff), Explorer\'s Pack, Herbalism Kit, and 9 GP; or (B) 50 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Leather Armor, Shield, Sickle, Druidic Focus, Explorer\'s Pack, 9 GP', items: ['leather_armor', 'shield', 'sickle', 'druidic_focus', 'explorers_pack'] },
-          { id: 'b', label: 'B: 50 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Leather Armor, Shield, Sickle, Druidic Focus (Quarterstaff), Explorer\'s Pack, Herbalism Kit, and 9 GP; or (B) 50 GP.', [
+          { id: 'a', label: 'A: Leather Armor, Shield, Sickle, Druidic Focus, Explorer\'s Pack, 9 GP', items: ['leather_armor', 'shield', 'sickle', 'druidic_focus', 'explorers_pack'], gold: 9 },
+          { id: 'b', label: 'B: 50 GP', items: [], gold: 50 },
         ]),
         k.pick('primal_order', 'Primal Order: choose a sacred role.', 1, [
           k.option('primal_order_magician', 'Magician', 1, 'You know one extra cantrip from the Druid spell list (choose it below). Your mystical connection to nature gives you a bonus to your Intelligence (Arcana or Nature) checks equal to your Wisdom modifier (minimum +1).',

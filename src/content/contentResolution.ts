@@ -80,7 +80,8 @@ export function resolveSpellById(id: string, homebrewSpells: Spell[], activeRule
   // ruleset — homebrew already wins by id precedence, so this must NOT fall
   // through to an official spell that happens to share the same id.
   if (candidates.length > 0) return undefined;
-  const official = spellRepo.getSpellSync(id);
+  // The official record resolves to its version under the active ruleset (SRD 5.2.1 text for 2024), if it has one.
+  const official = spellRepo.getSpellSync(id, activeRuleset);
   if (!official) return undefined;
   return matchesRuleset(official.rulesetId, activeRuleset) ? official : undefined;
 }

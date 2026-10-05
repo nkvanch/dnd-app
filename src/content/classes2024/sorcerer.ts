@@ -42,9 +42,9 @@ export const sorcerer2024: ClassDef = {
     1: {
       choices: [
         k.skills(2, ['arcana', 'deception', 'insight', 'intimidation', 'persuasion', 'religion']),
-        k.equip('start', 'Starting equipment: (A) Spear, 2 Daggers, Arcane Focus (crystal), Dungeoneer\'s Pack, and 28 GP; or (B) 50 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Spear, 2 Daggers, Arcane Focus, Dungeoneer\'s Pack, 28 GP', items: ['spear', 'dagger', 'dagger', 'arcane_focus_orb', 'dungeoneers_pack'] },
-          { id: 'b', label: 'B: 50 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Spear, 2 Daggers, Arcane Focus (crystal), Dungeoneer\'s Pack, and 28 GP; or (B) 50 GP.', [
+          { id: 'a', label: 'A: Spear, 2 Daggers, Arcane Focus, Dungeoneer\'s Pack, 28 GP', items: ['spear', 'dagger', 'dagger', 'arcane_focus_orb', 'dungeoneers_pack'], gold: 28 },
+          { id: 'b', label: 'B: 50 GP', items: [], gold: 50 },
         ]),
       ],
       grants: [

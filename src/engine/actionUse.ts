@@ -242,7 +242,7 @@ export function applyActionCardUse(
   // ritualLegal is false there too, since `spell.ritual` itself still needs
   // checking independently of any class policy.)
   if (isRitual) {
-    const ritualSpell = spellRepo.getSpellSync(card.featureId) ?? content.homebrewSpells?.find(s => s.id === card.featureId);
+    const ritualSpell = spellRepo.getSpellSync(card.featureId, entity.rulesetId) ?? content.homebrewSpells?.find(s => s.id === card.featureId);
     if (!ritualSpell?.ritual || !revalidatedContext?.ritualEligible) return entity;
   }
 
@@ -304,7 +304,7 @@ export function applyActionCardUse(
   // generateSpellCard) — this keeps Actions-tab/Favorites casts of a
   // concentration spell consistent with TabSpells' own handleCast, rather
   // than spending the slot but silently never tracking concentration.
-  const spell = spellRepo.getSpellSync(card.featureId);
+  const spell = spellRepo.getSpellSync(card.featureId, entity.rulesetId);
   if (spell?.concentration) {
     updated = castConcentrationSpell(updated, spell, rules);
   }

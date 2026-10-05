@@ -19,9 +19,10 @@
 //    fully synchronous — no async rewrite of the mutation handlers that
 //    call it.
 // ============================================================================
-import { Spell, asRulesetId } from '../engine/types';
+import { Spell, RulesetId, asRulesetId } from '../engine/types';
 import { getContentDb } from '../db/contentDb';
 import type { SpellIndexEntry, SpellRepo } from './spellRepo.types';
+import { resolveSpellVersion } from './spells/spellVersions';
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 
@@ -105,8 +106,8 @@ async function ensureLoaded(ids: string[]): Promise<void> {
   }
 }
 
-function getSpellSync(id: string): Spell | undefined {
-  return fullCache.get(id);
+function getSpellSync(id: string, rulesetId?: RulesetId | null): Spell | undefined {
+  return resolveSpellVersion(fullCache.get(id), rulesetId);
 }
 
 export const spellRepo: SpellRepo = { init, getIndex, ensureLoaded, getSpellSync };

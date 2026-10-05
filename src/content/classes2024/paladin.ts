@@ -36,9 +36,9 @@ export const paladin2024: ClassDef = {
     1: {
       choices: [
         k.skills(2, ['athletics', 'insight', 'intimidation', 'medicine', 'persuasion', 'religion']),
-        k.equip('start', 'Starting equipment: (A) Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest\'s Pack, and 9 GP; or (B) 150 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest\'s Pack, 9 GP', items: ['chain_mail', 'shield', 'longsword', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'holy_symbol', 'priests_pack'] },
-          { id: 'b', label: 'B: 150 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest\'s Pack, and 9 GP; or (B) 150 GP.', [
+          { id: 'a', label: 'A: Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest\'s Pack, 9 GP', items: ['chain_mail', 'shield', 'longsword', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'holy_symbol', 'priests_pack'], gold: 9 },
+          { id: 'b', label: 'B: 150 GP', items: [], gold: 150 },
         ]),
       ],
       grants: [

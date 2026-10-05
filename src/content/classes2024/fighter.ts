@@ -34,10 +34,10 @@ export const fighter2024: ClassDef = {
     1: {
       choices: [
         k.skills(2, ['acrobatics', 'animal_handling', 'athletics', 'history', 'insight', 'intimidation', 'persuasion', 'perception', 'survival']),
-        k.equip('start', 'Starting equipment: (A) Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer\'s Pack, 4 GP; (B) Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Dungeoneer\'s Pack, 11 GP; or (C) 155 GP (add the gold on your sheet).', [
-          { id: 'a', label: 'A: Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer\'s Pack, 4 GP', items: ['chain_mail', 'greatsword', 'flail', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'dungeoneers_pack'] },
-          { id: 'b', label: 'B: Studded Leather, Scimitar, Shortsword, Longbow, 20 Arrows, Dungeoneer\'s Pack, 11 GP', items: ['studded_leather', 'scimitar', 'shortsword', 'longbow', 'arrows_20', 'dungeoneers_pack'] },
-          { id: 'c', label: 'C: 155 GP', items: [] },
+        k.equip('start', 'Starting equipment: (A) Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer\'s Pack, 4 GP; (B) Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Dungeoneer\'s Pack, 11 GP; or (C) 155 GP.', [
+          { id: 'a', label: 'A: Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer\'s Pack, 4 GP', items: ['chain_mail', 'greatsword', 'flail', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'javelin', 'dungeoneers_pack'], gold: 4 },
+          { id: 'b', label: 'B: Studded Leather, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Dungeoneer\'s Pack, 11 GP', items: ['studded_leather', 'scimitar', 'shortsword', 'longbow', 'arrows_20', 'quiver', 'dungeoneers_pack'], gold: 11 },
+          { id: 'c', label: 'C: 155 GP', items: [], gold: 155 },
         ]),
         k.pick('fighting_style', 'Fighting Style: choose a Fighting Style feat. (Defense is recommended; you can replace it whenever you gain a Fighter level from the Features tab.)', 1, styles(k), { timing: 'level_up', rule: 'Whenever you gain a Fighter level, you can replace this with a different one.' }),
       ],

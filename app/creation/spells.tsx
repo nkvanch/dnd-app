@@ -16,7 +16,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { applySpellChoiceToEntity } from '../../src/engine/leveling';
-import { Entity, Spell } from '../../src/engine/types';
+import { Entity, Spell, RulesetId } from '../../src/engine/types';
 import { spellRepo } from '../../src/content/spellRepo';
 import type { SpellIndexEntry } from '../../src/content/spellRepo.types';
 import { mergeSpellIndex } from '../../src/content/contentResolution';
@@ -47,9 +47,9 @@ function markVisited(entity: Entity): Entity {
 // ── Spell row (select + expandable description) ───────────────────────────────
 
 function SpellRow({
-  spell, selected, disabled, isHomebrew, onToggle,
+  spell, selected, disabled, isHomebrew, rulesetId, onToggle,
 }: {
-  spell: SpellIndexEntry; selected: boolean; disabled: boolean; isHomebrew?: boolean; onToggle: () => void;
+  spell: SpellIndexEntry; selected: boolean; disabled: boolean; isHomebrew?: boolean; rulesetId?: RulesetId | null; onToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
   // Tier 1 doesn't carry description — homebrew spells are already full
@@ -63,7 +63,7 @@ function SpellRow({
     if (!open || description !== null || isHomebrew) return;
     let cancelled = false;
     void spellRepo.ensureLoaded([spell.id]).then(() => {
-      if (!cancelled) setDescription(spellRepo.getSpellSync(spell.id)?.description ?? '');
+      if (!cancelled) setDescription(spellRepo.getSpellSync(spell.id, rulesetId)?.description ?? '');
     });
     return () => { cancelled = true; };
   }, [open, spell.id, description, isHomebrew]);
@@ -615,6 +615,7 @@ export default function SpellsScreen() {
                   selected={selected}
                   disabled={disabled}
                   isHomebrew={homebrewSpellIds.has(spell.id)}
+                  rulesetId={draft?.rulesetId}
                   onToggle={() => toggleInGroup(group, spell.id)}
                 />
               );
@@ -887,6 +888,7 @@ export default function SpellsScreen() {
                     selected={pickedCantrips.includes(s.id)}
                     disabled={!pickedCantrips.includes(s.id) && pickedCantrips.length >= targets.cantrips}
                     isHomebrew={homebrewSpellIds.has(s.id)}
+                    rulesetId={draft?.rulesetId}
                     onToggle={() => toggleCantrip(s.id)}
                   />
                 )))}
@@ -912,6 +914,7 @@ export default function SpellsScreen() {
                     selected={pickedSpells.includes(s.id)}
                     disabled={!pickedSpells.includes(s.id) && pickedSpells.length >= targets.spells}
                     isHomebrew={homebrewSpellIds.has(s.id)}
+                    rulesetId={draft?.rulesetId}
                     onToggle={() => toggleSpell(s.id)}
                   />
                 )))}

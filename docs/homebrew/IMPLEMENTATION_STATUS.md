@@ -64,11 +64,23 @@ Built 5 October 2026 from the same SRD 5.2.1: all twelve classes (`src/content/c
 
 New engine pieces these needed: formula pools (`perLevel`, `perAbilityModifier`), resource upgrades that change the recharge, effect level gates (`minLevel`), `addAbilityModifier`/`addProficiencyBonus`/`addPerLevel` on effects, level-gated spell access, and a 2024 Martial Arts die.
 
+### 2024 follow-ups (built 5 October 2026)
+
+- **Heroic Inspiration** is tracked state (`Entity.heroicInspiration`, `engine/heroicInspiration.ts`): never more than one (gaining it while holding it reports the overflow, which is lost unless given to another player), spent to reroll a die, restored by Human's Resourceful on a Long Rest, with a panel on the Character tab (Gain, Spend, Give away).
+- **Cross-list spell choices**: a spell choice can carry a `spellFilter` (other classes' lists, exact levels, ritual only, include cantrips, ignore the slot cap) and a feature can open choices (`Feature.grantsChoices`). Magical Secrets (level 10+), Magical Discoveries, Blessed Warrior, Druidic Warrior, Pact of the Tome (three any-list cantrips, two any-list rituals), Mystic Arcanum (levels 6-9), Thaumaturge and Magician are real picks.
+- **Prerequisite engine** (`engine/prerequisites.ts`): level, held option, feature, cantrip traits, spell and mutual exclusion on any choice option, enforced by the picker and by the engine. Eldritch Invocations carry their real prerequisites. Cantrip traits (deals damage, needs an attack roll, range 10+) are read from spell text, a disclosed heuristic.
+- **Swappable choices**: `replacePoolOption` and a Swappable Choices panel for Fighting Style, Metamagic, Invocations, Hunter's Prey, Defensive Tactics and Fiendish Resilience. It refuses a swap whose prerequisites fail or that another held option needs. The app does not track level-ups or rests, so honoring the timing is the player's (the rule is shown on the confirm step).
+- **Movement**: speeds equal to Speed (Roving, Thief), worn-gear conditions (`worn:not_heavy`, `worn:no_armor`, `worn:no_armor_or_shield`), Dragon Wings as a situational Fly 60, and a Speed of 0 zeroes every speed.
+- **Spell versions**: the library keeps one record per spell id; a 2024 character resolves the same id to the SRD 5.2.1 version (333 spells, `spells/spellVersions2024.ts`, generated from the SRD text). Wired into the repo, the content resolver, spell cards, the Spells tab, the picker and creation. Monster stat blocks that spells name (Animated Object and so on) are not included.
+- **Starting equipment**: every class and background package carries its SRD leftover gold, the gold alternative adds the gold, reopening a choice takes back exactly its items and gold, `item*N` stacks (parchment), and the tool a Monk or Bard names is a real item pick. Six gear items were added to the catalog.
+
+Remaining gaps:
+- Repeatable invocations (Agonizing Blast on a second cantrip) cannot be taken twice; the cantrip an invocation names is left to the player.
+- Cantrip replacement on level-up (Blessed Warrior, Druidic Warrior) and the spell-list swaps are not a workflow yet.
+- Spell versions cover spell text and data; the Compendium's spell browser still shows the library record.
+- Heroic Inspiration is not awarded remotely by a DM yet.
+
 Stated gaps:
-- **Spell text** in the library is still the 2014 wording for the many spells 2024 reworked; only the six new spells carry 2024 text, and spells moved between classes are tagged but not re-balanced.
-- **Spells from other lists** (Bard Magical Secrets and Lore's Magical Discoveries, Paladin Blessed Warrior, Ranger Druidic Warrior, Pact of the Tome, Mystic Arcanum picks) are described on the feature, and you add the spells with + Add Spell, because the picker only offers the class's own list.
-- **Eldritch Invocations** state their prerequisites but the picker does not enforce them, and the cantrip an invocation names (Agonizing Blast, Eldritch Spear, Repelling Blast) is left to the player. Replacing an invocation, a Fighting Style, Metamagic or a Hunter's Prey option on level-up or rest is done by removing the old one on the Features tab.
 - **Druid** Wild Shape forms are limited to the three beast forms the app has. Circle of the Land's land change means removing and re-picking.
-- **Movement from features** (Roving and Thief climb and swim "equal to your Speed", Dragon Wings fly 60) is described, not applied, because the app's extra movement speeds are fixed numbers. The Paladin aura and Aura of Courage/Devotion apply to the Paladin only; allies are table play.
-- **Starting equipment** package B (gold) adds nothing; add the gold on the sheet. Heroic Inspiration is not built.
+- The Paladin aura and Aura of Courage/Devotion apply to the Paladin only; allies are table play.
 - Not checked on a device or an emulator.

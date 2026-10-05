@@ -2,7 +2,7 @@
 // Tab 4 — Features grouped by source, plus spells if applicable.
 import { useState, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal } from 'react-native';
-import { Entity, FeatureInstance, ActionCard, CampaignRules } from '../../engine/types';
+import { Entity, FeatureInstance, ActionCard, CampaignRules, RulesetId } from '../../engine/types';
 import { resolveChoice, applyExpertiseChoiceToEntity, applyToolChoiceToEntity, applyLanguageChoiceToEntity } from '../../engine/leveling';
 import { recomputeDerived } from '../../engine/pipeline';
 import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from '../../engine/choiceEligibility';
@@ -80,9 +80,9 @@ function FeatureRow({ feature, onRemove }: { feature: FeatureInstance; onRemove?
   );
 }
 
-function SpellCardRow({ card }: { card: ActionCard }) {
+function SpellCardRow({ card, rulesetId }: { card: ActionCard; rulesetId?: RulesetId | null }) {
   const [expanded, setExpanded] = useState(false);
-  const spell = spellRepo.getSpellSync(card.featureId);
+  const spell = spellRepo.getSpellSync(card.featureId, rulesetId);
   const borderColor = card.color === 'red' ? Colors.red : card.color === 'green' ? Colors.green : card.color === 'blue' ? Colors.blue : card.color === 'purple' ? Colors.purple : Colors.textDim;
   return (
     <Pressable style={[styles.spellCard, { borderLeftColor: borderColor }]} onPress={() => setExpanded(e => !e)}>
@@ -250,11 +250,11 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
     : [];
 
   const cantrips = spellCards.filter(c => {
-    const sp = spellRepo.getSpellSync(c.featureId);
+    const sp = spellRepo.getSpellSync(c.featureId, entity.rulesetId);
     return sp?.level === 0;
   });
   const leveled = spellCards.filter(c => {
-    const sp = spellRepo.getSpellSync(c.featureId);
+    const sp = spellRepo.getSpellSync(c.featureId, entity.rulesetId);
     return sp && sp.level > 0;
   });
 
@@ -576,13 +576,13 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
           {cantrips.length > 0 && (
             <View style={styles.spellSubGroup}>
               <Text style={styles.spellSubTitle}>CANTRIPS</Text>
-              {cantrips.map(c => <SpellCardRow key={c.featureId} card={c} />)}
+              {cantrips.map(c => <SpellCardRow key={c.featureId} card={c} rulesetId={entity.rulesetId} />)}
             </View>
           )}
           {leveled.length > 0 && (
             <View style={styles.spellSubGroup}>
               <Text style={styles.spellSubTitle}>SPELLS</Text>
-              {leveled.map(c => <SpellCardRow key={c.featureId} card={c} />)}
+              {leveled.map(c => <SpellCardRow key={c.featureId} card={c} rulesetId={entity.rulesetId} />)}
             </View>
           )}
           {spellCards.length === 0 && (

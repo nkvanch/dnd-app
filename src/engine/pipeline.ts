@@ -605,6 +605,7 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
     if (fi.source.kind === 'race' && fi.level !== null && fi.level > entity.identity.level) continue;
 
     for (const effect of fi.effects) {
+      if (effect.minLevel && entity.identity.level < effect.minLevel) continue;
       // Gate: skip if effect requires a flag or condition that is not active
       if (effect.condition !== null && !effectConditionActive(effect.condition, activeFlags, activeConditionIds, entity)) continue;
 
@@ -861,13 +862,20 @@ function computeWeaponAttackBonuses(
   // multiclassed monk/fighter still gets the right die) and unlocks DEX as
   // an option for the attack/damage roll, same finesse-style
   // max(str,dex) rule as a finesse weapon above.
-  const hasMartialArts = entity.features.some(f => f.id === 'martial_arts');
+  const hasMartialArts2024 = entity.features.some(f => f.id === 'monk_2024_martial_arts');
+  const hasMartialArts = hasMartialArts2024 || entity.features.some(f => f.id === 'martial_arts');
   let unarmedDice = '1';
   let unarmedAbility: 'str' | 'dex' = 'str';
   let unarmedMod = strMod;
   if (hasMartialArts) {
-    const monkLevel = getClassEntry(entity, 'monk')?.level ?? entity.identity.level;
-    unarmedDice = monkLevel >= 17 ? '1d10' : monkLevel >= 11 ? '1d8' : monkLevel >= 5 ? '1d6' : '1d4';
+    if (hasMartialArts2024) {
+      // 2024 Martial Arts die: d6, d8 at 5, d10 at 11, d12 at 17.
+      const monkLevel = getClassEntry(entity, 'monk_2024')?.level ?? entity.identity.level;
+      unarmedDice = monkLevel >= 17 ? '1d12' : monkLevel >= 11 ? '1d10' : monkLevel >= 5 ? '1d8' : '1d6';
+    } else {
+      const monkLevel = getClassEntry(entity, 'monk')?.level ?? entity.identity.level;
+      unarmedDice = monkLevel >= 17 ? '1d10' : monkLevel >= 11 ? '1d8' : monkLevel >= 5 ? '1d6' : '1d4';
+    }
     unarmedAbility = dexMod >= strMod ? 'dex' : 'str';
     unarmedMod = Math.max(strMod, dexMod);
   }

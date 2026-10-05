@@ -91,12 +91,12 @@ export function masteryEntryFor(idOrName: string | undefined): WeaponMasteryEntr
  * Which weapon kinds a class's Weapon Mastery may pick, as a rule key read from the granting feature:
  *   'melee'           Simple or Martial MELEE weapons (Barbarian)
  *   'any'             any Simple or Martial weapon (Fighter, Paladin, Ranger)
- *   'finesse_or_light' Simple or Martial weapons with the Finesse or Light property (Rogue)
+ *   'finesse_or_light' Simple weapons, and Martial weapons with the Finesse or Light property: the Rogue's proficient weapons
  */
 export type MasteryEligibility = 'melee' | 'any' | 'finesse_or_light';
 
 export function isEligibleForMastery(entry: WeaponMasteryEntry, rule: MasteryEligibility): boolean {
   if (rule === 'melee') return entry.kind === 'melee';
-  if (rule === 'finesse_or_light') return entry.properties.includes('finesse') || entry.properties.includes('light');
+  if (rule === 'finesse_or_light') return entry.category === 'simple' || entry.properties.includes('finesse') || entry.properties.includes('light');   // the Rogue's weapon proficiencies
   return true;
 }

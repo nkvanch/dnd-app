@@ -1197,6 +1197,8 @@ export type EntitlementRecord = {
   choiceId?:  string;
   /** Additive maximum contribution for resource_upgrade records. */
   amount?:    number;
+  /** A spell/cantrip the source grants from a given CHARACTER level on (Circle of the Land's level 5/7/9 spells, a lineage spell at 3 and 5). Absent = from the start. */
+  minLevel?:  number;
   /**
    * Rules-engine blocker closure (1F — ambiguous legacy/migrated
    * provenance): set ONLY on a sourceKind:'manual' spell_access/
@@ -1825,6 +1827,8 @@ export type Effect = {
   addAbilityModifier?: Ability;
   /** "Add your proficiency bonus": PB is added to this effect's numeric `value` (Alert's initiative). */
   addProficiencyBonus?: boolean;
+  /** The effect does nothing until the character reaches this level (Nature's Ward's resistance at 10). Works on any feature's effect. */
+  minLevel?: number;
   /** "...and again whenever you gain a level": this many points per CHARACTER level are added to `value` (Dwarven Toughness: 1). */
   addPerLevel?: number;
   /**

@@ -25,6 +25,8 @@ export const CASTER_TYPE: Record<string, string> = {
   rogue: 'Martial', sorcerer: 'Full Caster', warlock: 'Half Caster', wizard: 'Full Caster',
   artificer: 'Half Caster',
 };
+// The 2024 (5.5e) classes share their base class's caster type (the 2024 Paladin and Ranger cast from level 1 but stay half casters).
+for (const id of Object.keys(CASTER_TYPE)) CASTER_TYPE[`${id}_2024`] = CASTER_TYPE[id];
 export const CASTER_TYPES = ['Full Caster', 'Half Caster', 'Martial'] as const;
 
 // ── Layer 1: Class Summary metadata ─────────────────────────────────────────────

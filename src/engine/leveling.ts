@@ -91,8 +91,8 @@ export function applyGrant(
           };
         }
         next = grantEntitlements(next, [
-          ...(cantripIds ?? []).map(key => ({ kind: 'cantrip_access' as const, key, sourceKind: grantedFeature.source.kind, sourceId: grantedFeature.source.refId })),
-          ...(spellIds   ?? []).map(key => ({ kind: 'spell_access'   as const, key, sourceKind: grantedFeature.source.kind, sourceId: grantedFeature.source.refId })),
+          ...(cantripIds ?? []).map(key => ({ kind: 'cantrip_access' as const, key, sourceKind: grantedFeature.source.kind, sourceId: grantedFeature.source.refId, ...(eff.minLevel ? { minLevel: eff.minLevel } : {}) })),
+          ...(spellIds   ?? []).map(key => ({ kind: 'spell_access'   as const, key, sourceKind: grantedFeature.source.kind, sourceId: grantedFeature.source.refId, ...(eff.minLevel ? { minLevel: eff.minLevel } : {}) })),
         ]);
 
       }

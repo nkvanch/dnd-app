@@ -142,6 +142,7 @@ export function deriveProficienciesFromEntitlements(entity: Entity): DerivedProf
     skills: { trained: new Set(), expertise: new Set() },
   };
   for (const e of entity.entitlements ?? []) {
+    if (e.minLevel && entity.identity.level < e.minLevel) continue;   // a level-gated spell grant is not yet in effect
     switch (e.kind) {
       case 'armor_proficiency':  if (!result.armor.includes(e.key))     result.armor.push(e.key);     break;
       case 'weapon_proficiency': if (!result.weapons.includes(e.key))   result.weapons.push(e.key);   break;

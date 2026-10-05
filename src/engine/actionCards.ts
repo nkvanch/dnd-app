@@ -329,7 +329,8 @@ export function resolveSpellCastingContexts(
   //        uses (if any) are a completely separate resource-cost gate,
   //        already enforced by isFeatureAvailable, not by this function.
   const sources = (entity.entitlements ?? []).filter(
-    e => (e.kind === 'spell_access' || e.kind === 'cantrip_access') && e.key === spellId,
+    e => (e.kind === 'spell_access' || e.kind === 'cantrip_access') && e.key === spellId
+      && !(e.minLevel && entity.identity.level < e.minLevel),
   );
   for (const s of sources) {
     const entitlementIsCantrip = s.kind === 'cantrip_access';
@@ -921,6 +922,12 @@ export function buildLayer3(feature: Feature, entity?: Entity, classDefs: readon
   if (action?.resourceCost?.resourceId === 'spell_slots') {
     const tier = action.resourceCost.spellSlotTier;
     if (tier) parts.push(`Slot Lv ${tier}+`);
+  }
+
+  // An authored weapon attack the character has mastered (2024 Weapon Mastery) names its property.
+  if (entity && feature.source?.kind === 'item' && (feature.abilityEffects ?? []).some(e => e.type === 'damage')) {
+    const mastery = masteryNote(entity, feature.source.refId);
+    if (mastery) parts.push(mastery);
   }
 
   return parts.length > 0 ? parts.join(' • ') : null;

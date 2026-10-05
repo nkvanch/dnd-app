@@ -23,6 +23,7 @@ import {
 } from '../../src/components/FilterChipRow';
 import { SortControl } from '../../src/components/SortControl';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { CLASSES_2024 } from '../../src/content/classes2024';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 type ClassDetail = {
@@ -35,6 +36,8 @@ type ClassDetail = {
   toolProf: string;
   spellcasting: boolean;
 };
+
+const ABILITY_NAMES: Record<string, string> = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' };
 
 const CLASS_DETAIL: Record<string, ClassDetail> = {
   fighter: {
@@ -244,6 +247,8 @@ export default function ClassDetailScreen() {
   // spread official first, so .find() always returned the official entry).
   const cls    = getMergedContentDB().classes.find(c => c.id === id);
   const detail = id ? CLASS_DETAIL[id] : null;
+  // The 2024 (5.5e) classes are official content with no CLASS_DETAIL entry: they read their facts from the class itself.
+  const isOfficial2024 = !!cls && CLASSES_2024.some(c => c.id === cls.id);
 
   useEffect(() => {
     if (!cls || !draft) safeGoBack();
@@ -299,7 +304,7 @@ export default function ClassDetailScreen() {
         .filter(c => c.resolved && c.definition.kind === 'asi')
         .length;
       const hadSpells = !!draft!.spellcasting;
-      const newHadSpells = detail?.spellcasting ?? false;
+      const newHadSpells = detail?.spellcasting ?? !!cls!.spellcastingAbility;
 
       const lines: string[] = [
         `Switching from ${draft!.identity.classId} to ${cls!.id}.`,
@@ -336,12 +341,12 @@ export default function ClassDetailScreen() {
 
       <View style={styles.headingRow}>
         <Text style={styles.heading}>{cls.name}</Text>
-        {!detail && (
+        {!detail && !isOfficial2024 && (
           <View style={styles.homebrewTag}>
             <Text style={styles.homebrewTagTxt}>Homebrew</Text>
           </View>
         )}
-        {!!detail && isNonSrd(cls.srd) && <NonSrdBadge />}
+        {(!!detail || isOfficial2024) && isNonSrd(cls.srd) && <NonSrdBadge />}
       </View>
       <View style={styles.divider} />
 
@@ -510,7 +515,7 @@ export default function ClassDetailScreen() {
         // Saving throws: official from CLASS_DETAIL, homebrew from cls.savingThrows.
         const saves = detail
           ? detail.savingThrows
-          : (cls.savingThrows ?? []).map(a => a.charAt(0).toUpperCase() + a.slice(1));
+          : (cls.savingThrows ?? []).map(a => isOfficial2024 ? ABILITY_NAMES[a] ?? a : a.charAt(0).toUpperCase() + a.slice(1));
         // Proficiencies: official has prose strings; homebrew has profs arrays.
         const armor   = detail ? detail.armorProf  : (cls.armorProfs ?? []).join(', ');
         const weapons = detail ? detail.weaponProf : (cls.weaponProfs ?? []).join(', ');
@@ -540,7 +545,7 @@ export default function ClassDetailScreen() {
             </CollapsibleSection>
 
             {/* Homebrew with incomplete spellcasting config gets a gentle hint */}
-            {!detail && cls.spellcastingAbility === undefined && !cls.spellcastingAbilityOptions?.length && (
+            {!detail && !isOfficial2024 && cls.spellcastingAbility === undefined && !cls.spellcastingAbilityOptions?.length && (
               <View style={styles.infoCard}>
                 <Text style={styles.infoCardTxt}>
                   If this is a spellcasting class, configure spellcasting in the

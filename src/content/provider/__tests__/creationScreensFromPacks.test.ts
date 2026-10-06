@@ -15,7 +15,7 @@ import { makeEmptyEntity, DEFAULT_RULES } from '../../../store/characterStore';
 import { acquireClass, levelUpClass, applySubclassToEntity } from '../../../engine/leveling';
 import { getProgressionForClass, mergeSubclassIntoProgression } from '../../classes/progressions';
 import { RulesetId } from '../../../engine/types';
-import { useOfficialPacks, clearOfficialPacks, officialPacksInstalled } from '../../officialPacks';
+import { activateOfficialPacks, clearOfficialPacks, officialPacksInstalled } from '../../officialPacks';
 
 const R2024 = 'dnd5e-2024' as RulesetId;
 const R2014 = 'dnd5e-2014' as RulesetId;
@@ -114,15 +114,15 @@ describe('creation screens on installed packs', () => {
   it('installing packs is all or nothing: a bad pack changes nothing and says why', () => {
     const before = globalContentDB.classes.length;
     const noManifest = { ...packs[1], manifest: undefined };
-    expect(useOfficialPacks([packs[0], noManifest])).toEqual({ ok: false, problems: [expect.stringMatching(/no manifest/)] });
+    expect(activateOfficialPacks([packs[0], noManifest])).toEqual({ ok: false, problems: [expect.stringMatching(/no manifest/)] });
     expect(officialPacksInstalled()).toBe(false);
     expect(globalContentDB.classes.length).toBe(before);
     // The 5.2.1 pack alone is refused: it depends on the 5.1 pack.
-    const alone = useOfficialPacks([packs[1]]);
+    const alone = activateOfficialPacks([packs[1]]);
     expect(alone.ok).toBe(false);
     expect(alone.ok ? '' : alone.problems[0]).toMatch(/grimoire\.srd\.5\.1.*not installed/);
     expect(officialPacksInstalled()).toBe(false);
-    const good = useOfficialPacks(packs);
+    const good = activateOfficialPacks(packs);
     expect(good).toMatchObject({ ok: true, packs: [{ id: 'grimoire.srd.5.1' }, { id: 'grimoire.srd.5.2.1' }] });
     expect(officialPacksInstalled()).toBe(true);
     clearOfficialPacks();

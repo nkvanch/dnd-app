@@ -78,3 +78,17 @@ export function compareVersions(a: string, b: string): number {
 
 /** What a character (or campaign) needs installed, as stored in its export instead of copying the content. */
 export type RequiredPack = { id: string; minVersion?: string };
+
+/** Canonical JSON: object keys sorted and undefined members dropped, so the same content always hashes the same. */
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    return `{${Object.keys(o).filter(k => o[k] !== undefined).sort().map(k => `${JSON.stringify(k)}:${canonicalJson(o[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** The text a pack's content hash is taken over: every record and the rules tables (not the manifest or the envelope). */
+export const packHashInput = (pack: { homebrew?: unknown; rules?: unknown }): string =>
+  canonicalJson({ homebrew: pack.homebrew, rules: pack.rules ?? null });

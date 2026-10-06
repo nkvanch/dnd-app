@@ -55,11 +55,11 @@ Built:
 Not done, and why (each is a reason the static catalog cannot be deleted yet):
 - **Creation screens: done at the seam, not yet switched on.** The screens did not need rewriting. They read the official
   catalog through `globalContentDB`, the merged content database, subclass browsing and the Compendium's Official view,
-  so those readers now follow `officialSource.ts`: `useOfficialPacks(packs)` validates the packs (all or nothing) and makes
+  so those readers now follow `officialSource.ts`: `activateOfficialPacks(packs)` validates the packs (all or nothing) and makes
   them the official source; `clearOfficialPacks()` restores the hardcoded catalog. With packs installed, races, classes,
   backgrounds, feats and subclasses on the screens are the pack records (tests show they equal the catalog's, provenance
   aside), the SRD-5.1 flag filter stops applying to them, and a Fighter built the way the class screen builds one equals
-  the catalog's. What is not done: nothing in the running app calls `useOfficialPacks` yet, because the app has no pack
+  the catalog's. What is not done: nothing in the running app calls `activateOfficialPacks` yet, because the app has no pack
   files to install (bundling versus downloading them is step 8), so the screens still show the hardcoded catalog.
   Conditions and the feature list still come from the catalog.
 - `createCharacter` is no longer a duplicate path to maintain: the screens and it now read the same source.
@@ -84,6 +84,29 @@ Not done, and why (each is a reason the static catalog cannot be deleted yet):
 - **No install registry or runtime hash check.** The provider takes packs it is given. Verifying `contentHash` needs a
   SHA-256 at runtime (build-time uses node `crypto`; React Native needs `expo-crypto`), and the install, update and
   uninstall store (steps 7 and 8) does not exist.
+
+## Importing the official packs (6 October 2026)
+
+An SRD pack imports through the same screen as homebrew (Homebrew → Import, or Compendium → Packages → Import):
+- The picker recognises a first-party pack (`manifest.officialFirstPartyPack`) and shows its own confirm card instead of the
+  homebrew conflict flow: name, version, ruleset, licence, counts, what installing does, the attribution, and the reason
+  when it cannot be installed. Nothing is installed by picking.
+- Before install: the envelope and manifest validate, the **content hash is checked** (a pure-TypeScript SHA-256,
+  `engine/sha256.ts`, verified against Node's), the content passes the same validation as any imported pack, and the
+  packs installed together must still resolve (a missing or too-old dependency, such as the 5.2.1 pack without the 5.1
+  pack, is refused).
+- Install is all or nothing and is stored whole in a new `official_packs` SQLite table; it is restored at every app start
+  (`bootOfficialPacks`, before characters load; a problem leaves the built-in catalog and is logged). An update replaces
+  the installed version. Removal (Compendium → Packages → Official content packs) is refused while another pack needs the
+  one removed; removing the last pack restores the built-in catalog.
+- Installing makes the packs the official catalog: anything they do not contain is hidden until they are removed. In a full
+  (non-SRD-only) build that includes the Artificer and other non-SRD content; characters keep their saved data.
+- Homebrew classes that draw on official spell lists (the Emperor Warlock) still see them: their class tags are added to
+  pack spells at read time through `registerSpellTagOverlay`, not baked into the packs. Packs now carry only the class tags
+  of the classes they contain.
+- Not checked: authenticity. The hash proves the file is intact, not who made it; there is no signature.
+- Not built yet (waiting on screen review): first-run "choose packs" screen, pack download or bundling, update checks, and
+  pack ids and versions on characters and campaigns.
 
 ## Order for the rest
 

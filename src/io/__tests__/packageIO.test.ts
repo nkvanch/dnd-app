@@ -28,7 +28,7 @@ jest.mock('expo-document-picker', () => ({
 }));
 jest.mock('expo-constants', () => ({ expoConfig: { version: '1.0.0' } }));
 
-import { exportPackage, pickAndValidatePackage, MAX_PACKAGE_FILE_BYTES } from '../packageIO';
+import { exportPackage, pickAndValidatePackage, MAX_PACKAGE_FILE_BYTES, PackageImportPreview } from '../packageIO';
 import { GrimoirePackHomebrew, PackageContentRef } from '../../engine/backup';
 import type { Race } from '../../engine/types';
 
@@ -101,9 +101,10 @@ describe('pickAndValidatePackage — item 13 (file-layer malformed JSON) and ite
     // A DIFFERENT local item (name changed) — a real conflict, not an
     // identical-skip, exercising the same path detectConflictsDetailed uses.
     const localLookup = (ref: { type: string; id: string }) => (ref.type === 'race' && ref.id === 'tideborn') ? ({ ...race, name: 'Tideborn (local)' } as never) : undefined;
-    const result = await pickAndValidatePackage(new Set(['dnd5e-2014']), localLookup);
-
-    expect(result).not.toBeNull();
+    const picked = await pickAndValidatePackage(new Set(['dnd5e-2014']), localLookup);
+    expect(picked).not.toBeNull();
+    expect(picked && 'kind' in picked).toBe(false);          // an ordinary homebrew package, not a first-party content pack
+    const result = picked as PackageImportPreview;
     expect(result!.suggestedName).toBe('Tideborn Collection');
     expect(result!.validation.blocking).toEqual([]);
     expect(result!.conflicts).toEqual([{ type: 'race', id: 'tideborn', localName: 'Tideborn (local)', incomingName: 'Tideborn' }]);
@@ -130,9 +131,34 @@ describe('pickAndValidatePackage — item 13 (file-layer malformed JSON) and ite
 
     // The SAME local item, byte-for-byte.
     const localLookup = (ref: { type: string; id: string }) => (ref.type === 'race' && ref.id === 'tideborn') ? ({ ...race } as never) : undefined;
-    const result = await pickAndValidatePackage(new Set(['dnd5e-2014']), localLookup);
+    const result = (await pickAndValidatePackage(new Set(['dnd5e-2014']), localLookup)) as PackageImportPreview;
 
     expect(result!.conflicts).toEqual([]);
     expect(result!.identical).toEqual([{ type: 'race', id: 'tideborn', localName: 'Tideborn', incomingName: 'Tideborn' }]);
+  });
+});
+
+describe('pickAndValidatePackage: a first-party content pack', () => {
+  it('is routed to its own confirm step instead of the homebrew conflict flow, and nothing is installed by picking it', async () => {
+    const { buildSrd51Pack, serializePack } = require('../../content/packs/srdPacks');
+    mockGetDocumentAsync.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///srd.grimoire-pack', name: 'grimoire.srd.5.1-1.0.0.grimoire-pack' }] });
+    mockReadAsStringAsync.mockResolvedValue(serializePack(buildSrd51Pack()));
+
+    const picked = await pickAndValidatePackage(new Set(['dnd5e-2014']), () => undefined);
+
+    expect(picked).toMatchObject({ kind: 'official', preview: { ok: true, action: 'install', manifest: { id: 'grimoire.srd.5.1' } } });
+    const { installedOfficialPacks } = require('../../content/officialPackService');
+    expect(installedOfficialPacks()).toEqual([]);
+  });
+
+  it('a damaged one is reported with the reason, not imported', async () => {
+    const { buildSrd51Pack, serializePack } = require('../../content/packs/srdPacks');
+    const damaged = JSON.parse(serializePack(buildSrd51Pack()));
+    damaged.homebrew.spells[0].name = 'Changed';
+    mockGetDocumentAsync.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///srd.grimoire-pack', name: 'x.grimoire-pack' }] });
+    mockReadAsStringAsync.mockResolvedValue(JSON.stringify(damaged));
+
+    const picked = await pickAndValidatePackage(new Set(['dnd5e-2014']), () => undefined);
+    expect(picked).toMatchObject({ kind: 'official', preview: { ok: false, problems: [expect.stringMatching(/content hash/)] } });
   });
 });

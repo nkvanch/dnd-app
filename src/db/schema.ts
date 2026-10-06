@@ -185,6 +185,18 @@ export const CREATE_INSTALLED_PACKS_TABLE = `
   );
 `;
 
+// Installed first-party content packs (the SRD packs): the whole pack file, kept as one JSON blob per pack id, because
+// the pack is read as a unit (validated, ordered by dependency, served as the official catalog) and never queried by
+// field. Separate from installed_packs, which tracks homebrew items that arrived together.
+export const CREATE_OFFICIAL_PACKS_TABLE = `
+  CREATE TABLE IF NOT EXISTS official_packs (
+    id         TEXT PRIMARY KEY NOT NULL,
+    version    TEXT NOT NULL,
+    importedAt INTEGER NOT NULL,
+    data       TEXT NOT NULL
+  );
+`;
+
 export const CREATE_CUSTOM_RULE_PROFILES_TABLE = `
   CREATE TABLE IF NOT EXISTS custom_rule_profiles (
     id TEXT PRIMARY KEY NOT NULL,
@@ -229,6 +241,7 @@ export const ALL_TABLES = [
   CREATE_CHARACTER_DRAFT_TABLE,
   CREATE_APP_META_TABLE,
   CREATE_INSTALLED_PACKS_TABLE,
+  CREATE_OFFICIAL_PACKS_TABLE,
   CREATE_PREPARED_ENCOUNTERS_TABLE,
   CREATE_CUSTOM_RULE_PROFILES_TABLE,
   CREATE_SESSION_DOCS_TABLE,

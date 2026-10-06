@@ -25,6 +25,7 @@ import { detectConflictsDetailed, PackageConflict } from '../engine/packageConfl
 import { DependencyRef } from '../engine/contentDependencies';
 import { HomebrewContent } from '../db/contentCacheRepo';
 import { identifyGrimoireImport, WRONG_HOMEBREW_IMPORTER_MESSAGE } from './importEnvelope';
+import { isOfficialPackFile, previewOfficialPack, OfficialPackPreview } from '../content/officialPackService';
 
 function sanitize(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'package';
@@ -93,12 +94,15 @@ export type PackageImportPreview = {
  * exactly, just with the richer package-specific diagnostics. Returns null
  * if the user cancels the picker.
  */
+/** A first-party content pack (the SRD packs) was picked instead of a homebrew package: it has its own confirm step. */
+export type OfficialPackImport = { kind: 'official'; preview: OfficialPackPreview };
+
 export async function pickAndValidatePackage(
   knownRulesetIds: Set<string>,
   localLookup:     (ref: DependencyRef) => (HomebrewContent & { rulesetId?: string }) | undefined,
   /** Whether a reference points at bundled official content (see content/officialRefs.ts). */
   isOfficialRef:   (ref: DependencyRef) => boolean = () => false,
-): Promise<PackageImportPreview | null> {
+): Promise<PackageImportPreview | OfficialPackImport | null> {
   const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
   if (result.canceled || !result.assets?.[0]) return null;
 
@@ -114,6 +118,8 @@ export async function pickAndValidatePackage(
   }
 
   if (identifyGrimoireImport(data) === 'character') throw new Error(WRONG_HOMEBREW_IMPORTER_MESSAGE);
+  // A first-party content pack is installed as the app's official content, not saved as homebrew.
+  if (isOfficialPackFile(data)) return { kind: 'official', preview: previewOfficialPack(data) };
 
   const validation = validatePackageForImport(data, knownRulesetIds, localLookup, isOfficialRef);
   if (validation.blocking.length > 0) {

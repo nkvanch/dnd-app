@@ -46,7 +46,7 @@ describe('first-party SRD packs', () => {
     const ids = new Set([...all(a), ...all(b)].map(r => r.id));
     for (const banned of ['emperor_warlock', 'abyss_knight', 'blood_hunter', 'artificer', 'glassback', 'emperor_warlock_demo']) expect(ids.has(banned)).toBe(false);
     const text = serializePack(a) + serializePack(b);
-    expect(text).not.toMatch(/Emperor Warlock|Abyss Knight|Blood Hunter|Creator Stress/);
+    expect(text).not.toMatch(/Emperor Warlock|Abyss Knight|Blood Hunter|Creator Stress|emperor_warlock|abyss_knight|blood_hunter|"artificer"/i);
     for (const r of a.homebrew!.classes as { srd?: boolean }[]) expect(r.srd).toBe(true);
     for (const r of a.homebrew!.items as { srd?: boolean }[]) expect(r.srd).not.toBe(false);
   });

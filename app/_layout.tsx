@@ -1,6 +1,8 @@
 // app/_layout.tsx
 // Root layout — initializes SQLite DB + loads characters + hydrates session
 // on startup, then renders the navigation stack.
+import { bootOfficialPacks } from '../src/content/officialPackService';
+import { sqlitePackStore } from '../src/content/officialPackStore';
 import { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -95,6 +97,10 @@ export default function RootLayout() {
         //    features, which falls back to homebrewStore for any item
         //    itemRepo (official-only) doesn't have.
         await loadHomebrew();
+
+        // 3b. Restore installed official content packs (the SRD packs): they become the official catalog before
+        //     characters load. Never blocks boot; with none installed (or any problem) the built-in catalog stays.
+        await bootOfficialPacks(sqlitePackStore);
 
         // 4. Load characters + session. Runs regardless of whether steps
         //    1-3 fully succeeded — a character can still open in a

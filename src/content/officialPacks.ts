@@ -1,6 +1,6 @@
 // ============================================================================
 // FILE: src/content/officialPacks.ts
-// Installs content packs as the app's official catalog. `useOfficialPacks` validates the packs (envelope, manifest,
+// Installs content packs as the app's official catalog. `activateOfficialPacks` validates the packs (envelope, manifest,
 // dependencies, versions) and, only if all of them are usable, makes them the official source (officialSource.ts), so
 // the creation screens and every other reader of the official catalog serve pack content. If anything is wrong it
 // changes nothing and returns the problems, so a bad pack can never leave the app with half a catalog.
@@ -13,7 +13,7 @@ export type OfficialPacksResult =
   | { ok: true; source: string; packs: { id: string; version: string }[] }
   | { ok: false; problems: string[] };
 
-export function useOfficialPacks(packs: readonly unknown[]): OfficialPacksResult {
+export function activateOfficialPacks(packs: readonly unknown[]): OfficialPacksResult {
   const problems: string[] = [];
   const usable: InstalledPack[] = [];
   packs.forEach((p, i) => {

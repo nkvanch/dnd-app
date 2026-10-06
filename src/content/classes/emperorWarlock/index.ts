@@ -12,6 +12,13 @@ import type { MonsterTemplate } from '../../monsters/types';
 import { buildEmperorProgression, legacyBindingGroup } from './progression';
 import { buildSpirits, EMPEROR_CONDITIONS } from './spirits';
 import { EMPEROR_SUMMONS } from './summons';
+import { EMPEROR_CLASS_SPELLS } from './spellData';
+import { registerSpellTagOverlay } from '../../packRepos';
+
+// When installed packs are the official catalog, the spells the Emperor Warlock draws on (its own list plus the whole
+// Warlock list) still carry its class ids, exactly as the built-in spell library tags them.
+const EMPEROR_SPELLS = new Set(EMPEROR_CLASS_SPELLS);
+registerSpellTagOverlay(s => EMPEROR_SPELLS.has(s.id) || s.classes?.includes('warlock') ? ['emperor_warlock', 'emperor_warlock_demo'] : []);
 
 export const EMPEROR_WARLOCK_ID = 'emperor_warlock';
 export const EMPEROR_WARLOCK_DEMO_ID = 'emperor_warlock_demo';

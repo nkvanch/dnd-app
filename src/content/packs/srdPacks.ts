@@ -16,7 +16,7 @@ import { createHash } from 'crypto';
 import type { GrimoirePack } from '../../engine/backup';
 import { GRIMOIRE_PACK_FORMAT_VERSION } from '../../engine/backup';
 import {
-  CONTENT_PACK_MANIFEST_VERSION, ContentPackManifest, RecordProvenance, PackDependency,
+  CONTENT_PACK_MANIFEST_VERSION, ContentPackManifest, RecordProvenance, PackDependency, canonicalJson,
 } from '../../engine/contentPackManifest';
 import type { CharClass, Item, Spell } from '../../engine/types';
 import { ALL_CHAR_CLASSES_CATALOG } from '../classes/index';
@@ -72,15 +72,7 @@ const stamp = <T extends object>(record: T, provenance: RecordProvenance): T & {
 const srdProvenance = (family: '5.1' | '5.2.1', extra: Partial<RecordProvenance> = {}): RecordProvenance =>
   ({ kind: 'srd', family, sourceId: `srd-${family}`, ...extra });
 
-/** Canonical JSON: object keys sorted, so the same content always hashes the same. */
-export function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const o = value as Record<string, unknown>;
-    return `{${Object.keys(o).filter(k => o[k] !== undefined).sort().map(k => `${JSON.stringify(k)}:${canonicalJson(o[k])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
+export { canonicalJson };
 
 export const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 
@@ -132,14 +124,17 @@ export function buildSrd51Pack(): SrdPack {
   const classes = (ALL_CHAR_CLASSES_CATALOG as CharClass[])
     .filter(c => c.srd === true && !CLASSES_2024.some(c24 => c24.id === c.id))
     .map(c => stamp(plain({ ...c, ...(c.rawProgression ? {} : (progressionFor(c.id) ? { rawProgression: progressionFor(c.id) } : {})) }), prov) as AnyRecord);
+  const srdClassIds = new Set(classes.map(c => c.id));
   const content: Content = {
     classes,
     subclasses: FULL_SUBCLASS_LIBRARY.filter(s => s.srd === true && !SUBCLASSES_2024.some(s24 => s24.id === (s as { id?: string }).id)).map(s => stamp(plain({ ...s, id: subclassId(s as never) }), prov) as AnyRecord),
     races: FULL_RACE_LIBRARY.filter(r => r.srd === true && r.rulesetId !== ('dnd5e-2024' as never)).map(r => stamp(plain(r), prov) as AnyRecord),
     backgrounds: FULL_BACKGROUND_LIBRARY.filter(b => b.srd === true && b.rulesetId !== ('dnd5e-2024' as never)).map(b => stamp(plain(b), prov) as AnyRecord),
     feats: FULL_FEAT_LIBRARY.filter(f => f.srd === true && f.rulesetId !== ('dnd5e-2024' as never)).map(f => stamp(plain(f), prov) as AnyRecord),
+    // Class tags are limited to the classes this pack carries: the library also tags spells for classes outside the SRD
+    // (Artificer and private ones), and a pack must not name them.
     spells: (FULL_SPELL_LIBRARY as Spell[]).filter(s => s.srd === true && s.rulesetId !== ('dnd5e-2024' as never))
-      .map(s => stamp(plain({ ...s, classes: (s.classes ?? []).filter(c => !c.endsWith('_2024')) }), prov) as AnyRecord),
+      .map(s => stamp(plain({ ...s, classes: (s.classes ?? []).filter(c => srdClassIds.has(c)) }), prov) as AnyRecord),
     items: GENERATED_SRD_ITEMS.filter(i => hasVerifiedPublicItemProvenance(i.id)).map(i => stamp(plain(i), prov) as AnyRecord),
     monsters: FULL_MONSTER_LIBRARY.filter(m => m.srd === true).map(m => stamp(plain(m), prov) as AnyRecord),
     conditions: ALL_CONDITIONS.map(c => stamp(plain(c), prov) as AnyRecord),

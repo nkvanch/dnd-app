@@ -12,6 +12,9 @@ import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { makeHomebrewLookup } from '../../src/store/homebrewLookup';
 import { pickAndValidatePackage, PackageImportPreview } from '../../src/io/packageIO';
+import { OfficialPackImportCard } from '../../src/components/OfficialPackImportCard';
+import { installOfficialPack, OfficialPackPreview } from '../../src/content/officialPackService';
+import { sqlitePackStore } from '../../src/content/officialPackStore';
 import { isOfficialRef } from '../../src/content/officialRefs';
 import { planPackageImport, ConflictResolution, PackageConflict, flattenPackageContents } from '../../src/engine/packageConflicts';
 import { removedPackItemRefs, stillReferencedRefs } from '../../src/engine/packDiagnostics';
@@ -36,6 +39,8 @@ export default function ImportPackageScreen() {
 
   const [picking, setPicking] = useState(false);
   const [preview, setPreview] = useState<PackageImportPreview | null>(null);
+  // A first-party content pack (the SRD packs) has its own confirm step instead of the homebrew conflict flow.
+  const [officialPreview, setOfficialPreview] = useState<OfficialPackPreview | null>(null);
   const [resolutions, setResolutions] = useState<Map<string, ConflictResolution>>(new Map());
   const [committing, setCommitting] = useState(false);
   const [resultMsg, setResultMsg] = useState<string | null>(null);
@@ -68,7 +73,9 @@ export default function ImportPackageScreen() {
         makeHomebrewLookup(homebrew),
         isOfficialRef,
       );
-      if (result) {
+      if (result && 'kind' in result) {
+        setOfficialPreview(result.preview);
+      } else if (result) {
         setPreview(result);
         // Default every conflict to 'keep_local' — the safest default
         // (never silently overwrites existing content) until the player
@@ -200,7 +207,26 @@ export default function ImportPackageScreen() {
     }
   }
 
+  async function handleInstallOfficial() {
+    if (!officialPreview || !officialPreview.ok) return;
+    setCommitting(true);
+    try {
+      const result = await installOfficialPack(officialPreview.pack, sqlitePackStore);
+      if (result.ok) {
+        setResultMsg(`${officialPreview.manifest.name} ${officialPreview.manifest.version} is installed. The official content now comes from installed packs.`);
+        setOfficialPreview(null);
+      } else {
+        setOfficialPreview({ ok: false, problems: result.problems });
+      }
+    } catch (e: any) {
+      setOfficialPreview({ ok: false, problems: [e?.message ?? 'The pack could not be installed.'] });
+    } finally {
+      setCommitting(false);
+    }
+  }
+
   function cancelImport() {
+    setOfficialPreview(null);
     setPreview(null);
     setResolutions(new Map());
     setUpdateTarget(null);
@@ -220,7 +246,11 @@ export default function ImportPackageScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      {!preview && (
+      {officialPreview && (
+        <OfficialPackImportCard preview={officialPreview} busy={committing} onInstall={() => { void handleInstallOfficial(); }} onCancel={() => setOfficialPreview(null)} />
+      )}
+
+      {!preview && !officialPreview && (
         <View style={styles.section}>
           <Text style={styles.body}>
             Pick a .grimoire-pack file exported from another device (or another

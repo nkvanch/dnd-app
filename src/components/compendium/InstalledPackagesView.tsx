@@ -31,6 +31,7 @@ import {
 import { SortControl } from '../SortControl';
 import { usePackageBuilderStore } from '../../store/packageBuilderStore';
 import { IssuesModal } from '../sheet/IssuesModal';
+import { OfficialPacksSection } from './OfficialPacksSection';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 const STATE_KEY = 'compendium.packages';
@@ -262,6 +263,7 @@ export function InstalledPackagesView() {
         }
         ListHeaderComponent={
           <View style={styles.header}>
+            <OfficialPacksSection />
             <View style={styles.headerRow}>
               <Text style={styles.count}>{packs.length} package{packs.length === 1 ? '' : 's'}</Text>
               <View style={styles.headerBtns}>

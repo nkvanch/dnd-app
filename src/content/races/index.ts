@@ -3,7 +3,8 @@
 // All PHB races expressed as Feature/Effect arrays.
 // ============================================================================
 import { RACES_2024 } from './races2024';
-import { Race, Subrace, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, Feature, Ability, RulesetId } from '../../engine/types';
+import { Race, Subrace, AncestryOption, RACE_CHOICE_PREFIX, ChoiceOption, ChoiceDefinition, Feat, Feature, Ability, RulesetId } from '../../engine/types';
+import { ORIGIN_FEATS_2024 } from '../feats/origin2024';
 
 /**
  * Builds one Mordenkainen's Tome of Foes Tiefling bloodline subrace — each
@@ -441,6 +442,26 @@ export const raceHuman: Race = {
  * established pattern for mechanics the engine doesn't model (see e.g.
  * Dwarven Toughness/Tough above).
  */
+/**
+ * Human's Versatile: each Origin feat as an option that grants the feat's feature, its limited-use pools and the picks it asks for
+ * (skills, Magic Initiate's spells), all sourced to the species so choosing another species takes them back out.
+ */
+function versatileOption(feat: Feat): ChoiceOption {
+  const source = { kind: 'race' as const, refId: 'human_2024' };
+  const toRace = (c: ChoiceDefinition): ChoiceDefinition => ({
+    ...c, pool: Array.isArray(c.pool) ? c.pool.map(o => (o.value && typeof o.value === 'object' && !Array.isArray(o.value) && 'effects' in (o.value as object) ? { ...o, value: { ...(o.value as Feature), source } } : o)) : c.pool,
+  });
+  const id = `human_2024_versatile_${feat.id}`;
+  return {
+    id, label: feat.name,
+    value: {
+      ...feat.feature, id, name: `${feat.name} (Versatile)`, source, level: null,
+      ...(feat.resources?.length ? { resources: feat.resources } : {}),
+      ...(feat.pendingChoices?.length ? { grantsChoices: feat.pendingChoices.map(toRace) } : {}),
+    } as Feature,
+  };
+}
+
 export const raceHuman2024: Race = {
   id: 'human_2024',
   name: 'Human',
@@ -464,7 +485,7 @@ export const raceHuman2024: Race = {
     {
       id: 'human_2024_versatile',
       name: 'Versatile',
-      description: 'You gain one feat of your choice, chosen from feats available to a 1st-level character. Take it on the Feats screen during creation (enable the "Feat at 1st level" campaign rule if it isn\'t already, so that screen is reachable) — same disclosed pattern Variant Human already uses for its bonus feat.',
+      description: 'You gain an Origin feat of your choice (Skilled is recommended). You pick it when you choose the species, and the picks the feat asks for (skills, spells) follow.',
       source: { kind: 'race', refId: 'human_2024' },
       level: null, effects: [], actions: [], choices: [], passive: true,
     },
@@ -474,6 +495,12 @@ export const raceHuman2024: Race = {
       id: `${RACE_CHOICE_PREFIX}human_2024_skill`,
       prompt: 'Choose one skill to gain proficiency in.',
       kind: 'skill', count: 1, pool: ALL_SKILL_OPTIONS,
+      grants: [], required: true, resolved: false,
+    },
+    {
+      id: `${RACE_CHOICE_PREFIX}human_2024_versatile`,
+      prompt: 'Versatile: choose an Origin feat (Skilled is recommended).',
+      kind: 'feature_pool', count: 1, pool: ORIGIN_FEATS_2024.map(versatileOption),
       grants: [], required: true, resolved: false,
     },
   ],

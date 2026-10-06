@@ -318,6 +318,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)"              options={{ headerShown: false }} />
         <Stack.Screen name="creation"            options={{ headerShown: false }} />
         <Stack.Screen name="sheet/[id]"          options={{ headerShown: false }} />
+        <Stack.Screen name="rules-reference"     options={{ headerShown: false }} />
         {/* Every app/dm/* screen (including ones with no explicit entry
             here before, like encounter-builder/encounters — expo-router
             auto-discovers them regardless) is now gated by

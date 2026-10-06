@@ -1,4 +1,5 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { exhaustionEffectText } from '../../engine/exhaustion';
 import { useSpellPayment } from './SpellPaymentChooser';
 // app/sheet/TabCharacter.tsx
 // Tab 1 — Combat dashboard. Players live here.
@@ -44,17 +45,6 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // Class progressions are looked up from the content library — no hardcoded names.
 // ALL_PROGRESSIONS is a Record<classId, ClassProgression> covering all 12 classes.
-
-// ── Exhaustion level descriptions ─────────────────────────────────────────────
-
-const EXHAUSTION_EFFECTS: Record<number, string> = {
-  1: 'Disadvantage on ability checks',
-  2: 'Speed halved',
-  3: 'Disadvantage on attacks and saving throws',
-  4: 'Hit point maximum halved',
-  5: 'Speed reduced to 0',
-  6: 'Death',
-};
 
 /**
  * 2014 condition-mechanics closure, Part S: split per condition into what
@@ -1570,7 +1560,7 @@ function TabCharacterInner({
             <View style={styles.condChip}>
               <Text style={styles.condChipTxt}>Exhaustion {exhaustion}</Text>
             </View>
-            <Text style={styles.exhaustionDesc}>{EXHAUSTION_EFFECTS[exhaustion]}</Text>
+            <Text style={styles.exhaustionDesc}>{exhaustionEffectText(exhaustion, entity)}</Text>
           </View>
         )}
 

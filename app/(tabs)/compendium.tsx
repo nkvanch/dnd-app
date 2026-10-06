@@ -12,7 +12,9 @@
 // not app-restart-persisted — matches every other screen this pass).
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, FlatList, Pressable, StyleSheet, TextInput, InteractionManager } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { installedRulesReferences } from '../../src/content/rules/rulesReference';
+import { useOfficialContentVersion } from '../../src/hooks/useOfficialContentVersion';
 import { useBrowseStateStore } from '../../src/store/browseStateStore';
 import { loadFavorites, saveFavorites, favoriteKey } from '../../src/content/favorites';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -1032,7 +1034,10 @@ const styles = StyleSheet.create({
   shellHeader: {
     paddingTop: Spacing.xl + 8, paddingBottom: Spacing.xs,
     paddingHorizontal: Spacing.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
+  rulesBtn: { borderWidth: 1, borderColor: Colors.gold + '88', borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 6 },
+  rulesBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold },
   shellTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
 
   searchWrap: { padding: Spacing.md, paddingBottom: Spacing.sm, gap: Spacing.xs },
@@ -1127,6 +1132,9 @@ export default function CompendiumScreen() {
   const mode = useCompendiumModeStore(s => s.mode);
   const setMode = useCompendiumModeStore(s => s.setMode);
   const closePack = useCompendiumModeStore(s => s.closePack);
+  const router = useRouter();
+  useOfficialContentVersion();   // the Rules button appears when a pack with a rules reference is installed
+  const hasRulesReference = installedRulesReferences().length > 0;
 
   const paramMode = parseCompendiumMode(params.mode);
   useEffect(() => {
@@ -1142,6 +1150,11 @@ export default function CompendiumScreen() {
     <View style={styles.screen}>
       <View style={styles.shellHeader}>
         <Text style={styles.shellTitle}>Compendium</Text>
+        {hasRulesReference && (
+          <Pressable style={styles.rulesBtn} onPress={() => router.push('/rules-reference')} accessibilityLabel="Open the Rules Reference" testID="open-rules-reference">
+            <Text style={styles.rulesBtnTxt}>Rules</Text>
+          </Pressable>
+        )}
       </View>
       <CompendiumModeSwitch mode={mode} onChange={changeMode} />
       {mode === 'official' && <OfficialCompendiumView />}

@@ -10,6 +10,7 @@
 // The UI always reads from entity.derived and never computes stats itself.
 // ============================================================================
 
+import { exhaustionSpeedPenalty } from './exhaustion';
 import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
   Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus, AuditSourceKind,
@@ -396,7 +397,8 @@ export function recomputeDerived(
       : entity.resources.speed + speedResolved;
   const hasZeroSpeedRestriction = speedEffects.some(ae => ae.effect.operation === 'set' && ae.effect.value === 0);
   // 'scale' (double/halve speed) applies to the resolved speed; a speed-zero restriction still wins.
-  const finalSpeed = hasZeroSpeedRestriction ? 0 : applyScale(calculatedSpeed, resolveScaleFactor(speedEffects));
+  // 2024 Exhaustion: -5 ft Speed per level (the 2014 tiers are descriptive; see exhaustion.ts).
+  const finalSpeed = hasZeroSpeedRestriction ? 0 : Math.max(0, applyScale(calculatedSpeed, resolveScaleFactor(speedEffects)) - exhaustionSpeedPenalty(entity));
 
   // ── Senses: aggregate grant_sense effects, dedup by type (largest range) ──
   const senseEffects = allEffects.filter(ae => ae.effect.type === 'grant_sense');

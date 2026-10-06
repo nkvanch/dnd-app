@@ -41,6 +41,7 @@ import { SPELL_VERSIONS_2024 } from '../spells/spellVersions2024';
 import { GEAR_2024 } from '../items/gear2024';
 import { EQUIPMENT_2024, EQUIPMENT_2024_IDS } from '../items/equipment2024';
 import { MAGIC_ITEMS_2024, magicItemRecord } from '../items/magicItems2024';
+import { GLOSSARY_2024, TOOLBOX_2024, EQUIPMENT_RULES_2024 } from '../rules/rulesReference2024Data';
 import { FULL_ITEM_LIBRARY } from '../items/index';
 import { parseStartingItem } from '../../engine/startingItems';
 import { WEAPON_MASTERY_TABLE, MASTERY_RULES } from '../weaponMastery';
@@ -211,6 +212,7 @@ export function buildSrd521Pack(): SrdPack {
       properties: MASTERY_RULES, weapons: WEAPON_MASTERY_TABLE,
     },
     spellLists: { provenance: derived, byClass: SPELL_LIST_2024 },
+    reference: { provenance: srdProvenance('5.2.1', { sourceLocation: 'Rules Glossary, Gameplay Toolbox, Equipment' }), glossary: GLOSSARY_2024, toolbox: TOOLBOX_2024, equipment: EQUIPMENT_RULES_2024 },
   };
   const deps: PackDependency[] = [{ id: SRD_5_1_PACK_ID, minVersion: '1.0.0', reason: 'Weapons, armor and equipment packs the 2024 classes and backgrounds start with; monsters and conditions.' }];
   return assemble({

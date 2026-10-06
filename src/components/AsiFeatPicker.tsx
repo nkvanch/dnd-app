@@ -283,6 +283,7 @@ export function AsiFeatPicker({
     const q = search.trim().toLowerCase();
     const filtered = allFeats
       .filter(f => !takenFeatIds.has(f.id))
+      .filter(f => f.id !== 'ability_score_improvement_2024')   // the Ability Improvements path above is this feat
       .filter(f => q === '' || f.name.toLowerCase().includes(q) || f.description.toLowerCase().includes(q))
       .filter(f => prereqFilter === 'all' || (prereqFilter === 'none' ? !f.prerequisite : !!f.prerequisite))
       .filter(f => officialFilter === 'all' || (officialFilter === 'homebrew') === homebrewFeatIds.has(f.id))

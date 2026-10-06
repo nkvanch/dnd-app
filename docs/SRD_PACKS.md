@@ -15,7 +15,7 @@ Done:
 3. **The two packs are generated** (`npx tsx scripts/build-srd-packs.ts`, output in `release/packs/`, git-ignored):
    - `grimoire.srd.5.1` 1.0.0, ruleset `dnd5e-2014`: 12 classes, 12 subclasses, 9 species, 1 background, 1 feat,
      319 spells, 95 items, 322 monsters, 14 conditions (exactly what the SRD-only build ships today).
-   - `grimoire.srd.5.2.1` 1.0.0, ruleset `dnd5e-2024`: 12 classes, 12 subclasses, 9 species, 4 backgrounds, 6 feats,
+   - `grimoire.srd.5.2.1` 1.0.0, ruleset `dnd5e-2024`: 12 classes, 12 subclasses, 9 species, 4 backgrounds, 19 feats,
      339 spells (the library record with the SRD 5.2.1 text applied), 20 items (the gear its starting packages name and the weapons its Weapon Mastery table lists that the 5.1 pack's 95 items lack: Leather Armor, the adventuring packs, Holy Symbol, the crossbows and so on; the build fails if one is not marked SRD), and a `rules` section with the
      Weapon Mastery table and the class spell lists. It depends on the 5.1 pack for weapons, armor, packs, monsters and
      conditions, which are not separately authored for 5.2.1.

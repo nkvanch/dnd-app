@@ -35,6 +35,7 @@ import { NEW_SPELLS_2024 } from '../classes2024/spells2024';
 import { SPELL_LIST_2024 } from '../classes2024/spellLists2024';
 import { RACES_2024 } from '../races/races2024';
 import { ORIGIN_FEATS_2024 } from '../feats/origin2024';
+import { MORE_FEATS_2024 } from '../feats/feats2024';
 import { BACKGROUNDS_2024 } from '../backgrounds/backgrounds2024';
 import { SPELL_VERSIONS_2024 } from '../spells/spellVersions2024';
 import { GEAR_2024 } from '../items/gear2024';
@@ -194,7 +195,7 @@ export function buildSrd521Pack(): SrdPack {
     subclasses: SUBCLASSES_2024.map(s => stamp(plain(s), prov) as unknown as AnyRecord),
     races: [raceHuman2024, ...RACES_2024].map(r => stamp(plain(r), prov) as AnyRecord),
     backgrounds: BACKGROUNDS_2024.map(b => stamp(plain(b), prov) as AnyRecord),
-    feats: ORIGIN_FEATS_2024.map(f => stamp(plain(f), prov) as AnyRecord),
+    feats: [...ORIGIN_FEATS_2024, ...MORE_FEATS_2024].map(f => stamp(plain(f), prov) as AnyRecord),
     spells,
     items: equipment521(),
     monsters: [],

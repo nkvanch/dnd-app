@@ -29,7 +29,7 @@ const bgSource = (id: string) => ({ kind: 'background' as const, refId: id });
 function originFeat(id: string, name: string, description: string, f: Partial<Parameters<typeof feature>[0]>, extra: Partial<Feat> = {}): Feat {
   const featureId = `feat_${id}`;
   return {
-    id, name, prerequisite: null, description: `Origin Feat. ${description}`, source: SOURCE,
+    id, name, category: 'origin', prerequisite: null, description: `Origin Feat. ${description}`, source: SOURCE,
     rulesetId: RULESET, srd: false,
     feature: feature({ id: featureId, name, description, source: { kind: 'feat', refId: id }, ...f }),
     ...extra,

@@ -83,6 +83,27 @@ export function evaluatePrerequisite(entity: Entity, prereq: string | null): Pre
   const text = prereq.trim();
   const lower = text.toLowerCase();
 
+  // -- 2024 style: "Level 4+" alone or combined, "Level 4+, Strength or Dexterity 13+" --
+  // Every comma-separated part must hold; the first unmet one is reported.
+  const parts = text.split(/,\s*(?=level\s+\d|strength|dexterity|constitution|intelligence|wisdom|charisma|fighting style|spellcasting)/i);
+  if (parts.length > 1 || /^level\s+\d+\+?$/i.test(text) || /fighting style feature/i.test(text)) {
+    for (const part of parts) {
+      const lv = /^level\s+(\d+)\+?$/i.exec(part.trim());
+      if (lv) {
+        const need = parseInt(lv[1], 10);
+        if (entity.identity.level < need) return { met: false, reason: `Requires level ${need} or higher (you are level ${entity.identity.level}).`, needsManualCheck: false };
+        continue;
+      }
+      if (/^fighting style feature$/i.test(part.trim())) {
+        if (!entity.features.some(f => /fighting style/i.test(f.name))) return { met: false, reason: 'Requires the Fighting Style class feature.', needsManualCheck: false };
+        continue;
+      }
+      const r = evaluatePrerequisite(entity, part.trim());
+      if (!r.met) return r;
+    }
+    return { met: true, reason: '', needsManualCheck: false };
+  }
+
   // -- Ability minimums, possibly with "X or Y NN+" --
   // Matches "Strength 13+", "Dexterity 13", "Intelligence or Wisdom 13+".
   const abilityMatch = lower.match(/((?:strength|dexterity|constitution|intelligence|wisdom|charisma)(?:\s+or\s+(?:strength|dexterity|constitution|intelligence|wisdom|charisma))*)\s+(\d+)\+?/);

@@ -27,7 +27,7 @@ describe('first-party SRD packs', () => {
   it('hold the expected content', () => {
     expect(a.manifest.counts).toMatchObject({ spells: 319, monsters: 322 });
     expect(a.manifest.counts.classes).toBeGreaterThanOrEqual(12);
-    expect(b.manifest.counts).toMatchObject({ classes: 12, subclasses: 12, spells: 339, feats: 6 });
+    expect(b.manifest.counts).toMatchObject({ classes: 12, subclasses: 12, spells: 339, feats: 19 });
     expect(b.manifest.counts.races).toBe(9);
     expect(b.manifest.counts.items).toBe(20);   // the gear its starting packages name and the mastery weapons the 5.1 pack lacks
     expect(b.manifest.counts.backgrounds).toBe(4);

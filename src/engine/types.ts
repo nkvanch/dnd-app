@@ -753,9 +753,14 @@ export type Item = {
  * benefits can't be fully automated yet still apply as a named, described Feature
  * the player tracks manually.
  */
+/** The four feat categories of the 2024 rules (the SRD lists them as Origin, General, Fighting Style and Epic Boon). */
+export type FeatCategory = 'origin' | 'general' | 'fighting_style' | 'epic_boon';
+
 export type Feat = {
   id:           string;
   name:         string;
+  /** Which category a 2024 feat is in. Absent for older feats (everything in the 5e catalog). */
+  category?:    FeatCategory;
   prerequisite: string | null;
   description:  string;
   source:       string;

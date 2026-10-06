@@ -2,6 +2,8 @@
 // FILE: src/store/campaignStore.ts
 // Campaign + DM identity state management.
 // ============================================================================
+import { requiredPacksForRuleset } from '../content/requiredPacks';
+import { installedOfficialPacks } from '../content/officialPackService';
 import { create } from 'zustand';
 import { Campaign, CampaignRules, DeviceSession, RulesetId } from '../engine/types';
 import { saveCampaign, loadAllCampaigns, deleteCampaign, loadCampaign } from '../db/campaignRepo';
@@ -170,6 +172,8 @@ type CampaignStore = {
   reconnectWithCode: (code: string) => Promise<void>;
 };
 
+const requiredFor = (ruleset: RulesetId | undefined) => requiredPacksForRuleset(ruleset, installedOfficialPacks());
+
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
   campaigns:      [],
   activeCampaign: null,
@@ -207,6 +211,8 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       ...(opts.description?.trim() ? { description: opts.description.trim() } : {}),
       ...(opts.rulesetId ? { rulesetId: opts.rulesetId } : {}),
       ...(opts.bannedPackIds && opts.bannedPackIds.length > 0 ? { bannedPackIds: opts.bannedPackIds } : {}),
+      // The content packs this campaign's ruleset needs, so a player who joins can be told what they lack (content/requiredPacks.ts).
+      ...(requiredFor(opts.rulesetId).length > 0 ? { requiredPacks: requiredFor(opts.rulesetId) } : {}),
     };
 
     // Start hosting (DM role). This is CampaignHost — a session/role concept

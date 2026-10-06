@@ -1,4 +1,5 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MissingPacksBanner } from './MissingPacksBanner';
 import { exhaustionEffectText } from '../../engine/exhaustion';
 import { useSpellPayment } from './SpellPaymentChooser';
 // app/sheet/TabCharacter.tsx
@@ -1257,6 +1258,8 @@ function TabCharacterInner({
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      <MissingPacksBanner entity={entity} />
 
       {/* HP Block */}
       <Pressable style={styles.hpBlock} onPress={() => setHpOpen(true)}>

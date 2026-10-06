@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { installedOfficialPacks } from '../src/content/officialPackService';
+import { packShortfalls, describeShortfall } from '../src/content/requiredPacks';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { pickPortableCharacter } from '../src/io/characterPortable';
@@ -25,7 +27,13 @@ export default function ImportCharacterScreen() {
       }
       if (!(await importCharacter(parsed.entity))) throw new Error('The character could not be saved.');
       const name = parsed.entity.identity.name?.replace(/ \(Imported Copy\)$/, '') || 'Unnamed';
-      Alert.alert('Character imported', parsed.importedAsCopy ? `Imported ${name} as a copy` : `Imported ${name}`, [
+      // Packs the character was built from that are not installed here (only said when packs are the official content).
+      const packs = installedOfficialPacks();
+      const lacking = packs.length > 0 ? packShortfalls(parsed.entity.requiredPacks, packs).map(describeShortfall) : [];
+      const note = lacking.length > 0 ? `
+
+This character needs content packs: ${lacking.join('; ')}. Some of its content will be missing until they are installed (Compendium → Packages).` : '';
+      Alert.alert('Character imported', (parsed.importedAsCopy ? `Imported ${name} as a copy` : `Imported ${name}`) + note, [
         { text: 'Done', onPress: () => router.replace('/(tabs)/characters') },
       ]);
     } catch (error) {

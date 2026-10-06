@@ -2359,6 +2359,12 @@ export type Entity = {
   /** Heroic Inspiration (2024): whether the character holds it. Never more than one; see engine/heroicInspiration.ts. */
   heroicInspiration?: boolean;
   /**
+   * The content packs (ids and minimum versions) this character's class, species, background, feats, spells and items come from,
+   * recorded when it is saved. Only ever added to, so removing a pack does not forget what the character was built from.
+   * See content/requiredPacks.ts.
+   */
+  requiredPacks?: { id: string; minVersion?: string }[];
+  /**
    * Item 13 (build comparison/checkpoints/loadouts) — named, saved
    * equipment + prepared-spell configurations a player can swap between
    * (e.g. "Dungeon Loadout" vs "Social Loadout"), applied via
@@ -3097,6 +3103,11 @@ export type Campaign = {
    * every existing campaign parses unchanged and is fully unrestricted.
    */
   bannedPackIds?: string[];
+  /**
+   * The content packs (ids and minimum versions) this campaign's ruleset needs, recorded when the campaign is made or its
+   * ruleset changes, so a player who joins can be told what they have not installed. See content/requiredPacks.ts.
+   */
+  requiredPacks?: { id: string; minVersion?: string }[];
   /** Optional free-text blurb set at creation (CREATE_CAMPAIGN_FLOW_SPEC.md's Basics step). */
   description?:   string;
   /** The ruleset this campaign is built for. Optional — undefined means no restriction, same

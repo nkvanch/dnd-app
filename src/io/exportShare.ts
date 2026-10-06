@@ -4,6 +4,8 @@
 // file-system/sharing pattern (same expo-file-system/legacy subpath — SDK 56's
 // default expo-file-system API is a different class-based shape that doesn't
 // have writeAsStringAsync).
+import { withRequiredPacks } from '../content/requiredPacks';
+import { installedOfficialPacks } from '../content/officialPackService';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
@@ -174,7 +176,7 @@ async function shareByFormat(
 
 export async function exportCharacter(entity: Entity, format: ExportFormat, action: ExportAction = 'share'): Promise<void> {
   if (format === 'pack') return;
-  if (format === 'character-json') { const profile = useCustomRuleProfileStore.getState().profiles.find(candidate => candidate.id === entity.customRuleProfileId); await shareText(serializePortableCharacter(entity, profile), sanitize((entity.identity.name || 'character') + '-character') + '.grimoire-character.json', 'json', action); return; }
+  if (format === 'character-json') { const profile = useCustomRuleProfileStore.getState().profiles.find(candidate => candidate.id === entity.customRuleProfileId); await shareText(serializePortableCharacter(withRequiredPacks(entity, installedOfficialPacks()), profile), sanitize((entity.identity.name || 'character') + '-character') + '.grimoire-character.json', 'json', action); return; }
   const db = useHomebrewStore.getState().getMergedContentDB();
 
   const spellIds = [

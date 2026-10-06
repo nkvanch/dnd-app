@@ -7,6 +7,7 @@
 //   DM ACTIVE    → connection block + campaign overview (notes/quests/log/party)
 //   PLAYER ACTIVE → read-only campaign overview + sync status
 // ============================================================================
+import { CampaignPacksNote } from '../../src/components/CampaignPacksNote';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
@@ -689,6 +690,7 @@ function DmActiveView() {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <CampaignPacksNote campaign={activeCampaign} />
 
       {/* Connection block */}
       <View style={styles.campaignCard}>
@@ -856,6 +858,7 @@ function PlayerActiveView() {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <CampaignPacksNote campaign={activeCampaign} />
 
       {/* Status block */}
       <View style={styles.campaignCard}>

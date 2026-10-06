@@ -15,6 +15,7 @@
 // source of truth, same as the "NEEDS VERIFICATION" spell tags.
 // ============================================================================
 import { BeastForm } from '../../engine/types';
+import { BEAST_FORMS_2024 } from './beastforms2024Data';
 
 export const formWolf: BeastForm = {
   id: 'wolf', name: 'Wolf', challengeRating: 0.25, size: 'Medium',
@@ -169,4 +170,6 @@ export const ALL_BEAST_FORMS: BeastForm[] = [
   formEarthElemental,
   formFireElemental,
   formWaterElemental,
+  // The SRD 5.2.1 Beasts of Challenge Rating 1 or lower, for the 2024 Druid's Known Forms (ids end in _2024).
+  ...BEAST_FORMS_2024,
 ];

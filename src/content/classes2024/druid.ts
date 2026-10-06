@@ -1,15 +1,17 @@
 // ============================================================================
 // FILE: src/content/classes2024/druid.ts
 // Druid (2024 rules), System Reference Document 5.2.1 (Creative Commons Attribution 4.0).
-// Wild Shape is a pool (2 uses, 3 from level 6, 4 from level 17) and each beast form the app has is a
-// Transform feature. The SRD gives 4/6/8 known forms by level; the app's monster library has only three
-// beast forms (Wolf, Giant Spider, Brown Bear), so Wolf comes at level 2 and the other two at level 8
-// (Challenge Rating 1), and Known Forms is not a picker. Elemental Fury is a real choice. Subclass:
-// Circle of the Land, whose land type is chosen once (the SRD lets you change it after every Long Rest:
-// remove the feature and choose again) and whose circle spells arrive at Druid levels 3, 5, 7 and 9.
+// Wild Shape is a pool (2 uses, 3 from level 6, 4 from level 17). Known Forms is a real choice, as in the Beast
+// Shapes table: 4 forms at level 2 (Beasts up to Challenge Rating 1/4, no Fly Speed), 2 more at level 4 (up to 1/2)
+// and 2 more at level 8 (up to 1, Fly Speed allowed), each a Transform feature, from the 64 SRD 5.2.1 Beasts of that
+// size (beastforms2024Data.ts), and replaceable after a Long Rest. A form's attacks are its damaging attack rolls
+// (dice only); the rest of its stat block is text. Elemental Fury is a real choice. Subclass:
+// Circle of the Land, whose land type can be changed after every Long Rest (a replaceable choice, like Known Forms)
+// and whose circle spells arrive at Druid levels 3, 5, 7 and 9.
 // ============================================================================
 import { ClassDef, classKit, activation } from './builder';
-import { Effect } from '../../engine/types';
+import { Effect, ChoiceReplacePolicy } from '../../engine/types';
+import { BEAST_FORMS_2024 } from '../beastforms/beastforms2024Data';
 
 const classId = 'druid_2024';
 const k = classKit(classId);
@@ -21,10 +23,19 @@ const cantrip = (ids: string[]): Effect =>
   ({ type: 'grant_spell', target: '', operation: 'add', value: null, condition: null, cantripIds: ids, spellcastingAbility: 'wis', minLevel: 3 });
 const wardResist = (type: string): Effect => ({ type: 'grant_resistance', target: type, operation: 'resistance', value: null, condition: null, minLevel: 10 });
 
-const wildShape = (key: string, name: string, level: number, formId: string, cr: string) =>
-  k.g(`wild_shape_${key}`, `Wild Shape: ${name}`, level,
-    `As a Bonus Action you shape-shift into a ${name} (Beast, CR ${cr}). You stay in the form for a number of hours equal to half your Druid level or until you use Wild Shape again, have the Incapacitated condition, or die; you can leave it early as a Bonus Action. When you assume the form you gain Temporary Hit Points equal to your Druid level. Your game statistics are replaced by the Beast's, but you keep your creature type, Hit Points, Intelligence, Wisdom and Charisma scores, class features and proficiencies. You can't cast spells (shapeshifting doesn't break Concentration).`,
-    { activation: activation('bonus_action', { resource: 'wild_shape_pool' }), abilityEffects: [{ type: 'transform', formId }], tags: ['transformation'] });
+/** The Known Forms for one Beast Shapes row: Beasts up to `maxCr`, with a Fly Speed only from level 8. The same form can be offered at several levels; the picker does not offer one already known. */
+const WILD_FORMS_REPLACE: ChoiceReplacePolicy = { timing: 'long_rest', rule: 'Whenever you finish a Long Rest, you can replace one of your known forms with another eligible form.' };
+const crText = (cr: number) => (cr === 0.125 ? '1/8' : cr === 0.25 ? '1/4' : cr === 0.5 ? '1/2' : String(cr));
+const formChoice = (level: number, count: number, maxCr: number, fly: boolean) => {
+  const forms = BEAST_FORMS_2024.filter(f => f.challengeRating <= maxCr && (fly || !f.flySpeed));
+  return k.pick(`wild_forms_${level}`, count === 4 ? 'Wild Shape: choose four known Beast forms (maximum Challenge Rating 1/4, no Fly Speed).' : `Wild Shape: choose ${count} more known Beast forms (maximum Challenge Rating ${crText(maxCr)}${fly ? ', a Fly Speed is allowed' : ', no Fly Speed'}).`, count,
+    forms.map(f => ({
+      ...k.option(`wild_form_${f.id}`, `Wild Shape: ${f.name}`, level,
+        `As a Bonus Action you shape-shift into a ${f.name} (Beast, CR ${crText(f.challengeRating)}). You stay in the form for a number of hours equal to half your Druid level or until you use Wild Shape again, have the Incapacitated condition, or die; you can leave it early as a Bonus Action. When you assume the form you gain Temporary Hit Points equal to your Druid level. Your game statistics are replaced by the Beast's, but you keep your creature type, Hit Points, Intelligence, Wisdom and Charisma scores, class features and proficiencies. You can't cast spells (shapeshifting doesn't break Concentration).`,
+        { activation: activation('bonus_action', { resource: 'wild_shape_pool' }), abilityEffects: [{ type: 'transform', formId: f.id }], tags: ['transformation'] }),
+      label: `${f.name} (CR ${crText(f.challengeRating)}${f.flySpeed ? ', flies' : ''})`,
+    })), WILD_FORMS_REPLACE);
+};
 
 export const druid2024: ClassDef = {
   key: 'druid', name: 'Druid', hitDie: 8, savingThrows: ['int', 'wis'],
@@ -60,10 +71,9 @@ export const druid2024: ClassDef = {
         k.g('primal_order', 'Primal Order', 1, 'You have dedicated yourself to a sacred role of your choice: Magician (an extra cantrip and a Wisdom-modifier bonus to Arcana and Nature checks) or Warden (Martial weapons and Medium armor).'),
       ],
     },
-    2: { grants: [
+    2: { choices: [formChoice(2, 4, 0.25, false)], grants: [
       k.pool('wild_shape_pool', 'Wild Shape', WILD(2), 'long_rest'),
       k.g('wild_shape', 'Wild Shape', 2, 'The power of nature allows you to assume the form of an animal. You can use Wild Shape twice (three times from level 6, four from level 17); you regain one expended use on a Short Rest and all expended uses on a Long Rest. Use the beast form features below to shape-shift. At level 8 you can adopt a form that has a Fly Speed.'),
-      wildShape('wolf', 'Wolf', 2, 'wolf', '1/4'),
       k.g('wild_companion', 'Wild Companion', 2, 'As a Magic action, you can expend a spell slot or a use of Wild Shape to cast the Find Familiar spell without Material components. When you cast it this way the familiar is Fey and disappears when you finish a Long Rest.',
         { activation: activation('action', { range: '10 feet' }), abilityEffects: [{ type: 'cast_spell', spellId: 'find_familiar' }], tags: ['utility'] }),
     ] },
@@ -78,10 +88,8 @@ export const druid2024: ClassDef = {
       ])],
       grants: [k.g('elemental_fury', 'Elemental Fury', 7, 'The might of the elements flows through you. You gain one of two options of your choice: Potent Spellcasting or Primal Strike. At level 15 the chosen option grows more powerful (Improved Elemental Fury).')],
     },
-    8: { grants: [
-      wildShape('giant_spider', 'Giant Spider', 8, 'giant_spider', '1'),
-      wildShape('brown_bear', 'Brown Bear', 8, 'brown_bear', '1'),
-    ] },
+    4: { choices: [formChoice(4, 2, 0.5, false)] },
+    8: { choices: [formChoice(8, 2, 1, true)] },
     15: { grants: [k.g('improved_elemental_fury', 'Improved Elemental Fury', 15, 'The option you chose for Elemental Fury grows more powerful. Potent Spellcasting: when you cast a Druid cantrip with a range of 10 feet or greater, the spell\'s range increases by 300 feet. Primal Strike: the extra damage increases to 2d8.')] },
     17: { grants: [k.raise('wild_shape_pool', WILD(17))] },
     18: { grants: [k.g('beast_spells', 'Beast Spells', 18, 'While using Wild Shape, you can cast spells in Beast form, except for any spell that has a Material component with a cost specified or that consumes its Material component.')] },
@@ -100,7 +108,7 @@ export const druid2024: ClassDef = {
             land('polar', 'Polar', ['fog_cloud', 'hold_person'], ['ray_of_frost'], 'sleet_storm', 'ice_storm', 'cone_of_cold', 'cold'),
             land('temperate', 'Temperate', ['misty_step', 'sleep_spell'], ['shocking_grasp'], 'lightning_bolt', 'freedom_of_movement', 'tree_stride', 'lightning'),
             land('tropical', 'Tropical', ['ray_of_sickness', 'web'], ['acid_splash'], 'stinking_cloud', 'polymorph', 'insect_plague', 'poison'),
-          ])],
+          ], { timing: 'long_rest', rule: 'Whenever you finish a Long Rest, you choose a type of land again.' })],
           grants: [
             kit.g('land_circle_spells', 'Circle of the Land Spells', 3, 'Whenever you finish a Long Rest you choose one type of land (arid, polar, temperate, or tropical); you have the spells listed for your Druid level and lower prepared. (Choose your land below; to change it after a Long Rest, remove the land feature on the Features tab and choose again.)'),
             kit.g('land_lands_aid', "Land's Aid", 3, 'As a Magic action, you can expend a use of your Wild Shape and choose a point within 60 feet. Vitality-giving flowers and life-draining thorns appear in a 10-foot-radius Sphere centered on that point. Each creature of your choice in the Sphere makes a Constitution saving throw against your spell save DC, taking 2d6 Necrotic damage on a failed save or half as much on a success. One creature of your choice in the area regains 2d6 Hit Points. The damage and healing increase by 1d6 at Druid levels 10 (3d6) and 14 (4d6).',

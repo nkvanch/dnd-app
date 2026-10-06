@@ -56,7 +56,7 @@ describe('campaignStore', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
-    useCampaignStore.setState({ campaigns: [], activeCampaign: null, isDm: false });
+    useCampaignStore.setState({ campaigns: [], activeCampaign: null, isDm: false, liveSession: false });
   });
 
   describe('leaveCampaign — no longer destructive (the actual bug fix)', () => {
@@ -161,32 +161,18 @@ describe('campaignStore', () => {
   });
 
   describe('switchToCampaign — a DM can own several campaigns, hosting one at a time', () => {
-    it('stops the previously-active campaign and hosts the target one, without losing either', async () => {
+    it('stops the previously-active campaign\'s transport and opens the target one OFFLINE, without losing either', async () => {
       const campaignA = makeCampaign({ id: 'campA', name: 'Campaign A' });
       const campaignB = makeCampaign({ id: 'campB', name: 'Campaign B', joinCode: '' });
-      useCampaignStore.setState({ campaigns: [campaignA, campaignB], activeCampaign: campaignA, isDm: true });
+      useCampaignStore.setState({ campaigns: [campaignA, campaignB], activeCampaign: campaignA, isDm: true, liveSession: true });
 
       await useCampaignStore.getState().switchToCampaign('campB');
 
-      expect(stopAllSpy).toHaveBeenCalled(); // stopped hosting A before switching
-      // sessionId (2nd arg) is now a freshly-generated id, distinct from the
-      // DM's permanent deviceId — see ARCH-4's regression test below for the
-      // dedicated proof; this call site only needs to confirm campaignId/
-      // deviceId/nickname are still passed correctly.
-      expect(startAsServerSpy).toHaveBeenCalledWith('campB', expect.any(String), 'dm-device', 'DM');
-      expect(startAsServerSpy.mock.calls[0][1]).not.toBe('dm-device');
+      expect(stopAllSpy).toHaveBeenCalled();                 // whatever was live stops
+      expect(startAsServerSpy).not.toHaveBeenCalled();       // and the DM's target campaign opens no server
       expect(useCampaignStore.getState().activeCampaign?.id).toBe('campB');
-      // Both campaigns still exist locally — switching never deletes.
+      expect(useCampaignStore.getState().liveSession).toBe(false);
       expect(useCampaignStore.getState().campaigns.map(c => c.id).sort()).toEqual(['campA', 'campB']);
-    });
-
-    it('persists the freshly-hosted room code onto the target campaign', async () => {
-      const campaignB = makeCampaign({ id: 'campB', joinCode: '' });
-      useCampaignStore.setState({ campaigns: [campaignB], activeCampaign: null, isDm: false });
-
-      await useCampaignStore.getState().switchToCampaign('campB');
-
-      expect(saveCampaignSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'campB', joinCode: 'DEF5678' }));
     });
 
     it('connects as a player (not host) when this device is not the campaign owner', async () => {
@@ -216,8 +202,8 @@ describe('campaignStore', () => {
     });
 
     it('stays active locally even if the live transport attempt fails (graceful degradation, matches resumeSync)', async () => {
-      startAsServerSpy.mockRejectedValueOnce(new Error('native module not linked'));
-      const campaignB = makeCampaign({ id: 'campB' });
+      startAsClientSpy.mockRejectedValueOnce(new Error('native module not linked'));
+      const campaignB = makeCampaign({ id: 'campB', dmDeviceId: 'the-real-dm', joinCode: 'ZZZ9999' });
       useCampaignStore.setState({ campaigns: [campaignB], activeCampaign: null, isDm: false });
 
       await useCampaignStore.getState().switchToCampaign('campB');
@@ -303,24 +289,113 @@ describe('campaignStore', () => {
     });
   });
 
-  describe('ARCH-4 — startAsServer gets a fresh sessionId, distinct from deviceId', () => {
-    it('createCampaign passes a sessionId different from deviceId', async () => {
-      await useCampaignStore.getState().createCampaign({ name: 'New Campaign' });
-      const [, sessionId, deviceId] = startAsServerSpy.mock.calls[0];
-      expect(sessionId).not.toBe(deviceId);
-      expect(deviceId).toBe('dm-device');
+  describe('offline campaign, explicit live session (release blocker: createCampaign must not start LAN)', () => {
+    it('1-4. createCampaign works with no network: no server, no room code, persisted, active, DM context set', async () => {
+      const c = await useCampaignStore.getState().createCampaign({ name: 'Offline Campaign' });
+      expect(startAsServerSpy).not.toHaveBeenCalled();
+      expect(startAsClientSpy).not.toHaveBeenCalled();
+      expect(c.joinCode).toBe('');
+      expect(saveCampaignSpy).toHaveBeenCalledWith(expect.objectContaining({ id: c.id, joinCode: '' }));
+      const state = useCampaignStore.getState();
+      expect(state.activeCampaign?.id).toBe(c.id);
+      expect(state.isDm).toBe(true);
+      expect(state.liveSession).toBe(false);
+      expect(setCampaignIdSpy).toHaveBeenCalledWith(c.id);
     });
 
-    it('two separate hosting runs (e.g. createCampaign then a re-host) get different sessionIds', async () => {
-      await useCampaignStore.getState().createCampaign({ name: 'Campaign A' });
-      const firstSessionId = startAsServerSpy.mock.calls[0][1];
+    it('5-6. an offline campaign is restored after a restart with no live session, and resumeSync opens no server', async () => {
+      const created = makeCampaign({ id: 'camp1', joinCode: '' });
+      jest.spyOn(campaignRepo, 'loadAllCampaigns').mockResolvedValue([created]);
+      useSessionStore.setState({ session: dmSession() });
+      useCampaignStore.setState({ campaigns: [], activeCampaign: null, isDm: false, liveSession: true });
 
-      const campaignB = makeCampaign({ id: 'campB' });
-      useCampaignStore.setState({ campaigns: [campaignB], activeCampaign: null, isDm: false });
-      await useCampaignStore.getState().switchToCampaign('campB');
-      const secondSessionId = startAsServerSpy.mock.calls[1][1];
+      await useCampaignStore.getState().loadCampaigns();
+      await useCampaignStore.getState().resumeSync();
 
-      expect(firstSessionId).not.toBe(secondSessionId);
+      const state = useCampaignStore.getState();
+      expect(state.activeCampaign?.id).toBe('camp1');
+      expect(state.isDm).toBe(true);
+      expect(state.liveSession).toBe(false);
+      expect(startAsServerSpy).not.toHaveBeenCalled();
+    });
+
+    it('a stale room code left from before a restart is dropped when the DM campaign loads', async () => {
+      jest.spyOn(campaignRepo, 'loadAllCampaigns').mockResolvedValue([makeCampaign({ joinCode: 'OLD1234' })]);
+      await useCampaignStore.getState().loadCampaigns();
+      expect(useCampaignStore.getState().activeCampaign?.joinCode).toBe('');
+    });
+
+    it('7. startLiveSession opens the server, allocates the room code and stores it on the campaign', async () => {
+      const campaign = makeCampaign({ joinCode: '' });
+      useCampaignStore.setState({ campaigns: [campaign], activeCampaign: campaign, isDm: true, liveSession: false });
+
+      const code = await useCampaignStore.getState().startLiveSession();
+
+      expect(code).toBe('DEF5678');
+      expect(startAsServerSpy).toHaveBeenCalledWith('camp1', expect.any(String), 'dm-device', 'DM');
+      expect(startAsServerSpy.mock.calls[0][1]).not.toBe('dm-device');   // a fresh hosting-run id (audit finding ARCH-4)
+      expect(useCampaignStore.getState().liveSession).toBe(true);
+      expect(useCampaignStore.getState().activeCampaign?.joinCode).toBe('DEF5678');
+    });
+
+    it('starting twice does not open a second server', async () => {
+      const campaign = makeCampaign({ joinCode: '' });
+      useCampaignStore.setState({ campaigns: [campaign], activeCampaign: campaign, isDm: true, liveSession: false });
+      await useCampaignStore.getState().startLiveSession();
+      await useCampaignStore.getState().startLiveSession();
+      expect(startAsServerSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('two live sessions of the same campaign get different hosting-run ids', async () => {
+      const campaign = makeCampaign({ joinCode: '' });
+      useCampaignStore.setState({ campaigns: [campaign], activeCampaign: campaign, isDm: true, liveSession: false });
+      await useCampaignStore.getState().startLiveSession();
+      await useCampaignStore.getState().endLiveSession();
+      await useCampaignStore.getState().startLiveSession();
+      expect(startAsServerSpy.mock.calls[0][1]).not.toBe(startAsServerSpy.mock.calls[1][1]);
+    });
+
+    it('8. endLiveSession tells players, stops the server, clears the code and leaves the campaign intact and active', async () => {
+      const campaign = makeCampaign({ joinCode: '' });
+      useCampaignStore.setState({ campaigns: [campaign], activeCampaign: campaign, isDm: true, liveSession: false });
+      await useCampaignStore.getState().startLiveSession();
+
+      await useCampaignStore.getState().endLiveSession();
+
+      expect(announceClosingSpy).toHaveBeenCalled();
+      expect(stopAllSpy).toHaveBeenCalled();
+      const state = useCampaignStore.getState();
+      expect(state.liveSession).toBe(false);
+      expect(state.activeCampaign?.id).toBe('camp1');           // still active
+      expect(state.activeCampaign?.joinCode).toBe('');
+      expect(state.isDm).toBe(true);                             // DM screens stay reachable
+      expect(state.campaigns).toHaveLength(1);
+      expect(deleteCampaignSpy).not.toHaveBeenCalled();
+    });
+
+    it('only the campaign\'s DM can start a live session, and only with a campaign open', async () => {
+      useCampaignStore.setState({ campaigns: [], activeCampaign: null, isDm: false });
+      await expect(useCampaignStore.getState().startLiveSession()).rejects.toThrow(/Open one of your campaigns/);
+      const theirs = makeCampaign({ dmDeviceId: 'someone-else' });
+      useCampaignStore.setState({ campaigns: [theirs], activeCampaign: theirs, isDm: false });
+      await expect(useCampaignStore.getState().startLiveSession()).rejects.toThrow();
+      expect(startAsServerSpy).not.toHaveBeenCalled();
+    });
+
+    it('a failed server start leaves the campaign offline and active', async () => {
+      startAsServerSpy.mockRejectedValueOnce(new Error('native module not linked'));
+      const campaign = makeCampaign({ joinCode: '' });
+      useCampaignStore.setState({ campaigns: [campaign], activeCampaign: campaign, isDm: true, liveSession: false });
+      await expect(useCampaignStore.getState().startLiveSession()).rejects.toThrow('native module not linked');
+      expect(useCampaignStore.getState().liveSession).toBe(false);
+      expect(useCampaignStore.getState().activeCampaign?.id).toBe('camp1');
+    });
+
+    it('ending a live session that was never started is harmless', async () => {
+      const campaign = makeCampaign({ joinCode: '' });
+      useCampaignStore.setState({ campaigns: [campaign], activeCampaign: campaign, isDm: true, liveSession: false });
+      await useCampaignStore.getState().endLiveSession();
+      expect(useCampaignStore.getState().activeCampaign?.id).toBe('camp1');
     });
   });
 

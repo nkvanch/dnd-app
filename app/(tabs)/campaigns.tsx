@@ -94,9 +94,8 @@ function WizToggle({ label, hint, value, onChange, testID }: { label: string; hi
 
 // ── Create Campaign wizard (CREATE_CAMPAIGN_FLOW_SPEC.md) ────────────────────
 // 5 steps: Basics -> Rules -> Permissions -> Content -> Review. Per the spec's own "important
-// rules": never creates a Host session or room code here beyond what createCampaign() already
-// does (persistent campaign object first, live session is a separate later attachment — see
-// DmActiveView's own "Host Live Session" button), and the chosen rule profile is COPIED into
+// rules": never creates a Host session or room code here (createCampaign makes the persistent
+// campaign object only; a live session is a separate later step, DmActiveView's "Host Session" button), and the chosen rule profile is COPIED into
 // the campaign's own `rules`, not referenced — editing the original profile later never
 // silently rewrites an existing campaign (createCampaign already enforces this; the wizard just
 // decides what to copy in).
@@ -179,9 +178,7 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
     if (!trimmed || !session) return;
     setLoading(true);
     try {
-      // createCampaign now starts the LAN server itself and stores the real
-      // room code, so we must NOT also call startAsServer here (that would bind
-      // the port twice and overwrite the code).
+      // createCampaign is offline state only: it opens no server and allocates no room code (Host Session does that later).
       await createCampaign({
         name: trimmed, description, rulesetId, rules: buildRules(),
         bannedPackIds,
@@ -660,15 +657,19 @@ function PartySection({ characterIds }: { characterIds: string[] }) {
 function DmActiveView() {
   const router         = useRouter();
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
-  const leaveCampaign  = useCampaignStore(s => s.leaveCampaign);
   const updateCampaign = useCampaignStore(s => s.updateCampaign);
+  const liveSession      = useCampaignStore(s => s.liveSession);
+  const startLiveSession = useCampaignStore(s => s.startLiveSession);
+  const endLiveSession   = useCampaignStore(s => s.endLiveSession);
   const syncStatus     = useSyncStore(s => s.status);
   const liveNickname   = useSessionStore(s => s.session?.nickname ?? '');
   const [hostOpen, setHostOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   if (!activeCampaign) return null;
 
-  const roomCode   = syncStatus.roomCode ?? activeCampaign.joinCode;
+  // A room code exists only during a live session; an offline campaign has none.
+  const roomCode   = liveSession ? (syncStatus.roomCode ?? activeCampaign.joinCode) : '';
   const quests     = activeCampaign.quests ?? [];
   const log        = activeCampaign.sessionLog ?? [];
   const campaignId = activeCampaign.id;   // captured after null guard for closure safety
@@ -683,10 +684,17 @@ function DmActiveView() {
     // connected players, same as a network outage. The campaign itself is
     // untouched and can be resumed later from the campaign list (a DM can
     // own more than one campaign now — see campaignStore.switchToCampaign).
-    Alert.alert('Stop Hosting', 'Players currently connected will be disconnected. You can resume this campaign later. Continue?', [
+    Alert.alert('End Live Session', 'Players currently connected will be disconnected. The campaign stays as it is and you can host another session any time.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Stop Hosting', style: 'destructive', onPress: () => { void leaveCampaign(); } },
+      { text: 'End Live Session', style: 'destructive', onPress: () => { void endLiveSession(); } },
     ]);
+  }
+
+  async function beginLiveSession() {
+    setStarting(true);
+    try { await startLiveSession(); }
+    catch (e) { Alert.alert('Could not start the session', e instanceof Error ? e.message : 'Try again.'); }
+    finally { setStarting(false); }
   }
 
   return (
@@ -701,9 +709,11 @@ function DmActiveView() {
             <View style={styles.syncRow}>
               <SyncStatusDot />
               <Text style={styles.campaignMeta}>
-                {syncStatus.connected
-                  ? `${syncStatus.clientCount} player${syncStatus.clientCount !== 1 ? 's' : ''} connected`
-                  : 'Starting server…'}
+                {!liveSession
+                  ? 'Offline campaign, no live session'
+                  : syncStatus.connected
+                    ? `${syncStatus.clientCount} player${syncStatus.clientCount !== 1 ? 's' : ''} connected`
+                    : 'Starting server…'}
               </Text>
             </View>
           </View>
@@ -737,9 +747,9 @@ function DmActiveView() {
             // here and nothing to dismiss.
             <View style={styles.noNetworkNotice}>
               <Text style={styles.noNetworkTxt}>
-                No local network is available. You can still use this campaign on this
-                device, but other players cannot join. Enable Wi-Fi or a mobile hotspot
-                for live multiplayer.
+                {liveSession
+                  ? 'No local network is available. The session is started, but other players cannot join until a network appears. Enable Wi-Fi or a mobile hotspot.'
+                  : 'This campaign works offline: the DM dashboard, rules and encounters need no network. Start a live session when you want players to join.'}
               </Text>
             </View>
           )}
@@ -755,8 +765,17 @@ function DmActiveView() {
         <Pressable style={styles.dmBtn} onPress={() => router.push('/dm/dashboard' as any)}>
           <Text style={styles.dmBtnTxt}>🎲 Open DM Dashboard</Text>
         </Pressable>
+        {liveSession ? (
+          <Pressable style={[styles.dmBtn, styles.dmBtnSecondary]} onPress={confirmEnd} testID="campaign-end-live-session">
+            <Text style={[styles.dmBtnTxt, { color: Colors.red }]}>⏹ End Live Session</Text>
+          </Pressable>
+        ) : (
+          <Pressable style={[styles.dmBtn, styles.dmBtnSecondary, starting && { opacity: 0.6 }]} disabled={starting} onPress={() => { void beginLiveSession(); }} testID="campaign-host-session">
+            <Text style={[styles.dmBtnTxt, { color: Colors.textPrimary }]}>{starting ? 'Starting…' : '📡 Host Session'}</Text>
+          </Pressable>
+        )}
         <Pressable style={[styles.dmBtn, styles.dmBtnSecondary]} onPress={() => setHostOpen(true)} testID="campaign-host-live-session">
-          <Text style={[styles.dmBtnTxt, { color: Colors.textPrimary }]}>🛰 Host Live Session</Text>
+          <Text style={[styles.dmBtnTxt, { color: Colors.textPrimary }]}>🛰 Host Live Table (advanced)</Text>
         </Pressable>
       </View>
 

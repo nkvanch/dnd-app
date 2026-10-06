@@ -100,7 +100,7 @@ describe('Origin feats are granted by the background, for real', () => {
     expect(e.spellcasting!.known).toEqual([]);
     expect(e.resources.custom.some(r => r.id === 'magic_initiate_cleric_2024_cast')).toBe(false);
     const fresh = e.choices.filter(c => !c.resolved && c.definition.id.includes('magic_initiate_wizard_2024'));
-    expect(fresh).toHaveLength(2);
+    expect(fresh).toHaveLength(3);   // the spellcasting ability, two cantrips, one spell
   });
 
   it('the background grants its skill and tool proficiencies', () => {

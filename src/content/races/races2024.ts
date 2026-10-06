@@ -12,10 +12,9 @@
 //   - scaling damage (Breath Weapon 1d10 -> 4d10 at levels 5/11/17) through AbilityEffect.diceByLevel.
 //   - Dwarven Toughness as +1 maximum HP per character level.
 //
-// Stated gaps: the SRD lets you pick Intelligence, Wisdom or Charisma as the spellcasting ability for the
-// Elf, Gnome and Tiefling lineage spells; the app fixes it (Elf: Wisdom, Gnome: Intelligence, Tiefling:
-// Charisma) because the spells are granted before such a choice could be asked. The level 3 and 5 lineage
-// spells are castable once per Long Rest from their action cards (not additionally with spell slots).
+// The Elf, Gnome and Tiefling ask which of Intelligence, Wisdom or Charisma is the spellcasting ability for their
+// lineage spells (spellAbilityChoice.ts; the species' usual one is the default until chosen). The level 3 and 5
+// lineage spells are always prepared, castable once per Long Rest from their action cards and with spell slots.
 // Tiefling and Human (Small or Medium) size is a Small/Medium choice. Languages are not a species trait in
 // the 2024 rules and are not granted here.
 // ============================================================================
@@ -23,6 +22,7 @@ import {
   Race, Subrace, Feature, Effect, ResourceGrant, AncestryOption, ChoiceDefinition, RulesetId, RACE_CHOICE_PREFIX,
 } from '../../engine/types';
 import { feature, activation, adv } from '../homebrewPack/helpers';
+import { spellAbilityChoice } from '../spellAbilityChoice';
 
 const RULESET = 'dnd5e-2024' as RulesetId;
 const CC = 'dnd5e-2024';
@@ -41,10 +41,14 @@ const darkvision = (range: number): Effect =>
   ({ type: 'grant_sense', target: 'sense', operation: 'add', value: null, condition: null, senseType: 'darkvision', senseRange: range });
 const resist = (type: string): Effect => ({ type: 'grant_resistance', target: type, operation: 'resistance', value: null, condition: null });
 const speed = (n: number): Effect => ({ type: 'stat_modifier', target: 'speed', operation: 'set', value: n, condition: null });
-const cantrip = (id: string, ability: Ability): Effect =>
-  ({ type: 'grant_spell', target: '', operation: 'add', value: null, condition: null, cantripIds: [id], spellcastingAbility: ability });
-const spell = (id: string, ability: Ability): Effect =>
-  ({ type: 'grant_spell', target: '', operation: 'add', value: null, condition: null, spellIds: [id], spellcastingAbility: ability });
+// `from` names the spellcasting-ability choice the species asks for (spellAbilityChoice.ts); `ability` is the default until it is made.
+const cantrip = (id: string, ability: Ability, from?: string): Effect =>
+  ({ type: 'grant_spell', target: '', operation: 'add', value: null, condition: null, cantripIds: [id], spellcastingAbility: ability, ...(from ? { spellcastingAbilityFrom: from } : {}) });
+const spell = (id: string, ability: Ability, from?: string): Effect =>
+  ({ type: 'grant_spell', target: '', operation: 'add', value: null, condition: null, spellIds: [id], spellcastingAbility: ability, ...(from ? { spellcastingAbilityFrom: from } : {}) });
+const abilityChoice = (raceId: string, fallback: Ability): ChoiceDefinition => spellAbilityChoice({
+  choiceId: `${RACE_CHOICE_PREFIX}${raceId}_spell_ability`, from: `${raceId}_spell_ability`, source: { kind: 'race', refId: raceId }, what: 'your lineage spells', fallback,
+});
 
 const pbPool = (id: string, name: string, recharge: 'long_rest' | 'short_rest' = 'long_rest'): ResourceGrant =>
   ({ resourceId: id, name, maximum: 2, recharge, perProficiencyBonus: true });
@@ -56,8 +60,9 @@ const nameOf = (id: string) => id.split('_').map(w => w[0].toUpperCase() + w.sli
 function lineageSpell(raceId: string, tag: string, level: 3 | 5, spellId: string, ability: Ability): Feature {
   return feature({
     id: `${raceId}_${tag}_${spellId}`, name: `${nameOf(spellId)} (level ${level})`, level,
-    description: `At character level ${level} you learn ${nameOf(spellId)}. You can cast it once without a spell slot and regain that use when you finish a Long Rest. ${{ int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' }[ability]} is your spellcasting ability for it.`,
+    description: `At character level ${level} you learn ${nameOf(spellId)}: you always have it prepared. You can cast it once without a spell slot and regain that use when you finish a Long Rest, and you can also cast it with any spell slots you have. The spellcasting ability you chose for your lineage spells is your spellcasting ability for it.`,
     source: { kind: 'race', refId: raceId },
+    effects: [{ ...spell(spellId, ability, `${raceId}_spell_ability`), minLevel: level }],
     activation: activation('action', { resource: `${raceId}_lineage_${level}`, range: 'varies', target: 'single' }),
     abilityEffects: [{ type: 'cast_spell', spellId }],
   });
@@ -149,7 +154,7 @@ const ELF_AB: Ability = 'wis';
 const elfLineage = (id: string, name: string, blurb: string, desc: string, extra: Effect[], s3: string, s5: string): AncestryOption => ({
   id, name, blurb,
   feature: E.trait(`lineage_${id}`, `Elven Lineage: ${name}`,
-    `${desc} At character levels 3 and 5 you learn a higher-level spell (see the level 3 and level 5 traits). Wisdom is your spellcasting ability for these spells.`,
+    `${desc} At character levels 3 and 5 you learn a higher-level spell (see the level 3 and level 5 traits). The spellcasting ability you choose (Intelligence, Wisdom, or Charisma) is your spellcasting ability for these spells.`,
     { effects: extra }),
 });
 const elfLineageSpells: Feature[] = [
@@ -160,13 +165,13 @@ export const raceElf2024: Race = {
   id: 'elf_2024', name: 'Elf', rulesetId: RULESET, srd: false, size: 'Medium', languages: ['Common'],
   description: 'Graceful, long-lived folk of fey descent. (2024 rules.)',
   resources: lineagePools('elf_2024'),
-  pendingChoices: [keenSensesChoice('elf_2024')],
+  pendingChoices: [keenSensesChoice('elf_2024'), abilityChoice('elf_2024', ELF_AB)],
   ancestryChoice: {
     prompt: 'Elven Lineage: choose a lineage.',
     options: [
-      elfLineage('drow', 'Drow', 'Darkvision 120 ft., Dancing Lights, Faerie Fire (3), Darkness (5).', 'The range of your Darkvision increases to 120 feet. You also know the Dancing Lights cantrip.', [darkvision(120), cantrip('dancing_lights', ELF_AB)], 'faerie_fire', 'darkness'),
-      elfLineage('high_elf', 'High Elf', 'Prestidigitation, Detect Magic (3), Misty Step (5).', 'You know the Prestidigitation cantrip. Whenever you finish a Long Rest you can replace that cantrip with a different cantrip from the Wizard spell list.', [cantrip('prestidigitation', ELF_AB)], 'detect_magic', 'misty_step'),
-      elfLineage('wood_elf', 'Wood Elf', 'Speed 35 ft., Druidcraft, Longstrider (3), Pass without Trace (5).', 'Your Speed increases to 35 feet. You also know the Druidcraft cantrip.', [speed(35), cantrip('druidcraft', ELF_AB)], 'longstrider', 'pass_without_trace'),
+      elfLineage('drow', 'Drow', 'Darkvision 120 ft., Dancing Lights, Faerie Fire (3), Darkness (5).', 'The range of your Darkvision increases to 120 feet. You also know the Dancing Lights cantrip.', [darkvision(120), cantrip('dancing_lights', ELF_AB, 'elf_2024_spell_ability')], 'faerie_fire', 'darkness'),
+      elfLineage('high_elf', 'High Elf', 'Prestidigitation, Detect Magic (3), Misty Step (5).', 'You know the Prestidigitation cantrip. Whenever you finish a Long Rest you can replace that cantrip with a different cantrip from the Wizard spell list.', [cantrip('prestidigitation', ELF_AB, 'elf_2024_spell_ability')], 'detect_magic', 'misty_step'),
+      elfLineage('wood_elf', 'Wood Elf', 'Speed 35 ft., Druidcraft, Longstrider (3), Pass without Trace (5).', 'Your Speed increases to 35 feet. You also know the Druidcraft cantrip.', [speed(35), cantrip('druidcraft', ELF_AB, 'elf_2024_spell_ability')], 'longstrider', 'pass_without_trace'),
     ],
   },
   features: [
@@ -185,14 +190,15 @@ export const raceGnome2024: Race = {
   id: 'gnome_2024', name: 'Gnome', rulesetId: RULESET, srd: false, size: 'Small', languages: ['Common'],
   description: 'Small, curious inventors and illusionists. (2024 rules.)',
   resources: [pbPool('gnome_2024_speak', 'Speak with Animals')],
+  pendingChoices: [abilityChoice('gnome_2024', GN_AB)],
   ancestryChoice: {
-    prompt: 'Gnomish Lineage: choose Forest Gnome or Rock Gnome (Intelligence is the spellcasting ability).',
+    prompt: 'Gnomish Lineage: choose Forest Gnome or Rock Gnome (you also choose its spellcasting ability).',
     options: [
       {
         id: 'forest', name: 'Forest Gnome', blurb: 'Minor Illusion; Speak with Animals (Proficiency Bonus times per Long Rest).',
         feature: G.trait('lineage_forest', 'Gnomish Lineage: Forest Gnome',
           'You know the Minor Illusion cantrip. You also always have the Speak with Animals spell prepared. You can cast it without a spell slot a number of times equal to your Proficiency Bonus, regaining all uses on a Long Rest, and you can also cast it with any spell slots you have. Intelligence is your spellcasting ability for these spells.',
-          { effects: [cantrip('minor_illusion', GN_AB), spell('speak_with_animals', GN_AB)],
+          { effects: [cantrip('minor_illusion', GN_AB, 'gnome_2024_spell_ability'), spell('speak_with_animals', GN_AB, 'gnome_2024_spell_ability')],
             activation: activation('action', { resource: 'gnome_2024_speak', range: '30 feet', target: 'single' }),
             abilityEffects: [{ type: 'cast_spell', spellId: 'speak_with_animals' }] }),
       },
@@ -200,7 +206,7 @@ export const raceGnome2024: Race = {
         id: 'rock', name: 'Rock Gnome', blurb: 'Mending, Prestidigitation, and Tiny clockwork devices.',
         feature: G.trait('lineage_rock', 'Gnomish Lineage: Rock Gnome',
           'You know the Mending and Prestidigitation cantrips. In addition, you can spend 10 minutes casting Prestidigitation to create a Tiny clockwork device (AC 5, 1 HP), such as a toy, fire starter, or music box. When you create it you choose one effect from Prestidigitation; the device produces that effect whenever you or another creature takes a Bonus Action to activate it with a touch. You can have three such devices at a time; each falls apart 8 hours after creation or when you dismantle it with a touch as a Utilize action. Intelligence is your spellcasting ability for these spells.',
-          { effects: [cantrip('mending', GN_AB), cantrip('prestidigitation', GN_AB)] }),
+          { effects: [cantrip('mending', GN_AB, 'gnome_2024_spell_ability'), cantrip('prestidigitation', GN_AB, 'gnome_2024_spell_ability')] }),
       },
     ],
   },
@@ -280,8 +286,8 @@ const TF_AB: Ability = 'cha';
 const legacy = (id: string, name: string, damage: string, cantripId: string, s3: string, s5: string): AncestryOption => ({
   id, name, blurb: `${nameOf(damage)} resistance, ${nameOf(cantripId)}, ${nameOf(s3)} (3), ${nameOf(s5)} (5).`,
   feature: T.trait(`legacy_${id}`, `Fiendish Legacy: ${name}`,
-    `You have Resistance to ${nameOf(damage)} damage and you know the ${nameOf(cantripId)} cantrip. At character levels 3 and 5 you learn a higher-level spell (see the level 3 and level 5 traits). Charisma is your spellcasting ability for these spells.`,
-    { effects: [resist(damage), cantrip(cantripId, TF_AB)] }),
+    `You have Resistance to ${nameOf(damage)} damage and you know the ${nameOf(cantripId)} cantrip. At character levels 3 and 5 you learn a higher-level spell (see the level 3 and level 5 traits). The spellcasting ability you choose (Intelligence, Wisdom, or Charisma) is your spellcasting ability for these spells.`,
+    { effects: [resist(damage), cantrip(cantripId, TF_AB, 'tiefling_2024_spell_ability')] }),
 });
 const tieflingSpells: Feature[] = [
   ['abyssal', 'ray_of_sickness', 'hold_person'], ['chthonic', 'false_life', 'ray_of_enfeeblement'], ['infernal', 'hellish_rebuke', 'darkness'],
@@ -292,6 +298,7 @@ export const raceTiefling2024: Race = {
   description: 'Heirs of a fiendish legacy. (2024 rules.)',
   subraces: sizeSubraces('tiefling_2024'),
   resources: lineagePools('tiefling_2024'),
+  pendingChoices: [abilityChoice('tiefling_2024', TF_AB)],
   ancestryChoice: {
     prompt: 'Fiendish Legacy: choose a legacy.',
     options: [
@@ -302,8 +309,8 @@ export const raceTiefling2024: Race = {
   },
   features: [
     T.trait('darkvision', 'Darkvision', 'You have Darkvision with a range of 60 feet.', { effects: [darkvision(60)] }),
-    T.trait('presence', 'Otherworldly Presence', 'You know the Thaumaturgy cantrip. When you cast it with this trait, the spell uses the same spellcasting ability you use for your Fiendish Legacy trait (Charisma).',
-      { effects: [cantrip('thaumaturgy', TF_AB)] }),
+    T.trait('presence', 'Otherworldly Presence', 'You know the Thaumaturgy cantrip. When you cast it with this trait, the spell uses the same spellcasting ability you use for your Fiendish Legacy trait.',
+      { effects: [cantrip('thaumaturgy', TF_AB, 'tiefling_2024_spell_ability')] }),
     ...tieflingSpells,
   ],
 };

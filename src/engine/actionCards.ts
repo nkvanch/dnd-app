@@ -9,6 +9,7 @@
 // Passive features (no activation field) are never given cards.
 // ============================================================================
 
+import { grantedSpellAbility } from './grantedSpellAbility';
 import {
   Feature, Entity, ActionCard, ActionCardType, ActionCardColor,
   AbilityEffect, FeatureActivation, Spell, OutcomeKey,
@@ -273,13 +274,17 @@ export function resolveSpellCastingContexts(
   //    doc comment).
   for (const f of entity.features) {
     if (!f.isActive) continue;
+    // A racial trait with an unlock level does nothing before it (the same gate collectAllEffects applies).
+    if (f.source.kind === 'race' && f.level !== null && f.level !== undefined && f.level > entity.identity.level) continue;
     const effects = f.effects ?? [];
     for (let effectIndex = 0; effectIndex < effects.length; effectIndex++) {
       const eff = effects[effectIndex];
       if (eff.type !== 'grant_spell') continue;
+      if (eff.minLevel && entity.identity.level < eff.minLevel) continue;
       const matches = (eff.cantripIds ?? []).includes(spellId) || (eff.spellIds ?? []).includes(spellId);
       if (!matches) continue;
-      const ability = eff.spellcastingAbility ?? entity.spellcasting?.ability ?? 'int';
+      const granted = grantedSpellAbility(entity, eff);
+      const ability = granted ?? entity.spellcasting?.ability ?? 'int';
       // Rules-engine blocker RE-AUDIT closure (2A/2B — exact source
       // identity): a coarse `feature:${f.id}` key would collide when the
       // SAME feature carries two grant_spell effects for the same spell
@@ -296,7 +301,7 @@ export function resolveSpellCastingContexts(
         preparationPolicy: 'always_available',
         castingAbility: ability,
         legal: true,
-        explicitAbility: eff.spellcastingAbility != null,
+        explicitAbility: granted != null,
       });
     }
   }

@@ -1,4 +1,5 @@
 import { parseStartingItem } from './startingItems';
+import { grantedSpellAbility } from './grantedSpellAbility';
 import { itemIdForCharacter } from '../content/itemForCharacter';
 export { parseStartingItem };
 import { spellRepo } from '../content/spellRepo';
@@ -82,7 +83,7 @@ export function applyGrant(
       for (const eff of spellEffects) {
         const cantripIds = (eff as any).cantripIds as string[] | undefined;
         const spellIds   = (eff as any).spellIds   as string[] | undefined;
-        const ability    = ((eff as any).spellcastingAbility as Ability) ?? 'con';
+        const ability    = (grantedSpellAbility(next, eff) as Ability | undefined) ?? 'con';
 
         if (!next.spellcasting) {
           const emptySlots = Object.fromEntries(

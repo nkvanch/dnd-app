@@ -1918,6 +1918,8 @@ export type Effect = {
   cantripIds?:         string[];
   spellIds?:           string[];
   spellcastingAbility?: Ability;
+  /** The choice that picks the ability instead (see grantedSpellAbility.ts); `spellcastingAbility` is the default until it is made. */
+  spellcastingAbilityFrom?: string;
   // ── grant_sense-specific fields ───────────────────────────────────
   senseType?:  SenseType;
   senseRange?: number;

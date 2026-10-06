@@ -12,12 +12,12 @@
 //   Magic Initiate  one feat per list (Cleric, Druid, Wizard): two cantrips and one 1st-level spell,
 //                   picked from that list, the spell castable once per Long Rest without a slot.
 //
-// Stated gaps: the SRD lets you pick Intelligence, Wisdom OR Charisma as Magic Initiate's spellcasting
-// ability; the app fixes it to the list's natural ability (Wisdom for Cleric/Druid, Intelligence for
-// Wizard) because the ability must be known before the spells are granted. Skilled offers skills only.
+// Magic Initiate asks which of Intelligence, Wisdom or Charisma is its spellcasting ability (the list's natural one
+// is the default until chosen). Skilled offers skills only.
 // The "replace a spell whenever you gain a level" option is text.
 // ============================================================================
 import { Ability, ChoiceDefinition, Feat, Feature, RulesetId } from '../../engine/types';
+import { spellAbilityChoice, chosenAbility } from '../spellAbilityChoice';
 import { feature, activation } from '../homebrewPack/helpers';
 import { FULL_SPELL_LIBRARY } from '../spells/index';
 import { SPELL_LIST_2024 } from '../classes2024/spellLists2024';
@@ -67,6 +67,7 @@ const slugName = (id: string) => id.split('_').map(w => w[0].toUpperCase() + w.s
 function magicInitiate(list: typeof LISTS[number]): Feat {
   const id = `magic_initiate_${list.key}_2024`;
   const poolId = `magic_initiate_${list.key}_2024_cast`;
+  const abilityFrom = `${id}_ability`;
   // The 2024 (SRD 5.2.1) spell list of that class, not the 2014 one, and the whole library rather than the build's filtered view,
   // so the feat reads the same in every build and in the pack generated from it.
   const onList = (level: number) => {
@@ -81,8 +82,8 @@ function magicInitiate(list: typeof LISTS[number]): Feat {
       id: `mi_${list.key}_cantrip_${s.id}`, label: s.name,
       value: feature({
         id: `${id}_cantrip_${s.id}`, name: `${s.name} (Magic Initiate)`, source: bgSource(id),
-        description: `You know the ${s.name} cantrip from Magic Initiate (${list.label}). ${list.ability === 'wis' ? 'Wisdom' : 'Intelligence'} is your spellcasting ability for it.`,
-        effects: [{ type: 'grant_spell', target: '', operation: 'add', value: null, condition: null, cantripIds: [s.id], spellcastingAbility: list.ability }],
+        description: `You know the ${s.name} cantrip from Magic Initiate (${list.label}). Your Magic Initiate spellcasting ability (Intelligence, Wisdom, or Charisma, as you chose) is your spellcasting ability for it.`,
+        effects: [chosenAbility({ type: 'grant_spell', target: '', operation: 'add', value: null, condition: null, cantripIds: [s.id] }, abilityFrom, list.ability)],
       }),
     })),
   };
@@ -94,7 +95,7 @@ function magicInitiate(list: typeof LISTS[number]): Feat {
       value: feature({
         id: `${id}_spell_${s.id}`, name: `${s.name} (Magic Initiate)`, source: bgSource(id),
         description: `You always have ${s.name} prepared. You can cast it once without a spell slot and regain that use when you finish a Long Rest; you can also cast it with a spell slot.`,
-        effects: [{ type: 'grant_spell', target: '', operation: 'add', value: null, condition: null, spellIds: [s.id], spellcastingAbility: list.ability }],
+        effects: [chosenAbility({ type: 'grant_spell', target: '', operation: 'add', value: null, condition: null, spellIds: [s.id] }, abilityFrom, list.ability)],
         activation: activation('action', { resource: poolId, range: 'varies', target: 'single' }),
         abilityEffects: [{ type: 'cast_spell', spellId: s.id }],
       }),
@@ -105,7 +106,10 @@ function magicInitiate(list: typeof LISTS[number]): Feat {
     `Two Cantrips: you learn two cantrips of your choice from the ${list.label} spell list. Level 1 Spell: choose a level 1 spell from the same list; you always have it prepared, can cast it once without a spell slot (regaining that on a Long Rest), and can also cast it with any spell slots you have. ${list.ability === 'wis' ? 'Wisdom' : 'Intelligence'} is your spellcasting ability for this feat's spells. Spell Change: whenever you gain a level you can replace one of these spells with a different spell of the same level from the ${list.label} list. Repeatable: you can take this feat more than once, but you must choose a different spell list each time.`,
     {},
     {
-      pendingChoices: [cantripChoice, spellChoice],
+      pendingChoices: [
+        spellAbilityChoice({ choiceId: 'ability', from: abilityFrom, source: bgSource(id), what: `Magic Initiate (${list.label})`, fallback: list.ability }),
+        cantripChoice, spellChoice,
+      ],
       resources: [{ resourceId: poolId, name: `Magic Initiate (${list.label}) free cast`, maximum: 1, recharge: 'long_rest' }],
     });
 }

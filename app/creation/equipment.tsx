@@ -12,6 +12,7 @@
 // shared "Continue" gate), so each group's own progress is independently
 // visible and the picker never bounces back to a hub/list between items of
 // the same multi-item choice.
+import { itemsForRuleset } from '../../src/content/itemEditions';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -47,7 +48,8 @@ export default function EquipmentScreen() {
   const homebrewItems    = useHomebrewStore(s => s.items);
   const saveHomebrewItem = useHomebrewStore(s => s.saveItem);
 
-  const allItems = useMemo(() => mergeItemIndex(homebrewItems), [homebrewItems]);
+  const draftRuleset = useCharacterStore(s => s.draft?.rulesetId);
+  const allItems = useMemo(() => itemsForRuleset(mergeItemIndex(homebrewItems), draftRuleset), [homebrewItems, draftRuleset]);
   const itemById = useMemo(() => new Map(allItems.map(i => [i.id, i])), [allItems]);
   function itemLookup(id: string) { return itemById.get(id); }
   function itemName(id: string) { return itemById.get(id)?.name ?? id; }

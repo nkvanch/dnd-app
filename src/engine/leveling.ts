@@ -1,4 +1,5 @@
 import { parseStartingItem } from './startingItems';
+import { itemIdForCharacter } from '../content/itemForCharacter';
 export { parseStartingItem };
 import { spellRepo } from '../content/spellRepo';
 import { checkPrerequisites, heldOptionIds, dependentsOf, splitSelection, cantripQualifies, lookupSpell } from './prerequisites';
@@ -2067,7 +2068,8 @@ export function resolveChoice(
       }
       const itemIds = Array.isArray(option.value) ? (option.value as string[]) : [];
       for (const entry of itemIds) {
-        const { itemId, quantity } = parseStartingItem(entry);
+        const { itemId: baseId, quantity } = parseStartingItem(entry);
+        const itemId = itemIdForCharacter(baseId, updated.rulesetId);
         const instanceId = generateItemInstanceId();
         grantedItemInstanceIds.push(instanceId);
         updated = {
@@ -2203,7 +2205,8 @@ export function resolveEquipmentChoice(
   }
   const grantedItemInstanceIds: string[] = [];
   for (const entry of [...fixedItemIds, ...filteredItemIds]) {
-    const { itemId, quantity } = parseStartingItem(entry);
+    const { itemId: baseId, quantity } = parseStartingItem(entry);
+    const itemId = itemIdForCharacter(baseId, updated.rulesetId);
     const instanceId = generateItemInstanceId();
     grantedItemInstanceIds.push(instanceId);
     updated = {

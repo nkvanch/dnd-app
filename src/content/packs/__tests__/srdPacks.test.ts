@@ -29,7 +29,7 @@ describe('first-party SRD packs', () => {
     expect(a.manifest.counts.classes).toBeGreaterThanOrEqual(12);
     expect(b.manifest.counts).toMatchObject({ classes: 12, subclasses: 12, spells: 339, feats: 19 });
     expect(b.manifest.counts.races).toBe(9);
-    expect(b.manifest.counts.items).toBe(384);   // 126 equipment items (tools, gear, armor, mounts, vehicles, firearms) + 258 magic item entries
+    expect(b.manifest.counts.items).toBe(427);   // the 5.5e equipment (tools, gear, armor, mounts, vehicles, firearms), 258 magic item entries, and the shared weapons and armor
     expect(b.manifest.counts.backgrounds).toBe(4);
   });
 

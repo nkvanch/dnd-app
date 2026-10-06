@@ -39,10 +39,11 @@ import { MORE_FEATS_2024 } from '../feats/feats2024';
 import { BACKGROUNDS_2024 } from '../backgrounds/backgrounds2024';
 import { SPELL_VERSIONS_2024 } from '../spells/spellVersions2024';
 import { GEAR_2024 } from '../items/gear2024';
-import { EQUIPMENT_2024, EQUIPMENT_2024_IDS } from '../items/equipment2024';
+import { ROW_ITEMS_2024, EXTRA_ITEMS_2024, ARMOR_IDS_2024 } from '../items/equipment2024';
+import { editionItemId, asEditionItem } from '../itemEditions';
 import { MAGIC_ITEMS_2024, magicItemRecord } from '../items/magicItems2024';
 import { GLOSSARY_2024, TOOLBOX_2024, EQUIPMENT_RULES_2024 } from '../rules/rulesReference2024Data';
-import { FULL_ITEM_LIBRARY } from '../items/index';
+import { FULL_ITEM_LIBRARY, CATALOG_ITEM_IDS_5E } from '../items/index';
 import { parseStartingItem } from '../../engine/startingItems';
 import { WEAPON_MASTERY_TABLE, MASTERY_RULES } from '../weaponMastery';
 
@@ -158,8 +159,10 @@ export function buildSrd51Pack(): SrdPack {
  */
 function equipment521(): AnyRecord[] {
   const have = new Set(GENERATED_SRD_ITEMS.filter(i => hasVerifiedPublicItemProvenance(i.id)).map(i => i.id));
-  // Every SRD 5.2.1 magic item is a record of this pack; where the 5.1 pack has the same id, this pack's record (the later one) wins.
-  const gear = new Set([...GEAR_2024, ...EQUIPMENT_2024].map(i => i.id));
+  // Records this pack authors for 5.5e: the Equipment chapter's rows, the firearms and armors it adds, the 2024 starting gear and every
+  // magic item entry. One that shares an id with a 5e catalog item is a different item (the 2024 text), so it gets the `_2024` id and
+  // can never replace the 5e one; one the 5e catalog lacks keeps its id. Both are tagged for 5.5e. (itemEditions.ts)
+  const authored = new Set([...GEAR_2024, ...ROW_ITEMS_2024, ...EXTRA_ITEMS_2024].map(i => i.id));
   const wanted = new Set<string>();
   const addEntries = (entries: unknown[]) => { for (const e of entries) wanted.add(parseStartingItem(String(e)).itemId); };
   const choicesOf = (choices: { kind: string; pool?: unknown }[]) => choices.filter(c => c.kind === 'equipment')
@@ -167,17 +170,21 @@ function equipment521(): AnyRecord[] {
   for (const c of CLASSES_2024) for (const e of c.rawProgression!.entries) choicesOf(e.choices as never);
   for (const b of BACKGROUNDS_2024) choicesOf((b.pendingChoices ?? []) as never);
   for (const w of WEAPON_MASTERY_TABLE) wanted.add(w.id);
-  for (const id of EQUIPMENT_2024_IDS) wanted.add(id);
+  for (const id of ARMOR_IDS_2024) wanted.add(id);
   const library = new Map((FULL_ITEM_LIBRARY as Item[]).map(i => [i.id, i]));
-  const extra: Item[] = [];
+  // Items that read the same in both editions (a Longsword, Chain Mail) are one shared record, taken from the item library.
+  const shared: Item[] = [];
   for (const id of [...wanted].sort()) {
-    if (have.has(id) || gear.has(id)) continue;
+    if (have.has(id) || authored.has(id)) continue;
     const item = library.get(id);
     if (!item) { throw new Error(`The 5.2.1 pack needs the item "${id}", which is not in the item library.`); }
     if (item.srd !== true) throw new Error(`The 5.2.1 pack needs the item "${id}", which is not marked SRD.`);
-    extra.push(item);
+    shared.push(item);
   }
-  return [...GEAR_2024, ...EQUIPMENT_2024, ...MAGIC_ITEMS_2024.map(m => magicItemRecord(m, library.get(m.id))), ...extra].map(i => stamp(plain(i), srdProvenance('5.2.1', { sourceLocation: 'Equipment' })) as AnyRecord);
+  const edition = (item: Item): Item => (CATALOG_ITEM_IDS_5E.has(item.id) ? asEditionItem(item, editionItemId(item.id)) : { ...item, rulesetId: 'dnd5e-2024' as never });
+  const magic = MAGIC_ITEMS_2024.map(m => magicItemRecord(m, library.get(m.id)));
+  const own = [...GEAR_2024, ...ROW_ITEMS_2024, ...EXTRA_ITEMS_2024, ...magic].map(edition);
+  return [...shared, ...own].map(i => stamp(plain(i), srdProvenance('5.2.1', { sourceLocation: 'Equipment' })) as AnyRecord);
 }
 
 // ── SRD 5.2.1 ────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@
 //     compared and so nothing existing has to change yet.
 // Pure data in, pure data out: the provider never mutates a pack and never reaches into the stores.
 // ============================================================================
+import { is2024ItemId, baseItemId, editionItemId } from '../itemEditions';
 import type { GrimoirePack } from '../../engine/backup';
 import { validateGrimoirePack } from '../../engine/backup';
 import { ContentPackManifest, compareVersions, validateManifest } from '../../engine/contentPackManifest';
@@ -146,6 +147,8 @@ export function packContentProvider(packs: readonly InstalledPack[], rulesetId?:
     spells: target => spellsFor(target ?? rulesetId),
     getSpell: (id, target) => resolveSpell(spellVersions.get(id) ?? [], target ?? rulesetId),
     spellIndexSpells: () => spellIndex,
-    items: () => items, getItem: id => itemById.get(id),
+    items: () => items,
+    // An id the packs do not have falls back to its other edition (a 5e `longsword` reference on a 5.5e character, or the reverse).
+    getItem: id => itemById.get(id) ?? itemById.get(is2024ItemId(id) ? baseItemId(id) : editionItemId(id)),
   };
 }

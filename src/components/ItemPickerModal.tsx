@@ -18,11 +18,13 @@
 //                  repeatedly, modal stays open (mirrors AddItemModal's
 //                  own in-play behavior) — selections here never count
 //                  toward a required-equipment counter.
+import { itemsForRuleset } from '../content/itemEditions';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Modal, View, Text, Pressable, TextInput, StyleSheet, FlatList } from 'react-native';
 import { ItemFilterConstraint } from '../engine/types';
 import { ItemIndexEntry } from '../content/itemRepo.types';
 import { useHomebrewStore } from '../store/homebrewStore';
+import { useCharacterStore } from '../store/characterStore';
 import { useBrowseStateStore } from '../store/browseStateStore';
 import { mergeItemIndex } from '../content/contentResolution';
 import {
@@ -81,7 +83,8 @@ export function ItemPickerModal({
 }: Props) {
   const insets = useSafeAreaInsets();
   const homebrewItems = useHomebrewStore(s => s.items);
-  const allItems = useMemo(() => mergeItemIndex(homebrewItems), [homebrewItems]);
+  const draftRuleset = useCharacterStore(s => s.draft?.rulesetId);
+  const allItems = useMemo(() => itemsForRuleset(mergeItemIndex(homebrewItems), draftRuleset), [homebrewItems, draftRuleset]);
   const homebrewIds = useMemo(() => new Set(homebrewItems.map(i => i.id)), [homebrewItems]);
 
   const savedBrowse = browseStateKey ? useBrowseStateStore.getState().getBrowseState(browseStateKey) : {};

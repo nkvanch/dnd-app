@@ -73,3 +73,14 @@ export const EQUIPMENT_2024_IDS: string[] = [
   ...[...TOOL_ROWS, ...GEAR_ROWS, ...VARIANT_ROWS, ...MOUNT_ROWS].map(r => r.id),
   ...ARMOR_IDS_2024,
 ];
+
+/** Every row of the SRD 5.2.1 Equipment chapter built as an item, including those the catalog already has (the pack's edition copy). */
+export const ROW_ITEMS_2024: Item[] = [
+  ...TOOL_ROWS.filter(r => !HAVE_GEAR.has(r.id)).map(toolItem),
+  ...GEAR_ROWS.filter(r => !HAVE_GEAR.has(r.id)).map(gearItem),
+  ...VARIANT_ROWS.filter(r => !HAVE_GEAR.has(r.id)).map(variantItem),
+  ...MOUNT_ROWS.filter(r => !HAVE_GEAR.has(r.id)).map(mountItem),
+];
+
+/** What the chapter adds that is not a row: the two firearms and the two armors the catalog lacked. */
+export const EXTRA_ITEMS_2024: Item[] = EQUIPMENT_2024.filter(i => ['musket', 'pistol', 'padded_armor', 'hide_armor'].includes(i.id));

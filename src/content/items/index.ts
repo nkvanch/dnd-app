@@ -1218,15 +1218,15 @@ const CLASSIFIED_IMPORTED_ITEMS: Item[] = IMPORTED_ITEMS.map(i => applyItemOverr
   srd: (importedSrdClassification as Record<string, boolean>)[i.id],
 })));
 
-const CATALOG_IDS = new Set([...CORE_ITEMS.map(i => i.id), ...CLASSIFIED_IMPORTED_ITEMS.map(i => i.id)]);
+export const CATALOG_ITEM_IDS_5E = new Set([...CORE_ITEMS.map(i => i.id), ...CLASSIFIED_IMPORTED_ITEMS.map(i => i.id)]);
 
 export const FULL_ITEM_LIBRARY: Item[] = [
   ...CORE_ITEMS,
   ...CLASSIFIED_IMPORTED_ITEMS.filter(i => !CORE_IDS.has(i.id)),
   // Gear the 2024 starting-equipment packages name (not in the catalog before).
-  ...GEAR_2024.filter(i => !CATALOG_IDS.has(i.id)),
+  ...GEAR_2024.filter(i => !CATALOG_ITEM_IDS_5E.has(i.id)),
   // The rest of the SRD 5.2.1 Equipment chapter (tools, gear, variants, mounts, vehicles, firearms, padded and hide armor).
-  ...EQUIPMENT_2024.filter(i => !CATALOG_IDS.has(i.id)),
+  ...EQUIPMENT_2024.filter(i => !CATALOG_ITEM_IDS_5E.has(i.id)),
 ];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';

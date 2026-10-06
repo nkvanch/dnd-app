@@ -54,7 +54,7 @@ describe('SRD 5.2.1 equipment', () => {
   it('the SRD 5.2.1 pack carries the whole equipment list: tools, gear, armor, weapons, mounts and vehicles', () => {
     const ids = new Set(((buildSrd521Pack().homebrew?.items ?? []) as { id: string }[]).map(i => i.id));
     // 5.1 pack items are its own; the 5.2.1 pack must cover everything the 5.1 pack's verified set lacks.
-    for (const id of ['padded_armor', 'hide_armor', 'musket', 'pistol', 'acid', 'camel', 'warhorse', 'airship', 'cobbler_s_tools', 'arcane_focus_rod']) expect(ids.has(id)).toBe(true);
+    for (const id of ['padded_armor', 'hide_armor', 'musket', 'pistol', 'acid', 'camel', 'warhorse', 'airship_2024', 'cobbler_s_tools', 'arcane_focus_rod']) expect(ids.has(id)).toBe(true);
   });
 });
 
@@ -101,6 +101,9 @@ describe('SRD 5.2.1 magic items A-Z', () => {
 
   it('the SRD 5.2.1 pack carries every entry', () => {
     const ids = new Set(((buildSrd521Pack().homebrew?.items ?? []) as { id: string }[]).map(i => i.id));
-    expect(MAGIC_ROWS.filter((r: { id: string }) => !ids.has(r.id)).map((r: { id: string }) => r.id)).toEqual([]);
+    const { CATALOG_ITEM_IDS_5E } = require('../items/index') as typeof import('../items/index');
+    // An entry that shares an id with a 5e catalog item is its own record under the 5.5e id.
+    const packId = (id: string) => (CATALOG_ITEM_IDS_5E.has(id) ? `${id}_2024` : id);
+    expect(MAGIC_ROWS.filter((r: { id: string }) => !ids.has(packId(r.id))).map((r: { id: string }) => r.id)).toEqual([]);
   });
 });

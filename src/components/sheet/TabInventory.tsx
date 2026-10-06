@@ -3,6 +3,7 @@
 // Supports adding items from the content DB (or homebrew),
 // removing items, and adjusting money per denomination.
 // Large creature rules are surfaced when the character is Large-sized.
+import { itemsForRuleset } from '../../content/itemEditions';
 import { useState, useMemo, useEffect, memo } from 'react';
 import {
   ScrollView, View, Text, Pressable, StyleSheet,
@@ -251,7 +252,8 @@ function AddItemModal({
   // Deduped by id, homebrew wins on collision — see contentResolution.ts.
   // (Previously a plain concat with no dedup: a homebrew item reusing an
   // official id would show up as two separate rows.)
-  const allItems: ItemIndexEntry[] = mergeItemIndex(homebrewItems);
+  // A 5.5e character is offered the 5.5e record where the edition has one, and a 5e character never sees the 5.5e records.
+  const allItems: ItemIndexEntry[] = itemsForRuleset(mergeItemIndex(homebrewItems), entityRulesetId);
   const q = search.trim().toLowerCase();
   // LIVE-RULESET-2 (item 7/8): the manual Ruleset chip OVERRIDES the
   // character's own ruleset when set (an explicit "show me ONLY this

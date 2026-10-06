@@ -10,6 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { globalContentDB } from '../../src/content/classes/library';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import { MissingRulesetContentBanner } from '../../src/components/MissingRulesetContentBanner';
+import { useOfficialContentVersion } from '../../src/hooks/useOfficialContentVersion';
+import { EditionBadge } from '../../src/components/EditionBadge';
 import { FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips } from '../../src/components/FilterChipRow';
 import {
   RACE_SIZE_ORDER, RACE_MOVEMENT_TYPES, hasDarkvision, raceMovementTypes, hasSubraces, raceSortOptions,
@@ -100,6 +103,7 @@ export default function RaceScreen() {
   const availableRulesets = Array.from(new Set(globalContentDB.races.map(r => r.rulesetId).filter((r): r is NonNullable<typeof r> => !!r)))
     .map(String).sort().map(r => ({ id: r, label: r }));
 
+  useOfficialContentVersion();   // follow pack installs and removals while this list is open
   const suggestedRuleset = useCreationDraftStore.getState().draft?.rulesetId;
   const races = officialFilter === 'homebrew' ? [] : suggestFirst(sortByOption(globalContentDB.races.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -132,6 +136,7 @@ export default function RaceScreen() {
   const listHeader = (
     <>
       <Text style={styles.heading}>Select Race</Text>
+      <MissingRulesetContentBanner ruleset={suggestedRuleset} />
       {suggestedRuleset ? <Text style={{ textAlign: 'center', color: Colors.textDim, fontSize: FontSize.xs, marginTop: -Spacing.sm, marginBottom: Spacing.sm }}>{rulesetLabel(suggestedRuleset)} content is listed first.</Text> : null}
       <View style={styles.divider} />
 
@@ -217,12 +222,8 @@ export default function RaceScreen() {
                     regardless of ruleset, so without this they were
                     genuinely indistinguishable (audit finding
                     RULESET-DUP-1). */}
-                {item.rulesetId && (
-                  <View style={styles.rulesetTag}>
-                    <Text style={styles.rulesetTagTxt}>{item.rulesetId}</Text>
-                  </View>
-                )}
-                {isNonSrd(item.srd) && <NonSrdBadge />}
+                <EditionBadge item={item} official />
+                {isNonSrd(item.srd, item.rulesetId) && <NonSrdBadge />}
                 <Pressable
                   hitSlop={12}
                   onPress={e => { e.stopPropagation(); setExpanded(isOpen ? null : item.id); }}

@@ -15,6 +15,7 @@ import { applyGrant, queueChoice } from '../../src/engine/leveling';
 import { recomputeDerived, applyStatModifiers, collectAllEffects } from '../../src/engine/pipeline';
 import { Entity, Ability, Feature, RACE_CHOICE_PREFIX } from '../../src/engine/types';
 import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import { EditionBadge } from '../../src/components/EditionBadge';
 import {
   FilterSection, MultiSelectChipRow, OfficialHomebrewChipRow, ActiveFilterChips,
 } from '../../src/components/FilterChipRow';
@@ -397,7 +398,8 @@ export default function RaceDetailScreen() {
 
       <View style={styles.headingRow}>
         <Text style={styles.heading}>{race.name}</Text>
-        {!homebrewRaceIds.includes(race.id) && isNonSrd(race.srd) && <NonSrdBadge />}
+        {!homebrewRaceIds.includes(race.id) && <EditionBadge item={race} official />}
+        {!homebrewRaceIds.includes(race.id) && isNonSrd(race.srd, race.rulesetId) && <NonSrdBadge />}
       </View>
       <View style={styles.divider} />
 

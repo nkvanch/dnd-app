@@ -11,6 +11,7 @@ import { getSubclassEntryMerged, subclassFeaturesByLevel, subclassProgressionTab
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import { EditionBadge } from '../../src/components/EditionBadge';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 
@@ -47,7 +48,8 @@ export default function SubclassDetailScreen() {
     >
       <View style={styles.headingRow}>
         <Text style={styles.heading}>{sub.name}</Text>
-        {!homebrewSubclasses.some(hs => hs.id === sub.id) && isNonSrd(sub.progression.srd) && <NonSrdBadge />}
+        {!homebrewSubclasses.some(hs => hs.id === sub.id) && <EditionBadge item={sub.progression} official />}
+        {!homebrewSubclasses.some(hs => hs.id === sub.id) && isNonSrd(sub.progression.srd, sub.progression.rulesetId) && <NonSrdBadge />}
       </View>
       <Text style={styles.subheading}>
         {sub.classId.charAt(0).toUpperCase() + sub.classId.slice(1)} subclass · unlocks at level {sub.unlockLevel}

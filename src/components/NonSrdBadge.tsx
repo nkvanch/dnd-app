@@ -25,7 +25,10 @@ export function NonSrdBadge() {
  *  `srd !== true` covers both explicitly-false and not-yet-audited
  *  (undefined) content, matching the same "unsafe by default" rule the
  *  EXPO_PUBLIC_SRD_ONLY build filter already uses. */
-export function isNonSrd(srd: boolean | undefined): boolean {
+export function isNonSrd(srd: boolean | undefined, rulesetId?: string): boolean {
+  // `srd` means SRD 5.1. All official 2024 (5.5e) content is the System Reference Document 5.2.1, which is licensed the same
+  // way, so it is not "non-SRD" just because it is not in the 5.1 document.
+  if (rulesetId === 'dnd5e-2024') return false;
   return srd !== true;
 }
 

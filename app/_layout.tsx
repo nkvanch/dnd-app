@@ -1,7 +1,8 @@
 // app/_layout.tsx
 // Root layout — initializes SQLite DB + loads characters + hydrates session
 // on startup, then renders the navigation stack.
-import { bootOfficialPacks } from '../src/content/officialPackService';
+import { bootOfficialPacks, installedOfficialPacks } from '../src/content/officialPackService';
+import { ContentPacksPrompt } from '../src/components/ContentPacksPrompt';
 import { sqlitePackStore } from '../src/content/officialPackStore';
 import { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
@@ -15,7 +16,7 @@ import { initDb } from '../src/db/db';
 import { initContentDb } from '../src/db/contentDb';
 import { spellRepo } from '../src/content/spellRepo';
 import { itemRepo } from '../src/content/itemRepo';
-import { getMeta } from '../src/db/appMetaRepo';
+import { getMeta, setMeta } from '../src/db/appMetaRepo';
 import { clearStaleSessionEffects } from '../src/session/effectBridge';
 import { useCharacterStore } from '../src/store/characterStore';
 import { useSessionStore }   from '../src/store/sessionStore';
@@ -283,6 +284,21 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [dbReady]);
 
+  // First launch with no content packs installed: offer the SRD packs once (the choice is remembered, and skipping is fine).
+  const [packsPromptOpen, setPacksPromptOpen] = useState(false);
+  useEffect(() => {
+    if (!dbReady) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (installedOfficialPacks().length > 0) return;
+        if ((await getMeta('content_packs_prompt_seen')) === '1') return;
+        if (!cancelled) setPacksPromptOpen(true);
+      } catch (e) { console.error('[_layout] content packs prompt check failed:', e); }
+    })();
+    return () => { cancelled = true; };
+  }, [dbReady]);
+
   if (!dbReady) return <BootScreen />;
 
   return (
@@ -336,6 +352,10 @@ export default function RootLayout() {
         <Stack.Screen name="backup"                        options={{ headerShown: false }} />
         <Stack.Screen name="onboarding"                    options={{ headerShown: false }} />
       </Stack>
+      <ContentPacksPrompt
+        visible={packsPromptOpen}
+        onClose={() => { setPacksPromptOpen(false); void setMeta('content_packs_prompt_seen', '1').catch(() => undefined); }}
+      />
     </View>
     </ErrorBoundary>
     </SafeAreaProvider>

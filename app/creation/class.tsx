@@ -11,6 +11,9 @@ import { globalContentDB } from '../../src/content/classes/library';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import { MissingRulesetContentBanner } from '../../src/components/MissingRulesetContentBanner';
+import { useOfficialContentVersion } from '../../src/hooks/useOfficialContentVersion';
+import { EditionBadge } from '../../src/components/EditionBadge';
 import { FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips } from '../../src/components/FilterChipRow';
 import { SortControl } from '../../src/components/SortControl';
 import { CASTER_TYPE, CASTER_TYPES, classSortOptions } from '../../src/content/classes/classBrowse';
@@ -115,6 +118,7 @@ export default function ClassScreen() {
   const availableWeapons = Array.from(new Set(globalContentDB.classes.flatMap(c => c.weaponProfs ?? [])))
     .map(w => ({ id: w, label: WEAPON_LABELS[w] ?? w }));
 
+  useOfficialContentVersion();   // follow pack installs and removals while this list is open
   const suggestedRuleset = useCreationDraftStore.getState().draft?.rulesetId;
   const classes = officialFilter === 'homebrew' ? [] : suggestFirst(sortByOption(globalContentDB.classes.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -147,6 +151,7 @@ export default function ClassScreen() {
   const listHeader = (
     <>
       <Text style={styles.heading}>Select Class</Text>
+      <MissingRulesetContentBanner ruleset={suggestedRuleset} />
       {suggestedRuleset ? <Text style={{ textAlign: 'center', color: Colors.textDim, fontSize: FontSize.xs, marginTop: -Spacing.sm, marginBottom: Spacing.sm }}>{rulesetLabel(suggestedRuleset)} content is listed first.</Text> : null}
       <View style={styles.divider} />
 
@@ -224,7 +229,8 @@ export default function ClassScreen() {
                 <View style={styles.rowInfo}>
                   <View style={styles.rowNameLine}>
                     <Text style={styles.rowName}>{item.name}</Text>
-                    {isNonSrd(item.srd) && <NonSrdBadge />}
+                    <EditionBadge item={item} official />
+                    {isNonSrd(item.srd, item.rulesetId) && <NonSrdBadge />}
                   </View>
                   <Text style={styles.rowSub}>{casterType} · d{item.hitDie}</Text>
                 </View>

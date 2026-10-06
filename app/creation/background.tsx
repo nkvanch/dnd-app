@@ -20,6 +20,9 @@ import { sortByOption } from '../../src/content/contentQuery';
 import { SortControl } from '../../src/components/SortControl';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import { MissingRulesetContentBanner } from '../../src/components/MissingRulesetContentBanner';
+import { useOfficialContentVersion } from '../../src/hooks/useOfficialContentVersion';
+import { EditionBadge } from '../../src/components/EditionBadge';
 import {
   FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow,
   ActiveFilterChips, ZeroResultsState,
@@ -208,6 +211,7 @@ export default function BackgroundScreen() {
   const availableTools = Array.from(new Set(globalContentDB.backgrounds.flatMap(b => b.toolProficiencies ?? [])))
     .sort().map(t => ({ id: t, label: t }));
 
+  useOfficialContentVersion();   // follow pack installs and removals while this list is open
   const suggestedRuleset = useCreationDraftStore.getState().draft?.rulesetId;
   const backgrounds = officialFilter === 'homebrew' ? [] : suggestFirst(sortByOption(globalContentDB.backgrounds.filter(b =>
     b.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -236,6 +240,7 @@ export default function BackgroundScreen() {
   const listHeader = (
     <>
       <Text style={styles.heading}>Select Background</Text>
+      <MissingRulesetContentBanner ruleset={suggestedRuleset} />
       {suggestedRuleset ? <Text style={{ textAlign: 'center', color: Colors.textDim, fontSize: FontSize.xs, marginTop: -Spacing.sm, marginBottom: Spacing.sm }}>{rulesetLabel(suggestedRuleset)} content is listed first.</Text> : null}
       <View style={styles.divider} />
 
@@ -305,12 +310,8 @@ export default function BackgroundScreen() {
               {/* Distinguishes same-named ruleset variants (e.g. the paused
                   5.5e proof-slice's "Acolyte" alongside the classic one) —
                   audit finding RULESET-DUP-1. */}
-              {item.rulesetId && (
-                <View style={styles.rulesetTag}>
-                  <Text style={styles.rulesetTagTxt}>{item.rulesetId}</Text>
-                </View>
-              )}
-              {isNonSrd(item.srd) && <NonSrdBadge />}
+              <EditionBadge item={item} official />
+              {isNonSrd(item.srd, item.rulesetId) && <NonSrdBadge />}
               <Text style={styles.rowArrow}>›</Text>
             </Pressable>
           )}
@@ -534,7 +535,8 @@ function BackgroundDetail({ id }: { id: string }) {
             <Text style={styles.homebrewTagTxt}>Homebrew</Text>
           </View>
         )}
-        {!isHomebrew && isNonSrd(bg.srd) && <NonSrdBadge />}
+        {!isHomebrew && <EditionBadge item={bg} official />}
+        {!isHomebrew && isNonSrd(bg.srd, bg.rulesetId) && <NonSrdBadge />}
       </View>
       <View style={styles.divider} />
 

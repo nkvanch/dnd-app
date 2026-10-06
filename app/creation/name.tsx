@@ -10,6 +10,7 @@ import { RulesetId } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { RulesSourcePicker, RulesChoice, rulesChoiceFromDraft } from '../../src/components/RulesSourcePicker';
+import { MissingRulesetContentBanner } from '../../src/components/MissingRulesetContentBanner';
 
 const LEVEL_OPTIONS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
 
@@ -142,6 +143,7 @@ export default function NameScreen() {
 
         {/* Rules source: campaign setting / custom / official 5e & 5.5e. Drives the ruleset and what content is suggested first. */}
         <RulesSourcePicker value={rulesChoice} onChange={setRulesChoice} />
+        <MissingRulesetContentBanner ruleset={rulesChoice.rulesetId as RulesetId | undefined} />
 
         {/* Campaign Settings — lives here in Character Basics, not in the creation flow */}
         <Pressable style={styles.campaignSettingsCard} onPress={() => router.push('/creation/rules')}>

@@ -32,6 +32,7 @@ import { SortControl } from '../SortControl';
 import { usePackageBuilderStore } from '../../store/packageBuilderStore';
 import { IssuesModal } from '../sheet/IssuesModal';
 import { OfficialPacksSection } from './OfficialPacksSection';
+import { ContentPacksPrompt } from '../ContentPacksPrompt';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 const STATE_KEY = 'compendium.packages';
@@ -67,6 +68,7 @@ export function InstalledPackagesView() {
   const [encounters, setEncounters] = useState<PreparedEncounter[]>([]);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [diagnosingPackId, setDiagnosingPackId] = useState<string | null>(null);
+  const [choosingPacks, setChoosingPacks] = useState(false);
 
   const refresh = useCallback(() => {
     loadInstalledPacks().then(setPacks).catch(e => console.error('[compendium] loadInstalledPacks failed:', e));
@@ -270,6 +272,9 @@ export function InstalledPackagesView() {
                 <Pressable style={styles.importBtn} testID="packages-create" onPress={() => { usePackageBuilderStore.getState().begin(); router.push('/homebrew/package-builder'); }}>
                   <Text style={styles.importBtnTxt}>＋ Create Package</Text>
                 </Pressable>
+                <Pressable style={styles.importBtn} testID="packages-install-srd" onPress={() => setChoosingPacks(true)}>
+                  <Text style={styles.importBtnTxt}>📦 SRD Packs</Text>
+                </Pressable>
                 <Pressable style={styles.importBtn} testID="packages-import" onPress={() => router.push('/homebrew/import-package')}>
                   <Text style={styles.importBtnTxt}>⬇️ Import</Text>
                 </Pressable>
@@ -331,6 +336,7 @@ export function InstalledPackagesView() {
           );
         }}
       />
+      <ContentPacksPrompt visible={choosingPacks} onClose={() => setChoosingPacks(false)} />
       {modals}
     </View>
   );

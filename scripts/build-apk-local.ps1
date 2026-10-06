@@ -71,6 +71,10 @@ if (-not $FullContent) {
   Remove-Item Env:CONTENT_DB_VERSION_OUT_PATH
 }
 
+# The SRD packs the app bundles (assets/packs) are generated from the same content; regenerate them so the APK never ships a stale pack.
+npx tsx scripts/build-srd-packs.ts
+if ($LASTEXITCODE -ne 0) { throw "SRD pack generation failed ($LASTEXITCODE)" }
+
 if (-not (Test-Path 'node_modules')) { npm ci }
 if ($Prebuild -or -not (Test-Path 'android\gradlew.bat')) {
   npx expo prebuild --platform android --no-install

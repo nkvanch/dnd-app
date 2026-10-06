@@ -7,6 +7,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { getHouseRule } from '../../src/engine/houseRules';
 import { Entity } from '../../src/engine/types';
+import { weaponMasteryCapacity, masteredWeaponIds, eligibleMasteryWeapons } from '../../src/engine/weaponMastery';
 import { subclassEntriesForClassMerged } from '../../src/content/subclasses/subclassBrowse';
 import { skillProgressFor, spellProgressFor } from '../../src/content/creationProgress';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -77,6 +78,14 @@ const SUBCLASS_SECTION: Section = {
   done:  d => d.choices.filter(c => c.definition.kind === 'subclass' && !c.resolved).length === 0,
 };
 
+// 2024 (5.5e): a class with Weapon Mastery picks its mastered weapons while creating the character.
+const MASTERY_SECTION: Section = {
+  key:   'weapon_mastery',
+  label: 'Weapon Mastery',
+  route: '/creation/weapon-mastery',
+  done:  d => masteredWeaponIds(d).length >= Math.min(weaponMasteryCapacity(d), eligibleMasteryWeapons(d).length),
+};
+
 const ASI_SECTION: Section = {
   key:   'asi',
   label: 'Ability Improvements',
@@ -138,6 +147,15 @@ export default function HubScreen() {
     const classIdx = sections.findIndex(s => s.key === 'class');
     sections = [...sections.slice(0, classIdx + 1), { ...SUBCLASS_SECTION, label: subclassChoices[0].definition.subclassLabel ?? SUBCLASS_SECTION.label }, ...sections.slice(classIdx + 1)];
   }
+
+  // Weapon Mastery (5.5e classes): its own step right after the class (and subclass, when there is one).
+  if (weaponMasteryCapacity(draft) > 0) {
+    const anchor = sections.findIndex(s => s.key === 'subclass') >= 0 ? sections.findIndex(s => s.key === 'subclass') : sections.findIndex(s => s.key === 'class');
+    sections = [...sections.slice(0, anchor + 1), MASTERY_SECTION, ...sections.slice(anchor + 1)];
+  }
+
+  // 5.5e calls races species.
+  const labelOf = (sec: Section): string => (sec.key === 'race' && draft.rulesetId === ('dnd5e-2024' as never)) ? 'Species' : sec.label;
 
   // Conditionally include ASI section only when there are pending ASI choices
   const asiChoices = draft.choices.filter(c => c.definition.kind === 'asi');
@@ -289,7 +307,7 @@ export default function HubScreen() {
               onPress={() => router.push(sec.route as any)}
             >
               <Text style={[styles.primaryBtnText, done && styles.primaryBtnTextDone]}>
-                {sec.label}
+                {labelOf(sec)}
               </Text>
               {done && <Text style={styles.doneCheck}>✓</Text>}
             </Pressable>
@@ -305,6 +323,7 @@ export default function HubScreen() {
         {sections.map(sec => {
           const done = sec.done(draft);
           const subtitle =
+            sec.key === 'weapon_mastery' ? `${masteredWeaponIds(draft).length}/${weaponMasteryCapacity(draft)} weapons` :
             sec.key === 'equipment' ? equipmentSubtitle(draft) :
             sec.key === 'skills'    ? skillsSubtitle(draft) :
             sec.key === 'spells'    ? spellsSubtitle(draft) :
@@ -317,7 +336,7 @@ export default function HubScreen() {
           return (
             <Pressable key={sec.key} style={styles.progressRow} onPress={() => router.push(sec.route as any)}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.progressLabel}>{sec.label}</Text>
+                <Text style={styles.progressLabel}>{labelOf(sec)}</Text>
                 {subtitle && <Text style={styles.progressSubtitle}>{subtitle}</Text>}
               </View>
               <Text style={[styles.progressStatus, done ? styles.statusDone : styles.statusPending]}>
@@ -339,7 +358,7 @@ export default function HubScreen() {
           {/* Next sequential button */}
           {nextSection && !allDone && (
             <Pressable style={styles.nextBtn} onPress={() => router.push(nextSection.route as any)}>
-              <Text style={styles.nextBtnText}>Next: {nextSection.label} →</Text>
+              <Text style={styles.nextBtnText}>Next: {labelOf(nextSection)} →</Text>
             </Pressable>
           )}
 

@@ -18,6 +18,7 @@ import {
 import { sortByOption } from '../../src/content/contentQuery';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import { EditionBadge } from '../../src/components/EditionBadge';
 import {
   FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips,
 } from '../../src/components/FilterChipRow';
@@ -247,7 +248,8 @@ export default function ClassDetailScreen() {
   const cls    = getMergedContentDB().classes.find(c => c.id === id);
   const detail = id ? CLASS_DETAIL[id] : null;
   // The 2024 (5.5e) classes are official content with no CLASS_DETAIL entry: they read their facts from the class itself.
-  const isOfficial2024 = !!cls && cls.rulesetId === 'dnd5e-2024' && !useHomebrewStore.getState().classes.some(c => c.id === cls.id);
+  const isHomebrewClass = !!cls && useHomebrewStore.getState().classes.some(c => c.id === cls.id);
+  const isOfficial2024 = !!cls && cls.rulesetId === 'dnd5e-2024' && !isHomebrewClass;
 
   useEffect(() => {
     if (!cls || !draft) safeGoBack();
@@ -345,7 +347,8 @@ export default function ClassDetailScreen() {
             <Text style={styles.homebrewTagTxt}>Homebrew</Text>
           </View>
         )}
-        {(!!detail || isOfficial2024) && isNonSrd(cls.srd) && <NonSrdBadge />}
+        {!isHomebrewClass && <EditionBadge item={cls} official />}
+        {(!!detail || isOfficial2024) && isNonSrd(cls.srd, cls.rulesetId) && <NonSrdBadge />}
       </View>
       <View style={styles.divider} />
 
@@ -628,7 +631,8 @@ export default function ClassDetailScreen() {
                     <View style={{ flex: 1 }}>
                       <View style={styles.subclassNameRow}>
                         <Text style={styles.subclassName}>{sub.name}</Text>
-                        {!homebrewSubclasses.some(hs => hs.id === sub.id) && isNonSrd(sub.progression.srd) && <NonSrdBadge />}
+                        {!homebrewSubclasses.some(hs => hs.id === sub.id) && <EditionBadge item={sub.progression} official />}
+                        {!homebrewSubclasses.some(hs => hs.id === sub.id) && isNonSrd(sub.progression.srd, sub.progression.rulesetId) && <NonSrdBadge />}
                         <View style={styles.subclassLvlBadge}>
                           <Text style={styles.subclassLvlTxt}>Lv {sub.unlockLevel}+</Text>
                         </View>

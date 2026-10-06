@@ -52,6 +52,7 @@ import { backgroundSkillGrants, backgroundSortOptions } from '../../src/content/
 import {
   primaryPrereqCategory, featGrantsAsi, featGrantsProficiency, featGrantsActivation, featSortOptions,
 } from '../../src/content/feats/featBrowse';
+import { CompendiumSpellDetail } from '../../src/components/compendium/CompendiumSpellDetail';
 import { spellSortOptions } from '../../src/content/spells/spellBrowse';
 import { actionType, ACTION_TYPES } from '../../src/content/spellFilterUtils';
 import {
@@ -999,6 +1000,7 @@ function OfficialCompendiumView() {
                     {entry.type === 'feat' && (entry.raw as { prerequisite: string | null }).prerequisite && (
                       <Text style={styles.rowDesc}>Prerequisite: {(entry.raw as { prerequisite: string }).prerequisite}</Text>
                     )}
+                    {entry.type === 'spell' && <CompendiumSpellDetail spellId={entry.id} rulesetId={rulesetFilter} />}
                     {entry.type === 'condition' && (
                       <Text style={styles.rowDesc}>{(entry.raw as { description: string }).description || 'No description.'}</Text>
                     )}

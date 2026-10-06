@@ -24,6 +24,7 @@
 //   Skills:         any SkillName e.g. 'perception', 'athletics'
 // ============================================================================
 
+import { findBeastForm } from '../content/runtimeRules';
 import {
   Entity, Ability, SkillName, AuditEntry, AuditTrail, AuditSourceKind, ActiveEffect,
 } from './types';
@@ -32,7 +33,6 @@ import {
   proficiencyBonus, AC_DC_BASE, selectBestAcFormula,
 } from './pipeline';
 import { resolveCombine, resolveScaleFactor, applyScale } from './resolver';
-import { ALL_BEAST_FORMS } from '../content/beastforms';
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ function buildAcEntries(entity: Entity): AuditEntry[] {
   // so a wildshaped entity's audit showed the player's own (irrelevant)
   // gear/formula breakdown instead of the actual AC in use.
   const beastForm = entity.wildShapeState?.active
-    ? ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId) ?? null
+    ? findBeastForm(entity.wildShapeState!.formId) ?? null
     : null;
   if (beastForm) {
     return [entry(`${beastForm.name} (beast form)`, beastForm.ac, 'base', null)];

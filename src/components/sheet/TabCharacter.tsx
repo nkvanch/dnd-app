@@ -1,4 +1,5 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { findBeastForm } from '../../content/runtimeRules';
 import { MissingPacksBanner } from './MissingPacksBanner';
 import { exhaustionEffectText } from '../../engine/exhaustion';
 import { useSpellPayment } from './SpellPaymentChooser';
@@ -30,7 +31,6 @@ import { getProgressionForClass, mergeSubclassIntoProgression } from '../../cont
 import { getSubclassEntryMerged } from '../../content/subclasses/subclassBrowse';
 import { spellRepo } from '../../content/spellRepo';
 import { spellIdsOnEntity } from '../../content/spellRepo.types';
-import { ALL_BEAST_FORMS } from '../../content/beastforms';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
@@ -1227,7 +1227,7 @@ function TabCharacterInner({
   // nonmagicalPhysicalResistance — HpModal itself further gates on the
   // selected damage type being bludgeoning/piercing/slashing.
   const activeBeastForm = entity.wildShapeState?.active
-    ? ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId)
+    ? findBeastForm(entity.wildShapeState!.formId)
     : undefined;
   const showNonmagicalOption = !!activeBeastForm?.nonmagicalPhysicalResistance;
 

@@ -16,7 +16,8 @@ import type { ItemIndexEntry } from '../../content/itemRepo.types';
 import { mergeItemIndex, resolveItemById } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { usesLargeCreatureWeaponDice } from '../../engine/houseRules';
-import { ALL_INFUSIONS, maxInfusedItems } from '../../content/infusions';
+import { infusions } from '../../content/runtimeRules';
+import { maxInfusedItems } from '../../engine/infusionRules';
 import { itemRequiresAttunement, attunementCap, countAttuned } from '../../engine/inventory';
 import { NonSrdBadge, isNonSrd } from '../NonSrdBadge';
 import {
@@ -749,7 +750,7 @@ function InfuseItemModal({
   onClose:  () => void;
 }) {
   const known = entity.knownInfusionIds ?? [];
-  const knownInfusions = ALL_INFUSIONS.filter(i => known.includes(i.id));
+  const knownInfusions = infusions().filter(i => known.includes(i.id));
   const [selectedInfusion, setSelectedInfusion] = useState<string | null>(null);
   // Item-identity closure: selects the OWNED INSTANCE, not the definition —
   // storing `inst.itemId` here made two eligible same-definition rows
@@ -908,7 +909,7 @@ function ItemRow({
   const name  = item?.name ?? instance.itemId;
   const props = item?.properties ?? [];
   const desc  = item?.features?.[0]?.description;
-  const infusion = instance.infusedWith ? ALL_INFUSIONS.find(i => i.id === instance.infusedWith) : null;
+  const infusion = instance.infusedWith ? infusions().find(i => i.id === instance.infusedWith) : null;
   const needsAttunement = itemRequiresAttunement(item);
 
   return (
@@ -1169,7 +1170,7 @@ function TabInventoryInner({
             </Pressable>
           </View>
           <Text style={styles.emptyNote}>
-            Known: {knownInfusionIds.map(id => ALL_INFUSIONS.find(i => i.id === id)?.name ?? id).join(', ')}
+            Known: {knownInfusionIds.map(id => infusions().find(i => i.id === id)?.name ?? id).join(', ')}
           </Text>
         </View>
       )}

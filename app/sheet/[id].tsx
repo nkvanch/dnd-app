@@ -27,7 +27,8 @@ import { Entity, ItemInstance, DurationTracker, Issue } from '../../src/engine/t
 import { itemRepo } from '../../src/content/itemRepo';
 import { spellRepo } from '../../src/content/spellRepo';
 import { spellIdsOnEntity } from '../../src/content/spellRepo.types';
-import { getInfusion, maxInfusedItems } from '../../src/content/infusions';
+import { getInfusion } from '../../src/content/runtimeRules';
+import { maxInfusedItems } from '../../src/engine/infusionRules';
 import { TabCharacter } from '../../src/components/sheet/TabCharacter';
 import { TabExploration } from '../../src/components/sheet/TabExploration';
 import { TabActions }   from '../../src/components/sheet/TabActions';

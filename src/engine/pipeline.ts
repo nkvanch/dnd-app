@@ -10,6 +10,7 @@
 // The UI always reads from entity.derived and never computes stats itself.
 // ============================================================================
 
+import { findBeastForm } from '../content/runtimeRules';
 import { exhaustionSpeedPenalty } from './exhaustion';
 import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
@@ -17,7 +18,6 @@ import {
 } from './types';
 import { tierHpBonus, hitDieTierFromEffects } from './hitDieTier';
 import { resolveEffectsForTarget, resolveBinary, resolveCombine, resolveExtraAttack, resolveScaleFactor, applyScale } from './resolver';
-import { ALL_BEAST_FORMS } from '../content/beastforms';
 import { generateAllActionCards, CardGenOptions } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
 import { isMartialWeapon } from '../content/items/itemBrowse';
@@ -233,7 +233,7 @@ export function recomputeDerived(
   //    here touches entity.stats itself. See docs/ROADMAP_1.0.md "FEATURE
   //    DESIGN: Wild Shape".
   const beastForm = entity.wildShapeState?.active
-    ? ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId) ?? null
+    ? findBeastForm(entity.wildShapeState!.formId) ?? null
     : null;
   if (beastForm) {
     effectiveStats = {
@@ -717,7 +717,7 @@ export function collectAllEffects(entity: Entity, homebrewItems: readonly import
   //    entity — reverting (wildShapeState -> null) makes these vanish with
   //    no cleanup mutation, since this block simply stops firing.
   if (entity.wildShapeState?.active) {
-    const form = ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId);
+    const form = findBeastForm(entity.wildShapeState!.formId);
     if (form) {
       const pushDefense = (damageType: string, operation: 'resistance' | 'immunity' | 'vulnerability') => {
         effects.push({

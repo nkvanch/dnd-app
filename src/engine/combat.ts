@@ -2,6 +2,7 @@
 // FILE: src/engine/combat.ts
 // PROJECT: Initiative Tracker, Concentration Gate & Combat Clock
 // ============================================================================
+import { findBeastForm } from '../content/runtimeRules';
 import { lookupConditionFor } from '../content/conditions/lookup';
 import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect, DurationTracker, FeatureActivation, CustomResource } from './types';
 import { recomputeDerived, collectAllEffects } from './pipeline';
@@ -11,7 +12,6 @@ import { lookupCondition } from '../content/conditions/index';
 import { rollD20 as rollD20Dice } from './dice';
 import { DEFAULT_RULES } from '../store/characterStore';
 import { deathSavesPersist } from './houseRules';
-import { ALL_BEAST_FORMS } from '../content/beastforms';
 
 // ── Initiative ────────────────────────────────────────────────────────────────
 
@@ -960,7 +960,7 @@ export function startWildShape(
   rules:  CampaignRules = DEFAULT_RULES,
 ): Entity {
   if (entity.wildShapeState?.active) return entity;
-  const form = ALL_BEAST_FORMS.find(f => f.id === formId);
+  const form = findBeastForm(formId);
   if (!form) return entity;
 
   // Duration: half druid level in hours, minimum 1 (book rule). Falls back to
@@ -1061,7 +1061,7 @@ export function applyWildShapeDamage(
 ): Entity {
   if (!entity.wildShapeState?.active || damage <= 0) return entity;
 
-  const activeForm = ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId);
+  const activeForm = findBeastForm(entity.wildShapeState!.formId);
   const nonmagicalBPSApplies = isNonmagicalAttack && !!activeForm?.nonmagicalPhysicalResistance
     && (damageType === 'bludgeoning' || damageType === 'piercing' || damageType === 'slashing');
 

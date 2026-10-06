@@ -11,13 +11,13 @@
 //    starred-only. Spells show all known, with level + tap-for-description.
 //  • Fly/swim/climb come from derived.movement (grant_movement effects). Empty
 //    until a race/item/spell grants them.
+import { findBeastForm } from '../../content/runtimeRules';
 import { useState, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import {
   Entity, Ability, SkillName, CampaignRules, SenseType, Sense, ItemInstance, Spell, DurationTracker,
 } from '../../engine/types';
 import { modifier, collectAllEffects, applyStatModifiers, recomputeDerived } from '../../engine/pipeline';
-import { ALL_BEAST_FORMS } from '../../content/beastforms';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { HpModal } from './HpModal';
 import { ConcentrationModal } from './ConcentrationModal';
@@ -210,7 +210,7 @@ function TabExplorationInner({
   // TabCharacter.tsx's HpModal — shown only while transformed into a form
   // that actually declares nonmagicalPhysicalResistance.
   const activeBeastForm = entity.wildShapeState?.active
-    ? ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId)
+    ? findBeastForm(entity.wildShapeState!.formId)
     : undefined;
   const showNonmagicalOption = !!activeBeastForm?.nonmagicalPhysicalResistance;
   const [condOpen, setCondOpen] = useState(false);

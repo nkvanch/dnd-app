@@ -10,6 +10,7 @@
 import { Entity } from '../engine/types';
 import { recomputeDerived } from '../engine/pipeline';
 import { applyCondition, removeCondition } from '../engine/conditions';
+import { gainHeroicInspiration } from '../engine/heroicInspiration';
 import { useCharacterStore } from '../store/characterStore';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { CharacterAdapter, CharacterChange, CharacterSummary, CharacterVitals } from './types';
@@ -52,6 +53,8 @@ export function applyChangesToEntity(entity: Entity, changes: CharacterChange[],
       if (next.spellcasting) {
         next = { ...next, spellcasting: { ...next.spellcasting, concentrating: null, concentratingDuration: undefined } };
       }
+    } else if (c.kind === 'heroic_inspiration') {
+      next = gainHeroicInspiration(next).entity;
     } else if (c.kind === 'stabilize') {
       next = { ...next, resources: { ...next.resources, deathSaves: { successes: 0, failures: 0, stable: true } } };
     } else {

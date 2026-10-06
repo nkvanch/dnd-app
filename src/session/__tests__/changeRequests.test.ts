@@ -50,6 +50,26 @@ describe('DM -> Player change requests', () => {
     expect(dm.peer.view!.characters.alice.revision).toBe(before + 1);
   });
 
+  it('Heroic Inspiration is a DM-proposed change the player must accept, and nothing is awarded before that', async () => {
+    const { rig, dm, alice } = await table();
+    const { requestId } = dm.peer.requestChange('alice', 'Heroic Inspiration', [{ kind: 'heroic_inspiration' }]);
+    await rig.settle();
+    expect((alice.character as any).heroicInspiration).toBe(false);
+    alice.peer.respond(requestId, 'accept');
+    await rig.settle();
+    expect((alice.character as any).heroicInspiration).toBe(true);
+    expect(rig.host.debugState().audit.map(a => a.text).join('\n')).toContain('Heroic Inspiration');
+  });
+
+  it('a rejected Heroic Inspiration award gives nothing', async () => {
+    const { rig, dm, alice } = await table();
+    const { requestId } = dm.peer.requestChange('alice', 'Heroic Inspiration', [{ kind: 'heroic_inspiration' }]);
+    await rig.settle();
+    alice.peer.respond(requestId, 'reject');
+    await rig.settle();
+    expect((alice.character as any).heroicInspiration).toBe(false);
+  });
+
   it('MODIFY preserves the original AND records the final applied change', async () => {
     const { rig, dm, alice } = await table();
     const { requestId } = dm.peer.requestChange('alice', 'Curse of the Well', [{ kind: 'max_hp', delta: -10 }]);

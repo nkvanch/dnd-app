@@ -55,6 +55,7 @@ export function describeChange(c: CharacterChange): string {
     case 'condition_remove':   return `Remove condition: ${formatContentId(c.conditionId)}`;
     case 'concentration_break': return 'Break concentration';
     case 'stabilize':          return 'Stabilize';
+    case 'heroic_inspiration': return 'Heroic Inspiration';
   }
 }
 
@@ -89,7 +90,7 @@ export function validChanges(changes: unknown): changes is CharacterChange[] {
     const ch = c as Record<string, unknown>;
     if (ch.kind === 'temp_hp') return typeof ch.amount === 'number' && Number.isFinite(ch.amount) && Number.isInteger(ch.amount) && ch.amount >= 0;
     if (ch.kind === 'condition_add' || ch.kind === 'condition_remove') return validConditionId(ch.conditionId);
-    if (ch.kind === 'concentration_break' || ch.kind === 'stabilize') return true;
+    if (ch.kind === 'concentration_break' || ch.kind === 'stabilize' || ch.kind === 'heroic_inspiration') return true;
     if (typeof ch.delta !== 'number' || !Number.isFinite(ch.delta) || !Number.isInteger(ch.delta)) return false;
     if (ch.kind === 'exhaustion' || ch.kind === 'max_hp' || ch.kind === 'hp') return true;
     if (ch.kind === 'ability') return typeof ch.ability === 'string' && ch.ability in ABILITY_LABEL;

@@ -72,3 +72,14 @@ describe('applyChangesToEntity: stabilize', () => {
     expect(after.resources.deathSaves).toEqual({ successes: 0, failures: 0, stable: true });
   });
 });
+
+describe('applyChangesToEntity: heroic_inspiration', () => {
+  it('awards Heroic Inspiration, and a second award does not stack', () => {
+    let e = makeEmptyEntity('e1');
+    expect(e.heroicInspiration).toBeFalsy();
+    e = applyChangesToEntity(e, [{ kind: 'heroic_inspiration' }], DEFAULT_RULES);
+    expect(e.heroicInspiration).toBe(true);
+    e = applyChangesToEntity(e, [{ kind: 'heroic_inspiration' }], DEFAULT_RULES);
+    expect(e.heroicInspiration).toBe(true);
+  });
+});

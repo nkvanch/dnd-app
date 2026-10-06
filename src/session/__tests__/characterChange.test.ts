@@ -35,6 +35,11 @@ describe('validChanges', () => {
     expect(validChanges([{ kind: 'hp', delta: Infinity }])).toBe(false);
   });
 
+  it('accepts Heroic Inspiration, which carries nothing else, and describes it', () => {
+    expect(validChanges([{ kind: 'heroic_inspiration' }])).toBe(true);
+    expect(describeChange({ kind: 'heroic_inspiration' })).toBe('Heroic Inspiration');
+  });
+
   it('rejects an unknown kind', () => {
     expect(validChanges([{ kind: 'bogus', delta: 1 }])).toBe(false);
   });

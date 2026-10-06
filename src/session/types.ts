@@ -50,7 +50,11 @@ export type CharacterChange =
   | { kind: 'concentration_break' }
   /** DM_SCREEN_SPEC.md item 2's "Stabilize" fast action — resets death save counters and marks
    *  the character stable, same end state 3 successful death saves already reach. */
-  | { kind: 'stabilize' };
+  | { kind: 'stabilize' }
+  /** Awards Heroic Inspiration (2024 rules; the plain Inspiration die of 2014 is the same on/off state here). Same
+   *  consent flow as every change: the player accepts it and their own device applies it. A character never holds
+   *  more than one, so awarding it to someone who already has it changes nothing (engine/heroicInspiration.ts). */
+  | { kind: 'heroic_inspiration' };
 
 export type CharacterSummary = {
   name:  string;

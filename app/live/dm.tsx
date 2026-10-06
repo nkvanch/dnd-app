@@ -365,6 +365,7 @@ export default function DmLiveScreen() {
                       <Btn small kind="ghost" label="Exh. -1" disabled={offline} onPress={() => exhaustionStep(c.participantId, -1)} testID={`dm-exh-down-${c.summary.name}`} />
                       <Btn small kind="danger" label="0 HP" disabled={offline} onPress={() => quickKill(c.participantId)} testID={`dm-kill-${c.summary.name}`} />
                       <Btn small kind="ghost" label="Stabilize" disabled={offline} onPress={() => run(() => dmPeer.requestChange(c.participantId, 'Stabilize', [{ kind: 'stabilize' }]))} testID={`dm-stabilize-${c.summary.name}`} />
+                      <Btn small kind="ghost" label="Inspiration" disabled={offline} onPress={() => run(() => dmPeer.requestChange(c.participantId, 'Heroic Inspiration', [{ kind: 'heroic_inspiration' }]))} testID={`dm-inspiration-${c.summary.name}`} />
                       <Btn small kind="ghost" label="+ Condition" disabled={offline} onPress={() => setAddingCondition(c.participantId)} testID={`dm-addcondition-open-${c.summary.name}`} />
                       {!!c.vitals?.concentration && (
                         <Btn small kind="ghost" label="Break Concentration" disabled={offline}

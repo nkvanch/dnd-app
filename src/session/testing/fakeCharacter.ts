@@ -7,6 +7,7 @@ export class FakeCharacter implements CharacterAdapter {
   abilities: Record<string, number> = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
   conditions: string[] = [];
   concentrating: string | null = null;
+  heroicInspiration = false;
   deathSaves = { successes: 0, failures: 0, stable: false };
   resources: { id: string; name: string; current: number; maximum: number }[] = [];
   spellSlots: Record<string, { total: number; used: number }> | null = null;
@@ -30,6 +31,7 @@ export class FakeCharacter implements CharacterAdapter {
       else if (c.kind === 'condition_add') { if (!this.conditions.includes(c.conditionId)) this.conditions.push(c.conditionId); }
       else if (c.kind === 'condition_remove') { this.conditions = this.conditions.filter(x => x !== c.conditionId); }
       else if (c.kind === 'concentration_break') this.concentrating = null;
+      else if (c.kind === 'heroic_inspiration') this.heroicInspiration = true;
       else if (c.kind === 'stabilize') this.deathSaves = { successes: 0, failures: 0, stable: true };
       else this.abilities[c.ability] += c.delta;
     }

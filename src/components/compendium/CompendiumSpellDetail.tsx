@@ -9,12 +9,12 @@ import { spellDetail } from '../../content/spells/spellDetail';
 import { Colors, FontSize, FontWeight } from '../../theme';
 
 export function CompendiumSpellDetail({ spellId, rulesetId }: { spellId: string; rulesetId?: RulesetId | null }) {
-  const [spell, setSpell] = useState<Spell | undefined>(() => spellRepo.getSpellSync(spellId));
+  const [spell, setSpell] = useState<Spell | undefined>(() => spellRepo.getSpellSync(spellId, rulesetId));
   useEffect(() => {
     let live = true;
-    spellRepo.ensureLoaded([spellId]).then(() => { if (live) setSpell(spellRepo.getSpellSync(spellId)); }).catch(() => {});
+    spellRepo.ensureLoaded([spellId]).then(() => { if (live) setSpell(spellRepo.getSpellSync(spellId, rulesetId)); }).catch(() => {});
     return () => { live = false; };
-  }, [spellId]);
+  }, [spellId, rulesetId]);
   if (!spell) return null;
   const d = spellDetail(spell, rulesetId);
   return (

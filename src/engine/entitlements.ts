@@ -252,7 +252,7 @@ function reclassifyManualSpellSources(entity: Entity, homebrewSpells: readonly S
   let changed = false;
   const next = records.map(r => {
     if (r.sourceKind !== 'manual' || (r.kind !== 'spell_access' && r.kind !== 'cantrip_access')) return r;
-    const spell = spellRepo.getSpellSync(r.key) ?? homebrewSpells.find(s => s.id === r.key);
+    const spell = spellRepo.getSpellSync(r.key, entity.rulesetId) ?? homebrewSpells.find(s => s.id === r.key);
     const candidates = (spell?.classes ?? []).filter(id => ownedClassIds.includes(id));
     if (candidates.length === 1) {
       changed = true;

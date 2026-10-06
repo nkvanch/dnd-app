@@ -147,6 +147,20 @@ describe('short rest — spell slots', () => {
     expect(result.spellcasting!.slots['1'].used).toBe(0);
   });
 
+  it('recharges a solo pact caster whose pool is in .pactSlots (how levelUpClass stores it) and leaves .slots alone', () => {
+    const e = baseEntity({
+      identity: { ...makeEmptyEntity('e1').identity, classId: 'warlock_2024', level: 5 },
+      spellcasting: {
+        ability: 'cha',
+        slots:     emptySlots(),
+        pactSlots: emptySlots({ '3': { total: 2, used: 2 } }),
+        cantrips: [], known: [], prepared: [], concentrating: null,
+      },
+    });
+    const result = takeRest(e, 'short', DEFAULT_RULES);
+    expect(result.spellcasting!.pactSlots!['3'].used).toBe(0);
+  });
+
   it('does NOT recharge a non-pact caster (Wizard) on a short rest', () => {
     const e = baseEntity({
       identity: { ...makeEmptyEntity('e1').identity, classId: 'wizard', level: 1 },

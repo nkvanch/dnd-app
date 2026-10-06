@@ -5,6 +5,8 @@
 import type { RulesetId, Spell } from '../../engine/types';
 import { hasSpellVersion, resolveSpellVersion } from './spellVersions';
 
+const RULESET_2024 = 'dnd5e-2024' as RulesetId;
+
 export type SpellDetail = {
   /** "SRD 5.2.1 version" when the 2024 version is shown, else undefined. */
   versionLabel?: string;
@@ -16,7 +18,9 @@ export type SpellDetail = {
 export function spellDetail(spell: Spell, rulesetId?: RulesetId | null): SpellDetail {
   const shown = resolveSpellVersion(spell, rulesetId);
   return {
-    ...(hasSpellVersion(spell.id, rulesetId) && !spell.rulesetId ? { versionLabel: 'SRD 5.2.1 version' } : {}),
+    // Under the built-in overlay the library record is replaced by its 2024 version; with content packs the repo already hands out
+    // the 2024 record (tagged with its ruleset), so that is labelled the same way.
+    ...((hasSpellVersion(spell.id, rulesetId) && !spell.rulesetId) || (rulesetId === RULESET_2024 && spell.rulesetId === RULESET_2024) ? { versionLabel: 'SRD 5.2.1 version' } : {}),
     stats: [
       { label: 'Casting Time', value: shown.castingTime },
       { label: 'Range', value: shown.range },

@@ -110,15 +110,15 @@ function shortRest(entity: Entity): Entity {
   // recover spell slots on a short rest. All other spellcasting classes use
   // long rest recovery.
   const classes    = getClassLevels(entity);
-  const isPactCaster = classes.some(c => pactSlotTableFor(c.classId, c.subclassId));
-  const multiclassed = classes.length > 1;
+  // A pact pool on the entity is what marks a pact caster for a class the table does not name (the 2024 Warlock, an authored 'pact' class).
+  const hasPactPool = Object.values(entity.spellcasting?.pactSlots ?? {}).some(s => (s?.total ?? 0) > 0);
+  const isPactCaster = hasPactPool || classes.some(c => pactSlotTableFor(c.classId, c.subclassId));
   let rechargedSpellcasting = entity.spellcasting;
   if (entity.spellcasting && isPactCaster) {
-    // Multiclassed with pact slots split out (see levelUpClass): recharge
-    // ONLY the pact pool, leaving the combined non-pact `.slots` alone.
-    // Solo pact caster (never multiclassed): pact slots live in `.slots`
-    // directly, exactly as before this change — same recharge call.
-    rechargedSpellcasting = (multiclassed && entity.spellcasting.pactSlots)
+    // levelUpClass keeps the pact pool in `pactSlots` for every pact caster, solo or multiclassed, so that pool is what a short
+    // rest refills (a multiclass's combined non-pact `.slots` stay alone). Only a save from before that split, a solo pact
+    // caster whose pool still occupies `.slots`, is recharged through `.slots`.
+    rechargedSpellcasting = entity.spellcasting.pactSlots
       ? rechargePactSlots(entity.spellcasting)
       : rechargeSlots(entity.spellcasting);
   }

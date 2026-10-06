@@ -407,6 +407,7 @@ function TabExplorationInner({
           <SpellList
             ids={[...entity.spellcasting.cantrips, ...entity.spellcasting.known]}
             onTap={setSpellDetail}
+            rulesetId={entity.rulesetId}
           />
         </Section>
       )}
@@ -556,12 +557,12 @@ function FeatureRow({ feature, onToggleStar }: {
 }
 
 // ── Spell list grouped by level ──────────────────────────────────────────────
-function SpellList({ ids, onTap }: { ids: string[]; onTap: (s: Spell) => void }) {
+function SpellList({ ids, onTap, rulesetId }: { ids: string[]; onTap: (s: Spell) => void; rulesetId?: Entity["rulesetId"] }) {
   const resolved = ids
-    .map(id => spellRepo.getSpellSync(id))
+    .map(id => spellRepo.getSpellSync(id, rulesetId))
     .filter((s): s is Spell => !!s)
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
-  const unknown = ids.filter(id => !spellRepo.getSpellSync(id));
+  const unknown = ids.filter(id => !spellRepo.getSpellSync(id, rulesetId));
 
   if (resolved.length === 0 && unknown.length === 0) {
     return <Text style={styles.emptyNote}>None known</Text>;

@@ -15,7 +15,7 @@ import {
   Feature, Entity, ActionCard, ActionCardType, ActionCardColor,
   AbilityEffect, FeatureActivation, Spell, OutcomeKey,
   FeatureInstance, Ability, CharClass, EntitlementSourceKind, SpellPreparationPolicy,
-  SpellCastingContext, Race, Item,
+  SpellCastingContext, Race, Item, RulesetId,
 } from './types';
 import { spellRepo } from '../content/spellRepo';
 import { effectiveItemFeatures, isItemMechanicallyActive, resolveItemDefinition } from './itemMechanics';
@@ -659,20 +659,20 @@ function fmtBonus(n: number): string {
  * the card can render identically to a normally-known spell's card, just
  * sourced from a different Feature. Returns null for every ordinary feature.
  */
-function findGrantedSpell(feature: Feature): Spell | null {
+function findGrantedSpell(feature: Feature, rulesetId?: RulesetId | null): Spell | null {
   const castEffect = (feature.abilityEffects ?? []).find(
     (e): e is Extract<AbilityEffect, { type: 'cast_spell' }> => e.type === 'cast_spell'
   );
   if (!castEffect) return null;
-  return spellRepo.getSpellSync(castEffect.spellId) ?? null;
+  return spellRepo.getSpellSync(castEffect.spellId, rulesetId) ?? null;
 }
 
 /**
  * Determines the card type from a feature's abilityEffects and tags.
  * Priority: granted-spell delegation → explicit tags → effect-type inference → default 'utility'.
  */
-export function classifyFeature(feature: Feature): ActionCardType {
-  const grantedSpell = findGrantedSpell(feature);
+export function classifyFeature(feature: Feature, rulesetId?: RulesetId | null): ActionCardType {
+  const grantedSpell = findGrantedSpell(feature, rulesetId);
   if (grantedSpell) return classifySpell(grantedSpell);
 
   // Explicit tags win first
@@ -752,8 +752,8 @@ function cardColor(type: ActionCardType): ActionCardColor {
  * Layer 1: source type and card type.
  * Examples: "Lv 3 Spell • Damage", "Class Feature • Buff", "Bonus Action • Healing"
  */
-export function buildLayer1(feature: Feature, cardType: ActionCardType): string {
-  const grantedSpell = findGrantedSpell(feature);
+export function buildLayer1(feature: Feature, cardType: ActionCardType, rulesetId?: RulesetId | null): string {
+  const grantedSpell = findGrantedSpell(feature, rulesetId);
   if (grantedSpell) return buildLayer1ForSpell(grantedSpell, cardType);
 
   const typeLabel = capitalize(cardType);
@@ -764,7 +764,7 @@ export function buildLayer1(feature: Feature, cardType: ActionCardType): string 
   const actionLabel = actionTypeLabel(action.actionType);
 
   if (feature.source.kind === 'spell') {
-    const spell = spellRepo.getSpellSync(feature.source.refId);
+    const spell = spellRepo.getSpellSync(feature.source.refId, rulesetId);
     if (spell) {
       const lvl = spell.level === 0 ? 'Cantrip' : `Lv ${spell.level} Spell`;
       return `${lvl} • ${typeLabel}`;
@@ -787,7 +787,7 @@ export function buildLayer1ForSpell(spell: Spell, cardType: ActionCardType): str
  * Examples: "8d6 Fire • 20 ft radius", "+2 damage, B/P/S resistance"
  */
 export function buildLayer2(feature: Feature, entity?: Entity, opts: CardGenOptions = {}): string {
-  const grantedSpell = findGrantedSpell(feature);
+  const grantedSpell = findGrantedSpell(feature, entity?.rulesetId);
   if (grantedSpell) return buildLayer2ForSpell(grantedSpell);
 
   const fx = feature.abilityEffects ?? [];
@@ -898,7 +898,7 @@ export function buildLayer2ForSpell(spell: Spell, entity?: Entity, classDefs: re
  * Examples: "Dex Save (half)", "Concentration • 1 min", null
  */
 export function buildLayer3(feature: Feature, entity?: Entity, classDefs: readonly CharClass[] = officialClasses()): string | null {
-  const grantedSpell = findGrantedSpell(feature);
+  const grantedSpell = findGrantedSpell(feature, entity?.rulesetId);
   if (grantedSpell) return buildLayer3ForSpell(grantedSpell, entity, classDefs);
 
   const action = feature.activation;
@@ -1205,7 +1205,7 @@ export function generateActionCard(
 ): ActionCard | null {
   if (!feature.activation) return null;
 
-  const cardType = classifyFeature(feature);
+  const cardType = classifyFeature(feature, entity?.rulesetId);
   const { available, reason, incapacitatedOverridable } = isFeatureAvailable(feature, entity);
 
   const tabs: ActionCard['tabs'] = ['features'];
@@ -1225,7 +1225,7 @@ export function generateActionCard(
     name:              feature.name,
     cardType,
     color:             cardColor(cardType),
-    layer1:            buildLayer1(feature, cardType),
+    layer1:            buildLayer1(feature, cardType, entity?.rulesetId),
     layer2:            buildLayer2(feature, entity, opts),
     layer3:            buildLayer3(feature, entity),
     outcomes:          buildOutcomeLines(feature),

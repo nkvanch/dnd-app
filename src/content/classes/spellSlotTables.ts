@@ -291,6 +291,7 @@ export const CASTER_TYPE: Record<string, CasterType> = {
 /** classIds whose pact-magic table lives outside WARLOCK_SLOTS (order/patron-gated). */
 const PACT_SLOT_TABLES: Record<string, SpellSlotRow[]> = {
   warlock:      WARLOCK_SLOTS,
+  warlock_2024: WARLOCK_SLOTS,
   abyss_knight: ABYSS_KNIGHT_SLOTS,
   emperor_warlock:      WARLOCK_SLOTS,
   emperor_warlock_demo: WARLOCK_SLOTS,

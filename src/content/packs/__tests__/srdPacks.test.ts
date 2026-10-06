@@ -93,3 +93,15 @@ describe('first-party SRD packs', () => {
     }
   });
 });
+
+describe('pack content does not depend on the build environment', () => {
+  it('Magic Initiate offers the 2024 class lists, and the 5.2.1 pack is the same whether or not the SRD-only filter is on', () => {
+    const { SPELL_LIST_2024 } = require('../../classes2024/spellLists2024');
+    const feats = b.homebrew!.feats as { id: string; pendingChoices?: { id: string; pool: { label: string }[] }[] }[];
+    for (const key of ['cleric', 'druid', 'wizard'] as const) {
+      const feat = feats.find(f => f.id === `magic_initiate_${key}_2024`)!;
+      const offered = feat.pendingChoices!.find(c => c.id.endsWith('cantrips'))!.pool.length;
+      expect(offered).toBe(SPELL_LIST_2024[key][0].length);
+    }
+  });
+});

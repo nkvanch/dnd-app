@@ -19,7 +19,8 @@
 // ============================================================================
 import { Ability, ChoiceDefinition, Feat, Feature, RulesetId } from '../../engine/types';
 import { feature, activation } from '../homebrewPack/helpers';
-import { ALL_SPELLS } from '../spells/index';
+import { FULL_SPELL_LIBRARY } from '../spells/index';
+import { SPELL_LIST_2024 } from '../classes2024/spellLists2024';
 
 const SOURCE = 'System Reference Document 5.2.1 (2024 rules)';
 const RULESET = 'dnd5e-2024' as RulesetId;
@@ -66,7 +67,12 @@ const slugName = (id: string) => id.split('_').map(w => w[0].toUpperCase() + w.s
 function magicInitiate(list: typeof LISTS[number]): Feat {
   const id = `magic_initiate_${list.key}_2024`;
   const poolId = `magic_initiate_${list.key}_2024_cast`;
-  const onList = (level: number) => ALL_SPELLS.filter(s => s.level === level && s.classes?.includes(list.key));
+  // The 2024 (SRD 5.2.1) spell list of that class, not the 2014 one, and the whole library rather than the build's filtered view,
+  // so the feat reads the same in every build and in the pack generated from it.
+  const onList = (level: number) => {
+    const ids = new Set(SPELL_LIST_2024[list.key][level] ?? []);
+    return FULL_SPELL_LIBRARY.filter(s => ids.has(s.id));
+  };
 
   const cantripChoice: ChoiceDefinition = {
     id: 'cantrips', prompt: `Magic Initiate (${list.label}): choose two ${list.label} cantrips.`,

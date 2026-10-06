@@ -2,8 +2,9 @@
 // FILE: src/content/packs/nonSrdPacks.ts
 // The PRIVATE content packs: the official content the app carries that is not in a System Reference Document.
 //   grimoire.nonsrd.5.1    the 5e (2014) content outside SRD 5.1: Artificer and every official subclass, species, background,
-//                          feat and spell beyond the SRD, plus the items the 5.1 pack cannot carry (items the catalog marks
-//                          SRD whose text is not yet verified against the SRD, and the non-SRD ones)
+//                          feat and spell beyond the SRD, and the non-SRD items
+//   grimoire.srd.5.1.unverified  the items the catalog marks SRD but that fail the strict SRD provenance audit, so the public
+//                          SRD 5.1 pack cannot carry them
 //   grimoire.nonsrd.5.2.1  the 5.5e (2024) content outside SRD 5.2.1: nothing exists today, so no pack is built
 // These are NOT licensed for redistribution and are never bundled with the app or put in a public repository: the build writes
 // them to release/packs/ only (never assets/packs/). A person installs them from a file, like any content pack, for their own
@@ -26,6 +27,7 @@ import {
 
 export const NON_SRD_5_1_PACK_ID = 'grimoire.nonsrd.5.1';
 export const NON_SRD_5_2_1_PACK_ID = 'grimoire.nonsrd.5.2.1';
+export const SRD_5_1_UNVERIFIED_PACK_ID = 'grimoire.srd.5.1.unverified';
 
 const LICENSE_PRIVATE = 'Proprietary. For personal use on your own devices; not licensed for redistribution.';
 const ATTRIBUTION = 'Dungeons & Dragons and the content of its official books are the property of Wizards of the Coast LLC. This pack is not part of any System Reference Document, is not licensed for redistribution, and is not endorsed by or affiliated with Wizards of the Coast.';
@@ -66,11 +68,10 @@ export function buildNonSrd51Pack(): SrdPack {
     .map(s => stamp(scrub(plain({ ...s, id: subclassId(s as never) })), prov) as AnyRecord);
   const nonSrd = <T extends { id: string; srd?: boolean; rulesetId?: unknown }>(list: readonly T[]) =>
     list.filter(x => x.srd !== true && !is2024(x));
-  const verified = idsOf(srd51, 'items');
   const inSrd521 = idsOf(srd521, 'items');
   const items = (FULL_ITEM_LIBRARY as Item[])
-    .filter(i => !verified.has(i.id) && !inSrd521.has(i.id) && !is2024(i as { rulesetId?: unknown }))
-    .map(i => stamp(scrub(plain(i)), official(i.srd === true ? 'Marked SRD in the catalog but not verified against the SRD text' : 'Official non-SRD item')) as AnyRecord);
+    .filter(i => i.srd !== true && !inSrd521.has(i.id) && !is2024(i as { rulesetId?: unknown }))
+    .map(i => stamp(scrub(plain(i)), official('Official non-SRD item')) as AnyRecord);
 
   const spellsTaken = taken('spells');
   const content: PackContent = {
@@ -87,6 +88,31 @@ export function buildNonSrd51Pack(): SrdPack {
     id: NON_SRD_5_1_PACK_ID, name: 'Grimoire 5e non-SRD (private)', version: '1.0.0', ruleset: 'dnd5e-2014', sourceFamily: 'NON_SRD_5E',
     license: LICENSE_PRIVATE, attribution: ATTRIBUTION, dependencies: deps,
     description: 'Official 5e content outside the SRD: Artificer, subclasses, species, backgrounds, feats, spells and items. For personal use; do not redistribute.',
+  }, content, undefined, ['dnd5e-2014']);
+}
+
+/**
+ * The items the catalog marks SRD that fail the strict SRD 5.1 provenance audit (their text or structure is not yet shown to match
+ * the SRD), minus those SRD 5.2.1 carries. They are real SRD item names, but the app cannot yet claim the text is the SRD's, so
+ * they are a private pack, not part of the public SRD 5.1 pack. Installing it fills in the 5e item list for personal use.
+ */
+export function buildSrd51UnverifiedPack(): SrdPack {
+  const srd51 = buildSrd51Pack();
+  const srd521 = buildSrd521Pack();
+  const idsOf = (pack: SrdPack) => new Set(((pack.homebrew as unknown as Record<string, AnyRecord[]>).items ?? []).map(r => r.id));
+  const verified = idsOf(srd51);
+  const inSrd521 = idsOf(srd521);
+  const prov = official('Marked SRD in the catalog; fails the strict SRD 5.1 provenance audit');
+  const items = (FULL_ITEM_LIBRARY as Item[])
+    .filter(i => i.srd === true && !verified.has(i.id) && !inSrd521.has(i.id) && !is2024(i as { rulesetId?: unknown }))
+    .map(i => stamp(scrub(plain(i)), prov) as AnyRecord);
+  const content: PackContent = { classes: [], subclasses: [], races: [], backgrounds: [], feats: [], spells: [], items, monsters: [], conditions: [] };
+  const deps: PackDependency[] = [{ id: SRD_5_1_PACK_ID, minVersion: '1.0.0', reason: 'The verified SRD 5.1 items these sit beside.' }];
+  return assemble({
+    id: SRD_5_1_UNVERIFIED_PACK_ID, name: 'Grimoire SRD 5.1 unverified items (private)', version: '1.0.0', ruleset: 'dnd5e-2014', sourceFamily: 'SRD_5_1_UNVERIFIED',
+    license: 'Unverified. Marked SRD in the catalog but not shown to match the SRD 5.1 text. For personal use; not for redistribution.',
+    attribution: 'These items are named in the System Reference Document 5.1 by Wizards of the Coast LLC (CC-BY-4.0, https://dnd.wizards.com/resources/systems-reference-document), but their text in this pack has not been verified against it and is not offered as the SRD text.',
+    dependencies: deps, description: 'The 5e items the catalog marks SRD whose text fails the strict SRD provenance audit. Personal use only.',
   }, content, undefined, ['dnd5e-2014']);
 }
 

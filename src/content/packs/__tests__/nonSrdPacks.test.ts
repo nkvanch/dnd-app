@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { buildSrd51Pack, buildSrd521Pack, serializePack, sha256, canonicalJson, SRD_5_1_PACK_ID } from '../srdPacks';
-import { buildNonSrd51Pack, buildNonSrd521Pack, NON_SRD_5_1_PACK_ID } from '../nonSrdPacks';
+import { buildNonSrd51Pack, buildNonSrd521Pack, buildSrd51UnverifiedPack, NON_SRD_5_1_PACK_ID, SRD_5_1_UNVERIFIED_PACK_ID } from '../nonSrdPacks';
 import { validateManifest } from '../../../engine/contentPackManifest';
 import { validateGrimoirePack } from '../../../engine/backup';
 import { BUNDLED_PACKS } from '../../bundledPacks';
@@ -77,12 +77,36 @@ describe('the private non-SRD 5e pack', () => {
     expect(provider.classes().map(c => c.id)).toContain('artificer');
     expect(provider.classes().map(c => c.id)).toContain('wizard');
     expect(provider.races().map(r => r.id)).toEqual(expect.arrayContaining(['aasimar', 'tabaxi']));
-    expect(provider.items().length).toBeGreaterThan(600);
+    expect(provider.items().length).toBeGreaterThan(350);   // the 95 verified + the non-SRD items; the unverified SRD items are their own pack
   });
 });
 
 describe('the 5.5e non-SRD pack', () => {
   it('is not built: every 2024 record in the app is part of SRD 5.2.1', () => {
     expect(buildNonSrd521Pack()).toBeUndefined();
+  });
+});
+
+describe('the private unverified-SRD 5e item pack', () => {
+  const unv = buildSrd51UnverifiedPack();
+  it('holds the items marked SRD that fail the strict audit, with no licence claim, and overlaps no other pack', () => {
+    expect(validateManifest(unv.manifest)).toEqual([]);
+    expect(unv.manifest).toMatchObject({ id: SRD_5_1_UNVERIFIED_PACK_ID, sourceFamily: 'SRD_5_1_UNVERIFIED' });
+    expect(unv.manifest.license).toMatch(/Unverified/);
+    expect(unv.manifest.attribution).toMatch(/not offered as the SRD text/);
+    expect(unv.manifest.dependencies.map(d => d.id)).toEqual([SRD_5_1_PACK_ID]);
+    expect(Object.keys(unv.manifest.counts)).toEqual(['items']);
+    expect(unv.manifest.counts.items).toBeGreaterThan(200);
+    const mine = new Set((recordsOf(unv).items ?? []).map(i => i.id));
+    for (const other of [s51, s521, nonSrd]) for (const i of recordsOf(other).items ?? []) expect(mine.has(i.id)).toBe(false);
+    for (const i of recordsOf(unv).items ?? []) expect((i as { srd?: boolean }).srd).toBe(true);
+    expect(validateGrimoirePack(JSON.parse(serializePack(unv)))).toBeNull();
+  });
+
+  it('together with the SRD and non-SRD packs it covers the whole 5e item catalog', () => {
+    const catalog = new Set<string>();
+    for (const p of [s51, unv, nonSrd, s521]) for (const i of recordsOf(p).items ?? []) catalog.add(i.id);
+    const { FULL_ITEM_LIBRARY } = require('../../items/index') as typeof import('../../items/index');
+    expect(FULL_ITEM_LIBRARY.filter((i: { id: string }) => !catalog.has(i.id)).map((i: { id: string }) => i.id)).toEqual([]);
   });
 });

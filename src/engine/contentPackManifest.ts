@@ -49,7 +49,11 @@ export type ContentPackManifest = {
   officialFirstPartyPack: boolean;
   /** How many records of each kind the pack holds. */
   counts: Record<string, number>;
+  /** An Ed25519 signature over the manifest and content hash by a key the app trusts (content/packSigning.ts). Absent on an unsigned pack. */
+  signature?: PackSignature;
 };
+
+export type PackSignature = { alg: 'ed25519'; keyId: string; value: string };
 
 const REQUIRED: (keyof ContentPackManifest)[] = [
   'manifestVersion', 'id', 'name', 'version', 'ruleset', 'sourceFamily', 'license', 'attribution', 'contentHash',

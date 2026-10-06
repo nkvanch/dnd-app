@@ -44,7 +44,7 @@ export async function installBundledPacks(ids: readonly string[], store: PackSto
   for (const id of withDependencies(ids)) {
     if (installedOfficialPacks().some(p => p.manifest.id === id)) continue;
     const pack = BUNDLED_PACKS.find(p => p.id === id)!;
-    const result = await installOfficialPack(pack.load(), store);
+    const result = await installOfficialPack(pack.load(), store, { signed: 'require' });
     if (!result.ok) return { ok: false, problems: [`${pack.name} could not be installed:`, ...result.problems] };
   }
   return { ok: true };

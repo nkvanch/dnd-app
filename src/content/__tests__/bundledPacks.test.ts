@@ -7,6 +7,7 @@ import { rulesetHasContent } from '../../components/MissingRulesetContentBanner'
 import { editionLabel } from '../../components/EditionBadge';
 import { isNonSrd } from '../../components/NonSrdBadge';
 import { RulesetId } from '../../engine/types';
+import { verifyPackSignature } from '../packSigning';
 
 const R2024 = 'dnd5e-2024' as RulesetId;
 const R2014 = 'dnd5e-2014' as RulesetId;
@@ -22,9 +23,13 @@ describe('the SRD packs bundled with the app', () => {
   it('are exactly what the pack builder produces now (a stale bundle fails here; rebuild with scripts/build-srd-packs.ts)', () => {
     const built = { 'grimoire.srd.5.1': buildSrd51Pack(), 'grimoire.srd.5.2.1': buildSrd521Pack() };
     for (const b of BUNDLED_PACKS) {
-      const file = b.load() as { manifest: { contentHash: string; version: string } };
+      const file = b.load() as { manifest: { contentHash: string; version: string; signature?: unknown } };
       expect(file.manifest.contentHash).toBe(built[b.id as keyof typeof built].manifest.contentHash);
-      expect(JSON.stringify(file)).toBe(serializePack(built[b.id as keyof typeof built]));
+      // The shipped file is the built pack plus the signature the build added; the signature must verify against a key the app trusts.
+      const { signature: _signature, ...manifest } = file.manifest;
+      void _signature;
+      expect(JSON.stringify({ ...file, manifest })).toBe(serializePack(built[b.id as keyof typeof built]));
+      expect(verifyPackSignature(file as never).status).toBe('valid');
     }
   });
 

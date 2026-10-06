@@ -9,6 +9,7 @@
 // Authenticity is not checked: the content hash proves the file is intact, not who made it. Importing a pack is the
 // player's own decision, as importing homebrew is.
 // ============================================================================
+import { verifyPackSignature, SignatureStatus } from './packSigning';
 import { validateGrimoirePack, validatePackContents } from '../engine/backup';
 import { compareVersions, packHashInput, validateManifest, ContentPackManifest } from '../engine/contentPackManifest';
 import { sha256Hex } from '../engine/sha256';
@@ -48,6 +49,8 @@ export type OfficialPackPreview =
       previousVersion?: string;
       /** Plain-language consequences to show before the player confirms. */
       notes: string[];
+      /** Whether a key the app trusts signed the pack (content/packSigning.ts). Anything but 'valid' needs the player's confirmation. */
+      signature: { status: SignatureStatus; keyId?: string };
     }
   | { ok: false; problems: string[] };
 
@@ -68,6 +71,8 @@ export function previewOfficialPack(data: unknown, current: readonly InstalledPa
   if (contentProblems.length > 0) {
     return { ok: false, problems: [`The pack’s content is not valid (${contentProblems.length} problem${contentProblems.length === 1 ? '' : 's'}):`, ...contentProblems.slice(0, 4)] };
   }
+  const signature = verifyPackSignature(pack);
+  if (signature.status === 'invalid') return { ok: false, problems: ['The pack’s signature does not match its manifest, so it was changed or forged. It was not installed.'] };
   const others = current.filter(p => p.manifest.id !== pack.manifest.id);
   const resolved = activateCheck([...others, pack]);
   if (resolved.length > 0) return { ok: false, problems: resolved };
@@ -80,8 +85,10 @@ export function previewOfficialPack(data: unknown, current: readonly InstalledPa
     'Installing makes the pack the app’s official content: races, classes, backgrounds, feats, subclasses, spells and items come from installed packs instead of the built-in catalog. Anything the packs do not contain (for example a non-SRD class) is hidden until you remove them. Your homebrew and your characters are not changed.',
   ];
   if (action === 'update') notes.push(`This replaces version ${existing!.manifest.version}.`);
+  if (signature.status === 'unsigned') notes.push('This pack is not signed, so there is no way to tell who made it. Install it only if you trust where it came from.');
+  if (signature.status === 'unknown_key') notes.push(`This pack is signed with a key this app does not know (${signature.keyId}). Install it only if you trust where it came from.`);
   if (pack.manifest.dependencies.length > 0) notes.push(`Needs: ${pack.manifest.dependencies.map(d => `${d.id}${d.minVersion ? ' ' + d.minVersion + '+' : ''}`).join(', ')} (installed).`);
-  return { ok: true, pack, manifest: pack.manifest, action, previousVersion: existing?.manifest.version, notes };
+  return { ok: true, pack, manifest: pack.manifest, action, previousVersion: existing?.manifest.version, notes, signature };
 }
 
 /** Problems that stop this set of packs resolving (a missing or too-old dependency, a cycle), without activating anything. */
@@ -93,9 +100,11 @@ function activateCheck(packs: readonly InstalledPack[]): string[] {
 
 export type ServiceResult = { ok: true } | { ok: false; problems: string[] };
 
-export async function installOfficialPack(data: unknown, store: PackStore): Promise<ServiceResult> {
+/** `signed: 'require'` installs only a pack a trusted key signed (the packs that ship with the app); the default leaves that to the caller, which asks the player. A forged signature is always refused. */
+export async function installOfficialPack(data: unknown, store: PackStore, options: { signed?: 'require' | 'allow' } = {}): Promise<ServiceResult> {
   const preview = previewOfficialPack(data);
   if (!preview.ok) return preview;
+  if (options.signed === 'require' && preview.signature.status !== 'valid') return { ok: false, problems: [`${preview.manifest.name} is not signed by a key this app trusts, so it was not installed.`] };
   const others = installed.filter(p => p.manifest.id !== preview.manifest.id);
   const result = activateOfficialPacks([...others, preview.pack]);
   if (!result.ok) return { ok: false, problems: result.problems };

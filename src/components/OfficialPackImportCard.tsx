@@ -25,12 +25,15 @@ export function OfficialPackImportCard({ preview, busy, onInstall, onCancel }: {
       <Text style={styles.badge}>OFFICIAL CONTENT PACK</Text>
       <Text style={styles.name}>{m.name}</Text>
       <Text style={styles.meta}>Version {m.version} · {m.ruleset} · {m.license}</Text>
+      {preview.signature.status === 'valid'
+        ? <Text style={styles.signed} testID="official-pack-signed">✓ Signed ({preview.signature.keyId})</Text>
+        : <Text style={styles.unsigned} testID="official-pack-unsigned">{preview.signature.status === 'unknown_key' ? '⚠ Signed with a key this app does not know' : '⚠ Not signed'}</Text>}
       {preview.notes.map((n, i) => <Text key={i} style={styles.body}>{n}</Text>)}
       <Text style={styles.attribution}>{m.attribution}</Text>
       <View style={styles.row}>
         <Pressable style={styles.cancel} onPress={onCancel} disabled={busy}><Text style={styles.cancelTxt}>Cancel</Text></Pressable>
         <Pressable style={[styles.confirm, busy && { opacity: 0.6 }]} onPress={onInstall} disabled={busy} testID="official-pack-install">
-          {busy ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.confirmTxt}>{ACTION_LABEL[preview.action]}</Text>}
+          {busy ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.confirmTxt}>{preview.signature.status === 'valid' ? ACTION_LABEL[preview.action] : `${ACTION_LABEL[preview.action]} anyway`}</Text>}
         </Pressable>
       </View>
     </View>
@@ -42,6 +45,8 @@ const styles = StyleSheet.create({
   badge: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold, letterSpacing: 1 },
   name: { fontSize: FontSize.xl, color: Colors.textPrimary, fontWeight: FontWeight.black },
   meta: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  signed: { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold },
+  unsigned: { fontSize: FontSize.sm, color: Colors.red, fontWeight: FontWeight.bold },
   body: { fontSize: FontSize.sm, color: Colors.textPrimary, lineHeight: 19 },
   attribution: { fontSize: FontSize.xs, color: Colors.textDim, lineHeight: 16 },
   row: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },

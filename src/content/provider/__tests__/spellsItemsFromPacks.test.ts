@@ -105,8 +105,8 @@ describe('items from installed packs', () => {
     expect(missing).toEqual([]);
   });
 
-  it('every weapon with a mastery property resolves (the two optional firearms are not in the packs)', () => {
+  it('every weapon with a mastery property resolves, the Musket and Pistol included', () => {
     const missing = WEAPON_MASTERY_TABLE.filter(w => !itemRepo.getItemSync(w.id)).map(w => w.id);
-    expect(missing.sort()).toEqual(['musket', 'pistol']);
+    expect(missing).toEqual([]);
   });
 });

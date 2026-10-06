@@ -39,6 +39,7 @@ import { MORE_FEATS_2024 } from '../feats/feats2024';
 import { BACKGROUNDS_2024 } from '../backgrounds/backgrounds2024';
 import { SPELL_VERSIONS_2024 } from '../spells/spellVersions2024';
 import { GEAR_2024 } from '../items/gear2024';
+import { EQUIPMENT_2024, EQUIPMENT_2024_IDS } from '../items/equipment2024';
 import { FULL_ITEM_LIBRARY } from '../items/index';
 import { parseStartingItem } from '../../engine/startingItems';
 import { WEAPON_MASTERY_TABLE, MASTERY_RULES } from '../weaponMastery';
@@ -155,7 +156,7 @@ export function buildSrd51Pack(): SrdPack {
  */
 function equipment521(): AnyRecord[] {
   const have = new Set(GENERATED_SRD_ITEMS.filter(i => hasVerifiedPublicItemProvenance(i.id)).map(i => i.id));
-  const gear = new Set(GEAR_2024.map(i => i.id));
+  const gear = new Set([...GEAR_2024, ...EQUIPMENT_2024].map(i => i.id));
   const wanted = new Set<string>();
   const addEntries = (entries: unknown[]) => { for (const e of entries) wanted.add(parseStartingItem(String(e)).itemId); };
   const choicesOf = (choices: { kind: string; pool?: unknown }[]) => choices.filter(c => c.kind === 'equipment')
@@ -163,16 +164,17 @@ function equipment521(): AnyRecord[] {
   for (const c of CLASSES_2024) for (const e of c.rawProgression!.entries) choicesOf(e.choices as never);
   for (const b of BACKGROUNDS_2024) choicesOf((b.pendingChoices ?? []) as never);
   for (const w of WEAPON_MASTERY_TABLE) wanted.add(w.id);
+  for (const id of EQUIPMENT_2024_IDS) wanted.add(id);
   const library = new Map((FULL_ITEM_LIBRARY as Item[]).map(i => [i.id, i]));
   const extra: Item[] = [];
   for (const id of [...wanted].sort()) {
     if (have.has(id) || gear.has(id)) continue;
     const item = library.get(id);
-    if (!item) { if (id === 'musket' || id === 'pistol') continue; throw new Error(`The 5.2.1 pack needs the item "${id}", which is not in the item library.`); }
+    if (!item) { throw new Error(`The 5.2.1 pack needs the item "${id}", which is not in the item library.`); }
     if (item.srd !== true) throw new Error(`The 5.2.1 pack needs the item "${id}", which is not marked SRD.`);
     extra.push(item);
   }
-  return [...GEAR_2024, ...extra].map(i => stamp(plain(i), srdProvenance('5.2.1', { sourceLocation: 'Equipment' })) as AnyRecord);
+  return [...GEAR_2024, ...EQUIPMENT_2024, ...extra].map(i => stamp(plain(i), srdProvenance('5.2.1', { sourceLocation: 'Equipment' })) as AnyRecord);
 }
 
 // ── SRD 5.2.1 ────────────────────────────────────────────────────────────────

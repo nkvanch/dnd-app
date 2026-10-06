@@ -18,9 +18,9 @@ describe('Weapon Mastery data (SRD 5.2.1)', () => {
       .toEqual(['cleave', 'nick', 'sap', 'vex', 'sap', 'graze', 'slow']);
   });
 
-  it('every weapon id matches a weapon in the item catalog (the two optional firearms are the exception)', () => {
+  it('every weapon id matches a weapon in the item catalog (the Musket and Pistol included)', () => {
     const itemIds = new Set(FULL_ITEM_LIBRARY.map((i: any) => i.id));
-    expect(WEAPON_MASTERY_TABLE.filter(w => !itemIds.has(w.id)).map(w => w.id)).toEqual(['musket', 'pistol']);
+    expect(WEAPON_MASTERY_TABLE.filter(w => !itemIds.has(w.id)).map(w => w.id)).toEqual([]);
   });
 
   it('class eligibility rules filter the table', () => {

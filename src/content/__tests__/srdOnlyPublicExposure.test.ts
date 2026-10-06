@@ -186,7 +186,7 @@ describe('SRD-only runtime exposure counts (golden)', () => {
       items: full.items.ALL_ITEMS.length,
       monsters: full.monsters.ALL_MONSTER_TEMPLATES.length,
       subclasses: full.subclasses.ALL_SUBCLASSES.length,
-    }).toEqual({ races: 40, subraces: 61, spells: 495, items: 897, monsters: 322, subclasses: 150 });
+    }).toEqual({ races: 40, subraces: 61, spells: 495, items: 986, monsters: 322, subclasses: 150 });
     // The public build is a strict subset of the full library.
     expect(pub.spells.ALL_SPELLS.every(s => full.spells.FULL_SPELL_LIBRARY.some(f => f.id === s.id))).toBe(true);
     expect(pub.items.ALL_ITEMS.every(i => full.items.FULL_ITEM_LIBRARY.some(f => f.id === i.id))).toBe(true);

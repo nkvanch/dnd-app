@@ -16,7 +16,7 @@ Done:
    - `grimoire.srd.5.1` 1.0.0, ruleset `dnd5e-2014`: 12 classes, 12 subclasses, 9 species, 1 background, 1 feat,
      319 spells, 95 items, 322 monsters, 14 conditions (exactly what the SRD-only build ships today).
    - `grimoire.srd.5.2.1` 1.0.0, ruleset `dnd5e-2024`: 12 classes, 12 subclasses, 9 species, 4 backgrounds, 6 feats,
-     339 spells (the library record with the SRD 5.2.1 text applied), 6 starting-gear items, and a `rules` section with the
+     339 spells (the library record with the SRD 5.2.1 text applied), 20 items (the gear its starting packages name and the weapons its Weapon Mastery table lists that the 5.1 pack's 95 items lack: Leather Armor, the adventuring packs, Holy Symbol, the crossbows and so on; the build fails if one is not marked SRD), and a `rules` section with the
      Weapon Mastery table and the class spell lists. It depends on the 5.1 pack for weapons, armor, packs, monsters and
      conditions, which are not separately authored for 5.2.1.
    - Every record carries `provenance` (`kind`, `family`, `sourceId`, and `derivedBy` where Grimoire normalized it); the
@@ -63,17 +63,27 @@ Not done, and why (each is a reason the static catalog cannot be deleted yet):
   files to install (bundling versus downloading them is step 8), so the screens still show the hardcoded catalog.
   Conditions and the feature list still come from the catalog.
 - `createCharacter` is no longer a duplicate path to maintain: the screens and it now read the same source.
-- **The engine still imports static content at module load**: `leveling.ts` and `actionCards.ts` default their
-  `classDefinitions`/`classDefs` to `ALL_CHAR_CLASSES`, `ALL_RACES` and `spellRepo`/`itemRepo` are read for spell and
-  item lookups (entitlements, action cards, pipeline), and `prerequisites.ts`/`replaceSpellChoiceSelection` read the
-  spell library lazily. `createCharacter` passes the provider's classes, races and spells wherever the engine accepts
-  them, so no static *record* is read for the pack-only tests, but a pack spell that is not also in the static library
-  would not resolve in those lookups. The spell and item repos need the same provider seam.
+- **Spells and items: done at the seam.** `spellRepo` and `itemRepo` (web and native) are wrapped (`packRepos.ts`): with packs
+  installed, the index and the full records come from the provider, and the SQLite and in-memory stores are not read. A
+  spell resolves per ruleset (`provider.getSpell(id, ruleset)`: a 2024 character gets the 5.2.1 pack's version, anyone else
+  the shared 5.1 record, and a 2024-only spell such as Divine Smite is absent for a 2014 character); the browsing index
+  has one entry per id carrying the class tags of every version, so 2024 class pickers work. Entitlements, action cards,
+  the pipeline, the pickers and the prerequisite checks all read through the repos, so they follow with no change of
+  their own; the three remaining direct readers of the hardcoded spell library (prerequisites, spell replacement, the
+  Swappable Spells panel) now use the repo too. Tests run with no repo mocked and prove it: every always-prepared spell,
+  every starting item of every 2024 class and background, and every Weapon Mastery weapon (bar the optional firearms)
+  resolves from the packs alone.
+- **Still static:** `leveling.ts` and `actionCards.ts` default `classDefinitions`/`classDefs` to the hardcoded `ALL_CHAR_CLASSES`
+  (callers pass the provider's classes; the default is only for callers that pass nothing), conditions, monsters,
+  `origin2024.ts` (which builds the Magic Initiate pools from the hardcoded spell library when it loads; the packs carry
+  those feats already built), and the homebrew spell and item builders.
+- **Finding:** the SRD-only build ships only 95 items, because the public-provenance gate is strict. Leather Armor, the
+  adventuring packs, Holy Symbol, the crossbows and the sling are not among them, so today's SRD-only APK cannot resolve a
+  2014 Fighter's or Rogue's own starting gear. The 5.1 pack mirrors that gate; widening it is a content-verification
+  decision, not an engineering one.
 - **No install registry or runtime hash check.** The provider takes packs it is given. Verifying `contentHash` needs a
   SHA-256 at runtime (build-time uses node `crypto`; React Native needs `expo-crypto`), and the install, update and
   uninstall store (steps 7 and 8) does not exist.
-- Items: the 5.2.1 pack's gear depends on the 5.1 pack's weapons and armor; the provider does not serve items yet, so
-  starting equipment still resolves through the static item repo.
 
 ## Order for the rest
 

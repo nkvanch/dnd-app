@@ -3,7 +3,7 @@
 // The hardcoded catalog behind the ContentProvider interface. It imports the static libraries, so the app can keep
 // using it unchanged while packs take over, and tests can check that a pack provider returns what it does.
 // ============================================================================
-import type { Background, CharClass, Feat, Race, RulesetId, Spell } from '../../engine/types';
+import type { Background, CharClass, Feat, Item, Race, RulesetId, Spell } from '../../engine/types';
 import { matchesRuleset } from '../../engine/types';
 import type { ContentProvider, ProviderSubclass } from './contentProvider';
 import { ALL_CHAR_CLASSES_CATALOG } from '../classes/index';
@@ -13,8 +13,10 @@ import { FULL_BACKGROUND_LIBRARY } from '../backgrounds/index';
 import { FULL_FEAT_LIBRARY } from '../feats/index';
 import { FULL_SPELL_LIBRARY } from '../spells/index';
 import { SUBCLASSES_2024 } from '../classes2024/index';
+import { FULL_ITEM_LIBRARY } from '../items/index';
+import { resolveSpellVersion } from '../spells/spellVersions';
 
-export function staticContentProvider(rulesetId: RulesetId): ContentProvider {
+export function staticContentProvider(rulesetId?: RulesetId): ContentProvider {
   const of = <T extends { rulesetId?: RulesetId }>(list: readonly T[]): T[] => list.filter(r => matchesRuleset(r.rulesetId, rulesetId));
   const classes = of(ALL_CHAR_CLASSES_CATALOG as CharClass[]);
   const subclasses = of([...(FULL_SUBCLASS_LIBRARY as unknown as ProviderSubclass[]).filter(s => !!s.id), ...(SUBCLASSES_2024 as ProviderSubclass[])]);
@@ -22,6 +24,7 @@ export function staticContentProvider(rulesetId: RulesetId): ContentProvider {
   const backgrounds = of(FULL_BACKGROUND_LIBRARY as Background[]);
   const feats = of(FULL_FEAT_LIBRARY as Feat[]);
   const spells = of(FULL_SPELL_LIBRARY as Spell[]);
+  const items = FULL_ITEM_LIBRARY as Item[];
   const first = <T extends { id: string }>(list: readonly T[], id: string) => list.find(x => x.id === id);
   return {
     source: 'static', rulesetId,
@@ -31,6 +34,10 @@ export function staticContentProvider(rulesetId: RulesetId): ContentProvider {
     races: () => races, getRace: id => first(races, id),
     backgrounds: () => backgrounds, getBackground: id => first(backgrounds, id),
     feats: () => feats, getFeat: id => first(feats, id),
-    spells: () => spells, getSpell: id => first(spells, id),
+    // The hardcoded library keeps one record per spell id (the 2014 text) and resolves the SRD 5.2.1 version on demand.
+    spells: target => spells.filter(s => matchesRuleset(s.rulesetId, target ?? rulesetId)).map(s => resolveSpellVersion(s, target ?? rulesetId)),
+    getSpell: (id, target) => resolveSpellVersion(first(spells, id), target ?? rulesetId),
+    spellIndexSpells: () => FULL_SPELL_LIBRARY as Spell[],
+    items: () => items, getItem: id => first(items, id),
   };
 }

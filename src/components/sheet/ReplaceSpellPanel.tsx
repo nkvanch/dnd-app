@@ -7,11 +7,11 @@ import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal, StyleSheet } from 'react-native';
 import { Entity, CampaignRules } from '../../engine/types';
 import { replaceSpellChoiceSelection } from '../../engine/leveling';
-import { FULL_SPELL_LIBRARY } from '../../content/spells/index';
+import { spellRepo } from '../../content/spellRepo';
 import { candidateSpellsForChoice } from '../../content/spellChoiceFilter';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
-const nameOf = (id: string) => FULL_SPELL_LIBRARY.find(s => s.id === id)?.name ?? id;
+const nameOf = (id: string) => spellRepo.getIndex().find(s => s.id === id)?.name ?? id;
 
 export function replaceableSpellChoices(entity: Entity) {
   return entity.choices.filter(c => c.resolved && c.definition.kind === 'spell' && !!c.definition.replace && c.selections.length > 0);
@@ -27,7 +27,7 @@ export function ReplaceSpellPanel({ entity, rules, onEntityUpdate }: { entity: E
   const choice = target ? entity.choices.find(c => c.id === target.choiceId) : undefined;
   const known = new Set([...(entity.spellcasting?.cantrips ?? []), ...(entity.spellcasting?.known ?? []), ...(entity.spellcasting?.prepared ?? [])]);
   const candidates = choice
-    ? candidateSpellsForChoice(FULL_SPELL_LIBRARY, choice.definition, { ownClassId: choice.definition.forClassId ?? entity.identity.classId, maxCastableLevel: 9 })
+    ? candidateSpellsForChoice(spellRepo.getIndex(), choice.definition, { ownClassId: choice.definition.forClassId ?? entity.identity.classId, maxCastableLevel: 9 })
         .filter(s => !known.has(s.id))
     : [];
 

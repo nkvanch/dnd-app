@@ -1,3 +1,6 @@
+// Jest resolves the SQLite-backed (native) spell repo by default; these tests use the in-memory one the web build uses.
+jest.mock('../spellRepo', () => jest.requireActual('../spellRepo.ts'));
+
 import { FULL_SPELL_LIBRARY } from '../spells/index';
 import { candidateSpellsForChoice, spellMatchesChoice } from '../spellChoiceFilter';
 import { newChar, toLevel, bindSubclass } from '../classes2024/testKit';

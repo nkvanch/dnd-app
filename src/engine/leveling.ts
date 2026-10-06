@@ -1,3 +1,6 @@
+import { parseStartingItem } from './startingItems';
+export { parseStartingItem };
+import { spellRepo } from '../content/spellRepo';
 import { checkPrerequisites, heldOptionIds, dependentsOf, splitSelection, cantripQualifies, lookupSpell } from './prerequisites';
 import type { Prerequisite } from './types';
 import { Feat, Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
@@ -1409,10 +1412,8 @@ export function replaceSpellChoiceSelection(
   if (!sc) throw new Error('This character does not cast spells.');
   if (sc.cantrips.includes(newSpellId) || sc.known.includes(newSpellId) || sc.prepared.includes(newSpellId)) throw new Error('You already know that spell.');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { FULL_SPELL_LIBRARY } = require('../content/spells/index') as { FULL_SPELL_LIBRARY: { id: string; level: number; school: string; ritual: boolean; classes?: string[] }[] };
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { spellMatchesChoice } = require('../content/spellChoiceFilter') as typeof import('../content/spellChoiceFilter');
-  const next = FULL_SPELL_LIBRARY.find(sp => sp.id === newSpellId);
+  const next = spellRepo.getIndex().find(sp => sp.id === newSpellId);
   const ownClassId = choice.definition.forClassId ?? entity.identity.classId;
   if (!next || !spellMatchesChoice(next, choice.definition, { ownClassId, maxCastableLevel: 9 })) throw new Error('That spell is not one this choice could have offered.');
 
@@ -2119,12 +2120,6 @@ export function resolveChoice(
   };
 
   return recomputeDerived(updated, rules);
-}
-
-/** A starting-equipment entry is an item id, or `id*N` for N of a stackable item (`parchment*10`) in one inventory row. */
-export function parseStartingItem(entry: string): { itemId: string; quantity: number } {
-  const m = /^(.+)\*(\d+)$/.exec(entry);
-  return m ? { itemId: m[1], quantity: Math.max(1, Number(m[2])) } : { itemId: entry, quantity: 1 };
 }
 
 /** Adds gold pieces to the character's purse. */

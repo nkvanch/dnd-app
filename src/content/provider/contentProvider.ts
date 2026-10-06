@@ -11,7 +11,7 @@
 import type { GrimoirePack } from '../../engine/backup';
 import { validateGrimoirePack } from '../../engine/backup';
 import { ContentPackManifest, compareVersions, validateManifest } from '../../engine/contentPackManifest';
-import type { Background, CharClass, ClassProgression, Feat, Race, RulesetId, Spell } from '../../engine/types';
+import type { Background, CharClass, ClassProgression, Feat, Item, Race, RulesetId, Spell } from '../../engine/types';
 import { matchesRuleset } from '../../engine/types';
 
 /** A subclass as packs carry it: the class's progression shape plus its own id and name. */
@@ -34,8 +34,16 @@ export interface ContentProvider {
   getBackground(id: string): Background | undefined;
   feats(): readonly Feat[];
   getFeat(id: string): Feat | undefined;
-  spells(): readonly Spell[];
-  getSpell(id: string): Spell | undefined;
+  /**
+   * One spell record per id, resolved for a ruleset (the provider's own when none is given): a record written for that
+   * ruleset (the SRD 5.2.1 version of a spell) wins over the shared one, and a record written for another ruleset is left out.
+   */
+  spells(rulesetId?: RulesetId): readonly Spell[];
+  getSpell(id: string, rulesetId?: RulesetId): Spell | undefined;
+  /** One record per spell id for browsing and class lists: the shared record carrying the class tags of every version. */
+  spellIndexSpells(): readonly Spell[];
+  items(): readonly Item[];
+  getItem(id: string): Item | undefined;
 }
 
 /** A pack is not usable: invalid, a dependency is missing or too old, or two packs are for different rulesets. */
@@ -98,10 +106,32 @@ export function packContentProvider(packs: readonly InstalledPack[], rulesetId?:
   const races = pick<Race>('races');
   const backgrounds = pick<Background>('backgrounds');
   const feats = pick<Feat>('feats');
-  const spells = pick<Spell>('spells');
   const index = <T extends { id: string }>(list: readonly T[], key: (x: T) => string = x => x.id) => new Map(list.map(x => [key(x), x]));
   const classById = index(classes), subclassById = index(subclasses, subclassKey), raceById = index(races),
-    backgroundById = index(backgrounds), featById = index(feats), spellById = index(spells);
+    backgroundById = index(backgrounds), featById = index(feats);
+
+  // Spells keep every version: the 5.1 pack's shared record and the 5.2.1 pack's 2024 record share an id, so they are
+  // grouped by id and resolved per ruleset instead of the later one replacing the earlier.
+  const spellVersions = new Map<string, Spell[]>();
+  for (const p of ordered) for (const s of ((p.homebrew?.spells ?? []) as unknown as Spell[])) {
+    spellVersions.set(s.id, [...(spellVersions.get(s.id) ?? []), s]);
+  }
+  const last = <T,>(list: T[]): T | undefined => list[list.length - 1];
+  const resolveSpell = (versions: Spell[], target?: RulesetId): Spell | undefined => {
+    const shared = last(versions.filter(v => !v.rulesetId));
+    if (!target) return shared ?? last(versions);
+    return last(versions.filter(v => v.rulesetId === target)) ?? shared;
+  };
+  const spellsFor = (target?: RulesetId): Spell[] =>
+    [...spellVersions.values()].map(v => resolveSpell(v, target)).filter((s): s is Spell => !!s);
+  const spellIndex: Spell[] = [...spellVersions.values()].map(versions => {
+    const base = resolveSpell(versions) as Spell;
+    const classes = [...new Set(versions.flatMap(v => v.classes ?? []))];
+    return classes.length > 0 ? { ...base, classes } : base;
+  });
+  // Items are shared across rulesets (a Longsword is a Longsword): every installed pack's, merged by id.
+  const items = mergeById(ordered.map(p => ((p.homebrew?.items ?? []) as unknown as Item[])));
+  const itemById = index(items);
 
   return {
     source: ordered.map(p => `pack:${p.manifest.id}@${p.manifest.version}`).join('+'),
@@ -113,6 +143,9 @@ export function packContentProvider(packs: readonly InstalledPack[], rulesetId?:
     races: () => races, getRace: id => raceById.get(id),
     backgrounds: () => backgrounds, getBackground: id => backgroundById.get(id),
     feats: () => feats, getFeat: id => featById.get(id),
-    spells: () => spells, getSpell: id => spellById.get(id),
+    spells: target => spellsFor(target ?? rulesetId),
+    getSpell: (id, target) => resolveSpell(spellVersions.get(id) ?? [], target ?? rulesetId),
+    spellIndexSpells: () => spellIndex,
+    items: () => items, getItem: id => itemById.get(id),
   };
 }

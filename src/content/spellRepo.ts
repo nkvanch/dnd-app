@@ -11,6 +11,7 @@
 import { Spell } from '../engine/types';
 import { ALL_SPELLS } from './spells/index';
 import type { SpellIndexEntry, SpellRepo } from './spellRepo.types';
+import { withOfficialSpells } from './packRepos';
 import { resolveSpellVersion } from './spells/spellVersions';
 
 const spellById = new Map<string, Spell>(ALL_SPELLS.map(s => [s.id, s]));
@@ -29,9 +30,9 @@ const index: SpellIndexEntry[] = ALL_SPELLS.map(s => ({
   components:    s.components,
 }));
 
-export const spellRepo: SpellRepo = {
+export const spellRepo: SpellRepo = withOfficialSpells({
   async init() { /* no-op — the static arrays are already in memory */ },
   getIndex() { return index; },
   async ensureLoaded() { /* no-op — everything is already resident */ },
   getSpellSync(id, rulesetId) { return resolveSpellVersion(spellById.get(id), rulesetId); },
-};
+});

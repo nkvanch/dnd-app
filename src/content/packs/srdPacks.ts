@@ -18,7 +18,7 @@ import { GRIMOIRE_PACK_FORMAT_VERSION } from '../../engine/backup';
 import {
   CONTENT_PACK_MANIFEST_VERSION, ContentPackManifest, RecordProvenance, PackDependency,
 } from '../../engine/contentPackManifest';
-import type { CharClass, Spell } from '../../engine/types';
+import type { CharClass, Item, Spell } from '../../engine/types';
 import { ALL_CHAR_CLASSES_CATALOG } from '../classes/index';
 import { ALL_CLASS_PROGRESSIONS } from '../classes/index';
 import { FULL_SUBCLASS_LIBRARY } from '../subclasses/index';
@@ -38,6 +38,8 @@ import { ORIGIN_FEATS_2024 } from '../feats/origin2024';
 import { BACKGROUNDS_2024 } from '../backgrounds/backgrounds2024';
 import { SPELL_VERSIONS_2024 } from '../spells/spellVersions2024';
 import { GEAR_2024 } from '../items/gear2024';
+import { FULL_ITEM_LIBRARY } from '../items/index';
+import { parseStartingItem } from '../../engine/startingItems';
 import { WEAPON_MASTERY_TABLE, MASTERY_RULES } from '../weaponMastery';
 
 export const SRD_5_1_PACK_ID = 'grimoire.srd.5.1';
@@ -148,6 +150,35 @@ export function buildSrd51Pack(): SrdPack {
   }, content, undefined, ['dnd5e-2014']);
 }
 
+/**
+ * The equipment the 5.2.1 pack needs to stand on its own: the gear its starting packages name and the weapons its Weapon
+ * Mastery table lists, taken from the item library. The 5.1 pack's items are limited to what passed the public-provenance
+ * gate (95 items, which leaves out Leather Armor, the adventuring packs, Holy Symbol and the crossbows), so anything the
+ * 2024 classes and backgrounds hand out that is missing there is added here, from entries the library marks as SRD.
+ * The build fails if a named item is not in the library or is not marked SRD, so nothing outside the SRD can slip in.
+ */
+function equipment521(): AnyRecord[] {
+  const have = new Set(GENERATED_SRD_ITEMS.filter(i => hasVerifiedPublicItemProvenance(i.id)).map(i => i.id));
+  const gear = new Set(GEAR_2024.map(i => i.id));
+  const wanted = new Set<string>();
+  const addEntries = (entries: unknown[]) => { for (const e of entries) wanted.add(parseStartingItem(String(e)).itemId); };
+  const choicesOf = (choices: { kind: string; pool?: unknown }[]) => choices.filter(c => c.kind === 'equipment')
+    .forEach(c => (Array.isArray(c.pool) ? c.pool : []).forEach((o: { value?: unknown }) => Array.isArray(o.value) && addEntries(o.value)));
+  for (const c of CLASSES_2024) for (const e of c.rawProgression!.entries) choicesOf(e.choices as never);
+  for (const b of BACKGROUNDS_2024) choicesOf((b.pendingChoices ?? []) as never);
+  for (const w of WEAPON_MASTERY_TABLE) wanted.add(w.id);
+  const library = new Map((FULL_ITEM_LIBRARY as Item[]).map(i => [i.id, i]));
+  const extra: Item[] = [];
+  for (const id of [...wanted].sort()) {
+    if (have.has(id) || gear.has(id)) continue;
+    const item = library.get(id);
+    if (!item) { if (id === 'musket' || id === 'pistol') continue; throw new Error(`The 5.2.1 pack needs the item "${id}", which is not in the item library.`); }
+    if (item.srd !== true) throw new Error(`The 5.2.1 pack needs the item "${id}", which is not marked SRD.`);
+    extra.push(item);
+  }
+  return [...GEAR_2024, ...extra].map(i => stamp(plain(i), srdProvenance('5.2.1', { sourceLocation: 'Equipment' })) as AnyRecord);
+}
+
 // ── SRD 5.2.1 ────────────────────────────────────────────────────────────────
 
 export function buildSrd521Pack(): SrdPack {
@@ -170,7 +201,7 @@ export function buildSrd521Pack(): SrdPack {
     backgrounds: BACKGROUNDS_2024.map(b => stamp(plain(b), prov) as AnyRecord),
     feats: ORIGIN_FEATS_2024.map(f => stamp(plain(f), prov) as AnyRecord),
     spells,
-    items: GEAR_2024.map(i => stamp(plain(i), srdProvenance('5.2.1', { sourceLocation: 'Equipment' })) as AnyRecord),
+    items: equipment521(),
     monsters: [],
     conditions: [],
   };

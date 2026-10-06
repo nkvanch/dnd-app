@@ -10,6 +10,7 @@
 // ============================================================================
 import { Entity, Prerequisite, ChoiceState } from './types';
 import { getClassLevels } from './multiclass';
+import { spellRepo } from '../content/spellRepo';
 
 export type SpellTraits = { damage: boolean; attackRoll: boolean; rangeFeet: number };
 
@@ -64,11 +65,10 @@ export function cantripQualifies(spell: SpellLike, requires: Prerequisite[] | un
 
 export function lookupSpell(id: string): SpellLike | undefined { return defaultSpellLookup(id); }
 
+// Spells are read through the spell repo, so installed content packs (officialSource.ts) are what answers. A spell the
+// character knows is in the repo's cache: the app warms every spell a character references when it loads it.
 function defaultSpellLookup(id: string): SpellLike | undefined {
-  // Loaded on demand: the content library is large and the engine should not pull it in just to be imported.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const lib = require('../content/spells/index').FULL_SPELL_LIBRARY as SpellLike[];
-  return lib.find(s => s.id === id);
+  return spellRepo.getSpellSync(id) as SpellLike | undefined;
 }
 
 function levelFor(entity: Entity, classId: string | null | undefined): number {

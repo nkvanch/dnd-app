@@ -11,6 +11,7 @@
 import { Item, asRulesetId } from '../engine/types';
 import { getContentDb } from '../db/contentDb';
 import type { ItemIndexEntry, ItemRepo } from './itemRepo.types';
+import { withOfficialItems } from './packRepos';
 import { baseWeaponIdFromName } from './items/itemBrowse';
 import { hasVerifiedPublicItemProvenance } from './items/srdProvenance';
 import { GENERATED_SRD_ITEMS } from './items/generatedSrdItems';
@@ -119,4 +120,4 @@ function getItemSync(id: string): Item | undefined {
   return fullCache.get(id);
 }
 
-export const itemRepo: ItemRepo = { init, getIndex, ensureLoaded, getItemSync };
+export const itemRepo: ItemRepo = withOfficialItems({ init, getIndex, ensureLoaded, getItemSync });

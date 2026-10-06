@@ -22,6 +22,7 @@
 import { Spell, RulesetId, asRulesetId } from '../engine/types';
 import { getContentDb } from '../db/contentDb';
 import type { SpellIndexEntry, SpellRepo } from './spellRepo.types';
+import { withOfficialSpells } from './packRepos';
 import { resolveSpellVersion } from './spells/spellVersions';
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
@@ -110,4 +111,4 @@ function getSpellSync(id: string, rulesetId?: RulesetId | null): Spell | undefin
   return resolveSpellVersion(fullCache.get(id), rulesetId);
 }
 
-export const spellRepo: SpellRepo = { init, getIndex, ensureLoaded, getSpellSync };
+export const spellRepo: SpellRepo = withOfficialSpells({ init, getIndex, ensureLoaded, getSpellSync });

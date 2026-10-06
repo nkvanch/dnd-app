@@ -79,8 +79,8 @@ export function classKit(classId: string, subclassId?: string) {
   const spells = (id: string, count: number, prompt: string): ChoiceDefinition =>
     ({ id: `${classId}_${id}`, prompt, kind: 'spell', count, pool: 'all', grants: [], required: true, resolved: false });
   /** A spell choice with its own pool rules: spells from other classes' lists, exact levels, rituals only (see SpellPickFilter). */
-  const spellsFrom = (id: string, count: number, prompt: string, filter: SpellPickFilter, required = true): ChoiceDefinition =>
-    ({ id: `${classId}_${id}`, prompt, kind: 'spell', count, pool: 'all', grants: [], required, resolved: false, spellFilter: filter });
+  const spellsFrom = (id: string, count: number, prompt: string, filter: SpellPickFilter, required = true, replace?: ChoiceReplacePolicy): ChoiceDefinition =>
+    ({ id: `${classId}_${id}`, prompt, kind: 'spell', count, pool: 'all', grants: [], required, resolved: false, spellFilter: filter, ...(replace ? { replace } : {}) });
   const pick = (id: string, prompt: string, count: number, pool: ChoiceOption[], replace?: ChoiceReplacePolicy): ChoiceDefinition =>
     ({ id: `${classId}_${id}`, prompt, kind: 'feature_pool', count, pool, grants: [], required: true, resolved: false, ...(replace ? { replace } : {}) });
   const option = (key: string, name: string, level: number, description: string, o: FeatureOpts = {}): ChoiceOption =>

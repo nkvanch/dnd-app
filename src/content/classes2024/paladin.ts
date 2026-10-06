@@ -53,7 +53,7 @@ export const paladin2024: ClassDef = {
       choices: [k.pick('fighting_style', 'Fighting Style: choose a Fighting Style feat, or Blessed Warrior.', 1, [
         ...styles(k),
         k.option('fighting_style_blessed_warrior', 'Blessed Warrior', 2, 'You learn two Cleric cantrips of your choice (Guidance and Sacred Flame are recommended). They count as Paladin spells for you, and Charisma is your spellcasting ability for them. Whenever you gain a Paladin level, you can replace one of these cantrips with another Cleric cantrip.',
-          { grantsChoices: [k.spellsFrom('blessed_warrior_cantrips', 2, 'Blessed Warrior: choose two Cleric cantrips (Guidance and Sacred Flame are recommended).', { lists: ['cleric_2024'], label: 'Blessed Warrior (Cleric cantrips)' })] }),
+          { grantsChoices: [k.spellsFrom('blessed_warrior_cantrips', 2, 'Blessed Warrior: choose two Cleric cantrips (Guidance and Sacred Flame are recommended).', { lists: ['cleric_2024'], label: 'Blessed Warrior (Cleric cantrips)' }, true, { timing: 'level_up', rule: 'Whenever you gain a Paladin level, you can replace one of these cantrips with another Cleric cantrip.' })] }),
       ], { timing: 'level_up', rule: 'Whenever you gain a Paladin level, you can replace this with a different one.' })],
       grants: [
         k.g('fighting_style', 'Fighting Style', 2, 'You gain a Fighting Style feat of your choice, or the Blessed Warrior option.'),

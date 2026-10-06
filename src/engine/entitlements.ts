@@ -109,6 +109,15 @@ export function revokeEntitlementsFromChoice(entity: Entity, choiceId: string): 
   return reconcileRevokedResources(entity, next);
 }
 
+/** Removes one spell/cantrip entitlement a specific choice produced (swapping a chosen cantrip), leaving the rest of the choice's grants. */
+export function revokeSpellEntitlementFromChoice(entity: Entity, choiceId: string, spellId: string): Entity {
+  entity = initializeEntitlementInputs(entity);
+  const existing = entity.entitlements ?? [];
+  const next = existing.filter(e => !(e.choiceId === choiceId && e.key === spellId && (e.kind === 'cantrip_access' || e.kind === 'spell_access')));
+  if (next.length === existing.length) return entity;
+  return reconcileRevokedResources(entity, next);
+}
+
 export function hasEntitlement(entity: Entity, kind: EntitlementKind, key: string): boolean {
   return (entity.entitlements ?? []).some(e => e.kind === kind && e.key === key);
 }

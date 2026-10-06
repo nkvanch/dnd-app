@@ -1,7 +1,7 @@
 import { FULL_SPELL_LIBRARY } from '../spells/index';
 import { candidateSpellsForChoice, spellMatchesChoice } from '../spellChoiceFilter';
 import { newChar, toLevel, bindSubclass } from '../classes2024/testKit';
-import { applyPoolChoiceToEntity, applySpellChoiceToEntity } from '../../engine/leveling';
+import { applyPoolChoiceToEntity, applySpellChoiceToEntity, replaceSpellChoiceSelection } from '../../engine/leveling';
 import { removeFeature } from '../../engine/leveling';
 import { DEFAULT_RULES } from '../../store/characterStore';
 import { Entity } from '../../engine/types';
@@ -117,5 +117,47 @@ describe('cross-list choices on the 2024 classes', () => {
     const order = e.choices.find(c => c.definition.id.includes('divine_order'))!;
     e = applyPoolChoiceToEntity(e, order.id, ['divine_order_thaumaturge'], DEFAULT_RULES);
     expect(pending(e, 'thaumaturge_cantrip')).toBeDefined();
+  });
+});
+
+describe('cantrip replacement (Blessed Warrior, Druidic Warrior)', () => {
+  const pending = (e: Entity, part: string) => e.choices.find(c => c.id.includes(part))!;
+  const setup = (cls: string, option: string, part: string, picks: string[]) => {
+    let e = toLevel(newChar(cls), cls, 2);
+    const style = e.choices.find(c => c.definition.id.includes('fighting_style'))!;
+    e = applyPoolChoiceToEntity(e, style.id, [option], DEFAULT_RULES);
+    const ch = pending(e, part);
+    return { e: applySpellChoiceToEntity(e, ch.id, picks, level, DEFAULT_RULES), id: ch.id };
+  };
+
+  it('Blessed Warrior swaps one Cleric cantrip for another and keeps the other', () => {
+    const { e, id } = setup('paladin', 'fighting_style_blessed_warrior', 'blessed_warrior_cantrips', ['guidance', 'sacred_flame']);
+    expect(pending(e, 'blessed_warrior_cantrips').definition.replace?.timing).toBe('level_up');
+    const out = replaceSpellChoiceSelection(e, id, 'sacred_flame', 'resistance', DEFAULT_RULES);
+    expect(out.spellcasting!.cantrips).toEqual(expect.arrayContaining(['guidance', 'resistance']));
+    expect(out.spellcasting!.cantrips).not.toContain('sacred_flame');
+    expect(pending(out, 'blessed_warrior_cantrips').selections.sort()).toEqual(['guidance', 'resistance']);
+  });
+
+  it('refuses a spell that is not on the list, one already known, or one not held from the choice', () => {
+    const { e, id } = setup('paladin', 'fighting_style_blessed_warrior', 'blessed_warrior_cantrips', ['guidance', 'sacred_flame']);
+    expect(() => replaceSpellChoiceSelection(e, id, 'sacred_flame', 'fire_bolt', DEFAULT_RULES)).toThrow(/could have offered/);
+    expect(() => replaceSpellChoiceSelection(e, id, 'sacred_flame', 'guidance', DEFAULT_RULES)).toThrow(/already know/);
+    expect(() => replaceSpellChoiceSelection(e, id, 'light', 'resistance', DEFAULT_RULES)).toThrow(/do not hold/);
+  });
+
+  it('Druidic Warrior swaps a Druid cantrip', () => {
+    const { e, id } = setup('ranger', 'fighting_style_druidic_warrior', 'druidic_warrior_cantrips', ['guidance', 'starry_wisp']);
+    const out = replaceSpellChoiceSelection(e, id, 'starry_wisp', 'druidcraft', DEFAULT_RULES);
+    expect(out.spellcasting!.cantrips).toContain('druidcraft');
+    expect(out.spellcasting!.cantrips).not.toContain('starry_wisp');
+  });
+
+  it('a choice without a replace rule cannot be swapped', () => {
+    let e = toLevel(newChar('wizard'), 'wizard', 1);
+    const cantrips = e.choices.find(c => c.definition.id.includes('cantrip'));
+    if (!cantrips) return;
+    e = applySpellChoiceToEntity(e, cantrips.id, ['light'], level, DEFAULT_RULES);
+    expect(() => replaceSpellChoiceSelection(e, cantrips.id, 'light', 'fire_bolt', DEFAULT_RULES)).toThrow(/cannot be swapped/);
   });
 });

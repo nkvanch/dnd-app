@@ -54,7 +54,7 @@ export const ranger2024: ClassDef = {
         k.pick('fighting_style', 'Fighting Style: choose a Fighting Style feat, or Druidic Warrior.', 1, [
           ...styles(k),
           k.option('fighting_style_druidic_warrior', 'Druidic Warrior', 2, 'You learn two Druid cantrips of your choice (Guidance and Starry Wisp are recommended). They count as Ranger spells for you, and Wisdom is your spellcasting ability for them. Whenever you gain a Ranger level, you can replace one of these cantrips with another Druid cantrip.',
-            { grantsChoices: [k.spellsFrom('druidic_warrior_cantrips', 2, 'Druidic Warrior: choose two Druid cantrips (Guidance and Starry Wisp are recommended).', { lists: ['druid_2024'], label: 'Druidic Warrior (Druid cantrips)' })] }),
+            { grantsChoices: [k.spellsFrom('druidic_warrior_cantrips', 2, 'Druidic Warrior: choose two Druid cantrips (Guidance and Starry Wisp are recommended).', { lists: ['druid_2024'], label: 'Druidic Warrior (Druid cantrips)' }, true, { timing: 'level_up', rule: 'Whenever you gain a Ranger level, you can replace one of these cantrips with another Druid cantrip.' })] }),
         ]),
       ],
       grants: [

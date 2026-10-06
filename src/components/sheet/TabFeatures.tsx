@@ -19,6 +19,7 @@ import { GrantRewardModal } from './GrantRewardModal';
 import { ModeGroupPanel } from './ModeGroupPanel';
 import { WeaponMasteryPanel } from './WeaponMasteryPanel';
 import { ReplaceChoicePanel } from './ReplaceChoicePanel';
+import { ReplaceSpellPanel } from './ReplaceSpellPanel';
 import { ChangeBackgroundModal } from './ChangeBackgroundModal';
 import { spellRepo } from '../../content/spellRepo';
 import { spellProgressFor, groupPendingSpellChoices } from '../../content/creationProgress';
@@ -273,7 +274,10 @@ function TabFeaturesInner({ entity, rules, onEntityUpdate }: {
 
       {/* Swappable choices (Fighting Style, Metamagic, Eldritch Invocations, Hunter's Prey, ...): replace one held option. */}
       {canResolve && onEntityUpdate && (
-        <ReplaceChoicePanel entity={entity} rules={rules ?? DEFAULT_RULES} onEntityUpdate={onEntityUpdate} />
+        <>
+          <ReplaceChoicePanel entity={entity} rules={rules ?? DEFAULT_RULES} onEntityUpdate={onEntityUpdate} />
+          <ReplaceSpellPanel entity={entity} rules={rules ?? DEFAULT_RULES} onEntityUpdate={onEntityUpdate} />
+        </>
       )}
 
       {/* Header-level identity action — changes the whole background, not

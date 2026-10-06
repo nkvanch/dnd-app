@@ -15,7 +15,7 @@ import { itemMatchesConstraint } from '../content/items/itemBrowse';
 import type { ItemIndexEntry } from '../content/itemRepo.types';
 import { hpMinHalfDie, bonusFeatEveryLevel } from './houseRules';
 import { getClassLevels, syncLegacyIdentity, multiclassProficienciesFor } from './multiclass';
-import { initializeEntitlementInputs, grantEntitlement, grantEntitlements, revokeEntitlementsFromChoice, revokeResourceSource, recomputeResourceMaximums } from './entitlements';
+import { initializeEntitlementInputs, grantEntitlement, grantEntitlements, revokeEntitlementsFromChoice, revokeSpellEntitlementFromChoice, revokeResourceSource, recomputeResourceMaximums } from './entitlements';
 import { generateItemInstanceId } from './inventory';
 import { applyBackgroundOriginFeat, revokeBackgroundOriginFeat } from './originFeat';
 import { eligibleExpertiseOptions, eligibleToolOptions, eligibleLanguageOptions } from './choiceEligibility';
@@ -1388,6 +1388,38 @@ export function applySpellChoiceToEntity(
       c.id === choiceId ? { ...c, resolved: true, selections: spellIds } : c
     ),
   };
+  return recomputeDerived(updated, rules);
+}
+
+/**
+ * Swaps one chosen cantrip (or spell) of a resolved spell choice for another that the same choice could have offered
+ * (Blessed Warrior and Druidic Warrior: "whenever you gain a Paladin/Ranger level, you can replace one of these
+ * cantrips with another"). Needs `choice.definition.replace`; the new spell must pass the choice's own filter and not
+ * be known already. The app does not track level-ups, so honoring the timing is the player's (the rule is shown).
+ */
+export function replaceSpellChoiceSelection(
+  entity: Entity, choiceId: string, oldSpellId: string, newSpellId: string, rules: CampaignRules,
+): Entity {
+  const choice = entity.choices.find(c => c.id === choiceId);
+  if (!choice || !choice.resolved || choice.definition.kind !== 'spell') throw new Error('That choice has not been made yet.');
+  if (!choice.definition.replace) throw new Error('This choice cannot be swapped.');
+  if (!choice.selections.includes(oldSpellId)) throw new Error('You do not hold that spell from this choice.');
+  if (oldSpellId === newSpellId) throw new Error('Pick a different spell.');
+  const sc = entity.spellcasting;
+  if (!sc) throw new Error('This character does not cast spells.');
+  if (sc.cantrips.includes(newSpellId) || sc.known.includes(newSpellId) || sc.prepared.includes(newSpellId)) throw new Error('You already know that spell.');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { FULL_SPELL_LIBRARY } = require('../content/spells/index') as { FULL_SPELL_LIBRARY: { id: string; level: number; school: string; ritual: boolean; classes?: string[] }[] };
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { spellMatchesChoice } = require('../content/spellChoiceFilter') as typeof import('../content/spellChoiceFilter');
+  const next = FULL_SPELL_LIBRARY.find(sp => sp.id === newSpellId);
+  const ownClassId = choice.definition.forClassId ?? entity.identity.classId;
+  if (!next || !spellMatchesChoice(next, choice.definition, { ownClassId, maxCastableLevel: 9 })) throw new Error('That spell is not one this choice could have offered.');
+
+  const source: { kind: EntitlementSourceKind; id?: string } = choice.sourceKind ? { kind: choice.sourceKind, id: choice.sourceId } : { kind: 'manual' };
+  let updated = revokeSpellEntitlementFromChoice(entity, choiceId, oldSpellId);
+  updated = grantEntitlement(updated, { kind: next.level === 0 ? 'cantrip_access' : 'spell_access', key: newSpellId, sourceKind: source.kind, sourceId: source.id, choiceId });
+  updated = { ...updated, choices: updated.choices.map(c => c.id === choiceId ? { ...c, selections: c.selections.map(id => id === oldSpellId ? newSpellId : id) } : c) };
   return recomputeDerived(updated, rules);
 }
 

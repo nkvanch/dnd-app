@@ -7,7 +7,7 @@ import type { DependencyRef } from '../engine/contentDependencies';
 import { globalContentDB } from './classes/library';
 import { spellRepo } from './spellRepo';
 import { itemRepo } from './itemRepo';
-import { ALL_MONSTER_TEMPLATES } from './monsters/srd';
+import { officialMonsters } from './runtimeRules';
 import { currentContentExposure, exposedSubraces } from './contentExposure';
 import { officialContentVersion } from './officialSource';
 
@@ -26,7 +26,7 @@ function officialIds(): Map<string, Set<string>> {
     ['background', ids(globalContentDB.backgrounds)],
     ['feat', ids(globalContentDB.feats ?? [])],
     ['condition', ids(globalContentDB.conditions)],
-    ['monster', ids(ALL_MONSTER_TEMPLATES)],
+    ['monster', ids(officialMonsters())],
     ['spell', ids(spellRepo.getIndex())],
     ['item', ids(itemRepo.getIndex())],
   ]);

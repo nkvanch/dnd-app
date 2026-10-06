@@ -22,38 +22,25 @@ config.resolver.extraNodeModules = {
 // This app targets iOS and Android only — the web platform guard in db.ts
 // prevents any runtime SQLite calls, and this resolver prevents the bundler
 // error entirely by returning an empty module for any .wasm file on web.
-const publicContentAliases = new Map([
-  ['src/content/spells/index.ts', 'src/content/public/spells.ts'],
-  ['src/content/items/index.ts', 'src/content/public/items.ts'],
-  ['src/content/classes/index.ts', 'src/content/public/classes.ts'],
-  ['src/content/races/index.ts', 'src/content/public/races.ts'],
-  ['src/content/backgrounds/index.ts', 'src/content/public/backgrounds.ts'],
-  ['src/content/feats/index.ts', 'src/content/public/feats.ts'],
-  ['src/content/subclasses/index.ts', 'src/content/public/subclasses.ts'],
-  ['src/content/monsters/srd.ts', 'src/content/public/monsters.ts'],
-].map(([from, to]) => [path.resolve(__dirname, from), path.resolve(__dirname, to)]));
+// The built-in catalog is not part of the app: each module that holds catalog data is replaced by an empty one with the same
+// exports (src/content/empty/). Content comes only from installed content packs. Jest and the build scripts do not go through
+// Metro, so they keep the real modules, which are the source the packs are built from.
+const emptyCatalog = new Map([
+  ['spells/index.ts', 'spells.ts'], ['items/index.ts', 'items.ts'], ['classes/index.ts', 'classes.ts'], ['races/index.ts', 'races.ts'],
+  ['backgrounds/index.ts', 'backgrounds.ts'], ['feats/index.ts', 'feats.ts'], ['subclasses/index.ts', 'subclasses.ts'],
+  ['monsters/srd.ts', 'monsters.ts'], ['beastforms/index.ts', 'beastforms.ts'], ['infusions/index.ts', 'infusions.ts'],
+  ['companions/index.ts', 'companions.ts'], ['conditions/index.ts', 'conditions.ts'], ['conditions/conditions2024.ts', 'conditions2024.ts'],
+  ['spells/spellVersions2024.ts', 'spellVersions2024.ts'], ['feats/origin2024.ts', 'origin2024.ts'],
+  ['rules/rulesReference2024Data.ts', 'rulesReference2024Data.ts'], ['builtinHomebrew.ts', 'builtinHomebrew.ts'],
+].map(([from, to]) => [path.resolve(__dirname, 'src/content', from), path.resolve(__dirname, 'src/content/empty', to)]));
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (platform === 'web' && moduleName.endsWith('.wasm')) {
     return { type: 'empty' };
   }
-  // Resolve relative requests before Metro reads the original module. Looking
-  // only at the default resolver result is too late on some Expo versions,
-  // which reports the platform candidate rather than the authored .ts path.
-  if (process.env.EXPO_PUBLIC_SRD_ONLY === 'true' && moduleName.startsWith('.')) {
-    const requested = path.resolve(path.dirname(context.originModulePath), moduleName);
-    for (const [source, replacement] of publicContentAliases) {
-      const withoutExtension = source.replace(/\.ts$/, '');
-      if (requested === source || requested === withoutExtension || requested === path.dirname(source)) {
-        return { type: 'sourceFile', filePath: replacement };
-      }
-    }
-  }
   const resolved = context.resolveRequest(context, moduleName, platform);
-  if (process.env.EXPO_PUBLIC_SRD_ONLY !== 'true' || resolved?.type !== 'sourceFile') {
-    return resolved;
-  }
-  const replacement = publicContentAliases.get(path.resolve(resolved.filePath));
+  if (resolved?.type !== 'sourceFile') return resolved;
+  const replacement = emptyCatalog.get(path.resolve(resolved.filePath));
   return replacement ? { type: 'sourceFile', filePath: replacement } : resolved;
 };
 

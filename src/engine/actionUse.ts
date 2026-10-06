@@ -1,10 +1,10 @@
 import { isFeatureAvailable, isSpellPreparationLegal, resolveSpellCastingContexts, CardGenOptions } from './actionCards';
+import { officialClasses } from '../content/runtimeRules';
 import { Entity, ActionCard, CampaignRules, ActivationOption, SpellCastingContext, AttackSequenceUse } from './types';
 import { applyAbilityEffects, castConcentrationSpell, markActionSlotUsed } from './combat';
 import { legalSpellPaymentOptions, commitSpellPayment, SpellPaymentOption } from './spellPayment';
 import { recomputeDerived } from './pipeline';
 import { spellRepo } from '../content/spellRepo';
-import { ALL_CHAR_CLASSES } from '../content/classes';
 
 /**
  * Applies one use after selection. Activation options specify a requirement;
@@ -41,7 +41,7 @@ import { ALL_CHAR_CLASSES } from '../content/classes';
  * spells/items snapshot the card was generated against (CardGenOptions —
  * generateAllActionCards/generateSpellCard, actionCards.ts). This function
  * never reaches into a store for it; omitting it falls back to the
- * deterministic official-only catalog (ALL_CHAR_CLASSES), matching every
+ * deterministic official-only catalog (officialClasses()), matching every
  * existing caller that hasn't been updated to pass homebrew-aware content.
  * Also threaded into the final recomputeDerived call so the entity's
  * freshly-regenerated actionCards reflect the SAME content this cast used.
@@ -181,7 +181,7 @@ export function applyActionCardUse(
   // here, an architecturally sloppier way to reach the same result).
   const availabilityActivation = { ...card.activation, options: undefined, resourceCost: cost };
   if (!isFeatureAvailable({ activation: availabilityActivation }, entity, bypassIncapacitated, bypassActionEconomy).available) return entity;
-  const classDefs = content.classDefs ?? ALL_CHAR_CLASSES;
+  const classDefs = content.classDefs ?? officialClasses();
 
   // Item-identity closure (pass 2, finding D3/D4): a card generated from a
   // SPECIFIC equipped ItemInstance (card.sourceKind === 'item') must

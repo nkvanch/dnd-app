@@ -31,7 +31,7 @@ import { toItemIndexEntry } from './itemRepo.types';
 import type { SpellIndexEntry } from './spellRepo.types';
 import type { ItemIndexEntry } from './itemRepo.types';
 import { MonsterTemplate } from './monsters/types';
-import { ALL_MONSTER_TEMPLATES } from './monsters/srd';
+import { officialMonsters } from './runtimeRules';
 
 /** Official spell index + homebrew, deduped by id (homebrew wins), homebrew filtered by ruleset. */
 export function mergeSpellIndex(homebrewSpells: Spell[], activeRuleset?: RulesetId): SpellIndexEntry[] {
@@ -122,11 +122,11 @@ export function resolveItemById(id: string, homebrewItems: Item[], activeRuleset
 export function mergeMonsterIndex(homebrewMonsters: MonsterTemplate[], activeRuleset?: RulesetId): MonsterTemplate[] {
   const inScope = homebrewMonsters.filter(m => matchesRuleset(m.rulesetId, activeRuleset));
   const homebrewIds = new Set(inScope.map(m => m.id));
-  const official = ALL_MONSTER_TEMPLATES.filter(m => !homebrewIds.has(m.id));
+  const official = officialMonsters().filter(m => !homebrewIds.has(m.id));
   return [...official, ...inScope];
 }
 
 /** Homebrew-first, official fallback — the single-id version of mergeMonsterIndex's precedence. */
 export function resolveMonsterById(id: string, homebrewMonsters: MonsterTemplate[]): MonsterTemplate | undefined {
-  return homebrewMonsters.find(m => m.id === id) ?? ALL_MONSTER_TEMPLATES.find(m => m.id === id);
+  return homebrewMonsters.find(m => m.id === id) ?? officialMonsters().find(m => m.id === id);
 }

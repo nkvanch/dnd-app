@@ -8,6 +8,7 @@
 //     compared and so nothing existing has to change yet.
 // Pure data in, pure data out: the provider never mutates a pack and never reaches into the stores.
 // ============================================================================
+import type { MonsterTemplate } from '../monsters/types';
 import { conditionForRuleset } from '../conditions/resolve';
 import { is2024ItemId, baseItemId, editionItemId } from '../itemEditions';
 import type { GrimoirePack } from '../../engine/backup';
@@ -46,6 +47,8 @@ export interface ContentProvider {
   spellIndexSpells(): readonly Spell[];
   items(): readonly Item[];
   getItem(id: string): Item | undefined;
+  /** The monster templates of the installed packs (SRD 5.1 has 322). */
+  monsters(): readonly MonsterTemplate[];
   /**
    * The records of a pack rules table that is a list of records with ids (`rules.<key>.records`): beast forms, infusions,
    * companions. Every installed pack's, merged by id with a later pack replacing an earlier record.
@@ -161,6 +164,7 @@ export function packContentProvider(packs: readonly InstalledPack[], rulesetId?:
     spellIndexSpells: () => spellIndex,
     items: () => items,
     conditionRecords: () => conditionRecords,
+    monsters: () => mergeById(ordered.map(p => ((p.homebrew?.monsters ?? []) as unknown as MonsterTemplate[]))),
     ruleRecords: key => mergeById(ordered.map(p => ((((p as { rules?: Record<string, { records?: unknown[] }> }).rules ?? {})[key]?.records ?? []) as { id: string }[]))),
     getCondition: (id, target) => conditionForRuleset(conditionRecords, id, target ?? rulesetId),
     // An id the packs do not have falls back to its other edition (a 5e `longsword` reference on a 5.5e character, or the reverse).

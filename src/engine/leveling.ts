@@ -1,4 +1,5 @@
 import { parseStartingItem } from './startingItems';
+import { originFeats, officialClasses } from '../content/runtimeRules';
 import { grantedSpellAbility } from './grantedSpellAbility';
 import { itemIdForCharacter } from '../content/itemForCharacter';
 export { parseStartingItem };
@@ -13,7 +14,6 @@ import { Feat, Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, Pr
 import { recomputeDerived, modifier, collectAllEffects, applyStatModifiers, effectiveAbilityScores } from './pipeline';
 import { getSpellSlotsForClassLevel, multiclassCasterLevel, MULTICLASS_SPELLCASTER_SLOTS,
          pactSlotTableFor, slotsForLevel, slotsFromCountArray } from '../content/classes/spellSlotTables';
-import { ALL_CHAR_CLASSES } from '../content/classes';
 import { getProgressionForClass } from '../content/classes/progressions';
 import { WARLOCK_SLOTS } from '../content/classes/spellSlotTables';
 import { itemMatchesConstraint } from '../content/items/itemBrowse';
@@ -1037,9 +1037,7 @@ export function applyPoolChoiceToEntity(
         if (!sp || !(entity.spellcasting?.cantrips ?? []).includes(target)) throw new Error('Pick one of your known cantrips.');
         if (!cantripQualifies(sp, option.requires)) throw new Error(`${sp.name ?? target} does not qualify for ${option.label}.`);
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const feats = require('../content/feats/origin2024') as { ORIGIN_FEATS_2024: { id: string }[] };
-        if (!feats.ORIGIN_FEATS_2024.some(f => f.id === target)) throw new Error('Pick an Origin feat.');
+        if (!originFeats().some(f => f.id === target)) throw new Error('Pick an Origin feat.');
       }
     }
     const check = checkPrerequisites(entity, option?.requires, {
@@ -1804,7 +1802,7 @@ export function levelUpClass(
   progression: ClassProgression,
   rules: CampaignRules,
   targetClass?: CharClass,
-  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
+  classDefinitions: readonly CharClass[] = officialClasses(),
   /** Table-first resolution: the physically-rolled HP die result, when
    *  rules.hpMode === 'rolled' and the UI collected it (manually entered or
    *  via its own "Roll in App" convenience) before calling this — see
@@ -1945,7 +1943,7 @@ export function levelUp(
   targetLevel: number,
   progression: ClassProgression,
   rules: CampaignRules,
-  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
+  classDefinitions: readonly CharClass[] = officialClasses(),
   /** Table-first resolution — see levelUpClass's own doc comment. Only
    *  meaningful (and only ever passed) when going up exactly one level, the
    *  single "Level Up" button's own usage; a multi-level jump (the
@@ -1984,7 +1982,7 @@ export function projectToLevel(
   targetLevel: number,
   progression: ClassProgression,
   rules: CampaignRules,
-  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
+  classDefinitions: readonly CharClass[] = officialClasses(),
 ): Entity {
   return levelUp(entity, targetLevel, progression, { ...rules, hpMode: 'max' }, classDefinitions);
 }
@@ -2015,7 +2013,7 @@ export function projectMulticlassSequence(
   entity: Entity,
   steps:  MulticlassPlanStep[],
   rules:  CampaignRules,
-  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES,
+  classDefinitions: readonly CharClass[] = officialClasses(),
 ): Entity {
   const forcedRules: CampaignRules = { ...rules, hpMode: 'max' };
   return steps.reduce(
@@ -2229,7 +2227,7 @@ export function resolveEquipmentChoice(
 }
 /** Shared creation/live acquisition. Existing classes are not granted twice. */
 export function acquireClass(entity: Entity, cls: CharClass, rules: CampaignRules,
-  classDefinitions: readonly CharClass[] = ALL_CHAR_CLASSES): Entity {
+  classDefinitions: readonly CharClass[] = officialClasses()): Entity {
   if (getClassLevels(entity).some(c => c.classId === cls.id && c.level > 0)) return entity;
   return levelUpClass(entity, cls.id, getProgressionForClass(cls), rules, cls, classDefinitions);
 }

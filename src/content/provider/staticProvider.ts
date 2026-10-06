@@ -3,6 +3,7 @@
 // The hardcoded catalog behind the ContentProvider interface. It imports the static libraries, so the app can keep
 // using it unchanged while packs take over, and tests can check that a pack provider returns what it does.
 // ============================================================================
+import { FULL_MONSTER_LIBRARY } from '../monsters/srd';
 import { ALL_BEAST_FORMS } from '../beastforms';
 import { ALL_INFUSIONS } from '../infusions';
 import { COMPANION_TEMPLATES_BY_GRANT_FEATURE } from '../companions';
@@ -54,6 +55,7 @@ export function staticContentProvider(rulesetId?: RulesetId): ContentProvider {
     spellIndexSpells: () => FULL_SPELL_LIBRARY as Spell[],
     items: () => items, getItem: id => first(items, id),
     conditionRecords: () => conditionRecords,
+    monsters: () => FULL_MONSTER_LIBRARY,
     ruleRecords: key => (STATIC_RULE_RECORDS[key] ?? []),
     getCondition: (id, target) => conditionForRuleset(conditionRecords, id, target ?? rulesetId),
   };

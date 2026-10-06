@@ -9,6 +9,7 @@
 // Passive features (no activation field) are never given cards.
 // ============================================================================
 
+import { officialClasses, officialRaces } from '../content/runtimeRules';
 import { grantedSpellAbility } from './grantedSpellAbility';
 import {
   Feature, Entity, ActionCard, ActionCardType, ActionCardColor,
@@ -24,8 +25,6 @@ import { usesLargeCreatureWeaponDice } from './houseRules';
 import { hasLegalSpellPayment } from './spellPayment';
 import { isIncapacitated, isDead, incapacitationReason } from './combat';
 import { CampaignRules } from './types';
-import { ALL_CHAR_CLASSES } from '../content/classes';
-import { ALL_RACES } from '../content/races';
 import { getClassLevels } from './multiclass';
 import { spellRangeOverride, spellDamageBonus } from './spellModifiers';
 import { masteryPropertyFor } from './weaponMastery';
@@ -48,11 +47,11 @@ import { masteryPropertyFor } from './weaponMastery';
  * application/store state implicitly. The APPLICATION layer now resolves
  * the correct merged/ruleset-filtered race list (getMergedContentDB) and
  * passes it in; omitting it falls back to the deterministic, static
- * official race catalog (ALL_RACES) — correct for every test and any
+ * official race catalog (officialRaces()) — correct for every test and any
  * caller that hasn't been updated to pass homebrew-aware content, though it
  * won't reflect a homebrew race's own size.
  */
-export function isLargeCreature(entity: Entity, races: readonly Race[] = ALL_RACES): boolean {
+export function isLargeCreature(entity: Entity, races: readonly Race[] = officialRaces()): boolean {
   const raceId = entity.identity.raceId;
   if (raceId) {
     const race = races.find(r => r.id === raceId);
@@ -86,7 +85,7 @@ function doubleDice(dice: string): string {
  * second ad-hoc merge path) and passes it down — this file never reaches
  * into a store for any of it. Omitting a field falls back to the matching
  * deterministic, static official-only catalog on each function that
- * consumes it (ALL_CHAR_CLASSES / ALL_RACES / itemRepo-only / no homebrew
+ * consumes it (officialClasses() / officialRaces() / itemRepo-only / no homebrew
  * spells) — correct for every test and any caller not yet updated to pass
  * homebrew-aware content, though it won't reflect homebrew content in that
  * case.
@@ -260,7 +259,7 @@ function contextForClass(
 export function resolveSpellCastingContexts(
   entity: Entity,
   spellId: string,
-  classDefs: readonly CharClass[] = ALL_CHAR_CLASSES,
+  classDefs: readonly CharClass[] = officialClasses(),
 ): SpellCastingContext[] {
   const isPrepared = entity.spellcasting?.prepared.includes(spellId) ?? false;
   const contexts: SpellCastingContext[] = [];
@@ -450,7 +449,7 @@ const SOURCE_KIND_PRIORITY: EntitlementSourceKind[] =
 export function selectSpellCastingContext(
   entity: Entity,
   spellId: string,
-  classDefs: readonly CharClass[] = ALL_CHAR_CLASSES,
+  classDefs: readonly CharClass[] = officialClasses(),
 ): SpellCastingContext {
   const contexts = resolveSpellCastingContexts(entity, spellId, classDefs);
   const legal = contexts.filter(c => c.legal);
@@ -485,7 +484,7 @@ export function selectSpellCastingContext(
  * from for actual legality.
  */
 export const PREPARED_CASTER_CLASS_IDS = new Set(
-  ALL_CHAR_CLASSES
+  officialClasses()
     .filter(c => c.spellPreparationPolicy === 'spellbook_prepared' || c.spellPreparationPolicy === 'full_list_prepared')
     .map(c => c.id),
 );
@@ -501,7 +500,7 @@ export const PREPARED_CASTER_CLASS_IDS = new Set(
  * still-valid source's access.
  */
 export function isSpellPreparationLegal(
-  entity: Entity, spellId: string, classDefs: readonly CharClass[] = ALL_CHAR_CLASSES,
+  entity: Entity, spellId: string, classDefs: readonly CharClass[] = officialClasses(),
 ): boolean {
   return resolveSpellCastingContexts(entity, spellId, classDefs).some(c => c.legal);
 }
@@ -528,7 +527,7 @@ export function isSpellPreparationLegal(
 export function resolveSpellAbility(
   entity: Entity,
   spellId: string,
-  classDefs: readonly CharClass[] = ALL_CHAR_CLASSES,
+  classDefs: readonly CharClass[] = officialClasses(),
 ): Ability {
   return selectSpellCastingContext(entity, spellId, classDefs).castingAbility;
 }
@@ -557,7 +556,7 @@ function hasActiveOverride(entity: Entity, stat: string): boolean {
  * regardless of source, so it's returned as-is rather than decomposed.
  */
 export function resolveSpellSaveDC(
-  entity: Entity, spellId: string, classDefs: readonly CharClass[] = ALL_CHAR_CLASSES,
+  entity: Entity, spellId: string, classDefs: readonly CharClass[] = officialClasses(),
 ): number | null {
   return computeSpellSaveDCForAbility(entity, resolveSpellAbility(entity, spellId, classDefs));
 }
@@ -581,7 +580,7 @@ export function computeSpellSaveDCForAbility(entity: Entity, ability: Ability): 
  *  matching attack bonus per the 5e formula), so no second per-ability
  *  attack-bonus table needs to exist alongside abilityBasedDC. */
 export function resolveSpellAttackBonus(
-  entity: Entity, spellId: string, classDefs: readonly CharClass[] = ALL_CHAR_CLASSES,
+  entity: Entity, spellId: string, classDefs: readonly CharClass[] = officialClasses(),
 ): number | null {
   return computeSpellAttackBonusForAbility(entity, resolveSpellAbility(entity, spellId, classDefs));
 }
@@ -624,7 +623,7 @@ function entitlementSourceKindLabel(kind: EntitlementSourceKind): string {
  * is honored.
  */
 export function formatCastingContextLabel(
-  entity: Entity, context: SpellCastingContext, classDefs: readonly CharClass[] = ALL_CHAR_CLASSES,
+  entity: Entity, context: SpellCastingContext, classDefs: readonly CharClass[] = officialClasses(),
 ): string {
   const className = context.classId
     ? (classDefs.find(c => c.id === context.classId)?.name ?? capitalize(context.classId))
@@ -865,7 +864,7 @@ export function buildLayer2(feature: Feature, entity?: Entity, opts: CardGenOpti
  * dice — not a new formula engine, just a new textual signal feeding the
  * one that already exists.
  */
-export function buildLayer2ForSpell(spell: Spell, entity?: Entity, classDefs: readonly CharClass[] = ALL_CHAR_CLASSES): string {
+export function buildLayer2ForSpell(spell: Spell, entity?: Entity, classDefs: readonly CharClass[] = officialClasses()): string {
   const parts: string[] = [];
 
   if (entity && /(melee|ranged) spell attack/i.test(spell.description)) {
@@ -898,7 +897,7 @@ export function buildLayer2ForSpell(spell: Spell, entity?: Entity, classDefs: re
  * Layer 3: save / concentration / duration notes.
  * Examples: "Dex Save (half)", "Concentration • 1 min", null
  */
-export function buildLayer3(feature: Feature, entity?: Entity, classDefs: readonly CharClass[] = ALL_CHAR_CLASSES): string | null {
+export function buildLayer3(feature: Feature, entity?: Entity, classDefs: readonly CharClass[] = officialClasses()): string | null {
   const grantedSpell = findGrantedSpell(feature);
   if (grantedSpell) return buildLayer3ForSpell(grantedSpell, entity, classDefs);
 
@@ -946,7 +945,7 @@ export function buildLayer3(feature: Feature, entity?: Entity, classDefs: readon
  * is unchanged (the existing description-regex heuristic); this only adds
  * the number once a save is already found.
  */
-export function buildLayer3ForSpell(spell: Spell, entity?: Entity, classDefs: readonly CharClass[] = ALL_CHAR_CLASSES): string | null {
+export function buildLayer3ForSpell(spell: Spell, entity?: Entity, classDefs: readonly CharClass[] = officialClasses()): string | null {
   const parts: string[] = [];
 
   if (spell.concentration) {
@@ -1315,7 +1314,7 @@ export function generateSpellCard(
   // content set), not the bare official catalog default — a homebrew
   // class's own preparation policy/ability is honored whenever the caller
   // supplies it.
-  const classDefs = opts.classDefs ?? ALL_CHAR_CLASSES;
+  const classDefs = opts.classDefs ?? officialClasses();
   const allContexts = resolveSpellCastingContexts(entity, spellId, classDefs);
   const distinctContexts = collapseDistinctSpellCastingContexts(allContexts);
   const selectedContext = selectSpellCastingContext(entity, spellId, classDefs);

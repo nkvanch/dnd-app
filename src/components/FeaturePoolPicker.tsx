@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { applyPoolChoiceToEntity } from '../engine/leveling';
 import { checkPrerequisites, splitSelection, cantripQualifies, lookupSpell } from '../engine/prerequisites';
-import { ORIGIN_FEATS_2024 } from '../content/feats/origin2024';
+import { originFeats } from '../content/runtimeRules';
 import { Entity, ChoiceState, CampaignRules, Feature, ChoiceOption } from '../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
@@ -41,7 +41,7 @@ export function FeaturePoolPicker({
     if (!opt.repeatable) return [];
     const raw = opt.repeatable.target === 'cantrip'
       ? (entity.spellcasting?.cantrips ?? []).flatMap(id => { const sp = lookupSpell(id); return sp && cantripQualifies(sp, opt.requires) ? [{ id, label: sp.name ?? id }] : []; })
-      : ORIGIN_FEATS_2024.map(f => ({ id: f.id, label: f.name }));
+      : originFeats().map(f => ({ id: f.id, label: f.name }));
     return raw.filter(t => !takenSelections.has(`${opt.id}::${t.id}`));
   };
 

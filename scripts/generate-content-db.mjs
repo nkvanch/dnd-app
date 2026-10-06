@@ -23,8 +23,14 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 
-import { ALL_SPELLS } from '../src/content/spells/index.ts';
-import { ALL_ITEMS } from '../src/content/items/index.ts';
+import { ALL_SPELLS as CATALOG_SPELLS } from '../src/content/spells/index.ts';
+import { ALL_ITEMS as CATALOG_ITEMS } from '../src/content/items/index.ts';
+
+// The app ships NO built-in catalog: spells and items come from installed content packs, so the bundled database is schema-only.
+// GRIMOIRE_CONTENT_DB_FULL=1 writes the whole catalog instead (a development database for tools; never ship it).
+const FULL = process.env.GRIMOIRE_CONTENT_DB_FULL === '1';
+const ALL_SPELLS = FULL ? CATALOG_SPELLS : [];
+const ALL_ITEMS = FULL ? CATALOG_ITEMS : [];
 import { toItemIndexEntry } from '../src/content/itemRepo.types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -1,12 +1,17 @@
 /** @jest-environment node */
 const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: new (path: string, options?: object) => any };
 import path from 'node:path';
+import os from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { FULL_ITEM_LIBRARY } from '../../content/items';
 import type { Item } from '../../engine/types';
 import { makeEmptyEntity, DEFAULT_RULES } from '../../store/characterStore';
 import { recomputeDerived } from '../../engine/pipeline';
 
-const db = new DatabaseSync(path.resolve(process.cwd(), 'assets/content.db'), { readOnly: true });
+// The shipped content.db is schema-only now (the app has no built-in catalog), so this test builds the full development database itself.
+const fullDb = path.join(os.tmpdir(), `grimoire-content-full-${process.pid}.db`);
+execFileSync('npx', ['tsx', 'scripts/generate-content-db.mjs'], { cwd: process.cwd(), shell: true, stdio: 'ignore', env: { ...process.env, GRIMOIRE_CONTENT_DB_FULL: '1', CONTENT_DB_OUT_PATH: fullDb } });
+const db = new DatabaseSync(fullDb, { readOnly: true });
 const mockNativeItems = new Map<string, Item>();
 for (const row of db.prepare('SELECT id, data FROM items').all() as { id: string; data: string }[]) {
   mockNativeItems.set(row.id, JSON.parse(row.data));

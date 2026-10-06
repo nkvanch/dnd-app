@@ -6,7 +6,6 @@
     .\scripts\build-apk-local.ps1 -AllAbis        # arm64 + armv7 + x86 + x86_64 (big, slow)
     .\scripts\build-apk-local.ps1 -Clean          # gradle clean first
     .\scripts\build-apk-local.ps1 -Prebuild       # regenerate ./android from app.json first
-    .\scripts\build-apk-local.ps1 -FullContent    # don't set EXPO_PUBLIC_SRD_ONLY (default matches eas "preview")
     .\scripts\build-apk-local.ps1 -KeystorePath D:\Keys\grimoire-release.jks   # sign with YOUR release key, not the debug key
         # (password is read from $env:GRIMOIRE_KEYSTORE_PASSWORD - never a parameter or a file; see scripts\make-release-keystore.ps1)
 
@@ -16,7 +15,6 @@ param(
   [switch]$AllAbis,
   [switch]$Clean,
   [switch]$Prebuild,
-  [switch]$FullContent,
   [string]$KeystorePath,
   [string]$KeyAlias = 'grimoire',
   [string]$CacheRoot = 'D:\DevCache'
@@ -44,32 +42,9 @@ $env:GRADLE_USER_HOME = $gradleHome
 $env:TEMP = $tmp; $env:TMP = $tmp
 $env:GRADLE_OPTS = "-Djava.io.tmpdir=$tmp"
 
-# --- same env the EAS "preview" profile uses ---
-if (-not $FullContent) { $env:EXPO_PUBLIC_SRD_ONLY = 'true' }
+# --- the app ships no built-in catalog: content comes only from the signed packs it bundles (assets/packs), and metro.config.js swaps the
+# --- catalog modules for empty ones. There is no SRD-only / full-content split any more.
 $env:NODE_ENV = 'production'
-
-# Keep the private development seed intact: public release inputs are staged
-# only while Gradle packages the APK, then restored in the outer finally.
-$publicStage = $null
-$savedContentDb = $null
-$savedContentVersion = $null
-if (-not $FullContent) {
-  $publicStage = Join-Path $tmp ('grimoire-public-content-' + [guid]::NewGuid().ToString())
-  New-Item -ItemType Directory -Force -Path $publicStage | Out-Null
-  $savedContentDb = Join-Path $publicStage 'content.db.private'
-  $savedContentVersion = Join-Path $publicStage 'contentDbVersion.ts.private'
-  Copy-Item 'assets\content.db' $savedContentDb
-  Copy-Item 'src\content\contentDbVersion.ts' $savedContentVersion
-  $env:CONTENT_DB_OUT_PATH = Join-Path $publicStage 'content.db.public'
-  $env:CONTENT_DB_VERSION_OUT_PATH = Join-Path $publicStage 'contentDbVersion.ts.public'
-  npx tsx scripts/generate-public-content-snapshot.ts
-  npx tsx scripts/generate-content-db.mjs
-  if ($LASTEXITCODE -ne 0) { throw "public content generation failed ($LASTEXITCODE)" }
-  Copy-Item $env:CONTENT_DB_OUT_PATH 'assets\content.db' -Force
-  Copy-Item $env:CONTENT_DB_VERSION_OUT_PATH 'src\content\contentDbVersion.ts' -Force
-  Remove-Item Env:CONTENT_DB_OUT_PATH
-  Remove-Item Env:CONTENT_DB_VERSION_OUT_PATH
-}
 
 # The SRD packs the app bundles (assets/packs) are generated from the same content; regenerate them so the APK never ships a stale pack.
 npx tsx scripts/build-srd-packs.ts
@@ -101,17 +76,12 @@ try {
   Push-Location android
   $androidPushed = $true
   if ($Clean) { .\gradlew.bat clean }
-  # The public database is staged immediately before this invocation. Force
-  # asset/bundle tasks to observe it instead of reusing a prior full-content
-  # Gradle output from the same checkout.
   $releaseArgs = @('assembleRelease', "-PreactNativeArchitectures=$abis") + $signArgs + @('--no-daemon')
-  if (-not $FullContent) { $releaseArgs += '--rerun-tasks' }
+  $releaseArgs += '--rerun-tasks'   # never reuse a bundle built before the packs or the empty catalog changed
   .\gradlew.bat @releaseArgs
   if ($LASTEXITCODE -ne 0) { throw "gradle failed ($LASTEXITCODE)" }
 } finally {
   if ($androidPushed) { Pop-Location }
-  if ($savedContentDb) { Copy-Item $savedContentDb (Join-Path $repo 'assets\content.db') -Force }
-  if ($savedContentVersion) { Copy-Item $savedContentVersion (Join-Path $repo 'src\content\contentDbVersion.ts') -Force }
 }
 
 $apk = Get-ChildItem 'android\app\build\outputs\apk\release\*.apk' | Sort-Object LastWriteTime -Descending | Select-Object -First 1

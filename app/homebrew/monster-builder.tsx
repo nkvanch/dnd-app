@@ -29,7 +29,7 @@ import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { AbilityScoreGrid, TraitListEditor, buildTraitFeature } from '../../src/components/homebrew/TraitEditor';
 import { toId, disambiguateId } from '../../src/content/traitCompiler';
-import { FULL_MONSTER_LIBRARY } from '../../src/content/monsters/srd';
+import { officialMonsters } from '../../src/content/runtimeRules';
 import { PickOrCustom } from '../../src/components/homebrew/PickOrCustom';
 import { spawnMonster } from '../../src/engine/monsterFactory';
 import { collectAllEffects } from '../../src/engine/pipeline';
@@ -211,7 +211,7 @@ export default function MonsterBuilderScreen() {
   function buildMonster(): MonsterTemplate {
     // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
     const takenMonsterIds = new Set([
-      ...FULL_MONSTER_LIBRARY.map(m => m.id),
+      ...officialMonsters().map(m => m.id),
       ...monsters.filter(m => m.id !== editing?.id).map(m => m.id),
     ]);
     const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_monster', takenMonsterIds);

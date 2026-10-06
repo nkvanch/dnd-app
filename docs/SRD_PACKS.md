@@ -35,7 +35,7 @@ Not done (this is the migration, and it is large):
 - The 2024 content is `srd: false` (that flag means SRD 5.1), so the current SRD-only APK hides every 2024 class,
   species and spell. The pack model fixes that by using the source family, not the flag.
 
-## Step 4: content-provider seam (6 October 2026, partly done)
+## Step 4: content-provider seam (6 October 2026, screens done at the seam)
 
 Built:
 - `ContentProvider` (`src/content/provider/contentProvider.ts`): classes, subclasses, species, backgrounds, feats and
@@ -53,8 +53,16 @@ Built:
   missing content fails with a named error; a level 3 Evoker Wizard from packs equals the one from the static catalog.
 
 Not done, and why (each is a reason the static catalog cannot be deleted yet):
-- **The creation screens still read the static catalog** (`getMergedContentDB`). `createCharacter` duplicates the
-  screens' steps (race, background, class, subclass) rather than the screens calling it; moving them is the next piece.
+- **Creation screens: done at the seam, not yet switched on.** The screens did not need rewriting. They read the official
+  catalog through `globalContentDB`, the merged content database, subclass browsing and the Compendium's Official view,
+  so those readers now follow `officialSource.ts`: `useOfficialPacks(packs)` validates the packs (all or nothing) and makes
+  them the official source; `clearOfficialPacks()` restores the hardcoded catalog. With packs installed, races, classes,
+  backgrounds, feats and subclasses on the screens are the pack records (tests show they equal the catalog's, provenance
+  aside), the SRD-5.1 flag filter stops applying to them, and a Fighter built the way the class screen builds one equals
+  the catalog's. What is not done: nothing in the running app calls `useOfficialPacks` yet, because the app has no pack
+  files to install (bundling versus downloading them is step 8), so the screens still show the hardcoded catalog.
+  Conditions and the feature list still come from the catalog.
+- `createCharacter` is no longer a duplicate path to maintain: the screens and it now read the same source.
 - **The engine still imports static content at module load**: `leveling.ts` and `actionCards.ts` default their
   `classDefinitions`/`classDefs` to `ALL_CHAR_CLASSES`, `ALL_RACES` and `spellRepo`/`itemRepo` are read for spell and
   item lookups (entitlements, action cards, pipeline), and `prerequisites.ts`/`replaceSpellChoiceSelection` read the

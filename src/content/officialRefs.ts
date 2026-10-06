@@ -9,18 +9,19 @@ import { spellRepo } from './spellRepo';
 import { itemRepo } from './itemRepo';
 import { ALL_MONSTER_TEMPLATES } from './monsters/srd';
 import { currentContentExposure, exposedSubraces } from './contentExposure';
+import { officialContentVersion } from './officialSource';
 
-// Same module-load evaluation the Compendium uses (the build mode is fixed for the app's lifetime).
-const CONTENT_EXPOSURE = currentContentExposure();
 
 let cache: Map<string, Set<string>> | null = null;
+let cacheVersion = -1;
 
 function officialIds(): Map<string, Set<string>> {
-  if (cache) return cache;
+  if (cache && cacheVersion === officialContentVersion()) return cache;
+  cacheVersion = officialContentVersion();
   const ids = (arr: readonly { id: string }[]) => new Set(arr.map(x => x.id));
   cache = new Map<string, Set<string>>([
     ['race', ids(globalContentDB.races)],
-    ['subrace', new Set(globalContentDB.races.flatMap(r => exposedSubraces(r.subraces, CONTENT_EXPOSURE).map(s => s.id)))],
+    ['subrace', new Set(globalContentDB.races.flatMap(r => exposedSubraces(r.subraces, currentContentExposure()).map(s => s.id)))],
     ['class', ids(globalContentDB.classes)],
     ['background', ids(globalContentDB.backgrounds)],
     ['feat', ids(globalContentDB.feats ?? [])],

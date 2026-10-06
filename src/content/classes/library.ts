@@ -2,7 +2,8 @@
 // FILE: src/content/classes/library.ts
 // Global content database — imports from all content sub-modules.
 // ============================================================================
-import { ContentDB } from '../../engine/types';
+import { ContentDB, Race, CharClass, Background, Feat } from '../../engine/types';
+import { getOfficialContentProvider } from '../officialSource';
 import { ALL_RACES } from '../races/index';
 import { ALL_CHAR_CLASSES } from './index';
 import { ALL_BACKGROUNDS } from '../backgrounds/index';
@@ -16,11 +17,13 @@ export { ALL_RACES, ALL_CHAR_CLASSES, ALL_BACKGROUNDS, ALL_FEATS, ALL_CONDITIONS
 // bundle (SQLite-backed there); on web they're still eager static arrays,
 // just accessed via spellRepo/itemRepo's getIndex()/getXSync() instead of
 // globalContentDB.spells/.items so both platforms share one call surface.
+// races, classes, backgrounds and feats follow the official content source (officialSource.ts): the hardcoded
+// catalog by default, or installed content packs once a provider is set. Conditions stay with the catalog for now.
 export const globalContentDB: Omit<ContentDB, 'spells' | 'items'> = {
-  races:       ALL_RACES,
-  classes:     ALL_CHAR_CLASSES,
-  backgrounds: ALL_BACKGROUNDS,
+  get races(): Race[] { const p = getOfficialContentProvider(); return p ? (p.races() as Race[]) : ALL_RACES; },
+  get classes(): CharClass[] { const p = getOfficialContentProvider(); return p ? (p.classes() as CharClass[]) : ALL_CHAR_CLASSES; },
+  get backgrounds(): Background[] { const p = getOfficialContentProvider(); return p ? (p.backgrounds() as Background[]) : ALL_BACKGROUNDS; },
   conditions:  ALL_CONDITIONS,
   features:    [],
-  feats:       ALL_FEATS,
+  get feats(): Feat[] { const p = getOfficialContentProvider(); return p ? (p.feats() as Feat[]) : ALL_FEATS; },
 };

@@ -23,6 +23,7 @@ import { WARLOCK_SUBCLASSES }   from './warlock';
 import { ARTIFICER_SUBCLASSES } from './artificer';
 import { BLOOD_HUNTER_SUBCLASSES } from './bloodHunter';
 import { ClassProgression }     from '../../engine/types';
+import { getOfficialContentProvider } from '../officialSource';
 import { SUBCLASSES_2024 }      from '../classes2024';
 
 export type SubclassProgression = ClassProgression & { name: string };
@@ -55,5 +56,8 @@ export const ALL_SUBCLASSES: SubclassProgression[] = SRD_ONLY
 
 /** Returns all subclasses for a given classId. */
 export function getSubclassesForClass(classId: string): SubclassProgression[] {
+  // Installed content packs, when they are the official source, replace the hardcoded catalog.
+  const provider = getOfficialContentProvider();
+  if (provider) return provider.subclassesOf(classId) as unknown as SubclassProgression[];
   return ALL_SUBCLASSES.filter(s => s.classId === classId);
 }

@@ -9,6 +9,7 @@
 // across launches. If a user edits a built-in, the edited version is upserted
 // to SQLite; on next load the SQLite copy takes precedence over the built-in.
 // ============================================================================
+import { officialContentVersion } from '../content/officialSource';
 import { create } from 'zustand';
 import {
   Race, Subrace, CharClass, HomebrewSubclass, Spell, Feature, Background, Item, Feat, Condition, SpellList, ContentDB,
@@ -145,7 +146,7 @@ type HomebrewStore = {
 // current and future call site across the app for argument consistency.
 type MergedContentDBCacheKey = readonly [
   unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[],
-  RulesetId | undefined, Set<string> | undefined,
+  RulesetId | undefined, Set<string> | undefined, number,
 ];
 // Small LRU, not unbounded — a handful of distinct argument shapes are
 // legitimately in real use across the app at once (bare, ruleset-scoped,
@@ -227,7 +228,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
     const { races, subraces, classes, spells, backgrounds, features, items, feats, conditions } = get();
     const cacheKey: MergedContentDBCacheKey = [
       races, subraces, classes, spells, backgrounds, features, items, feats, conditions,
-      activeRuleset, bannedIds,
+      activeRuleset, bannedIds, officialContentVersion(),
     ];
     const hit = mergedContentDBCacheEntries.find(entry => cacheKey.every((v, i) => v === entry.key[i]));
     if (hit) return hit.value;

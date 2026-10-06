@@ -16,6 +16,7 @@ import {
 import { sortByOption } from '../content/contentQuery';
 import { asiMode as getAsiMode } from '../engine/houseRules';
 import { ALL_FEATS } from '../content/feats/index';
+import { globalContentDB } from '../content/classes/library';
 import { useHomebrewStore, homebrewWinsById } from '../store/homebrewStore';
 import { Entity, ChoiceState, CampaignRules, Ability, SkillName, Feat, matchesRuleset } from '../engine/types';
 import { FeatPreviewModal } from './FeatPreviewModal';
@@ -228,7 +229,7 @@ export function AsiFeatPicker({
   // one that's never been switched) applies no filter at all, matching
   // today's unfiltered behavior exactly.
   const allFeats = useMemo(
-    () => filterFeatsByRuleset(homebrewWinsById(ALL_FEATS, homebrewWinsById(homebrewFeats, homebrewRealFeats)), entity.rulesetId),
+    () => filterFeatsByRuleset(homebrewWinsById(globalContentDB.feats ?? ALL_FEATS, homebrewWinsById(homebrewFeats, homebrewRealFeats)), entity.rulesetId),
     [homebrewFeats, homebrewRealFeats, entity.rulesetId],
   );
   // For NonSrdBadge gating — a feat whose winning entry came from either

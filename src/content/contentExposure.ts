@@ -1,10 +1,18 @@
 import type { ContentTypeId } from './contentQuery';
+import { getOfficialContentProvider } from './officialSource';
 
 export type ContentExposureContext = { srdOnly: boolean };
 export type ExposableContent = { srd?: boolean; isHomebrew?: boolean; type?: ContentTypeId };
 
+// The build mode is fixed for the app's lifetime (decided when this module loads); only the official source can change.
+const SRD_ONLY_BUILD = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
+
 export function currentContentExposure(): ContentExposureContext {
-  return { srdOnly: process.env.EXPO_PUBLIC_SRD_ONLY === 'true' };
+  // Live, not a snapshot: screens keep this in a module-level constant, and the official source can change while the app
+  // runs (installing a pack). Content installed from a pack is distributed under the pack's own provenance, so the
+  // SRD 5.1 flag filter does not apply to it (it would hide every 2024 record, which carries source-family provenance
+  // instead of that flag).
+  return { get srdOnly() { return SRD_ONLY_BUILD && getOfficialContentProvider() === null; } };
 }
 
 /** Central ordinary-browser exposure decision. Bundled data remains stored.

@@ -20,7 +20,8 @@ export type ProviderSubclass = ClassProgression & { id: string; name: string; ru
 export interface ContentProvider {
   /** Where the content came from, for diagnostics and tests: "pack:grimoire.srd.5.2.1@1.0.0" or "static". */
   readonly source: string;
-  readonly rulesetId: RulesetId;
+  /** The ruleset the provider is scoped to, or undefined when it serves every installed ruleset. */
+  readonly rulesetId?: RulesetId;
   classes(): readonly CharClass[];
   getClass(id: string): CharClass | undefined;
   subclasses(): readonly ProviderSubclass[];
@@ -83,8 +84,8 @@ function mergeById<T extends { id: string }>(lists: readonly (readonly T[])[]): 
   return [...out.values()];
 }
 
-/** A provider over installed packs, for one ruleset. A later pack replaces an earlier record with the same id. */
-export function packContentProvider(packs: readonly InstalledPack[], rulesetId: RulesetId): ContentProvider {
+/** A provider over installed packs, for one ruleset (or, with none given, for every ruleset the packs are written for). A later pack replaces an earlier record with the same id. */
+export function packContentProvider(packs: readonly InstalledPack[], rulesetId?: RulesetId): ContentProvider {
   const ordered = orderPacks(packs);
   // A record with no ruleset of its own is written for the ruleset its pack is for (the 5.1 pack's untagged classes are
   // 2014 content, not content that belongs to every ruleset).

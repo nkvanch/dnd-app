@@ -23,7 +23,6 @@ import {
 } from '../../src/components/FilterChipRow';
 import { SortControl } from '../../src/components/SortControl';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
-import { CLASSES_2024 } from '../../src/content/classes2024';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 type ClassDetail = {
@@ -248,7 +247,7 @@ export default function ClassDetailScreen() {
   const cls    = getMergedContentDB().classes.find(c => c.id === id);
   const detail = id ? CLASS_DETAIL[id] : null;
   // The 2024 (5.5e) classes are official content with no CLASS_DETAIL entry: they read their facts from the class itself.
-  const isOfficial2024 = !!cls && CLASSES_2024.some(c => c.id === cls.id);
+  const isOfficial2024 = !!cls && cls.rulesetId === 'dnd5e-2024' && !useHomebrewStore.getState().classes.some(c => c.id === cls.id);
 
   useEffect(() => {
     if (!cls || !draft) safeGoBack();

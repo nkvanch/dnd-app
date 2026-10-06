@@ -12,6 +12,8 @@
 // This is a build-time module: the app never imports it. It exists so the pack files can be generated, verified
 // and, in a later step, installed in place of the hardcoded catalog.
 // ============================================================================
+import { ALL_BEAST_FORMS } from '../beastforms';
+import { BEAST_FORMS_2024 } from '../beastforms/beastforms2024Data';
 import { CONDITIONS_2024 } from '../conditions/conditions2024';
 import { createHash } from 'crypto';
 import type { GrimoirePack } from '../../engine/backup';
@@ -148,7 +150,10 @@ export function buildSrd51Pack(): SrdPack {
   return assemble({
     id: SRD_5_1_PACK_ID, name: 'Grimoire SRD 5.1', version: '1.0.0', ruleset: 'dnd5e-2014', sourceFamily: 'SRD_5_1',
     attribution: ATTRIBUTION_5_1, dependencies: [], description: 'The System Reference Document 5.1 content of Grimoire: D&D 5e compatible.',
-  }, content, undefined, ['dnd5e-2014']);
+  }, content, {
+    // The 2014 Wild Shape and elemental forms, whose numbers match the SRD 5.1 monsters they are drawn from.
+    beastForms: { provenance: srdProvenance('5.1', { sourceLocation: 'Monsters', derivedBy: 'grimoire-normalization' }), records: ALL_BEAST_FORMS.filter(f => !f.id.endsWith('_2024')) },
+  }, ['dnd5e-2014']);
 }
 
 /**
@@ -221,6 +226,7 @@ export function buildSrd521Pack(): SrdPack {
       properties: MASTERY_RULES, weapons: WEAPON_MASTERY_TABLE,
     },
     spellLists: { provenance: derived, byClass: SPELL_LIST_2024 },
+    beastForms: { provenance: srdProvenance('5.2.1', { sourceLocation: 'Animals', derivedBy: 'grimoire-normalization' }), records: BEAST_FORMS_2024 },
     reference: { provenance: srdProvenance('5.2.1', { sourceLocation: 'Rules Glossary, Gameplay Toolbox, Equipment' }), glossary: GLOSSARY_2024, toolbox: TOOLBOX_2024, equipment: EQUIPMENT_RULES_2024 },
   };
   const deps: PackDependency[] = [{ id: SRD_5_1_PACK_ID, minVersion: '1.0.0', reason: 'Weapons, armor and equipment packs the 2024 classes and backgrounds start with; monsters and conditions.' }];

@@ -12,6 +12,8 @@
 // Abyss Knight, Emperor Warlock, the stress-test pack, user homebrew) is in them: those are homebrew, not official content.
 // Build-time module; the app never imports it.
 // ============================================================================
+import { ALL_INFUSIONS } from '../infusions';
+import { COMPANION_TEMPLATES_BY_GRANT_FEATURE } from '../companions';
 import type { CharClass, Item, Spell } from '../../engine/types';
 import { ALL_CHAR_CLASSES_CATALOG, ALL_CLASS_PROGRESSIONS } from '../classes/index';
 import { FULL_SUBCLASS_LIBRARY } from '../subclasses/index';
@@ -88,7 +90,11 @@ export function buildNonSrd51Pack(): SrdPack {
     id: NON_SRD_5_1_PACK_ID, name: 'Grimoire 5e non-SRD (private)', version: '1.0.0', ruleset: 'dnd5e-2014', sourceFamily: 'NON_SRD_5E',
     license: LICENSE_PRIVATE, attribution: ATTRIBUTION, dependencies: deps,
     description: 'Official 5e content outside the SRD: Artificer, subclasses, species, backgrounds, feats, spells and items. For personal use; do not redistribute.',
-  }, content, undefined, ['dnd5e-2014']);
+  }, content, {
+    // The Artificer's Infuse Item catalog and the companions it summons: tables the sheet reads, not records of the other kinds.
+    infusions: { provenance: prov, records: ALL_INFUSIONS },
+    companions: { provenance: prov, records: Object.entries(COMPANION_TEMPLATES_BY_GRANT_FEATURE).map(([id, template]) => ({ id, template })) },
+  }, ['dnd5e-2014']);
 }
 
 /**

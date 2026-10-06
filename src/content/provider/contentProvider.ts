@@ -46,6 +46,11 @@ export interface ContentProvider {
   spellIndexSpells(): readonly Spell[];
   items(): readonly Item[];
   getItem(id: string): Item | undefined;
+  /**
+   * The records of a pack rules table that is a list of records with ids (`rules.<key>.records`): beast forms, infusions,
+   * companions. Every installed pack's, merged by id with a later pack replacing an earlier record.
+   */
+  ruleRecords(key: string): readonly unknown[];
   /** Every condition record, every edition's (5e and 5.5e share ids and differ by `rulesetId`). */
   conditionRecords(): readonly Condition[];
   /** The condition of an id for a ruleset (the provider's own when none is given). See conditions/resolve.ts. */
@@ -156,6 +161,7 @@ export function packContentProvider(packs: readonly InstalledPack[], rulesetId?:
     spellIndexSpells: () => spellIndex,
     items: () => items,
     conditionRecords: () => conditionRecords,
+    ruleRecords: key => mergeById(ordered.map(p => ((((p as { rules?: Record<string, { records?: unknown[] }> }).rules ?? {})[key]?.records ?? []) as { id: string }[]))),
     getCondition: (id, target) => conditionForRuleset(conditionRecords, id, target ?? rulesetId),
     // An id the packs do not have falls back to its other edition (a 5e `longsword` reference on a 5.5e character, or the reverse).
     getItem: id => itemById.get(id) ?? itemById.get(is2024ItemId(id) ? baseItemId(id) : editionItemId(id)),

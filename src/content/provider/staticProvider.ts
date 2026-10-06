@@ -3,6 +3,9 @@
 // The hardcoded catalog behind the ContentProvider interface. It imports the static libraries, so the app can keep
 // using it unchanged while packs take over, and tests can check that a pack provider returns what it does.
 // ============================================================================
+import { ALL_BEAST_FORMS } from '../beastforms';
+import { ALL_INFUSIONS } from '../infusions';
+import { COMPANION_TEMPLATES_BY_GRANT_FEATURE } from '../companions';
 import { ALL_CONDITIONS } from '../conditions/index';
 import { CONDITIONS_2024 } from '../conditions/conditions2024';
 import { conditionForRuleset } from '../conditions/resolve';
@@ -18,6 +21,13 @@ import { FULL_SPELL_LIBRARY } from '../spells/index';
 import { SUBCLASSES_2024 } from '../classes2024/index';
 import { FULL_ITEM_LIBRARY } from '../items/index';
 import { resolveSpellVersion } from '../spells/spellVersions';
+
+/** The hardcoded catalog's rules tables, by the same keys a pack's `rules` bag uses (used by tests and as the build input of the packs). */
+const STATIC_RULE_RECORDS: Record<string, readonly unknown[]> = {
+  beastForms: ALL_BEAST_FORMS,
+  infusions: ALL_INFUSIONS,
+  companions: Object.entries(COMPANION_TEMPLATES_BY_GRANT_FEATURE).map(([grantFeatureId, template]) => ({ id: grantFeatureId, template })),
+};
 
 export function staticContentProvider(rulesetId?: RulesetId): ContentProvider {
   const of = <T extends { rulesetId?: RulesetId }>(list: readonly T[]): T[] => list.filter(r => matchesRuleset(r.rulesetId, rulesetId));
@@ -44,6 +54,7 @@ export function staticContentProvider(rulesetId?: RulesetId): ContentProvider {
     spellIndexSpells: () => FULL_SPELL_LIBRARY as Spell[],
     items: () => items, getItem: id => first(items, id),
     conditionRecords: () => conditionRecords,
+    ruleRecords: key => (STATIC_RULE_RECORDS[key] ?? []),
     getCondition: (id, target) => conditionForRuleset(conditionRecords, id, target ?? rulesetId),
   };
 }

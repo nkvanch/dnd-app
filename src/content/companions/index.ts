@@ -19,7 +19,7 @@ const STEEL_DEFENDER: CompanionTemplate = {
   name: 'Steel Defender',
   baseStats: { str: 14, dex: 12, con: 14, int: 4, wis: 10, cha: 6 },
   speed: 40,
-  hpForOwnerLevel: (level) => 5 + 5 * level,
+  hp: { base: 5, perOwnerLevel: 5 },
   features: [
     {
       id: 'steel_defender_ac', name: 'Defender Plating',
@@ -48,7 +48,7 @@ const ELDRITCH_CANNON: CompanionTemplate = {
   name: 'Eldritch Cannon',
   baseStats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
   speed: 0,
-  hpForOwnerLevel: (level) => 5 + 2 * level,
+  hp: { base: 5, perOwnerLevel: 2 },
   features: [
     {
       id: 'eldritch_cannon_ac', name: 'Cannon Housing',
@@ -76,7 +76,7 @@ const RANGERS_WOLF: CompanionTemplate = {
   name: "Ranger's Companion (Wolf)",
   baseStats: { str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6 },
   speed: 40,
-  hpForOwnerLevel: (level) => 4 * level,
+  hp: { base: 0, perOwnerLevel: 4 },
   features: [
     {
       id: 'rangers_wolf_bite', name: 'Bite',

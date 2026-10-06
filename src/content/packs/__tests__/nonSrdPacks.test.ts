@@ -27,7 +27,7 @@ describe('the private non-SRD 5e pack', () => {
     expect(nonSrd.manifest.license).toMatch(/not licensed for redistribution/);
     expect(nonSrd.manifest.attribution).toMatch(/not part of any System Reference Document/);
     expect(nonSrd.manifest.dependencies.map(d => d.id)).toEqual([SRD_5_1_PACK_ID]);
-    expect(nonSrd.manifest.contentHash).toBe(sha256(canonicalJson({ homebrew: nonSrd.homebrew, rules: null })));
+    expect(nonSrd.manifest.contentHash).toBe(sha256(canonicalJson({ homebrew: nonSrd.homebrew, rules: nonSrd.rules ?? null })));
     expect(validateGrimoirePack(JSON.parse(serializePack(nonSrd)))).toBeNull();
   });
 

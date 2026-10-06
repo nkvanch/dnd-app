@@ -224,13 +224,13 @@ export default function CharacterSheetScreen() {
     // mechanical features attach the same way an official one's do (e.g.
     // Grappled sets speed to 0 in the pipeline) — audit findings CONTENT-8
     // / KNOWN_CONDITIONS-1.
-    const condContent = getMergedContentDB().conditions.find(c => c.id === condId);
+    const condContent = getMergedContentDB(entity?.rulesetId).conditions.find(c => c.id === condId);
     mutate(e => applyCondition(e, condId, 'manual', rules, condContent?.features, duration), `Added condition: ${condContent?.name ?? condId}`, 'combat');
-  }, [mutate, rules, getMergedContentDB]);
+  }, [mutate, rules, getMergedContentDB, entity?.rulesetId]);
 
   const handleRemoveCondition = useCallback((condId: string) => {
-    mutate(e => removeCondition(e, condId, rules), `Removed condition: ${getMergedContentDB().conditions.find(c => c.id === condId)?.name ?? condId}`, 'combat');
-  }, [mutate, rules, getMergedContentDB]);
+    mutate(e => removeCondition(e, condId, rules), `Removed condition: ${getMergedContentDB(entity?.rulesetId).conditions.find(c => c.id === condId)?.name ?? condId}`, 'combat');
+  }, [mutate, rules, getMergedContentDB, entity?.rulesetId]);
 
   const handleResourceChange = useCallback((resourceId: string, delta: number) => {
     const resourceName = entity?.resources.custom.find(r => r.id === resourceId)?.name ?? resourceId;

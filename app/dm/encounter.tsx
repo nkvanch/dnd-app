@@ -94,7 +94,7 @@ function QuickPanel({ entity, rules, onUpdate, onRuling, onClose }: QuickPanelPr
   // audit findings KNOWN_CONDITIONS-1 and CONTENT-8, which are the same
   // underlying gap seen from two angles and fixed together here.
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
-  const allConditions = getMergedContentDB().conditions;
+  const allConditions = getMergedContentDB(entity.rulesetId).conditions;
 
   const amount = parseInt(valueStr, 10);
   const validNum = !isNaN(amount) && amount > 0;
@@ -770,6 +770,7 @@ export default function EncounterScreen() {
   const safeGoBack      = useSafeGoBack('/(tabs)');
   const { preparedId }  = useLocalSearchParams<{ preparedId?: string }>();
   const isDm            = useCampaignStore(s => s.isDm);
+  const campaignRuleset = useCampaignStore(s => s.activeCampaign?.rulesetId);   // a 5.5e campaign applies the 2024 conditions
   const characters      = useCharacterStore(s => s.characters);
   const updateCharacter = useCharacterStore(s => s.updateCharacter);
   const session         = useSessionStore(s => s.session);
@@ -969,7 +970,7 @@ export default function EncounterScreen() {
     );
   }
   function bulkAddCondition(conditionId: string) {
-    const features = getMergedContentDB().conditions.find(c => c.id === conditionId)?.features;
+    const features = getMergedContentDB(campaignRuleset).conditions.find(c => c.id === conditionId)?.features;
     handleBulkUpdate(
       e => applyCondition(e, conditionId, 'dm', rules, features),
       e => `${e.identity.name}: added condition: ${conditionId}`,

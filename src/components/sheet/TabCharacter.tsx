@@ -1245,7 +1245,7 @@ function TabCharacterInner({
   // itself is called once per render (cheap — cached at the store level as
   // of CONTENT-REGISTRY-PERF-1, returns the same reference when nothing in
   // the content store changed), and used as a stable useMemo dependency.
-  const mergedContentDB = getMergedContentDB();
+  const mergedContentDB = getMergedContentDB(entity.rulesetId);
   const filteredConds = useMemo(() => mergedContentDB.conditions
     .map(c => c.id)
     .filter(c =>

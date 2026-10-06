@@ -3,6 +3,9 @@
 // The hardcoded catalog behind the ContentProvider interface. It imports the static libraries, so the app can keep
 // using it unchanged while packs take over, and tests can check that a pack provider returns what it does.
 // ============================================================================
+import { ALL_CONDITIONS } from '../conditions/index';
+import { CONDITIONS_2024 } from '../conditions/conditions2024';
+import { conditionForRuleset } from '../conditions/resolve';
 import type { Background, CharClass, Feat, Item, Race, RulesetId, Spell } from '../../engine/types';
 import { matchesRuleset } from '../../engine/types';
 import type { ContentProvider, ProviderSubclass } from './contentProvider';
@@ -25,6 +28,7 @@ export function staticContentProvider(rulesetId?: RulesetId): ContentProvider {
   const feats = of(FULL_FEAT_LIBRARY as Feat[]);
   const spells = of(FULL_SPELL_LIBRARY as Spell[]);
   const items = FULL_ITEM_LIBRARY as Item[];
+  const conditionRecords = of([...ALL_CONDITIONS, ...CONDITIONS_2024]);
   const first = <T extends { id: string }>(list: readonly T[], id: string) => list.find(x => x.id === id);
   return {
     source: 'static', rulesetId,
@@ -39,5 +43,7 @@ export function staticContentProvider(rulesetId?: RulesetId): ContentProvider {
     getSpell: (id, target) => resolveSpellVersion(first(spells, id), target ?? rulesetId),
     spellIndexSpells: () => FULL_SPELL_LIBRARY as Spell[],
     items: () => items, getItem: id => first(items, id),
+    conditionRecords: () => conditionRecords,
+    getCondition: (id, target) => conditionForRuleset(conditionRecords, id, target ?? rulesetId),
   };
 }

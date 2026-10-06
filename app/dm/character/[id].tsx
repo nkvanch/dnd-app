@@ -152,10 +152,10 @@ export default function DmCharacterView() {
               // collects one (Permanent/Until Rest/N Rounds), but it was
               // silently dropped here since this callback only declared
               // one parameter.
-              const cond = getMergedContentDB().conditions.find(c => c.id === cId);
+              const cond = getMergedContentDB(entity.rulesetId).conditions.find(c => c.id === cId);
               mutate(e => applyCondition(e, cId, 'dm', rules, cond?.features, duration), `DM: Added condition: ${cond?.name ?? cId}`, 'combat');
             }}
-            onRemoveCondition={cId => mutate(e => removeCondition(e, cId, rules), `DM: Removed condition: ${getMergedContentDB().conditions.find(c => c.id === cId)?.name ?? cId}`, 'combat')}
+            onRemoveCondition={cId => mutate(e => removeCondition(e, cId, rules), `DM: Removed condition: ${getMergedContentDB(entity.rulesetId).conditions.find(c => c.id === cId)?.name ?? cId}`, 'combat')}
             onResourceChange={(rId, delta) => mutate(e => ({
               ...e,
               resources: {

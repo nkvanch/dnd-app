@@ -8,11 +8,12 @@
 //     compared and so nothing existing has to change yet.
 // Pure data in, pure data out: the provider never mutates a pack and never reaches into the stores.
 // ============================================================================
+import { conditionForRuleset } from '../conditions/resolve';
 import { is2024ItemId, baseItemId, editionItemId } from '../itemEditions';
 import type { GrimoirePack } from '../../engine/backup';
 import { validateGrimoirePack } from '../../engine/backup';
 import { ContentPackManifest, compareVersions, validateManifest } from '../../engine/contentPackManifest';
-import type { Background, CharClass, ClassProgression, Feat, Item, Race, RulesetId, Spell } from '../../engine/types';
+import type { Background, CharClass, ClassProgression, Condition, Feat, Item, Race, RulesetId, Spell } from '../../engine/types';
 import { matchesRuleset } from '../../engine/types';
 
 /** A subclass as packs carry it: the class's progression shape plus its own id and name. */
@@ -45,6 +46,10 @@ export interface ContentProvider {
   spellIndexSpells(): readonly Spell[];
   items(): readonly Item[];
   getItem(id: string): Item | undefined;
+  /** Every condition record, every edition's (5e and 5.5e share ids and differ by `rulesetId`). */
+  conditionRecords(): readonly Condition[];
+  /** The condition of an id for a ruleset (the provider's own when none is given). See conditions/resolve.ts. */
+  getCondition(id: string, rulesetId?: RulesetId): Condition | undefined;
 }
 
 /** A pack is not usable: invalid, a dependency is missing or too old, or two packs are for different rulesets. */
@@ -133,6 +138,8 @@ export function packContentProvider(packs: readonly InstalledPack[], rulesetId?:
   // Items are shared across rulesets (a Longsword is a Longsword): every installed pack's, merged by id.
   const items = mergeById(ordered.map(p => ((p.homebrew?.items ?? []) as unknown as Item[])));
   const itemById = index(items);
+  // Conditions keep every edition's record (same ids, told apart by ruleset); a record with no ruleset of its own belongs to no one edition.
+  const conditionRecords = ordered.flatMap(p => ((p.homebrew?.conditions ?? []) as unknown as Condition[]).filter(c => matchesRuleset(c.rulesetId, rulesetId)));
 
   return {
     source: ordered.map(p => `pack:${p.manifest.id}@${p.manifest.version}`).join('+'),
@@ -148,6 +155,8 @@ export function packContentProvider(packs: readonly InstalledPack[], rulesetId?:
     getSpell: (id, target) => resolveSpell(spellVersions.get(id) ?? [], target ?? rulesetId),
     spellIndexSpells: () => spellIndex,
     items: () => items,
+    conditionRecords: () => conditionRecords,
+    getCondition: (id, target) => conditionForRuleset(conditionRecords, id, target ?? rulesetId),
     // An id the packs do not have falls back to its other edition (a 5e `longsword` reference on a 5.5e character, or the reverse).
     getItem: id => itemById.get(id) ?? itemById.get(is2024ItemId(id) ? baseItemId(id) : editionItemId(id)),
   };

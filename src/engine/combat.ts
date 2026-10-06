@@ -2,6 +2,7 @@
 // FILE: src/engine/combat.ts
 // PROJECT: Initiative Tracker, Concentration Gate & Combat Clock
 // ============================================================================
+import { lookupConditionFor } from '../content/conditions/lookup';
 import { Entity, CampaignRules, Spell, FeatureInstance, AbilityEffect, DurationTracker, FeatureActivation, CustomResource } from './types';
 import { recomputeDerived, collectAllEffects } from './pipeline';
 import { resolveResistance } from './resolver';
@@ -890,7 +891,7 @@ export function applyAbilityEffects(
     } else if (effect.type === 'restore_resource') {
       updated = restoreResource(updated, effect.resourceId, effect.amount);
     } else if (effect.type === 'apply_condition' && isSelfAndUnconditional) {
-      const features = lookupCondition(effect.conditionId)?.features;
+      const features = lookupConditionFor(effect.conditionId, updated.rulesetId)?.features;
       updated = applyCondition(updated, effect.conditionId, 'ability', rules, features, effect.duration);
     } else if (effect.type === 'remove_condition' && isSelfAndUnconditional) {
       updated = removeCondition(updated, effect.conditionId, rules);

@@ -9,6 +9,7 @@
 // across launches. If a user edits a built-in, the edited version is upserted
 // to SQLite; on next load the SQLite copy takes precedence over the built-in.
 // ============================================================================
+import { conditionsForRuleset } from '../content/conditions/resolve';
 import { officialContentVersion } from '../content/officialSource';
 import { create } from 'zustand';
 import {
@@ -277,7 +278,7 @@ export const useHomebrewStore = create<HomebrewStore>((set, get) => ({
       backgrounds: notBanned(homebrewWinsById(globalContentDB.backgrounds, backgrounds).filter(b => matchesRuleset(b.rulesetId, activeRuleset))),
       // Now includes homebrew conditions too (A-35) — previously official-only,
       // the one content type with zero homebrew authoring support at all.
-      conditions:  notBanned(homebrewWinsById(globalContentDB.conditions, conditions).filter(c => matchesRuleset(c.rulesetId, activeRuleset))),
+      conditions:  notBanned(homebrewWinsById(conditionsForRuleset(globalContentDB.conditions, activeRuleset), conditions).filter(c => matchesRuleset(c.rulesetId, activeRuleset))),
       // Same rationale as .spells above — official item content lives in
       // itemRepo now, not globalContentDB.
       items:       notBanned(items),

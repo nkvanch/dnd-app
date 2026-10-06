@@ -961,7 +961,7 @@ function OfficialCompendiumView() {
           style={styles.scroll}
           contentContainerStyle={styles.content}
           data={results}
-          keyExtractor={entry => `${entry.type}:${entry.id}`}
+          keyExtractor={entry => `${entry.type}:${entry.id}:${entry.rulesetId ?? ""}`}
           ListHeaderComponent={listHeader}
           initialNumToRender={20}
           windowSize={7}

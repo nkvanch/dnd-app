@@ -12,6 +12,7 @@
 // This is a build-time module: the app never imports it. It exists so the pack files can be generated, verified
 // and, in a later step, installed in place of the hardcoded catalog.
 // ============================================================================
+import { CONDITIONS_2024 } from '../conditions/conditions2024';
 import { createHash } from 'crypto';
 import type { GrimoirePack } from '../../engine/backup';
 import { GRIMOIRE_PACK_FORMAT_VERSION } from '../../engine/backup';
@@ -211,7 +212,8 @@ export function buildSrd521Pack(): SrdPack {
     spells,
     items: equipment521(),
     monsters: [],
-    conditions: [],
+    // The 2024 conditions: same ids as the 5.1 pack's, tagged 5.5e, so each edition resolves its own (conditions/resolve.ts).
+    conditions: CONDITIONS_2024.map(c => stamp(plain(c), srdProvenance('5.2.1', { sourceLocation: 'Rules Glossary' })) as AnyRecord),
   };
   const rules = {
     weaponMastery: {

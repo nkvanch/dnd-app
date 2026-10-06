@@ -3,7 +3,7 @@
 import { buildSrd51Pack, buildSrd521Pack, serializePack } from '../packs/srdPacks';
 import { packContentProvider, ContentProvider } from '../provider/contentProvider';
 import { createCharacter, spellCandidates, recomputeContentOf } from '../provider/createCharacter';
-import { applyPoolChoiceToEntity, levelUpClass, replacePoolOption, applySubclassToEntity, applySpellChoiceToEntity } from '../../engine/leveling';
+import { applyPoolChoiceToEntity, levelUpClass, replacePoolOption, applySubclassToEntity, applySpellChoiceToEntity, swapBackground } from '../../engine/leveling';
 import { mergeSubclassIntoProgression } from '../classes/progressions';
 import { recomputeDerived } from '../../engine/pipeline';
 import { takeRest } from '../../engine/rest';
@@ -235,4 +235,138 @@ describe('cross-list spell picks (2024), through the real pickers', () => {
     // The arcanum choice is queued by the feature's grant, so it exists only once the feature is held: report whether it was queued
     expect(w11.features.some(f => f.id.includes('mystic_arcanum_6'))).toBe(true);
   });
+});
+
+describe('backgrounds (2024): ability options, Origin feat, change', () => {
+  it('each SRD 5.2.1 background lists its three abilities, its Origin feat, two skills and a tool, exactly as the SRD does', () => {
+    const want: Record<string, { abilities: string[]; feat: string; skills: string[] }> = {
+      acolyte_2024: { abilities: ['int', 'wis', 'cha'], feat: 'magic_initiate_cleric_2024', skills: ['insight', 'religion'] },
+      criminal_2024: { abilities: ['dex', 'con', 'int'], feat: 'alert_2024', skills: ['sleight_of_hand', 'stealth'] },
+      sage_2024: { abilities: ['con', 'int', 'wis'], feat: 'magic_initiate_wizard_2024', skills: ['arcana', 'history'] },
+      soldier_2024: { abilities: ['str', 'dex', 'con'], feat: 'savage_attacker_2024', skills: ['athletics', 'intimidation'] },
+    };
+    expect(p24.backgrounds().map(b => b.id).sort()).toEqual(Object.keys(want).sort());
+    for (const [id, w] of Object.entries(want)) {
+      const b = p24.getBackground(id)!;
+      expect(((b.flexibleAsi as { mode: { restrictTo: string[] } }).mode.restrictTo)).toEqual(w.abilities);
+      expect(b.originFeat).toBe(w.feat);
+      expect(p24.getFeat(w.feat)?.category).toBe('origin');
+      const granted = b.features.flatMap(f => f.effects.filter(e => e.type === 'grant_proficiency').map(e => e.target));
+      for (const s of w.skills) expect(granted).toContain(`skill:${s}`);
+    }
+  });
+
+  it('changing the background takes the old skills, tool and Origin feat (with its spells) back out and grants the new ones', () => {
+    const cls = p24.getClass('fighter_2024')!;
+    void cls;
+    const e0 = make(p24, 'fighter_2024', 'orc_2024', 'acolyte_2024', 1);
+    expect(e0.features.some(f => /magic_initiate_cleric/.test(f.id))).toBe(true);
+    const crim = p24.getBackground('criminal_2024')!;
+    const e1 = swapBackground(e0, crim, DEFAULT_RULES, ['dex', 'con', 'int'], undefined, p24.getFeat(crim.originFeat!));
+    expect(e1.identity.backgroundId).toBe('criminal_2024');
+    expect(e1.features.some(f => /magic_initiate_cleric/.test(f.id))).toBe(false);
+    expect(e1.features.some(f => /alert/.test(f.id))).toBe(true);
+    expect(e1.skills.skills.stealth.trained).toBe(true);
+    expect(e1.skills.skills.religion.trained).toBe(false);
+    expect((e1.spellcasting?.cantrips ?? []).length).toBe(0);
+  });
+});
+
+describe('spell slots by class level match the SRD 5.2.1 tables', () => {
+  const FULL = [[2], [3], [4, 2], [4, 3], [4, 3, 2], [4, 3, 3], [4, 3, 3, 1], [4, 3, 3, 2], [4, 3, 3, 3, 1], [4, 3, 3, 3, 2], [4, 3, 3, 3, 2, 1], [4, 3, 3, 3, 2, 1],
+    [4, 3, 3, 3, 2, 1, 1], [4, 3, 3, 3, 2, 1, 1], [4, 3, 3, 3, 2, 1, 1, 1], [4, 3, 3, 3, 2, 1, 1, 1], [4, 3, 3, 3, 2, 1, 1, 1, 1], [4, 3, 3, 3, 3, 1, 1, 1, 1], [4, 3, 3, 3, 3, 2, 1, 1, 1], [4, 3, 3, 3, 3, 2, 2, 1, 1]];
+  const HALF = [[2], [2], [3], [3], [4, 2], [4, 2], [4, 3], [4, 3], [4, 3, 2], [4, 3, 2], [4, 3, 3], [4, 3, 3], [4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 2], [4, 3, 3, 2], [4, 3, 3, 3, 1], [4, 3, 3, 3, 1], [4, 3, 3, 3, 2], [4, 3, 3, 3, 2]];
+  // Pact Magic: [slots, slot level]
+  const PACT: [number, number][] = [[1, 1], [2, 1], [2, 2], [2, 2], [2, 3], [2, 3], [2, 4], [2, 4], [2, 5], [2, 5], [3, 5], [3, 5], [3, 5], [3, 5], [3, 5], [3, 5], [4, 5], [4, 5], [4, 5], [4, 5]];
+  const totals = (m: Record<string, { total: number }> | undefined) => Array.from({ length: 9 }, (_, i) => m?.[String(i + 1)]?.total ?? 0);
+  const trim = (a: number[]) => { const o = [...a]; while (o.length && o[o.length - 1] === 0) o.pop(); return o; };
+  for (const [key, table] of [['wizard', FULL], ['cleric', FULL], ['druid', FULL], ['bard', FULL], ['sorcerer', FULL], ['paladin', HALF], ['ranger', HALF]] as const) {
+    it(`${key}: slots at every level 1-20`, () => {
+      const cls = p24.getClass(`${key}_2024`)!;
+      let e = make(p24, `${key}_2024`, 'human_2024', 'sage_2024', 1);
+      for (let l = 1; l <= 20; l++) {
+        if (l > 1) e = levelUpClass(e, cls.id, cls.rawProgression!, DEFAULT_RULES, cls, p24.classes());
+        expect([l, trim(totals(e.spellcasting?.slots as never))]).toEqual([l, table[l - 1]]);
+      }
+    });
+  }
+  it('warlock: Pact Magic slot count and slot level at every level 1-20', () => {
+    const cls = p24.getClass('warlock_2024')!;
+    let e = make(p24, 'warlock_2024', 'human_2024', 'sage_2024', 1);
+    for (let l = 1; l <= 20; l++) {
+      if (l > 1) e = levelUpClass(e, cls.id, cls.rawProgression!, DEFAULT_RULES, cls, p24.classes());
+      const t = totals(e.spellcasting?.pactSlots as never); const lvl = t.findIndex(n => n > 0) + 1;
+      expect([l, t[lvl - 1], lvl]).toEqual([l, PACT[l - 1][0], PACT[l - 1][1]]);
+    }
+  });
+});
+
+describe('replaceable options (2024)', () => {
+  it('Fighting Style, Metamagic and Eldritch Invocations carry a replace rule, and a held style can be swapped for another on level-up', () => {
+    const found = (classId: string, to: number, match: (id: string) => boolean) => {
+      const cls = p24.getClass(classId)!;
+      const e = levelTo(make(p24, classId, 'human_2024', 'soldier_2024', 1), p24, cls, to);
+      return { e, choice: e.choices.find(c => Array.isArray(c.definition.pool) && c.definition.pool.some(o => match(o.id)))! };
+    };
+    const fs = found('fighter_2024', 2, id => /fighting_style_/.test(id));
+    expect(fs.choice.definition.replace).toBeTruthy();
+    const opts = (fs.choice.definition.pool as { id: string }[]).map(o => o.id);
+    const mm = found('sorcerer_2024', 2, id => /metamagic/.test(id));
+    expect(mm.choice.definition.replace).toBeTruthy();
+    // swap a resolved Fighting Style for another one
+    const [a, b] = opts.filter(id => /fighting_style_/.test(id));
+    const held = applyPoolChoiceToEntity(fs.e, fs.choice.id, [a], DEFAULT_RULES);
+    const swapped = replacePoolOption(held, fs.choice.id, a, b, DEFAULT_RULES);
+    expect(swapped.choices.find(c => c.id === fs.choice.id)!.selections).toEqual([b]);
+    expect(swapped.features.some(f => f.id.includes(a))).toBe(false);
+    expect(swapped.features.some(f => f.id.includes(b))).toBe(true);
+  });
+});
+
+describe('Heroic Inspiration (2024)', () => {
+  it('a Human (Resourceful) gains it on a long rest and not on a short rest; another species does not; it never stacks', () => {
+    const human = make(p24, 'fighter_2024', 'human_2024', 'soldier_2024', 1);
+    expect(human.heroicInspiration).toBeFalsy();
+    expect(takeRest(human, 'short', DEFAULT_RULES).heroicInspiration).toBeFalsy();
+    const rested = takeRest(human, 'long', DEFAULT_RULES);
+    expect(rested.heroicInspiration).toBe(true);
+    expect(takeRest(rested, 'long', DEFAULT_RULES).heroicInspiration).toBe(true);
+    const orc = make(p24, 'fighter_2024', 'orc_2024', 'soldier_2024', 1);
+    expect(takeRest(orc, 'long', DEFAULT_RULES).heroicInspiration).toBeFalsy();
+  });
+});
+
+describe('level-up breakpoints (2024)', () => {
+  const ASI: Record<string, number[]> = { fighter: [4, 6, 8, 12, 14, 16, 19], rogue: [4, 8, 10, 12, 16, 19] };
+  for (const key of ['barbarian', 'bard', 'cleric', 'druid', 'fighter', 'monk', 'paladin', 'ranger', 'rogue', 'sorcerer', 'warlock', 'wizard']) {
+    it(`${key}: subclass choice at level 3, Ability Score Improvement / feat / Epic Boon at the SRD levels, no skipped level`, () => {
+      const cls = p24.getClass(`${key}_2024`)!;
+      const e = levelTo(make(p24, `${key}_2024`, 'human_2024', 'sage_2024', 1), p24, cls, 20);
+      const levelOf = (c: { id: string }) => Number(/_(\d+)(?:_\d+)?$/.exec(c.id)?.[1] ?? 0);
+      const sub = e.choices.filter(c => c.definition.kind === 'subclass');
+      expect(sub.map(levelOf)).toEqual([3]);
+      const asi = e.choices.filter(c => c.definition.kind === 'asi').map(levelOf).sort((a, b) => a - b);
+      expect(asi).toEqual(ASI[key] ?? [4, 8, 12, 16, 19]);
+      expect(e.identity.level).toBe(20);
+      expect(e.identity.classes?.[0]?.level).toBe(20);
+    });
+  }
+});
+
+describe('Weapon Mastery slots by level match the SRD tables', () => {
+  const cap = (arr: number[]) => arr;
+  const BARB = cap([2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]);
+  const FIGHTER = cap([3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6]);
+  for (const [key, want] of [['barbarian', BARB], ['fighter', FIGHTER], ['paladin', Array(20).fill(2)], ['ranger', Array(20).fill(2)], ['rogue', Array(20).fill(2)]] as [string, number[]][]) {
+    it(`${key}: slots at every level`, () => {
+      const cls = p24.getClass(`${key}_2024`)!;
+      let e = make(p24, `${key}_2024`, 'human_2024', 'soldier_2024', 1);
+      const got: number[] = [];
+      for (let l = 1; l <= 20; l++) {
+        if (l > 1) e = levelUpClass(e, cls.id, cls.rawProgression!, DEFAULT_RULES, cls, p24.classes());
+        got.push(weaponMasteryCapacity(recomputeDerived(e, DEFAULT_RULES, recomputeContentOf(p24))));
+      }
+      expect(got).toEqual(want);
+    });
+  }
 });

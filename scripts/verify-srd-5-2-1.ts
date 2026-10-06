@@ -1,8 +1,10 @@
 // Compares what the SRD 5.2.1 pack carries with the canonical source in third_party/wotc/srd/5.2.1 (the PDF, read through pdftotext).
 //   npx tsx scripts/verify-srd-5-2-1.ts [--json]
 // Exits 1 if the PDF's SHA-256 is not the one SOURCE.md records, or if a checked record disagrees with the PDF beyond the tolerances below.
-// What is checked: every spell's level, school, classes, casting time, range, duration, components and description text; every feat (name,
-// category, prerequisite); the weapon and armor tables (cost, weight, damage, mastery); the tools; every magic item's name, type line and text.
+// What is checked against the PDF: every spell's level, school, casting time, range, duration, components and description text;
+// every feat's name and category (prerequisites are not compared); the Mastery column of the weapons table (all 38 weapons, in table order); every magic item's name and text.
+// What is NOT checked here (the audit checked it another way or not at all, see docs/audits/SRD_5_2_1_READINESS_AUDIT.md): species traits, class
+// features (scripts/audit-caster-tables.ts covers the cantrip and prepared-spell columns), backgrounds, weapon and armor cost/weight/damage, tools.
 import fs from 'fs';
 import path from 'path';
 import { createHash } from 'crypto';

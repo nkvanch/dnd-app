@@ -197,6 +197,36 @@ describe('2024 representative characters, end to end', () => {
     }
   });
 
+  describe('all twelve classes, level 1 to 20 through the real pick flow', () => {
+    const ALL = ['barbarian', 'bard', 'cleric', 'druid', 'fighter', 'monk', 'paladin', 'ranger', 'rogue', 'sorcerer', 'warlock', 'wizard'];
+    for (const key of ALL) {
+      it(key + ': creates, levels to 20, no stuck pick but ASI, no duplicate feature, saves and reloads to the same state', () => {
+        const classId = key + '_2024';
+        const cls = provider.getClass(classId)!;
+        const subclassId = provider.subclassesOf(classId)[0].id;
+        const base = createCharacter(provider, { id: key, name: key, classId, raceId: 'human_2024', backgroundId: 'sage_2024', stats, level: 1 }, DEFAULT_RULES);
+        let ent = resolveAll(base, provider, classId, subclassId).entity;
+        const stuckAll: Stuck[] = [];
+        for (const target of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]) {
+          const r = levelTo(ent, cls, target, provider, subclassId);
+          ent = r.entity; stuckAll.push(...r.stuck);
+          const ids = ent.features.map(f => f.id);
+          expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+          expect(Number.isFinite(ent.derived.ac) && Number.isFinite(ent.derived.speed)).toBe(true);
+        }
+        const notAsi = stuckAll.filter(x => !/asi|ability|feat/i.test(x.choice + ' ' + x.kind)).map(x => x.choice + ': ' + x.why);
+        expect(notAsi).toEqual([]);
+        expect(ent.identity.subclassId).toBe(subclassId);
+        const reloaded = recomputeDerived(migrateEntity(JSON.parse(JSON.stringify(ent)) as Entity), DEFAULT_RULES, recomputeContentOf(provider));
+        expect(validateEntityShape(reloaded).valid).toBe(true);
+        expect([reloaded.derived.ac, reloaded.derived.speed, reloaded.resources.hp.maximum, reloaded.features.length]).toEqual([ent.derived.ac, ent.derived.speed, ent.resources.hp.maximum, ent.features.length]);
+        const own = ent.features.filter(f => f.source.kind === 'class' || f.source.kind === 'subclass');
+        const mech = own.filter(f => (f.effects?.length ?? 0) > 0 || (f.abilityEffects?.length ?? 0) > 0 || !!f.activation);
+        report['class_' + key] = { features: ent.features.length, classFeatures: own.length, mechanicalOrTracked: mech.length, textOnly: own.length - mech.length, textOnlyNames: own.filter(f => !mech.includes(f)).map(f => f.name), hp: ent.resources.hp.maximum, pools: ent.resources.custom.length, stuck: stuckAll.length };
+      });
+    }
+  });
+
   it('writes the machine-readable result for the audit document', () => {
     fs.mkdirSync(path.join(process.cwd(), 'release'), { recursive: true });
     fs.writeFileSync(path.join(process.cwd(), 'release', 'audit2024.json'), JSON.stringify(report, null, 1));

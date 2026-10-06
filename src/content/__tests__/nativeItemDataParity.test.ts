@@ -10,7 +10,7 @@ import { recomputeDerived } from '../../engine/pipeline';
 
 // The shipped content.db is schema-only now (the app has no built-in catalog), so this test builds the full development database itself.
 const fullDb = path.join(os.tmpdir(), `grimoire-content-full-${process.pid}.db`);
-execFileSync('npx', ['tsx', 'scripts/generate-content-db.mjs'], { cwd: process.cwd(), shell: true, stdio: 'ignore', env: { ...process.env, GRIMOIRE_CONTENT_DB_FULL: '1', CONTENT_DB_OUT_PATH: fullDb } });
+execFileSync('npx', ['tsx', 'scripts/generate-content-db.mjs'], { cwd: process.cwd(), shell: true, stdio: 'ignore', env: { ...process.env, GRIMOIRE_CONTENT_DB_FULL: '1', CONTENT_DB_OUT_PATH: fullDb, CONTENT_DB_VERSION_OUT_PATH: fullDb + '.version.ts' } });
 const db = new DatabaseSync(fullDb, { readOnly: true });
 const mockNativeItems = new Map<string, Item>();
 for (const row of db.prepare('SELECT id, data FROM items').all() as { id: string; data: string }[]) {

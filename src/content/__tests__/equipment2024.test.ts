@@ -57,3 +57,50 @@ describe('SRD 5.2.1 equipment', () => {
     for (const id of ['padded_armor', 'hide_armor', 'musket', 'pistol', 'acid', 'camel', 'warhorse', 'airship', 'cobbler_s_tools', 'arcane_focus_rod']) expect(ids.has(id)).toBe(true);
   });
 });
+
+describe('SRD 5.2.1 magic items A-Z', () => {
+  const { MAGIC_ROWS } = require('../items/magicItems2024Data') as typeof import('../items/magicItems2024Data');
+  const { MAGIC_ITEMS_2024, isPlaceholderItem } = require('../items/magicItems2024') as typeof import('../items/magicItems2024');
+  const byId = new Map(FULL_ITEM_LIBRARY.map(i => [i.id, i]));
+
+  it('has the SRD entries with their rarity and attunement', () => {
+    expect(MAGIC_ROWS.length).toBeGreaterThanOrEqual(255);
+    const bag = MAGIC_ITEMS_2024.find(i => i.name === 'Bag of Holding')!;
+    expect(bag.properties).toEqual(expect.arrayContaining(['magic item', 'uncommon', 'wondrous item']));
+    expect(bag.properties).not.toContain('requires attunement');
+    const ring = MAGIC_ITEMS_2024.find(i => i.name === 'Ring of Protection')!;
+    expect(ring.properties).toEqual(expect.arrayContaining(['rare', 'requires attunement', 'ring']));
+    const staff = MAGIC_ITEMS_2024.find(i => i.name === 'Staff of Healing')!;
+    expect(staff.features[0].description).toMatch(/Requires Attunement by a Bard, Cleric, or Druid/);
+  });
+
+  it('every entry has real rules text, not a one-line summary', () => {
+    for (const i of MAGIC_ITEMS_2024) expect(i.features[0].description.length).toBeGreaterThan(60);
+  });
+
+  it('the pack record is the SRD entry, or the catalog item with its bonus kept and the SRD text in place of its summary', () => {
+    const { magicItemRecord } = require('../items/magicItems2024') as typeof import('../items/magicItems2024');
+    const entry = (id: string) => MAGIC_ITEMS_2024.find(i => i.id === id)!;
+    // Cloak of Protection models a +1 bonus: the pack record keeps it and gains the SRD text and attunement.
+    const cloak = magicItemRecord(entry('cloak_of_protection'), byId.get('cloak_of_protection'));
+    expect(cloak.features.some(f => f.effects.length > 0)).toBe(true);
+    expect(cloak.features.find(f => f.id === 'cloak_of_protection_desc')!.description).toMatch(/Requires Attunement/);
+    expect(cloak.properties).toContain('requires attunement');
+    // A catalog summary with nothing modeled is replaced outright; an entry the catalog lacks is used as it is.
+    const bag = byId.get('bag_of_holding');
+    if (bag && isPlaceholderItem(bag)) expect(magicItemRecord(entry('bag_of_holding'), bag)).toBe(entry('bag_of_holding'));
+    expect(magicItemRecord(entry('dragon_slayer'), undefined)).toBe(entry('dragon_slayer'));
+  });
+
+  it('the static catalog is left as it was (a 5e character without packs is unchanged)', () => {
+    const ids = FULL_ITEM_LIBRARY.map(i => i.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(byId.has('dragon_slayer')).toBe(false);
+    expect(byId.get('broom_of_flying')!.properties).not.toContain('requires attunement');   // the 2024 text says it does; only the pack says so
+  });
+
+  it('the SRD 5.2.1 pack carries every entry', () => {
+    const ids = new Set(((buildSrd521Pack().homebrew?.items ?? []) as { id: string }[]).map(i => i.id));
+    expect(MAGIC_ROWS.filter((r: { id: string }) => !ids.has(r.id)).map((r: { id: string }) => r.id)).toEqual([]);
+  });
+});

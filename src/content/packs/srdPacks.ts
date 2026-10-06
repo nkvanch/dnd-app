@@ -40,6 +40,7 @@ import { BACKGROUNDS_2024 } from '../backgrounds/backgrounds2024';
 import { SPELL_VERSIONS_2024 } from '../spells/spellVersions2024';
 import { GEAR_2024 } from '../items/gear2024';
 import { EQUIPMENT_2024, EQUIPMENT_2024_IDS } from '../items/equipment2024';
+import { MAGIC_ITEMS_2024, magicItemRecord } from '../items/magicItems2024';
 import { FULL_ITEM_LIBRARY } from '../items/index';
 import { parseStartingItem } from '../../engine/startingItems';
 import { WEAPON_MASTERY_TABLE, MASTERY_RULES } from '../weaponMastery';
@@ -156,6 +157,7 @@ export function buildSrd51Pack(): SrdPack {
  */
 function equipment521(): AnyRecord[] {
   const have = new Set(GENERATED_SRD_ITEMS.filter(i => hasVerifiedPublicItemProvenance(i.id)).map(i => i.id));
+  // Every SRD 5.2.1 magic item is a record of this pack; where the 5.1 pack has the same id, this pack's record (the later one) wins.
   const gear = new Set([...GEAR_2024, ...EQUIPMENT_2024].map(i => i.id));
   const wanted = new Set<string>();
   const addEntries = (entries: unknown[]) => { for (const e of entries) wanted.add(parseStartingItem(String(e)).itemId); };
@@ -174,7 +176,7 @@ function equipment521(): AnyRecord[] {
     if (item.srd !== true) throw new Error(`The 5.2.1 pack needs the item "${id}", which is not marked SRD.`);
     extra.push(item);
   }
-  return [...GEAR_2024, ...EQUIPMENT_2024, ...extra].map(i => stamp(plain(i), srdProvenance('5.2.1', { sourceLocation: 'Equipment' })) as AnyRecord);
+  return [...GEAR_2024, ...EQUIPMENT_2024, ...MAGIC_ITEMS_2024.map(m => magicItemRecord(m, library.get(m.id))), ...extra].map(i => stamp(plain(i), srdProvenance('5.2.1', { sourceLocation: 'Equipment' })) as AnyRecord);
 }
 
 // ── SRD 5.2.1 ────────────────────────────────────────────────────────────────

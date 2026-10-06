@@ -107,6 +107,20 @@ export async function pickAndValidatePackage(
   if (result.canceled || !result.assets?.[0]) return null;
 
   const content = await FileSystem.readAsStringAsync(result.assets[0].uri);
+  return validatePackageText(content, result.assets[0].name ?? null, knownRulesetIds, localLookup, isOfficialRef);
+}
+
+/**
+ * The same validation for a file that is already text: one the player picked (above) or one downloaded from a link
+ * (content/packDownload.ts). Nothing is imported or installed; the preview is what the player confirms.
+ */
+export async function validatePackageText(
+  content:         string,
+  fileName:        string | null,
+  knownRulesetIds: Set<string>,
+  localLookup:     (ref: DependencyRef) => (HomebrewContent & { rulesetId?: string }) | undefined,
+  isOfficialRef:   (ref: DependencyRef) => boolean = () => false,
+): Promise<PackageImportPreview | OfficialPackImport> {
   if (content.length > MAX_PACKAGE_FILE_BYTES) {
     throw new Error(`That file is ${Math.round(content.length / 1024 / 1024)}MB, which is larger than a real homebrew package should be (limit: ${Math.round(MAX_PACKAGE_FILE_BYTES / 1024 / 1024)}MB). It may be corrupted.`);
   }
@@ -134,7 +148,7 @@ export async function pickAndValidatePackage(
   // needs the whole local item, not just its display name, so there's no
   // longer a separate name-only lookup to keep in sync with this one.
   const { conflicts, identical } = detectConflictsDetailed(pack.homebrew, (type, id) => localLookup({ type, id }));
-  const rawName = result.assets[0].name ?? pack.name ?? 'Imported Package';
+  const rawName = fileName ?? pack.name ?? 'Imported Package';
   return {
     pack,
     validation,

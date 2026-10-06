@@ -6,12 +6,13 @@
 // commit. Never mutates the library before the user explicitly confirms —
 // same rule app/backup.tsx's own pickAndValidateBackup()/preview flow
 // already established for personal backups.
+import { PackDownloadPanel } from '../../src/components/PackDownloadPanel';
 import { useState, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { makeHomebrewLookup } from '../../src/store/homebrewLookup';
-import { pickAndValidatePackage, PackageImportPreview } from '../../src/io/packageIO';
+import { pickAndValidatePackage, validatePackageText, PackageImportPreview } from '../../src/io/packageIO';
 import { OfficialPackImportCard } from '../../src/components/OfficialPackImportCard';
 import { installOfficialPack, OfficialPackPreview } from '../../src/content/officialPackService';
 import { sqlitePackStore } from '../../src/content/officialPackStore';
@@ -73,6 +74,26 @@ export default function ImportPackageScreen() {
         makeHomebrewLookup(homebrew),
         isOfficialRef,
       );
+      applyResult(result);
+    } catch (e: any) {
+      Alert.alert('That file couldn’t be imported', e?.message ?? 'Unknown error.');
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  /** A pack downloaded from a link goes through the same validation and confirmation as one picked from the device. */
+  async function handleDownloaded(text: string, name: string | null) {
+    setResultMsg(null);
+    try {
+      applyResult(await validatePackageText(text, name, KNOWN_RULESET_IDS, makeHomebrewLookup(homebrew), isOfficialRef));
+    } catch (e: any) {
+      Alert.alert('That download couldn’t be imported', e?.message ?? 'Unknown error.');
+    }
+  }
+
+  function applyResult(result: Awaited<ReturnType<typeof pickAndValidatePackage>>) {
+    {
       if (result && 'kind' in result) {
         setOfficialPreview(result.preview);
       } else if (result) {
@@ -88,10 +109,6 @@ export default function ImportPackageScreen() {
         setUpdateTarget(match);
         setUpdateChoice(initialImportMode(match)); // 'new' when nothing installed matches: an ordinary import, NOT an update
       }
-    } catch (e: any) {
-      Alert.alert('That file couldn’t be imported', e?.message ?? 'Unknown error.');
-    } finally {
-      setPicking(false);
     }
   }
 
@@ -260,6 +277,7 @@ export default function ImportPackageScreen() {
           <Pressable style={[styles.actionBtn, picking && styles.btnDisabled]} onPress={() => { void handlePick(); }} disabled={picking}>
             {picking ? <ActivityIndicator color={Colors.bg} /> : <Text style={styles.actionBtnTxt}>Choose Package File…</Text>}
           </Pressable>
+          <PackDownloadPanel onDownloaded={handleDownloaded} disabled={picking} />
           {resultMsg && (
             <View style={styles.resultBox}><Text style={styles.resultTxt}>✓ {resultMsg}</Text></View>
           )}

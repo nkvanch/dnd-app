@@ -2,6 +2,7 @@
 // Compendium → Packages: the first-party content packs (the SRD packs) installed on this device, with Remove. Shown only
 // when there is at least one. Removal is refused (with the reason) if another installed pack needs the one removed, and
 // removing the last pack puts the built-in catalog back.
+import { shareText } from '../../io/exportShare';
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { installedOfficialPacks, onOfficialPacksChanged, removeOfficialPack } from '../../content/officialPackService';
@@ -13,6 +14,12 @@ export function OfficialPacksSection() {
   const [packs, setPacks] = useState(() => [...installedOfficialPacks()]);
   useEffect(() => onOfficialPacksChanged(() => setPacks([...installedOfficialPacks()])), []);
   if (packs.length === 0) return null;
+
+  /** The pack file as it was installed (signature included), to send to another device or to upload where others can download it. */
+  async function sharePack(pack: (typeof packs)[number]) {
+    try { await shareText(JSON.stringify(pack), `${pack.manifest.id}-${pack.manifest.version}.grimoire-pack`, 'json', 'share'); }
+    catch (e) { Alert.alert('Could not share the pack', e instanceof Error ? e.message : String(e)); }
+  }
 
   function confirmRemove(id: string, name: string) {
     Alert.alert(`Remove ${name}?`, 'Characters that use its content keep their saved data, but the content is hidden until a pack that has it is installed again. Your homebrew is not touched.', [
@@ -32,6 +39,9 @@ export function OfficialPacksSection() {
               <Text style={styles.name}>{m.name} <Text style={styles.ver}>v{m.version}</Text></Text>
               <Text style={styles.meta}>{m.ruleset} · {m.license} · {Object.entries(m.counts).map(([k, v]) => `${v} ${k}`).join(', ')}</Text>
             </View>
+            <Pressable style={styles.shareBtn} onPress={() => { void sharePack(p); }} accessibilityLabel={`Share ${m.name}`} testID={`share-pack-${m.id}`}>
+              <Text style={styles.shareTxt}>Share</Text>
+            </Pressable>
             <Pressable style={styles.btn} onPress={() => confirmRemove(m.id, m.name)} accessibilityLabel={`Remove ${m.name}`}>
               <Text style={styles.btnTxt}>Remove</Text>
             </Pressable>
@@ -49,6 +59,8 @@ const styles = StyleSheet.create({
   name: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold },
   ver: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.normal },
   meta: { fontSize: FontSize.xs, color: Colors.textDim },
+  shareBtn: { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold + '88', paddingHorizontal: Spacing.sm, paddingVertical: 6 },
+  shareTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
   btn: { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.red + '88', paddingHorizontal: Spacing.sm, paddingVertical: 6 },
   btnTxt: { fontSize: FontSize.xs, color: Colors.red, fontWeight: FontWeight.bold },
 });

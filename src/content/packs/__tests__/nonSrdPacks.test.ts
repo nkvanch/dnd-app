@@ -1,0 +1,88 @@
+import fs from 'fs';
+import path from 'path';
+import { buildSrd51Pack, buildSrd521Pack, serializePack, sha256, canonicalJson, SRD_5_1_PACK_ID } from '../srdPacks';
+import { buildNonSrd51Pack, buildNonSrd521Pack, NON_SRD_5_1_PACK_ID } from '../nonSrdPacks';
+import { validateManifest } from '../../../engine/contentPackManifest';
+import { validateGrimoirePack } from '../../../engine/backup';
+import { BUNDLED_PACKS } from '../../bundledPacks';
+import { PackStore, installOfficialPack, installedOfficialPacks, previewOfficialPack, resetOfficialPackService } from '../../officialPackService';
+import { clearOfficialPacks } from '../../officialPacks';
+import { getOfficialContentProvider } from '../../officialSource';
+
+const nonSrd = buildNonSrd51Pack();
+const s51 = buildSrd51Pack();
+const s521 = buildSrd521Pack();
+const recordsOf = (p: { homebrew?: unknown }) => (p.homebrew ?? {}) as Record<string, { id: string }[]>;
+
+function memoryStore(): PackStore {
+  return { save: async () => {}, load: async () => [], remove: async () => {} };
+}
+beforeEach(() => { resetOfficialPackService(); clearOfficialPacks(); });
+afterAll(() => { resetOfficialPackService(); clearOfficialPacks(); });
+
+describe('the private non-SRD 5e pack', () => {
+  it('has a valid manifest, a private licence, a verified hash, and depends on the SRD 5.1 pack', () => {
+    expect(validateManifest(nonSrd.manifest)).toEqual([]);
+    expect(nonSrd.manifest).toMatchObject({ id: NON_SRD_5_1_PACK_ID, ruleset: 'dnd5e-2014', sourceFamily: 'NON_SRD_5E' });
+    expect(nonSrd.manifest.license).toMatch(/not licensed for redistribution/);
+    expect(nonSrd.manifest.attribution).toMatch(/not part of any System Reference Document/);
+    expect(nonSrd.manifest.dependencies.map(d => d.id)).toEqual([SRD_5_1_PACK_ID]);
+    expect(nonSrd.manifest.contentHash).toBe(sha256(canonicalJson({ homebrew: nonSrd.homebrew, rules: null })));
+    expect(validateGrimoirePack(JSON.parse(serializePack(nonSrd)))).toBeNull();
+  });
+
+  it('holds the official non-SRD 5e content: Artificer, its subclasses, and the other books\' options', () => {
+    const r = recordsOf(nonSrd);
+    expect(r.classes.map(c => c.id)).toEqual(['artificer']);
+    expect(nonSrd.manifest.counts).toMatchObject({ classes: 1 });
+    expect(nonSrd.manifest.counts.subclasses).toBeGreaterThan(100);
+    expect(nonSrd.manifest.counts.races).toBeGreaterThanOrEqual(20);
+    expect(nonSrd.manifest.counts.feats).toBeGreaterThan(100);
+    expect(nonSrd.manifest.counts.spells).toBeGreaterThan(100);
+    expect(r.subclasses.some(s => (s as { classId?: string }).classId === 'artificer')).toBe(true);
+  });
+
+  it('carries nothing the SRD packs already carry, and nothing from 2024', () => {
+    const mine = recordsOf(nonSrd);
+    for (const [category, records] of Object.entries(mine)) {
+      const others = new Set([...(recordsOf(s51)[category] ?? []), ...(recordsOf(s521)[category] ?? [])].map(x => x.id));
+      expect(records.filter(x => others.has(x.id)).map(x => `${category}:${x.id}`)).toEqual([]);
+      expect(records.filter(x => (x as { rulesetId?: string }).rulesetId === 'dnd5e-2024').map(x => x.id)).toEqual([]);
+      const ids = records.map(x => x.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+  });
+
+  it('names nothing private to the author, and no spell is tagged for a class outside the packs', () => {
+    const text = serializePack(nonSrd);
+    expect(text).not.toMatch(/emperor_warlock|abyss_knight|blood_hunter|Blood Hunter|Abyss Knight|Emperor Warlock|glassback|pressure.?vault|stress.?pack/i);
+    const classIds = new Set([...(recordsOf(s51).classes ?? []), ...(recordsOf(nonSrd).classes ?? [])].map(c => c.id));
+    for (const s of recordsOf(nonSrd).spells as { id: string; classes?: string[] }[]) for (const c of s.classes ?? []) expect(classIds.has(c)).toBe(true);
+  });
+
+  it('is private: not bundled with the app and not among the files assets/packs holds', () => {
+    expect(BUNDLED_PACKS.map(p => p.id).filter(id => id.includes('nonsrd'))).toEqual([]);
+    const files = fs.readdirSync(path.resolve(process.cwd(), 'assets', 'packs'));
+    expect(files.filter(f => f.includes('nonsrd'))).toEqual([]);
+  });
+
+  it('installs on top of the SRD 5.1 pack (not alone), and then the app offers Artificer and the extra options', async () => {
+    const store = memoryStore();
+    const alone = previewOfficialPack(JSON.parse(serializePack(nonSrd)));
+    expect(alone.ok).toBe(false);
+    expect(await installOfficialPack(JSON.parse(serializePack(s51)), store)).toEqual({ ok: true });
+    expect(await installOfficialPack(JSON.parse(serializePack(nonSrd)), store)).toEqual({ ok: true });
+    expect(installedOfficialPacks().map(p => p.manifest.id)).toEqual([SRD_5_1_PACK_ID, NON_SRD_5_1_PACK_ID]);
+    const provider = getOfficialContentProvider()!;
+    expect(provider.classes().map(c => c.id)).toContain('artificer');
+    expect(provider.classes().map(c => c.id)).toContain('wizard');
+    expect(provider.races().map(r => r.id)).toEqual(expect.arrayContaining(['aasimar', 'tabaxi']));
+    expect(provider.items().length).toBeGreaterThan(600);
+  });
+});
+
+describe('the 5.5e non-SRD pack', () => {
+  it('is not built: every 2024 record in the app is part of SRD 5.2.1', () => {
+    expect(buildNonSrd521Pack()).toBeUndefined();
+  });
+});

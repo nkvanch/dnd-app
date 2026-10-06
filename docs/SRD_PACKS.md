@@ -124,6 +124,49 @@ they are from. Two causes: the SRD-only build contains no 2024 content until a p
 - **Creation differs in 5.5e:** races are called Species, and a class with Weapon Mastery gets its own creation step to pick the
   mastered weapons.
 
+## The 5.5e completion pass and the four packs (6 October 2026)
+
+What was added to the SRD 5.2.1 pack (`grimoire.srd.5.2.1`, now 12 classes, 12 subclasses, 9 species, 4 backgrounds, 19 feats,
+339 spells, 384 items, plus a rules reference):
+- **Feats.** The General (Grappler; the Ability Score Improvement feat is the existing Ability Improvements step and is hidden
+  from the feat list), Fighting Style (Archery, Defense, Great Weapon Fighting, Two-Weapon Fighting) and Epic Boon feats (all
+  seven), with `Feat.category`. Prerequisites "Level N+" and "Fighting Style Feature" are evaluated. Truesight, Boon of Fate's
+  use and Defense's AC are modeled; the combat riders (Archery's +2, the boons' extra damage) are text.
+- **Equipment.** The Equipment chapter generated from the SRD text (`items/equipment2024Data.ts`): 25 tools with ability, Utilize
+  and Craft text, the adventuring gear with SRD prices and weights, focus, ammunition, instrument and gaming-set variants,
+  mounts, tack and vehicles, the Musket and Pistol, Padded and Hide Armor. 126 items.
+- **Magic items.** All 258 entries of Magic Items A-Z with full rules text, rarity and attunement (`items/magicItems2024Data.ts`).
+  Items the catalog already models (Cloak of Protection's +1) keep their mechanics and gain the SRD text. They are records of the
+  pack only: the static 5e catalog's one-line summaries are unchanged. Items are shared across rulesets, so with both packs
+  installed the 5.2.1 record (the later one) replaces the 5.1 pack's for the same id (2024 Broom of Flying needs attunement).
+- **Rules.** 2024 Exhaustion (each level: D20 Tests -2, Speed -5 ft; Speed is derived, the roll penalty is shown as text). The Rules
+  Glossary (157 entries), Gameplay Toolbox (74) and Equipment rules (28) are the pack's `rules.reference`, read by the new
+  Rules Reference screen (Compendium > Rules). Tables were flattened by the text extraction.
+- **Class and species.** Druid Wild Shape Known Forms is a real picker over 64 SRD 5.2.1 Beasts (4 forms at level 2, CR 1/4, no Fly
+  Speed; +2 at level 4, CR 1/2; +2 at level 8, CR 1, flying allowed; replaceable after a Long Rest). Circle of the Land's land type
+  is replaceable after a Long Rest.
+
+Still text or fixed, by design of the engine today: the Elf, Gnome and Tiefling lineage spellcasting ability and Magic
+Initiate's (the SRD lets you choose Intelligence, Wisdom or Charisma; the app fixes it), Human Versatile (the feat is taken on
+the Feats screen), Paladin's Aura of Protection for allies (no ally model), the 2024 condition texts (the Conditions list is still
+the 2014 modeled set; the 2024 text is in the Rules Reference).
+
+**The four packs** (`npx tsx scripts/build-srd-packs.ts`; all four land in `release/packs/`, git-ignored):
+
+| pack | edition | licence | bundled in the app |
+| --- | --- | --- | --- |
+| `grimoire.srd.5.1` | 5e (2014) | CC-BY-4.0 | yes (`assets/packs`) |
+| `grimoire.srd.5.2.1` | 5.5e (2024) | CC-BY-4.0 | yes (`assets/packs`) |
+| `grimoire.nonsrd.5.1` | 5e (2014) | proprietary, personal use | no, private file only |
+| `grimoire.nonsrd.5.2.1` | 5.5e (2024) | proprietary, personal use | not built: no 5.5e non-SRD content exists in the app |
+
+`grimoire.nonsrd.5.1` holds Artificer, 122 official subclasses, 22 species, 12 backgrounds, 111 feats, 155 spells and 547 items
+(including the items the catalog marks SRD whose text is not yet verified against the SRD: those cannot go in the public 5.1
+pack). It depends on `grimoire.srd.5.1` and carries nothing either SRD pack carries. Blood Hunter, Abyss Knight, Emperor Warlock
+and the stress-test pack are homebrew and are in no pack; their names are scrubbed from the official records that mentioned them.
+Tome of Heroes feats (a third-party publisher) are in it. The 5.1 pack still has only the 95 items that pass the strict SRD
+provenance audit (510 more are marked public but unverified); closing that gap means extending the audit's canonical extraction.
+
 ## Order for the rest
 
 4. (Partly done, above.) Make 2024 character creation read installed-pack content only (the 2024 content is the smallest, newest and has no

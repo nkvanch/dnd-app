@@ -55,10 +55,10 @@ const ATTRIBUTION_5_1 =
 const ATTRIBUTION_5_2_1 =
   'This work includes material taken from the System Reference Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC and available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.';
 
-type AnyRecord = Record<string, unknown> & { id: string };
+export type AnyRecord = Record<string, unknown> & { id: string };
 
 /** A subclass record's id: its own `id` (the 2024 ones), else the id its features carry as their source (what a character's subclassId is), else its name. */
-function subclassId(s: { classId: string; name: string; entries: { grants: { kind: string; value: unknown }[] }[] } & { id?: string }): string {
+export function subclassId(s: { classId: string; name: string; entries: { grants: { kind: string; value: unknown }[] }[] } & { id?: string }): string {
   if (s.id) return s.id;
   for (const e of s.entries) for (const g of e.grants) {
     const f = g.kind === 'feature' ? (g.value as { source?: { kind?: string; refId?: string } }) : undefined;
@@ -68,9 +68,9 @@ function subclassId(s: { classId: string; name: string; entries: { grants: { kin
 }
 
 /** Plain JSON copy: what a pack file holds (drops undefined, proves the record carries no functions). */
-const plain = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
+export const plain = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
-const stamp = <T extends object>(record: T, provenance: RecordProvenance): T & { provenance: RecordProvenance } =>
+export const stamp = <T extends object>(record: T, provenance: RecordProvenance): T & { provenance: RecordProvenance } =>
   ({ ...record, provenance });
 
 const srdProvenance = (family: '5.1' | '5.2.1', extra: Partial<RecordProvenance> = {}): RecordProvenance =>
@@ -82,14 +82,14 @@ export const sha256 = (text: string): string => createHash('sha256').update(text
 
 export type SrdPack = GrimoirePack & { manifest: ContentPackManifest; rules?: Record<string, unknown> };
 
-type Content = {
+export type PackContent = {
   classes: AnyRecord[]; subclasses: AnyRecord[]; races: AnyRecord[]; backgrounds: AnyRecord[]; feats: AnyRecord[];
   spells: AnyRecord[]; items: AnyRecord[]; monsters: AnyRecord[]; conditions: AnyRecord[];
 };
 
-function assemble(
-  base: Pick<ContentPackManifest, 'id' | 'name' | 'version' | 'ruleset' | 'sourceFamily' | 'attribution' | 'dependencies'> & { description: string },
-  content: Content,
+export function assemble(
+  base: Pick<ContentPackManifest, 'id' | 'name' | 'version' | 'ruleset' | 'sourceFamily' | 'attribution' | 'dependencies'> & { description: string; license?: string },
+  content: PackContent,
   rules: Record<string, unknown> | undefined,
   compatibleRulesets: string[],
 ): SrdPack {
@@ -103,7 +103,7 @@ function assemble(
   const contentHash = sha256(canonicalJson({ homebrew, rules: rules ?? null }));
   const manifest: ContentPackManifest = {
     manifestVersion: CONTENT_PACK_MANIFEST_VERSION, id: base.id, name: base.name, version: base.version, ruleset: base.ruleset,
-    sourceFamily: base.sourceFamily, license: LICENSE, attribution: base.attribution, contentHash,
+    sourceFamily: base.sourceFamily, license: base.license ?? LICENSE, attribution: base.attribution, contentHash,
     dependencies: base.dependencies, replaces: [], author: 'Grimoire', officialFirstPartyPack: true, counts,
   };
   const TYPE_OF: Record<string, string> = {
@@ -129,7 +129,7 @@ export function buildSrd51Pack(): SrdPack {
     .filter(c => c.srd === true && !CLASSES_2024.some(c24 => c24.id === c.id))
     .map(c => stamp(plain({ ...c, ...(c.rawProgression ? {} : (progressionFor(c.id) ? { rawProgression: progressionFor(c.id) } : {})) }), prov) as AnyRecord);
   const srdClassIds = new Set(classes.map(c => c.id));
-  const content: Content = {
+  const content: PackContent = {
     classes,
     subclasses: FULL_SUBCLASS_LIBRARY.filter(s => s.srd === true && !SUBCLASSES_2024.some(s24 => s24.id === (s as { id?: string }).id)).map(s => stamp(plain({ ...s, id: subclassId(s as never) }), prov) as AnyRecord),
     races: FULL_RACE_LIBRARY.filter(r => r.srd === true && r.rulesetId !== ('dnd5e-2024' as never)).map(r => stamp(plain(r), prov) as AnyRecord),
@@ -195,7 +195,7 @@ export function buildSrd521Pack(): SrdPack {
   });
   for (const s of NEW_SPELLS_2024) spells.push(stamp(plain(s), prov) as AnyRecord);
 
-  const content: Content = {
+  const content: PackContent = {
     classes: CLASSES_2024.map(c => stamp(plain(c), prov) as AnyRecord),
     subclasses: SUBCLASSES_2024.map(s => stamp(plain(s), prov) as unknown as AnyRecord),
     races: [raceHuman2024, ...RACES_2024].map(r => stamp(plain(r), prov) as AnyRecord),

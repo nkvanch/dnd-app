@@ -51,7 +51,11 @@ export type ContentPackManifest = {
   counts: Record<string, number>;
   /** An Ed25519 signature over the manifest and content hash by a key the app trusts (content/packSigning.ts). Absent on an unsigned pack. */
   signature?: PackSignature;
+  /** The canonical documents the pack's records were taken from; a record's provenance `sourceId` names one of these. */
+  sources?: PackSource[];
 };
+
+export type PackSource = { id: string; title: string; sha256: string; url: string; license: string };
 
 export type PackSignature = { alg: 'ed25519'; keyId: string; value: string };
 

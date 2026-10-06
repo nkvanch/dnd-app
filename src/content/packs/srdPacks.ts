@@ -16,10 +16,12 @@ import { ALL_BEAST_FORMS } from '../beastforms';
 import { BEAST_FORMS_2024 } from '../beastforms/beastforms2024Data';
 import { CONDITIONS_2024 } from '../conditions/conditions2024';
 import { createHash } from 'crypto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { GrimoirePack } from '../../engine/backup';
 import { GRIMOIRE_PACK_FORMAT_VERSION } from '../../engine/backup';
 import {
-  CONTENT_PACK_MANIFEST_VERSION, ContentPackManifest, RecordProvenance, PackDependency, canonicalJson,
+  CONTENT_PACK_MANIFEST_VERSION, ContentPackManifest, RecordProvenance, PackSource, PackDependency, canonicalJson,
 } from '../../engine/contentPackManifest';
 import type { CharClass, Item, Spell } from '../../engine/types';
 import { ALL_CHAR_CLASSES_CATALOG } from '../classes/index';
@@ -49,6 +51,16 @@ import { GLOSSARY_2024, TOOLBOX_2024, EQUIPMENT_RULES_2024 } from '../rules/rule
 import { FULL_ITEM_LIBRARY, CATALOG_ITEM_IDS_5E } from '../items/index';
 import { parseStartingItem } from '../../engine/startingItems';
 import { WEAPON_MASTERY_TABLE, MASTERY_RULES } from '../weaponMastery';
+
+/** The canonical source document of an SRD edition: its SHA-256 and URL are read from the SOURCE.md next to the checked-in PDF (third_party/wotc/srd), so the pack names exactly what it was checked against. */
+function canonicalSource(edition: '5.1' | '5.2.1'): PackSource {
+  const md = readFileSync(join(__dirname, '..', '..', '..', 'third_party', 'wotc', 'srd', edition, 'SOURCE.md'), 'utf8');
+  const pick = (re: RegExp) => { const m = re.exec(md); if (!m) throw new Error(`SOURCE.md for SRD ${edition} lacks ${re}`); return m[1]; };
+  return {
+    id: `srd-${edition}`, title: `System Reference Document ${edition}`, license: 'CC-BY-4.0',
+    sha256: pick(/SHA-256:\*\* `([0-9a-fA-F]{64})`/).toLowerCase(), url: pick(/Canonical URL:\*\* (https:\/\/[^\s(]+)/),
+  };
+}
 
 export const SRD_5_1_PACK_ID = 'grimoire.srd.5.1';
 export const SRD_5_2_1_PACK_ID = 'grimoire.srd.5.2.1';
@@ -92,7 +104,7 @@ export type PackContent = {
 };
 
 export function assemble(
-  base: Pick<ContentPackManifest, 'id' | 'name' | 'version' | 'ruleset' | 'sourceFamily' | 'attribution' | 'dependencies'> & { description: string; license?: string },
+  base: Pick<ContentPackManifest, 'id' | 'name' | 'version' | 'ruleset' | 'sourceFamily' | 'attribution' | 'dependencies'> & { description: string; license?: string; sources?: PackSource[] },
   content: PackContent,
   rules: Record<string, unknown> | undefined,
   compatibleRulesets: string[],
@@ -109,6 +121,7 @@ export function assemble(
     manifestVersion: CONTENT_PACK_MANIFEST_VERSION, id: base.id, name: base.name, version: base.version, ruleset: base.ruleset,
     sourceFamily: base.sourceFamily, license: base.license ?? LICENSE, attribution: base.attribution, contentHash,
     dependencies: base.dependencies, replaces: [], author: 'Grimoire', officialFirstPartyPack: true, counts,
+    ...(base.sources ? { sources: base.sources } : {}),
   };
   const TYPE_OF: Record<string, string> = {
     classes: 'class', subclasses: 'subclass', races: 'race', backgrounds: 'background', feats: 'feat',
@@ -149,7 +162,7 @@ export function buildSrd51Pack(): SrdPack {
   };
   return assemble({
     id: SRD_5_1_PACK_ID, name: 'Grimoire SRD 5.1', version: '1.0.0', ruleset: 'dnd5e-2014', sourceFamily: 'SRD_5_1',
-    attribution: ATTRIBUTION_5_1, dependencies: [], description: 'The System Reference Document 5.1 content of Grimoire: D&D 5e compatible.',
+    attribution: ATTRIBUTION_5_1, dependencies: [], sources: [canonicalSource('5.1')], description: 'The System Reference Document 5.1 content of Grimoire: D&D 5e compatible.',
   }, content, {
     // The 2014 Wild Shape and elemental forms, whose numbers match the SRD 5.1 monsters they are drawn from.
     beastForms: { provenance: srdProvenance('5.1', { sourceLocation: 'Monsters', derivedBy: 'grimoire-normalization' }), records: ALL_BEAST_FORMS.filter(f => !f.id.endsWith('_2024')) },
@@ -232,7 +245,7 @@ export function buildSrd521Pack(): SrdPack {
   const deps: PackDependency[] = [{ id: SRD_5_1_PACK_ID, minVersion: '1.0.0', reason: 'Weapons, armor and equipment packs the 2024 classes and backgrounds start with; monsters and conditions.' }];
   return assemble({
     id: SRD_5_2_1_PACK_ID, name: 'Grimoire SRD 5.2.1', version: '1.0.0', ruleset, sourceFamily: 'SRD_5_2_1',
-    attribution: ATTRIBUTION_5_2_1, dependencies: deps, description: 'The System Reference Document 5.2.1 content of Grimoire: 2024 / 5.5e compatible.',
+    attribution: ATTRIBUTION_5_2_1, dependencies: deps, sources: [canonicalSource('5.2.1')], description: 'The System Reference Document 5.2.1 content of Grimoire: 2024 / 5.5e compatible.',
   }, content, rules, [ruleset]);
 }
 

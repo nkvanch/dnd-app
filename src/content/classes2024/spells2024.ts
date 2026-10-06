@@ -49,7 +49,7 @@ export const NEW_SPELLS_2024: Spell[] = [
   },
   {
     ...base, id: 'summon_dragon', name: 'Summon Dragon', level: 5, school: 'Conjuration',
-    castingTime: 'Action', range: '60 feet', components: ['V', 'S', 'M (an object with the image of a dragon engraved on it worth 500+ GP)'], duration: 'Concentration, up to 1 hour', concentration: true,
+    castingTime: 'Action', range: '60 feet', components: ['V', 'S', 'M'], material: 'an object with the image of a dragon engraved on it worth 500+ GP', duration: 'Concentration, up to 1 hour', concentration: true,
     description:
       'You call forth a Dragon spirit. It manifests in an unoccupied space you can see within range and uses the Draconic Spirit stat block (Large Dragon, AC 14 + the spell\'s level, HP 50 + 10 for each spell level above 5, Speed 30 ft., Fly 60 ft., Swim 30 ft.; the full stat block is in the SRD). The creature disappears when it drops to 0 Hit Points or when the spell ends. It is an ally to you and your allies, shares your Initiative count but takes its turn immediately after yours, and obeys your verbal commands (if you give none, it takes the Dodge action and moves to avoid danger).',
     upcast: 'Use the spell slot\'s level for the spell\'s level in the stat block.', classes: ['wizard_2024'], spellType: ['summoning'],

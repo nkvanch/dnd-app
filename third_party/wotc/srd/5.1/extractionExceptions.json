@@ -1,0 +1,14 @@
+{
+  "wand-war-mage-name": {
+    "sourcePage": 249,
+    "extracted": "Wan d of the War Mage, +1, +2, or +3",
+    "canonical": "Wand of the War Mage, +1, +2, or +3",
+    "reason": "PDF text extraction inserted whitespace inside the printed word 'Wand'."
+  },
+  "pipes-haunting-name": {
+    "sourcePage": 232,
+    "extracted": "Pipes of H aunting",
+    "canonical": "Pipes of Haunting",
+    "reason": "PDF text extraction inserted whitespace inside the printed word 'Haunting'."
+  }
+}

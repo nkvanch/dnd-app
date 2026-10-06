@@ -1,5 +1,6 @@
 // app/dm/dashboard.tsx
 // DM party overview dashboard. Only accessible when isDm === true.
+import { identityLabelsFor } from '../../src/store/identityLabelsFor';
 import { useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -53,7 +54,7 @@ function PartyCard({ entity, showFull, onPress, onPlay }: { entity: Entity; show
         <View>
           <Text style={styles.cardName}>{identity.name || 'Unnamed'}</Text>
           <Text style={styles.cardSub}>
-            Lv {identity.level} {identity.classId} · {identity.raceId}
+            Lv {identity.level} {identityLabelsFor(entity).class} · {identityLabelsFor(entity).race}
           </Text>
         </View>
         <View style={styles.cardBadges}>

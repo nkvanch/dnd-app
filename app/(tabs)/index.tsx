@@ -10,6 +10,8 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { useCampaignStore }  from '../../src/store/campaignStore';
 import { useSyncStore }      from '../../src/store/syncStore';
 import { useLastCharacterStore } from '../../src/store/lastCharacterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { resolveIdentityLabels } from '../../src/content/identityLabels';
 import { rollExpression } from '../../src/engine/dice';
 import { DiceRoll, Entity } from '../../src/engine/types';
 import { ManualRollInput } from '../../src/components/ManualRollInput';
@@ -204,14 +206,18 @@ function LastCharacterCard({ character, onPress }: { character: Entity; onPress:
     ? resources.hp.current / resources.hp.maximum
     : 1;
   const hpColor = hpPercent > 0.5 ? Colors.green : hpPercent > 0.25 ? Colors.gold : Colors.red;
+  // Class and species by name (not their ids), from the same merged content the rest of the app reads.
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
+  const labels = resolveIdentityLabels(character, getMergedContentDB(character.rulesetId), homebrewSubclasses);
 
   return (
     <Pressable testID="home-last-character" accessibilityLabel="Continue last character" style={styles.lastCharCard} onPress={onPress}>
       <View style={styles.lastCharHeader}>
-        <View>
-          <Text style={styles.lastCharName}>{identity.name || 'Unnamed'}</Text>
-          <Text style={styles.lastCharSub}>
-            Level {identity.level}  ·  {identity.classId || '—'}  ·  {identity.raceId || '—'}
+        <View style={styles.lastCharText}>
+          <Text style={styles.lastCharName} numberOfLines={1}>{identity.name || 'Unnamed'}</Text>
+          <Text style={styles.lastCharSub} numberOfLines={2}>
+            Level {identity.level}  ·  {labels.class || '—'}  ·  {labels.race || '—'}
           </Text>
         </View>
         <View style={styles.lastCharStats}>
@@ -395,10 +401,11 @@ const styles = StyleSheet.create({
     padding:         Spacing.md,
     gap:             Spacing.sm,
   },
-  lastCharHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  lastCharHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: Spacing.sm },
+  lastCharText:   { flex: 1, minWidth: 0 },
   lastCharName:   { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   lastCharSub:    { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
-  lastCharStats:  { flexDirection: 'row', gap: Spacing.sm },
+  lastCharStats:  { flexDirection: 'row', gap: Spacing.xs, flexShrink: 0 },
   statPill: {
     backgroundColor: Colors.surfaceHigh,
     borderRadius:    Radius.sm,

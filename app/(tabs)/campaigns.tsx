@@ -7,6 +7,7 @@
 //   DM ACTIVE    → connection block + campaign overview (notes/quests/log/party)
 //   PLAYER ACTIVE → read-only campaign overview + sync status
 // ============================================================================
+import { identityLabelsFor } from '../../src/store/identityLabelsFor';
 import { CampaignPacksNote } from '../../src/components/CampaignPacksNote';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -633,7 +634,7 @@ function PartySection({ characterIds }: { characterIds: string[] }) {
             <View style={styles.partyInfo}>
               <Text style={styles.partyName}>{c.identity.name || 'Unnamed'}</Text>
               <Text style={styles.partySub}>
-                Lv {c.identity.level} · {c.identity.classId || '—'}
+                Lv {c.identity.level} · {identityLabelsFor(c).class || '—'}
               </Text>
             </View>
             <View style={styles.partyRight}>
@@ -934,7 +935,7 @@ function PlayerActiveView() {
           <View style={styles.partyCard}>
             <View style={styles.partyInfo}>
               <Text style={styles.partyName}>{myChar.identity.name || 'Unnamed'}</Text>
-              <Text style={styles.partySub}>Lv {myChar.identity.level} · {myChar.identity.classId || '—'}</Text>
+              <Text style={styles.partySub}>Lv {myChar.identity.level} · {identityLabelsFor(myChar).class || '—'}</Text>
             </View>
             <Pressable onPress={() => setClaimOpen(true)}>
               <Text style={styles.changeLink}>Change</Text>
@@ -985,7 +986,7 @@ function PlayerActiveView() {
                 <Pressable key={c.id} style={styles.pickRow} onPress={() => claim(c.id)}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.partyName}>{c.identity.name || 'Unnamed'}</Text>
-                    <Text style={styles.partySub}>Lv {c.identity.level} · {c.identity.classId || '—'}</Text>
+                    <Text style={styles.partySub}>Lv {c.identity.level} · {identityLabelsFor(c).class || '—'}</Text>
                   </View>
                   {myChar?.id === c.id && <Text style={styles.changeLink}>✓</Text>}
                 </Pressable>

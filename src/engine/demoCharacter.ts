@@ -19,9 +19,7 @@ import { Entity, CampaignRules } from './types';
 import { makeEmptyEntity } from '../store/characterStore';
 import { applyGrant, levelUp, resolveChoice } from './leveling';
 import { recomputeDerived } from './pipeline';
-import { fighterProgression } from '../content/classes/fighter';
-import { raceHuman } from '../content/races/index';
-import { bgSoldier } from '../content/backgrounds/index';
+import { getOfficialContentProvider } from '../content/officialSource';
 
 const DEMO_CHARACTER_ID_PREFIX = 'demo-';
 
@@ -38,6 +36,12 @@ export function isDemoCharacter(entity: Entity): boolean {
  * choices pending, same as any real level-3 fighter who hasn't picked yet.
  */
 export function buildDemoCharacter(rules: CampaignRules): Entity {
+  // The sample character is built from the installed SRD 5.1 pack (a Human Soldier Fighter), not from built-in content.
+  const provider = getOfficialContentProvider();
+  const raceHuman = provider?.getRace('human');
+  const bgSoldier = provider?.getBackground('soldier');
+  const fighterProgression = provider?.getClass('fighter')?.rawProgression;
+  if (!raceHuman || !bgSoldier || !fighterProgression) throw new Error('The sample character needs the SRD 5.1 content pack to be installed.');
   const id = `${DEMO_CHARACTER_ID_PREFIX}${Date.now().toString(36)}`;
   let entity = makeEmptyEntity(id, 'character');
 

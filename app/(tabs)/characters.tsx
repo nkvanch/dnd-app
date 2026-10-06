@@ -1,5 +1,6 @@
 // app/(tabs)/characters.tsx
 // Character list — all saved characters. Tap to open sheet. Long press to delete.
+import { identityLabelsFor } from '../../src/store/identityLabelsFor';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -29,7 +30,7 @@ function CharacterCard({
       <View style={styles.cardMain}>
         <Text style={styles.cardName}>{identity.name || 'Unnamed'}</Text>
         <Text style={styles.cardSub}>
-          Level {identity.level}  ·  {identity.classId || '—'}  ·  {identity.raceId || '—'}
+          Level {identity.level}  ·  {identityLabelsFor(character).class || '—'}  ·  {identityLabelsFor(character).race || '—'}
         </Text>
         {campaignName && (
           <View style={styles.campaignBadge}>

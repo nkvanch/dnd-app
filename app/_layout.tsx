@@ -1,6 +1,7 @@
 // app/_layout.tsx
 // Root layout — initializes SQLite DB + loads characters + hydrates session
 // on startup, then renders the navigation stack.
+import { ensureBundledPacks } from '../src/content/firstRunPacks';
 import { bootOfficialPacks, installedOfficialPacks } from '../src/content/officialPackService';
 import { ContentPacksPrompt } from '../src/components/ContentPacksPrompt';
 import { sqlitePackStore } from '../src/content/officialPackStore';
@@ -102,6 +103,8 @@ export default function RootLayout() {
         // 3b. Restore installed official content packs (the SRD packs): they become the official catalog before
         //     characters load. Never blocks boot; with none installed (or any problem) the built-in catalog stays.
         await bootOfficialPacks(sqlitePackStore);
+        // With no built-in catalog the app needs packs: the first run with none installed installs the ones that ship with it.
+        await ensureBundledPacks(sqlitePackStore, { get: getMeta, set: setMeta });
 
         // 4. Load characters + session. Runs regardless of whether steps
         //    1-3 fully succeeded — a character can still open in a

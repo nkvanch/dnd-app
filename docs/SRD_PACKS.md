@@ -35,10 +35,43 @@ Not done (this is the migration, and it is large):
 - The 2024 content is `srd: false` (that flag means SRD 5.1), so the current SRD-only APK hides every 2024 class,
   species and spell. The pack model fixes that by using the source family, not the flag.
 
+## Step 4: content-provider seam (6 October 2026, partly done)
+
+Built:
+- `ContentProvider` (`src/content/provider/contentProvider.ts`): classes, subclasses, species, backgrounds, feats and
+  spells by id, for one ruleset. `packContentProvider(packs, ruleset)` reads installed `.grimoire-pack` envelopes:
+  each pack is validated (`validateGrimoirePack`, `validateManifest`), dependencies are checked (missing, too old,
+  installed twice, cycles) and ordered, records merge by id with later packs winning, and a record with no ruleset of
+  its own takes its pack's ruleset (the 5.1 pack's untagged classes are 2014 content, not content for every ruleset).
+  `staticContentProvider` puts the hardcoded catalog behind the same interface.
+- `createCharacter(provider, spec, rules)` (`src/content/provider/createCharacter.ts`) builds a character from a
+  provider alone: species features, resources and picks, background and its Origin feat (the feat comes from the
+  provider), class and levels, subclass, and `spellCandidates`/`pickSpells` for spell choices filtered from the
+  provider's spells. It uses the same engine functions the screens use.
+- Tests (`src/content/provider/__tests__/packProvider.test.ts`): created from the generated packs round-tripped through
+  JSON; a changed or removed pack record (class feature, Origin feat, species trait, spell) changes the character;
+  missing content fails with a named error; a level 3 Evoker Wizard from packs equals the one from the static catalog.
+
+Not done, and why (each is a reason the static catalog cannot be deleted yet):
+- **The creation screens still read the static catalog** (`getMergedContentDB`). `createCharacter` duplicates the
+  screens' steps (race, background, class, subclass) rather than the screens calling it; moving them is the next piece.
+- **The engine still imports static content at module load**: `leveling.ts` and `actionCards.ts` default their
+  `classDefinitions`/`classDefs` to `ALL_CHAR_CLASSES`, `ALL_RACES` and `spellRepo`/`itemRepo` are read for spell and
+  item lookups (entitlements, action cards, pipeline), and `prerequisites.ts`/`replaceSpellChoiceSelection` read the
+  spell library lazily. `createCharacter` passes the provider's classes, races and spells wherever the engine accepts
+  them, so no static *record* is read for the pack-only tests, but a pack spell that is not also in the static library
+  would not resolve in those lookups. The spell and item repos need the same provider seam.
+- **No install registry or runtime hash check.** The provider takes packs it is given. Verifying `contentHash` needs a
+  SHA-256 at runtime (build-time uses node `crypto`; React Native needs `expo-crypto`), and the install, update and
+  uninstall store (steps 7 and 8) does not exist.
+- Items: the 5.2.1 pack's gear depends on the 5.1 pack's weapons and armor; the provider does not serve items yet, so
+  starting equipment still resolves through the static item repo.
+
 ## Order for the rest
 
-4. Make 2024 character creation read installed-pack content only (the 2024 content is the smallest, newest and has no
-   legacy importers, so it proves the loader).
+4. (Partly done, above.) Make 2024 character creation read installed-pack content only (the 2024 content is the smallest, newest and has no
+   legacy importers, so it proves the loader). Remaining: move the screens onto the provider, give the engine's spell,
+   item and class lookups a provider, serve items.
 5. Same for SRD 5.1.
 6. Remove the hardcoded public catalog registration and the `SRD_ONLY` switches; `content.db` becomes the install target.
 7. Missing-pack handling (a character whose pack is gone keeps its data and shows "Missing content dependency").

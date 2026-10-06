@@ -74,11 +74,19 @@ New engine pieces these needed: formula pools (`perLevel`, `perAbilityModifier`)
 - **Spell versions**: the library keeps one record per spell id; a 2024 character resolves the same id to the SRD 5.2.1 version (333 spells, `spells/spellVersions2024.ts`, generated from the SRD text). Wired into the repo, the content resolver, spell cards, the Spells tab, the picker and creation. Monster stat blocks that spells name (Animated Object and so on) are not included.
 - **Starting equipment**: every class and background package carries its SRD leftover gold, the gold alternative adds the gold, reopening a choice takes back exactly its items and gold, `item*N` stacks (parchment), and the tool a Monk or Bard names is a real item pick. Six gear items were added to the catalog.
 
+### 2024 follow-ups, second round (built 6 October 2026)
+
+- **Repeatable invocations**: Agonizing Blast, Eldritch Spear, Repelling Blast (a different known cantrip each time, checked against the option's traits) and Lessons of the First Ones (a different Origin feat) can be taken more than once. A pool option carries `repeatable: { target }`; a take is selected as `optionId::target`, validated by the engine, and the target is written on the granted feature's name and text. The picker lists the targets; swaps understand targeted ids.
+- **Cantrip replacement**: a resolved spell choice can carry a replace rule. Blessed Warrior and Druidic Warrior use it (`replaceSpellChoiceSelection`, a Swappable Spells panel on the Features tab): the new cantrip must pass the choice's own filter and not be known already. Timing is the player's, as with the other swaps.
+- **Compendium spell detail**: expanding a spell now loads the full record and shows casting time, range, components, duration, text and upcast, resolved for the Ruleset filter. With 2024 selected it is the SRD 5.2.1 version, labelled.
+- **Heroic Inspiration from the DM**: a new change kind (`heroic_inspiration`) goes through the existing DM change-request flow: the DM proposes it from the party card, the player accepts or rejects, and the player's device applies it. The Reward protocol was not used: it only records a decision and applies nothing to the sheet.
+- **Content provider seam** (SRD pack migration step 4, see docs/SRD_PACKS.md): `ContentProvider`, a pack-backed provider and a static one, and `createCharacter`, which builds a 2024 character from a provider alone. Tested from the generated SRD packs, and against the static catalog for parity. The creation screens are not moved onto it yet.
+
 Remaining gaps:
-- Repeatable invocations (Agonizing Blast on a second cantrip) cannot be taken twice; the cantrip an invocation names is left to the player.
-- Cantrip replacement on level-up (Blessed Warrior, Druidic Warrior) and the spell-list swaps are not a workflow yet.
-- Spell versions cover spell text and data; the Compendium's spell browser still shows the library record.
-- Heroic Inspiration is not awarded remotely by a DM yet.
+- Lessons of the First Ones records the Origin feat but does not grant the feat's own features. Repeatable invocations that name a cantrip add no damage effect (they were text before too).
+- A player who already has Heroic Inspiration keeps one when a DM awards another, and is not told it overflowed.
+- Spell-list swaps other than Blessed Warrior and Druidic Warrior (Magic Initiate's Spell Change, Bard's) are not marked swappable yet.
+- The Compendium shows the SRD 5.2.1 spell version only when the Ruleset filter is 2024. Monster stat blocks that spells name are not included.
 
 Stated gaps:
 - **Druid** Wild Shape forms are limited to the three beast forms the app has. Circle of the Land's land change means removing and re-picking.

@@ -1394,6 +1394,12 @@ export type ChoiceOption = {
   gold?: number;
   /** Requirements for taking this option (level, another option, a cantrip, ...). See Prerequisite. */
   requires?: Prerequisite[];
+  /**
+   * The option can be taken more than once, each time with its own target (Agonizing Blast on a different cantrip,
+   * Lessons of the First Ones with a different Origin feat). A targeted take is selected as `optionId::targetId`; the
+   * target is validated by the engine and written on the granted feature (see engine/prerequisites.ts, splitSelection).
+   */
+  repeatable?: { target: 'cantrip' | 'origin_feat' };
 };
 
 /**

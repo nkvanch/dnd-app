@@ -1,4 +1,4 @@
-import { checkPrerequisites, heldOptionIds, dependentsOf } from './prerequisites';
+import { checkPrerequisites, heldOptionIds, dependentsOf, splitSelection, cantripQualifies, lookupSpell } from './prerequisites';
 import type { Prerequisite } from './types';
 import { Feat, Entity, Grant, ChoiceDefinition, CampaignRules, ResourceGrant, ProficiencyGrant,
          ResourceUpgrade, FeatureInstance, Feature, ClassProgression, Ability, SpellSlots,
@@ -1013,20 +1013,47 @@ export function applyPoolChoiceToEntity(
   if (!pending || !Array.isArray(pending.definition.pool)) return entity;
 
   // Prerequisites (level, another option, a known cantrip, mutual exclusion) are enforced here, not only in the picker.
+  // A repeatable option may be selected as `optionId::target`: the target is validated and written on the feature.
   const classContext = pending.definition.forClassId ?? entity.identity.classId;
-  for (const optId of selectedOptionIds) {
+  const takenTargets = new Set<string>();
+  for (const c of entity.choices) if (c.resolved) for (const sel of c.selections) takenTargets.add(String(sel));
+  const seenIds = new Set<string>();
+  for (const sel of selectedOptionIds) {
+    const { optionId: optId, target } = splitSelection(sel);
     const option = pending.definition.pool.find(o => o.id === optId);
+    if (seenIds.has(sel)) throw new Error(`${option?.label ?? optId} was picked twice${target ? ` for the same target` : ''}.`);
+    seenIds.add(sel);
+    if (target === undefined && takenTargets.has(sel)) throw new Error(`You already have ${option?.label ?? optId}.`);
+    if (target !== undefined) {
+      if (!option?.repeatable) throw new Error(`${option?.label ?? optId} cannot be taken more than once.`);
+      if (takenTargets.has(sel)) throw new Error(`You already took ${option.label} for that target.`);
+      if (option.repeatable.target === 'cantrip') {
+        const sp = lookupSpell(target);
+        if (!sp || !(entity.spellcasting?.cantrips ?? []).includes(target)) throw new Error('Pick one of your known cantrips.');
+        if (!cantripQualifies(sp, option.requires)) throw new Error(`${sp.name ?? target} does not qualify for ${option.label}.`);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const feats = require('../content/feats/origin2024') as { ORIGIN_FEATS_2024: { id: string }[] };
+        if (!feats.ORIGIN_FEATS_2024.some(f => f.id === target)) throw new Error('Pick an Origin feat.');
+      }
+    }
     const check = checkPrerequisites(entity, option?.requires, {
-      alsoHeld: selectedOptionIds.filter(id => id !== optId), classId: classContext,
+      alsoHeld: selectedOptionIds.map(id => splitSelection(id).optionId).filter(id => id !== optId), classId: classContext,
     });
     if (!check.met) throw new Error(`${option?.label ?? optId} requires: ${check.unmet.join(', ')}.`);
   }
 
   let updated = entity;
-  for (const optId of selectedOptionIds) {
+  for (const sel of selectedOptionIds) {
+    const { optionId: optId, target } = splitSelection(sel);
     const option = pending.definition.pool.find(o => o.id === optId);
     if (option?.value) {
-      updated = applyGrant(updated, { kind: 'feature', value: option.value as Feature }, pending.grantedAt);
+      let feature = option.value as Feature;
+      if (target !== undefined && option.repeatable) {
+        const label = option.repeatable.target === 'cantrip' ? (lookupSpell(target)?.name ?? target) : target.replace(/_/g, ' ');
+        feature = { ...feature, id: `${feature.id}::${target}`, name: `${feature.name} (${label})`, description: `${feature.description} Taken for: ${label}.` };
+      }
+      updated = applyGrant(updated, { kind: 'feature', value: feature }, pending.grantedAt);
     }
   }
   updated = {
@@ -1057,7 +1084,7 @@ export function replacePoolOption(
   if (!choice || !choice.resolved || !Array.isArray(choice.definition.pool)) throw new Error('That choice has not been made yet.');
   if (!choice.definition.replace) throw new Error('This choice cannot be swapped.');
   const pool = choice.definition.pool;
-  const oldOpt = pool.find(o => o.id === oldOptionId);
+  const oldOpt = pool.find(o => o.id === splitSelection(oldOptionId).optionId);
   const newOpt = pool.find(o => o.id === newOptionId);
   if (!oldOpt || !choice.selections.includes(oldOptionId)) throw new Error('You do not hold that option.');
   if (!newOpt || !newOpt.value) throw new Error('That option is not available here.');
@@ -1075,7 +1102,8 @@ export function replacePoolOption(
   }
 
   const classContext = choice.definition.forClassId ?? entity.identity.classId;
-  const withoutOld = removeFeature(entity, (oldOpt.value as Feature).id);
+  const oldTarget = splitSelection(oldOptionId).target;
+  const withoutOld = removeFeature(entity, `${(oldOpt.value as Feature).id}${oldTarget !== undefined ? `::${oldTarget}` : ''}`);
   // Check against the character as they will be after the swap: the old option no longer counts as held.
   const afterRemoval: Entity = { ...withoutOld, choices: withoutOld.choices.map(c => c.id === choiceId ? { ...c, selections: c.selections.filter(id => id !== oldOptionId) } : c) };
   const check = checkPrerequisites(afterRemoval, newOpt.requires, { classId: classContext });
@@ -1101,14 +1129,14 @@ export function replaceableOptions(entity: Entity, choiceId: string): { optionId
   const classContext = choice.definition.forClassId ?? entity.identity.classId;
 
   return choice.selections.map(optionId => {
-    const opt = pool.find(o => o.id === optionId);
-    const deps = dependentsOf(optionId, [...held], optionsById);
+    const opt = pool.find(o => o.id === splitSelection(optionId).optionId);
+    const deps = dependentsOf(splitSelection(optionId).optionId, [...held], optionsById);
     const stripped: Entity = { ...entity, choices: entity.choices.map(c => c.id === choiceId ? { ...c, selections: c.selections.filter(id => id !== optionId) } : c) };
     const candidates = pool
       .filter(o => o.id !== optionId && !held.has(o.id) && !heldFeatureIds.has((o.value as Feature | undefined)?.id ?? ''))
       .map(o => ({ id: o.id, label: o.label, unmet: checkPrerequisites(stripped, o.requires, { classId: classContext }).unmet }));
     return {
-      optionId, label: opt?.label ?? optionId,
+      optionId, label: `${opt?.label ?? optionId}${splitSelection(optionId).target ? ` (${splitSelection(optionId).target!.replace(/_/g, ' ')})` : ''}`,
       ...(deps.length ? { blockedBy: `Needed by ${deps.map(id => optionsById[id]?.label ?? id).join(', ')}` } : {}),
       candidates,
     };

@@ -13,7 +13,7 @@ import { getClassLevels } from './multiclass';
 
 export type SpellTraits = { damage: boolean; attackRoll: boolean; rangeFeet: number };
 
-type SpellLike = { id: string; level: number; range?: string; description?: string };
+type SpellLike = { id: string; name?: string; level: number; range?: string; description?: string };
 
 /** The traits the cantrip prerequisites ask about, read from a spell's range and text. */
 export function spellTraits(spell: Pick<SpellLike, 'range' | 'description'>): SpellTraits {
@@ -37,12 +37,32 @@ export type PrerequisiteContext = {
 
 export type PrerequisiteResult = { met: boolean; unmet: string[] };
 
-/** Every option id the character holds through resolved choices (their `selections`). */
+/** A repeatable option taken with a target is selected as `optionId::targetId` (see ChoiceOption.repeatable). */
+export const TARGET_SEPARATOR = '::';
+
+export function splitSelection(selection: string): { optionId: string; target?: string } {
+  const i = selection.indexOf(TARGET_SEPARATOR);
+  return i < 0 ? { optionId: selection } : { optionId: selection.slice(0, i), target: selection.slice(i + TARGET_SEPARATOR.length) };
+}
+
+/** Every option id the character holds through resolved choices (their `selections`). A targeted take counts as its option. */
 export function heldOptionIds(entity: Entity): Set<string> {
   const held = new Set<string>();
-  for (const c of entity.choices as ChoiceState[]) if (c.resolved) for (const id of c.selections) held.add(String(id));
+  for (const c of entity.choices as ChoiceState[]) if (c.resolved) for (const id of c.selections) {
+    held.add(String(id));
+    held.add(splitSelection(String(id)).optionId);
+  }
   return held;
 }
+
+/** Does this cantrip meet the traits an option's `cantrip` prerequisites ask for? Validates a repeat take's target. */
+export function cantripQualifies(spell: SpellLike, requires: Prerequisite[] | undefined): boolean {
+  const t = spellTraits(spell);
+  return (requires ?? []).filter((r): r is Extract<Prerequisite, { kind: 'cantrip' }> => r.kind === 'cantrip')
+    .every(r => r.traits.every(trait => trait === 'damage' ? t.damage : trait === 'attack_roll' ? t.attackRoll : t.rangeFeet >= 10));
+}
+
+export function lookupSpell(id: string): SpellLike | undefined { return defaultSpellLookup(id); }
 
 function defaultSpellLookup(id: string): SpellLike | undefined {
   // Loaded on demand: the content library is large and the engine should not pull it in just to be imported.

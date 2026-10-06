@@ -30,6 +30,8 @@ type FeatureOpts = {
   tags?: ActionCardTag[]; upgradeOf?: string; resources?: ResourceGrant[]; grantsChoices?: ChoiceDefinition[];
   /** Only for `option`: requirements for taking it (see Prerequisite). */
   requires?: Prerequisite[];
+  /** Only for `option`: can be taken again, each time with its own target (see ChoiceOption.repeatable). */
+  repeatable?: ChoiceOption['repeatable'];
 };
 
 /** Makes the feature/grant helpers for one class (so ids and sources are filled in). */
@@ -82,7 +84,7 @@ export function classKit(classId: string, subclassId?: string) {
   const pick = (id: string, prompt: string, count: number, pool: ChoiceOption[], replace?: ChoiceReplacePolicy): ChoiceDefinition =>
     ({ id: `${classId}_${id}`, prompt, kind: 'feature_pool', count, pool, grants: [], required: true, resolved: false, ...(replace ? { replace } : {}) });
   const option = (key: string, name: string, level: number, description: string, o: FeatureOpts = {}): ChoiceOption =>
-    ({ id: key, label: name, value: f(key, name, level, description, o), ...(o.requires ? { requires: o.requires } : {}) });
+    ({ id: key, label: name, value: f(key, name, level, description, o), ...(o.requires ? { requires: o.requires } : {}), ...(o.repeatable ? { repeatable: o.repeatable } : {}) });
   /** A starting-equipment choice: each option is a package of items plus its leftover gold, or only gold (the gold alternative). `itemFilter` makes the option also ask for a real item of a kind (the tool you are proficient with). */
   const equip = (id: string, prompt: string, options: { id: string; label: string; items: string[]; gold?: number; itemFilter?: ChoiceOption['itemFilter'] }[]): ChoiceDefinition => ({
     id: `${classId}_equip_${id}`, prompt, kind: 'equipment', equipmentStyle: 'exact_options', count: 1, grants: [], required: true, resolved: false,

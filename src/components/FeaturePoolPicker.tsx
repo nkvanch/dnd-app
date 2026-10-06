@@ -8,8 +8,9 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { applyPoolChoiceToEntity } from '../engine/leveling';
-import { checkPrerequisites } from '../engine/prerequisites';
-import { Entity, ChoiceState, CampaignRules, Feature } from '../engine/types';
+import { checkPrerequisites, splitSelection, cantripQualifies, lookupSpell } from '../engine/prerequisites';
+import { ORIGIN_FEATS_2024 } from '../content/feats/origin2024';
+import { Entity, ChoiceState, CampaignRules, Feature, ChoiceOption } from '../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 export function FeaturePoolPicker({
@@ -31,13 +32,25 @@ export function FeaturePoolPicker({
   // character already has, so the same maneuver can't be picked twice.
   const knownFeatureIds = new Set(entity.features.map(f => f.id));
   const pool = (Array.isArray(choice.definition.pool) ? choice.definition.pool : [])
-    .filter(opt => !knownFeatureIds.has((opt.value as Feature | undefined)?.id ?? ''));
+    .filter(opt => opt.repeatable || !knownFeatureIds.has((opt.value as Feature | undefined)?.id ?? ''));
+
+  // A repeatable option (Agonizing Blast, Lessons of the First Ones) is taken once per target, so it lists its targets.
+  const takenSelections = new Set<string>();
+  for (const c of entity.choices) if (c.resolved) for (const sel of c.selections) takenSelections.add(String(sel));
+  const targetsFor = (opt: ChoiceOption): { id: string; label: string }[] => {
+    if (!opt.repeatable) return [];
+    const raw = opt.repeatable.target === 'cantrip'
+      ? (entity.spellcasting?.cantrips ?? []).flatMap(id => { const sp = lookupSpell(id); return sp && cantripQualifies(sp, opt.requires) ? [{ id, label: sp.name ?? id }] : []; })
+      : ORIGIN_FEATS_2024.map(f => ({ id: f.id, label: f.name }));
+    return raw.filter(t => !takenSelections.has(`${opt.id}::${t.id}`));
+  };
 
   const classContext = choice.definition.forClassId ?? entity.identity.classId;
   // What stops an option being taken, given what is already selected in this sitting (an option can need another one
   // picked alongside it, such as Eldritch Smite with Pact of the Blade).
   const unmetFor = (optId: string, others: string[]): string[] =>
-    checkPrerequisites(entity, pool.find(o => o.id === optId)?.requires, { alsoHeld: others.filter(x => x !== optId), classId: classContext }).unmet;
+    checkPrerequisites(entity, pool.find(o => o.id === splitSelection(optId).optionId)?.requires,
+      { alsoHeld: others.map(x => splitSelection(x).optionId).filter(x => x !== splitSelection(optId).optionId), classId: classContext }).unmet;
 
   function toggle(id: string) {
     setSelected(prev => {
@@ -80,6 +93,28 @@ export function FeaturePoolPicker({
       <View style={styles.list}>
         {pool.map(opt => {
           const feature = opt.value as Feature;
+          const targets = targetsFor(opt);
+          if (opt.repeatable) {
+            const unmetRep = unmetFor(opt.id, selected);
+            return (
+              <View key={opt.id} style={[styles.row, unmetRep.length > 0 && styles.rowLocked]}>
+                <Text style={styles.rowName}>{opt.label} (repeatable: choose {opt.repeatable.target === 'cantrip' ? 'a cantrip' : 'an Origin feat'})</Text>
+                {unmetRep.length > 0 && <Text style={styles.rowUnmet}>Requires: {unmetRep.join(', ')}</Text>}
+                {!!feature?.description && <Text style={styles.rowDesc}>{feature.description}</Text>}
+                {unmetRep.length === 0 && targets.length === 0 && <Text style={styles.rowDesc}>No target left for this option.</Text>}
+                {unmetRep.length === 0 && targets.map(t => {
+                  const sel = `${opt.id}::${t.id}`;
+                  const on = selected.includes(sel);
+                  return (
+                    <Pressable key={sel} style={[styles.row, on && styles.rowSelected, { marginTop: Spacing.xs }]} onPress={() => toggle(sel)}
+                      accessibilityState={{ selected: on }}>
+                      <Text style={styles.rowName}>{t.label}{on ? ' ✓' : ''}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            );
+          }
           const isSel   = selected.includes(opt.id);
           const isReal  = !!feature?.activation;
           const unmet   = isSel ? [] : unmetFor(opt.id, selected);

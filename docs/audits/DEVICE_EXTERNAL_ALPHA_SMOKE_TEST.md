@@ -58,6 +58,7 @@ None. This was a read-only device test. Per the task instruction, no feature wor
 3. Rebuild from the corrected commit, perform a new clean install, and restart this device suite from step 2.
 
 ---
+---
 
 ## Corrected run: Campaign auto-host regression
 
@@ -65,40 +66,40 @@ None. This was a read-only device test. Per the task instruction, no feature wor
 
 ### Root cause
 
-The earlier separation (, contained in  and in , nothing later touched the campaign files) was intact:  opened no server, allocated no room code, and  was the only caller of . The device was not hosting. The DM campaign view ( in ) drew a legacy **Stop Hosting** button at the bottom of the page unconditionally, whatever the live-session state. The store tests could not see it because they never rendered the screen. Fix: that button now renders only while  is true.
+The earlier separation (`cff4ea1`, contained in `f868d80` and in `1ca84db`; nothing later touched the campaign files) was intact: `createCampaign()` opened no server and allocated no room code, and `startLiveSession` was the only caller of `startAsServer`. The device was not hosting. The DM campaign view (`DmActiveView` in `app/(tabs)/campaigns.tsx`) drew a legacy **Stop Hosting** button at the bottom of the page unconditionally, whatever the live-session state. The store tests could not see it because they never rendered the screen. Fix: that button now renders only while `liveSession` is true.
 
-The previous run's inference ("the control only appears for a running Host session") was wrong about the cause: the LAN server was not running; only the button was drawn.
+The previous run's inference ("that control only appears for a running Host session") was wrong about the cause: the LAN server was not running, only the button was drawn.
 
 ### What the call graph showed
 
-Server start:  → , reached only from the Host Session button. , the wizard completion handler, the Campaign page mount effect,  (a DM restores the campaign only),  (drops any stored room code) and the root layout boot sequence do not start it. The separate Live Session feature (, ) has its own runtime and is not on the Create Campaign path.
+Server start: `campaignStore.startLiveSession` calls `syncManager.startAsServer`, and is reached only from the Host Session button. `createCampaign`, the wizard completion handler, the Campaign page mount effect, `resumeSync` (a DM restores the campaign only), `loadCampaigns` (drops any stored room code) and the root layout boot sequence do not start it. The separate Live Session feature (`/live`, `LiveSessionStart`) has its own runtime and is not on the Create Campaign path.
 
 ### Candidate
 
-- **Commit:**  (tracked tree clean; the only modified tracked file was )
-- **APK:** , built fresh from that commit (not the earlier  file)
-- **SHA-256:**  (debug-signed)
-- **Device:** serial , 1080x2400, installed with Performing Streamed Install, then Success
-- **Automation:**  (adb + uiautomator dump + input tap). The server state was checked independently of the UI by reading  for a listener on port 7742 (0x1E3E).
+- **Commit:** `874e75ef7786d7f863dcf01129a5c3b16bb80cfb` (tracked tree clean; the only modified tracked file was `.obsidian/workspace.json`)
+- **APK:** `builds/grimoire-local-20261007-2028.apk`, built fresh from that commit (not the earlier `20261006-2028` file)
+- **SHA-256:** `4a1b2eb9441c250ad63b1c25973713e16cb08826333ddbfe80419028d45a7587` (debug-signed)
+- **Device:** serial `GAJFYTFIW8KBOZDA`, 1080x2400, installed with `adb install -r`, then `adb shell pm clear com.nkvanch.grimoire`
+- **Automation:** `scripts/dev-ui.sh` (adb, uiautomator dump, input tap). Server state was checked independently of the UI by reading `/proc/net/tcp` for a listener on port 7742 (0x1E3E).
 
 ### Automated tests (this commit)
 
- renders the real Campaigns screen and presses the real wizard, Host Session and End Live Session controls (5 tests). It fails against the previous screen. error TS5025: Unknown compiler option '--noEmit'. Did you mean 'noEmit'? clean; full Jest 258 suites, 3442 tests pass;  clean.
+`src/__tests__/campaignCreateFlow.test.tsx` renders the real Campaigns screen and presses the real wizard, Host Session and End Live Session controls (5 tests, including restart). It fails against the previous screen. `npx tsc --noEmit` is clean, the full Jest run passes (258 suites, 3442 tests), and `git diff --check` is clean.
 
 ### Device results
 
 | Step | Result | Evidence |
 | --- | --- | --- |
 | Clean install, launch, Skip first-run | PASS | Welcome screen, then Home |
-| Create  through all 5 wizard steps | PASS | campaign page opened |
+| Create `OfflineAudit` through all 5 wizard steps | PASS | Campaign page opened |
 | Campaign page right after creation | **PASS** | Host Session present; Stop Hosting, Room Code, QR and End Live Session all absent, including after scrolling to the bottom; status line "Offline campaign, no live session"; DM dashboard button present. Nothing listening on 7742. |
-| Press Host Session | PASS | Room code  and QR shown, "0 players connected", End Live Session at the top, **Stop Hosting** at the bottom, a listener on 7742, "Hosting on 192.168.1.12:7742". |
-| End Live Session (confirm) | PASS | Room code, QR, Stop Hosting and End Live Session gone; Host Session back;  still active; no listener on 7742. |
+| Press Host Session | PASS | Room code `DALSAJN` and QR shown, "0 players connected", End Live Session at the top, **Stop Hosting** at the bottom, a listener on 7742, "Hosting on 192.168.1.12:7742". |
+| End Live Session (confirm) | PASS | Room code, QR, Stop Hosting and End Live Session gone; Host Session back; `OfflineAudit` still active; no listener on 7742. |
 | Kill and relaunch while offline | PASS | Campaign restored offline: Host Session shown, no Stop Hosting or room code, no listener. |
-| Host, kill, relaunch | PASS | Old room did not resume: Host Session shown, no room code, no Stop Hosting, no listener. |
-| Crash check | PASS | no FATAL EXCEPTION for the app in logcat |
+| Host, kill, relaunch | PASS | The old room did not resume: Host Session shown, no room code, no Stop Hosting, no listener. |
+| Crash check | PASS | No FATAL EXCEPTION for the app in logcat |
 
-Evidence:  (, , , , , , ).
+Evidence is in `builds/maestro-artifacts/campaign-fix/`: `02-after-create.png` and `.xml`, `02b-after-create-bottom.png`, `03-hosting.png` and `.xml`, `03-hosting-top.png`, `03b-hosting-bottom.png`, `04-after-end.png`, `05-restart-after-hosting.png`.
 
 ### Not run
 

@@ -78,7 +78,10 @@ export function buildNonSrd51Pack(): SrdPack {
   const spellsTaken = taken('spells');
   const content: PackContent = {
     classes, subclasses,
-    races: nonSrd(FULL_RACE_LIBRARY).map(r => stamp(scrub(plain(r)), prov) as AnyRecord),
+    // Non-SRD races, plus each SRD race that has non-SRD subraces: the full record (every subrace) replaces the public pack's SRD-only one
+    // when this pack is installed after it, so the extra subraces reappear for whoever holds the private pack.
+    races: FULL_RACE_LIBRARY.filter(r => !is2024(r) && (r.srd !== true || (r.subraces ?? []).some(s => s.srd !== true)))
+      .map(r => stamp(scrub(plain(r)), prov) as AnyRecord),
     backgrounds: nonSrd(FULL_BACKGROUND_LIBRARY).map(b => stamp(scrub(plain(b)), prov) as AnyRecord),
     feats: nonSrd(FULL_FEAT_LIBRARY).filter(f => !HOMEBREW_SOURCE.test(f.source ?? '')).map(f => stamp(scrub(plain(f)), prov) as AnyRecord),
     spells: nonSrd(FULL_SPELL_LIBRARY as Spell[]).filter(s => !spellsTaken.has(s.id))

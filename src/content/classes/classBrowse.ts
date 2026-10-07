@@ -154,15 +154,8 @@ export const CLASS_META: Record<string, ClassMeta> = {
     complexity: 'Complex',
     recommendation: 'Make Dexterity your highest ability score, followed by Wisdom, then Constitution. The Hermit background suits a monk.',
   },
-  artificer: {
-    role: 'Support / Utility Half-Caster',
-    primaryAbility: 'int',
-    shortDescription: 'An inventor who channels magic through tools and infusions, casting spells from level 1 and enhancing gear for the whole party.',
-    keyMechanics: ['Magical Tinkering', 'Spellcasting', 'Infuse Item', 'Artificer Specialist'],
-    playstyle: 'Gear-focused support and utility, with a specialist subclass shaping combat role.',
-    complexity: 'Moderate',
-    recommendation: 'Make Intelligence your highest ability score, followed by Constitution, then Dexterity. The Guild Artisan background suits an artificer.',
-  },
+  // Non-SRD classes (Artificer and the private ones) have no entry here: the public app carries no description of them, and a class from an
+  // installed private pack falls back to the defaults derived from its own record.
 };
 
 const ABILITY_NAMES: Record<Ability, string> = {

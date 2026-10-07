@@ -149,7 +149,10 @@ export function buildSrd51Pack(): SrdPack {
   const content: PackContent = {
     classes,
     subclasses: FULL_SUBCLASS_LIBRARY.filter(s => s.srd === true && !SUBCLASSES_2024.some(s24 => s24.id === (s as { id?: string }).id)).map(s => stamp(plain({ ...s, id: subclassId(s as never) }), prov) as AnyRecord),
-    races: FULL_RACE_LIBRARY.filter(r => r.srd === true && r.rulesetId !== ('dnd5e-2024' as never)).map(r => stamp(plain(r), prov) as AnyRecord),
+    // An SRD race carries only its SRD subraces: the library nests dozens of non-SRD ones (Eberron, Ravnica, Mordenkainen's) inside the SRD races,
+    // and they belong to the private non-SRD pack (nonSrdPacks.ts), never to this public one.
+    races: FULL_RACE_LIBRARY.filter(r => r.srd === true && r.rulesetId !== ('dnd5e-2024' as never))
+      .map(r => stamp(plain({ ...r, ...(r.subraces ? { subraces: r.subraces.filter(s => s.srd === true) } : {}) }), prov) as AnyRecord),
     backgrounds: FULL_BACKGROUND_LIBRARY.filter(b => b.srd === true && b.rulesetId !== ('dnd5e-2024' as never)).map(b => stamp(plain(b), prov) as AnyRecord),
     feats: FULL_FEAT_LIBRARY.filter(f => f.srd === true && f.rulesetId !== ('dnd5e-2024' as never)).map(f => stamp(plain(f), prov) as AnyRecord),
     // Class tags are limited to the classes this pack carries: the library also tags spells for classes outside the SRD

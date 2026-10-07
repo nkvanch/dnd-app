@@ -50,7 +50,10 @@ describe('creation screens on installed packs', () => {
       for (const rec of fromPacks[kind]) {
         const base = byId.get(rec.id);
         if (!base) { differing.push(`${rec.id} (not in the catalog)`); continue; }
-        if (strip(base) !== strip(rec)) differing.push(rec.id);
+        // the public pack carries an SRD race's SRD subraces only; the catalog nests the non-SRD ones too
+        const expected = kind === 'races' && (base as { subraces?: { srd?: boolean }[] }).subraces
+          ? { ...(base as object), subraces: (base as { subraces: { srd?: boolean }[] }).subraces.filter(x => x.srd !== false) } : base;
+        if (strip(expected) !== strip(rec)) differing.push(rec.id);
       }
       expect([kind, differing]).toEqual([kind, []]);
       expect(fromPacks[kind].every(r => (r as { provenance?: { kind: string } }).provenance?.kind === 'srd')).toBe(true);

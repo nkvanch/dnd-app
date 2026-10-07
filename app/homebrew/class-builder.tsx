@@ -512,7 +512,7 @@ export default function ClassBuilderScreen() {
 
         <Text style={styles.fieldLabel}>Class Name *</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName}
-          placeholder="e.g. Blood Hunter" placeholderTextColor={Colors.textDim} />
+          placeholder="e.g. Runesmith" placeholderTextColor={Colors.textDim} />
 
         <Text style={styles.fieldLabel}>Game / Ruleset</Text>
         <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />

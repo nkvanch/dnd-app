@@ -46,7 +46,14 @@ describe('the private non-SRD 5e pack', () => {
     const mine = recordsOf(nonSrd);
     for (const [category, records] of Object.entries(mine)) {
       const others = new Set([...(recordsOf(s51)[category] ?? []), ...(recordsOf(s521)[category] ?? [])].map(x => x.id));
-      expect(records.filter(x => others.has(x.id)).map(x => `${category}:${x.id}`)).toEqual([]);
+      // The one deliberate overlap: an SRD race that gains non-SRD subraces appears here in full (every subrace), replacing the public SRD-only record.
+      const overlap = records.filter(x => others.has(x.id)).filter(x => {
+        if (category !== 'races') return true;
+        const own = ((x as { subraces?: { id: string }[] }).subraces ?? []).length;
+        const pub = ((recordsOf(s51).races ?? []).find(r => r.id === x.id) as { subraces?: unknown[] } | undefined)?.subraces?.length ?? 0;
+        return own <= pub;
+      });
+      expect(overlap.map(x => `${category}:${x.id}`)).toEqual([]);
       expect(records.filter(x => (x as { rulesetId?: string }).rulesetId === 'dnd5e-2024').map(x => x.id)).toEqual([]);
       const ids = records.map(x => x.id);
       expect(new Set(ids).size).toBe(ids.length);

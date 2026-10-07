@@ -160,36 +160,8 @@ const CLASS_DETAIL: Record<string, ClassDetail> = {
     toolProf: 'None',
     spellcasting: true,
   },
-  artificer: {
-    description: 'An inventor who infuses mundane objects with magic, casting spells from level 1 and unlocking Infuse Item at level 2.',
-    savingThrows: ['Constitution', 'Intelligence'],
-    savingThrowAbilities: ['con', 'int'],
-    primaryFeatures: ['Magical Tinkering', 'Spellcasting', 'Infuse Item', 'Artificer Specialist'],
-    armorProf: 'Light, medium, shields',
-    weaponProf: 'Simple weapons',
-    toolProf: "Thieves' tools, tinker's tools, one type of artisan's tools",
-    spellcasting: true,
-  },
-  abyss_knight: {
-    description: 'A warrior bound by pact to a demon lord of the Abyss, channeling dark power through their hit dice to fuel both their attacks and their nascent spellcasting.',
-    savingThrows: ['Strength', 'Constitution'],
-    savingThrowAbilities: ['str', 'con'],
-    primaryFeatures: ['Abyssal Energy', 'Oozing Knight', "Demon's Sight", 'Frightening Gaze', 'Dark Magic'],
-    armorProf: 'Light, medium, heavy, shields',
-    weaponProf: 'Simple weapons, martial weapons',
-    toolProf: 'None',
-    spellcasting: true,
-  },
-  blood_hunter: {
-    description: 'A grim warrior who sacrifices their own vitality to hunt monsters, channeling hemocraft blood magic into weapon strikes and curses.',
-    savingThrows: ['Dexterity', 'Intelligence'],
-    savingThrowAbilities: ['dex', 'int'],
-    primaryFeatures: ["Hunter's Bane", 'Blood Maledict', 'Crimson Rite', 'Blood Hunter Order', 'Extra Attack'],
-    armorProf: 'Light, medium, shields',
-    weaponProf: 'Simple weapons, martial weapons',
-    toolProf: "Alchemist's supplies",
-    spellcasting: false,
-  },
+  // No entries for non-SRD classes (Artificer and the private ones): the public app carries no description of them. A class from an installed
+  // private pack reads its facts from the class record itself, like the 2024 classes.
 };
 
 /**
@@ -249,7 +221,7 @@ export default function ClassDetailScreen() {
   const detail = id ? CLASS_DETAIL[id] : null;
   // The 2024 (5.5e) classes are official content with no CLASS_DETAIL entry: they read their facts from the class itself.
   const isHomebrewClass = !!cls && useHomebrewStore.getState().classes.some(c => c.id === cls.id);
-  const isOfficial2024 = !!cls && cls.rulesetId === 'dnd5e-2024' && !isHomebrewClass;
+  const isOfficial2024 = !!cls && !isHomebrewClass && (cls.rulesetId === 'dnd5e-2024' || !detail);
 
   useEffect(() => {
     if (!cls || !draft) safeGoBack();

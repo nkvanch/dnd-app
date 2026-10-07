@@ -985,7 +985,7 @@ function OfficialCompendiumView() {
                       <Text style={[styles.typeBadgeTxt, { color: visual.accent }]}>{visual.icon} {CONTENT_TYPE_LABELS[entry.type]}</Text>
                     </View>
                     <Text style={styles.rowName}>{entry.name}</Text>
-                    {!entry.isHomebrew && isNonSrd(entry.srd) && <NonSrdBadge />}
+                    {!entry.isHomebrew && isNonSrd(entry.srd, entry.rulesetId) && <NonSrdBadge />}
                   </View>
                   <View style={styles.rowBadges}>
                     <View style={[styles.provBadge, entry.isHomebrew ? styles.provBadgeHomebrew : styles.provBadgeOfficial]}>

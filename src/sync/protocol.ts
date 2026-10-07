@@ -87,3 +87,19 @@ export function parseBuffer(buffer: string): {
 
   return { messages, remainder };
 }
+
+// ── What a player may be told ─────────────────────────────────────────────────
+
+/**
+ * The DM's campaign notes are the DM's own page: world secrets, plot, reminders. Players get the campaign's name, rules, quests and
+ * session log (the shared quest tracker and recap), never the notes. Applied to every message the DM's server sends to a player.
+ */
+export function redactForPlayers(msg: SyncMessage): SyncMessage {
+  if (msg.type === 'campaign_snapshot') return { ...msg, campaign: { ...msg.campaign, notes: '' } };
+  if (msg.type === 'campaign_patch' && 'notes' in msg.patch) {
+    const { notes: _notes, ...rest } = msg.patch;
+    void _notes;
+    return { ...msg, patch: rest };
+  }
+  return msg;
+}

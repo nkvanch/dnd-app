@@ -328,12 +328,13 @@ function CreateModal({ visible, onClose }: { visible: boolean; onClose: () => vo
 function NotesSection({ notes, editable, onChange }: {
   notes: string; editable: boolean; onChange: (n: string) => void;
 }) {
+  // The DM's notes never leave the DM's device (sync/protocol.ts redactForPlayers), so the section says so.
   const [local, setLocal] = useState(notes);
   useEffect(() => setLocal(notes), [notes]);
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionLabel}>CAMPAIGN NOTES</Text>
+      <Text style={styles.sectionLabel}>DM NOTES (PRIVATE, NOT SENT TO PLAYERS)</Text>
       {editable ? (
         <TextInput
           style={[styles.input, styles.notesInput]}
@@ -661,6 +662,7 @@ function DmActiveView() {
   const liveSession      = useCampaignStore(s => s.liveSession);
   const startLiveSession = useCampaignStore(s => s.startLiveSession);
   const endLiveSession   = useCampaignStore(s => s.endLiveSession);
+  const leaveCampaign    = useCampaignStore(s => s.leaveCampaign);
   const syncStatus     = useSyncStore(s => s.status);
   const liveNickname   = useSessionStore(s => s.session?.nickname ?? '');
   const [hostOpen, setHostOpen] = useState(false);
@@ -688,6 +690,21 @@ function DmActiveView() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'End Live Session', style: 'destructive', onPress: () => { void endLiveSession(); } },
     ]);
+  }
+
+  // Leaves this campaign without deleting it: a live session (if any) is announced and stopped, and the Campaigns page returns to
+  // Create / Open Existing / Join, so a DM can start or open another campaign. The campaign stays saved and can be reopened.
+  function confirmClose() {
+    Alert.alert(
+      'Close Campaign',
+      liveSession
+        ? 'Players currently connected will be disconnected. "' + activeCampaign!.name + '" stays saved; you can reopen it or start another campaign.'
+        : '"' + activeCampaign!.name + '" stays saved; you can reopen it or start another campaign.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Close Campaign', onPress: () => { void leaveCampaign(); } },
+      ],
+    );
   }
 
   async function beginLiveSession() {
@@ -776,6 +793,9 @@ function DmActiveView() {
         )}
         <Pressable style={[styles.dmBtn, styles.dmBtnSecondary]} onPress={() => setHostOpen(true)} testID="campaign-host-live-session">
           <Text style={[styles.dmBtnTxt, { color: Colors.textPrimary }]}>🛰 Host Live Table (advanced)</Text>
+        </Pressable>
+        <Pressable style={[styles.dmBtn, styles.dmBtnSecondary]} onPress={confirmClose} testID="campaign-close">
+          <Text style={[styles.dmBtnTxt, { color: Colors.textPrimary }]}>↩ Close Campaign / Switch</Text>
         </Pressable>
       </View>
 
@@ -971,11 +991,7 @@ function PlayerActiveView() {
       </View>
 
       {/* Overview sections — read-only */}
-      <NotesSection
-        notes={activeCampaign.notes}
-        editable={false}
-        onChange={() => {}}
-      />
+      {/* the DM's notes are private: players are not sent them */}
       {quests.length > 0 && (
         <QuestsSection
           quests={quests}

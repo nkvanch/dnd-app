@@ -13,7 +13,7 @@ import type Socket from 'react-native-tcp-socket/lib/types/Socket';
 
 import { SyncEvent } from '../engine/types';
 import { Entity, Campaign } from '../engine/types';
-import { SyncMessage, encodeMessage, parseBuffer, ConnectedPlayer, CombatTurnState } from './protocol';
+import { SyncMessage, encodeMessage, redactForPlayers, parseBuffer, ConnectedPlayer, CombatTurnState } from './protocol';
 import { SYNC_PORT } from './discovery';
 
 /**
@@ -144,7 +144,7 @@ export class SyncServer {
 
   /** Broadcast a message to all clients, optionally excluding one device. */
   broadcast(msg: SyncMessage, exceptDeviceId?: string): void {
-    const encoded = encodeMessage(msg);
+    const encoded = encodeMessage(redactForPlayers(msg));
     this.clients.forEach((client, deviceId) => {
       if (deviceId === exceptDeviceId) return;
       try { client.socket.write(encoded); } catch { /* ignore */ }
@@ -155,7 +155,7 @@ export class SyncServer {
   sendTo(deviceId: string, msg: SyncMessage): void {
     const client = this.clients.get(deviceId);
     if (!client) return;
-    try { client.socket.write(encodeMessage(msg)); } catch { /* ignore */ }
+    try { client.socket.write(encodeMessage(redactForPlayers(msg))); } catch { /* ignore */ }
   }
 
   /** Push a full entity snapshot to every connected player. */

@@ -11,7 +11,7 @@ jest.mock('../db/packRegistryRepo', () => ({ loadInstalledPacks: () => Promise.r
 jest.mock('../db/customRuleProfileRepo', () => ({ loadCustomRuleProfiles: () => Promise.resolve([]), saveCustomRuleProfile: jest.fn(), deleteCustomRuleProfile: jest.fn() }));
 jest.mock('../utils/alert', () => ({
   // confirmations are answered with the destructive/confirming button, as a user pressing it would
-  Alert: { alert: jest.fn((_t: string, _m?: string, buttons?: { text: string; style?: string; onPress?: () => void }[]) => { buttons?.find(b => b.style === 'destructive')?.onPress?.(); }) },
+  Alert: { alert: jest.fn((_t: string, _m?: string, buttons?: { text: string; style?: string; onPress?: () => void }[]) => { (buttons?.find(b => b.style === 'destructive') ?? buttons?.find(b => b.style !== 'cancel'))?.onPress?.(); }) },
 }));
 
 import React from 'react';
@@ -78,6 +78,13 @@ beforeEach(() => {
 });
 const mounted: TestRenderer.ReactTestRenderer[] = [];
 afterEach(() => { for (const r of mounted.splice(0)) act(() => { r.unmount(); }); jest.restoreAllMocks(); resetStores(); });
+
+async function createNamed(r: TestRenderer.ReactTestRenderer, name: string) {
+  await pressLabel(r, '👑 Create Campaign');
+  await act(async () => { byId(r, 'wiz-name').props.onChangeText(name); });
+  for (let i = 0; i < 4; i++) await press(r, 'wiz-next');
+  await press(r, 'wiz-create');
+}
 
 async function mountAndCreate(): Promise<TestRenderer.ReactTestRenderer> {
   let r!: TestRenderer.ReactTestRenderer;
@@ -212,5 +219,48 @@ describe('restart', () => {
     expect(screenText(x)).not.toContain('Stop Hosting');
     expect(screenText(x)).not.toContain('ROOM CODE');
     expect(hasId(x, 'campaign-host-session')).toBe(true);
+  });
+});
+
+describe('leaving a campaign (the navigation trap)', () => {
+  it('Close Campaign returns to Create / Open Existing with the campaign kept, so a second campaign can be started or the first reopened', async () => {
+    const r = await mountAndCreate();
+    expect(hasId(r, 'campaign-close')).toBe(true);
+    await press(r, 'campaign-close');
+
+    let t = screenText(r);
+    expect(t).toContain('No Active Campaign');
+    expect(t).toContain('👑 Create Campaign');
+    expect(t).toContain('Open Existing Campaign');
+    expect(useCampaignStore.getState().activeCampaign).toBeNull();
+    expect(useCampaignStore.getState().campaigns.map(c => c.name)).toEqual(['OfflineAudit']);   // kept, not deleted
+    expect(saved.map(c => c.name)).toEqual(['OfflineAudit']);
+    expect(startAsServer).not.toHaveBeenCalled();
+
+    await createNamed(r, 'SecondCampaign');                                                       // a second, separate campaign
+    t = screenText(r);
+    expect(t).toContain('SecondCampaign');
+    expect(useCampaignStore.getState().campaigns.map(c => c.name).sort()).toEqual(['OfflineAudit', 'SecondCampaign']);
+    expect(useCampaignStore.getState().liveSession).toBe(false);
+    expect(hasId(r, 'campaign-host-session')).toBe(true);
+
+    await press(r, 'campaign-close');
+    await pressLabel(r, 'Open Existing Campaign');
+    expect(screenText(r)).toContain('OfflineAudit');
+    expect(screenText(r)).toContain('SecondCampaign');
+  });
+
+  it('closing while hosting ends the live session first and leaves the campaign saved', async () => {
+    const r = await mountAndCreate();
+    await press(r, 'campaign-host-session');
+    expect(useCampaignStore.getState().liveSession).toBe(true);
+    await press(r, 'campaign-close');
+    expect(announceClosing).toHaveBeenCalled();
+    expect(stopAll).toHaveBeenCalled();
+    expect(useCampaignStore.getState().liveSession).toBe(false);
+    expect(useCampaignStore.getState().activeCampaign).toBeNull();
+    expect(screenText(r)).toContain('No Active Campaign');
+    expect(useSyncStore.getState().status.roomCode).toBeNull();
+    expect(useCampaignStore.getState().campaigns).toHaveLength(1);
   });
 });

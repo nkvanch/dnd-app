@@ -162,7 +162,7 @@ export function ItemPickerModal({
         <View style={s.rowInfo}>
           <View style={s.rowNameLine}>
             <Text style={s.rowName}>{item.name}</Text>
-            {!homebrewIds.has(item.id) && isNonSrd(item.srd) && <NonSrdBadge />}
+            {!homebrewIds.has(item.id) && isNonSrd(item.srd, item.rulesetId) && <NonSrdBadge />}
           </View>
           {item.cost && item.cost !== '—' && <Text style={s.rowMeta}>{item.cost}</Text>}
         </View>

@@ -609,7 +609,7 @@ function BackgroundDetail({ id }: { id: string }) {
               </Pressable>
               <Pressable
                 style={[flexStyles.subModeBtn, flexSubMode === '3x1' && flexStyles.subModeBtnActive]}
-                onPress={() => { setFlexSubMode('3x1'); setFlexPicks([]); }}
+                onPress={() => { setFlexSubMode('3x1'); setFlexPicks(flexAbilityOptions.length === 3 ? [...flexAbilityOptions] : []); }}
               >
                 <Text style={[flexStyles.subModeTxt, flexSubMode === '3x1' && flexStyles.subModeTxtActive]}>+1 / +1 / +1</Text>
               </Pressable>

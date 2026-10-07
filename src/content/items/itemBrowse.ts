@@ -109,6 +109,8 @@ export function baseWeaponIdFromName(name: string): string | null {
 /** Recover a weapon's { martial, ranged } class from its name, or null. */
 export function classifyWeaponByName(i: ItemIndexEntry): WeaponClass | null {
   const name = i.name.toLowerCase();
+  // Ammunition and its containers name a weapon ("Case, crossbow bolt", "Crossbow Bolts (20)") without being one.
+  if (/\b(case|quiver|bolts?|bullets?|needles?)\b/.test(name) && !i.hasDamageEffect) return null;
   for (const base of BASE_WEAPON_KEYS_BY_LENGTH) {
     if (name.includes(base)) return BASE_WEAPONS[base];
   }

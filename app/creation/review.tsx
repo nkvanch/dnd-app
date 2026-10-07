@@ -193,6 +193,13 @@ export default function ReviewScreen() {
         </View>
       )}
 
+      {/* Starting gear is saved as carried, not worn: AC and attacks count only what is equipped. */}
+      {draft.inventory.carried.length > 0 && (
+        <Text style={styles.warningText}>
+          Your starting gear is added to Carried. Equip armor, a shield and weapons from the Items tab to count them in AC and attacks.
+        </Text>
+      )}
+
       {/* Save */}
       {saveError && (
         <View style={styles.warningBox}>

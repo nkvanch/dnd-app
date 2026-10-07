@@ -41,7 +41,6 @@ const CLASS_DESCRIPTIONS: Record<string, string> = {
   sorcerer:  'An innate spellcaster powered by bloodline magic. Metamagic lets you shape spells in unique ways. Fewer spell slots than wizard. Hit Die: d6.',
   warlock:   'A pact-magic spellcaster empowered by a patron. Short-rest spell slot recharge, Eldritch Invocations, and flexible Pact Boon. Hit Die: d8.',
   wizard:    'A scholarly spellcaster with the broadest spell list in the game. Arcane Recovery and spellbook give unmatched flexibility. Hit Die: d6.',
-  artificer: "An inventor who infuses mundane objects with magic. INT-based half-caster that casts from level 1, with a specialist subclass (Armorer, Alchemist, Artillerist, or Battle Smith) chosen at level 3. Hit Die: d8.",
 };
 
 export default function ClassScreen() {

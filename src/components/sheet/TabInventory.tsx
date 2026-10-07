@@ -506,7 +506,7 @@ function AddItemModal({
                         <Text style={[addStyles.itemName, owned && addStyles.itemNameOwned]}>
                           {item.name}
                         </Text>
-                        {!homebrewItemIds.has(item.id) && isNonSrd(item.srd) && <NonSrdBadge />}
+                        {!homebrewItemIds.has(item.id) && isNonSrd(item.srd, item.rulesetId) && <NonSrdBadge />}
                       </View>
                       {item.properties.length > 0 && (
                         <Text style={addStyles.itemProps} numberOfLines={1}>

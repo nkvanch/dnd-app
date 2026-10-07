@@ -2,6 +2,7 @@
 // DM read-only character view with override controls on every stat.
 // Mirrors the 6-tab sheet but the DM can't edit notes/inventory directly —
 // instead they use the DM override system on every tappable stat.
+import { identityLabelsFor } from '../../../src/store/identityLabelsFor';
 import { useState, useCallback, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -103,7 +104,7 @@ export default function DmCharacterView() {
         <View style={styles.headerInfo}>
           <Text style={styles.charName}>{entity.identity.name || 'Unnamed'}</Text>
           <Text style={styles.charSub}>
-            👑 DM View · Lv {entity.identity.level} {entity.identity.classId}
+            👑 DM View · Lv {entity.identity.level} {identityLabelsFor(entity).class || entity.identity.classId}
           </Text>
         </View>
         <View style={styles.hpPill}>

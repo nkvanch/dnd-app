@@ -17,6 +17,7 @@ import { useCombatTurnStore } from '../../src/store/combatTurnStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { applyDamage, applyHealing, applyWildShapeDamage, playerEndTurn, endConcentration } from '../../src/engine/combat';
 import { applyCondition, removeCondition } from '../../src/engine/conditions';
+import { identityLabelsFor } from '../../src/store/identityLabelsFor';
 import { shortRestMinutes, longRestHours } from '../../src/engine/houseRules';
 import { equipItem, unequipItem, toggleAttunement, generateItemInstanceId, isStatefulItem, applyItemInfusion, removeItemInfusion } from '../../src/engine/inventory';
 import { commitSpellPayment, restoreSpellSlot, SpellPaymentOption } from '../../src/engine/spellPayment';
@@ -608,7 +609,7 @@ export default function CharacterSheetScreen() {
         </View>
         <View style={styles.headerStats}>
           <Text style={styles.charSub}>
-            Lv {identity.level}  ·  {identity.classId || '—'}
+            Lv {identity.level}  ·  {(entity ? identityLabelsFor(entity).class : '') || identity.classId || '—'}
           </Text>
           <View style={styles.statPills}>
             {/* HP */}

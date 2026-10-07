@@ -600,7 +600,7 @@ export function AsiFeatPicker({
                 >
                   <View style={styles.featHeader}>
                     <Text style={styles.featName}>{f.name}</Text>
-                    {!homebrewFeatIds.has(f.id) && isNonSrd(f.srd) && <NonSrdBadge />}
+                    {!homebrewFeatIds.has(f.id) && isNonSrd(f.srd, f.rulesetId) && <NonSrdBadge />}
                     {selected && <Text style={styles.featCheck}>✓</Text>}
                     {unmet && !selected && <Text style={styles.featLock}>⚠</Text>}
                   </View>

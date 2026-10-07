@@ -83,7 +83,7 @@ function SpellRow({
                   <Text style={styles.homebrewTagTxt}>Homebrew</Text>
                 </View>
               )}
-              {!isHomebrew && isNonSrd(spell.srd) && <NonSrdBadge />}
+              {!isHomebrew && isNonSrd(spell.srd, spell.rulesetId) && <NonSrdBadge />}
             </View>
             <Text style={styles.spellMeta}>
               {spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`}  ·  {spell.school}  ·  {spell.castingTime}

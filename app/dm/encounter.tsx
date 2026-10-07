@@ -1,5 +1,6 @@
 // app/dm/encounter.tsx
 // Initiative tracker + combat encounter manager (DM only).
+import { identityLabelsFor } from '../../src/store/identityLabelsFor';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
@@ -1191,7 +1192,7 @@ export default function EncounterScreen() {
             return (
               <View key={c.id} style={styles.setupRow}>
                 <Text style={styles.setupName}>
-                  {c.identity.name} — Lv {c.identity.level} {c.identity.classId}
+                  {c.identity.name} — Lv {c.identity.level} {identityLabelsFor(c).class || c.identity.classId}
                 </Text>
                 <Pressable
                   style={[styles.addBtn, inCombat && styles.addBtnAdded]}

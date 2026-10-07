@@ -1,5 +1,6 @@
 // app/creation/class-detail.tsx
 // Class detail with back button, collapsible sections, and safe re-selection.
+import { identityLabelsFor } from '../../src/store/identityLabelsFor';
 import { View, Text, ScrollView, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -280,7 +281,7 @@ export default function ClassDetailScreen() {
       const newHadSpells = detail?.spellcasting ?? !!cls!.spellcastingAbility;
 
       const lines: string[] = [
-        `Switching from ${draft!.identity.classId} to ${cls!.id}.`,
+        `Switching from ${identityLabelsFor(draft!).class || draft!.identity.classId} to ${cls!.name}.`,
         '',
         'This will remove:',
         `• ${classFeatures.length} class feature${classFeatures.length !== 1 ? 's' : ''} (${classFeatures.slice(0, 3).join(', ')}${classFeatures.length > 3 ? '…' : ''})`,

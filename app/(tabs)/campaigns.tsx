@@ -811,9 +811,12 @@ function DmActiveView() {
       />
       <PartySection characterIds={activeCampaign.characterIds} />
 
-      <Pressable style={styles.leaveBtn} onPress={confirmEnd}>
-        <Text style={styles.leaveBtnTxt}>⏸ Stop Hosting</Text>
-      </Pressable>
+      {/* Only while a live session runs: an offline campaign is not hosting, so it offers no Stop Hosting. */}
+      {liveSession ? (
+        <Pressable style={styles.leaveBtn} onPress={confirmEnd} testID="campaign-stop-hosting">
+          <Text style={styles.leaveBtnTxt}>⏸ Stop Hosting</Text>
+        </Pressable>
+      ) : null}
 
     </ScrollView>
   );

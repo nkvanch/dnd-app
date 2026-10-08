@@ -10,21 +10,71 @@
 // The UI always reads from entity.derived and never computes stats itself.
 // ============================================================================
 
+import { findBeastForm } from '../content/runtimeRules';
+import { exhaustionSpeedPenalty } from './exhaustion';
 import {
   Entity, CampaignRules, DerivedStats, ActiveEffect,
-  Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus,
+  Ability, SkillName, DERIVED_NUMERIC_KEYS, Sense, AttackBonus, AuditSourceKind,
 } from './types';
-import { resolveEffectsForTarget, resolveBinary } from './resolver';
-import { ALL_BEAST_FORMS } from '../content/beastforms';
-import { generateAllActionCards } from './actionCards';
+import { tierHpBonus, hitDieTierFromEffects } from './hitDieTier';
+import { resolveEffectsForTarget, resolveBinary, resolveCombine, resolveExtraAttack, resolveScaleFactor, applyScale } from './resolver';
+import { generateAllActionCards, CardGenOptions } from './actionCards';
 import { itemRepo } from '../content/itemRepo';
-import { useHomebrewStore } from '../store/homebrewStore';
+import { isMartialWeapon } from '../content/items/itemBrowse';
+import { effectiveItemFeatures, effectiveWeaponAttackFeatures, isItemMechanicallyActive, itemWearsArmorOrShield, resolveItemDefinition, wornGearOf, WornGear } from './itemMechanics';
 import { getClassEntry } from './multiclass';
+import { deriveProficienciesFromEntitlements, initializeEntitlementInputs, recomputeResourceMaximums } from './entitlements';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Standard 5e ability score → modifier formula. */
 export const modifier = (score: number): number => Math.floor((score - 10) / 2);
+
+/** Standard 5e proficiency bonus formula. Shared with audit.ts so the two can't drift. */
+export const proficiencyBonus = (level: number): number => Math.ceil(1 + level / 4);
+
+/** The "8" every 5e save DC starts from (spell save, ki save, ability-based DC). */
+export const AC_DC_BASE = 8;
+
+/** Standard 5e DC formula: 8 + proficiency + ability modifier. */
+export const abilityDC = (prof: number, mod: number): number => AC_DC_BASE + prof + mod;
+
+/** One base_ac_formula effect's resolved value, with enough source identity
+ * for audit.ts to label it (recomputeDerived only needs .total). */
+export type AcFormulaCandidate = {
+  label: string; kind: AuditSourceKind; id: string;
+  base: number; abilities: Ability[]; total: number;
+};
+
+/**
+ * Picks the winning base_ac_formula effect (Unarmored Defense, Mage Armor,
+ * etc.) — 5e rule: you use whichever formula gives the higher AC, formulas
+ * never stack with each other. Shared by recomputeDerived (armor fallback
+ * chain) and audit.ts's AC breakdown so they can never compute a different
+ * winner. Returns null when no base_ac_formula effect is active.
+ */
+export function selectBestAcFormula(
+  allEffects:     ActiveEffect[],
+  effectiveStats: Entity['stats'],
+): AcFormulaCandidate | null {
+  const formulaEffects = allEffects.filter(ae => ae.effect.type === 'base_ac_formula');
+  if (formulaEffects.length === 0) return null;
+  const candidates = formulaEffects.map((ae): AcFormulaCandidate => {
+    const baseValue = ae.effect.value as number;
+    const abilities = (ae.effect.formulaAbilities ?? []) as Ability[];
+    const abilityBonus = abilities.reduce((sum, ab) => {
+      const rawMod = modifier(effectiveStats[ab]);
+      // formulaAbilityCap: e.g. { dex: 2 } for medium armor (PHB p.144)
+      const cap = ae.effect.formulaAbilityCap?.[ab];
+      return sum + (cap !== undefined ? Math.min(rawMod, cap) : rawMod);
+    }, 0);
+    return {
+      label: ae.sourceName, kind: ae.sourceKind ?? 'base', id: ae.sourceId,
+      base: baseValue, abilities, total: baseValue + abilityBonus,
+    };
+  });
+  return candidates.reduce((a, b) => (b.total > a.total ? b : a));
+}
 
 /**
  * Applies all stat_modifier passive effects that target an ability score
@@ -42,26 +92,43 @@ export function applyStatModifiers(
   const abilities: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
   const result = { ...base };
   for (const ab of abilities) {
-    const relevant = effects.filter(
+    const allForAbility = effects.filter(
       ae => ae.effect.type === 'stat_modifier' && ae.effect.target === ab
     );
-    let value = base[ab];
-    // 'set' effects (e.g. Belt of Giant Strength) establish a new base —
-    // last one wins, same convention resolveCombine already uses for ac/speed —
-    // then 'add' effects stack on top of that base.
-    for (const ae of relevant) {
-      if (ae.effect.operation === 'set' && typeof ae.effect.value === 'number') {
-        value = ae.effect.value;
-      }
+    // "Your score becomes N if it is lower" (Wisdom of the Sultan, Avatar of Tenochtitlan): an
+    // `atLeast` set is a floor applied AFTER everything else, never a replacement that could lower
+    // a higher score, so it is kept out of the ordinary set/add resolution below.
+    const floors   = allForAbility.filter(ae => ae.effect.atLeast && ae.effect.operation === 'set' && typeof ae.effect.value === 'number');
+    const relevant = allForAbility.filter(ae => !floors.includes(ae));
+    if (relevant.length === 0) {
+      if (floors.length) result[ab] = Math.max(result[ab], ...floors.map(f => f.effect.value as number));
+      continue;
     }
-    for (const ae of relevant) {
-      if (ae.effect.operation === 'add' && typeof ae.effect.value === 'number') {
-        value += ae.effect.value;
-      }
-    }
-    result[ab] = value;
+    // Bug fix: this used to pick the 'set' effect by array order ("last
+    // one wins"), which is order-dependent — shuffling collectAllEffects's
+    // iteration order could change which 'set' effect won, and therefore
+    // the character's effective ability score. resolveCombine (resolver.ts)
+    // already resolves competing 'set' effects order-independently
+    // (highest value wins) for ac/speed/every other stat_modifier target;
+    // this now uses the exact same function, and the exact same "does a
+    // 'set' exist? then that resolved value IS the score; otherwise add
+    // the resolved (additive-only) delta to base" pattern speed already
+    // uses just below (see the "Speed: respect 'set' operations" block).
+    const hasSet   = relevant.some(ae => ae.effect.operation === 'set');
+    const resolved = resolveCombine(relevant);
+    // 'scale' ("double your Strength") multiplies the fully resolved score, after set/add.
+    result[ab] = applyScale(hasSet ? resolved : base[ab] + resolved, resolveScaleFactor(relevant));
+    if (floors.length) result[ab] = Math.max(result[ab], ...floors.map(f => f.effect.value as number));
   }
   return result;
+}
+
+export function effectiveAbilityScores(entity: Entity): Entity['stats'] {
+  const scores = applyStatModifiers(entity.stats, collectAllEffects(entity));
+  for (const override of [...(entity.characterOverrides ?? []).filter(o=>o.active).sort((a,b)=>a.appliedAt-b.appliedAt), ...(entity.dmOverrides ?? []).filter(o=>o.active).sort((a,b)=>a.appliedAt-b.appliedAt)].filter(o => (['str','dex','con','int','wis','cha'] as string[]).includes(o.stat))) {
+    const ability = override.stat as Ability; scores[ability] = override.operation === 'set' ? override.value : scores[ability] + override.value;
+  }
+  return scores;
 }
 
 // ── Main pipeline ─────────────────────────────────────────────────────────────
@@ -72,14 +139,92 @@ export function applyStatModifiers(
  *
  * DM overrides are applied LAST and win over everything else.
  * They never modify entity.stats or entity.features.
+ *
+ * `content` (rules-engine blocker RE-AUDIT closure — dependency inversion,
+ * 1B): explicit, application-resolved classes/races/spells/items — the ONE
+ * merged content snapshot (getMergedContentDB(entity.rulesetId)) — threaded
+ * straight through to initializeEntitlementInputs (spell reclassification),
+ * item-mechanics resolution (equipped-item effects, weapon attack bonuses),
+ * and generateAllActionCards (spell-card/context generation) — this file
+ * never reaches into a store for any of it. Optional so every pre-existing
+ * call site (this function has ~50 across the engine) keeps working
+ * unchanged, falling back to the deterministic official-only catalogs each
+ * of those functions already defaults to.
  */
-export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Entity {
-  // Use a mutable local reference so we can apply grant_proficiency effects
-  let entity = entityParam;
+/** Keeps every `perProficiencyBonus` pool's maximum equal to the current proficiency bonus, preserving what was spent. */
+function syncProficiencyResources(entity: Entity): Entity {
+  if (!entity.resources.custom.some(r => r.perProficiencyBonus)) return entity;
+  const pb = proficiencyBonus(entity.identity.level);
+  let changed = false;
+  const custom = entity.resources.custom.map(r => {
+    if (!r.perProficiencyBonus || r.maximum === pb) return r;
+    changed = true;
+    const spent = Math.max(0, r.maximum - r.current);
+    return { ...r, maximum: pb, baseMaximum: pb, current: Math.max(0, pb - spent) };
+  });
+  return changed ? { ...entity, resources: { ...entity.resources, custom } } : entity;
+}
 
-  const allEffects    = collectAllEffects(entity);
+/**
+ * Folds the bonuses that depend only on the character's level into each effect's numeric value:
+ * `addProficiencyBonus` (Alert: initiative + PB) and `addPerLevel` (Dwarven Toughness: +1 per level).
+ * Runs before anything reads the effects, so max-HP reconciliation and every stat see plain numbers.
+ */
+export function foldKnownBonuses(effects: ActiveEffect[], entity: Entity): ActiveEffect[] {
+  if (!effects.some(ae => ae.effect.addProficiencyBonus || ae.effect.addPerLevel)) return effects;
+  const pb = proficiencyBonus(entity.identity.level);
+  return effects.map(ae => {
+    const { addProficiencyBonus, addPerLevel } = ae.effect;
+    if (!addProficiencyBonus && !addPerLevel) return ae;
+    const base = typeof ae.effect.value === 'number' ? ae.effect.value : 0;
+    return { ...ae, effect: { ...ae.effect, value: base + (addProficiencyBonus ? pb : 0) + (addPerLevel ? addPerLevel * entity.identity.level : 0) } };
+  });
+}
+
+/** Keeps `perAbilityModifier` and `perLevel` pools at their formula value (the spent amount is preserved). */
+function syncFormulaResources(entity: Entity, stats: Entity['stats']): Entity {
+  if (!entity.resources.custom.some(r => r.perAbilityModifier || r.perLevel)) return entity;
+  let changed = false;
+  const custom = entity.resources.custom.map(r => {
+    let target: number | null = null;
+    if (r.perAbilityModifier) target = Math.max(1, modifier(stats[r.perAbilityModifier]));
+    else if (r.perLevel) target = Math.max(0, r.perLevel * entity.identity.level);
+    if (target === null || r.maximum === target) return r;
+    changed = true;
+    const spent = Math.max(0, r.maximum - r.current);
+    return { ...r, maximum: target, baseMaximum: target, current: Math.max(0, target - spent) };
+  });
+  return changed ? { ...entity, resources: { ...entity.resources, custom } } : entity;
+}
+
+export function recomputeDerived(
+  entityParam: Entity, rules: CampaignRules,
+  content: Pick<CardGenOptions, 'classDefs' | 'homebrewSpells' | 'races' | 'items'> = {},
+): Entity {
+  // Use a mutable local reference so we can apply grant_proficiency effects
+  let entity = syncProficiencyResources(recomputeResourceMaximums(initializeEntitlementInputs(entityParam, content.homebrewSpells)));
+
+  let allEffects      = foldKnownBonuses(collectAllEffects(entity, content.items), entity);
+
+  // ── Derived max-HP bonus ("+5 maximum hit points" as an effect on target 'max_hp') ──
+  // resources.hp.maximum is a STORED value (set by leveling, adjusted by CON changes), so a bonus
+  // can't simply be summed into it on every recompute. HPBlock.bonusApplied records how much of
+  // `maximum` the effects currently account for; only the difference is applied, which is what
+  // makes a tier that REPLACES +5 with +10 net +5, and removing the feature take its bonus back.
+  // Plus whatever a hit-die tier effect (hitDieTier.ts) is worth across the character's levels.
+  const hpBonus = Math.trunc(resolveEffectsForTarget('max_hp', allEffects, rules) as number)
+    + tierHpBonus(entity.resources.hitDice, hitDieTierFromEffects(allEffects, rules));
+  const hpApplied = entity.resources.hp.bonusApplied ?? 0;
+  if (hpBonus !== hpApplied) {
+    const delta = hpBonus - hpApplied;
+    const hp = entity.resources.hp;
+    const maximum = Math.max(1, hp.maximum + delta);
+    const current = delta > 0 ? hp.current + delta : Math.min(hp.current, maximum);
+    entity = { ...entity, resources: { ...entity.resources, hp: { ...hp, maximum, current, bonusApplied: hpBonus } } };
+  }
+
   let effectiveStats = applyStatModifiers(entity.stats, allEffects);
-  const profBonus     = Math.ceil(1 + entity.identity.level / 4);
+  const profBonus     = proficiencyBonus(entity.identity.level);
 
   // ── Wild Shape: physical stats (STR/DEX/CON) come from the beast form;
   //    mental scores (INT/WIS/CHA) stay the player's own, per the book rule
@@ -88,7 +233,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   //    here touches entity.stats itself. See docs/ROADMAP_1.0.md "FEATURE
   //    DESIGN: Wild Shape".
   const beastForm = entity.wildShapeState?.active
-    ? ALL_BEAST_FORMS.find(f => f.id === entity.wildShapeState!.formId) ?? null
+    ? findBeastForm(entity.wildShapeState!.formId) ?? null
     : null;
   if (beastForm) {
     effectiveStats = {
@@ -99,108 +244,114 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     };
   }
 
-  // ── Apply grant_proficiency effects to the skill block ────────────────────
-  // These come from race/class features (Elf Keen Senses → Perception, etc.)
+  // Ability-score DM replacements/additions feed every dependent derived value.
+  for (const override of [...(entity.characterOverrides ?? []), ...(entity.dmOverrides ?? [])].filter(o => o.active && (['str','dex','con','int','wis','cha'] as string[]).includes(o.stat))) {
+    const ability = override.stat as Ability;
+    effectiveStats[ability] = override.operation === 'set' ? override.value : effectiveStats[ability] + override.value;
+  }
+
+  entity = syncFormulaResources(entity, effectiveStats);
+
+  // "Add your Charisma modifier to initiative" (Effect.addAbilityModifier): fold the final ability
+  // modifier into the effect's own value now that every ability score is settled, so every consumer
+  // (initiative, AC, saves, ...) just sees an ordinary numeric bonus.
+  if (allEffects.some(ae => ae.effect.addAbilityModifier)) {
+    allEffects = allEffects.map(ae => ae.effect.addAbilityModifier
+      ? { ...ae, effect: { ...ae.effect, value: (typeof ae.effect.value === 'number' ? ae.effect.value : 0) + modifier(effectiveStats[ae.effect.addAbilityModifier]) } }
+      : ae);
+  }
+
+  // Authoritative inputs: persisted entitlements and currently active effects.
+  // Every flat grant field below is compatibility output, never an ownership oracle.
   const profEffects = allEffects.filter(ae => ae.effect.type === 'grant_proficiency');
-  if (profEffects.length > 0) {
-    let updatedSkills  = { ...entity.skills.skills };
-    let updatedTools   = [...entity.proficiencies.tools];
-    let updatedWeapons = [...entity.proficiencies.weapons];
-    let updatedArmor   = [...entity.proficiencies.armor];
-    let changed = false;
-    let toolsChanged = false;
-    let weaponsChanged = false;
-    let armorChanged = false;
-    for (const ae of profEffects) {
-      // target format: 'skill:perception', 'skill:athletics', etc.
-      if (ae.effect.target.startsWith('skill:')) {
-        const skillName = ae.effect.target.slice(6) as SkillName;
-        const existing  = updatedSkills[skillName];
-        if (existing) {
-          if (ae.effect.operation === 'add' && !existing.trained) {
-            updatedSkills = { ...updatedSkills, [skillName]: { ...existing, trained: true } };
-            changed = true;
-          } else if (ae.effect.operation === 'multiply' && !existing.expertise) {
-            // multiply = expertise (double proficiency)
-            updatedSkills = {
-              ...updatedSkills,
-              [skillName]: { ...existing, trained: true, expertise: true },
-            };
-            changed = true;
-          }
-        }
-      }
-      // target format: 'tool:thieves_tools', 'tool:herbalism_kit', etc. — same
-      // pattern as skills, previously declared in the type system (Effect.type
-      // already included 'grant_proficiency') but this branch never existed,
-      // so a trait authored with a tool: target was silently a no-op even
-      // though a builder UI could have let someone create it.
-      if (ae.effect.target.startsWith('tool:') && ae.effect.operation === 'add') {
-        const toolName = ae.effect.target.slice(5).replace(/_/g, ' ');
-        if (!updatedTools.some(t => t.toLowerCase() === toolName.toLowerCase())) {
-          updatedTools = [...updatedTools, toolName];
-          toolsChanged = true;
-        }
-      }
-      // target format: 'weapon:rapier', 'weapon:battleaxe', etc. — same
-      // pattern as tool:, for racial weapon-proficiency traits (Dwarven
-      // Combat Training, Elf Weapon Training, Drow Weapon Training, etc.),
-      // which previously had no mechanism at all (every existing one was
-      // flavor-text-only).
-      if (ae.effect.target.startsWith('weapon:') && ae.effect.operation === 'add') {
-        const weaponName = ae.effect.target.slice(7).replace(/_/g, ' ');
-        if (!updatedWeapons.some(w => w.toLowerCase() === weaponName.toLowerCase())) {
-          updatedWeapons = [...updatedWeapons, weaponName];
-          weaponsChanged = true;
-        }
-      }
-      // target format: 'armor:light', 'armor:medium', 'armor:heavy',
-      // 'armor:shields' — same pattern as weapon:/tool:, for racial armor-
-      // proficiency traits (Dwarven Armor Training, etc.).
-      if (ae.effect.target.startsWith('armor:') && ae.effect.operation === 'add') {
-        const armorName = ae.effect.target.slice(6).replace(/_/g, ' ');
-        if (!updatedArmor.some(a => a.toLowerCase() === armorName.toLowerCase())) {
-          updatedArmor = [...updatedArmor, armorName];
-          armorChanged = true;
-        }
-      }
+  const newGrantedSkills = new Set<SkillName>();
+  const newExpertiseSkills = new Set<SkillName>();
+  const newGrantedTools: string[] = [];
+  const newGrantedWeapons: string[] = [];
+  const newGrantedArmor: string[] = [];
+  const newGrantedLanguages: string[] = [];
+
+  // Entitlement-derived contribution — folded into the SAME newGranted*
+  // sets the active-effect loop below also populates. Neither reads prior output.
+  const entDerived = deriveProficienciesFromEntitlements(entity);
+  for (const s of entDerived.skills.trained)   newGrantedSkills.add(s);
+  for (const s of entDerived.skills.expertise) newExpertiseSkills.add(s);
+  for (const t of entDerived.tools)     if (!newGrantedTools.some(x => x.toLowerCase() === t.toLowerCase()))     newGrantedTools.push(t);
+  for (const w of entDerived.weapons)   if (!newGrantedWeapons.some(x => x.toLowerCase() === w.toLowerCase())) newGrantedWeapons.push(w);
+  for (const a of entDerived.armor)     if (!newGrantedArmor.some(x => x.toLowerCase() === a.toLowerCase()))   newGrantedArmor.push(a);
+  for (const l of entDerived.languages) if (!newGrantedLanguages.some(x => x.toLowerCase() === l.toLowerCase())) newGrantedLanguages.push(l);
+
+  for (const ae of profEffects) {
+    // target format: 'skill:perception', 'skill:athletics', etc.
+    if (ae.effect.target.startsWith('skill:')) {
+      const skillName = ae.effect.target.slice(6) as SkillName;
+      // 'add' with the value 'expertise_if_proficient' is applied in the second pass below, once every
+      // plain proficiency source has been counted ("gain proficiency; if already proficient, expertise").
+      if (ae.effect.operation === 'add' && ae.effect.value !== 'expertise_if_proficient') newGrantedSkills.add(skillName);
+      else if (ae.effect.operation === 'multiply') { newGrantedSkills.add(skillName); newExpertiseSkills.add(skillName); }
     }
-    if (changed) {
-      entity = { ...entity, skills: { skills: updatedSkills } };
+    // target format: 'tool:thieves_tools', 'tool:herbalism_kit', etc.
+    if (ae.effect.target.startsWith('tool:') && ae.effect.operation === 'add') {
+      const toolName = ae.effect.target.slice(5).replace(/_/g, ' ');
+      if (!newGrantedTools.some(t => t.toLowerCase() === toolName.toLowerCase())) newGrantedTools.push(toolName);
     }
-    if (toolsChanged || weaponsChanged || armorChanged) {
-      entity = {
-        ...entity,
-        proficiencies: {
-          ...entity.proficiencies,
-          tools:   toolsChanged   ? updatedTools   : entity.proficiencies.tools,
-          weapons: weaponsChanged ? updatedWeapons : entity.proficiencies.weapons,
-          armor:   armorChanged   ? updatedArmor   : entity.proficiencies.armor,
-        },
-      };
+    // target format: 'weapon:rapier', 'weapon:battleaxe', etc.
+    if (ae.effect.target.startsWith('weapon:') && ae.effect.operation === 'add') {
+      const weaponName = ae.effect.target.slice(7).replace(/_/g, ' ');
+      if (!newGrantedWeapons.some(w => w.toLowerCase() === weaponName.toLowerCase())) newGrantedWeapons.push(weaponName);
+    }
+    // target format: 'armor:light', 'armor:medium', 'armor:heavy', 'armor:shields'
+    if (ae.effect.target.startsWith('armor:') && ae.effect.operation === 'add') {
+      const armorName = ae.effect.target.slice(6).replace(/_/g, ' ');
+      if (!newGrantedArmor.some(a => a.toLowerCase() === armorName.toLowerCase())) newGrantedArmor.push(armorName);
     }
   }
+
+  // Second pass: "proficiency, or expertise if you already have it" (Emperor Warlock's Scholar of Empires).
+  // Sequential on purpose — two such effects naming the same skill make the second one expertise.
+  for (const ae of profEffects) {
+    if (ae.effect.operation !== 'add' || ae.effect.value !== 'expertise_if_proficient' || !ae.effect.target.startsWith('skill:')) continue;
+    const skillName = ae.effect.target.slice(6) as SkillName;
+    if (newGrantedSkills.has(skillName) || newExpertiseSkills.has(skillName)) newExpertiseSkills.add(skillName);
+    newGrantedSkills.add(skillName);
+  }
+
+  // Skills: project current authoritative grants.
+  let updatedSkills = entity.skills.skills;
+  let skillsChanged = false;
+  for (const skillName of Object.keys(updatedSkills) as SkillName[]) {
+    const existing = updatedSkills[skillName];
+    if (!existing) continue;
+    const finalTrained = newGrantedSkills.has(skillName) || newExpertiseSkills.has(skillName);
+    const finalExpertise = newExpertiseSkills.has(skillName);
+    if (finalTrained !== existing.trained || finalExpertise !== existing.expertise) {
+      if (!skillsChanged) updatedSkills = { ...updatedSkills };
+      updatedSkills[skillName] = { ...existing, trained: finalTrained, expertise: finalExpertise };
+      skillsChanged = true;
+    }
+  }
+  if (skillsChanged) {
+    entity = { ...entity, skills: { skills: updatedSkills } };
+  }
+
+  entity = {
+    ...entity,
+    proficiencies: { ...entity.proficiencies, tools: newGrantedTools,
+      weapons: newGrantedWeapons, armor: newGrantedArmor, languages: newGrantedLanguages },
+    spellcasting: entity.spellcasting ? { ...entity.spellcasting,
+      known: entDerived.spells, cantrips: entDerived.cantrips } : null,
+  };
 
   // ── Base AC resolution (priority order) ──────────────────────────────────
   // 1. base_ac_formula effects (Unarmored Defense, Mage Armor, etc.)
   //    formulaAbilities adds modifier(stat) for each listed ability.
   // 2. entity.resources.ac  (set when armor is equipped — 0 = no armor)
   // 3. Fallback: 10 + DEX modifier
-  const formulaEffects   = allEffects.filter(ae => ae.effect.type === 'base_ac_formula');
+  const acFormula        = beastForm ? null : selectBestAcFormula(allEffects, effectiveStats);
   const calculatedBaseAc = beastForm
     ? beastForm.ac
-    : formulaEffects.length > 0
-      ? Math.max(...formulaEffects.map(ae => {
-          const baseValue    = ae.effect.value as number;
-          const abilityBonus = (ae.effect.formulaAbilities ?? [])
-            .reduce((sum, ab) => {
-              const rawMod = modifier(effectiveStats[ab]);
-              // formulaAbilityCap: e.g. { dex: 2 } for medium armor (PHB p.144)
-              const cap    = ae.effect.formulaAbilityCap?.[ab];
-              return sum + (cap !== undefined ? Math.min(rawMod, cap) : rawMod);
-            }, 0);
-          return baseValue + abilityBonus;
-        }))
+    : acFormula
+      ? acFormula.total
       : entity.resources.ac > 0
         ? entity.resources.ac
         : 10 + modifier(effectiveStats.dex);
@@ -217,11 +368,37 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   const speedEffects  = allEffects.filter(ae => ae.effect.target === 'speed');
   const hasSetSpeed   = speedEffects.some(ae => ae.effect.operation === 'set');
   const speedResolved = resolveEffectsForTarget('speed', allEffects, rules) as number;
-  const finalSpeed    = beastForm
+  // Rules-correctness fix (speed-zero precedence): a condition that sets
+  // speed to 0 (Grappled/Restrained/Stunned/Unconscious — see
+  // content/conditions/index.ts's speedZeroFeature) is a RESTRICTION, not
+  // an ordinary "highest set wins" replacement value — 5e RAW: the creature
+  // "can't benefit from any bonus to its speed" while this applies. Without
+  // this check, resolveCombine's normal 'set' tie-break (highest value
+  // wins) let an ordinary higher replacement speed (e.g. a 40ft "set"
+  // effect) or an additive bonus stacked on top of the winning 'set' beat
+  // the 0, which is wrong — the restriction must dominate base speed,
+  // additive bonuses, AND ordinary replacement/set effects. An explicit
+  // character/DM override for 'speed' (applied later, unconditionally,
+  // near the end of this function) still wins over this — this only
+  // affects the CALCULATED value overrides start from.
+  // Rules-correctness fix (Wild Shape speed-zero precedence): the
+  // beastForm branch used to short-circuit straight to beastForm.speed
+  // BEFORE the restriction check below ever ran, so a transformed,
+  // Grappled/Restrained creature incorrectly kept its full beast-form
+  // movement — the active condition's effects survive transformation (they
+  // live on entity.features, untouched by Wild Shape), so the restriction
+  // must still apply. Compute the ordinary-or-transformed CALCULATED speed
+  // first, then apply the restriction on top unconditionally, exactly like
+  // the non-transformed path always has.
+  const calculatedSpeed = beastForm
     ? beastForm.speed
     : hasSetSpeed
       ? speedResolved
       : entity.resources.speed + speedResolved;
+  const hasZeroSpeedRestriction = speedEffects.some(ae => ae.effect.operation === 'set' && ae.effect.value === 0);
+  // 'scale' (double/halve speed) applies to the resolved speed; a speed-zero restriction still wins.
+  // 2024 Exhaustion: -5 ft Speed per level (the 2014 tiers are descriptive; see exhaustion.ts).
+  const finalSpeed = hasZeroSpeedRestriction ? 0 : Math.max(0, applyScale(calculatedSpeed, resolveScaleFactor(speedEffects)) - exhaustionSpeedPenalty(entity));
 
   // ── Senses: aggregate grant_sense effects, dedup by type (largest range) ──
   const senseEffects = allEffects.filter(ae => ae.effect.type === 'grant_sense');
@@ -254,11 +431,15 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   if (!beastForm) {
     for (const ae of moveEffects) {
       const t = ae.effect.movementType;
-      const r = ae.effect.movementRange ?? 0;
+      // "A Climb Speed equal to your Speed" follows the final walking Speed (so Roving's +10 carries into it);
+      // a fixed range, or a bonus on top of the Speed, can be added with movementRange.
+      const r = (ae.effect.movementEqualsSpeed ? finalSpeed : 0) + (ae.effect.movementRange ?? 0);
       if (!t) continue;
       if ((movement[t] ?? 0) < r) movement[t] = r;
     }
   }
+  // A Speed of 0 from a condition (Grappled, Restrained, Stunned, ...) leaves no speed of any kind to move at.
+  if (hasZeroSpeedRestriction) for (const k of Object.keys(movement) as (keyof typeof movement)[]) delete movement[k];
 
   // ── Build derived stats object ────────────────────────────────────────────
   const advDisadvEffects = allEffects.filter(ae =>
@@ -273,20 +454,30 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
 
   const derived: DerivedStats = {
     proficiencyBonus: profBonus,
-    ac:               calculatedBaseAc + acBonus,
-    initiative:       modifier(effectiveStats.dex)
-                        + (resolveEffectsForTarget('initiative', allEffects, rules) as number),
+    ac:               applyScale(calculatedBaseAc + acBonus, resolveScaleFactor(allEffects.filter(ae => ae.effect.target === 'ac'))),
+    initiative:       applyScale(
+                        modifier(effectiveStats.dex) + (resolveEffectsForTarget('initiative', allEffects, rules) as number),
+                        resolveScaleFactor(allEffects.filter(ae => ae.effect.target === 'initiative')),
+                      ),
     speed:            finalSpeed,
-    passivePerception:    10 + resolveSkill(entity, effectiveStats, 'perception', allEffects, profBonus),
-    passiveInvestigation: 10 + resolveSkill(entity, effectiveStats, 'investigation', allEffects, profBonus),
-    passiveInsight:       10 + resolveSkill(entity, effectiveStats, 'insight', allEffects, profBonus),
+    // Bug fix (architecture review U7): a passive-score-targeted
+    // stat_modifier effect (e.g. Observant's +5 to passive Perception and
+    // passive Investigation) used to be silently ignored here — unlike
+    // every other derived stat below, which folds in its own
+    // resolveEffectsForTarget term on top of the base formula.
+    passivePerception:    10 + resolveSkill(entity, effectiveStats, 'perception', allEffects, profBonus)
+                            + (resolveEffectsForTarget('passivePerception', allEffects, rules) as number),
+    passiveInvestigation: 10 + resolveSkill(entity, effectiveStats, 'investigation', allEffects, profBonus)
+                            + (resolveEffectsForTarget('passiveInvestigation', allEffects, rules) as number),
+    passiveInsight:       10 + resolveSkill(entity, effectiveStats, 'insight', allEffects, profBonus)
+                            + (resolveEffectsForTarget('passiveInsight', allEffects, rules) as number),
     senses,
     movement,
     savingThrows:     resolveSavingThrows(effectiveStats, entity.proficiencies.savingThrows, profBonus, allEffects, rules),
-    attackBonuses:    computeWeaponAttackBonuses(entity, effectiveStats, profBonus),
+    attackBonuses:    computeWeaponAttackBonuses(entity, effectiveStats, profBonus, content.items),
     advantageStates,
     spellSaveDC:  entity.spellcasting
-      ? 8 + profBonus + modifier(effectiveStats[entity.spellcasting.ability])
+      ? abilityDC(profBonus, modifier(effectiveStats[entity.spellcasting.ability]))
           // Accept either target spelling so feature authors aren't tripped by
           // the snake_case/camelCase split (DM overrides use 'spellSaveDC').
           + (resolveEffectsForTarget('spell_save_dc', allEffects, rules) as number)
@@ -300,7 +491,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     // Monk's ki-ability save DC (Stunning Strike, etc.) — always WIS-based,
     // separate from spellSaveDC since Monk has no entity.spellcasting block.
     kiSaveDC: entity.features.some(f => f.id === 'martial_arts')
-      ? 8 + profBonus + modifier(effectiveStats.wis)
+      ? abilityDC(profBonus, modifier(effectiveStats.wis))
           + (resolveEffectsForTarget('ki_save_dc', allEffects, rules) as number)
       : null,
     // Generic 8 + prof + ability mod, precomputed for every ability — any
@@ -310,19 +501,22 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
     // unlike kiSaveDC/spellSaveDC — no per-class gating check needed since
     // a feature only ever points at this if it actually has one.
     abilityBasedDC: {
-      str: 8 + profBonus + modifier(effectiveStats.str),
-      dex: 8 + profBonus + modifier(effectiveStats.dex),
-      con: 8 + profBonus + modifier(effectiveStats.con),
-      int: 8 + profBonus + modifier(effectiveStats.int),
-      wis: 8 + profBonus + modifier(effectiveStats.wis),
-      cha: 8 + profBonus + modifier(effectiveStats.cha),
+      str: abilityDC(profBonus, modifier(effectiveStats.str)),
+      dex: abilityDC(profBonus, modifier(effectiveStats.dex)),
+      con: abilityDC(profBonus, modifier(effectiveStats.con)),
+      int: abilityDC(profBonus, modifier(effectiveStats.int)),
+      wis: abilityDC(profBonus, modifier(effectiveStats.wis)),
+      cha: abilityDC(profBonus, modifier(effectiveStats.cha)),
     },
+    // Extra Attack / action-structure batch — see this field's own doc
+    // comment (types.ts) for the multiclass max-not-additive rationale.
+    attackActionAttacks: 1 + resolveExtraAttack(allEffects),
   };
 
   // ── Apply DM overrides LAST ───────────────────────────────────────────────
   // Scalar numeric fields (DERIVED_NUMERIC_KEYS):
   const mutableDerived = derived as unknown as Record<string, number | null>;
-  for (const override of (entity.dmOverrides ?? []).filter(o => o.active)) {
+  for (const override of [...(entity.characterOverrides ?? []), ...(entity.dmOverrides ?? [])].filter(o => o.active)) {
     if (!DERIVED_NUMERIC_KEYS.has(override.stat)) continue;
     const current = (mutableDerived[override.stat] as number) ?? 0;
     mutableDerived[override.stat] =
@@ -330,7 +524,7 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   }
 
   // SIG-1: Saving throw DM overrides (e.g. "savingThrows.str")
-  for (const override of (entity.dmOverrides ?? []).filter(o => o.active)) {
+  for (const override of [...(entity.characterOverrides ?? []), ...(entity.dmOverrides ?? [])].filter(o => o.active)) {
     if (!override.stat.startsWith('savingThrows.')) continue;
     const ability = override.stat.slice('savingThrows.'.length) as Ability;
     if (!(['str','dex','con','int','wis','cha'] as string[]).includes(ability)) continue;
@@ -350,10 +544,53 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
   // — see the SQLite/render-loop plan). Safe to call synchronously:
   // spellRepo/itemRepo's Tier-2 caches are guaranteed warm for every id
   // this entity references by the time any mutation reaches here.
-  return { ...withDerived, actionCards: generateAllActionCards(withDerived, rules) };
+  return { ...withDerived, actionCards: generateAllActionCards(withDerived, rules, content) };
 }
 
 // ── Effect collection ─────────────────────────────────────────────────────────
+
+/**
+ * Whether an effect's `condition` gate is satisfied. A condition is one of:
+ *   - a runtime flag name ("rage_active") that is currently true,
+ *   - an active condition id ("poisoned"), or
+ *   - a resource threshold: `resource:<resourceId><op><n>` with op one of <= >= < > == (e.g.
+ *     "resource:glassback_pressure<=1" — true while that pool's CURRENT value is 1 or less). This
+ *     is how a state meter (Glassback's Pressure) drives tiered penalties with no new state: the
+ *     effects simply switch on and off as the resource moves, and a missing pool is false.
+ *   - a worn-gear test: `worn:no_armor`, `worn:not_heavy` (no Heavy armor), or `worn:no_armor_or_shield`
+ *     ("while you aren't wearing armor or wielding a Shield"). Needs the worn-gear state, which the
+ *     effect collector computes once from the equipped items.
+ */
+export function effectConditionActive(
+  condition: string,
+  flags: Record<string, boolean>,
+  activeConditionIds: ReadonlySet<string>,
+  entity: Entity,
+  worn?: WornGear,
+): boolean {
+  if (flags[condition] === true || activeConditionIds.has(condition)) return true;
+  if (condition.startsWith('worn:')) {
+    if (!worn) return false;
+    switch (condition.slice(5)) {
+      case 'no_armor':           return worn.armor === 'none';
+      case 'not_heavy':          return worn.armor !== 'heavy';
+      case 'no_armor_or_shield': return worn.armor === 'none' && !worn.shield;
+      default:                   return false;
+    }
+  }
+  const m = /^resource:([A-Za-z0-9_]+)(<=|>=|==|<|>)(-?\d+)$/.exec(condition);
+  if (!m) return false;
+  const pool = entity.resources.custom.find(r => r.id === m[1]);
+  if (!pool) return false;
+  const n = parseInt(m[3], 10);
+  switch (m[2]) {
+    case '<=': return pool.current <= n;
+    case '>=': return pool.current >= n;
+    case '<':  return pool.current <  n;
+    case '>':  return pool.current >  n;
+    default:   return pool.current === n;
+  }
+}
 
 /**
  * Collects all active passive Effects from every source on the entity:
@@ -363,23 +600,41 @@ export function recomputeDerived(entityParam: Entity, rules: CampaignRules): Ent
  * or in the active condition list (e.g. Rage effects skip when rage is not active).
  * Skips effects from conditions whose suppressedBy list includes a relevant suppressor
  * (e.g. Blindsight silences Blinded's attack penalties without removing the condition).
+ *
+ * `homebrewItems` (rules-engine blocker RE-AUDIT closure — dependency
+ * inversion, 1D): explicit, application-resolved homebrew items, threaded
+ * to resolveItemDefinition for the equipped-item effects below — this
+ * function never reaches into a store for it. Optional so every
+ * pre-existing caller (audit.ts, combat.ts, featPrereq.ts, leveling.ts,
+ * rest.ts — none of which currently pass homebrew-aware content) keeps
+ * working unchanged, falling back to official-only item resolution.
  */
-export function collectAllEffects(entity: Entity): ActiveEffect[] {
+export function collectAllEffects(entity: Entity, homebrewItems: readonly import('./types').Item[] = []): ActiveEffect[] {
   const effects: ActiveEffect[]       = [];
   const activeFlags                   = entity.conditionMonitor.flags;
   const activeConditionIds            = new Set(entity.conditions.map(c => c.id));
+  const worn: WornGear                = wornGearOf(entity.inventory.equipped, id => resolveItemDefinition(id, homebrewItems));
 
   // 1. Features from race, class, background, feats, spells, etc.
   for (const fi of entity.features) {
     if (!fi.isActive) continue;
+    // A RACIAL trait with an authored unlock level (Draconic Flight at 5, Large Form at 5) does nothing
+    // until the character reaches it — the same gate action-card generation already applies. Limited to
+    // race-sourced features on purpose: class/feat/background features are stamped with the level they
+    // were granted at (which is not always <= the character's level in fixtures and mid-creation states).
+    if (fi.source.kind === 'race' && fi.level !== null && fi.level > entity.identity.level) continue;
 
     for (const effect of fi.effects) {
+      if (effect.minLevel && entity.identity.level < effect.minLevel) continue;
       // Gate: skip if effect requires a flag or condition that is not active
-      if (effect.condition !== null) {
-        const flagActive      = activeFlags[effect.condition] === true;
-        const conditionActive = activeConditionIds.has(effect.condition);
-        if (!flagActive && !conditionActive) continue;
-      }
+      if (effect.condition !== null && !effectConditionActive(effect.condition, activeFlags, activeConditionIds, entity, worn)) continue;
+
+      // Gate: skip a situational effect (item 9 — a real-world fact the
+      // engine can't observe, e.g. "an ally within 5 feet") unless the
+      // player/DM has explicitly answered Yes. Unanswered and explicit No
+      // are treated identically — conservative, never silently overstates
+      // a bonus. See Effect.situational's own doc comment.
+      if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
 
       // Gate: skip if this feature's source condition has its effects suppressed
       if (fi.source.kind === 'condition') {
@@ -397,26 +652,82 @@ export function collectAllEffects(entity: Entity): ActiveEffect[] {
         sourceName: fi.name,
         sourceId:   fi.id,
         appliedAt:  fi.level ?? 0,
+        sourceKind: fi.source.kind,
       });
     }
   }
 
-  // 2. Equipped items — features fire while the item is worn/wielded
+  // 2. Equipped items — features fire while the item is worn/wielded.
+  //    Re-audit A17: an item that REQUIRES attunement must not contribute
+  //    anything until actually attuned — merely equipping it used to be
+  //    enough (an unattuned Ring of Protection still gave +1 AC). Items
+  //    with no attunement requirement (requiresAttunement falsy) are
+  //    unaffected — their effects always fired on equip and still do.
+  // Re-audit A19: whether ANY equipped item is armor/a shield — computed
+  // once, outside the per-item loop, so an effect declaring
+  // requiresNoArmorOrShield can check "is something ELSE equipped that
+  // counts" without an O(n^2) rescan. Deliberately counts every equipped
+  // item, including the one this effect's own feature lives on (Bracers of
+  // Defense itself is neither armor nor a shield, so this is correct for
+  // it; a hypothetical future item that WAS both armor and had its own
+  // requiresNoArmorOrShield effect would be a contradiction in the content
+  // itself, not something this predicate needs to resolve).
+  const anyArmorOrShieldEquipped = entity.inventory.equipped.some(i => {
+    const definition = resolveItemDefinition(i.itemId, homebrewItems);
+    return definition ? itemWearsArmorOrShield(definition) : i.wearsArmorOrShield === true;
+  });
+
   for (const item of entity.inventory.equipped) {
-    for (const fi of item.features) {
+    const definition = resolveItemDefinition(item.itemId, homebrewItems);
+    if (!isItemMechanicallyActive(item, definition)) continue;
+    const itemFeatures = effectiveItemFeatures(item, definition);
+    for (const fi of itemFeatures) {
       for (const effect of fi.effects) {
-        if (effect.condition !== null) {
-          const flagActive      = activeFlags[effect.condition] === true;
-          const conditionActive = activeConditionIds.has(effect.condition);
-          if (!flagActive && !conditionActive) continue;
-        }
+        if (effect.condition !== null && !effectConditionActive(effect.condition, activeFlags, activeConditionIds, entity, worn)) continue;
+        if (effect.requiresNoArmorOrShield && anyArmorOrShieldEquipped) continue;
+        if (effect.situational && entity.situationalAnswers?.[effect.situational.id] !== true) continue;
         effects.push({
           effect,
           sourceName: fi.name,
-          sourceId:   item.itemId,
+          // Item-identity closure (pass 2, finding C): CONTRIBUTOR identity
+          // is the owned INSTANCE (item.id) — distinct from the definition
+          // lookup just above (resolveItemDefinition still keys on
+          // item.itemId, unchanged). Two identical equipped items each push
+          // their own ActiveEffect entry already (this loop iterates the
+          // real array, never deduped by itemId), so their contributions
+          // were always independently removable at the array level; this
+          // only makes their PROVENANCE (audit-trail identity) distinct
+          // too, rather than both reporting the same itemId as their
+          // source. Falls back to itemId for a still-unmigrated instance.
+          sourceId:   item.id ?? item.itemId,
           appliedAt:  0,
+          sourceKind: 'item',
         });
       }
+    }
+  }
+
+  // 3. Rules-engine blocker RE-AUDIT closure (Closure 3C — native BeastForm
+  //    defenses): while transformed, the active beast form's OWN typed
+  //    damage resistances/immunities/vulnerabilities participate in the
+  //    SAME damage-resolution path as every other active effect (used by
+  //    resolveResistance via collectAllEffects — see applyWildShapeDamage,
+  //    combat.ts, which calls collectAllEffects(entity) BEFORE reverting).
+  //    Purely derived from wildShapeState.formId, never copied onto the
+  //    entity — reverting (wildShapeState -> null) makes these vanish with
+  //    no cleanup mutation, since this block simply stops firing.
+  if (entity.wildShapeState?.active) {
+    const form = findBeastForm(entity.wildShapeState!.formId);
+    if (form) {
+      const pushDefense = (damageType: string, operation: 'resistance' | 'immunity' | 'vulnerability') => {
+        effects.push({
+          effect: { type: 'grant_resistance', target: damageType, operation, value: null, condition: null },
+          sourceName: form.name, sourceId: form.id, appliedAt: 0, sourceKind: 'condition',
+        });
+      };
+      for (const t of form.damageResistances ?? [])    pushDefense(t, 'resistance');
+      for (const t of form.damageImmunities ?? [])      pushDefense(t, 'immunity');
+      for (const t of form.damageVulnerabilities ?? []) pushDefense(t, 'vulnerability');
     }
   }
 
@@ -444,6 +755,28 @@ function doesSuppressTarget(
 }
 
 /**
+ * Re-audit A18: whether the entity is actually proficient with this specific
+ * weapon — either by name (a racial/feat grant naming an exact weapon, e.g.
+ * Elf Weapon Training's "longsword") or by category ('simple'/'martial',
+ * granted by class/background/race — the same entity.proficiencies.weapons
+ * array applyGrant('proficiency', ...) and the grant_proficiency Effect
+ * reconciler both write into). Reuses itemBrowse.ts's already-built
+ * isMartialWeapon() classifier (name-table lookup, falling back to
+ * property-text parsing) rather than a second one — weapon items carry no
+ * "simple weapon"/"martial weapon" property tag of their own to check
+ * directly.
+ */
+function isProficientWithWeapon(entity: Entity, def: { name: string; properties: string[] }): boolean {
+  const weaponProfs = entity.proficiencies.weapons.map(w => w.toLowerCase());
+  if (weaponProfs.includes(def.name.toLowerCase())) return true;
+  const martial = isMartialWeapon({
+    id: '', name: def.name, weight: 0, cost: '', properties: def.properties,
+    hasDamageEffect: true, weaponRange: null,
+  });
+  return weaponProfs.includes(martial ? 'martial' : 'simple');
+}
+
+/**
  * Computes to-hit and damage info for every equipped weapon. Single source
  * of truth — TabCharacter's ATTACKS section and each weapon's action card
  * both read this instead of recomputing (they used to, independently, and
@@ -454,24 +787,36 @@ function computeWeaponAttackBonuses(
   entity:         Entity,
   effectiveStats: Entity['stats'],
   profBonus:      number,
+  /** Rules-engine blocker RE-AUDIT closure (dependency inversion, 1D):
+   *  explicit, application-resolved homebrew items — this function never
+   *  reaches into a store for it. See resolveItemDefinition's own doc
+   *  comment (itemMechanics.ts) for the same contract. */
+  homebrewItems:  readonly import('./types').Item[] = [],
 ): AttackBonus[] {
   const strMod = modifier(effectiveStats.str);
   const dexMod = modifier(effectiveStats.dex);
   const result: AttackBonus[] = [];
 
   for (const inst of entity.inventory.equipped) {
+    // Re-audit A17: an attunement-required weapon contributes no attack
+    // bonus until actually attuned — same gate collectAllEffects applies to
+    // passive effects and actionCards.ts applies to action cards, reusing
+    // the same hydrated flag (see ItemInstance's own doc comment).
+    const activeDefinition = resolveItemDefinition(inst.itemId, homebrewItems);
+    if (!isItemMechanicallyActive(inst, activeDefinition)) continue;
     // itemRepo only ever holds the OFFICIAL catalog — a homebrew weapon's
-    // definition lives in homebrewStore instead, so it needs the same
-    // fallback lookup as characterStore.ts's hydrateItemFeatures, or every
-    // homebrew weapon silently gets no to-hit bonus computed for it here.
+    // definition lives in the explicit content snapshot instead, so it
+    // needs the same fallback lookup as characterStore.ts's
+    // hydrateItemFeatures, or every homebrew weapon silently gets no
+    // to-hit bonus computed for it here.
     const def = itemRepo.getItemSync(inst.itemId)
-      ?? useHomebrewStore.getState().items.find(i => i.id === inst.itemId);
+      ?? homebrewItems.find(i => i.id === inst.itemId);
     if (!def) continue;
 
     // Prefer the instance's own (possibly infusion-augmented) features,
     // same fallback actionCards.ts's card generator already uses — older
     // saves may have only an itemId with no hydrated features.
-    const feats = (inst.features && inst.features.length > 0) ? inst.features : def.features;
+    const feats = effectiveWeaponAttackFeatures(inst, def, homebrewItems);
     let dice: string | null = null;
     let dmgType = '';
     let featureName = def.name;
@@ -483,10 +828,17 @@ function computeWeaponAttackBonuses(
 
     const props = def.properties.map(p => p.toLowerCase());
     const isFinesse = props.some(p => p.includes('finesse'));
-    // Ammunition weapons, or thrown weapons that also list a range (a
-    // plain thrown-only weapon like a handaxe used in melee is STR).
-    const isRanged = props.some(p => p.includes('ammunition'))
-      || (props.some(p => p.includes('thrown')) && props.some(p => p.includes('range')));
+    // Re-audit A18: ranged means "ammunition" ONLY — a thrown weapon's own
+    // property text always reads like "thrown (range 20/60)", which
+    // contains the substring "range" too, so the OLD second clause
+    // (`thrown && range`) was true for EVERY thrown weapon, not just true
+    // ranged ones. Per RAW, a thrown weapon uses the SAME ability modifier
+    // whether thrown or swung in melee (finesse already lets it pick DEX
+    // above; a non-finesse thrown weapon like a Handaxe is STR either way)
+    // — there is no "thrown weapon used at range" ability distinction to
+    // make here, since this app has no melee/ranged choice for thrown
+    // attacks. `type` below still reflects true ranged weapons only.
+    const isRanged = props.some(p => p.includes('ammunition'));
 
     let mod: number;
     let ability: 'str' | 'dex';
@@ -503,10 +855,19 @@ function computeWeaponAttackBonuses(
     const magicHay = [def.name, featureName, ...def.properties].join(' ');
     const magicBonus = parseInt(magicHay.match(/\+(\d)\b/)?.[1] ?? '0', 10);
 
+    // Re-audit A18: proficiency bonus only applies when the character is
+    // actually proficient with this weapon — it used to be added
+    // unconditionally. Checks the same weapon-category/named-weapon
+    // proficiency list entitlements already flow into
+    // entity.proficiencies.weapons (category tags 'simple'/'martial' plus
+    // any specific named weapons a feature/race/background grants).
+    const isProficient = isProficientWithWeapon(entity, def);
+
     result.push({
       id:          inst.itemId,
+      instanceId:  inst.id,
       name:        def.name,
-      bonus:       profBonus + mod + magicBonus,
+      bonus:       (isProficient ? profBonus : 0) + mod + magicBonus,
       type:        isRanged ? 'ranged' : 'melee',
       ability,
       damageBonus: mod + magicBonus,
@@ -521,13 +882,20 @@ function computeWeaponAttackBonuses(
   // multiclassed monk/fighter still gets the right die) and unlocks DEX as
   // an option for the attack/damage roll, same finesse-style
   // max(str,dex) rule as a finesse weapon above.
-  const hasMartialArts = entity.features.some(f => f.id === 'martial_arts');
+  const hasMartialArts2024 = entity.features.some(f => f.id === 'monk_2024_martial_arts');
+  const hasMartialArts = hasMartialArts2024 || entity.features.some(f => f.id === 'martial_arts');
   let unarmedDice = '1';
   let unarmedAbility: 'str' | 'dex' = 'str';
   let unarmedMod = strMod;
   if (hasMartialArts) {
-    const monkLevel = getClassEntry(entity, 'monk')?.level ?? entity.identity.level;
-    unarmedDice = monkLevel >= 17 ? '1d10' : monkLevel >= 11 ? '1d8' : monkLevel >= 5 ? '1d6' : '1d4';
+    if (hasMartialArts2024) {
+      // 2024 Martial Arts die: d6, d8 at 5, d10 at 11, d12 at 17.
+      const monkLevel = getClassEntry(entity, 'monk_2024')?.level ?? entity.identity.level;
+      unarmedDice = monkLevel >= 17 ? '1d12' : monkLevel >= 11 ? '1d10' : monkLevel >= 5 ? '1d8' : '1d6';
+    } else {
+      const monkLevel = getClassEntry(entity, 'monk')?.level ?? entity.identity.level;
+      unarmedDice = monkLevel >= 17 ? '1d10' : monkLevel >= 11 ? '1d8' : monkLevel >= 5 ? '1d6' : '1d4';
+    }
     unarmedAbility = dexMod >= strMod ? 'dex' : 'str';
     unarmedMod = Math.max(strMod, dexMod);
   }

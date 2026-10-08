@@ -4,12 +4,14 @@
 // file-system/sharing pattern (same expo-file-system/legacy subpath — SDK 56's
 // default expo-file-system API is a different class-based shape that doesn't
 // have writeAsStringAsync).
+import { withRequiredPacks } from '../content/requiredPacks';
+import { installedOfficialPacks } from '../content/officialPackService';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { Platform } from 'react-native';
 import {
-  Entity, ContentDB, Race, Subrace, CharClass, HomebrewSubclass, Spell, Background, Feature, Item, Feat,
+  Entity, ContentDB, Race, Subrace, CharClass, HomebrewSubclass, Spell, Background, Feature, Item, Feat, Condition,
 } from '../engine/types';
 import { MonsterTemplate } from '../content/monsters/types';
 import { ContentCacheType, HomebrewContent } from '../db/contentCacheRepo';
@@ -26,10 +28,10 @@ import {
   buildSpellHtml, buildStandaloneFeatureHtml,
 } from './exportHtml';
 import { buildCharacterSheetHtml } from './characterSheetPdf';
-import { GrimoirePackHomebrew } from '../engine/backup';
-import { exportContentPack } from './backupIO';
+import { serializePortableCharacter } from './characterPortable';
+import { useCustomRuleProfileStore } from '../store/customRuleProfileStore';
 
-export type ExportFormat = 'pdf' | 'txt' | 'md' | 'pack';
+export type ExportFormat = 'pdf' | 'txt' | 'md' | 'pack' | 'character-json';
 
 /**
  * 'save' writes straight to a location the user picks, no OS share sheet.
@@ -125,8 +127,8 @@ export async function saveTextViaSAF(content: string, filename: string, mimeType
   await withTimeout(FileSystem.writeAsStringAsync(fileUri, content, { encoding }), 30000, 'Saving the file');
 }
 
-export async function shareText(content: string, filename: string, format: 'txt' | 'md', action: ExportAction = 'share'): Promise<void> {
-  const mimeType = format === 'md' ? 'text/markdown' : 'text/plain';
+export async function shareText(content: string, filename: string, format: 'txt' | 'md' | 'json', action: ExportAction = 'share'): Promise<void> {
+  const mimeType = format === 'md' ? 'text/markdown' : format === 'json' ? 'application/json' : 'text/plain';
   if (action === 'save' && Platform.OS === 'android') {
     await saveTextViaSAF(content, filename, mimeType, FileSystem.EncodingType.UTF8);
     return;
@@ -155,7 +157,7 @@ export async function sharePdfHtml(html: string, dialogTitle: string, action: Ex
 }
 
 async function shareByFormat(
-  format: Exclude<ExportFormat, 'pack'>,
+  format: Exclude<ExportFormat, 'pack' | 'character-json'>,
   buildMarkdown: () => string,
   buildHtml: () => string,
   baseName: string,
@@ -173,7 +175,8 @@ async function shareByFormat(
 // ── Character ─────────────────────────────────────────────────────────────────
 
 export async function exportCharacter(entity: Entity, format: ExportFormat, action: ExportAction = 'share'): Promise<void> {
-  if (format === 'pack') return; // character sheet never offers this format — see ExportFormatSheet's showPackOption
+  if (format === 'pack') return;
+  if (format === 'character-json') { const profile = useCustomRuleProfileStore.getState().profiles.find(candidate => candidate.id === entity.customRuleProfileId); await shareText(serializePortableCharacter(withRequiredPacks(entity, installedOfficialPacks()), profile), sanitize((entity.identity.name || 'character') + '-character') + '.grimoire-character.json', 'json', action); return; }
   const db = useHomebrewStore.getState().getMergedContentDB();
 
   const spellIds = [
@@ -196,27 +199,11 @@ export async function exportCharacter(entity: Entity, format: ExportFormat, acti
 
 // ── Homebrew ──────────────────────────────────────────────────────────────────
 
-/** Wraps a single item into the GrimoirePackHomebrew field matching its type. */
-function wrapAsHomebrewPack(type: ContentCacheType, item: HomebrewContent): GrimoirePackHomebrew {
-  switch (type) {
-    case 'race':       return { races: [item as Race] };
-    case 'subrace':    return { subraces: [item as Subrace] };
-    case 'class':      return { classes: [item as CharClass] };
-    case 'subclass':   return { subclasses: [item as HomebrewSubclass] };
-    case 'spell':      return { spells: [item as Spell] };
-    case 'background': return { backgrounds: [item as Background] };
-    case 'feature':    return { features: [item as Feature] };
-    case 'item':       return { items: [item as Item] };
-    case 'feat':       return { feats: [item as Feat] };
-    case 'monster':    return { monsters: [item as MonsterTemplate] };
-  }
-}
-
 export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewContent, format: ExportFormat, action: ExportAction = 'share'): Promise<void> {
-  if (format === 'pack') {
-    await exportContentPack(wrapAsHomebrewPack(type, item), null, sanitize(`${item.name}-${type}`), action);
-    return;
-  }
+  if (format === 'character-json') throw new Error('Portable Character JSON is available only for characters.');
+  // The portable one-entry export is "Export Homebrew": a reviewed single-entry package (its required
+  // content included), built by HomebrewExportModal / engine/packageBuilder.ts — not by this readable-copy path.
+  if (format === 'pack') throw new Error('Use Export Homebrew for a portable file. This path produces readable copies only.');
   switch (type) {
     case 'race': {
       const race = item as Race;
@@ -333,6 +320,22 @@ export async function exportHomebrewItem(type: ContentCacheType, item: HomebrewC
         () => buildFeatureListMarkdown(m.name, subtitle, m.features),
         () => buildFeatureListHtml(m.name, subtitle, m.features),
         sanitize(`${m.name}-monster`),
+        action,
+      );
+      return;
+    }
+    case 'condition': {
+      // Missing case — the (since removed) single-item pack path once handled
+      // 'condition'; this switch, covering txt/md/pdf, silently
+      // fell through with no matching case and no error (audit finding
+      // EXPORT-1). Same buildFeatureListMarkdown/Html pattern background/
+      // item already use — a condition's own description as the subtitle.
+      const cond = item as Condition;
+      await shareByFormat(
+        format,
+        () => buildFeatureListMarkdown(cond.name, cond.description || null, cond.features),
+        () => buildFeatureListHtml(cond.name, cond.description ?? '', cond.features),
+        sanitize(`${cond.name}-condition`),
         action,
       );
       return;

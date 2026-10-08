@@ -3,11 +3,17 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Feature, Effect } from '../../src/engine/types';
+import { Feature, Effect, Entity } from '../../src/engine/types';
 import { Alert } from '../../src/utils/alert';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const EFFECT_TYPES = [
@@ -94,6 +100,8 @@ export default function FeatureEditorScreen() {
   const [effects,     setEffects]     = useState<Effect[]>([]);
   const [passive,     setPassive]     = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: Feature.effects is stored as the exact same shape used at
   // runtime (unlike Race/Item, there's no separate compiled-vs-draft split
@@ -106,15 +114,33 @@ export default function FeatureEditorScreen() {
     setPassive(editing.passive);
   }, [editing?.id]);
 
-  async function handleSave() {
-    if (!name.trim() || saving) return;
-    setSaving(true);
+  function buildFeature(): Feature {
     const id = editing?.id ?? (toId(name) || 'homebrew_feature');
-    const feature: Feature = {
+    return mergeHomebrewDefinition(editing, {
       id, name: name.trim(), description: description.trim(),
       source: editing?.source ?? { kind: 'feat', refId: id },
       level: editing?.level ?? null, effects, actions: editing?.actions ?? [], choices: editing?.choices ?? [], passive,
-    };
+    });
+  }
+
+  // Read-only test on a disposable level-1 scratch entity — same pattern
+  // feat-builder.tsx's runTest() uses (a bare Feature grant via
+  // applyGrant() has no choice-resolution to worry about, unlike a full
+  // Feat). Reuses FeatPreviewModal's buildFeatSummaryRows() as-is — a
+  // Feature is exactly the shape it already diffs.
+  function runTest() {
+    const feature = buildFeature();
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => applyGrant(e, { kind: 'feature', value: feature }, 0), DEFAULT_RULES);
+    setTestRows(buildFeatSummaryRows(before, after));
+    setTestOpen(true);
+  }
+
+  async function handleSave() {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    const feature = buildFeature();
     try {
       await saveItem('feature', feature);
       goBack();
@@ -165,11 +191,21 @@ export default function FeatureEditorScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
-          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
+          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={() => { void handleSave(); }} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Feature'}</Text>
           </Pressable>
         </View>
       </SafeBottomView>
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Feature'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -203,7 +239,9 @@ const styles = StyleSheet.create({
   addBtn:    { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
   btnDisabled: { opacity: 0.4 },
   addBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
-  footer:    { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:    { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:   { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt:{ color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:   { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   saveBtnTxt:{ color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

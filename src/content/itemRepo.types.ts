@@ -4,7 +4,7 @@
 // (SQLite-backed). Mirrors spellRepo.types.ts's design exactly — see that
 // file's header for the full rationale.
 // ============================================================================
-import { Item, ItemInstance } from '../engine/types';
+import { Item, ItemInstance, RulesetId } from '../engine/types';
 
 /**
  * Tier 1 — the lightweight fields browse/sort/classify UIs actually key on
@@ -29,8 +29,29 @@ export type ItemIndexEntry = {
    * for this one check.
    */
   hasDamageEffect: boolean;
+  /**
+   * Whether the full definition declares any Feature.  This is deliberately
+   * a compact, authoritative Tier-1 fact rather than the features payload:
+   * creation-time acquisition must know whether an item is stateful even on
+   * native, where the Tier-2 definition cache has not necessarily been
+   * warmed yet.
+   */
+  hasFeatures?: boolean;
   weaponRange:     string | null;
   srd?:       boolean;
+  /**
+   * TIER1-EXT-1: added so Ruleset (and the derived Source filter — see
+   * getContentProvenance()) don't need a Tier-2 full-record load just to
+   * filter. Rarity/damage-type/consumable/charges are NOT added here —
+   * confirmed against the Item type (src/engine/types.ts) that none of
+   * those exist as real fields anywhere in this content model, official
+   * or homebrew; adding index columns for them would mean inventing data.
+   * Weapon/armor SUBTYPE is also not added — TabInventory.tsx's own
+   * classifyWeaponByName()/armorWeight() heuristics already do this from
+   * `properties`/`name`, already present in Tier 1, so no new field is
+   * needed for that filter to work.
+   */
+  rulesetId?: RulesetId;
 };
 
 export interface ItemRepo {
@@ -60,8 +81,10 @@ export function toItemIndexEntry(item: Item): ItemIndexEntry {
     cost:            item.cost,
     properties:      item.properties,
     hasDamageEffect: !!damageFeature,
+    hasFeatures:     item.features.length > 0,
     weaponRange:     damageFeature?.activation?.range ?? null,
     srd:             item.srd,
+    rulesetId:       item.rulesetId,
   };
 }
 

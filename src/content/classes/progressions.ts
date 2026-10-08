@@ -113,6 +113,13 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
     const grants: Grant[] = [];
     const levelChoices: ChoiceDefinition[] = [];
 
+    // CHOICE-AUTHORING-1: authored per-level choices (Expertise/Tool/Language
+    // today) — merged in alongside the ASI/spellcasting-ability choices this
+    // loop already synthesizes below.
+    for (const entry of (cls.levelChoices ?? [])) {
+      if (entry.level === level) levelChoices.push(...entry.choices);
+    }
+
     // ─ Level 1: proficiency grant ──────────────────────────────────────────────
     if (level === 1 && (cls.armorProfs?.length || cls.weaponProfs?.length || cls.toolProfs?.length)) {
       grants.push({
@@ -141,12 +148,16 @@ export function buildProgressionFromClass(cls: CharClass): ClassProgression {
     // Classes saved before class features gained real effect kinds only have
     // {level, name, description} — effectKind defaults to 'none' (flavor-only),
     // matching what buildTraitFeature already does for an unset/unrecognized kind.
+    // usedIds is seeded with the legacy cls.features ids above (level 1 only)
+    // so a levelFeatures-authored trait can't silently collide with one of
+    // those, then scoped per level same as subclass-builder.tsx's own loop.
+    const usedIds = new Set(level === 1 ? (cls.features ?? []).map(f => f.id) : []);
     const authoredFeatures = featuresByLevel.get(level);
     if (authoredFeatures) {
       for (const f of authoredFeatures) {
         const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(
           { ...f, effectKind: f.effectKind ?? 'none' },
-          { idPrefix: `${cls.id}_l${level}`, sourceKind: 'class', sourceRefId: cls.id, level },
+          { idPrefix: `${cls.id}_l${level}`, sourceKind: 'class', sourceRefId: cls.id, level, usedIds },
         );
         grants.push({ kind: 'feature', value: feature });
         if (resource) grants.push({ kind: 'resource', value: resource });

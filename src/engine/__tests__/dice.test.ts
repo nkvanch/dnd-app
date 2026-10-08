@@ -5,7 +5,7 @@
 // would otherwise only ever show up as an occasionally-wrong character sheet.
 import {
   rollDie, rollExpression, setRandomSource, rollAbilityScore, rollAbilityScoreSet,
-  rollD20, rollWithAdvantage, rollWithDisadvantage, averageRoll,
+  rollD20, rollWithAdvantage, rollWithDisadvantage, averageRoll, manualRoll, doubleDiceCount,
 } from '../dice';
 
 afterEach(() => {
@@ -173,6 +173,50 @@ describe('rollWithAdvantage / rollWithDisadvantage', () => {
   });
 });
 
+describe('manualRoll', () => {
+  it('splits out a positive trailing modifier from the expression', () => {
+    const r = manualRoll('2d6+3', 13);
+    expect(r.modifier).toBe(3);
+    expect(r.rolls).toEqual([10]);
+    expect(r.total).toBe(13);
+  });
+
+  it('splits out a negative trailing modifier from the expression', () => {
+    const r = manualRoll('1d20-2', 5);
+    expect(r.modifier).toBe(-2);
+    expect(r.rolls).toEqual([7]);
+    expect(r.total).toBe(5);
+  });
+
+  it('treats an expression with no trailing modifier as modifier 0', () => {
+    const r = manualRoll('1d20', 15);
+    expect(r.modifier).toBe(0);
+    expect(r.rolls).toEqual([15]);
+    expect(r.total).toBe(15);
+  });
+
+  it('recovers the modifier from a keep-highest expression the same way', () => {
+    const r = manualRoll('4d6kh3+1', 14);
+    expect(r.modifier).toBe(1);
+    expect(r.rolls).toEqual([13]);
+    expect(r.total).toBe(14);
+  });
+
+  it('carries the label through and stamps a timestamp/id, expression preserved verbatim', () => {
+    const r = manualRoll('2d6+3', 13, 'Attack roll');
+    expect(r.label).toBe('Attack roll');
+    expect(r.expression).toBe('2d6+3');
+    expect(typeof r.id).toBe('string');
+    expect(r.id.length).toBeGreaterThan(0);
+    expect(typeof r.timestamp).toBe('number');
+  });
+
+  it('defaults label to null when omitted', () => {
+    const r = manualRoll('1d20', 10);
+    expect(r.label).toBeNull();
+  });
+});
+
 describe('averageRoll', () => {
   it('computes the standard fixed-HP average for NdM+X', () => {
     expect(averageRoll('1d8')).toBe(4.5);
@@ -186,5 +230,37 @@ describe('averageRoll', () => {
 
   it('throws for an unparseable expression', () => {
     expect(() => averageRoll('nonsense')).toThrow(/Cannot compute average/);
+  });
+});
+
+// Item 11 (roll improvements) — critical-hit damage doubling. Per the real
+// 5e rule, a crit doubles the DICE, not the total/flat modifier.
+describe('doubleDiceCount', () => {
+  it('doubles the dice count on a standard NdX+M expression, leaving the modifier untouched', () => {
+    expect(doubleDiceCount('2d6+4')).toBe('4d6+4');
+  });
+
+  it('doubles a single die with no modifier', () => {
+    expect(doubleDiceCount('1d8')).toBe('2d8');
+  });
+
+  it('handles a negative modifier', () => {
+    expect(doubleDiceCount('1d10-1')).toBe('2d10-1');
+  });
+
+  it('doubles the dice count on a keep-highest/lowest expression, leaving the keep count and modifier untouched', () => {
+    expect(doubleDiceCount('2d6kh1+3')).toBe('4d6kh1+3');
+  });
+
+  it('returns a flat number (no dice) unchanged', () => {
+    expect(doubleDiceCount('8')).toBe('8');
+  });
+
+  it('returns an unparseable expression unchanged rather than throwing', () => {
+    expect(doubleDiceCount('nonsense')).toBe('nonsense');
+  });
+
+  it('is case-insensitive and strips whitespace, matching rollExpression\'s own parsing', () => {
+    expect(doubleDiceCount('2D6 + 4')).toBe('4d6+4');
   });
 });

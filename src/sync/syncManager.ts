@@ -11,13 +11,13 @@
 // This gives us trivial conflict resolution (last-writer-wins) and simplicity.
 // ============================================================================
 import { Platform } from 'react-native';
-import { Entity, SyncEvent } from '../engine/types';
+import { Entity, SyncEvent, Campaign } from '../engine/types';
 import { SyncServer } from './server';
 import { SyncClient } from './client';
-import { ConnectedPlayer } from './protocol';
-import { decodeRoomCode, encodeRoomCode, getLocalIp } from './discovery';
+import { ConnectedPlayer, CombatTurnState } from './protocol';
+import { decodeRoomCode, encodeRoomCode, getLocalIp, watchNetworkChanges } from './discovery';
+import type { EventSubscription } from 'expo-modules-core';
 import { queueSyncEvent, markEventApplied, getUnflushedEvents } from '../db/syncRepo';
-import { saveEntity } from '../db/entityRepo';
 import { deepDiff } from './diff';
 
 // Lazy import to avoid circular dependency: characterStore → syncManager → characterStore.
@@ -25,6 +25,14 @@ import { deepDiff } from './diff';
 function getCharacters(): Entity[] {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   return require('../store/characterStore').useCharacterStore.getState().characters as Entity[];
+}
+
+// Same lazy-require pattern as getCharacters() above, same reason
+// (campaignStore → syncManager → campaignStore would otherwise cycle).
+function getActiveCampaignById(campaignId: string): Campaign | null {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const campaigns = require('../store/campaignStore').useCampaignStore.getState().campaigns as Campaign[];
+  return campaigns.find(c => c.id === campaignId) ?? null;
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -47,6 +55,12 @@ export type SyncManagerCallbacks = {
   /** A partial patch arrived instead of a full entity — merge, don't replace. */
   onEntityPatchReceived: (entityId: string, patch: Record<string, unknown>) => void;
   onSyncEvent:      (event: SyncEvent) => void;
+  /** Player only — the DM pushed the current Campaign (join/reconnect, or
+   *  after a DM edit) — audit finding CAMPAIGN-SYNC-1. */
+  onCampaignReceived?:      (campaign: Campaign) => void;
+  onCampaignPatchReceived?: (campaignId: string, patch: Record<string, unknown>) => void;
+  /** Player only — the DM's combat state changed (start/advance/end turn). */
+  onCombatTurnReceived?: (turn: CombatTurnState) => void;
 };
 
 // ── generateEventId ───────────────────────────────────────────────────────────
@@ -66,6 +80,10 @@ class SyncManagerClass {
   private sessionId:   string | null = null;
   private _roster:     ConnectedPlayer[] = [];
   private _lastError:  string | null = null;
+  /** DM role only — watches for the device's network connectivity changing
+   *  while a campaign is hosted, so the room code can regenerate (or clear)
+   *  without restarting the TCP server. See startNetworkWatch(). */
+  private networkSub:  EventSubscription | null = null;
 
   // ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -77,23 +95,31 @@ class SyncManagerClass {
   // ── Role entry points ─────────────────────────────────────────────────────
 
   /**
-   * Start a TCP server on this device (DM role).
-   * Returns the 6-character room code players use to join.
-   * Throws if not on WiFi.
+   * Start hosting on this device (DM role) — CampaignHost, the session/role
+   * concept, not NetworkHostAvailability. Always succeeds regardless of
+   * WiFi/hotspot/network state (throws only for genuine platform/build
+   * incapability — web, or a native TCP module that isn't linked): the TCP
+   * server binds to 0.0.0.0, which doesn't require an active network
+   * interface, so it's always started here. Hosting is valid offline.
+   *
+   * Returns the 7-character room code players use to join, or null if no
+   * usable local network is currently available to derive one from — in
+   * that case the server is still running and ready, just not currently
+   * dialable. startNetworkWatch() picks up a network appearing later (WiFi
+   * connects, a hotspot is enabled) and regenerates the code reactively,
+   * without needing to re-call this method or recreate the campaign.
    */
   async startAsServer(
     campaignId: string,
     sessionId:  string,
     deviceId:   string,
     nickname:   string,
-  ): Promise<string> {
+  ): Promise<string | null> {
     if (Platform.OS === 'web') throw new Error('Sync not supported on web.');
     this.stopAll();
 
     const ip = await getLocalIp();
-    if (!ip) throw new Error('Not connected to WiFi. Cannot host campaign.');
-
-    this.roomCode  = encodeRoomCode(ip);
+    this.roomCode  = ip ? encodeRoomCode(ip) : null;
     this.sessionId = sessionId;
     this.role      = 'dm';
 
@@ -132,6 +158,15 @@ class SyncManagerClass {
           this.server?.sendTo(requesterId, { type: 'entity_snapshot', entity: ent });
         }
       },
+      onCampaignSyncRequested: (requesterId) => {
+        // Push the current Campaign to the newly connected/reconnected
+        // player (audit finding CAMPAIGN-SYNC-1) — same shape as
+        // onEntitySyncRequested above.
+        const campaign = getActiveCampaignById(campaignId);
+        if (campaign) {
+          this.server?.sendTo(requesterId, { type: 'campaign_snapshot', campaign });
+        }
+      },
       onEntityReceived: (entity) => {
         // A player pushed their character up to us (the DM). Apply locally.
         this.callbacks?.onEntityReceived(entity);
@@ -142,8 +177,32 @@ class SyncManagerClass {
     });
 
     await this.server.start();
+    this.startNetworkWatch();
     this.emitStatus();
     return this.roomCode;
+  }
+
+  /**
+   * Subscribes to network connectivity changes while hosting, so a WiFi/
+   * hotspot connection appearing or disappearing updates the room code
+   * reactively (regenerate, or clear to null) without tearing down the
+   * already-running TCP server — "network appears/disappears during
+   * campaign" from the CampaignHost/NetworkHostAvailability split. Torn
+   * down in stopAll(); re-subscribing on every startAsServer call (via the
+   * stopAll() at its top) keeps at most one active subscription.
+   */
+  private startNetworkWatch(): void {
+    this.networkSub = watchNetworkChanges(() => { void this.refreshRoomCode(); });
+  }
+
+  private async refreshRoomCode(): Promise<void> {
+    if (this.role !== 'dm') return;
+    const ip = await getLocalIp();
+    const nextCode = ip ? encodeRoomCode(ip) : null;
+    if (nextCode !== this.roomCode) {
+      this.roomCode = nextCode;
+      this.emitStatus();
+    }
   }
 
   /**
@@ -182,9 +241,15 @@ class SyncManagerClass {
         this.applyIncomingEvent(event);
       },
       onEntitySnapshot: (entity) => {
+        // Persistence is NOT done here — onEntityReceived routes to
+        // characterStore.applyIncomingEntity, which already owns the only
+        // saveEntity call for this data (see its own doc comment) and is
+        // conditioned on its P1/S0 stale-snapshot guard. A second,
+        // unconditional saveEntity call here used to bypass that guard and
+        // silently write a stale snapshot straight to SQLite even when
+        // applyIncomingEntity correctly rejected it in memory (audit
+        // finding PERSIST-1).
         this.callbacks?.onEntityReceived(entity);
-        // Also persist to local SQLite so offline access still works
-        saveEntity(entity).catch(e => console.error('[syncManager] saveEntity failed:', e));
       },
       onEntityPatch: (entityId, patch) => {
         this.callbacks?.onEntityPatchReceived(entityId, patch);
@@ -192,6 +257,15 @@ class SyncManagerClass {
         // above) — the merged result is persisted by characterStore's
         // applyIncomingPatch, which is the one that actually knows the
         // merged entity shape.
+      },
+      onCampaignSnapshot: (campaign) => {
+        this.callbacks?.onCampaignReceived?.(campaign);
+      },
+      onCampaignPatch: (campaignId, patch) => {
+        this.callbacks?.onCampaignPatchReceived?.(campaignId, patch);
+      },
+      onCombatTurn: (turn) => {
+        this.callbacks?.onCombatTurnReceived?.(turn);
       },
     });
 
@@ -211,6 +285,35 @@ class SyncManagerClass {
   broadcastEntity(entity: Entity): void {
     if (this.role === 'dm' && this.server) {
       this.server.broadcastEntity(entity);
+    }
+  }
+
+  /**
+   * Broadcast "whose turn is it" to every connected player — DM-only, same
+   * no-op-for-players shape as broadcastEntity. combatStore.ts calls this on
+   * every combat-state change (start/advance/end turn, reinforcements
+   * added/removed) so player devices can show a live turn banner instead of
+   * having zero visibility into DM-run combat, as before this existed.
+   */
+  broadcastCombatTurn(turn: CombatTurnState): void {
+    if (this.role === 'dm' && this.server) {
+      this.server.broadcastCombatTurn(turn);
+    }
+  }
+
+  /**
+   * DM-only: tell every connected player why hosting is about to stop
+   * (explicit "Stop Hosting"/"Leave Campaign"/campaign deletion — never a
+   * network drop, since there'd be no connection left to send this over).
+   * Callers must await this and call it BEFORE stopAll(), so the message
+   * actually reaches clients before their sockets are torn down. No-op
+   * (resolves immediately) when not currently hosting with clients
+   * connected — matches broadcastEntity/broadcastCombatTurn's own
+   * role-gated no-op shape.
+   */
+  async announceClosing(reason: string): Promise<void> {
+    if (this.role === 'dm' && this.server) {
+      await this.server.announceClosing(reason);
     }
   }
 
@@ -266,6 +369,26 @@ class SyncManagerClass {
   }
 
   /**
+   * DM-only, one-way Campaign patch sync (audit finding CAMPAIGN-SYNC-1) —
+   * a no-op when called from a player's device, since a player never
+   * legitimately authors a Campaign edit (campaignStore.updateCampaign's
+   * own player-side call sites are local self-corrections — e.g. persisting
+   * a freshly-reconnected joinCode — not DM edits, so broadcasting them
+   * would be meaningless/wrong for the rest of the table). Same
+   * deepDiff-based shape as syncEntityPatch above.
+   */
+  syncCampaignPatch(id: string, previous: Campaign | null, next: Campaign): void {
+    if (this.role !== 'dm' || !this.server) return;
+    if (!previous) {
+      this.server.broadcastCampaign(next);
+      return;
+    }
+    const patch = deepDiff(previous, next) as Record<string, unknown> | undefined;
+    if (!patch) return;
+    this.server.broadcastCampaignPatch(id, patch);
+  }
+
+  /**
    * Player-only: announce which character this device is controlling.
    * No-op for DM/offline. Safe to call before connection completes — the
    * client also re-sends the current characterId inside every 'hello'.
@@ -314,6 +437,8 @@ class SyncManagerClass {
   // ── Teardown ──────────────────────────────────────────────────────────────
 
   stopAll(): void {
+    this.networkSub?.remove();
+    this.networkSub   = null;
     this.server?.stop();
     this.client?.disconnect();
     this.server       = null;
@@ -345,6 +470,12 @@ class SyncManagerClass {
       roster:      this.role === 'dm' ? this._roster : [],
       lastError:   this.role === 'player' ? this._lastError : null,
     };
+  }
+
+  /** Which character THIS device currently claims/controls (player role
+   *  only — null for DM/offline/unclaimed). See SyncClient.ownedCharacterId. */
+  get ownedCharacterId(): string | null {
+    return this.role === 'player' ? (this.client?.ownedCharacterId ?? null) : null;
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

@@ -5,33 +5,58 @@ import { Modal, View, Text, Pressable, TextInput, StyleSheet } from 'react-nativ
 import { COMMON_DAMAGE_TYPES } from '../../content/traitCompiler';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
+const NONMAGICAL_QUALIFYING_TYPES = new Set(['bludgeoning', 'piercing', 'slashing']);
+
 interface Props {
   visible:  boolean;
   currentHp: number;
   maxHp:     number;
-  onDamage:  (amount: number, damageType?: string) => void;
+  onDamage:  (amount: number, damageType?: string, isNonmagicalAttack?: boolean) => void;
   onHeal:    (amount: number) => void;
   onClose:   () => void;
+  /** Rules-engine blocker RE-AUDIT closure (3A): true only while the
+   * character is transformed into a BeastForm that actually declares
+   * `nonmagicalPhysicalResistance` — the same bounded, table-first
+   * per-hit fact the DM's Wild Shape damage controls already expose
+   * (app/dm/encounter.tsx), now available to the player's own HP modal. */
+  showNonmagicalOption?: boolean;
 }
 
-export function HpModal({ visible, currentHp, maxHp, onDamage, onHeal, onClose }: Props) {
+export function HpModal({ visible, currentHp, maxHp, onDamage, onHeal, onClose, showNonmagicalOption }: Props) {
   const [text, setText] = useState('');
   const [damageType, setDamageType] = useState('');
+  const [nonmagicalAttack, setNonmagicalAttack] = useState(false);
   const amount = parseInt(text, 10);
   const valid  = !isNaN(amount) && amount > 0;
+  const nonmagicalOptionShown = !!showNonmagicalOption && NONMAGICAL_QUALIFYING_TYPES.has(damageType);
+
+  function setDamageTypeChecked(next: string) {
+    setDamageType(next);
+    if (!NONMAGICAL_QUALIFYING_TYPES.has(next)) setNonmagicalAttack(false);
+  }
 
   function submit(type: 'damage' | 'heal') {
     if (!valid) return;
-    if (type === 'damage') onDamage(amount, damageType.trim() || undefined);
+    if (type === 'damage') onDamage(amount, damageType.trim() || undefined, nonmagicalOptionShown ? nonmagicalAttack : undefined);
     else onHeal(amount);
+    reset();
+    onClose();
+  }
+
+  function reset() {
     setText('');
     setDamageType('');
+    setNonmagicalAttack(false);
+  }
+
+  function handleClose() {
+    reset();
     onClose();
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+      <Pressable style={styles.backdrop} onPress={handleClose}>
         <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
           <Text style={styles.title}>HP: {currentHp} / {maxHp}</Text>
 
@@ -50,19 +75,33 @@ export function HpModal({ visible, currentHp, maxHp, onDamage, onHeal, onClose }
             <TextInput
               style={styles.typeInput}
               value={damageType}
-              onChangeText={setDamageType}
+              onChangeText={setDamageTypeChecked}
               placeholder="Unspecified"
               placeholderTextColor={Colors.textDim}
             />
             <View style={styles.typeChipWrap}>
               {COMMON_DAMAGE_TYPES.map(t => (
                 <Pressable key={t} style={[styles.typeChip, damageType === t && styles.typeChipActive]}
-                  onPress={() => setDamageType(damageType === t ? '' : t)}>
+                  onPress={() => setDamageTypeChecked(damageType === t ? '' : t)}>
                   <Text style={[styles.typeChipTxt, damageType === t && styles.typeChipTxtActive]}>{t}</Text>
                 </Pressable>
               ))}
             </View>
           </View>
+
+          {/* Rules-engine blocker RE-AUDIT closure (3A/3D): table-first, per-hit
+              fact — only meaningful (and only shown) while transformed into a
+              form with nonmagicalPhysicalResistance and hitting with a
+              bludgeoning/piercing/slashing type; never inferred automatically. */}
+          {nonmagicalOptionShown && (
+            <Pressable style={styles.typeChipWrap} onPress={() => setNonmagicalAttack(v => !v)}>
+              <View style={[styles.typeChip, nonmagicalAttack && styles.typeChipActive]}>
+                <Text style={[styles.typeChipTxt, nonmagicalAttack && styles.typeChipTxtActive]}>
+                  {nonmagicalAttack ? '☑' : '☐'} Nonmagical attack
+                </Text>
+              </View>
+            </Pressable>
+          )}
 
           <View style={styles.btnRow}>
             <Pressable
@@ -81,7 +120,7 @@ export function HpModal({ visible, currentHp, maxHp, onDamage, onHeal, onClose }
             </Pressable>
           </View>
 
-          <Pressable style={styles.cancelBtn} onPress={onClose}>
+          <Pressable style={styles.cancelBtn} onPress={handleClose}>
             <Text style={styles.cancelTxt}>Cancel</Text>
           </Pressable>
         </Pressable>

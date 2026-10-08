@@ -92,6 +92,24 @@ export function rollExpression(expression: string, label?: string): DiceRoll {
   throw new Error(`Cannot parse dice expression: "${expression}"`);
 }
 
+/**
+ * Builds a DiceRoll from a hand-entered total instead of rolling — for a
+ * player rolling physical dice at a real table. Recovers the flat modifier
+ * from the expression's trailing signed integer (the same shape every
+ * notation branch above already parses via `([+-]\d+)?$`), so a manual
+ * result's rolls/modifier breakdown renders identically to a digital one's.
+ */
+export function manualRoll(expression: string, enteredTotal: number, label?: string): DiceRoll {
+  const clean = expression.toLowerCase().replace(/\s/g, '');
+  const modMatch = clean.match(/([+-]\d+)$/);
+  const modifier = modMatch ? parseInt(modMatch[1], 10) : 0;
+  return {
+    id: uid(), expression,
+    rolls: [enteredTotal - modifier], modifier, total: enteredTotal,
+    label: label ?? null, timestamp: Date.now(),
+  };
+}
+
 // ── Batch helpers ─────────────────────────────────────────────────────────────
 
 /** Rolls 4d6 and keeps the highest 3 — standard ability score method. */
@@ -124,6 +142,24 @@ export function rollWithDisadvantage(modifier = 0, label?: string): DiceRoll {
   const b = rollD20(modifier);
   const loser = a.total <= b.total ? a : b;
   return { ...loser, label: label ?? 'Disadvantage', expression: `2d20kl1${modifier !== 0 ? (modifier > 0 ? `+${modifier}` : modifier) : ''}` };
+}
+
+/**
+ * Doubles the DICE portion of a damage expression for a critical hit —
+ * "2d6+4" → "4d6+4", "1d8" → "2d8" — leaving the flat modifier untouched,
+ * per the real 5e rule (roll extra dice, don't double the total). Works on
+ * the standard "NdX(+/-M)" and keep-highest/lowest "NdXkhY(+/-M)" shapes
+ * rollExpression itself already parses; returns the expression unchanged
+ * (not thrown) if it doesn't match either, since a caller can always just
+ * not double an expression it doesn't recognise as dice-shaped.
+ */
+export function doubleDiceCount(expression: string): string {
+  const clean = expression.toLowerCase().replace(/\s/g, '');
+  const keepMatch = clean.match(/^(\d+)(d\d+k[hl]\d+(?:[+-]\d+)?)$/);
+  if (keepMatch) return `${parseInt(keepMatch[1], 10) * 2}${keepMatch[2]}`;
+  const stdMatch = clean.match(/^(\d+)(d\d+(?:[+-]\d+)?)$/);
+  if (stdMatch) return `${parseInt(stdMatch[1], 10) * 2}${stdMatch[2]}`;
+  return expression;
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────

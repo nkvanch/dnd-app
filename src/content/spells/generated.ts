@@ -997,7 +997,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "alarm",
     "name": "Alarm",
     "level": 1,
-    "school": "Abjuration (ritual)",
+    "school": "Abjuration",
     "castingTime": "1 minute",
     "range": "30 feet",
     "components": [
@@ -1211,7 +1211,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "ceremony",
     "name": "Ceremony",
     "level": 1,
-    "school": "Abjuration (ritual)",
+    "school": "Abjuration",
     "castingTime": "1 hour",
     "range": "Touch",
     "components": [
@@ -1360,7 +1360,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "comprehend_languages",
     "name": "Comprehend Languages",
     "level": 1,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 action",
     "range": "Self",
     "components": [
@@ -1452,7 +1452,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "detect_magic",
     "name": "Detect Magic",
     "level": 1,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 action",
     "range": "Self",
     "components": [
@@ -1480,7 +1480,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "detect_poison_and_disease",
     "name": "Detect Poison and Disease",
     "level": 1,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 action",
     "range": "Self",
     "components": [
@@ -1716,7 +1716,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "find_familiar",
     "name": "Find Familiar",
     "level": 1,
-    "school": "Conjuration (ritual)",
+    "school": "Conjuration",
     "castingTime": "1 hour",
     "range": "10 feet",
     "components": [
@@ -1989,7 +1989,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "identify",
     "name": "Identify",
     "level": 1,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 minute",
     "range": "Touch",
     "components": [
@@ -2012,7 +2012,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "illusory_script",
     "name": "Illusory Script",
     "level": 1,
-    "school": "Illusion (ritual)",
+    "school": "Illusion",
     "castingTime": "1 minute",
     "range": "Touch",
     "components": [
@@ -2171,7 +2171,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "purify_food_and_drink",
     "name": "Purify Food and Drink",
     "level": 1,
-    "school": "Transmutation (ritual)",
+    "school": "Transmutation",
     "castingTime": "1 action",
     "range": "10 feet",
     "components": [
@@ -2388,7 +2388,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "speak_with_animals",
     "name": "Speak with Animals",
     "level": 1,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 action",
     "range": "Self",
     "components": [
@@ -2431,9 +2431,9 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "tensers_floating_disk",
-    "name": "Tenser's Floating Disk",
+    "name": "Floating Disk",
     "level": 1,
-    "school": "Conjuration (ritual)",
+    "school": "Conjuration",
     "castingTime": "1 action",
     "range": "30 feet",
     "components": [
@@ -2496,7 +2496,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "unseen_servant",
     "name": "Unseen Servant",
     "level": 1,
-    "school": "Conjuration (ritual)",
+    "school": "Conjuration",
     "castingTime": "1 action",
     "range": "60 feet",
     "components": [
@@ -2666,7 +2666,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "animal_messenger",
     "name": "Animal Messenger",
     "level": 2,
-    "school": "Enchantment (ritual)",
+    "school": "Enchantment",
     "castingTime": "1 action",
     "range": "30 feet",
     "components": [
@@ -2731,7 +2731,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "augury",
     "name": "Augury",
     "level": 2,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 minute",
     "range": "Self",
     "components": [
@@ -2774,7 +2774,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "beast_sense",
     "name": "Beast Sense",
     "level": 2,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 action",
     "range": "Touch",
     "components": [
@@ -3254,7 +3254,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "gentle_repose",
     "name": "Gentle Repose",
     "level": 2,
-    "school": "Necromancy (ritual)",
+    "school": "Necromancy",
     "castingTime": "1 action",
     "range": "Touch",
     "components": [
@@ -3458,7 +3458,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "locate_animals_or_plants",
     "name": "Locate Animals or Plants",
     "level": 2,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 action",
     "range": "Self",
     "components": [
@@ -3506,7 +3506,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "magic_mouth",
     "name": "Magic Mouth",
     "level": 2,
-    "school": "Illusion (ritual)",
+    "school": "Illusion",
     "castingTime": "1 minute",
     "range": "30 feet",
     "components": [
@@ -3940,7 +3940,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "silence",
     "name": "Silence",
     "level": 2,
-    "school": "Illusion (ritual)",
+    "school": "Illusion",
     "castingTime": "1 action",
     "range": "120 feet",
     "components": [
@@ -3961,7 +3961,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "skywrite",
     "name": "Skywrite",
     "level": 2,
-    "school": "Transmutation (ritual)",
+    "school": "Transmutation",
     "castingTime": "1 action",
     "range": "Sight",
     "components": [
@@ -4705,7 +4705,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "feign_death",
     "name": "Feign Death",
     "level": 3,
-    "school": "Necromancy (ritual)",
+    "school": "Necromancy",
     "castingTime": "1 action",
     "range": "Touch",
     "components": [
@@ -5065,7 +5065,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "meld_into_stone",
     "name": "Meld into Stone",
     "level": 3,
-    "school": "Transmutation (ritual)",
+    "school": "Transmutation",
     "castingTime": "1 action",
     "range": "Touch",
     "components": [
@@ -5131,7 +5131,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "phantom_steed",
     "name": "Phantom Steed",
     "level": 3,
-    "school": "Illusion (ritual)",
+    "school": "Illusion",
     "castingTime": "1 minute",
     "range": "30 feet",
     "components": [
@@ -5558,7 +5558,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "leomunds_tiny_hut",
     "name": "Tiny Hut",
     "level": 3,
-    "school": "Evocation (ritual)",
+    "school": "Evocation",
     "castingTime": "1 minute",
     "range": "Self (10-foot-radius hemisphere)",
     "components": [
@@ -5692,7 +5692,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "water_breathing",
     "name": "Water Breathing",
     "level": 3,
-    "school": "Transmutation (ritual)",
+    "school": "Transmutation",
     "castingTime": "1 action",
     "range": "30 feet",
     "components": [
@@ -5717,7 +5717,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "water_walk",
     "name": "Water Walk",
     "level": 3,
-    "school": "Transmutation (ritual)",
+    "school": "Transmutation",
     "castingTime": "1 action",
     "range": "30 feet",
     "components": [
@@ -6068,7 +6068,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "divination",
     "name": "Divination",
     "level": 4,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 action",
     "range": "Self",
     "components": [
@@ -6394,7 +6394,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "leomunds_secret_chest",
-    "name": "Leomund's Secret Chest",
+    "name": "Secret Chest",
     "level": 4,
     "school": "Conjuration",
     "castingTime": "1 action",
@@ -6441,7 +6441,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "mordenkainens_faithful_hound",
-    "name": "Mordenkainen's Faithful Hound",
+    "name": "Faithful Hound",
     "level": 4,
     "school": "Conjuration",
     "castingTime": "1 action",
@@ -6945,7 +6945,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "bigbys_hand",
-    "name": "Bigby's Hand",
+    "name": "Arcane Hand",
     "level": 5,
     "school": "Evocation",
     "castingTime": "1 action",
@@ -7009,7 +7009,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "commune",
     "name": "Commune",
     "level": 5,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 minute",
     "range": "Self",
     "components": [
@@ -7030,7 +7030,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "commune_with_nature",
     "name": "Commune with Nature",
     "level": 5,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 minute",
     "range": "Self",
     "components": [
@@ -7116,7 +7116,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "contact_other_plane",
     "name": "Contact Other Plane",
     "level": 5,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 minute",
     "range": "Self",
     "components": [
@@ -7771,9 +7771,9 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "rarys_telepathic_bond",
-    "name": "Rary's Telepathic Bond",
+    "name": "Telepathic Bond",
     "level": 5,
-    "school": "Divination (ritual)",
+    "school": "Divination",
     "castingTime": "1 action",
     "range": "30 feet",
     "components": [
@@ -8384,9 +8384,9 @@ export const ALL_VAULT_SPELLS: Spell[] = [
   },
   {
     "id": "drawmijs_instant_summons",
-    "name": "Drawmij's Instant Summons",
+    "name": "Instant Summons",
     "level": 6,
-    "school": "Conjuration (ritual)",
+    "school": "Conjuration",
     "castingTime": "1 minute",
     "range": "Touch",
     "components": [
@@ -8518,7 +8518,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "forbiddance",
     "name": "Forbiddance",
     "level": 6,
-    "school": "Abjuration (ritual)",
+    "school": "Abjuration",
     "castingTime": "10 minutes",
     "range": "Touch",
     "components": [
@@ -9253,7 +9253,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "divine_word",
     "name": "Divine Word",
     "level": 7,
-    "school": "Evocation **classes**: cleric",
+    "school": "Evocation",
     "castingTime": "1 bonus action",
     "range": "30 feet",
     "components": [
@@ -9264,7 +9264,9 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "cleric"
+    ]
   },
   {
     "id": "draconic_transformation",
@@ -9385,7 +9387,7 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "id": "forcecage",
     "name": "Forcecage",
     "level": 7,
-    "school": "Evocation **classes**: bard, warlock, wizard",
+    "school": "Evocation",
     "castingTime": "1 action **Range**: 100 feet **Components**: V, S, M (ruby dust worth 1,500 gp) **Duration**: 1 hour",
     "range": "",
     "components": [],
@@ -9394,13 +9396,17 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "bard",
+      "warlock",
+      "wizard"
+    ]
   },
   {
     "id": "mirage_arcane",
     "name": "Mirage Arcane",
     "level": 7,
-    "school": "Illusion **classes**: bard, druid, wizard",
+    "school": "Illusion",
     "castingTime": "10 minutes **Range**: Sight **Components**: V, S **Duration**: 10 days",
     "range": "",
     "components": [],
@@ -9409,43 +9415,61 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "bard",
+      "druid",
+      "wizard"
+    ]
   },
   {
     "id": "mordenkainens_magnificent_mansion",
-    "name": "Mordenkainen's Magnificent Mansion",
+    "name": "Magnificent Mansion",
     "level": 7,
-    "school": "Conjuration **classes**: bard, wizard",
-    "castingTime": "1 minute **Range**: 300 feet **Components**: V, S, M (a miniature portal carved from ivory, a small piece of polished marble, and a tiny silver spoon, each item worth at least 5 gp) **Duration**: 24 hours",
-    "range": "",
-    "components": [],
-    "duration": "",
+    "school": "Conjuration",
+    "castingTime": "1 minute",
+    "range": "300 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "24 hours",
     "description": "You conjure an extradimensional dwelling in range that lasts for the duration. You choose where its one entrance is located. The entrance shimmers faintly and is 5 feet wide and 10 feet tall. You and any creature you designate when you cast the spell can enter the extradimensional dwelling as long as the portal remains open. You can open or close the portal if you are within 30 feet of it. While closed, the portal is invisible.\n\nBeyond the portal is a magnificent foyer with numerous chambers beyond. The atmosphere is clean, fresh, and warm.\n\nYou can create any floor plan you like, but the space can't exceed 50 cubes, each cube being 10 feet on each side. The place is furnished and decorated as you choose. It contains sufficient food to serve a nine-course banquet for up to 100 people. A staff of 100 near-transparent servants attends all who enter. You decide the visual appearance of these servants and their attire. They are completely obedient to your orders. Each servant can perform any task a normal human servant could perform, but they can't attack or take any action that would directly harm another creature. Thus the servants can fetch things, clean, mend, fold clothes, light fires, serve food, pour wine, and so on. The servants can go anywhere in the mansion but can't leave it. Furnishings and other objects created by this spell dissipate into smoke if removed from the mansion. When the spell ends, any creatures or objects left inside the extradimensional space are expelled into the open spaces nearest to the entrance.",
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "bard",
+      "wizard"
+    ]
   },
   {
     "id": "mordenkainens_sword",
-    "name": "Mordenkainen's Sword",
+    "name": "Arcane Sword",
     "level": 7,
-    "school": "Evocation **classes**: bard, wizard",
-    "castingTime": "1 action **Range**: 60 feet **Components**: V, S, M (a miniature platinum sword with a grip and pommel of copper and zinc, worth 250 gp) **Duration**: Concentration, up to 1 minute",
-    "range": "",
-    "components": [],
-    "duration": "",
+    "school": "Evocation",
+    "castingTime": "1 action",
+    "range": "60 feet",
+    "components": [
+      "V",
+      "S",
+      "M"
+    ],
+    "duration": "Concentration, up to 1 minute",
     "description": "You create a sword-shaped plane of force that hovers within range. It lasts for the duration.\n\nWhen the sword appears, you make a melee spell attack against a target of your choice within 5 feet of the sword. On a hit, the target takes 3d10 force damage. Until the spell ends, you can use a bonus action on each of your turns to move the sword up to 20 feet to a spot you can see and repeat this attack against the same target or a different one.",
     "upcast": null,
     "ritual": false,
-    "concentration": false,
-    "classes": []
+    "concentration": true,
+    "classes": [
+      "bard",
+      "wizard"
+    ]
   },
   {
     "id": "plane_shift",
     "name": "Plane Shift",
     "level": 7,
-    "school": "Conjuration **classes**: cleric, druid, sorcerer, warlock, wizard",
+    "school": "Conjuration",
     "castingTime": "1 action **Range**: Touch **Components**: V, S, M (a forked, metal rod worth at least 250 gp, attuned to a particular plane of existence) **Duration**: Instantaneous",
     "range": "",
     "components": [],
@@ -9454,13 +9478,19 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "cleric",
+      "druid",
+      "sorcerer",
+      "warlock",
+      "wizard"
+    ]
   },
   {
     "id": "power_word_pain",
     "name": "Power Word Pain",
     "level": 7,
-    "school": "Enchantment **classes**: sorcerer, warlock, wizard",
+    "school": "Enchantment",
     "castingTime": "1 action **Range**: 60 feet **Components**: V **Duration**: Instantaneous",
     "range": "",
     "components": [],
@@ -9469,13 +9499,17 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "sorcerer",
+      "warlock",
+      "wizard"
+    ]
   },
   {
     "id": "prismatic_spray",
     "name": "Prismatic Spray",
     "level": 7,
-    "school": "Evocation **classes**: sorcerer, wizard",
+    "school": "Evocation",
     "castingTime": "1 action **Range**: Self (60-foot cone) **Components**: V, S **Duration**: Instantaneous",
     "range": "",
     "components": [],
@@ -9484,13 +9518,16 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "sorcerer",
+      "wizard"
+    ]
   },
   {
     "id": "project_image",
     "name": "Project Image",
     "level": 7,
-    "school": "Illusion **classes**: bard, wizard",
+    "school": "Illusion",
     "castingTime": "1 action **Range**: 500 miles **Components**: V, S, M (a small replica of you made from materials worth at least 5 gp) **Duration**: Concentration, up to 1 day",
     "range": "",
     "components": [],
@@ -9499,13 +9536,16 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "bard",
+      "wizard"
+    ]
   },
   {
     "id": "regenerate",
     "name": "Regenerate",
     "level": 7,
-    "school": "Transmutation **classes**: bard, cleric, druid",
+    "school": "Transmutation",
     "castingTime": "1 minute **Range**: Touch **Components**: V, S, M (a prayer wheel and holy water) **Duration**: 1 hour",
     "range": "",
     "components": [],
@@ -9514,13 +9554,17 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "bard",
+      "cleric",
+      "druid"
+    ]
   },
   {
     "id": "resurrection",
     "name": "Resurrection",
     "level": 7,
-    "school": "Necromancy **classes**: bard, cleric",
+    "school": "Necromancy",
     "castingTime": "1 hour **Range**: Touch **Components**: V, S, M (a diamond worth at least 1,000 gp, which the spell consumes) **Duration**: Instantaneous",
     "range": "",
     "components": [],
@@ -9529,13 +9573,16 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "bard",
+      "cleric"
+    ]
   },
   {
     "id": "reverse_gravity",
     "name": "Reverse Gravity",
     "level": 7,
-    "school": "Transmutation **classes**: druid, sorcerer, wizard",
+    "school": "Transmutation",
     "castingTime": "1 action **Range**: 100 feet **Components**: V, S, M (a lodestone and iron filings) **Duration**: Concentration, up to 1 minute",
     "range": "",
     "components": [],
@@ -9544,13 +9591,17 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "druid",
+      "sorcerer",
+      "wizard"
+    ]
   },
   {
     "id": "sequester",
     "name": "Sequester",
     "level": 7,
-    "school": "Transmutation **classes**: wizard",
+    "school": "Transmutation",
     "castingTime": "1 action **Range**: Touch **Components**: V, S, M (a powder composed of diamond, emerald, ruby, and sapphire dust worth at least 5,000 gp, which the spell consumes) **Duration**: Until dispelled",
     "range": "",
     "components": [],
@@ -9559,13 +9610,15 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "wizard"
+    ]
   },
   {
     "id": "simulacrum",
     "name": "Simulacrum",
     "level": 7,
-    "school": "Illusion **classes**: wizard",
+    "school": "Illusion",
     "castingTime": "12 hours **Range**: Touch **Components**: V, S, M (snow or ice in quantities sufficient to made a life-size copy of the duplicated creature; some hair, fingernail clippings, or other piece of that creature's body placed inside the snow or ice; and powdered ruby worth 1,500 gp, sprinkled over the duplicate and consumed by the spell) **Duration**: Until dispelled",
     "range": "",
     "components": [],
@@ -9574,13 +9627,15 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "wizard"
+    ]
   },
   {
     "id": "symbol",
     "name": "Symbol",
     "level": 7,
-    "school": "Abjuration **classes**: bard, cleric, wizard",
+    "school": "Abjuration",
     "castingTime": "1 minute **Range**: Touch **Components**: V, S, M (mercury, phosphorus, and powdered diamond and opal with a total value of at least 1,000 gp, which the spell consumes) **Duration**: Until dispelled or triggered",
     "range": "",
     "components": [],
@@ -9589,13 +9644,17 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "bard",
+      "cleric",
+      "wizard"
+    ]
   },
   {
     "id": "teleport",
     "name": "Teleport",
     "level": 7,
-    "school": "Conjuration **classes**: bard, sorcerer, wizard",
+    "school": "Conjuration",
     "castingTime": "1 action **Range**: 10 feet **Components**: V **Duration**: Instantaneous",
     "range": "",
     "components": [],
@@ -9604,13 +9663,17 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "bard",
+      "sorcerer",
+      "wizard"
+    ]
   },
   {
     "id": "temple_of_the_gods",
     "name": "Temple of the Gods",
     "level": 7,
-    "school": "Conjuration **classes**: cleric",
+    "school": "Conjuration",
     "castingTime": "1 hour **Range**: 120 feet **Components**: V, S, M (a holy symbol worth at least 5 gp) **Duration**: 24 hours",
     "range": "",
     "components": [],
@@ -9619,13 +9682,15 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "cleric"
+    ]
   },
   {
     "id": "whirlwind",
     "name": "Whirlwind",
     "level": 7,
-    "school": "Evocation **classes**: druid, sorcerer, wizard",
+    "school": "Evocation",
     "castingTime": "1 action **Range**: 300 feet **Components**: V, M (a piece of straw) **Duration**: Concentration, up to 1 minute",
     "range": "",
     "components": [],
@@ -9634,7 +9699,11 @@ export const ALL_VAULT_SPELLS: Spell[] = [
     "upcast": null,
     "ritual": false,
     "concentration": false,
-    "classes": []
+    "classes": [
+      "druid",
+      "sorcerer",
+      "wizard"
+    ]
   },
   {
     "id": "abi_dalzims_horrid_wilting",

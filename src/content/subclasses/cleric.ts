@@ -394,7 +394,17 @@ export const knowledgeDomainProgression: SubclassProgression = {
   srd: false,
   entries: [
     {
-      level: 1, hpDie: 8, choices: [],
+      level: 1, hpDie: 8,
+      // CHOICE-EXPANSION-2: "learn two languages of your choice" migrated to
+      // a real choice. The "proficiency in two of Arcana/History/Nature/
+      // Religion, doubled" half is NOT migrated — it grants proficiency AND
+      // doubles it in one move for a skill the character may not already
+      // have, which doesn't fit kind:'expertise' (requires prior
+      // proficiency) or any other authored kind in this pass; stays
+      // flavor-only, same as before.
+      choices: [
+        { id: 'knowledge_domain_languages_1', prompt: 'Choose two languages.', kind: 'language', count: 2, pool: 'all', grants: [], required: true, resolved: false },
+      ],
       grants: [
         { kind: 'feature', value: { id: 'blessings_of_knowledge', name: 'Blessings of Knowledge', description: 'Learn two languages of your choice and gain proficiency in two of Arcana, History, Nature, or Religion. Your proficiency bonus is doubled for checks using either chosen skill.', source: { kind: 'subclass', refId: 'knowledge_domain' }, level: 1, effects: [], actions: [], choices: [], passive: true } },
         domainSpells(['command', 'identify']),

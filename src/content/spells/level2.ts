@@ -229,7 +229,7 @@ export const spellPhantasmalForce: Spell = {
   castingTime: '1 action', range: '60 feet', components: ['V', 'S', 'M'],
   duration: 'Concentration, up to 1 minute',
   description: 'You craft an illusion that takes root in the mind of a creature you can see within range. The target must make an Intelligence saving throw. On a failed save, you create a phantasmal object, creature, or phenomenon of your choice that is no larger than a 10-foot cube and that is perceivable only to the target. The target takes 1d6 psychic damage at the start of each of your turns.',
-  upcast: null, ritual: false, concentration: true, srd: true, classes: ['bard', 'sorcerer', 'wizard'],
+  upcast: null, ritual: false, concentration: true, srd: false, classes: ['bard', 'sorcerer', 'wizard'],
 };
 
 export const NEW_LEVEL2: Spell[] = [

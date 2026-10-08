@@ -3,21 +3,35 @@
 // Supports adding items from the content DB (or homebrew),
 // removing items, and adjusting money per denomination.
 // Large creature rules are surfaced when the character is Large-sized.
-import { useState } from 'react';
+import { itemsForRuleset } from '../../content/itemEditions';
+import { useState, useMemo, useEffect, memo } from 'react';
 import {
   ScrollView, View, Text, Pressable, StyleSheet,
   Modal, TextInput, SectionList, Image,
 } from 'react-native';
-import { Entity, ItemInstance, Item, Currency, CampaignRules } from '../../engine/types';
+import { Entity, ItemInstance, Item, Currency, CampaignRules, matchesRuleset, RulesetId } from '../../engine/types';
 import { Alert } from '../../utils/alert';
 import { applyStatModifiers, collectAllEffects } from '../../engine/pipeline';
-import { itemRepo } from '../../content/itemRepo';
-import { toItemIndexEntry } from '../../content/itemRepo.types';
 import type { ItemIndexEntry } from '../../content/itemRepo.types';
+import { mergeItemIndex, resolveItemById } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { usesLargeCreatureWeaponDice } from '../../engine/houseRules';
-import { ALL_INFUSIONS, maxInfusedItems } from '../../content/infusions';
+import { infusions } from '../../content/runtimeRules';
+import { maxInfusedItems } from '../../engine/infusionRules';
+import { itemRequiresAttunement, attunementCap, countAttuned } from '../../engine/inventory';
+import { NonSrdBadge, isNonSrd } from '../NonSrdBadge';
+import {
+  isMagic, isWeapon, isRangedWeapon, isMartialWeapon, armorWeight, isArmorItem,
+  isShield, isAmmo, isToolOrKit, isFocus, itemCategory, ITEM_CATEGORY_LABELS,
+  type ItemCategoryId, RARITY_TIERS, rarityOf, itemSortOptions, buildSimpleCustomItem,
+} from '../../content/items/itemBrowse';
+import { sortByOption } from '../../content/contentQuery';
+import { SortControl } from '../SortControl';
+import { FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips } from '../FilterChipRow';
+import { useBrowseStateStore } from '../../store/browseStateStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+
+const ITEM_PICKER_SCREEN_KEY = 'item_picker';
 
 const DAMAGE_TYPES = [
   'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic',
@@ -47,6 +61,15 @@ const COIN_COLORS: Record<keyof Currency, string> = {
 };
 
 // ── Item categories ───────────────────────────────────────────────────────────
+// Classification helpers (isMagic/isWeapon/isRangedWeapon/isMartialWeapon/
+// armorWeight/isArmorItem/isShield/isAmmo/isToolOrKit/isFocus) now live in
+// src/content/items/itemBrowse.ts as the shared, independent-axis primitives
+// — see that file's header. ITEM_CATEGORIES/categorise below stay as the
+// results screen's own PRESENTATION grouping (a combined "Magic Weapons —
+// Martial Melee"-style label reads fine as a section header); the actual
+// FILTER controls in AddItemModal go through itemBrowse.ts's independent
+// Category/Magical/WeaponClass/WeaponRange/ArmorWeight fields instead of
+// matching against one of these 25 combined labels.
 
 type ItemCategory = {
   label:  string;
@@ -54,166 +77,8 @@ type ItemCategory = {
   test:   (item: ItemIndexEntry) => boolean;
 };
 
-// ── Classification helpers ─────────────────────────────────────────────
-// These all operate on ItemIndexEntry (Tier 1 — id/name/weight/cost/
-// properties/hasDamageEffect/weaponRange) rather than the full Item record,
-// since the Add Item browse list works off the lightweight index. A full
-// Item satisfies ItemIndexEntry structurally, so these are just as usable
-// wherever a real Item is already in hand (they're pure inspection
-// functions — no mutation, no dependency on `features` beyond the two
-// derived fields).
-
-function propsLower(i: ItemIndexEntry): string[] {
-  return i.properties.map(p => p.toLowerCase());
-}
-function isMagic(i: ItemIndexEntry): boolean {
-  return propsLower(i).some(p => p.includes('magic') || p.includes('wondrous') || p.includes('artifact'));
-}
-// Canonical D&D 5e base weapons → { martial, ranged }. Magic weapons are typed
-// only "Magic Weapon", so we recover the class from the base-weapon name in the
-// item name (e.g. "Flame Tongue Greatsword" → greatsword → martial melee).
-type WeaponClass = { martial: boolean; ranged: boolean };
-const BASE_WEAPONS: Record<string, WeaponClass> = {
-  club: { martial: false, ranged: false },
-  dagger: { martial: false, ranged: false },
-  greatclub: { martial: false, ranged: false },
-  handaxe: { martial: false, ranged: false },
-  javelin: { martial: false, ranged: false },
-  'light hammer': { martial: false, ranged: false },
-  mace: { martial: false, ranged: false },
-  quarterstaff: { martial: false, ranged: false },
-  sickle: { martial: false, ranged: false },
-  spear: { martial: false, ranged: false },
-  yklwa: { martial: false, ranged: false },
-  'light crossbow': { martial: false, ranged: true },
-  dart: { martial: false, ranged: true },
-  shortbow: { martial: false, ranged: true },
-  sling: { martial: false, ranged: true },
-  battleaxe: { martial: true, ranged: false },
-  flail: { martial: true, ranged: false },
-  glaive: { martial: true, ranged: false },
-  greataxe: { martial: true, ranged: false },
-  greatsword: { martial: true, ranged: false },
-  halberd: { martial: true, ranged: false },
-  lance: { martial: true, ranged: false },
-  longsword: { martial: true, ranged: false },
-  maul: { martial: true, ranged: false },
-  morningstar: { martial: true, ranged: false },
-  pike: { martial: true, ranged: false },
-  rapier: { martial: true, ranged: false },
-  scimitar: { martial: true, ranged: false },
-  shortsword: { martial: true, ranged: false },
-  trident: { martial: true, ranged: false },
-  'war pick': { martial: true, ranged: false },
-  warhammer: { martial: true, ranged: false },
-  whip: { martial: true, ranged: false },
-  blowgun: { martial: true, ranged: true },
-  'hand crossbow': { martial: true, ranged: true },
-  'heavy crossbow': { martial: true, ranged: true },
-  longbow: { martial: true, ranged: true },
-  net: { martial: true, ranged: true },
-};
-const WEAPON_WORD_FALLBACK: Record<string, WeaponClass> = {
-  sword: { martial: true, ranged: false },
-  blade: { martial: true, ranged: false },
-  axe: { martial: true, ranged: false },
-  hammer: { martial: true, ranged: false },
-  bow: { martial: true, ranged: true },
-};
-
-type ArmorWeight = 'heavy' | 'medium' | 'light';
-const BASE_ARMORS: Record<string, ArmorWeight> = {
-  padded: 'light', leather: 'light', 'studded leather': 'light',
-  hide: 'medium', 'chain shirt': 'medium', 'scale mail': 'medium',
-  breastplate: 'medium', 'half plate': 'medium',
-  'ring mail': 'heavy', 'chain mail': 'heavy', splint: 'heavy', plate: 'heavy',
-};
-// Words that signal an item is ARMOR even when no specific base armor is named
-// (e.g. "Adamantine Armor", "Demon Armor", "Elven Chain", "Glamoured Studded").
-// Weight is unknown for these, so they route to the "— Other" armor bucket.
-const ARMOR_WORD_HINTS = ['armor', 'mail', 'plate', 'cuirass', 'breastplate', 'chain'];
-
-function hasProp(i: ItemIndexEntry, kw: string): boolean {
-  return propsLower(i).some(p => p.includes(kw));
-}
-
-/** Recover a weapon's { martial, ranged } class from its name, or null. */
-function classifyWeaponByName(i: ItemIndexEntry): WeaponClass | null {
-  const name = i.name.toLowerCase();
-  const bases = Object.keys(BASE_WEAPONS).sort((a, b) => b.length - a.length);
-  for (const base of bases) {
-    if (name.includes(base)) return BASE_WEAPONS[base];
-  }
-  const words = Object.keys(WEAPON_WORD_FALLBACK).sort((a, b) => b.length - a.length);
-  for (const w of words) {
-    if (name.includes(w)) return WEAPON_WORD_FALLBACK[w];
-  }
-  return null;
-}
-
-/** True if the item is a weapon (mundane attack feature, "magic weapon"
- *  property, or a recognizable base-weapon name). */
-function isWeapon(i: ItemIndexEntry): boolean {
-  if (i.hasDamageEffect) return true;
-  if (hasProp(i, 'magic weapon')) return true;
-  return classifyWeaponByName(i) !== null;
-}
-function isRangedWeapon(i: ItemIndexEntry): boolean {
-  const cls = classifyWeaponByName(i);
-  if (cls) return cls.ranged;
-  const p = propsLower(i);
-  if (p.some(x => x.includes('ammunition') || x.includes('thrown'))) return true;
-  return i.hasDamageEffect &&
-    !!i.weaponRange && !['5 feet', 'touch', '10 feet'].includes(i.weaponRange);
-}
-function isMartialWeapon(i: ItemIndexEntry): boolean {
-  const cls = classifyWeaponByName(i);
-  if (cls) return cls.martial;
-  const p = propsLower(i);
-  if (p.some(x => x.includes('martial'))) return true;
-  if (p.some(x => x.includes('simple'))) return false;
-  return p.some(x => ['heavy', 'reach', 'two-handed', 'special'].some(kw => x.includes(kw)));
-}
-
-/** Recover armor weight from properties or base-armor name, or null. */
-function armorWeight(i: ItemIndexEntry): ArmorWeight | null {
-  const p = propsLower(i);
-  if (p.some(x => x.includes('heavy armor')))  return 'heavy';
-  if (p.some(x => x.includes('medium armor'))) return 'medium';
-  if (p.some(x => x.includes('light armor')))  return 'light';
-  const name = i.name.toLowerCase();
-  const bases = Object.keys(BASE_ARMORS).sort((a, b) => b.length - a.length);
-  for (const base of bases) {
-    if (name.includes(base)) return BASE_ARMORS[base];
-  }
-  return null;
-}
-/** True if the item is body armor (specific weight OR a generic armor name). */
-function isArmorItem(i: ItemIndexEntry): boolean {
-  if (hasProp(i, 'armor')) return true;
-  if (armorWeight(i) !== null) return true;
-  const name = i.name.toLowerCase();
-  // Shields are handled separately; don't let "mail"/"chain" steal a shield.
-  if (isShield(i)) return false;
-  return ARMOR_WORD_HINTS.some(w => name.includes(w));
-}
 function isArmor(i: ItemIndexEntry, weight: 'heavy' | 'medium' | 'light'): boolean {
   return armorWeight(i) === weight;
-}
-function isShield(i: ItemIndexEntry): boolean {
-  return hasProp(i, 'shield') || /\bshield\b/.test(i.name.toLowerCase());
-}
-function isAmmo(i: ItemIndexEntry): boolean {
-  if (hasProp(i, 'ammunition')) return true;
-  return /\b(arrow|arrows|bolt|bolts|bullet|bullets|sling stone|needle)\b/.test(i.name.toLowerCase());
-}
-function isToolOrKit(i: ItemIndexEntry): boolean {
-  if (propsLower(i).some(p => ['tool', 'kit', 'instrument', 'artisan'].some(kw => p.includes(kw)))) return true;
-  return /\b(tools|kit|instrument|utensils|supplies)\b/.test(i.name.toLowerCase());
-}
-function isFocus(i: ItemIndexEntry): boolean {
-  if (propsLower(i).some(p => ['focus', 'spellbook', 'component pouch'].some(kw => p.includes(kw)))) return true;
-  return /\b(wand|rod|staff|orb|crystal|talisman|spellbook|component pouch)\b/.test(i.name.toLowerCase());
 }
 
 const ITEM_CATEGORIES: ItemCategory[] = [
@@ -285,63 +150,21 @@ function categorise(items: ItemIndexEntry[]): { cat: ItemCategory; items: ItemIn
 }
 
 // ── Sorting ─────────────────────────────────────────────────────────────
-
-type SortMode = 'name' | 'value' | 'weight' | 'rarity';
-
-const SORT_LABELS: Record<SortMode, string> = {
-  name:   'A–Z',
-  value:  'Value',
-  weight: 'Weight',
-  rarity: 'Rarity',
-};
-
-// D&D rarity tiers (low → high). Items with no rarity sort as 0 (mundane).
-const RARITY_RANK: Record<string, number> = {
-  common: 1, uncommon: 2, rare: 3, 'very rare': 4, legendary: 5, artifact: 6,
-};
-function rarityRank(i: ItemIndexEntry): number {
-  for (const p of i.properties) {
-    const r = RARITY_RANK[p.toLowerCase()];
-    if (r) return r;
-  }
-  return 0;
-}
-
-/** Parses a cost string ("50 gp", "2 sp", "—") into a copper-piece value for sorting. */
-function costInCopper(cost: string): number {
-  if (!cost || cost === '—') return -1; // unknown cost sorts last on value
-  const m = cost.match(/([\d.]+)\s*(pp|gp|ep|sp|cp)/i);
-  if (!m) return -1;
-  const amt = parseFloat(m[1]);
-  const unit = m[2].toLowerCase();
-  const mult = unit === 'pp' ? 1000 : unit === 'gp' ? 100 : unit === 'ep' ? 50 : unit === 'sp' ? 10 : 1;
-  return amt * mult;
-}
-
-function sortItems(items: ItemIndexEntry[], mode: SortMode): ItemIndexEntry[] {
-  const copy = [...items];
-  switch (mode) {
-    case 'value':
-      // Highest value first; unknown (−1) sinks to the bottom.
-      return copy.sort((a, b) => costInCopper(b.cost) - costInCopper(a.cost));
-    case 'weight':
-      // Lightest first.
-      return copy.sort((a, b) => (a.weight ?? 0) - (b.weight ?? 0));
-    case 'rarity':
-      // Highest rarity first, then alphabetical within a tier.
-      return copy.sort((a, b) => rarityRank(b) - rarityRank(a) || a.name.localeCompare(b.name));
-    case 'name':
-    default:
-      return copy.sort((a, b) => a.name.localeCompare(b.name));
-  }
-}
+// Sort options (A–Z/Z–A/Rarity/Value/Weight/Source) now come from the
+// shared itemSortOptions()/SortControl (src/content/items/itemBrowse.ts),
+// same pattern as every other content type this pass.
 
 // ── Add Item Modal ─────────────────────────────────────────────────────────────
 
 function AddItemModal({
-  visible, equippedIds, carriedIds, onAdd, onClose,
+  visible, entityRulesetId, equippedIds, carriedIds, onAdd, onClose,
 }: {
   visible:     boolean;
+  /** LIVE-RULESET-2 (item 7): the character's entity.rulesetId, passed by
+   *  name rather than the whole Entity — this modal otherwise has no need
+   *  for one. Base-filters the pool the same "untagged = shared" way every
+   *  other content pool does. */
+  entityRulesetId: Entity['rulesetId'];
   equippedIds: Set<string>;
   carriedIds:  Set<string>;
   onAdd:       (itemId: string) => void;
@@ -349,11 +172,66 @@ function AddItemModal({
 }) {
   const homebrewItems = useHomebrewStore(s => s.items);
   const saveHomebrew  = useHomebrewStore(s => s.saveItem);
-  const [search,    setSearch]    = useState('');
+  const homebrewItemIds = new Set(homebrewItems.map(i => i.id));
+  // BROWSE-STATE-1: this modal is conditionally mounted (`{addOpen &&
+  // <AddItemModal/>}` in the parent, for perf — see that call site's own
+  // comment), so its internal state would otherwise reset every time it's
+  // reopened. Restore/persist via the shared browseStateStore instead.
+  const savedItemPicker = useBrowseStateStore.getState().getBrowseState(ITEM_PICKER_SCREEN_KEY);
+  const setBrowseState = useBrowseStateStore(s => s.setBrowseState);
+  const savedItemFilters = savedItemPicker.filters ?? {};
+  const [search,    setSearch]    = useState(savedItemPicker.search ?? '');
   const [expanded, setExpanded]  = useState<string | null>(null);
-  // Active category filter (null = all). When set, only that category shows.
-  const [catFilter, setCatFilter] = useState<string | null>(null);
-  const [sortMode,  setSortMode]  = useState<SortMode>('name');
+  // Independent-axis filters (SHARED-QUERY-1): Category/Magical/WeaponClass/
+  // WeaponRange/ArmorWeight/Rarity are each their own field — never combined
+  // into one taxonomy string like the old "Magic Weapons — Martial Melee"
+  // catFilter this replaces. See itemBrowse.ts's header comment.
+  const [categoryFilter, setCategoryFilter] = useState<ItemCategoryId | null>((savedItemFilters.categoryFilter as ItemCategoryId) ?? null);
+  const [magicalFilter, setMagicalFilter] = useState<'all' | 'magical' | 'mundane'>((savedItemFilters.magicalFilter as 'all' | 'magical' | 'mundane') ?? 'all');
+  const [weaponClassFilter, setWeaponClassFilter] = useState<'martial' | 'simple' | null>((savedItemFilters.weaponClassFilter as 'martial' | 'simple') ?? null);
+  const [weaponRangeFilter, setWeaponRangeFilter] = useState<'melee' | 'ranged' | null>((savedItemFilters.weaponRangeFilter as 'melee' | 'ranged') ?? null);
+  const [armorWeightFilter, setArmorWeightFilter] = useState<'heavy' | 'medium' | 'light' | null>((savedItemFilters.armorWeightFilter as 'heavy' | 'medium' | 'light') ?? null);
+  const [rarityFilter, setRarityFilter] = useState<Set<string>>(new Set((savedItemFilters.rarityFilter as string[]) ?? []));
+  const sortOptions = itemSortOptions(i => homebrewItemIds.has(i.id));
+  const [sort, setSort] = useState(savedItemPicker.sort ?? 'name_asc');
+  // Official/Homebrew — real, homebrewItemIds membership (already computed
+  // below for the row badge, now also drives an actual filter). Requires
+  // Attunement — real, itemRequiresAttunement() works off Tier-1 fields
+  // (id/properties) alone, no Tier-2 load needed. Ruleset — TIER1-EXT-1:
+  // now a real Tier-1 field too (ItemIndexEntry was extended). Source/Pack
+  // via getContentProvenance() is not wired here: Item has no per-item
+  // sourcebook field at all (only Feat does), so the derived label would
+  // only ever be "SRD 5.1" or undefined — the existing NonSrdBadge per row
+  // already communicates that narrower signal.
+  const [officialFilter, setOfficialFilter] = useState<'all' | 'official' | 'homebrew'>((savedItemFilters.officialFilter as 'all' | 'official' | 'homebrew') ?? 'all');
+  const [attunementOnly, setAttunementOnly] = useState(!!savedItemFilters.attunementOnly);
+  // LIVE-RULESET-2 (item 8): this filter is persisted via browseStateStore
+  // and shared by KEY across every character/session (ITEM_PICKER_SCREEN_KEY
+  // isn't per-character) — restoring it blindly on mount (this modal is
+  // conditionally mounted, remounting fresh every time the picker opens)
+  // could resurrect a filter chosen for a DIFFERENT character's ruleset,
+  // which combined with the ruleset-aware base filter below could leave
+  // the picker showing zero items with no obvious reason why. Restored
+  // only when it was persisted alongside a matching rulesetFilterSetFor —
+  // every other persisted filter/search/sort restores unconditionally, so
+  // this doesn't cost any of that preservation.
+  const [rulesetFilter, setRulesetFilter] = useState<string | null>(
+    savedItemFilters.rulesetFilterSetFor === entityRulesetId ? (savedItemFilters.rulesetFilter as string) ?? null : null
+  );
+  useEffect(() => {
+    setBrowseState(ITEM_PICKER_SCREEN_KEY, {
+      search, sort,
+      filters: {
+        categoryFilter, magicalFilter, weaponClassFilter, weaponRangeFilter, armorWeightFilter,
+        rarityFilter: Array.from(rarityFilter), officialFilter, attunementOnly, rulesetFilter,
+        // LIVE-RULESET-2 (item 8): which character's ruleset rulesetFilter
+        // was actually chosen under — read back on next mount to decide
+        // whether it's still valid. See the state init above.
+        rulesetFilterSetFor: entityRulesetId,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, sort, categoryFilter, magicalFilter, weaponClassFilter, weaponRangeFilter, armorWeightFilter, rarityFilter, officialFilter, attunementOnly, rulesetFilter, entityRulesetId]);
   // Quick-add custom item form
   const [quickOpen, setQuickOpen] = useState(false);
   const [qName,  setQName]  = useState('');
@@ -365,42 +243,68 @@ function AddItemModal({
   async function handleQuickAdd() {
     const name = qName.trim();
     if (!name) return;
-    const id = 'hb_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') + '_' + Date.now().toString(36);
-    const props = qType.trim() ? qType.split(',').map(p => p.trim().toLowerCase()).filter(Boolean) : [];
-    const custom: Item = {
-      id, name, weight: 0, cost: '\u2014',
-      properties: props,
-      features: [{
-        id: id + '_desc',
-        name,
-        description: qDesc.trim() || name,
-        source: { kind: 'item', refId: id },
-        level: null, effects: [], actions: [], choices: [], passive: true,
-      }],
-    };
+    const custom = buildSimpleCustomItem(name, qType, qDesc);
     await saveHomebrew('item', custom);
-    onAdd(id);
+    onAdd(custom.id);
     setQName(''); setQType(''); setQDesc(''); setQuickOpen(false);
   }
 
 
-  const allItems: ItemIndexEntry[] = [...itemRepo.getIndex(), ...homebrewItems.map(toItemIndexEntry)];
+  // Deduped by id, homebrew wins on collision — see contentResolution.ts.
+  // (Previously a plain concat with no dedup: a homebrew item reusing an
+  // official id would show up as two separate rows.)
+  // A 5.5e character is offered the 5.5e record where the edition has one, and a 5e character never sees the 5.5e records.
+  const allItems: ItemIndexEntry[] = itemsForRuleset(mergeItemIndex(homebrewItems), entityRulesetId);
   const q = search.trim().toLowerCase();
-  const searchFiltered = q
-    ? allItems.filter(i => i.name.toLowerCase().includes(q) ||
-        i.properties.some(p => p.toLowerCase().includes(q)))
-    : allItems;
+  // LIVE-RULESET-2 (item 7/8): the manual Ruleset chip OVERRIDES the
+  // character's own ruleset when set (an explicit "show me ONLY this
+  // ruleset's items" ask), otherwise falls back to matchesRuleset against
+  // entityRulesetId — the same "untagged = shared, tagged-different =
+  // hidden" rule every other content pool uses, so the picker defaults to
+  // the character's own ruleset with nothing chosen. Stacking both
+  // (base-filter AND a differently-valued manual chip) would make the
+  // manual chip permanently show zero results whenever it names a ruleset
+  // other than the character's own — override, not intersect.
+  const effectiveRulesetFilter = (rulesetFilter as RulesetId | null) ?? entityRulesetId;
+  const searchFiltered = allItems
+    .filter(i => !q || i.name.toLowerCase().includes(q) || i.properties.some(p => p.toLowerCase().includes(q)))
+    .filter(i => officialFilter === 'all' || (officialFilter === 'homebrew') === homebrewItemIds.has(i.id))
+    .filter(i => !attunementOnly || itemRequiresAttunement(i))
+    .filter(i => matchesRuleset(i.rulesetId, effectiveRulesetFilter))
+    .filter(i => !categoryFilter || itemCategory(i) === categoryFilter)
+    .filter(i => magicalFilter === 'all' || (magicalFilter === 'magical') === isMagic(i))
+    .filter(i => !weaponClassFilter || (itemCategory(i) === 'weapon' && (weaponClassFilter === 'martial' ? isMartialWeapon(i) : !isMartialWeapon(i))))
+    .filter(i => !weaponRangeFilter || (itemCategory(i) === 'weapon' && (weaponRangeFilter === 'ranged' ? isRangedWeapon(i) : !isRangedWeapon(i))))
+    .filter(i => !armorWeightFilter || armorWeight(i) === armorWeightFilter)
+    .filter(i => rarityFilter.size === 0 || (rarityOf(i) !== null && rarityFilter.has(rarityOf(i)!)));
+  const availableItemRulesets = Array.from(new Set(allItems.map(i => i.rulesetId).filter((r): r is NonNullable<typeof r> => !!r))).map(String);
+  const availableRarities = RARITY_TIERS.filter(r => allItems.some(i => rarityOf(i) === r));
 
-  const allGroups = categorise(searchFiltered).map(g => ({
+  const groups = categorise(searchFiltered).map(g => ({
     ...g,
-    items: sortItems(g.items, sortMode),
+    items: sortByOption(g.items, sortOptions, sort),
   }));
-  const groups = catFilter ? allGroups.filter(g => g.cat.label === catFilter) : allGroups;
+  const activeFilterCount =
+    (categoryFilter ? 1 : 0) + (magicalFilter !== 'all' ? 1 : 0) + (weaponClassFilter ? 1 : 0) +
+    (weaponRangeFilter ? 1 : 0) + (armorWeightFilter ? 1 : 0) + rarityFilter.size +
+    (officialFilter !== 'all' ? 1 : 0) + (attunementOnly ? 1 : 0) + (rulesetFilter ? 1 : 0);
+  function clearAllItemFilters() {
+    setCategoryFilter(null); setMagicalFilter('all'); setWeaponClassFilter(null);
+    setWeaponRangeFilter(null); setArmorWeightFilter(null); setRarityFilter(new Set());
+    setOfficialFilter('all'); setAttunementOnly(false); setRulesetFilter(null);
+  }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={addStyles.backdrop} onPress={onClose}>
-        <Pressable style={addStyles.sheet} onPress={e => e.stopPropagation()}>
+      {/* SCROLL-TOUCH-1: the sheet used to BE a Pressable (to swallow backdrop
+          taps). A Pressable ancestor claims every touch that starts on a
+          non-touchable child, so once a category was picked (rows are plain
+          Views, only "+ Add" is a button) the list only scrolled when the
+          drag began on "+ Add". The backdrop is now a separate sibling, and
+          the sheet a plain View that never takes part in touch negotiation. */}
+      <View style={addStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={addStyles.sheet}>
           <View style={addStyles.titleRow}>
             <Text style={addStyles.title}>Add Item</Text>
             <Pressable
@@ -457,57 +361,103 @@ function AddItemModal({
             autoFocus
           />
 
-          {/* Filters dropdown toggle + sort inline */}
+          {/* Filters dropdown toggle */}
           <View style={addStyles.filterBar}>
             <Pressable style={addStyles.filterToggle} onPress={() => setFiltersOpen(o => !o)}>
               <Text style={addStyles.filterToggleTxt}>
-                {filtersOpen ? '▲' : '▼'} Filters{catFilter ? ' (1)' : ''}
+                {filtersOpen ? '▲' : '▼'} Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </Text>
             </Pressable>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}
-              style={addStyles.sortInlineRow} contentContainerStyle={addStyles.chipRowContent}>
-              {(Object.keys(SORT_LABELS) as SortMode[]).map(mode => (
-                <Pressable
-                  key={mode}
-                  style={[addStyles.sortBtn, sortMode === mode && addStyles.sortBtnActive]}
-                  onPress={() => setSortMode(mode)}
-                >
-                  <Text style={[addStyles.sortTxt, sortMode === mode && addStyles.sortTxtActive]}>
-                    {SORT_LABELS[mode]}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            <SortControl options={sortOptions} value={sort} onChange={setSort} />
           </View>
 
           {filtersOpen && (
             <View style={addStyles.filterPanel}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={addStyles.chipRow}
-                contentContainerStyle={addStyles.chipRowContent}
+              <FilterSection label="Category">
+                <FilterChipRow
+                  options={(Object.keys(ITEM_CATEGORY_LABELS) as ItemCategoryId[]).map(id => ({ id, label: ITEM_CATEGORY_LABELS[id] }))}
+                  value={categoryFilter}
+                  onChange={setCategoryFilter}
+                  scrollable
+                />
+              </FilterSection>
+              <FilterSection label="Magical / Mundane">
+                <FilterChipRow
+                  options={[{ id: 'magical' as const, label: 'Magical' }, { id: 'mundane' as const, label: 'Mundane' }]}
+                  value={magicalFilter === 'all' ? null : magicalFilter}
+                  onChange={v => setMagicalFilter(v ?? 'all')}
+                />
+              </FilterSection>
+              {categoryFilter === 'weapon' && (
+                <>
+                  <FilterSection label="Weapon Class">
+                    <FilterChipRow
+                      options={[{ id: 'martial' as const, label: 'Martial' }, { id: 'simple' as const, label: 'Simple' }]}
+                      value={weaponClassFilter}
+                      onChange={setWeaponClassFilter}
+                    />
+                  </FilterSection>
+                  <FilterSection label="Weapon Range">
+                    <FilterChipRow
+                      options={[{ id: 'melee' as const, label: 'Melee' }, { id: 'ranged' as const, label: 'Ranged' }]}
+                      value={weaponRangeFilter}
+                      onChange={setWeaponRangeFilter}
+                    />
+                  </FilterSection>
+                </>
+              )}
+              {categoryFilter === 'armor' && (
+                <FilterSection label="Armor Class">
+                  <FilterChipRow
+                    options={[{ id: 'heavy' as const, label: 'Heavy' }, { id: 'medium' as const, label: 'Medium' }, { id: 'light' as const, label: 'Light' }]}
+                    value={armorWeightFilter}
+                    onChange={setArmorWeightFilter}
+                  />
+                </FilterSection>
+              )}
+              {availableRarities.length > 0 && (
+                <FilterSection label="Rarity">
+                  <MultiSelectChipRow
+                    options={availableRarities.map(r => ({ id: r, label: r[0].toUpperCase() + r.slice(1) }))}
+                    values={rarityFilter}
+                    onChange={setRarityFilter}
+                  />
+                </FilterSection>
+              )}
+              <FilterSection label="Official / Homebrew">
+                <OfficialHomebrewChipRow value={officialFilter} onChange={setOfficialFilter} />
+              </FilterSection>
+              <Pressable
+                style={[addStyles.chip, attunementOnly && addStyles.chipActive, addStyles.attunementToggle]}
+                onPress={() => setAttunementOnly(v => !v)}
               >
-                <Pressable
-                  style={[addStyles.chip, !catFilter && addStyles.chipActive]}
-                  onPress={() => setCatFilter(null)}
-                >
-                  <Text style={[addStyles.chipTxt, !catFilter && addStyles.chipTxtActive]}>All</Text>
-                </Pressable>
-                {allGroups.map(({ cat, items }) => (
-                  <Pressable
-                    key={cat.label}
-                    style={[addStyles.chip, catFilter === cat.label && addStyles.chipActive]}
-                    onPress={() => setCatFilter(c => c === cat.label ? null : cat.label)}
-                  >
-                    <Text style={[addStyles.chipTxt, catFilter === cat.label && addStyles.chipTxtActive]}>
-                      {cat.emoji} {cat.label.replace('Weapons — ', '').replace(' Armor', '')} ({items.length})
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+                <Text style={[addStyles.chipTxt, attunementOnly && addStyles.chipTxtActive]}>Requires Attunement</Text>
+              </Pressable>
+              {availableItemRulesets.length > 1 && (
+                <FilterSection label="Ruleset">
+                  <FilterChipRow
+                    options={availableItemRulesets.map(r => ({ id: r, label: r }))}
+                    value={rulesetFilter}
+                    onChange={setRulesetFilter}
+                  />
+                </FilterSection>
+              )}
             </View>
           )}
+          <ActiveFilterChips
+            chips={[
+              ...(categoryFilter ? [{ key: 'cat', label: ITEM_CATEGORY_LABELS[categoryFilter], onClear: () => setCategoryFilter(null) }] : []),
+              ...(magicalFilter !== 'all' ? [{ key: 'magic', label: magicalFilter === 'magical' ? 'Magical' : 'Mundane', onClear: () => setMagicalFilter('all') }] : []),
+              ...(weaponClassFilter ? [{ key: 'wclass', label: weaponClassFilter === 'martial' ? 'Martial' : 'Simple', onClear: () => setWeaponClassFilter(null) }] : []),
+              ...(weaponRangeFilter ? [{ key: 'wrange', label: weaponRangeFilter === 'ranged' ? 'Ranged' : 'Melee', onClear: () => setWeaponRangeFilter(null) }] : []),
+              ...(armorWeightFilter ? [{ key: 'aweight', label: armorWeightFilter[0].toUpperCase() + armorWeightFilter.slice(1), onClear: () => setArmorWeightFilter(null) }] : []),
+              ...Array.from(rarityFilter).map(r => ({ key: `rarity_${r}`, label: r[0].toUpperCase() + r.slice(1), onClear: () => setRarityFilter(prev => { const n = new Set(prev); n.delete(r); return n; }) })),
+              ...(officialFilter !== 'all' ? [{ key: 'official', label: officialFilter === 'official' ? 'Official' : 'Homebrew', onClear: () => setOfficialFilter('all') }] : []),
+              ...(attunementOnly ? [{ key: 'attune', label: 'Requires Attunement', onClear: () => setAttunementOnly(false) }] : []),
+              ...(rulesetFilter ? [{ key: 'ruleset', label: rulesetFilter, onClear: () => setRulesetFilter(null) }] : []),
+            ]}
+            onClearAll={clearAllItemFilters}
+          />
 
           {/* Results grouped by category — SectionList for virtualization,
               since a broad search can force-expand many categories at once
@@ -524,7 +474,7 @@ function AddItemModal({
                 // Collapsed categories render zero items (still show their
                 // header) — same UX as before, but now virtualized for
                 // whichever section(s) actually have visible data.
-                data: (expanded === cat.label || !!q || catFilter === cat.label) ? items : [],
+                data: (expanded === cat.label || !!q || !!categoryFilter) ? items : [],
               }))}
               keyExtractor={item => item.id}
               showsVerticalScrollIndicator={false}
@@ -552,9 +502,12 @@ function AddItemModal({
                 return (
                   <View style={[addStyles.itemRow, owned && addStyles.itemRowOwned]}>
                     <View style={addStyles.itemInfo}>
-                      <Text style={[addStyles.itemName, owned && addStyles.itemNameOwned]}>
-                        {item.name}
-                      </Text>
+                      <View style={addStyles.itemNameLine}>
+                        <Text style={[addStyles.itemName, owned && addStyles.itemNameOwned]}>
+                          {item.name}
+                        </Text>
+                        {!homebrewItemIds.has(item.id) && isNonSrd(item.srd, item.rulesetId) && <NonSrdBadge />}
+                      </View>
                       {item.properties.length > 0 && (
                         <Text style={addStyles.itemProps} numberOfLines={1}>
                           {item.properties.join(' · ')}
@@ -585,8 +538,8 @@ function AddItemModal({
           <Pressable style={addStyles.cancelBtn} onPress={onClose}>
             <Text style={addStyles.cancelTxt}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -626,7 +579,6 @@ const addStyles = StyleSheet.create({
   },
   quickAddBtnDisabled: { opacity: 0.4 },
   quickAddBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
-  chipRow: { flexGrow: 0, marginBottom: Spacing.xs },
   chipRowContent: { gap: Spacing.xs, paddingVertical: 2 },
   chip: {
     backgroundColor: Colors.surface, borderRadius: Radius.full,
@@ -636,27 +588,19 @@ const addStyles = StyleSheet.create({
   chipActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
   chipTxt:       { fontSize: FontSize.xs, color: Colors.textSecondary },
   chipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
-  filterBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: 2 },
+  attunementToggle: { alignSelf: 'flex-start', marginBottom: Spacing.sm },
+  filterBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: 2 },
   filterToggle: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
     paddingHorizontal: Spacing.sm, paddingVertical: 5,
   },
   filterToggleTxt: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.bold },
-  sortInlineRow: { flexGrow: 0 },
   filterPanel: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
     padding: Spacing.xs, marginBottom: Spacing.xs,
   },
-  sortBtn: {
-    backgroundColor: Colors.surface, borderRadius: Radius.sm,
-    borderWidth: 1, borderColor: Colors.border,
-    paddingHorizontal: Spacing.sm, paddingVertical: 3,
-  },
-  sortBtnActive: { backgroundColor: Colors.blue + '22', borderColor: Colors.blue },
-  sortTxt:       { fontSize: FontSize.xs, color: Colors.textSecondary },
-  sortTxtActive: { color: Colors.blue, fontWeight: FontWeight.bold },
   search: {
     backgroundColor: Colors.surface, borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.border,
@@ -682,6 +626,7 @@ const addStyles = StyleSheet.create({
   // stays live on them (they're still addable, not a disabled state).
   itemRowOwned: {},
   itemInfo:     { flex: 1 },
+  itemNameLine: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   itemName:     { fontSize: FontSize.sm, color: Colors.textPrimary, fontWeight: FontWeight.bold },
   itemNameOwned:{ color: Colors.textPrimary },
   itemProps:    { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 1 },
@@ -797,23 +742,40 @@ function InfuseItemModal({
   visible:  boolean;
   entity:   Entity;
   allItems: Item[];
-  onApply:  (itemId: string, infusionId: string, damageType?: string) => void;
+  /** `instanceId` (item-identity closure, pass 2 finding B) — the EXACT
+   *  owned copy selected below, since two eligible rows can share `itemId`.
+   *  `itemId` is still passed alongside for display/definition-lookup
+   *  convenience at the handler (unchanged contract there). */
+  onApply:  (itemId: string, infusionId: string, damageType: string | undefined, instanceId: string) => void;
   onClose:  () => void;
 }) {
   const known = entity.knownInfusionIds ?? [];
-  const knownInfusions = ALL_INFUSIONS.filter(i => known.includes(i.id));
+  const knownInfusions = infusions().filter(i => known.includes(i.id));
   const [selectedInfusion, setSelectedInfusion] = useState<string | null>(null);
-  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  // Item-identity closure: selects the OWNED INSTANCE, not the definition —
+  // storing `inst.itemId` here made two eligible same-definition rows
+  // impossible to tell apart (both highlighted together, and Infuse always
+  // targeted whichever instance a plain `.find(itemId)` happened to hit
+  // first at the handler).
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [damageType, setDamageType] = useState<string>('fire');
 
   const cap = maxInfusedItems(entity.identity.level);
   const infusedInstances = [...entity.inventory.equipped, ...entity.inventory.carried].filter(i => i.infusedWith);
   const atCap = infusedInstances.length >= cap;
-  const ownedInstances = [...entity.inventory.equipped, ...entity.inventory.carried].filter(i => !i.infusedWith);
+  // Item-identity closure: tag each candidate with WHICH side it's on so
+  // two identical-definition rows (one equipped, one carried) at least
+  // show a small disambiguator, per this app's "tiny label is enough,
+  // independent row selection is the real requirement" UI convention.
+  const ownedInstances = [
+    ...entity.inventory.equipped.map(i => ({ inst: i, equippedLabel: true })),
+    ...entity.inventory.carried.map(i => ({ inst: i, equippedLabel: false })),
+  ].filter(({ inst }) => !inst.infusedWith);
+  const selectedInstance = ownedInstances.find(({ inst }) => (inst.id ?? inst.itemId) === selectedInstanceId)?.inst;
 
   function reset() {
     setSelectedInfusion(null);
-    setSelectedItem(null);
+    setSelectedInstanceId(null);
     setDamageType('fire');
   }
 
@@ -823,16 +785,19 @@ function InfuseItemModal({
   }
 
   function handleApply() {
-    if (!selectedInfusion || !selectedItem || atCap) return;
-    onApply(selectedItem, selectedInfusion, selectedInfusion === 'resistant_armor' ? damageType : undefined);
+    if (!selectedInfusion || !selectedInstance || atCap) return;
+    const instanceId = selectedInstance.id ?? selectedInstance.itemId;
+    onApply(selectedInstance.itemId, selectedInfusion, selectedInfusion === 'resistant_armor' ? damageType : undefined, instanceId);
     reset();
     onClose();
   }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={addStyles.backdrop} onPress={handleClose}>
-        <Pressable style={addStyles.sheet} onPress={e => e.stopPropagation()}>
+      <View style={addStyles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} accessible={false} />
+        <View style={addStyles.sheet}>
           <Text style={addStyles.title}>Infuse an Item</Text>
           <Text style={infuseStyles.capNote}>{infusedInstances.length}/{cap} items currently infused</Text>
           {atCap && <Text style={infuseStyles.warn}>At capacity — remove an infusion before adding another.</Text>}
@@ -870,15 +835,16 @@ function InfuseItemModal({
 
           <Text style={infuseStyles.stepLabel}>2. Choose item</Text>
           <ScrollView style={infuseStyles.pickList}>
-            {ownedInstances.map((inst, idx) => {
+            {ownedInstances.map(({ inst, equippedLabel }, idx) => {
               const def = allItems.find(i => i.id === inst.itemId);
+              const instanceKey = inst.id ?? inst.itemId;
               return (
                 <Pressable
-                  key={`${inst.itemId}_${idx}`}
-                  style={[infuseStyles.row, selectedItem === inst.itemId && infuseStyles.rowSelected]}
-                  onPress={() => setSelectedItem(inst.itemId)}
+                  key={inst.id ?? `${inst.itemId}_${idx}`}
+                  style={[infuseStyles.row, selectedInstanceId === instanceKey && infuseStyles.rowSelected]}
+                  onPress={() => setSelectedInstanceId(instanceKey)}
                 >
-                  <Text style={infuseStyles.rowTxt}>{def?.name ?? inst.itemId}</Text>
+                  <Text style={infuseStyles.rowTxt}>{def?.name ?? inst.itemId} {equippedLabel ? '(equipped)' : '(carried)'}</Text>
                 </Pressable>
               );
             })}
@@ -886,8 +852,8 @@ function InfuseItemModal({
           </ScrollView>
 
           <Pressable
-            style={[addStyles.quickAddBtn, (!selectedInfusion || !selectedItem || atCap) && addStyles.quickAddBtnDisabled]}
-            disabled={!selectedInfusion || !selectedItem || atCap}
+            style={[addStyles.quickAddBtn, (!selectedInfusion || !selectedInstance || atCap) && addStyles.quickAddBtnDisabled]}
+            disabled={!selectedInfusion || !selectedInstance || atCap}
             onPress={handleApply}
           >
             <Text style={addStyles.quickAddBtnTxt}>Infuse Item</Text>
@@ -895,8 +861,8 @@ function InfuseItemModal({
           <Pressable style={addStyles.cancelBtn} onPress={handleClose}>
             <Text style={addStyles.cancelTxt}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -919,6 +885,7 @@ const infuseStyles = StyleSheet.create({
 
 function ItemRow({
   instance, equipped, allItems, onToggle, onRemove, onRemoveInfusion, onQuantityChange, onSetQuantity,
+  onToggleAttune,
 }: {
   instance: ItemInstance;
   equipped: boolean;
@@ -932,13 +899,18 @@ function ItemRow({
    * doesn't want 20 taps of the +1 stepper). Committed on blur/submit, same
    * pattern as the Abilities tab's manual-bonus inputs. */
   onSetQuantity?: (quantity: number) => void;
+  /** Present only when the item's definition requires attunement — the cap
+   * check/explanatory Alert lives in the parent (it needs the whole
+   * inventory to count), this just renders the toggle and calls back. */
+  onToggleAttune?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const item  = allItems.find(i => i.id === instance.itemId);
   const name  = item?.name ?? instance.itemId;
   const props = item?.properties ?? [];
   const desc  = item?.features?.[0]?.description;
-  const infusion = instance.infusedWith ? ALL_INFUSIONS.find(i => i.id === instance.infusedWith) : null;
+  const infusion = instance.infusedWith ? infusions().find(i => i.id === instance.infusedWith) : null;
+  const needsAttunement = itemRequiresAttunement(item);
 
   return (
     <View style={styles.itemWrap}>
@@ -958,9 +930,23 @@ function ItemRow({
             {infusion && (
               <Text style={styles.itemInfused}>✨ Infused: {infusion.name}</Text>
             )}
+            {needsAttunement && (
+              <Text style={styles.itemAttunement}>{instance.attuned ? '🔗 Attuned' : '⚬ Requires attunement'}</Text>
+            )}
           </View>
           <Text style={styles.expandCaret}>{expanded ? '▲' : '▼'}</Text>
         </Pressable>
+        {needsAttunement && onToggleAttune && (
+          <Pressable
+            style={[styles.attuneBtn, instance.attuned && styles.attuneBtnActive]}
+            onPress={onToggleAttune}
+            hitSlop={8}
+          >
+            <Text style={[styles.attuneTxt, instance.attuned && styles.attuneTxtActive]}>
+              {instance.attuned ? 'Attuned' : 'Attune'}
+            </Text>
+          </Pressable>
+        )}
         <Pressable
           style={[styles.toggleBtn, equipped && styles.toggleBtnEquipped]}
           onPress={onToggle}
@@ -1025,54 +1011,69 @@ function ItemRow({
 
 interface Props {
   entity:            Entity;
-  onEquip:           (itemId: string) => void;
-  onUnequip:         (itemId: string) => void;
+  /** `instanceId` (item-identity closure) — the EXACT owned copy this row
+   *  represents (ItemInstance.id), since two rows can share `itemId`.
+   *  Always passed from this file's own row callbacks below. */
+  onEquip:           (itemId: string, instanceId?: string) => void;
+  onUnequip:         (itemId: string, instanceId?: string) => void;
   onAddItem:         (itemId: string) => void;
-  onRemoveItem:      (itemId: string) => void;
+  onRemoveItem:      (itemId: string, instanceId?: string) => void;
   /** +/- stepper on a carried stack — delta is +1 or -1. Not offered for
    * equipped items (stacking multiple of a worn/wielded item doesn't mean
    * anything the sheet tracks). */
-  onUpdateQuantity:  (itemId: string, delta: number) => void;
+  onUpdateQuantity:  (itemId: string, delta: number, instanceId?: string) => void;
   /** Jump straight to an exact carried-stack count (typed, not tapped). */
-  onSetQuantity:     (itemId: string, quantity: number) => void;
+  onSetQuantity:     (itemId: string, quantity: number, instanceId?: string) => void;
   onUpdateCurrency:  (currency: Currency) => void;
   /** Active campaign rules — used to honour homebrew toggles (e.g. large-creature dice). */
   rules?:            CampaignRules;
-  /** Present only for classes with Infuse Item (Artificer) — omitted elsewhere. */
-  onApplyInfusion?:  (itemId: string, infusionId: string, damageType?: string) => void;
-  onRemoveInfusion?: (itemId: string) => void;
+  /** Present only for classes with Infuse Item (Artificer) — omitted elsewhere.
+   *  `instanceId` (item-identity closure) — the EXACT owned copy to
+   *  infuse/de-infuse, since two eligible rows can share `itemId`. */
+  onApplyInfusion?:  (itemId: string, infusionId: string, damageType: string | undefined, instanceId: string) => void;
+  onRemoveInfusion?: (itemId: string, instanceId?: string) => void;
+  onToggleAttune?:   (itemId: string, instanceId?: string) => void;
+  /** Item 13 (loadouts) — save/apply/delete a named (equipped items,
+   *  prepared spells) snapshot. Omitted entirely hides the section (same
+   *  optional-prop pattern as onApplyInfusion). */
+  onSaveLoadout?:    (name: string) => void;
+  onApplyLoadout?:   (loadoutId: string) => void;
+  onDeleteLoadout?:  (loadoutId: string) => void;
 }
 
-export function TabInventory({
+function TabInventoryInner({
   entity, onEquip, onUnequip, onAddItem, onRemoveItem, onUpdateQuantity, onSetQuantity, onUpdateCurrency, rules,
-  onApplyInfusion, onRemoveInfusion,
+  onApplyInfusion, onRemoveInfusion, onToggleAttune, onSaveLoadout, onApplyLoadout, onDeleteLoadout,
 }: Props) {
   const { inventory } = entity;
   const { currency }  = inventory;
   const [addOpen,    setAddOpen]    = useState(false);
   const [currOpen,   setCurrOpen]   = useState(false);
   const [infuseOpen, setInfuseOpen] = useState(false);
+  const [loadoutName, setLoadoutName] = useState('');
   const knownInfusionIds = entity.knownInfusionIds ?? [];
 
   const homebrewItemList = useHomebrewStore(s => s.items);
   // Full records — only for equipped/carried instance ids (already warmed
-  // via characterStore.ts's loadCharacters()/handleEquip/handleAddItem) plus
-  // homebrew, which is always a full Item already. NOT the whole catalog —
-  // that's what itemRepo.getIndex() (Tier 1) is for, used by AddItemModal.
-  const homebrewItemIds = new Set(homebrewItemList.map(i => i.id));
+  // via characterStore.ts's loadCharacters()/handleEquip/handleAddItem).
+  // NOT the whole catalog — that's what itemRepo.getIndex() (Tier 1) is for,
+  // used by AddItemModal. resolveItemById gives homebrew-first precedence —
+  // see contentResolution.ts.
   const instanceIds = new Set([...inventory.equipped, ...inventory.carried].map(i => i.itemId));
-  const allItems: Item[] = [
-    ...Array.from(instanceIds)
-      .filter(id => !homebrewItemIds.has(id))
-      .map(id => itemRepo.getItemSync(id))
-      .filter((i): i is Item => !!i),
-    ...homebrewItemList,
-  ];
+  const allItems: Item[] = Array.from(instanceIds)
+    .map(id => resolveItemById(id, homebrewItemList))
+    .filter((i): i is Item => !!i);
 
   const large          = isLargeCreature(entity);
   // Effective STR (race/feat bonuses) — matches the engine's derived values,
-  // not the raw base score.
-  const effectiveStr  = applyStatModifiers(entity.stats, collectAllEffects(entity)).str;
+  // not the raw base score. Memoized (ITEMS-PERF-3): was recomputed
+  // (full effect-collection pass over entity.features) on every render of
+  // this tab, including renders triggered by unrelated local state
+  // (currOpen/infuseOpen/loadoutName toggles) that don't touch stats/effects.
+  const effectiveStr  = useMemo(
+    () => applyStatModifiers(entity.stats, collectAllEffects(entity)).str,
+    [entity],
+  );
   const carryCapacity  = effectiveStr * (large ? 30 : 15);
   const totalWeight    = [...inventory.equipped, ...inventory.carried].reduce((sum, inst) => {
     const def = allItems.find(i => i.id === inst.itemId);
@@ -1084,11 +1085,23 @@ export function TabInventory({
   const equippedIds = new Set(inventory.equipped.map(i => i.itemId));
   const carriedIds  = new Set(inventory.carried.map(i => i.itemId));
 
-  function confirmRemove(itemId: string) {
-    const item = allItems.find(i => i.id === itemId);
-    Alert.alert('Remove Item', `Remove ${item?.name ?? itemId} from your inventory?`, [
+  const attunedCount = countAttuned(entity);
+  const attuneCap    = attunementCap(entity);
+
+  function handleAttuneToggle(inst: ItemInstance) {
+    if (!onToggleAttune) return;
+    if (!inst.attuned && attunedCount >= attuneCap) {
+      Alert.alert('Attunement Full', `You're already attuned to ${attuneCap} item${attuneCap === 1 ? '' : 's'} — un-attune from one first.`);
+      return;
+    }
+    onToggleAttune(inst.itemId, inst.id);
+  }
+
+  function confirmRemove(inst: ItemInstance) {
+    const item = allItems.find(i => i.id === inst.itemId);
+    Alert.alert('Remove Item', `Remove ${item?.name ?? inst.itemId} from your inventory?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => onRemoveItem(itemId) },
+      { text: 'Remove', style: 'destructive', onPress: () => onRemoveItem(inst.itemId, inst.id) },
     ]);
   }
 
@@ -1138,6 +1151,13 @@ export function TabInventory({
         </View>
       </View>
 
+      {/* Attunement — only shown once the character owns something that needs it */}
+      {[...inventory.equipped, ...inventory.carried].some(inst => itemRequiresAttunement(allItems.find(i => i.id === inst.itemId))) && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ATTUNEMENT ({attunedCount}/{attuneCap})</Text>
+        </View>
+      )}
+
       {/* Infusions — only shown for classes that know at least one (Artificer) */}
       {onApplyInfusion && knownInfusionIds.length > 0 && (
         <View style={styles.section}>
@@ -1150,8 +1170,56 @@ export function TabInventory({
             </Pressable>
           </View>
           <Text style={styles.emptyNote}>
-            Known: {knownInfusionIds.map(id => ALL_INFUSIONS.find(i => i.id === id)?.name ?? id).join(', ')}
+            Known: {knownInfusionIds.map(id => infusions().find(i => i.id === id)?.name ?? id).join(', ')}
           </Text>
+        </View>
+      )}
+
+      {/* Loadouts (item 13) — named saved (equipped items, prepared
+          spells) snapshots the player can swap between. Only shown when
+          the parent screen wires the callbacks (mirrors onApplyInfusion's
+          optional-prop pattern). */}
+      {onSaveLoadout && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>LOADOUTS ({(entity.loadouts ?? []).length})</Text>
+          </View>
+          <View style={styles.loadoutSaveRow}>
+            <TextInput
+              style={styles.loadoutInput}
+              value={loadoutName}
+              onChangeText={setLoadoutName}
+              placeholder="e.g. Dungeon, Social…"
+              placeholderTextColor={Colors.textDim}
+            />
+            <Pressable
+              style={[styles.addBtn, !loadoutName.trim() && styles.addBtnDisabled]}
+              disabled={!loadoutName.trim()}
+              onPress={() => { onSaveLoadout(loadoutName.trim()); setLoadoutName(''); }}
+            >
+              <Text style={styles.addBtnTxt}>💾 Save Current</Text>
+            </Pressable>
+          </View>
+          {(entity.loadouts ?? []).length === 0 ? (
+            <Text style={styles.emptyNote}>No saved loadouts yet</Text>
+          ) : (
+            (entity.loadouts ?? []).map(l => (
+              <View key={l.id} style={styles.loadoutRow}>
+                <View style={styles.loadoutInfo}>
+                  <Text style={styles.loadoutName}>{l.name}</Text>
+                  <Text style={styles.loadoutMeta}>
+                    {l.equippedItemIds.length} equipped · {l.preparedSpellIds.length} prepared
+                  </Text>
+                </View>
+                <Pressable style={styles.loadoutBtn} onPress={() => onApplyLoadout?.(l.id)}>
+                  <Text style={styles.loadoutBtnTxt}>Apply</Text>
+                </Pressable>
+                <Pressable style={styles.loadoutBtnDelete} onPress={() => onDeleteLoadout?.(l.id)}>
+                  <Text style={styles.loadoutBtnDeleteTxt}>✕</Text>
+                </Pressable>
+              </View>
+            ))
+          )}
         </View>
       )}
 
@@ -1168,13 +1236,14 @@ export function TabInventory({
         ) : (
           inventory.equipped.map((inst, idx) => (
             <ItemRow
-              key={`eq_${inst.itemId}_${idx}`}
+              key={inst.id ?? `eq_${inst.itemId}_${idx}`}
               instance={inst}
               equipped
               allItems={allItems}
-              onToggle={() => onUnequip(inst.itemId)}
-              onRemove={() => confirmRemove(inst.itemId)}
-              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId) : undefined}
+              onToggle={() => onUnequip(inst.itemId, inst.id)}
+              onRemove={() => confirmRemove(inst)}
+              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId, inst.id) : undefined}
+              onToggleAttune={onToggleAttune ? () => handleAttuneToggle(inst) : undefined}
             />
           ))
         )}
@@ -1195,15 +1264,16 @@ export function TabInventory({
         ) : (
           inventory.carried.map((inst, idx) => (
             <ItemRow
-              key={`ca_${inst.itemId}_${idx}`}
+              key={inst.id ?? `ca_${inst.itemId}_${idx}`}
               instance={inst}
               equipped={false}
               allItems={allItems}
-              onToggle={() => onEquip(inst.itemId)}
-              onRemove={() => confirmRemove(inst.itemId)}
-              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId) : undefined}
-              onQuantityChange={delta => onUpdateQuantity(inst.itemId, delta)}
-              onSetQuantity={qty => onSetQuantity(inst.itemId, qty)}
+              onToggle={() => onEquip(inst.itemId, inst.id)}
+              onRemove={() => confirmRemove(inst)}
+              onRemoveInfusion={onRemoveInfusion ? () => onRemoveInfusion(inst.itemId, inst.id) : undefined}
+              onQuantityChange={delta => onUpdateQuantity(inst.itemId, delta, inst.id)}
+              onSetQuantity={qty => onSetQuantity(inst.itemId, qty, inst.id)}
+              onToggleAttune={onToggleAttune ? () => handleAttuneToggle(inst) : undefined}
             />
           ))
         )}
@@ -1215,13 +1285,22 @@ export function TabInventory({
         )}
       </View>
 
-      <AddItemModal
-        visible={addOpen}
-        equippedIds={equippedIds}
-        carriedIds={carriedIds}
-        onAdd={onAddItem}
-        onClose={() => setAddOpen(false)}
-      />
+      {/* ITEMS-PERF-1: was unconditionally mounted with only `visible` gating
+          RN Modal's native visibility — the component body (full ~891-item
+          catalog merge + 27-category classification pass + sort, none of it
+          memoized) still ran on every TabInventory render regardless of
+          whether the picker was open. Gating the element itself means that
+          work only happens while the picker is actually open. */}
+      {addOpen && (
+        <AddItemModal
+          visible={addOpen}
+          entityRulesetId={entity.rulesetId}
+          equippedIds={equippedIds}
+          carriedIds={carriedIds}
+          onAdd={onAddItem}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
 
       <CurrencyModal
         visible={currOpen}
@@ -1243,6 +1322,9 @@ export function TabInventory({
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: see TabCharacter.tsx's identical comment.
+export const TabInventory = memo(TabInventoryInner);
 
 const styles = StyleSheet.create({
   scroll:   { flex: 1 },
@@ -1289,6 +1371,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm, paddingVertical: 2,
   },
   addBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  addBtnDisabled: { opacity: 0.4 },
   addItemRow: {
     paddingVertical: Spacing.sm, alignItems: 'center',
     borderTopWidth: 1, borderTopColor: Colors.border, marginTop: Spacing.xs,
@@ -1307,6 +1390,7 @@ const styles = StyleSheet.create({
   itemProps: { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 1, lineHeight: 14 },
   itemQty:   { fontSize: FontSize.sm, color: Colors.textSecondary },
   itemInfused: { fontSize: FontSize.xs, color: Colors.purple, marginTop: 2, fontWeight: FontWeight.bold },
+  itemAttunement: { fontSize: FontSize.xs, color: Colors.textDim, marginTop: 2 },
   qtyStepperRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.xs, paddingBottom: Spacing.xs,
@@ -1346,8 +1430,39 @@ const styles = StyleSheet.create({
   toggleTxt:         { fontSize: FontSize.sm, color: Colors.textSecondary },
   toggleTxtEquipped: { color: Colors.gold, fontWeight: FontWeight.bold },
 
+  attuneBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  attuneBtnActive: { borderColor: Colors.purple + '88', backgroundColor: Colors.purple + '22' },
+  attuneTxt:        { fontSize: FontSize.sm, color: Colors.textSecondary },
+  attuneTxtActive:  { color: Colors.purple, fontWeight: FontWeight.bold },
+
   removeBtn: { padding: 4 },
   removeTxt: { fontSize: FontSize.md, color: Colors.textDim },
 
   emptyNote: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
+
+  loadoutSaveRow: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center', marginTop: Spacing.xs },
+  loadoutInput: {
+    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6, color: Colors.textPrimary,
+  },
+  loadoutRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    paddingVertical: Spacing.xs, borderTopWidth: 1, borderTopColor: Colors.border, marginTop: Spacing.xs,
+  },
+  loadoutInfo: { flex: 1 },
+  loadoutName: { fontSize: FontSize.sm, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  loadoutMeta: { fontSize: FontSize.xs, color: Colors.textDim },
+  loadoutBtn: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  loadoutBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  loadoutBtnDelete: { padding: 4 },
+  loadoutBtnDeleteTxt: { fontSize: FontSize.md, color: Colors.textDim },
 });

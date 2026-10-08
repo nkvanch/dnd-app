@@ -132,11 +132,4 @@ export function getInfusion(id: string): Infusion | null {
  * Artificer-only 'infusion' choice (src/content/classes/artificer.ts), so
  * assuming the Artificer level table here is safe without checking classId.
  */
-export function maxInfusedItems(artificerLevel: number): number {
-  if (artificerLevel >= 18) return 6;
-  if (artificerLevel >= 14) return 5;
-  if (artificerLevel >= 10) return 4;
-  if (artificerLevel >= 6)  return 3;
-  if (artificerLevel >= 2)  return 2;
-  return 0;
-}
+export { maxInfusedItems } from '../../engine/infusionRules';

@@ -1,0 +1,27 @@
+appId: com.nkvanch.grimoire
+name: Compendium SRD exposure
+# Run against the SRD-only preview APK.
+tags:
+  - smoke
+  - srd
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: tab-compendium
+- assertVisible:
+    id: compendium-screen
+- tapOn:
+    id: compendium-search
+- inputText: "Fireball"
+- assertVisible: "Fireball"
+- eraseText
+- inputText: "Artificer"
+- assertNotVisible: "Artificer"
+- eraseText
+- inputText: "Tasha's Hideous Laughter"
+- assertNotVisible: "Tasha's Hideous Laughter"
+- tapOn:
+    id: compendium-filters
+- assertNotVisible: "Tasha's Hideous Laughter"
+- takeScreenshot: "D:/Documents/dnd-app/builds/maestro-artifacts/compendium-srd"

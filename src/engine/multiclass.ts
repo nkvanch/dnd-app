@@ -4,7 +4,7 @@
 // identity.classes directly, so the legacy single-class fallback logic (for
 // characters saved before this field existed, and for monster/companion/npc
 // entities that never populate it) lives in exactly one place.
-import { Entity, ClassLevelEntry, CharClass } from './types';
+import { Entity, ClassLevelEntry, CharClass, asClassId, asSubclassId, EntitlementRecord, SkillName } from './types';
 
 /**
  * Returns this entity's classes, oldest-first (index 0 = "primary"/first
@@ -19,9 +19,14 @@ export function getClassLevels(entity: Entity): ClassLevelEntry[] {
     return entity.identity.classes;
   }
   if (!entity.identity.classId) return [];
+  // identity.classId/subclassId are deliberately unbranded (see their doc
+  // comment in types.ts — reused as a companion-template id for
+  // monster/companion entities), so a cast is needed here to bridge into
+  // the branded ClassLevelEntry shape. No behavior change: this mirrors
+  // exactly what was already stored, cast, not converted.
   return [{
-    classId:    entity.identity.classId,
-    subclassId: entity.identity.subclassId,
+    classId:    asClassId(entity.identity.classId),
+    subclassId: entity.identity.subclassId ? asSubclassId(entity.identity.subclassId) : null,
     level:      entity.identity.level,
   }];
 }
@@ -106,17 +111,61 @@ export function multiclassProficienciesFor(cls: CharClass | null | undefined) {
  */
 export function migrateEntity(raw: Entity): Entity {
   if (raw.kind !== 'character') return raw;
-  if (raw.identity.classes && raw.identity.classes.length > 0) return raw;
-  if (!raw.identity.classId) return raw;
-  return {
-    ...raw,
-    identity: {
-      ...raw.identity,
-      classes: [{
-        classId:    raw.identity.classId,
-        subclassId: raw.identity.subclassId,
-        level:      raw.identity.level,
-      }],
-    },
-  };
+  let entity = raw;
+  if (!(entity.identity.classes && entity.identity.classes.length > 0) && entity.identity.classId) {
+    entity = {
+      ...entity,
+      identity: {
+        ...entity.identity,
+        classes: [{
+          classId:    asClassId(entity.identity.classId),
+          subclassId: entity.identity.subclassId ? asSubclassId(entity.identity.subclassId) : null,
+          level:      entity.identity.level,
+        }],
+      },
+    };
+  }
+  return migrateEntitlements(entity);
+}
+
+/**
+ * Closure pass 2 (source ownership, section 11 — migration/backward
+ * compatibility): seeds Entity.entitlements exactly once for an entity that
+ * predates the field, from whatever flat proficiencies/skills it already
+ * has — every value is tagged sourceKind:'manual', deliberately
+ * conservative per the spec ("classify truly untraceable historical
+ * entitlements as legacy/manual rather than deleting them"). A value that's
+ * ACTUALLY currently granted by an active race/subclass/feat effect gets a
+ * redundant manual entitlement too — harmless (recompute unions effect-
+ * derived and entitlement-derived sets, so double-tagging changes nothing
+ * today), and is what makes this migration safe: removing that effect's
+ * source later still won't silently drop a proficiency this character had
+ * before entitlements existed. Runs once — a later call is a no-op because
+ * `entitlements` is already an array (even an empty one counts as
+ * "migrated", so a fresh character with genuinely zero proficiencies isn't
+ * re-scanned every load).
+ */
+function migrateEntitlements(entity: Entity): Entity {
+  if (entity.entitlements) return entity;
+  const records: EntitlementRecord[] = [
+    ...entity.proficiencies.armor.map(key     => ({ kind: 'armor_proficiency'  as const, key, sourceKind: 'manual' as const })),
+    ...entity.proficiencies.weapons.map(key   => ({ kind: 'weapon_proficiency' as const, key, sourceKind: 'manual' as const })),
+    ...entity.proficiencies.tools.map(key     => ({ kind: 'tool_proficiency'   as const, key, sourceKind: 'manual' as const })),
+    ...entity.proficiencies.languages.map(key => ({ kind: 'language'          as const, key, sourceKind: 'manual' as const })),
+  ];
+  for (const [skillName, entry] of Object.entries(entity.skills.skills) as [SkillName, { trained: boolean; expertise: boolean }][]) {
+    if (entry.trained)   records.push({ kind: 'skill_proficiency', key: skillName, sourceKind: 'manual' });
+    if (entry.expertise) records.push({ kind: 'skill_expertise',   key: skillName, sourceKind: 'manual' });
+  }
+  // Closure pass 3 (item 2): same conservative seeding for spell/cantrip
+  // access — a pre-existing known spell/cantrip becomes a permanent
+  // sourceKind:'manual' entitlement, so removing some unrelated source
+  // later can never silently drop it, and a NEWLY applied source-owned
+  // grant of the SAME spell afterward still correctly overlaps/removes
+  // independently (see grantEntitlement's dedupe-by-full-record-identity).
+  if (entity.spellcasting) {
+    for (const key of entity.spellcasting.known)    records.push({ kind: 'spell_access',   key, sourceKind: 'manual' });
+    for (const key of entity.spellcasting.cantrips) records.push({ kind: 'cantrip_access', key, sourceKind: 'manual' });
+  }
+  return { ...entity, entitlements: records };
 }

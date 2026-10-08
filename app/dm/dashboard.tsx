@@ -1,7 +1,8 @@
 // app/dm/dashboard.tsx
 // DM party overview dashboard. Only accessible when isDm === true.
+import { identityLabelsFor } from '../../src/store/identityLabelsFor';
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCampaignStore } from '../../src/store/campaignStore';
 import { Alert } from '../../src/utils/alert';
@@ -9,6 +10,7 @@ import { useCharacterStore } from '../../src/store/characterStore';
 import { useCombatStore }    from '../../src/store/combatStore';
 import { Entity } from '../../src/engine/types';
 import { dmFullStatVisibility } from '../../src/engine/houseRules';
+import { activeSession, startSession, endSession } from '../../src/engine/session';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 import { SyncStatusDot } from '../../src/components/SyncStatusDot';
@@ -16,13 +18,28 @@ import { useSyncStore }  from '../../src/store/syncStore';
 
 // ── Party Character Card ──────────────────────────────────────────────────────
 
-function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: boolean; onPress: () => void }) {
-  const { identity, resources, derived, conditions, spellcasting, features } = entity;
-  const hpPct   = resources.hp.maximum > 0 ? resources.hp.current / resources.hp.maximum : 0;
+function PartyCard({ entity, showFull, onPress, onPlay }: { entity: Entity; showFull: boolean; onPress: () => void; onPlay: () => void }) {
+  const { identity, resources, derived, conditions, spellcasting, features, wildShapeState, conditionMonitor } = entity;
+
+  // While Wild Shaped, the HP bar shown to the DM should reflect the BEAST's
+  // pool (what's actually at risk right now), not the player's real HP
+  // underneath — same "beast HP is the live pool" rule QuickPanel/handleDamage
+  // already apply everywhere else damage is dealt to a transformed character.
+  const hpCurrent = wildShapeState?.active ? wildShapeState.beastHp    : resources.hp.current;
+  const hpMax     = wildShapeState?.active ? wildShapeState.beastHpMax : resources.hp.maximum;
+  const hpPct   = hpMax > 0 ? hpCurrent / hpMax : 0;
   const hpColor = hpPct > 0.5 ? Colors.green : hpPct > 0.25 ? Colors.gold : Colors.red;
 
   const concentrating = spellcasting?.concentrating ?? null;
   const keyResources  = resources.custom.slice(0, 3); // show first 3 resources as pips
+  const spellTiers = spellcasting
+    ? (Object.keys(spellcasting.slots) as (keyof typeof spellcasting.slots)[])
+        .filter(t => spellcasting.slots[t].total > 0)
+        .map(t => ({ tier: t, ...spellcasting.slots[t] }))
+    : [];
+  const pactSlot = spellcasting?.pactSlots
+    ? Object.values(spellcasting.pactSlots).find(s => s.total > 0)
+    : undefined;
 
   // Death state — deathSaves is real persisted/synced data now, so the DM
   // dashboard can show it at a glance without needing to open the character.
@@ -37,7 +54,7 @@ function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: bo
         <View>
           <Text style={styles.cardName}>{identity.name || 'Unnamed'}</Text>
           <Text style={styles.cardSub}>
-            Lv {identity.level} {identity.classId} · {identity.raceId}
+            Lv {identity.level} {identityLabelsFor(entity).class} · {identityLabelsFor(entity).race}
           </Text>
         </View>
         <View style={styles.cardBadges}>
@@ -78,10 +95,16 @@ function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: bo
               <Text style={styles.badgeVal}>{derived.passiveInvestigation}</Text>
             </View>
           )}
+          {wildShapeState?.active && (
+            <View style={[styles.badge, styles.wildShapeBadge]}>
+              <Text style={styles.wildShapeBadgeTxt}>🐾 {wildShapeState.formId}</Text>
+            </View>
+          )}
         </View>
       </View>
 
-      {/* HP bar — always visible, same reasoning as AC/movement/passives above */}
+      {/* HP bar — always visible, same reasoning as AC/movement/passives above.
+          Shows the beast's HP pool while Wild Shaped, real HP otherwise. */}
       <View style={styles.hpRow}>
         <View style={styles.hpBarOuter}>
           <View style={[styles.hpBarFill, {
@@ -89,15 +112,20 @@ function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: bo
             backgroundColor: hpColor,
           }]} />
         </View>
-        <Text style={styles.hpTxt}>{resources.hp.current}/{resources.hp.maximum}</Text>
+        <Text style={styles.hpTxt}>{hpCurrent}/{hpMax}</Text>
       </View>
 
       {/* Everything below is more than a DM could observe at a glance —
           gated behind the dmFullStatVisibility house rule (book default: off). */}
       {showFull && (
         <>
-          {/* Conditions + Concentration */}
+          {/* Conditions + Concentration + Exhaustion */}
           <View style={styles.condRow}>
+            {conditionMonitor.exhaustion > 0 && (
+              <View style={[styles.condPill, styles.exhaustionPill]}>
+                <Text style={styles.condTxt}>😩 Exhaustion {conditionMonitor.exhaustion}</Text>
+              </View>
+            )}
             {conditions.map(c => (
               <View key={c.id} style={styles.condPill}>
                 <Text style={styles.condTxt}>{c.id}</Text>
@@ -108,10 +136,41 @@ function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: bo
                 <Text style={styles.condTxt}>⟳ {concentrating}</Text>
               </View>
             )}
-            {conditions.length === 0 && !concentrating && (
+            {conditions.length === 0 && !concentrating && conditionMonitor.exhaustion === 0 && (
               <Text style={styles.noCondTxt}>No conditions</Text>
             )}
           </View>
+
+          {/* Spell slots — compact per-tier pips, same visual language as the
+              resource pips below. Only tiers the entity actually has (total
+              > 0) are shown; pact slots (Warlock etc.) get their own row
+              since they recover independently on a short rest. */}
+          {spellTiers.length > 0 && (
+            <View style={styles.resourcePips}>
+              {spellTiers.map(s => (
+                <View key={s.tier} style={styles.pipGroup}>
+                  <Text style={styles.pipLabel}>L{s.tier}</Text>
+                  <View style={styles.pips}>
+                    {/* Same fill convention as the resource pips below: filled
+                        = still available (i < remaining), empty = spent. */}
+                    {Array.from({ length: s.total }).map((_, i) => (
+                      <View key={i} style={[styles.pip, i >= s.total - s.used && styles.pipEmpty]} />
+                    ))}
+                  </View>
+                </View>
+              ))}
+              {pactSlot && (
+                <View style={styles.pipGroup}>
+                  <Text style={styles.pipLabel}>Pact</Text>
+                  <View style={styles.pips}>
+                    {Array.from({ length: pactSlot.total }).map((_, i) => (
+                      <View key={i} style={[styles.pip, i >= pactSlot.total - pactSlot.used && styles.pipEmpty]} />
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Resource pips */}
           {keyResources.length > 0 && (
@@ -130,6 +189,20 @@ function PartyCard({ entity, showFull, onPress }: { entity: Entity; showFull: bo
           )}
         </>
       )}
+
+      {/* DM-CLAIM-PC-1: a DM can already open any party character's real
+          player sheet (app/sheet/[id].tsx) directly — it has no isDm gate,
+          and isDm itself is derived from the active campaign, never from
+          which screen is open, so tapping this never affects DM status or
+          tools. What was actually missing was any DISCOVERABLE way to do
+          it — tapping the card itself always opened the DM-tools view
+          (app/dm/character/[id].tsx). This is a separate, explicit
+          affordance for "optionally control this PC," matching the
+          required "keep DM role and character control as separate
+          concepts" (never make the DM count as a normal player). */}
+      <Pressable style={styles.playBtn} onPress={onPlay}>
+        <Text style={styles.playBtnTxt}>▶ Play as {identity.name || 'this character'}</Text>
+      </Pressable>
     </Pressable>
   );
 }
@@ -141,11 +214,27 @@ export default function DmDashboard() {
   const safeGoBack     = useSafeGoBack('/(tabs)');
   const isDm           = useCampaignStore(s => s.isDm);
   const activeCampaign = useCampaignStore(s => s.activeCampaign);
+  const updateCampaign = useCampaignStore(s => s.updateCampaign);
   const characters     = useCharacterStore(s => s.characters);
   const rules          = useCharacterStore(s => s.rules);
   const startCombat    = useCombatStore(s => s.startCombat);
   const syncStatus     = useSyncStore(s => s.status);
   const showFull       = dmFullStatVisibility(rules);
+  const [endSessionOpen, setEndSessionOpen] = useState(false);
+  const [endSummary, setEndSummary] = useState('');
+
+  const session = activeCampaign ? activeSession(activeCampaign) : null;
+
+  function handleStartSession() {
+    if (!activeCampaign) return;
+    updateCampaign(activeCampaign.id, c => startSession(c));
+  }
+  function handleEndSession() {
+    if (!activeCampaign) return;
+    updateCampaign(activeCampaign.id, c => endSession(c, endSummary));
+    setEndSummary('');
+    setEndSessionOpen(false);
+  }
 
   // Guard: only DMs see this screen
   if (!isDm) {
@@ -195,21 +284,79 @@ export default function DmDashboard() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {/* Room code banner — what players type/scan to join. */}
+        {/* Room code banner — what players type/scan to join. Hosting itself
+            (CampaignHost) never depends on this — only whether a room code
+            is currently dialable does (NetworkHostAvailability). A missing
+            code is a non-blocking recommendation, not an error: this DM
+            screen and every local host/DM tool stay fully usable either
+            way. */}
         {syncStatus.role === 'dm' && (
           <View style={styles.roomCard}>
             <Text style={styles.roomLabel}>ROOM CODE</Text>
             {syncStatus.roomCode ? (
               <Text style={styles.roomCode}>{syncStatus.roomCode}</Text>
             ) : (
-              <Text style={styles.roomCodeDim}>Not hosting — check WiFi</Text>
+              <Text style={styles.roomCodeDim}>No local network — not joinable yet</Text>
             )}
             <Text style={styles.roomHint}>
-              Players join with this code on the same WiFi network.
-              {syncStatus.connected ? '' : ' (Server not running.)'}
+              {syncStatus.roomCode
+                ? 'Players join with this code on the same WiFi network.'
+                : 'Enable Wi-Fi or a mobile hotspot to let other players join. Everything here still works on this device.'}
             </Text>
           </View>
         )}
+        {/* Session lifecycle (item 14) — start/end a real-world play
+            session, distinct from the sync connection (a DM can be hosting
+            with no session "in progress" yet, e.g. while players are still
+            joining). Builds on the existing Campaigns-tab session log
+            rather than a separate concept — see engine/session.ts. */}
+        {activeCampaign && (
+          <View style={styles.sessionCard}>
+            {session ? (
+              <>
+                <Text style={styles.sessionActiveTxt}>🟢 Session in progress</Text>
+                <Text style={styles.sessionSub}>
+                  Started {new Date(session.startedAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {session.attendedCharacterIds ? ` · ${session.attendedCharacterIds.length} in party` : ''}
+                </Text>
+                <Pressable style={styles.sessionEndBtn} onPress={() => setEndSessionOpen(true)}>
+                  <Text style={styles.sessionEndBtnTxt}>⏹ End Session</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable style={styles.sessionStartBtn} onPress={handleStartSession}>
+                <Text style={styles.sessionStartBtnTxt}>▶ Start Session</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        <Modal visible={endSessionOpen} transparent animationType="fade" onRequestClose={() => setEndSessionOpen(false)}>
+          <View style={styles.sessionModalBackdrop}>
+            <View style={styles.sessionModalSheet}>
+              <Text style={styles.sessionModalTitle}>End Session</Text>
+              <TextInput
+                style={styles.sessionModalInput}
+                value={endSummary}
+                onChangeText={setEndSummary}
+                placeholder="What happened this session? (optional)"
+                placeholderTextColor={Colors.textDim}
+                multiline
+                textAlignVertical="top"
+                autoFocus
+              />
+              <View style={styles.sessionModalBtns}>
+                <Pressable style={styles.sessionModalCancel} onPress={() => setEndSessionOpen(false)}>
+                  <Text style={styles.sessionModalCancelTxt}>Cancel</Text>
+                </Pressable>
+                <Pressable style={styles.sessionModalConfirm} onPress={handleEndSession}>
+                  <Text style={styles.sessionModalConfirmTxt}>End Session</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* Connected players roster (live sync) */}
         {syncStatus.role === 'dm' && (
           <>
@@ -273,12 +420,19 @@ export default function DmDashboard() {
               entity={c}
               showFull={showFull}
               onPress={() => router.push(`/dm/character/${c.id}` as any)}
+              onPlay={() => router.push(`/sheet/${c.id}` as any)}
             />
           ))
         )}
 
         <Pressable style={styles.encounterBtn} onPress={handleStartEncounter}>
           <Text style={styles.encounterBtnTxt}>⚔️ Start Encounter</Text>
+        </Pressable>
+        <Pressable style={[styles.encounterBtn, styles.libraryBtn]} onPress={() => router.push('/dm/encounters' as any)}>
+          <Text style={styles.encounterBtnTxt}>📋 Encounter Library</Text>
+        </Pressable>
+        <Pressable style={[styles.encounterBtn, styles.libraryBtn]} onPress={() => router.push('/dm/monsters' as any)}>
+          <Text style={styles.encounterBtnTxt}>🐉 Monster Library</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -318,6 +472,46 @@ const styles = StyleSheet.create({
   roomCodeDim: { fontSize: FontSize.lg, color: Colors.textDim, fontWeight: FontWeight.bold },
   roomHint: { fontSize: FontSize.xs, color: Colors.textSecondary, textAlign: 'center', marginTop: 2 },
 
+  sessionCard: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.md, alignItems: 'center', gap: 4,
+  },
+  sessionActiveTxt: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.green },
+  sessionSub:        { fontSize: FontSize.xs, color: Colors.textDim },
+  sessionStartBtn: {
+    backgroundColor: Colors.green + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.green + '66',
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+  },
+  sessionStartBtnTxt: { fontSize: FontSize.md, color: Colors.green, fontWeight: FontWeight.bold },
+  sessionEndBtn: {
+    backgroundColor: Colors.red + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.red + '66',
+    paddingHorizontal: Spacing.md, paddingVertical: 6, marginTop: 4,
+  },
+  sessionEndBtnTxt: { fontSize: FontSize.sm, color: Colors.red, fontWeight: FontWeight.bold },
+
+  sessionModalBackdrop: { flex: 1, backgroundColor: '#000000cc', justifyContent: 'center', padding: Spacing.md },
+  sessionModalSheet: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg,
+    padding: Spacing.md, gap: Spacing.sm,
+  },
+  sessionModalTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold, textAlign: 'center' },
+  sessionModalInput: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, color: Colors.textPrimary, minHeight: 90,
+  },
+  sessionModalBtns: { flexDirection: 'row', gap: Spacing.sm },
+  sessionModalCancel: {
+    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center',
+  },
+  sessionModalCancelTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  sessionModalConfirm: { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  sessionModalConfirmTxt: { color: Colors.bg, fontWeight: FontWeight.bold },
+
   rosterRow: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     backgroundColor: Colors.surface, borderRadius: Radius.md,
@@ -354,11 +548,21 @@ const styles = StyleSheet.create({
   dyingBadgeTxt: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.red },
   stableBadge:    { backgroundColor: Colors.green + '22', borderWidth: 1, borderColor: Colors.green + '77' },
   stableBadgeTxt: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.green },
+  wildShapeBadge:    { backgroundColor: Colors.green + '22', borderWidth: 1, borderColor: Colors.green + '77' },
+  wildShapeBadgeTxt: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.green, textTransform: 'capitalize' },
 
   hpRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   hpBarOuter:{ flex: 1, height: 6, backgroundColor: Colors.border, borderRadius: Radius.full, overflow: 'hidden' },
   hpBarFill: { height: '100%', borderRadius: Radius.full },
   hpTxt:     { fontSize: FontSize.sm, color: Colors.textSecondary, width: 70, textAlign: 'right' },
+
+  playBtn: {
+    marginTop: Spacing.sm, alignSelf: 'flex-start',
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  playBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
 
   condRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
   condPill: {
@@ -367,6 +571,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.purple + '66',
   },
   concPill:   { backgroundColor: Colors.blue + '33', borderColor: Colors.blue + '66' },
+  exhaustionPill: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold + '66' },
   condTxt:    { fontSize: FontSize.xs, color: Colors.textPrimary, textTransform: 'capitalize' },
   noCondTxt:  { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic' },
 
@@ -390,4 +595,5 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   encounterBtnTxt: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.lg },
+  libraryBtn: { backgroundColor: Colors.surfaceHigh, borderWidth: 1, borderColor: Colors.gold },
 });

@@ -1,7 +1,8 @@
 // app/(tabs)/characters.tsx
 // Character list — all saved characters. Tap to open sheet. Long press to delete.
+import { identityLabelsFor } from '../../src/store/identityLabelsFor';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useCampaignStore } from '../../src/store/campaignStore';
@@ -29,7 +30,7 @@ function CharacterCard({
       <View style={styles.cardMain}>
         <Text style={styles.cardName}>{identity.name || 'Unnamed'}</Text>
         <Text style={styles.cardSub}>
-          Level {identity.level}  ·  {identity.classId || '—'}  ·  {identity.raceId || '—'}
+          Level {identity.level}  ·  {identityLabelsFor(character).class || '—'}  ·  {identityLabelsFor(character).race || '—'}
         </Text>
         {campaignName && (
           <View style={styles.campaignBadge}>
@@ -75,12 +76,23 @@ export default function CharactersScreen() {
   const [raceFilter, setRaceFilter]     = useState<string | null>(null);
   const [classFilter, setClassFilter]   = useState<string | null>(null);
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+  // Item 20 (QoL) — the two sibling tabs shipped this session (Homebrew,
+  // Compendium) both have a free-text search box; this screen only ever
+  // had sort/filter chips. Matches that established convention.
+  const [search, setSearch] = useState('');
+  // CHARACTERS-DROPDOWN-1: search/sort/filter default collapsed behind one
+  // toggle instead of permanently occupying screen space — a pure UI
+  // visibility flag, not part of visibleCharacters' own deps below, so
+  // expanding/collapsing never recomputes the list. All the real state
+  // above (search/sortMode/*Filter) is untouched by this toggle, so it
+  // survives a collapse exactly as-is.
+  const [panelOpen, setPanelOpen] = useState(false);
 
   // updatedAt for "sort by date" — characters (full Entity[]) doesn't carry
   // it, only the lightweight meta table does (native only; empty on web,
   // see loadAllEntityMeta's Platform guard — date sort silently no-ops
   // there rather than crashing).
-  useEffect(() => { loadCharactersMeta(); }, [loadCharactersMeta]);
+  useEffect(() => { void loadCharactersMeta(); }, [loadCharactersMeta]);
   const updatedAtById = useMemo(
     () => new Map(characterMeta.map(m => [m.id, m.updatedAt])),
     [characterMeta],
@@ -109,6 +121,8 @@ export default function CharactersScreen() {
 
   const visibleCharacters = useMemo(() => {
     let list = characters;
+    const q = search.trim().toLowerCase();
+    if (q) list = list.filter(c => (c.identity.name || 'unnamed').toLowerCase().includes(q));
     if (raceFilter)     list = list.filter(c => c.identity.raceId === raceFilter);
     if (classFilter)    list = list.filter(c => c.identity.classId === classFilter);
     if (campaignFilter) list = list.filter(c => campaignByCharId.get(c.id) === campaignFilter);
@@ -122,13 +136,37 @@ export default function CharactersScreen() {
       sorted.sort((a, b) => (campaignByCharId.get(a.id) ?? '￿').localeCompare(campaignByCharId.get(b.id) ?? '￿'));
     }
     return sorted;
-  }, [characters, raceFilter, classFilter, campaignFilter, sortMode, updatedAtById, campaignByCharId]);
+  }, [characters, search, raceFilter, classFilter, campaignFilter, sortMode, updatedAtById, campaignByCharId]);
+
+  const activeFilterCount = (raceFilter ? 1 : 0) + (classFilter ? 1 : 0) + (campaignFilter ? 1 : 0);
+  const sortLabel = sortMode === 'name' ? 'Name' : sortMode === 'date' ? 'Date' : 'Campaign';
 
   const openSheet = useCallback((id: string) => {
     router.push(`/sheet/${id}` as any);
   }, [router]);
 
+  // Re-audit A09 (item 11): a persisted draft can exist here (restored on
+  // boot, or just never finished this session) — jumping straight to
+  // Name would silently orphan it once name.tsx starts editing THIS
+  // existing draft in place rather than minting a new one. Offer the
+  // choice instead of guessing, same confirm-dialog pattern
+  // CreationHeader.tsx's Cancel button already uses.
   const startCreation = useCallback(() => {
+    const draft = useCharacterStore.getState().draft;
+    if (draft) {
+      Alert.alert(
+        'Resume character creation?',
+        `You have an unfinished character${draft.identity.name ? ` ("${draft.identity.name}")` : ''}. Continue where you left off, or start a new one?`,
+        [
+          { text: 'Resume', onPress: () => router.push('/creation/hub') },
+          {
+            text: 'Start New', style: 'destructive',
+            onPress: () => { useCharacterStore.getState().clearDraft(); router.push('/creation/name'); },
+          },
+        ]
+      );
+      return;
+    }
     router.push('/creation/name');
   }, [router]);
 
@@ -147,17 +185,22 @@ export default function CharactersScreen() {
     );
   }, [deleteCharacter]);
 
+
+
   if (isLoading) return <LoadingScreen message="Loading characters…" />;
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} testID="characters-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Characters</Text>
         <View style={styles.headerActions}>
           <Pressable style={styles.settingsBtn} onPress={() => router.push('/settings' as any)}>
             <Text style={styles.settingsBtnText}>⚙️</Text>
           </Pressable>
-          <Pressable style={styles.newBtn} onPress={startCreation}>
+          <Pressable testID="import-character" accessibilityRole="button" accessibilityLabel="Import Character" style={styles.importBtn} onPress={() => router.push('/import-character')}>
+            <Text style={styles.importBtnText}>⇩ Import</Text>
+          </Pressable>
+          <Pressable testID="create-character" accessibilityRole="button" accessibilityLabel="Create Character" style={styles.newBtn} onPress={startCreation}>
             <Text style={styles.newBtnText}>+ New</Text>
           </Pressable>
         </View>
@@ -173,42 +216,77 @@ export default function CharactersScreen() {
         />
       ) : (
         <>
-          <View style={styles.sortFilterBar}>
-            <Text style={styles.sortFilterLabel}>Sort</Text>
-            <View style={styles.chipRow}>
-              {([['name', 'Name'], ['date', 'Date'], ['campaign', 'Campaign']] as [SortMode, string][]).map(([m, label]) => (
-                <Pressable key={m} style={[styles.chip, sortMode === m && styles.chipActive]} onPress={() => setSortMode(m)}>
-                  <Text style={[styles.chipTxt, sortMode === m && styles.chipTxtActive]}>{label}</Text>
-                </Pressable>
-              ))}
+          <Pressable style={styles.collapsedBar} onPress={() => setPanelOpen(o => !o)}>
+            <Text style={styles.collapsedLabel}>{panelOpen ? '▲' : '▼'} Search &amp; Filter</Text>
+            <View style={styles.collapsedChips}>
+              {search.trim() !== '' && (
+                <View style={styles.summaryChip}>
+                  <Text style={styles.summaryChipTxt} numberOfLines={1}>Search: "{search.trim()}"</Text>
+                </View>
+              )}
+              {activeFilterCount > 0 && (
+                <View style={styles.summaryChip}>
+                  <Text style={styles.summaryChipTxt}>Filters: {activeFilterCount}</Text>
+                </View>
+              )}
+              {sortMode !== 'name' && (
+                <View style={styles.summaryChip}>
+                  <Text style={styles.summaryChipTxt}>Sort: {sortLabel}</Text>
+                </View>
+              )}
             </View>
+          </Pressable>
 
-            {(raceOptions.length > 0 || classOptions.length > 0 || campaignOptions.length > 0) && (
-              <>
-                <Text style={[styles.sortFilterLabel, { marginTop: Spacing.xs }]}>Filter</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-                  {raceOptions.map(r => (
-                    <Pressable key={`race_${r}`} style={[styles.chip, raceFilter === r && styles.chipActive]}
-                      onPress={() => setRaceFilter(f => f === r ? null : r)}>
-                      <Text style={[styles.chipTxt, raceFilter === r && styles.chipTxtActive]}>{r}</Text>
+          {panelOpen && (
+            <View style={styles.panel}>
+              <View style={styles.searchWrap}>
+                <TextInput
+                  style={styles.searchInput}
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search characters…"
+                  placeholderTextColor={Colors.textDim}
+                />
+              </View>
+
+              <View style={styles.sortFilterBar}>
+                <Text style={styles.sortFilterLabel}>Sort</Text>
+                <View style={styles.chipRow}>
+                  {([['name', 'Name'], ['date', 'Date'], ['campaign', 'Campaign']] as [SortMode, string][]).map(([m, label]) => (
+                    <Pressable key={m} style={[styles.chip, sortMode === m && styles.chipActive]} onPress={() => setSortMode(m)}>
+                      <Text style={[styles.chipTxt, sortMode === m && styles.chipTxtActive]}>{label}</Text>
                     </Pressable>
                   ))}
-                  {classOptions.map(c => (
-                    <Pressable key={`class_${c}`} style={[styles.chip, classFilter === c && styles.chipActive]}
-                      onPress={() => setClassFilter(f => f === c ? null : c)}>
-                      <Text style={[styles.chipTxt, classFilter === c && styles.chipTxtActive]}>{c}</Text>
-                    </Pressable>
-                  ))}
-                  {campaignOptions.map(camp => (
-                    <Pressable key={`camp_${camp}`} style={[styles.chip, campaignFilter === camp && styles.chipActive]}
-                      onPress={() => setCampaignFilter(f => f === camp ? null : camp)}>
-                      <Text style={[styles.chipTxt, campaignFilter === camp && styles.chipTxtActive]}>🗺️ {camp}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </>
-            )}
-          </View>
+                </View>
+
+                {(raceOptions.length > 0 || classOptions.length > 0 || campaignOptions.length > 0) && (
+                  <>
+                    <Text style={[styles.sortFilterLabel, { marginTop: Spacing.xs }]}>Filter</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                      {raceOptions.map(r => (
+                        <Pressable key={`race_${r}`} style={[styles.chip, raceFilter === r && styles.chipActive]}
+                          onPress={() => setRaceFilter(f => f === r ? null : r)}>
+                          <Text style={[styles.chipTxt, raceFilter === r && styles.chipTxtActive]}>{r}</Text>
+                        </Pressable>
+                      ))}
+                      {classOptions.map(c => (
+                        <Pressable key={`class_${c}`} style={[styles.chip, classFilter === c && styles.chipActive]}
+                          onPress={() => setClassFilter(f => f === c ? null : c)}>
+                          <Text style={[styles.chipTxt, classFilter === c && styles.chipTxtActive]}>{c}</Text>
+                        </Pressable>
+                      ))}
+                      {campaignOptions.map(camp => (
+                        <Pressable key={`camp_${camp}`} style={[styles.chip, campaignFilter === camp && styles.chipActive]}
+                          onPress={() => setCampaignFilter(f => f === camp ? null : camp)}>
+                          <Text style={[styles.chipTxt, campaignFilter === camp && styles.chipTxtActive]}>🗺️ {camp}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
+              </View>
+            </View>
+          )}
 
           <FlatList
             data={visibleCharacters}
@@ -222,6 +300,9 @@ export default function CharactersScreen() {
                 onLongPress={() => handleLongPress(item)}
               />
             )}
+            ListEmptyComponent={
+              <Text style={styles.noResultsTxt}>No characters match your search/filters.</Text>
+            }
           />
         </>
       )}
@@ -246,11 +327,34 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   settingsBtn:     { padding: Spacing.sm },
   settingsBtnText: { fontSize: 20 },
+  importBtn: { borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm },
+  importBtnText: { color: Colors.gold, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
   newBtn: {
     backgroundColor: Colors.gold,
     paddingHorizontal: Spacing.md,
     paddingVertical:   Spacing.sm,
     borderRadius:      Radius.md,
+  },
+
+  collapsedBar: {
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.xs,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  collapsedLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  collapsedChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, flexShrink: 1 },
+  summaryChip: {
+    backgroundColor: Colors.gold + '22', borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  summaryChipTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  panel: {},
+
+  searchWrap: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+  searchInput: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 8, color: Colors.textPrimary,
   },
 
   sortFilterBar: {
@@ -279,6 +383,7 @@ const styles = StyleSheet.create({
   newBtnText: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 
   list: { padding: Spacing.md, gap: Spacing.sm },
+  noResultsTxt: { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic', textAlign: 'center', padding: Spacing.lg },
 
   card: {
     backgroundColor: Colors.surface,

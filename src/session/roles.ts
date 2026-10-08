@@ -1,0 +1,99 @@
+// ============================================================================
+// FILE: src/session/roles.ts
+// Capability model + op authorization. This is enforced by the Host core on
+// every op; the UI hiding buttons is a convenience, never the security boundary.
+// ============================================================================
+import { Capability, CharacterChange, OpBody, RewardKind, SessionLogKind } from './types';
+
+export const ALL_CAPABILITIES: Capability[] = ['host', 'dm', 'player'];
+/** Capabilities that can be granted/requested over the network. `host` never is. */
+export const GRANTABLE: Capability[] = ['dm', 'player'];
+
+export function requiredCapability(kind: OpBody['kind']): Capability {
+  if (kind.startsWith('dm.')) return 'dm';
+  if (kind.startsWith('player.')) return 'player';
+  return 'host';
+}
+
+export function isAuthorized(capabilities: Capability[], kind: OpBody['kind']): boolean {
+  return capabilities.includes(requiredCapability(kind));
+}
+
+export function sanitizeRequested(requested: unknown): Capability[] {
+  if (!Array.isArray(requested)) return [];
+  const out: Capability[] = [];
+  for (const c of requested) {
+    if ((GRANTABLE as unknown[]).includes(c) && !out.includes(c as Capability)) out.push(c as Capability);
+  }
+  return out;
+}
+
+// ── Human-readable text (used by audit entries and UIs) ─────────────────────
+
+const ABILITY_LABEL: Record<string, string> = {
+  str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA',
+};
+
+function signed(n: number): string {
+  return n >= 0 ? `+${n}` : `${n}`;
+}
+
+/** Raw content ids are slugs like 'poisoned' — title-case them for display rather than requiring
+ *  a shared content registry lookup over the wire (see CharacterVitals's own doc comment). */
+export function formatContentId(id: string): string {
+  return id.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+export function describeChange(c: CharacterChange): string {
+  switch (c.kind) {
+    case 'exhaustion':         return `Exhaustion ${signed(c.delta)}`;
+    case 'max_hp':             return `Max HP ${signed(c.delta)}`;
+    case 'ability':            return `${ABILITY_LABEL[c.ability] ?? c.ability} ${signed(c.delta)}`;
+    case 'hp':                 return c.delta < 0 ? `${-c.delta} damage` : `Heal ${c.delta}`;
+    case 'temp_hp':            return `${c.amount} temp HP`;
+    case 'condition_add':      return `Add condition: ${formatContentId(c.conditionId)}`;
+    case 'condition_remove':   return `Remove condition: ${formatContentId(c.conditionId)}`;
+    case 'concentration_break': return 'Break concentration';
+    case 'stabilize':          return 'Stabilize';
+    case 'heroic_inspiration': return 'Heroic Inspiration';
+  }
+}
+
+export function describeChanges(changes: CharacterChange[]): string {
+  return changes.map(describeChange).join(', ');
+}
+
+const REWARD_KIND_LABEL: Record<RewardKind, string> = {
+  homebrew_feature: 'Homebrew feature', resource: 'Resource', proficiency: 'Proficiency',
+  reward_tier: 'Reward tier', permanent_modifier: 'Permanent modifier', campaign_boon: 'Campaign boon',
+};
+
+export function describeRewardKind(kind: RewardKind): string { return REWARD_KIND_LABEL[kind]; }
+
+const SESSION_LOG_KIND_LABEL: Record<SessionLogKind, string> = {
+  major_event: 'Major event', encounter_outcome: 'Encounter outcome', npc_death: 'NPC death',
+  quest_outcome: 'Quest outcome', reward: 'Reward', milestone: 'Milestone',
+  rule_change: 'Rule change', custom_note: 'Custom note',
+};
+
+export function describeSessionLogKind(kind: SessionLogKind): string { return SESSION_LOG_KIND_LABEL[kind]; }
+
+function validConditionId(x: unknown): x is string {
+  return typeof x === 'string' && x.length > 0 && x.length <= 100;
+}
+
+/** Structural validation of untrusted change lists. */
+export function validChanges(changes: unknown): changes is CharacterChange[] {
+  if (!Array.isArray(changes) || changes.length === 0 || changes.length > 20) return false;
+  return changes.every(c => {
+    if (!c || typeof c !== 'object') return false;
+    const ch = c as Record<string, unknown>;
+    if (ch.kind === 'temp_hp') return typeof ch.amount === 'number' && Number.isFinite(ch.amount) && Number.isInteger(ch.amount) && ch.amount >= 0;
+    if (ch.kind === 'condition_add' || ch.kind === 'condition_remove') return validConditionId(ch.conditionId);
+    if (ch.kind === 'concentration_break' || ch.kind === 'stabilize' || ch.kind === 'heroic_inspiration') return true;
+    if (typeof ch.delta !== 'number' || !Number.isFinite(ch.delta) || !Number.isInteger(ch.delta)) return false;
+    if (ch.kind === 'exhaustion' || ch.kind === 'max_hp' || ch.kind === 'hp') return true;
+    if (ch.kind === 'ability') return typeof ch.ability === 'string' && ch.ability in ABILITY_LABEL;
+    return false;
+  });
+}

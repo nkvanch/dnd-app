@@ -1,20 +1,24 @@
 // app/(tabs)/homebrew.tsx
-// Homebrew tab — Create and Library sections.
-import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useHomebrewStore } from '../../src/store/homebrewStore';
-import { Alert } from '../../src/utils/alert';
-import { ContentCacheType, HomebrewContent } from '../../src/db/contentCacheRepo';
-import { exportHomebrewItem, ExportFormat, ExportAction } from '../../src/io/exportShare';
-import { ExportFormatSheet } from '../../src/components/ExportFormatSheet';
-import { VersionHistoryModal } from '../../src/components/homebrew/VersionHistoryModal';
+// Homebrew tab — CREATION and editing entry points (the Create panel, Custom
+// Rule Profiles, and Import Homebrew). The Homebrew LIBRARY (browse/manage
+// existing content) and the INSTALLED PACKAGES list moved to
+// Compendium → Homebrew / Compendium → Packages; this screen keeps small
+// shortcuts to them and redirects the old `?view=library|packages` links.
+import { useEffect } from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { useCustomRuleProfileStore } from '../../src/store/customRuleProfileStore';
+import { useCompendiumModeStore } from '../../src/store/compendiumModeStore';
+import { compendiumHref, legacyHomebrewViewRedirect, CompendiumMode } from '../../src/content/compendiumModes';
 
 // ── Create Panel ──────────────────────────────────────────────────────────────
 
 function CreatePanel() {
   const router = useRouter();
+  const allRuleProfiles = useCustomRuleProfileStore(s => s.profiles);
+  // Built-in presets (5e / 5.5e) are read-only; only the player's own profiles are listed for editing.
+  const ruleProfiles = allRuleProfiles.filter(p => p.source.kind !== 'preset');
   const ITEMS = [
     { label: '⚔️  New Race',        route: '/homebrew/race-builder'  },
     { label: '🧬  New Subrace',      route: '/homebrew/subrace-builder' },
@@ -24,9 +28,12 @@ function CreatePanel() {
     { label: '🧰  New Item',         route: '/homebrew/item-builder'  },
     { label: '💎  Rare Items',       route: '/homebrew/rare-items'    },
     { label: '✨  New Spell',        route: '/homebrew/spell-builder' },
+    { label: '📗  New Spell List',   route: '/homebrew/spell-list-builder' },
     { label: '📖  New Feature',      route: '/homebrew/feature-editor' },
     { label: '🌟  New Feat',         route: '/homebrew/feat-builder' },
     { label: '🐉  New Monster',      route: '/homebrew/monster-builder' },
+    { label: '🩹  New Condition',    route: '/homebrew/condition-builder' },
+    { label: '⚙️  Custom Rule Profile', route: '/homebrew/rule-profile' },
   ];
 
   return (
@@ -44,199 +51,10 @@ function CreatePanel() {
           </Pressable>
         ))}
       </View>
-    </View>
-  );
-}
-
-// ── Library Panel ─────────────────────────────────────────────────────────────
-
-function LibraryPanel() {
-  const router = useRouter();
-  const {
-    races, subraces, classes, subclasses, spells, backgrounds, features, items, feats, monsters, deleteItem,
-    getMergedContentDB,
-  } = useHomebrewStore();
-  const allRaces = getMergedContentDB().races;
-  const allClasses = getMergedContentDB().classes;
-
-  const [exportTarget, setExportTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
-  const [exportingId, setExportingId] = useState<string | null>(null);
-  const [historyTarget, setHistoryTarget] = useState<{ type: ContentCacheType; item: HomebrewContent } | null>(null);
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<ContentCacheType | 'all'>('all');
-
-  async function handleExportFormat(format: ExportFormat, action: ExportAction) {
-    if (!exportTarget) return;
-    const { type, item } = exportTarget;
-    setExportTarget(null);
-    setExportingId(item.id);
-    try {
-      await exportHomebrewItem(type, item, format, action);
-    } catch (e: any) {
-      Alert.alert('Export failed', e?.message ?? 'Something went wrong.');
-    } finally {
-      setExportingId(null);
-    }
-  }
-
-  const all = [
-    ...races.map(r       => ({ type: 'race'       as const, item: r })),
-    ...subraces.map(sr   => ({ type: 'subrace'    as const, item: sr, parentName: allRaces.find(r => r.id === sr.parentId)?.name })),
-    ...classes.map(c     => ({ type: 'class'      as const, item: c })),
-    ...subclasses.map(sc => ({ type: 'subclass'   as const, item: sc, parentName: allClasses.find(c => c.id === sc.classId)?.name })),
-    ...items.map(it      => ({ type: 'item'       as const, item: it })),
-    ...spells.map(s      => ({ type: 'spell'      as const, item: s })),
-    ...backgrounds.map(b => ({ type: 'background' as const, item: b })),
-    ...features.map(f    => ({ type: 'feature'    as const, item: f })),
-    ...feats.map(f       => ({ type: 'feat'       as const, item: f })),
-    ...monsters.map(m    => ({ type: 'monster'    as const, item: m })),
-  ];
-
-  const EDIT_ROUTES: Partial<Record<string, string>> = {
-    race: '/homebrew/race-builder',
-    subrace: '/homebrew/subrace-builder',
-    class: '/homebrew/class-builder',
-    subclass: '/homebrew/subclass-builder',
-    item: '/homebrew/item-builder',
-    spell: '/homebrew/spell-builder',
-    background: '/homebrew/background-builder',
-    feature: '/homebrew/feature-editor',
-    feat: '/homebrew/feat-builder',
-    monster: '/homebrew/monster-builder',
-  };
-
-  if (all.length === 0) {
-    return (
-      <View style={styles.panel}>
-        <Text style={styles.panelTitle}>📚 Library</Text>
-        <Text style={styles.emptyTxt}>No homebrew content saved yet. Create something above.</Text>
-      </View>
-    );
-  }
-
-  const CATEGORIES: { id: ContentCacheType | 'all'; label: string }[] = [
-    { id: 'all',        label: 'All' },
-    { id: 'race',       label: 'Races' },
-    { id: 'subrace',    label: 'Subraces' },
-    { id: 'class',      label: 'Classes' },
-    { id: 'subclass',   label: 'Subclasses' },
-    { id: 'background', label: 'Backgrounds' },
-    { id: 'item',       label: 'Items' },
-    { id: 'spell',      label: 'Spells' },
-    { id: 'feature',    label: 'Features' },
-    { id: 'feat',       label: 'Feats' },
-    { id: 'monster',    label: 'Monsters' },
-  ];
-
-  const filtered = all.filter(({ type, item }) => {
-    if (categoryFilter !== 'all' && type !== categoryFilter) return false;
-    if (search.trim() && !item.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
-    return true;
-  });
-
-  return (
-    <View style={styles.panel}>
-      <Text style={styles.panelTitle}>📚 Library ({all.length})</Text>
-
-      <TextInput
-        style={styles.search}
-        placeholder="Search your homebrew"
-        placeholderTextColor={Colors.textDim}
-        value={search}
-        onChangeText={setSearch}
-      />
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow} contentContainerStyle={styles.categoryRowContent}>
-        {CATEGORIES.map(cat => {
-          const count = cat.id === 'all' ? all.length : all.filter(a => a.type === cat.id).length;
-          if (cat.id !== 'all' && count === 0) return null;
-          const active = categoryFilter === cat.id;
-          return (
-            <Pressable
-              key={cat.id}
-              style={[styles.categoryChip, active && styles.categoryChipActive]}
-              onPress={() => setCategoryFilter(cat.id)}
-            >
-              <Text style={[styles.categoryChipTxt, active && styles.categoryChipTxtActive]}>
-                {cat.label} ({count})
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {filtered.length === 0 && (
-        <Text style={styles.emptyTxt}>No homebrew matches your search or filter.</Text>
-      )}
-
-      {filtered.map(({ type, item, ...rest }) => {
-        const editRoute = EDIT_ROUTES[type];
-        const parentName = 'parentName' in rest ? rest.parentName : undefined;
-        return (
-          <View key={`${type}:${item.id}`} style={styles.libraryRow}>
-            <View style={styles.libraryInfo}>
-              <Text style={styles.libraryName}>
-                {item.name}{parentName ? ` (${parentName})` : ''}
-              </Text>
-              <View style={[styles.typeBadge, styles[`typeBadge_${type}`] ?? {}]}>
-                <Text style={styles.typeBadgeTxt}>{type}</Text>
-              </View>
-            </View>
-            <View style={styles.libraryActions}>
-              {editRoute && (
-                <Pressable
-                  style={styles.libBtn}
-                  onPress={() => router.push(`${editRoute}?editId=${item.id}` as any)}
-                >
-                  <Text style={styles.libBtnTxt}>✏️</Text>
-                </Pressable>
-              )}
-              <Pressable
-                style={styles.libBtn}
-                onPress={() => setHistoryTarget({ type, item })}
-              >
-                <Text style={styles.libBtnTxt}>🕐</Text>
-              </Pressable>
-              <Pressable
-                style={styles.libBtn}
-                disabled={exportingId === item.id}
-                onPress={() => setExportTarget({ type, item })}
-              >
-                {exportingId === item.id
-                  ? <ActivityIndicator size="small" color={Colors.textPrimary} />
-                  : <Text style={styles.libBtnTxt}>📤</Text>}
-              </Pressable>
-              <Pressable
-                style={styles.libBtn}
-                onPress={() => {
-                  Alert.alert('Delete', `Delete "${item.name}"?`, [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete', style: 'destructive', onPress: () => deleteItem(type, item.id) },
-                  ]);
-                }}
-              >
-                <Text style={styles.libBtnTxt}>🗑</Text>
-              </Pressable>
-            </View>
-          </View>
-        );
-      })}
-
-      <ExportFormatSheet
-        visible={!!exportTarget}
-        title={exportTarget ? `Export "${exportTarget.item.name}"` : ''}
-        onSelect={handleExportFormat}
-        onClose={() => setExportTarget(null)}
-        showPackOption
-      />
-
-      <VersionHistoryModal
-        visible={!!historyTarget}
-        type={historyTarget?.type ?? null}
-        id={historyTarget?.item.id ?? null}
-        name={historyTarget?.item.name ?? ''}
-        onClose={() => setHistoryTarget(null)}
-      />
+      {ruleProfiles.length > 0 && <View style={{ marginTop: Spacing.sm }}>
+        <Text style={styles.panelSub}>Saved Custom Rule Profiles</Text>
+        {ruleProfiles.map(profile => <Pressable key={profile.id} style={styles.createBtn} onPress={() => router.push(('/homebrew/rule-profile?editId=' + profile.id) as any)}><Text style={styles.createBtnTxt}>⚙️ {profile.name}</Text></Pressable>)}
+      </View>}
     </View>
   );
 }
@@ -244,14 +62,45 @@ function LibraryPanel() {
 // ── Homebrew Screen ───────────────────────────────────────────────────────────
 
 export default function HomebrewScreen() {
+  const router = useRouter();
+  const { view } = useLocalSearchParams<{ view?: string }>();
+
+  // Old deep links to the two views that moved into the Compendium. Only the
+  // library/packages views are redirected — creation routes are never touched.
+  const legacyTarget = legacyHomebrewViewRedirect(view);
+  useEffect(() => {
+    if (legacyTarget) router.replace(legacyTarget);
+  }, [legacyTarget, router]);
+
+  function openInCompendium(mode: CompendiumMode) {
+    useCompendiumModeStore.getState().setMode(mode);
+    router.navigate(compendiumHref(mode));
+  }
+
+  if (legacyTarget) return <View style={styles.screen} />;
+
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>Homebrew</Text>
+        <Pressable style={styles.importBtn} onPress={() => router.push('/homebrew/import-package')}>
+          <Text style={styles.importBtnTxt}>⬇️ Import Homebrew</Text>
+        </Pressable>
       </View>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         <CreatePanel />
-        <LibraryPanel />
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>📚 Your content</Text>
+          <Text style={styles.panelSub}>Browse, edit, export and delete what you've made — and manage installed packages — in the Compendium.</Text>
+          <View style={styles.linkRow}>
+            <Pressable style={styles.linkBtn} testID="homebrew-open-library" onPress={() => openInCompendium('homebrew')}>
+              <Text style={styles.linkBtnTxt}>Compendium → Homebrew</Text>
+            </Pressable>
+            <Pressable style={styles.linkBtn} testID="homebrew-open-packages" onPress={() => openInCompendium('packages')}>
+              <Text style={styles.linkBtnTxt}>Compendium → Packages</Text>
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -265,10 +114,15 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xl + 8, paddingBottom: Spacing.md,
     paddingHorizontal: Spacing.md,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm,
   },
   title:  { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.gold },
-  scroll: { flex: 1 },
-  content:{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xxl },
+  importBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+  },
+  importBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
+  content: { padding: Spacing.md, paddingBottom: Spacing.xxl, gap: Spacing.md },
 
   panel: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,
@@ -285,45 +139,10 @@ const styles = StyleSheet.create({
   },
   createBtnTxt: { fontSize: FontSize.md, color: Colors.textPrimary },
 
-  search: {
-    backgroundColor: Colors.surfaceHigh, borderWidth: 1, borderColor: Colors.border,
-    borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    fontSize: FontSize.md, color: Colors.textPrimary,
+  linkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  linkBtn: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 8,
   },
-  categoryRow:        { flexGrow: 0 },
-  categoryRowContent: { gap: Spacing.xs, paddingVertical: 2 },
-  categoryChip: {
-    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.full,
-    borderWidth: 1, borderColor: Colors.border,
-    paddingHorizontal: Spacing.sm, paddingVertical: 4,
-  },
-  categoryChipActive:   { backgroundColor: Colors.gold + '22', borderColor: Colors.gold + '66' },
-  categoryChipTxt:      { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
-  categoryChipTxtActive:{ color: Colors.gold },
-
-  libraryRow: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border,
-  },
-  libraryInfo:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  libraryName:    { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.bold, flex: 1 },
-  typeBadge:      { backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm, paddingHorizontal: 6, paddingVertical: 2 },
-  typeBadgeTxt:   { fontSize: FontSize.xs, color: Colors.textDim },
-  typeBadge_race:       { backgroundColor: Colors.green  + '22' },
-  typeBadge_subrace:    { backgroundColor: Colors.green  + '22' },
-  typeBadge_class:      { backgroundColor: Colors.gold   + '22' },
-  typeBadge_subclass:   { backgroundColor: Colors.gold   + '22' },
-  typeBadge_spell:      { backgroundColor: Colors.blue   + '22' },
-  typeBadge_background: { backgroundColor: Colors.purple + '22' },
-  typeBadge_feature:    { backgroundColor: Colors.surfaceHigh },
-  typeBadge_item:       { backgroundColor: Colors.red + '22' },
-  typeBadge_feat:       { backgroundColor: Colors.gold + '22' },
-  typeBadge_monster:    { backgroundColor: Colors.red + '22' },
-  libraryActions: { flexDirection: 'row', gap: Spacing.xs },
-  libBtn: {
-    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,
-    padding: Spacing.xs, borderWidth: 1, borderColor: Colors.border,
-  },
-  libBtnTxt:  { fontSize: FontSize.md },
-  emptyTxt:   { color: Colors.textDim, fontStyle: 'italic', fontSize: FontSize.sm },
+  linkBtnTxt: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold },
 });

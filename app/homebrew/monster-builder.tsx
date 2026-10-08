@@ -18,17 +18,68 @@ import {
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ability, DraftTrait, ResourceGrant, Feature } from '../../src/engine/types';
+import { Ability, DraftTrait, ResourceGrant, Feature, Entity, RulesetId } from '../../src/engine/types';
 import { MonsterTemplate } from '../../src/content/monsters/types';
 import { Alert } from '../../src/utils/alert';
 import { validateMonster } from '../../src/engine/homebrewValidator';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { AbilityScoreGrid, TraitListEditor, buildTraitFeature } from '../../src/components/homebrew/TraitEditor';
-import { toId } from '../../src/content/traitCompiler';
+import { toId, disambiguateId } from '../../src/content/traitCompiler';
+import { officialMonsters } from '../../src/content/runtimeRules';
 import { PickOrCustom } from '../../src/components/homebrew/PickOrCustom';
+import { spawnMonster } from '../../src/engine/monsterFactory';
+import { collectAllEffects } from '../../src/engine/pipeline';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { useCharacterStore, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+
+// Read-only test: unlike every other homebrew builder, a monster isn't
+// GRANTED onto a scratch character — it IS its own entity. So there's no
+// "before" to diff against; instead this spawns the draft via spawnMonster()
+// (src/engine/monsterFactory.ts — the SAME function DM tooling already uses
+// to put a real monster into an encounter, which calls recomputeDerived()
+// internally) and reads the resulting entity's own final computed stats
+// directly. This is genuinely useful, not just a formality: a trait like
+// "AC bonus (+N, stacks)" adds ON TOP of the authored AC value, so the
+// final derived.ac can differ from what the author typed in the AC field
+// above — same for a "Grants a sense" trait vs. the free-text Senses field
+// (which is flavor-only and never reaches derived.senses at all). Only
+// COMPUTED outcomes are shown here, not fields already visible as raw form
+// values (CR, alignment, type, senses/languages text) — those need no test.
+function buildMonsterSummaryRows(entity: Entity): Row[] {
+  const rows: Row[] = [];
+  rows.push({ label: `AC: ${entity.derived.ac}` });
+  rows.push({ label: `HP: ${entity.resources.hp.maximum}` });
+  rows.push({ label: `Speed: ${entity.derived.speed} ft` });
+  rows.push({ label: `Passive Perception: ${entity.derived.passivePerception}` });
+  rows.push({ label: `Passive Investigation: ${entity.derived.passiveInvestigation}` });
+  rows.push({ label: `Passive Insight: ${entity.derived.passiveInsight}` });
+
+  for (const ab of entity.proficiencies.savingThrows) {
+    const bonus = entity.derived.savingThrows[ab];
+    rows.push({ label: `${ab.toUpperCase()} save: ${bonus >= 0 ? '+' : ''}${bonus}` });
+  }
+
+  // Resistance/immunity — same collectAllEffects walk EquipmentPreviewModal
+  // already uses (not part of DerivedStats).
+  const resistances = new Set(
+    collectAllEffects(entity)
+      .filter(ae => ae.effect.type === 'grant_resistance' || ae.effect.type === 'grant_immunity')
+      .map(ae => `${ae.effect.type === 'grant_immunity' ? 'Immunity' : 'Resistance'}: ${ae.effect.target}`)
+  );
+  for (const r of resistances) rows.push({ label: r });
+
+  for (const r of entity.resources.custom) {
+    rows.push({ label: `Resource: ${r.name} (${r.maximum})` });
+  }
+
+  return rows;
+}
 
 const SIZES: MonsterTemplate['size'][] = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'];
 const CRS = [0, 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -61,6 +112,8 @@ export default function MonsterBuilderScreen() {
   const monsters = useHomebrewStore(s => s.monsters);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing  = editId ? monsters.find(m => m.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name,      setName]      = useState('');
   const [cr,        setCr]        = useState<number>(1);
@@ -78,12 +131,23 @@ export default function MonsterBuilderScreen() {
   const [languages,   setLanguages]   = useState('');
   const [legendaryActions, setLegendaryActions] = useState('');
   const [traits, setTraits] = useState<DraftTrait[]>([]);
+  // Re-audit A05: which trait localIds have actually been edited (content
+  // differs from what hydration seeded) — TraitListEditor reports changes
+  // as a whole replaced array via onChange, so this is computed by diffing
+  // against the previous traits state on every change, not tracked by the
+  // editor itself. A trait whose localId isn't in this set is passed through
+  // via its original compiled Feature at save time (buildMonster below)
+  // instead of being recompiled from its still-placeholder DraftTrait.
+  const [touchedTraitIds, setTouchedTraitIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: hydrate once when the existing monster first resolves.
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     setCr(editing.cr);
     setSize(editing.size);
     setType(editing.type);
@@ -103,8 +167,12 @@ export default function MonsterBuilderScreen() {
     setLegendaryActions(editing.legendaryActions ? String(editing.legendaryActions) : '');
     // Same accepted limitation as race-builder/subclass-builder's edit-mode
     // recovery: already-compiled Features can't be losslessly reversed back
-    // into authoring-shape DraftTraits, so features start as flavor-only
-    // entries seeded from the saved name/description.
+    // into authoring-shape DraftTraits for RE-EDITING, so they display as
+    // flavor-only entries seeded from the saved name/description until
+    // opened. Re-audit A05: this is a display limitation only — buildMonster
+    // below passes an untouched trait's ORIGINAL compiled Feature through
+    // verbatim on save (localId 't_<original id>' correlates them), so a
+    // save that never opens this trait doesn't lose its real effects.
     setTraits(editing.features.map(f => ({
       localId: `t_${f.id}`, name: f.name, description: f.description, effectKind: 'none' as const,
       abilityTarget: 'str', abilityAmount: '1', unarmoredBase: '10', unarmoredAbilities: ['dex'], unarmoredCaps: {}, acBonusAmount: '1',
@@ -115,7 +183,21 @@ export default function MonsterBuilderScreen() {
       actionType: 'bonus_action', actionTypeOther: '', recharge: 'short_rest', rechargeOther: '', uses: '1', healDice: '1d8',
       limitedUse: false,
     })));
+    setTouchedTraitIds(new Set());
   }, [editing?.id]);
+
+  function handleTraitsChange(next: DraftTrait[]) {
+    const prevById = new Map(traits.map(t => [t.localId, t]));
+    setTouchedTraitIds(prev => {
+      const nextTouched = new Set(prev);
+      for (const t of next) {
+        const before = prevById.get(t.localId);
+        if (!before || JSON.stringify(before) !== JSON.stringify(t)) nextTouched.add(t.localId);
+      }
+      return nextTouched;
+    });
+    setTraits(next);
+  }
 
   function toggleSavingThrow(a: Ability) {
     setSavingThrows(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
@@ -127,17 +209,34 @@ export default function MonsterBuilderScreen() {
   }
 
   function buildMonster(): MonsterTemplate {
-    const id = editing?.id ?? (toId(name) || 'homebrew_monster');
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
+    const takenMonsterIds = new Set([
+      ...officialMonsters().map(m => m.id),
+      ...monsters.filter(m => m.id !== editing?.id).map(m => m.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_monster', takenMonsterIds);
     const features: Feature[] = [];
     const resources: ResourceGrant[] = [];
+    const usedIds = new Set<string>();
     for (const t of traits) {
-      const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'campaign', sourceRefId: id, level: null });
+      // Re-audit A05: an untouched trait hydrated from an existing compiled
+      // Feature (localId 't_<original id>', set at hydration above) passes
+      // through verbatim rather than being recompiled from its still-
+      // "effectKind: none" placeholder — a save that never actually opened
+      // this trait must not silently discard its real effects.
+      const originalFeature = editing?.features.find(f => `t_${f.id}` === t.localId);
+      if (originalFeature && !touchedTraitIds.has(t.localId)) {
+        features.push(originalFeature);
+        usedIds.add(originalFeature.id);
+        continue;
+      }
+      const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'campaign', sourceRefId: id, level: null, usedIds });
       features.push(feature, ...(extraFeatures ?? []));
       if (resource) resources.push(resource);
       resources.push(...(extraResources ?? []));
     }
 
-    return {
+    return mergeHomebrewDefinition(editing, {
       id,
       name: name.trim(),
       cr,
@@ -153,15 +252,23 @@ export default function MonsterBuilderScreen() {
       speed: parseInt(speed, 10) || 0,
       features,
       savingThrows,
-      skills: {},
+      skills: editing?.skills ?? {},
       senses: senses.trim() ? senses.split(',').map(s => s.trim()).filter(Boolean) : [],
       languages: languages.trim() ? languages.split(',').map(l => l.trim()).filter(Boolean) : [],
       legendaryActions: legendaryActions.trim() ? parseInt(legendaryActions, 10) : undefined,
-      resources: resources.length > 0 ? resources : undefined,
-    };
+      resources: resources.length > 0 ? resources : editing?.resources,
+      rulesetId,
+    });
   }
 
-  async function handleSave() {
+  function runTest() {
+    const monster = buildMonster();
+    const entity = spawnMonster(monster, DEFAULT_RULES);
+    setTestRows(buildMonsterSummaryRows(entity));
+    setTestOpen(true);
+  }
+
+  function handleSave() {
     const monster = buildMonster();
     const { valid, errors, warnings } = validateMonster(monster);
     if (!valid) {
@@ -171,11 +278,11 @@ export default function MonsterBuilderScreen() {
     if (warnings.length > 0) {
       Alert.alert('Warnings', warnings.join('\n') + '\n\nSave anyway?', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Save', onPress: () => doSave(monster) },
+        { text: 'Save', onPress: () => { void doSave(monster); } },
       ]);
       return;
     }
-    doSave(monster);
+    void doSave(monster);
   }
 
   async function doSave(monster: MonsterTemplate) {
@@ -206,6 +313,10 @@ export default function MonsterBuilderScreen() {
         <Field label="Name *">
           <TextInput style={styles.input} value={name} onChangeText={setName}
             placeholder="Monster name" placeholderTextColor={Colors.textDim} />
+        </Field>
+
+        <Field label="Game / Ruleset">
+          <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
         </Field>
 
         <Field label="Challenge Rating">
@@ -304,18 +415,28 @@ export default function MonsterBuilderScreen() {
             describe them as "Flavor only" with the full stat block text (e.g. "Bite. Melee Weapon
             Attack: +4 to hit, reach 5 ft. Hit: 5 (1d6+2) piercing.").
           </Text>
-          <TraitListEditor traits={traits} onChange={setTraits} />
+          <TraitListEditor traits={traits} onChange={handleTraitsChange} />
         </Field>
 
       </ScrollView>
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Monster'}</Text>
           </Pressable>
         </View>
       </SafeBottomView>
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Monster'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -346,8 +467,10 @@ const styles = StyleSheet.create({
   chipActive:{ borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
   chipTxt:   { fontSize: FontSize.xs, color: Colors.textSecondary },
   chipTxtActive: { color: Colors.gold, fontWeight: FontWeight.bold },
-  footer:    { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:    { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:   { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt:{ color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:   { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

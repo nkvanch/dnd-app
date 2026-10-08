@@ -10,8 +10,11 @@ import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { AsiFeatPicker } from '../../src/components/AsiFeatPicker';
 import { FEATS_BY_ID } from '../../src/content/feats/index';
+import { globalContentDB } from '../../src/content/classes/library';
 import { Entity, ChoiceState } from '../../src/engine/types';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 /** Builds a fresh, unresolved feat choice anchored at level 1 for the picker. */
 function makeCreationFeatChoice(index: number): ChoiceState {
@@ -40,7 +43,13 @@ export default function CreationFeatsScreen() {
   const setDraft = useCharacterStore(s => s.setDraft);
   const rules    = useCharacterStore(s => s.rules);
 
-  const [pickerOpen, setPickerOpen] = useState(false);
+  // SAVE-AND-ADD-1: reopen the picker on return from "+ Create new homebrew
+  // feat" so AsiFeatPicker's own effect can consume the pending selection —
+  // this screen (and the Modal wrapping the picker) fully unmounts during
+  // that navigation, so `pickerOpen` would otherwise reset to closed.
+  const [pickerOpen, setPickerOpen] = useState(
+    () => usePendingSelectionStore.getState().pending.feat_picker !== undefined
+  );
 
   useEffect(() => {
     if (!draft) router.replace('/creation/name');
@@ -73,7 +82,11 @@ export default function CreationFeatsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
       <Text style={styles.heading}>Feats</Text>
       <View style={styles.divider} />
 
@@ -90,7 +103,7 @@ export default function CreationFeatsScreen() {
         <Text style={styles.emptyNote}>No feats yet.</Text>
       ) : (
         takenFeats.map(f => {
-          const cat = FEATS_BY_ID[f.source.refId];
+          const cat = (globalContentDB.feats ?? []).find(x => x.id === f.source.refId) ?? FEATS_BY_ID[f.source.refId];
           return (
             <View key={f.id} style={styles.featRow}>
               <View style={{ flex: 1 }}>
@@ -110,13 +123,17 @@ export default function CreationFeatsScreen() {
         <Text style={styles.addBtnTxt}>+ Add a Feat</Text>
       </Pressable>
 
-      <View style={styles.divider} />
-      <Pressable
-        style={styles.doneBtn}
-        onPress={() => { setDraft(markVisited(draft)); router.push('/creation/hub'); }}
-      >
-        <Text style={styles.doneBtnTxt}>Done →</Text>
-      </Pressable>
+    </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable
+          style={styles.doneBtn}
+          onPress={() => { setDraft(markVisited(draft)); router.push('/creation/hub'); }}
+        >
+          <Text style={styles.doneBtnTxt}>Done →</Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
 
       {/* Feat picker (feat-only mode) */}
       <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
@@ -131,16 +148,19 @@ export default function CreationFeatsScreen() {
               setDraft(markVisited(updated));
               setPickerOpen(false);
             }}
+            onCreateNewFeat={() => router.push('/homebrew/feat-builder')}
+            browseStateKey="feat:creation"
           />
         </View>
       </Modal>
-    </ScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
   divider:   { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
 

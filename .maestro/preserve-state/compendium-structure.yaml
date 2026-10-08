@@ -1,0 +1,12 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - Compendium structure
+tags: [preserve-state, structure]
+---
+- launchApp
+- tapOn: { id: tab-compendium }
+- assertVisible: { id: compendium-screen }
+- assertVisible: { id: compendium-search }
+- assertVisible: { id: compendium-filters }
+- assertVisible: "All"
+- assertVisible: "Official"
+- tapOn: { id: tab-home }

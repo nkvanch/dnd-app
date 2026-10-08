@@ -1,5 +1,5 @@
 // app/(tabs)/_layout.tsx
-// Bottom tab navigator — 4 sections: Home, Campaigns, Characters, Homebrew.
+// Bottom tab navigator — 5 sections: Home, Campaigns, Characters, Homebrew, Compendium.
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +31,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
+          tabBarButtonTestID: 'tab-home',
           tabBarIcon: ({ focused }) => <TabIcon glyph="⚔️" focused={focused} />,
         }}
       />
@@ -38,6 +39,7 @@ export default function TabLayout() {
         name="campaigns"
         options={{
           title: 'Campaigns',
+          tabBarButtonTestID: 'tab-campaigns',
           tabBarIcon: ({ focused }) => <TabIcon glyph="🗺️" focused={focused} />,
         }}
       />
@@ -45,6 +47,7 @@ export default function TabLayout() {
         name="characters"
         options={{
           title: 'Characters',
+          tabBarButtonTestID: 'tab-characters',
           tabBarIcon: ({ focused }) => <TabIcon glyph="👤" focused={focused} />,
         }}
       />
@@ -52,7 +55,16 @@ export default function TabLayout() {
         name="homebrew"
         options={{
           title: 'Homebrew',
+          tabBarButtonTestID: 'tab-homebrew',
           tabBarIcon: ({ focused }) => <TabIcon glyph="📜" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="compendium"
+        options={{
+          title: 'Compendium',
+          tabBarButtonTestID: 'tab-compendium',
+          tabBarIcon: ({ focused }) => <TabIcon glyph="📖" focused={focused} />,
         }}
       />
     </Tabs>

@@ -10,14 +10,16 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Entity, CampaignRules } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { createCompanion, syncCompanionFromOwner } from '../../engine/companion';
-import { COMPANION_TEMPLATES_BY_GRANT_FEATURE } from '../../content/companions';
+import { companionTemplates } from '../../content/runtimeRules';
 import { applyDamage, applyHealing } from '../../engine/combat';
+import { syncManager } from '../../sync/syncManager';
 import { HpModal } from './HpModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 export function CompanionSection({ owner, rules }: { owner: Entity; rules: CampaignRules }) {
   const characters = useCharacterStore(s => s.characters);
   const applyIncomingEntity = useCharacterStore(s => s.applyIncomingEntity);
+  const updateCharacter = useCharacterStore(s => s.updateCharacter);
   const [hpOpen, setHpOpen] = useState(false);
 
   // Which companion template(s) this owner currently has access to, keyed by
@@ -26,8 +28,8 @@ export function CompanionSection({ owner, rules }: { owner: Entity; rules: Campa
   // across their features, though in practice Artificer subclasses grant one.
   const availableGrants = useMemo(
     () => owner.features
-      .filter(f => f.isActive && COMPANION_TEMPLATES_BY_GRANT_FEATURE[f.id])
-      .map(f => COMPANION_TEMPLATES_BY_GRANT_FEATURE[f.id]),
+      .filter(f => f.isActive && companionTemplates()[f.id])
+      .map(f => companionTemplates()[f.id]),
     [owner.features],
   );
 
@@ -41,19 +43,35 @@ export function CompanionSection({ owner, rules }: { owner: Entity; rules: Campa
 
   if (availableGrants.length === 0) return null;
 
+  // Bug fix (architecture review U8): these used to call applyIncomingEntity
+  // for genuinely LOCAL, player-initiated actions — that function's own doc
+  // comment says it's the sync-RECEIVE path ("no sync broadcast, we are the
+  // receiver, not the sender"). A companion's summon/damage/heal were
+  // silently invisible to the DM and every other connected device.
   function summon(templateId: string) {
     const tpl = availableGrants.find(t => t.id === templateId);
     if (!tpl) return;
-    applyIncomingEntity(createCompanion(owner, tpl, rules));
+    const newCompanion = createCompanion(owner, tpl, rules);
+    // applyIncomingEntity is still the right call for the actual insert —
+    // it's the only store action that upserts a brand-new entity id
+    // (updateCharacter only ever maps over entities already in the store).
+    // What it doesn't do is broadcast, so do that explicitly — mirrors
+    // syncEntityPatch's own documented behavior for a brand-new entity
+    // (previous:null → a full-snapshot syncEntity() push, same as any other
+    // first save). Companion summon isn't undo/timeline-tracked (a rare,
+    // one-off action, unlike damage/heal below) — a smaller, disclosed gap,
+    // not silently dropped.
+    void applyIncomingEntity(newCompanion);
+    syncManager.syncEntityPatch(newCompanion.id, null, newCompanion);
   }
 
   function handleDamage(amount: number, damageType?: string) {
     if (!companion) return;
-    applyIncomingEntity(applyDamage(companion, amount, rules, damageType));
+    updateCharacter(companion.id, c => applyDamage(c, amount, rules, damageType), `${companion.identity.name || 'Companion'} took ${amount}${damageType ? ` ${damageType}` : ''} damage`, 'combat');
   }
   function handleHeal(amount: number) {
     if (!companion) return;
-    applyIncomingEntity(applyHealing(companion, amount, rules));
+    updateCharacter(companion.id, c => applyHealing(c, amount, rules), `${companion.identity.name || 'Companion'} healed ${amount}`, 'combat');
   }
 
   if (!companion) {

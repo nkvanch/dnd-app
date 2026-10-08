@@ -2,19 +2,35 @@
 // Homebrew class builder — Phase 2 full authoring UI.
 // Sections: Basics → Saving Throws → Proficiencies →
 //           Spellcasting → Per-Level Features → ASI Levels → Save
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { CharClass, Ability, DraftTrait } from '../../src/engine/types';
+import { CharClass, Ability, DraftTrait, Entity, RulesetId, ChoiceDefinition } from '../../src/engine/types';
+import {
+  ChoiceDefinitionEditorModal, DraftChoice, newDraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { Alert } from '../../src/utils/alert';
-import { itemRepo } from '../../src/content/itemRepo';
+import { mergeItemIndex, resolveItemById } from '../../src/content/contentResolution';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
-import { newDraftTrait, TraitEditorModal, COMMON_TOOLS } from '../../src/components/homebrew/TraitEditor';
+import { newDraftTrait, TraitEditorModal, COMMON_TOOLS, disambiguateId, EFFECT_KIND_LABELS as TRAIT_KIND_LABELS } from '../../src/components/homebrew/TraitEditor';
+import { globalContentDB } from '../../src/content/classes/library';
+import { getProgressionForClass } from '../../src/content/classes/progressions';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLeveledChoices, serializeLeveledChoices, LeveledLosslessDraftChoice } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -35,6 +51,21 @@ const SPELL_STYLES = [
   { key: 'half', label: 'Half Caster', sub: 'Paladin/Ranger slots' },
   { key: 'pact', label: 'Pact Magic',  sub: 'Warlock-style slots' },
 ] as const;
+/**
+ * Rules-engine blocker closure (2C — homebrew class preparation policy):
+ * production spell-card generation now reads CharClass.spellPreparationPolicy
+ * for real legality/DC — see actionCards.ts's isSpellPreparationLegal/
+ * resolveSpellCastingContexts — so a homebrew caster needs a way to author
+ * it. Slot Table (SPELL_STYLES above) can't stand in for this: it's a
+ * completely separate axis (Sorcerer and Wizard are both 'full' Slot Table
+ * but opposite preparation policies), so this is a genuinely new field, not
+ * a relabeled existing one.
+ */
+const SPELL_PREP_POLICIES = [
+  { key: 'known', label: 'Known Spells', sub: "Fixed list, always castable — Sorcerer/Bard/Warlock-style" },
+  { key: 'spellbook_prepared', label: 'Spellbook + Prepared', sub: 'Owns a spellbook, prepares a subset daily — Wizard-style' },
+  { key: 'full_list_prepared', label: 'Full-List Prepared', sub: 'Prepares directly from the whole class list daily — Cleric/Druid-style' },
+] as const;
 
 const DEFAULT_ASI_LEVELS = [4, 8, 12, 16, 19];
 
@@ -43,6 +74,7 @@ function toId(name: string): string {
 }
 
 type LevelFeature = DraftTrait & { level: number };
+type LevelChoice = LeveledLosslessDraftChoice;
 
 /**
  * Classes saved before class features gained real effect kinds have
@@ -74,8 +106,11 @@ export default function ClassBuilderScreen() {
   const saveItem = useHomebrewStore(s => s.saveItem);
   const homebrewItems = useHomebrewStore(s => s.items);
   const homebrewClasses = useHomebrewStore(s => s.classes);
+  const savedSpellLists = useHomebrewStore(s => s.spellLists);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing = editId ? homebrewClasses.find(c => c.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   // ── Basics
   const [name,        setName]        = useState('');
@@ -104,6 +139,8 @@ export default function ClassBuilderScreen() {
   const [equipmentNotes, setEquipmentNotes] = useState('');
 
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // ── Spellcasting
   const [isCaster,        setIsCaster]        = useState(false);
@@ -111,13 +148,27 @@ export default function ClassBuilderScreen() {
   // selected = the player picks at creation (spellcastingAbilityOptions).
   const [spellAbilities,  setSpellAbilities]  = useState<Ability[]>(['cha']);
   const [spellStyle,      setSpellStyle]      = useState<'full'|'half'|'pact'>('full');
+  const [spellPrepPolicy, setSpellPrepPolicy] = useState<'known'|'spellbook_prepared'|'full_list_prepared'>('known');
   const [spellStartLevel, setSpellStartLevel] = useState('1');
+  // Where this class's spell choices come from: 'own' (spells tagged for this class), another class's
+  // spell list ('class:<id>'), or one of the player's saved Spell Lists ('list:<id>').
+  const [spellSource, setSpellSource] = useState<string>('own');
+  // Classes whose spell list can be borrowed: every spellcasting class, official or homebrew (not this one).
+  const borrowableClasses = useMemo(() => {
+    const all = [...globalContentDB.classes, ...homebrewClasses.filter(c => !globalContentDB.classes.some(o => o.id === c.id))];
+    return all.filter(c => c.id !== editing?.id && (c.spellcastingAbility || (c.spellcastingAbilityOptions?.length ?? 0) > 0 || c.spellcastingStyle));
+  }, [homebrewClasses, editing?.id]);
 
   // ── Per-level features
   const [levelFeatures, setLevelFeatures] = useState<LevelFeature[]>([]);
   const [addLevel, setAddLevel] = useState('1');
   const [addName,  setAddName]  = useState('');
   const [openFeatureId, setOpenFeatureId] = useState<string | null>(null);
+
+  // ── Per-level player choices (Expertise/Tool/Language)
+  const [levelChoicesList, setLevelChoicesList] = useState<LevelChoice[]>([]);
+  const [addChoiceLevel, setAddChoiceLevel] = useState('1');
+  const [openChoiceId, setOpenChoiceId] = useState<string | null>(null);
 
   // ── ASI levels
   const [asiLevels, setAsiLevels] = useState<number[]>([...DEFAULT_ASI_LEVELS]);
@@ -129,6 +180,7 @@ export default function ClassBuilderScreen() {
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     setHitDie(editing.hitDie as 4|6|8|10|12);
     setHpAbility(editing.hpAbility ?? 'con');
     setDescription(editing.description ?? '');
@@ -138,7 +190,12 @@ export default function ClassBuilderScreen() {
     setToolProfs(editing.toolProfs ?? []);
     setStartingEquipment(
       (editing.startingEquipment ?? []).map(id => {
-        const found = [...itemRepo.getIndex(), ...homebrewItems].find(i => i.id === id);
+        // Bug fix (architecture review C9): this used to concat official +
+        // homebrew with no dedup and official listed first, so a homebrew
+        // item overriding an official one by id resolved to the official
+        // name instead of the override — resolveItemById already centralizes
+        // the correct homebrew-first precedence (contentResolution.ts).
+        const found = resolveItemById(id, homebrewItems);
         return { id, name: found?.name ?? id };
       })
     );
@@ -150,9 +207,22 @@ export default function ClassBuilderScreen() {
       : ['cha']
     );
     setSpellStyle(editing.spellcastingStyle ?? 'full');
+    setSpellPrepPolicy(
+      editing.spellPreparationPolicy === 'spellbook_prepared' || editing.spellPreparationPolicy === 'full_list_prepared'
+        ? editing.spellPreparationPolicy : 'known'
+    );
     setSpellStartLevel(String(editing.spellcastingStartLevel ?? 1));
+    setSpellSource(editing.spellListSource
+      ? (editing.spellListSource.kind === 'list' ? `list:${editing.spellListSource.listId}` : `class:${editing.spellListSource.classId}`)
+      : 'own');
     setLevelFeatures((editing.levelFeatures ?? []).map(normalizeLevelFeature));
     setAsiLevels(editing.asiLevels ?? [...DEFAULT_ASI_LEVELS]);
+    // CHOICE-AUTHORING-1: CharClass.levelChoices stores already-compiled
+    // ChoiceDefinition[] per level (unlike levelFeatures' draft-shaped
+    // DraftTrait[]) — reconstruct via definitionToDraftChoice using the
+    // exact idPrefix buildHomebrewClass() below composes at save time, so
+    // re-saving without changes round-trips to the same ids.
+    setLevelChoicesList(hydrateLeveledChoices(editing.levelChoices, editing.id));
   }, [editing?.id]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -199,11 +269,20 @@ export default function ClassBuilderScreen() {
   function removeStartingItem(id: string) {
     setStartingEquipment(prev => prev.filter(i => i.id !== id));
   }
-  const equipResults = equipSearch.trim().length >= 2
-    ? [...itemRepo.getIndex(), ...homebrewItems]
+  // Bug fix (architecture review C9): same unmerged-concat pattern as
+  // above — mergeItemIndex already dedups by id (homebrew wins) instead of
+  // showing a colliding homebrew/official pair as two separate rows.
+  // BUILDER-PERF-1: mergeItemIndex (full ~891-item catalog merge) used to
+  // rerun on every keystroke of equipSearch once it hit 2+ chars — split
+  // into its own memo (only recomputes when homebrewItems actually
+  // changes) so each keystroke only pays for the filter/slice, not the
+  // full merge.
+  const allItemIndex = useMemo(() => mergeItemIndex(homebrewItems), [homebrewItems]);
+  const equipResults = useMemo(() => equipSearch.trim().length >= 2
+    ? allItemIndex
         .filter(i => i.name.toLowerCase().includes(equipSearch.trim().toLowerCase()))
         .slice(0, 12)
-    : [];
+    : [], [allItemIndex, equipSearch]);
   function toggleAsiLevel(lvl: number) {
     setAsiLevels(prev =>
       prev.includes(lvl) ? prev.filter(l => l !== lvl) : [...prev, lvl].sort((a, b) => a - b)
@@ -226,14 +305,36 @@ export default function ClassBuilderScreen() {
     setOpenFeatureId(null);
   }
 
-  // ── Save ───────────────────────────────────────────────────────────────────
+  function addLevelChoice() {
+    const lvl = parseInt(addChoiceLevel, 10);
+    if (isNaN(lvl) || lvl < 1 || lvl > 20) return;
+    const d: LevelChoice = { ...newDraftChoice('tool'), level: lvl };
+    setLevelChoicesList(prev => [...prev, d]);
+    setOpenChoiceId(d.localId);
+  }
+  function updateLevelChoice(d: DraftChoice) {
+    setLevelChoicesList(prev => prev.map(x => x.localId === d.localId ? { ...x, ...d } : x));
+  }
+  function deleteLevelChoice(localId: string) {
+    setLevelChoicesList(prev => prev.filter(x => x.localId !== localId));
+    setOpenChoiceId(null);
+  }
 
-  async function handleSave() {
-    if (!name.trim() || saving) return;
-    setSaving(true);
+  // ── Build / Save ───────────────────────────────────────────────────────────
+
+  function buildHomebrewClass(): CharClass {
     const startLvl = parseInt(spellStartLevel, 10);
-    const cls: CharClass = {
-      id:          editing?.id ?? (toId(name) || 'homebrew_class'),
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix for the
+    // full explanation — auto-generated ids had no collision check against
+    // official content.
+    const takenClassIds = new Set([
+      ...globalContentDB.classes.map(c => c.id),
+      ...homebrewClasses.filter(c => c.id !== editing?.id).map(c => c.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_class', takenClassIds);
+    const levelChoices = serializeLeveledChoices(editing?.levelChoices, levelChoicesList, id);
+    return mergeHomebrewDefinition(editing, {
+      id,
       name:        name.trim(),
       hitDie,
       features:    editing?.features ?? [],
@@ -248,17 +349,120 @@ export default function ClassBuilderScreen() {
       spellcastingAbility:     isCaster && spellAbilities.length === 1 ? spellAbilities[0] : undefined,
       spellcastingAbilityOptions: isCaster && spellAbilities.length >= 2 ? spellAbilities : undefined,
       spellcastingStyle:       isCaster ? spellStyle   : undefined,
+      spellPreparationPolicy:  isCaster && spellPrepPolicy !== 'known' ? spellPrepPolicy : undefined,
       spellcastingStartLevel:  isCaster && startLvl > 1 ? startLvl : undefined,
+      spellListSource:         isCaster && spellSource.startsWith('list:') ? { kind: 'list' as const, listId: spellSource.slice(5) }
+                               : isCaster && spellSource.startsWith('class:') ? { kind: 'class' as const, classId: spellSource.slice(6) }
+                               : undefined,
       asiLevels:               JSON.stringify(asiLevels) !== JSON.stringify(DEFAULT_ASI_LEVELS)
                                  ? asiLevels : undefined,
       levelFeatures:           levelFeatures.length > 0 ? levelFeatures : undefined,
-    };
+      levelChoices,
+      rulesetId,
+      // Re-audit A39: this builder has no UI to author or edit either field
+      // (both are import-only — an imported advanced class's full hand-
+      // authored progression, or its PHB multiclass proficiency package).
+      // Previously omitted from the returned object entirely, so editing an
+      // imported class (even a rename-only save) silently deleted its real
+      // progression/multiclass rules. Passed through unconditionally from
+      // `editing` — there is nothing in this screen that could ever
+      // intentionally change either, so no touched/dirty tracking is needed
+      // here (unlike the trait-editor fields above).
+      rawProgression:           editing?.rawProgression,
+      multiclassProficiencies:  editing?.multiclassProficiencies,
+    });
+  }
+
+  // Read-only test: reuses getProgressionForClass() — the SAME compile
+  // function real class selection calls (progressions.ts:227) — to turn
+  // the draft's simplified fields (savingThrows/armorProfs/levelFeatures/
+  // spellcasting config/etc.) into real LevelEntry grants, so this test
+  // can never drift from what picking the class for real would actually
+  // produce. Same "combine every authored level at once, ignore the real
+  // level-gate" approach as subclass-builder.tsx's runTest (verified safe
+  // there: collectAllEffects only gates on Feature.isActive, never on
+  // level) — a caster class's spell_slots grants specifically OVERWRITE
+  // (not add to) the slot table each level (leveling.ts's "always zero
+  // ALL tiers before applying the new row" comment), so applying every
+  // level in order and keeping the LAST one is exactly right: it shows
+  // the class's max slot table, not a broken accumulation. Only `entry
+  // .grants` are applied — `entry.choices` (ASI/subclass-unlock/spellcasting-
+  // ability picks) are skipped entirely, same as subclass-builder, since
+  // none of them are specific to what THIS class's authored content does.
+  function runTest() {
+    const cls = buildHomebrewClass();
+    const progression = getProgressionForClass(cls);
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => {
+      let updated = e;
+      for (const entry of progression.entries) {
+        for (const grant of entry.grants) {
+          updated = applyGrant(updated, grant, entry.level, cls.id);
+        }
+      }
+      return updated;
+    }, DEFAULT_RULES);
+    const rows = buildFeatSummaryRows(before, after);
+    const beforeFeatureIds = new Set(before.features.map(f => f.id));
+    for (const f of after.features) {
+      if (!beforeFeatureIds.has(f.id)) rows.push({ label: `New feature: ${f.name}` });
+    }
+    const beforeResourceIds = new Set(before.resources.custom.map(r => r.id));
+    for (const r of after.resources.custom) {
+      if (!beforeResourceIds.has(r.id)) rows.push({ label: `New resource: ${r.name} (${r.maximum})` });
+    }
+    // Armor/weapon/tool proficiencies and starting equipment aren't part of
+    // buildFeatSummaryRows either (it only diffs skill/save proficiencies) —
+    // the 'proficiency' grant writes straight to entity.proficiencies.*,
+    // never through a Feature, so it would otherwise be invisible here.
+    const armorGained   = after.proficiencies.armor.filter(a => !before.proficiencies.armor.includes(a));
+    const weaponsGained = after.proficiencies.weapons.filter(w => !before.proficiencies.weapons.includes(w));
+    const toolsGained   = after.proficiencies.tools.filter(t => !before.proficiencies.tools.includes(t));
+    if (armorGained.length > 0)   rows.push({ label: `Armor proficiency: ${armorGained.join(', ')}` });
+    if (weaponsGained.length > 0) rows.push({ label: `Weapon proficiency: ${weaponsGained.join(', ')}` });
+    if (toolsGained.length > 0)   rows.push({ label: `Tool proficiency: ${toolsGained.join(', ')}` });
+    if (startingEquipment.length > 0) {
+      rows.push({ label: `Starting equipment: ${startingEquipment.map(i => i.name).join(', ')}` });
+    }
+    // Spell slots aren't part of buildFeatSummaryRows/DERIVED_NUMERIC_KEYS —
+    // show the class's eventual max slot table (the last level's grant,
+    // per the "always overwrites" note above) same per-tier shape
+    // LevelUpPreviewModal/RestPreviewModal already use.
+    if (after.spellcasting) {
+      for (const tier of ['1','2','3','4','5','6','7','8','9'] as const) {
+        const total = after.spellcasting.slots[tier]?.total ?? 0;
+        if (total > 0) rows.push({ label: `Level ${tier} slots (max): ${total}` });
+      }
+    } else if (isCaster && spellAbilities.length >= 2) {
+      // Multi-ability casting defers the actual ability to a player choice
+      // at creation (a non-auto-resolvable ChoiceDefinition, deliberately
+      // not resolved by this test — see the comment above) — without an
+      // init_spellcasting grant, the spell_slots grants that follow it all
+      // no-op (leveling.ts's spell_slots case: "if (!entity.spellcasting)
+      // return entity"), so slots can't be shown for this specific case.
+      rows.push({ label: "This class lets the player choose a spellcasting ability at creation — spell slots aren't shown here since that choice isn't resolved in this test." });
+    }
+    if (rows.length > 0) {
+      rows.push({ label: 'Shown combined across all authored levels (1-20) at once — not what a level 1 character of this class would actually have yet.' });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
+  }
+
+  async function handleSave() {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    const cls = buildHomebrewClass();
     // Saves and navigates immediately rather than waiting on Alert's OK
     // button dismissal — React Native Web's Alert.alert has unreliable
     // callback-firing in some versions, so the actual save+navigate
     // shouldn't depend on it completing.
     try {
       await saveItem('class', cls);
+      // SAVE-AND-ADD-1: tell class.tsx's class picker which class to
+      // navigate to on return. No-op for any other caller.
+      usePendingSelectionStore.getState().setPending('class_picker', cls.id);
       goBack();
     } catch (e) {
       console.error('[class-builder] save failed:', e);
@@ -308,7 +512,10 @@ export default function ClassBuilderScreen() {
 
         <Text style={styles.fieldLabel}>Class Name *</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName}
-          placeholder="e.g. Blood Hunter" placeholderTextColor={Colors.textDim} />
+          placeholder="e.g. Runesmith" placeholderTextColor={Colors.textDim} />
+
+        <Text style={styles.fieldLabel}>Game / Ruleset</Text>
+        <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
 
         <Text style={styles.fieldLabel}>Hit Die</Text>
         <View style={styles.chipRow}>
@@ -533,6 +740,66 @@ export default function ClassBuilderScreen() {
               );
             })}
 
+            <Text style={styles.fieldLabel}>Preparation Model</Text>
+            <Text style={styles.hint}>
+              How this class's LEVELED spells (not cantrips) become castable —
+              independent of Slot Table above (Wizard and Sorcerer are both
+              Full Caster but opposite preparation models).
+            </Text>
+            {SPELL_PREP_POLICIES.map(p => {
+              const active = spellPrepPolicy === p.key;
+              return (
+                <Pressable key={p.key}
+                  style={[styles.styleRow, active && styles.styleRowActive]}
+                  onPress={() => setSpellPrepPolicy(p.key)}
+                >
+                  <View style={[styles.styleRadio, active && styles.styleRadioActive]}>
+                    {active && <View style={styles.styleRadioDot} />}
+                  </View>
+                  <View>
+                    <Text style={[styles.styleLabel, active && styles.styleLabelActive]}>
+                      {p.label}
+                    </Text>
+                    <Text style={styles.styleSub}>{p.sub}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+
+            <Text style={styles.fieldLabel}>Spell List</Text>
+            <Text style={styles.hint}>
+              Which spells this class picks from by default. Choose one of your saved Spell Lists or borrow
+              another class's list. (A player can still switch to a different list while picking.)
+            </Text>
+            <View style={styles.chipRow}>
+              <Pressable style={[styles.chip, spellSource === 'own' && styles.chipActive]} onPress={() => setSpellSource('own')}>
+                <Text style={[styles.chipTxt, spellSource === 'own' && styles.chipTxtActive]}>This class's own</Text>
+              </Pressable>
+            </View>
+            {savedSpellLists.length > 0 && (
+              <>
+                <Text style={styles.hint}>Your Spell Lists</Text>
+                <View style={styles.chipRow}>
+                  {savedSpellLists.map(l => (
+                    <Pressable key={l.id} style={[styles.chip, spellSource === `list:${l.id}` && styles.chipActive]} onPress={() => setSpellSource(`list:${l.id}`)}>
+                      <Text style={[styles.chipTxt, spellSource === `list:${l.id}` && styles.chipTxtActive]}>{l.name} ({l.spellIds.length})</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+            <Text style={styles.hint}>Another class's list</Text>
+            <View style={styles.chipRow}>
+              {borrowableClasses.map(c => (
+                <Pressable key={c.id} style={[styles.chip, spellSource === `class:${c.id}` && styles.chipActive]} onPress={() => setSpellSource(`class:${c.id}`)}>
+                  <Text style={[styles.chipTxt, spellSource === `class:${c.id}` && styles.chipTxtActive]}>{c.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {savedSpellLists.length === 0 && (
+              <Text style={styles.hint}>No saved Spell Lists yet. Create one under Homebrew, then pick it here.</Text>
+            )}
+
             <Text style={styles.fieldLabel}>Spellcasting Begins at Level</Text>
             <TextInput
               style={[styles.input, styles.smallInput]}
@@ -565,7 +832,7 @@ export default function ClassBuilderScreen() {
                 <Pressable key={f.localId} style={styles.featureItem} onPress={() => setOpenFeatureId(f.localId)}>
                   <View style={styles.featureItemBody}>
                     <Text style={styles.featureItemName}>{f.name}</Text>
-                    <Text style={styles.featureItemDesc} numberOfLines={1}>{EFFECT_KIND_LABELS[f.effectKind]}</Text>
+                    <Text style={styles.featureItemDesc} numberOfLines={1}>{EFFECT_KIND_LABELS[f.effectKind] ?? TRAIT_KIND_LABELS[f.effectKind]}</Text>
                   </View>
                   <Pressable
                     style={styles.featureDeleteBtn}
@@ -607,6 +874,48 @@ export default function ClassBuilderScreen() {
           </Pressable>
         </View>
 
+        {/* ── 5b. Per-Level Player Choices ──────────────────────────────── */}
+        <View style={styles.divider} />
+        <Text style={styles.fieldLabel}>Per-Level Player Choices</Text>
+        <Text style={styles.hint}>
+          A real choice the player resolves at a specific level — e.g. "at level 3,
+          choose one tool proficiency." Distinct from a Feature above: this doesn't
+          grant anything by itself, it queues a pick.
+        </Text>
+        {levelChoicesList.length === 0 ? (
+          <Text style={styles.emptyNote}>No player choices added yet.</Text>
+        ) : (
+          Array.from(new Set(levelChoicesList.map(c => c.level))).sort((a, b) => a - b).map(lvl => (
+            <View key={lvl} style={styles.featureLevelGroup}>
+              <Text style={styles.featureLevelLabel}>LEVEL {lvl}</Text>
+              {levelChoicesList.filter(c => c.level === lvl).map(c => (
+                <Pressable key={c.localId} style={styles.featureItem} onPress={() => setOpenChoiceId(c.localId)}>
+                  <View style={styles.featureItemBody}>
+                    <Text style={styles.featureItemName}>{c.kind === 'expertise' ? 'Expertise' : c.kind === 'tool' ? 'Tool Proficiency' : 'Language'} choice</Text>
+                    <Text style={styles.featureItemDesc} numberOfLines={1}>Choose {c.count}</Text>
+                  </View>
+                  <Pressable style={styles.featureDeleteBtn} onPress={() => deleteLevelChoice(c.localId)} hitSlop={8}>
+                    <Text style={styles.featureDeleteTxt}>✕</Text>
+                  </Pressable>
+                </Pressable>
+              ))}
+            </View>
+          ))
+        )}
+        <View style={styles.inlineAddRow}>
+          <TextInput
+            style={[styles.input, styles.smallInput]}
+            value={addChoiceLevel}
+            onChangeText={setAddChoiceLevel}
+            keyboardType="number-pad"
+            placeholder="Lv"
+            placeholderTextColor={Colors.textDim}
+          />
+          <Pressable style={[styles.inlineAddBtn, { flex: 1 }]} onPress={addLevelChoice}>
+            <Text style={styles.inlineAddTxt}>+ Add Player Choice</Text>
+          </Pressable>
+        </View>
+
         {/* ── 6. ASI Levels ─────────────────────────────────────────────── */}
         <View style={styles.divider} />
         <SectionHeader title="Ability Score Improvements" n={6} />
@@ -636,12 +945,19 @@ export default function ClassBuilderScreen() {
 
       </ScrollView>
 
-      {/* Footer: Save */}
+      {/* Footer: Test + Save */}
       <SafeBottomView>
         <View style={styles.footer}>
           <Pressable
+            style={[styles.testBtn, !name.trim() && styles.btnDisabled]}
+            onPress={runTest}
+            disabled={!name.trim()}
+          >
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
+          <Pressable
             style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]}
-            onPress={handleSave}
+            onPress={() => { void handleSave(); }}
             disabled={!name.trim() || saving}
           >
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Class'}</Text>
@@ -656,6 +972,21 @@ export default function ClassBuilderScreen() {
         onChange={t => updateFeature(t as LevelFeature)}
         onDone={() => setOpenFeatureId(null)}
         onDelete={() => openFeature && deleteFeature(openFeature.localId)}
+      />
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Class'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
+      />
+
+      <ChoiceDefinitionEditorModal
+        draft={levelChoicesList.find(c => c.localId === openChoiceId) ?? null}
+        visible={!!openChoiceId}
+        onChange={updateLevelChoice}
+        onDone={() => setOpenChoiceId(null)}
+        onDelete={() => openChoiceId && deleteLevelChoice(openChoiceId)}
       />
 
     </KeyboardAvoidingView>
@@ -817,10 +1148,13 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: {
+    flexDirection: 'row', gap: Spacing.sm,
     padding: Spacing.sm, backgroundColor: Colors.surfaceHigh,
     borderTopWidth: 1, borderTopColor: Colors.border,
   },
-  saveBtn:     { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  testBtn:     { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt:  { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:     { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 

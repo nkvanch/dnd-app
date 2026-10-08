@@ -9,6 +9,8 @@
 // the player tracks manually — the description states the full benefit.
 // ============================================================================
 import { Feat, Feature, Effect, Ability } from '../../engine/types';
+import { ORIGIN_FEATS_2024 } from './origin2024';
+import { MORE_FEATS_2024 } from './feats2024';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -379,7 +381,7 @@ const allFeatEntries: Feat[] = [
     PHB, [advantage('melee attacks against unmounted creatures smaller than your mount')]),
 
   feat('mystic_conflux', 'Mystic Conflux', null,
-    'You can attune to up to four magic items instead of three, and can cast Identify once per long rest without a spell slot or material components. (No mechanism for a custom attunement-slot count, and Identify is a leveled spell with no mechanism for a limited-use cast without a slot — neither is applied mechanically.)',
+    'You can attune to up to four magic items instead of three (enforced by the app), and can cast Identify once per long rest without a spell slot or material components. (Identify is a leveled spell with no mechanism for a limited-use cast without a slot — not applied mechanically.)',
     TOH),
 
   feat('observant', 'Observant', null,
@@ -570,7 +572,7 @@ const allFeatEntries: Feat[] = [
 ];
 
 /** Every feat, unfiltered. Prefer ALL_FEATS below in app code. */
-export const FULL_FEAT_LIBRARY: Feat[] = allFeatEntries;
+export const FULL_FEAT_LIBRARY: Feat[] = [...allFeatEntries, ...ORIGIN_FEATS_2024, ...MORE_FEATS_2024];
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 

@@ -15,16 +15,31 @@ import { useLocalSearchParams } from 'expo-router';
 import { Alert } from '../../src/utils/alert';
 import {
   Race, Subrace, Feature, Ability, SenseType, Sense,
-  MovementSpeeds, ResourceGrant, DraftTrait,
+  MovementSpeeds, ResourceGrant, DraftTrait, Entity, RulesetId, RACE_CHOICE_PREFIX,
 } from '../../src/engine/types';
+import {
+  ChoiceDefinitionListEditor, DraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import {
-  ABILITIES, SENSE_TYPES, MOVE_TYPES, MoveType, toId,
-  DraftSubrace, newDraftSubrace, buildSubrace, buildTraitFeature,
+  ABILITIES, SENSE_TYPES, MOVE_TYPES, MoveType, toId, disambiguateId,
+  DraftSubrace, newDraftSubrace, buildSubrace,
   AbilityScoreGrid, TraitListEditor,
 } from '../../src/components/homebrew/TraitEditor';
+import { globalContentDB } from '../../src/content/classes/library';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLosslessChoices, serializeDraftTraits, serializeLosslessChoices } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const SIZES = ['Tiny', 'Small', 'Medium', 'Large'] as const;
@@ -83,9 +98,11 @@ function SubraceEditor({ subraces, onChange }: {
 
       {/* Subrace detail modal — its own ASI grid + its own trait list, same pattern as the parent race */}
       <Modal visible={!!open} transparent animationType="slide" onRequestClose={() => setOpenId(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpenId(null)}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenId(null)} accessible={false} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
-          <Pressable style={styles.traitModalSheet} onPress={e => e.stopPropagation()}>
+          <View style={styles.traitModalSheet}>
             {open && (
               <ScrollView keyboardShouldPersistTaps="handled">
                 <Text style={styles.traitModalTitle}>{open.name}</Text>
@@ -114,9 +131,9 @@ function SubraceEditor({ subraces, onChange }: {
                 </SafeBottomView>
               </ScrollView>
             )}
-          </Pressable>
+          </View>
           </KeyboardAvoidingView>
-        </Pressable>
+        </View>
       </Modal>
     </View>
   );
@@ -130,6 +147,13 @@ export default function RaceBuilderScreen() {
   const homebrewRaces = useHomebrewStore(s => s.races);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing = editId ? homebrewRaces.find(r => r.id === editId) ?? null : null;
+  // HOMEBREW-RULESET-1 (item 2): default to the character/campaign in
+  // progress's own ruleset when this builder was launched mid-creation —
+  // read once, on mount, via the global draft store (no caller changes
+  // needed anywhere this builder is launched from). Never applied when
+  // editing existing content (that content's own rulesetId wins).
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name,        setName]        = useState('');
   const [age,          setAge]         = useState('');
@@ -149,7 +173,10 @@ export default function RaceBuilderScreen() {
   const [draftMoveRange, setDraftMoveRange] = useState('30');
   const [traits, setTraits] = useState<DraftTrait[]>([]);
   const [subraces, setSubraces] = useState<DraftSubrace[]>([]);
+  const [pendingChoices, setPendingChoices] = useState<DraftChoice[]>([]);
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: restore the exact authoring state from homebrewDraft (see that
   // field's doc comment in engine/types.ts) rather than reverse-engineering
@@ -161,6 +188,7 @@ export default function RaceBuilderScreen() {
     setAge(editing.age ?? '');
     setSize(editing.size ?? 'Medium');
     setLanguages((editing.languages ?? ['Common']).join(', '));
+    setRulesetId(editing.rulesetId);
     const draft = editing.homebrewDraft as Record<string, unknown> | undefined;
     if (draft) {
       setSpeed(String(draft.speed ?? '30'));
@@ -170,6 +198,18 @@ export default function RaceBuilderScreen() {
       if (draft.movement) setMovement(draft.movement as MovementSpeeds);
       if (draft.traits) setTraits(draft.traits as DraftTrait[]);
       if (draft.subraces) setSubraces(draft.subraces as DraftSubrace[]);
+      if (draft.pendingChoices) setPendingChoices(hydrateLosslessChoices(editing.pendingChoices, RACE_CHOICE_PREFIX));
+    }
+    // CHOICE-AUTHORING-1: no draft.pendingChoices (race imported/authored
+    // outside this builder, or before this field existed) — reconstruct
+    // from the compiled Race.pendingChoices instead of dropping them, same
+    // "existing definitions must reopen correctly" guarantee the round-trip
+    // compiler is built for.
+    if (!draft?.pendingChoices && editing.pendingChoices) {
+      const reconstructed = editing.pendingChoices
+        .map(def => definitionToDraftChoice(def, RACE_CHOICE_PREFIX))
+        .filter((d): d is DraftChoice => d !== null);
+      if (reconstructed.length > 0) setPendingChoices(reconstructed);
     }
     // No draft (shouldn't happen for a race created by this builder, but
     // defensive for any other source) — the basics above still loaded, the
@@ -198,7 +238,23 @@ export default function RaceBuilderScreen() {
   }
 
   function buildRace(): Race {
-    const id = editing?.id ?? (toId(name) || 'homebrew_race');
+    // HOMEBREW-ID-COLLISION-1: auto-generated ids used to have no collision
+    // check at all — naming a homebrew race "Human" silently produced id
+    // `human`, identical to the official race. Both then rendered as
+    // apparent duplicates in the race picker, and BOTH rows resolved to the
+    // homebrew version (getMergedContentDB's homebrew-wins-by-id
+    // precedence), so tapping the official-looking row silently opened the
+    // player's own custom race instead. Reuses the existing
+    // disambiguateId() (already used for homebrew feature-id collisions,
+    // src/content/traitCompiler.ts) against BOTH official race ids and
+    // every OTHER homebrew race's id (excluding this one's own, when
+    // editing) — appends _2/_3/... on collision instead of silently
+    // colliding. Editing an existing race keeps its stable id unchanged.
+    const takenIds = new Set([
+      ...globalContentDB.races.map(r => r.id),
+      ...homebrewRaces.filter(r => r.id !== editing?.id).map(r => r.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_race', takenIds);
     const features: Feature[] = [];
     const resources: ResourceGrant[] = [];
 
@@ -257,24 +313,98 @@ export default function RaceBuilderScreen() {
       });
     }
 
-    for (const t of traits) {
-      const { feature, resource, extraFeatures, extraResources } = buildTraitFeature(t, { idPrefix: id, sourceKind: 'race', sourceRefId: id, level: null });
-      features.push(feature, ...(extraFeatures ?? []));
-      if (resource) resources.push(resource);
-      resources.push(...(extraResources ?? []));
-    }
+    // Seeded with the hand-authored ASI/Speed/Senses/Movement feature ids
+    // above so a trait named e.g. "Speed" can't silently collide with one.
+    const generatedIds = features.map(f => f.id);
+    const originalDraft = editing?.homebrewDraft as (Record<string, unknown> & { traitOwners?: any[] }) | undefined;
+    const serializedTraits = serializeDraftTraits({
+      originalFeatures: editing?.features ?? [], originalResources: editing?.resources,
+      originalDrafts: (originalDraft?.traits as DraftTrait[] | undefined) ?? [], editedDrafts: traits,
+      idPrefix: id, sourceKind: 'race', sourceRefId: id, generatedFeatures: features, generatedResources: resources,
+      generatedIds, owners: originalDraft?.traitOwners,
+    });
+    features.splice(0, features.length, ...serializedTraits.features);
+    resources.splice(0, resources.length, ...serializedTraits.resources);
 
     const compiledSubraces: Subrace[] = subraces.map(sr => buildSubrace(sr, id));
 
-    return {
+    return mergeHomebrewDefinition(editing, {
+      // Imported definitions without an authoring draft cannot be safely
+      // reverse-compiled by this UI; preserve structured mechanics.
+      ...(editing && !editing.homebrewDraft ? {
+        features: editing.features, resources: editing.resources, pendingChoices: editing.pendingChoices,
+      } : {}),
       id, name: name.trim(), features,
       resources: resources.length > 0 ? resources : undefined,
       subraces: compiledSubraces.length > 0 ? compiledSubraces : undefined,
       age: age.trim() || undefined,
       size,
       languages: languages.trim() ? languages.split(',').map(l => l.trim()).filter(Boolean) : undefined,
-      homebrewDraft: { speed, description, abiBonuses, senses, movement, traits, subraces },
-    };
+      rulesetId,
+      pendingChoices: serializeLosslessChoices(editing?.pendingChoices, pendingChoices, RACE_CHOICE_PREFIX),
+      homebrewDraft: { speed, description, abiBonuses, senses, movement, traits, subraces, pendingChoices, traitOwners: serializedTraits.owners },
+    });
+  }
+
+  // Read-only test: apply the draft race's OWN features/resources to a
+  // disposable level-1 scratch entity, same mechanism race-detail.tsx's
+  // real selectRace() uses for the base race (applyGrant over
+  // race.features, then race.resources) — no real character touched.
+  // Reuses buildFeatSummaryRows (ability/derived-numeric/skill/save-prof/
+  // HP) plus the same inline new-feature/new-resource rows subrace/
+  // background/subclass-builder already established, PLUS two more this
+  // race-specific case needs that no other builder's draft can produce:
+  // senses and non-walking movement. Neither is in DERIVED_NUMERIC_KEYS
+  // (Sense[]/MovementSpeeds are structured, not scalar numbers), so
+  // buildFeatSummaryRows's generic loop can't surface them — confirmed by
+  // reading pipeline.ts's senses/movement aggregation (grant_sense/
+  // grant_movement effects, "keep the largest per type"), which IS wired
+  // correctly; the gap is purely in what buildFeatSummaryRows reports, not
+  // in the engine. Subraces are deliberately NOT applied here — a race
+  // with subraces requires picking exactly one in real play, and
+  // subrace-builder.tsx already has its own Test proving the single-
+  // subrace case; combining every authored subrace into one test has no
+  // single correct answer, so it's disclosed instead of guessed.
+  function runTest() {
+    const race = buildRace();
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => {
+      let updated = e;
+      for (const feature of race.features) {
+        updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, feature.level ?? 0);
+      }
+      for (const resource of race.resources ?? []) {
+        updated = applyGrant(updated, { kind: 'resource', value: resource }, 0, undefined, { kind: 'race', id: race.id });
+      }
+      return updated;
+    }, DEFAULT_RULES);
+    const rows = buildFeatSummaryRows(before, after);
+    const beforeFeatureIds = new Set(before.features.map(f => f.id));
+    for (const f of after.features) {
+      if (!beforeFeatureIds.has(f.id)) rows.push({ label: `New feature: ${f.name}` });
+    }
+    const beforeResourceIds = new Set(before.resources.custom.map(r => r.id));
+    for (const r of after.resources.custom) {
+      if (!beforeResourceIds.has(r.id)) rows.push({ label: `New resource: ${r.name} (${r.maximum})` });
+    }
+    for (const s of after.derived.senses) {
+      const had = before.derived.senses.find(bs => bs.type === s.type);
+      if (!had || had.range !== s.range) {
+        rows.push({ label: `Sense: ${SENSE_TYPES.find(t => t.key === s.type)?.label ?? s.type} ${s.range} ft${s.note ? ` (${s.note})` : ''}` });
+      }
+    }
+    const moveTypes: (keyof MovementSpeeds)[] = ['fly', 'swim', 'climb', 'burrow'];
+    for (const t of moveTypes) {
+      const b = before.derived.movement[t] ?? 0;
+      const a = after.derived.movement[t] ?? 0;
+      if (a > 0 && a !== b) rows.push({ label: `Movement: ${MOVE_TYPES.find(m => m.key === t)?.label ?? t} ${a} ft` });
+    }
+    if (subraces.length > 0) {
+      rows.push({ label: `This race has ${subraces.length} subrace${subraces.length !== 1 ? 's' : ''} — their ability bonuses/traits aren't included here. Use Subrace Builder's own Test to check a specific one.` });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
   }
 
   async function handleSave() {
@@ -283,6 +413,10 @@ export default function RaceBuilderScreen() {
     const race = buildRace();
     try {
       await saveItem('race', race);
+      // SAVE-AND-ADD-1: lets the Race picker (app/creation/race.tsx), if
+      // that's what sent us here, select this race automatically on
+      // return instead of making the player find it again in the list.
+      usePendingSelectionStore.getState().setPending('race_picker', race.id);
       goBack();
     } catch (e) {
       console.error('[race-builder] save failed:', e);
@@ -306,6 +440,9 @@ export default function RaceBuilderScreen() {
         <Text style={styles.fieldLabel}>Race Name *</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName}
           placeholder="e.g. Pandafolk" placeholderTextColor={Colors.textDim} />
+
+        <Text style={styles.fieldLabel}>Game / Ruleset</Text>
+        <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
 
         <Text style={styles.fieldLabel}>Age (optional)</Text>
         <TextInput style={styles.input} value={age} onChangeText={setAge}
@@ -401,6 +538,15 @@ export default function RaceBuilderScreen() {
         </Text>
         <TraitListEditor traits={traits} onChange={setTraits} />
 
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Player Choices (optional)</Text>
+        <Text style={styles.helperNote}>
+          A real choice the player resolves when they select this race — e.g. proficiency
+          in one tool of their choice, or an extra language. Unlike a Trait above, this
+          doesn't grant anything by itself; it queues a pick the player makes on the
+          Features tab (or during creation), same as a class's own skill/expertise choices.
+        </Text>
+        <ChoiceDefinitionListEditor choices={pendingChoices} onChange={setPendingChoices} />
+
         <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Subraces (optional)</Text>
         <Text style={styles.helperNote}>
           If added, players choosing this race will be required to pick one --
@@ -416,11 +562,21 @@ export default function RaceBuilderScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
-          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
+          <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={() => { void handleSave(); }} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Race'}</Text>
           </Pressable>
         </View>
       </SafeBottomView>
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Race'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -490,8 +646,10 @@ const styles = StyleSheet.create({
   traitDoneBtn: { flex: 2, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center' },
   traitDoneTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
-  footer:   { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:  { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:   { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:  { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:  { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

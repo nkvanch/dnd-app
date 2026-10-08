@@ -3,7 +3,7 @@
 // Monster template — a static content record, NOT a live Entity.
 // Templates are instantiated into full Entity objects via monsterFactory.ts.
 // ============================================================================
-import { AbilityScores, Ability, SkillName, Feature, ResourceGrant } from '../../engine/types';
+import { AbilityScores, Ability, SkillName, Feature, ResourceGrant, RulesetId } from '../../engine/types';
 
 /**
  * A static monster template stored in the content database.
@@ -48,4 +48,6 @@ export type MonsterTemplate = {
    * semantics as Spell.srd. See docs/ROADMAP_1.0.md Phase 1 Step 1.4.
    */
   srd?: boolean;
+  /** Which ruleset this monster belongs to. Undefined = available under every ruleset. See the ContentHeader comment near the top of src/engine/types.ts. */
+  rulesetId?: RulesetId;
 };

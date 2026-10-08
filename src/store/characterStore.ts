@@ -12,9 +12,12 @@
 import { create } from 'zustand';
 import { AppState } from 'react-native';
 import { Entity, CampaignRules, SkillName, SkillEntry, AbilityScores, ItemInstance } from '../engine/types';
+import { useLastCharacterStore } from './lastCharacterStore';
 import {
-  saveEntity, loadAllEntities, deleteEntity, loadAllEntityMeta, EntityMeta,
+  saveEntity, loadAllEntities, deleteEntity, loadAllEntityMeta, persistedCharacterExists, EntityMeta,
 } from '../db/entityRepo';
+import { recordTimelineEntry, TimelineCategory } from '../db/timelineRepo';
+import { saveDraftState, clearDraftState } from '../db/draftRepo';
 import { syncManager } from '../sync/syncManager';
 import { deepMerge } from '../sync/diff';
 import { spellRepo } from '../content/spellRepo';
@@ -23,6 +26,9 @@ import { itemRepo } from '../content/itemRepo';
 import { itemIdsOnEntity } from '../content/itemRepo.types';
 import { recomputeDerived } from '../engine/pipeline';
 import { useHomebrewStore } from './homebrewStore';
+import { hydrateItemInstanceDefinitionFacts, resolveItemDefinition, hydrateLegacyItemInstanceIds } from '../engine/itemMechanics';
+import { stripTransientRuntimeState } from '../engine/combat';
+import { validateEntityDeep } from '../engine/entityValidation';
 
 export type { EntityMeta };
 
@@ -38,17 +44,19 @@ export type { EntityMeta };
  * below) must have already warmed via ensureLoaded — this function itself
  * stays synchronous so it's a drop-in map over the character list.
  */
-function hydrateItemFeatures(entity: Entity): Entity {
+function hydrateItemFeatures(rawEntity: Entity): Entity {
+  // Item-identity closure (pass 2, finding A): id backfill is now the ONE
+  // shared, reusable hydrator (itemMechanics.ts) — also called from
+  // characterPortable.ts (portable import) and applyIncomingEntity
+  // (backup restore / inbound sync), so no path can insert an
+  // identity-less legacy item into normal runtime state. See its own doc
+  // comment for why the id must be deterministic here specifically (this
+  // function runs on every load; loadCharacters() doesn't write the
+  // hydrated result back to SQLite by itself).
+  const entity = hydrateLegacyItemInstanceIds(rawEntity);
   function hydrateInstance(inst: ItemInstance): ItemInstance {
-    if (inst.features.length > 0) return inst;   // already hydrated (e.g. from equip path)
-    // itemRepo only ever holds the OFFICIAL catalog — a homebrew item's
-    // definition lives in homebrewStore instead. Callers of this function
-    // must ensure loadHomebrew() has resolved first (see boot() in
-    // app/_layout.tsx) or this silently misses homebrew items, same as the
-    // itemRepo-only bug this fallback fixes.
-    const def = itemRepo.getItemSync(inst.itemId)
-      ?? useHomebrewStore.getState().items.find(i => i.id === inst.itemId);
-    return def ? { ...inst, features: def.features } : inst;
+    const def = resolveItemDefinition(inst.itemId);
+    return hydrateItemInstanceDefinitionFacts(inst, def);
   }
   const equippedHydrated = entity.inventory.equipped.map(hydrateInstance);
   const carriedHydrated  = entity.inventory.carried.map(hydrateInstance);
@@ -110,20 +118,55 @@ function hydrateMissingResources(entity: Entity): Entity {
 // cutting both write volume and battery drain. Zustand state itself still
 // updates synchronously on every call — this only delays the disk write.
 const SAVE_DEBOUNCE_MS = 600;
-const pendingSaves = new Map<string, Entity>();
-const saveTimers   = new Map<string, ReturnType<typeof setTimeout>>();
+// Re-audit A01/A29 (item 14): this used to be a Map<string, Entity>, storing
+// the entity SNAPSHOT captured at schedule time. That snapshot could go
+// stale — if an inbound sync patch/snapshot landed and persisted its own
+// immediate write (applyIncomingEntity/applyIncomingPatch, both call
+// saveEntity() directly, not debounced) during this timer's debounce
+// window, the eventual flush would silently overwrite that newer SQLite
+// row with the older captured snapshot, reverting the merge on disk while
+// Zustand/the UI kept showing the correct merged state. Storing only the
+// id and re-reading the CURRENT live entity at flush time makes that class
+// of staleness structurally impossible — flush always persists whatever is
+// actually true in the store at that moment, never a closure from the past.
+const pendingSaveIds = new Set<string>();
+const saveTimers     = new Map<string, ReturnType<typeof setTimeout>>();
 
-function scheduleSave(entity: Entity): void {
-  pendingSaves.set(entity.id, entity);
-  const existing = saveTimers.get(entity.id);
+/**
+ * Reports a SQLite write outcome onto the store's lastPersistError field —
+ * cleared on the next successful write, set (with a user-readable message)
+ * on failure. `useCharacterStore` is referenced here even though it's
+ * declared later in this module: these are plain functions only ever
+ * INVOKED at runtime (via a debounce timer or an async continuation), by
+ * which point the whole module — including the `export const
+ * useCharacterStore = create(...)` assignment below — has already finished
+ * evaluating.
+ */
+function reportPersistOutcome(context: string, error: unknown | null): void {
+  if (error === null) {
+    useCharacterStore.setState({ lastPersistError: null });
+    return;
+  }
+  console.error(`[characterStore] ${context} failed:`, error);
+  useCharacterStore.setState({
+    lastPersistError: `Couldn't save your last change (${context}) — it may be lost if the app closes.`,
+  });
+}
+
+function scheduleSave(entityId: string): void {
+  pendingSaveIds.add(entityId);
+  const existing = saveTimers.get(entityId);
   if (existing) clearTimeout(existing);
-  saveTimers.set(entity.id, setTimeout(() => {
-    saveTimers.delete(entity.id);
-    const toSave = pendingSaves.get(entity.id);
-    pendingSaves.delete(entity.id);
+  saveTimers.set(entityId, setTimeout(() => {
+    saveTimers.delete(entityId);
+    pendingSaveIds.delete(entityId);
+    // Re-read the live entity rather than trusting a captured snapshot —
+    // see pendingSaveIds' own comment above for why.
+    const toSave = useCharacterStore.getState().characters.find(c => c.id === entityId);
     if (toSave) {
-      saveEntity(toSave).catch(e =>
-        console.error('[characterStore] debounced saveEntity failed:', e)
+      saveEntity(toSave).then(
+        () => reportPersistOutcome('debounced save', null),
+        e  => reportPersistOutcome('debounced save', e)
       );
     }
   }, SAVE_DEBOUNCE_MS));
@@ -138,11 +181,15 @@ function scheduleSave(entity: Entity): void {
 export function flushPendingSaves(): void {
   for (const timer of saveTimers.values()) clearTimeout(timer);
   saveTimers.clear();
-  const toFlush = Array.from(pendingSaves.values());
-  pendingSaves.clear();
-  for (const entity of toFlush) {
-    saveEntity(entity).catch(e =>
-      console.error('[characterStore] flushPendingSaves → saveEntity failed:', e)
+  const ids = Array.from(pendingSaveIds);
+  pendingSaveIds.clear();
+  const characters = useCharacterStore.getState().characters;
+  for (const id of ids) {
+    const entity = characters.find(c => c.id === id);
+    if (!entity) continue; // deleted since scheduling — nothing to save
+    saveEntity(entity).then(
+      () => reportPersistOutcome('flush on background', null),
+      e  => reportPersistOutcome('flush on background', e)
     );
   }
 }
@@ -162,6 +209,7 @@ export const DEFAULT_RULES: CampaignRules = {
   hpMode:          'fixed',
   allowMulticlass: false,
   customRules:     {},
+  abilityGenerationMode: 'standard',
 };
 
 // ── Default skill block ───────────────────────────────────────────────────────
@@ -218,6 +266,7 @@ export function makeEmptyEntity(id: string, kind: Entity['kind'] = 'character'):
     spellAttackBonus:  null,
     kiSaveDC:          null,
     abilityBasedDC:    { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+    attackActionAttacks: 1,
   };
 
   return {
@@ -262,6 +311,7 @@ export function makeEmptyEntity(id: string, kind: Entity['kind'] = 'character'):
     conditionMonitor: { active: [], exhaustion: 0, flags: {} },
     features:         [],
     choices:          [],
+    characterOverrides: [],
     dmOverrides:      [],
     wildShapeState:   null,
     notes:            '',
@@ -269,6 +319,40 @@ export function makeEmptyEntity(id: string, kind: Entity['kind'] = 'character'):
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
+
+/**
+ * One undoable step. `before` is an array (not a bare Entity) even though
+ * every current mutation is single-entity — avoids a reshape later if a
+ * future bulk action needs to undo several entities as one step.
+ * Session-local only — NOT persisted (see character_timeline, Phase B, for
+ * the persistent equivalent). Cleared on app restart.
+ */
+export type UndoEntry = {
+  entityId:  string;
+  before:    Entity[];
+  label:     string;
+  timestamp: number;
+  /**
+   * Closure item 13 (was `afterRevision`, re-audit A01/A29 item 14): the
+   * entity's Entity.revision at the moment this entry was captured.
+   * Entity.revision is now bumped ONLY by successfully-applied EXTERNAL/
+   * inbound updates (applyIncomingEntity/applyIncomingPatch) — ordinary
+   * local mutations (updateCharacter/undo/redo) never touch it. That's the
+   * fix for the original design's regression: because local traversal
+   * leaves revision untouched, a chain of local undo→undo→redo→redo always
+   * sees the SAME revision value at every step and never invalidates
+   * itself. undo()/redo() still compare this against the live entity's
+   * current revision before acting — a mismatch now means specifically
+   * "an external/inbound update landed since this entry was captured",
+   * never "some other local history traversal happened in between".
+   */
+  entityRevision: number;
+};
+
+/** Fixed entry count, not a memory-size heuristic — Entity objects here are
+ *  small (~5-30KB, see schema.ts's own reasoning for the same data) and JS
+ *  memory estimation is unreliable, so a simple cap is the right tool. */
+const UNDO_STACK_LIMIT = 50;
 
 type CharacterStore = {
   /** All saved characters (hydrated from SQLite on startup). */
@@ -281,6 +365,25 @@ type CharacterStore = {
   isLoading:   boolean;
   /** Lightweight metadata for the character list screen. */
   characterMeta: EntityMeta[];
+  /** Session-local undo/redo history — see UndoEntry's own doc comment. */
+  undoStack: UndoEntry[];
+  redoStack: UndoEntry[];
+  /**
+   * Human-readable message for the most recent SQLite write failure on
+   * this store (debounced save, draft save, incoming-sync persist, or
+   * delete), or null once the next write succeeds. Every write here used
+   * to be fire-and-forget with only a console.error on failure — the UI
+   * kept showing the successful in-memory mutation while the disk write
+   * silently failed, discovered only after a later restart reverted the
+   * change with no explanation (audit finding PERSIST-5). Mirrors the
+   * existing syncStatus.lastError pattern (src/store/syncStore.ts),
+   * already rendered as a small banner elsewhere in the app. Also reused
+   * (re-audit A01/A29, item 14) for a refused undo/redo — "this character
+   * changed elsewhere since then" is the same class of "something about
+   * the last state-changing action needs your attention" message this
+   * banner already exists to show, not a new UI concept.
+   */
+  lastPersistError: string | null;
 
   // ── Startup ──────────────────────────────────────────────────────────────
 
@@ -299,21 +402,54 @@ type CharacterStore = {
 
   // ── Draft management ─────────────────────────────────────────────────────
 
+  /**
+   * Sets the in-progress creation draft AND persists it to SQLite (fire-
+   * and-forget) — re-audit A09 (item 11), so an app kill mid-creation
+   * doesn't lose the player's progress. Every creation-flow screen already
+   * calls this on every meaningful step (race/class/scores/etc.), so no
+   * new call sites are needed for the persistence to take effect.
+   */
   setDraft:   (entity: Entity)  => void;
+  /** Clears the draft from both memory and its persisted SQLite row —
+   *  the explicit "discard my in-progress character" action (see
+   *  CreationHeader.tsx's Cancel button). */
   clearDraft: ()                => void;
   /**
-   * Saves the draft to the characters list, persists to SQLite, clears the draft.
+   * Saves the draft to the characters list and persists it to SQLite.
+   * Re-audit A09 (item 11): the draft (both in memory and its SQLite row)
+   * is deliberately NOT cleared until the SQLite write for the FINAL
+   * character actually succeeds — clearing it optimistically, before that
+   * write is confirmed, would mean a failed save loses the character with
+   * no way to recover it (the in-progress creation flow's own draft would
+   * already be gone too). On failure, the optimistic `characters` list
+   * update is rolled back and the draft (and its persisted row) are left
+   * exactly as they were, so the Review screen can retry. Returns whether
+   * the save actually succeeded, so callers know whether it's safe to
+   * navigate away.
    */
-  saveDraft:  () => Promise<void>;
+  saveDraft:  () => Promise<boolean>;
 
   // ── Character management ─────────────────────────────────────────────────
 
   /**
    * Replace an existing character using a pure updater function.
    * Zustand state updates synchronously; SQLite write fires async.
+   * `label` (default 'Edit') is what the undo/redo UI and the persistent
+   * mechanical timeline show for this step — every existing call site
+   * omitting it keeps compiling and just shows the generic default.
    */
-  updateCharacter: (id: string, updater: (e: Entity) => Entity) => void;
+  updateCharacter: (id: string, updater: (e: Entity) => Entity, label?: string, category?: TimelineCategory) => void;
   deleteCharacter: (id: string) => void;
+  importCharacter: (entity: Entity) => Promise<boolean>;
+
+  /** Steps back one entry in undoStack, pushing the replaced state onto
+   *  redoStack (a true inverse of redo()). No-op if undoStack is empty. */
+  undo: () => void;
+  /** Steps forward one entry in redoStack, pushing the replaced state onto
+   *  undoStack. No-op if redoStack is empty. Cleared by any NEW
+   *  updateCharacter call — the standard "branching history invalidates
+   *  the old redo path" rule. */
+  redo: () => void;
 
   /**
    * Apply an entity snapshot received from a sync peer.
@@ -344,6 +480,9 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   draft:         null,
   rules:         DEFAULT_RULES,
   isLoading:     false,
+  undoStack:     [],
+  redoStack:     [],
+  lastPersistError: null,
 
   // ── Startup ───────────────────────────────────────────────────────────────
 
@@ -382,7 +521,12 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       // can find them by id, same as any normal character; they're
       // deliberately excluded from characterMeta/the character list below,
       // since they're not independently-playable characters.
-      const characters = preHydration.map(hydrateItemFeatures).map(hydrateMissingResources);
+      // Extra Attack sequence closure (Part B4): defense-in-depth —
+      // entityRepo.ts's own parseEntityRow (behind loadAllEntities above)
+      // already strips attackSequence on every row read; re-stripping here
+      // is a safe no-op once already null, and guarantees the invariant
+      // holds even if loadCharacters is ever fed entities from elsewhere.
+      const characters = preHydration.map(hydrateItemFeatures).map(hydrateMissingResources).map(stripTransientRuntimeState);
 
       // Warm the Tier-2 spell cache for every known/prepared/cantrip spell
       // across every loaded character, once, before the engine pipeline
@@ -399,7 +543,18 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       // ever triggers a recompute. The comment above already described this
       // as the intent; the actual call was missing.
       const rules = get().rules;
-      const recomputed = characters.map(c => recomputeDerived(c, rules));
+      // Rules-engine blocker RE-AUDIT closure (dependency inversion, 1D):
+      // recomputeDerived's action-card/spell-context generation needs the
+      // real merged official+homebrew+ruleset content to reflect a
+      // homebrew class's own casting policy — resolved HERE (the
+      // application/store layer), passed down explicitly; the engine
+      // itself never reads useHomebrewStore. Each character resolves its
+      // OWN ruleset (getMergedContentDB is internally memoized per input
+      // set, so this is cheap even across many characters on one ruleset).
+      const recomputed = characters.map(c => {
+        const contentDB = useHomebrewStore.getState().getMergedContentDB(c.rulesetId);
+        return recomputeDerived(c, rules, { classDefs: contentDB.classes, homebrewSpells: contentDB.spells, races: contentDB.races, items: contentDB.items });
+      });
 
       set({ characters: recomputed, isLoading: false });
     } catch (e) {
@@ -410,48 +565,103 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
 
   // ── Draft management ──────────────────────────────────────────────────────
 
-  setDraft:   (entity) => set({ draft: entity }),
-  clearDraft: ()       => set({ draft: null }),
+  setDraft: (entity) => {
+    // Extra Attack sequence closure (final single-issue closure, Part 4):
+    // a creation draft should never legitimately carry an in-progress
+    // Attack sequence (drafts aren't in combat), but strip defensively
+    // before it ever lands in Zustand state or the persisted draft row —
+    // trivial (a no-op whenever already null/undefined) and keeps the
+    // invariant "draft state never carries attackSequence" true at every
+    // point, not just at load/commit.
+    const stripped = stripTransientRuntimeState(entity);
+    set({ draft: stripped });
+    saveDraftState(stripped).catch(e => console.error('[characterStore] failed to persist creation draft:', e));
+  },
+  clearDraft: () => {
+    set({ draft: null });
+    clearDraftState().catch(() => { /* non-critical — a leftover row is just re-offered/overwritten next time */ });
+  },
 
   saveDraft: async () => {
-    const { draft, characters } = get();
-    if (!draft) return;
+    const { draft: rawDraft, characters } = get();
+    if (!rawDraft) return false;
+    // Extra Attack sequence closure (final single-issue closure, Part 2):
+    // defense-in-depth at the draft-to-character COMMIT boundary — never
+    // trusts that draft load (or any other path that could have populated
+    // `draft` state) already stripped it. Protects against a legacy
+    // persisted draft, malformed/injected draft state, or a future
+    // alternate draft-loading path, independent of whether the read-side
+    // fix in draftRepo.ts's loadDraftState is also in place.
+    const draft = stripTransientRuntimeState(rawDraft);
 
     const exists = characters.some(c => c.id === draft.id);
     const updated = exists
       ? characters.map(c => c.id === draft.id ? draft : c)
       : [...characters, draft];
 
-    // Synchronous Zustand update — UI reflects immediately
-    set({ characters: updated, draft: null });
+    // Optimistic Zustand update — UI (e.g. the character list) reflects
+    // immediately. The draft itself is deliberately NOT cleared here — see
+    // this method's own doc comment in the store type above.
+    set({ characters: updated });
 
-    // Async SQLite persist — fire and forget (errors logged, not thrown)
-    saveEntity(draft).catch(e =>
-      console.error('[characterStore] saveDraft → saveEntity failed:', e)
-    );
+    try {
+      await saveEntity(draft);
+      reportPersistOutcome('saveDraft', null);
+      // Only now — after the durable write is confirmed — clear the draft
+      // from both memory and its persisted SQLite row.
+      set({ draft: null });
+      await clearDraftState();
+      return true;
+    } catch (e) {
+      reportPersistOutcome('saveDraft', e);
+      // Roll back the optimistic characters-list change so state doesn't
+      // claim a character exists that was never durably saved. The draft
+      // (and its SQLite row) are untouched, so the caller can retry.
+      set({ characters });
+      return false;
+    }
   },
 
   // ── Character management ───────────────────────────────────────────────────
 
-  updateCharacter: (id, updater) => {
+  updateCharacter: (id, updater, label = 'Edit', category) => {
     let updated: Entity | null = null;
     let previous: Entity | null = null;
+    const timestamp = Date.now();
 
     set(state => {
       const next = state.characters.map(c => {
         if (c.id !== id) return c;
         previous = c;
+        // Closure item 13: local edits do NOT bump revision — only
+        // applyIncomingEntity/applyIncomingPatch (genuine external updates)
+        // do. `updater`'s own output already carries `c.revision` through
+        // unchanged via its own spread (every mutator in this codebase
+        // spreads the input entity), so no explicit stamping is needed here.
         updated = updater(c);
         return updated;
       });
-      return { characters: next };
+      if (!previous || !updated) return { characters: next };
+      // A real, new mutation invalidates any prior redo path — standard
+      // undo/redo branching-history rule.
+      const undoEntry: UndoEntry = { entityId: id, before: [previous], label, timestamp, entityRevision: previous.revision ?? 0 };
+      return {
+        characters: next,
+        undoStack: [undoEntry, ...state.undoStack].slice(0, UNDO_STACK_LIMIT),
+        redoStack: [],
+      };
     });
 
     if (updated) {
       // Debounced SQLite persist — see scheduleSave's doc comment above.
       // Zustand state (read by every screen) is already updated synchronously
       // above; this only delays the disk write, not the UI.
-      scheduleSave(updated);
+      scheduleSave(id);
+      // Persistent mechanical timeline — same label/timestamp as the
+      // session-local undo entry above, fire-and-forget (never awaited),
+      // same non-blocking style scheduleSave already uses. Survives app
+      // restart, unlike undoStack — that's the deliberate distinction.
+      void recordTimelineEntry(id, label, timestamp, category);
       // Sync only what changed since `previous` — role-aware: broadcasts
       // directly if we're the DM, or pushes up to the DM (who relays onward)
       // if we're a player. No-op if offline. Sending a diff instead of the
@@ -462,7 +672,151 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     }
   },
 
-  applyIncomingEntity: async (entity) => {
+  /**
+   * Steps back one undo entry: replaces the current entity with the stored
+   * "before" snapshot, and pushes what it replaced onto redoStack (the true
+   * inverse of redo()). Bypasses updateCharacter entirely — going through
+   * it would push ANOTHER undo entry for the undo itself. Still goes through
+   * the same scheduleSave/syncEntityPatch persist+sync path every other
+   * mutation does, so an undo is indistinguishable from a normal edit to
+   * SQLite or sync peers. Self-healing if the target character no longer
+   * exists (e.g. deleted since the entry was pushed): the stale entry is
+   * still popped so it can't block future undos, it just skips the
+   * persist/sync/redo-push.
+   *
+   * Closure item 13 (was: re-audit A01/A29 item 14, which had a real
+   * regression): before restoring, compares the live entity's
+   * Entity.revision against the entry's `entityRevision`. Since local
+   * mutations never touch Entity.revision (see UndoEntry's own doc comment
+   * — only applyIncomingEntity/applyIncomingPatch do), this check can ONLY
+   * fail due to a genuine external/inbound update landing since the entry
+   * was captured — a chain of purely local undo→undo→redo→redo never
+   * touches revision at all, so it can never invalidate itself. A mismatch
+   * means blindly restoring `before` would silently discard that external
+   * change. The entry is still popped (so a stale/conflicting entry can't
+   * permanently block the stack), but nothing is applied, and the conflict
+   * is surfaced via lastPersistError rather than staying silent.
+   */
+  undo: () => {
+    const entry = get().undoStack[0];
+    if (!entry) return;
+    const { entityId: id, before: [restored], label, entityRevision } = entry;
+    const live = get().characters.find(c => c.id === id);
+
+    if (live && (live.revision ?? 0) !== entityRevision) {
+      set(state => ({ undoStack: state.undoStack.slice(1) }));
+      set({ lastPersistError: `Can't undo "${label}" — this character changed elsewhere since then.` });
+      return;
+    }
+
+    let replaced: Entity | null = null;
+
+    set(state => {
+      const characters = state.characters.map(c => {
+        if (c.id !== id) return c;
+        replaced = c;
+        return restored;
+      });
+      // `restored` already carries the correct (unchanged-by-local-edits)
+      // revision from when IT was captured — no re-stamping needed.
+      const redoEntry: UndoEntry | null = replaced
+        ? { entityId: id, before: [replaced], label, timestamp: Date.now(), entityRevision: replaced.revision ?? 0 }
+        : null;
+      return {
+        characters,
+        undoStack: state.undoStack.slice(1),
+        redoStack: redoEntry ? [redoEntry, ...state.redoStack].slice(0, UNDO_STACK_LIMIT) : state.redoStack,
+      };
+    });
+
+    if (replaced) {
+      scheduleSave(id);
+      syncManager.syncEntityPatch(id, replaced, restored);
+    }
+  },
+
+  /** Steps forward one redo entry — the exact mirror of undo() above,
+   *  including the same revision-conflict check and self-healing behavior. */
+  redo: () => {
+    const entry = get().redoStack[0];
+    if (!entry) return;
+    const { entityId: id, before: [restored], label, entityRevision } = entry;
+    const live = get().characters.find(c => c.id === id);
+
+    if (live && (live.revision ?? 0) !== entityRevision) {
+      set(state => ({ redoStack: state.redoStack.slice(1) }));
+      set({ lastPersistError: `Can't redo "${label}" — this character changed elsewhere since then.` });
+      return;
+    }
+
+    let replaced: Entity | null = null;
+
+    set(state => {
+      const characters = state.characters.map(c => {
+        if (c.id !== id) return c;
+        replaced = c;
+        return restored;
+      });
+      const undoEntry: UndoEntry | null = replaced
+        ? { entityId: id, before: [replaced], label, timestamp: Date.now(), entityRevision: replaced.revision ?? 0 }
+        : null;
+      return {
+        characters,
+        redoStack: state.redoStack.slice(1),
+        undoStack: undoEntry ? [undoEntry, ...state.undoStack].slice(0, UNDO_STACK_LIMIT) : state.undoStack,
+      };
+    });
+
+    if (replaced) {
+      scheduleSave(id);
+      syncManager.syncEntityPatch(id, replaced, restored);
+    }
+  },
+
+  applyIncomingEntity: async (rawEntity) => {
+    // Item-identity closure (pass 2, finding A/A4): an inbound full
+    // snapshot (backup restore OR live device sync) can carry a legacy
+    // entity whose items predate ItemInstance.id — hydrate with the SAME
+    // shared, pure function used by boot load and portable import before
+    // it's exposed to any code path below (the ownedCharacterId early
+    // return, Tier-2 warming, and the eventual `set`/persist). A no-op for
+    // an entity that already has ids on everything.
+    //
+    // Extra Attack sequence closure (Part B4): also strips any attackSequence
+    // the incoming snapshot carries — this covers BOTH live sync AND backup
+    // restore (app/backup.tsx reuses this exact function), so neither path
+    // can resurrect a stale, already-paid-for sequence token.
+    const entity = stripTransientRuntimeState(hydrateLegacyItemInstanceIds(rawEntity));
+    // Bug fix (architecture review P1, S0): an incoming FULL snapshot for a
+    // character THIS device already has locally AND currently owns/controls
+    // (syncManager.ownedCharacterId) used to unconditionally overwrite local
+    // state. In practice, the only thing that ever sends a player an
+    // entity_snapshot for an already-existing character is the DM's
+    // reconnect-triggered push (server.ts's onEntitySyncRequested, fired on
+    // every 'hello') — built from the DM's OWN possibly-stale copy. There is
+    // no offline mutation queue for entity patches (syncEntityPatch/
+    // syncEntity just silently no-op via SyncClient.send while
+    // disconnected, with nothing queued to replay) — so a WiFi blip during
+    // which the player took an action (damage, a spell slot spent — saved
+    // correctly to THIS device's own store, just never transmitted) was
+    // silently reverted, in both memory and local SQLite, the moment the
+    // socket reconnected and the DM's stale snapshot arrived.
+    //
+    // This device's own local copy of a character IT owns is authoritative
+    // for that character — the DM only ever legitimately edits an owned
+    // character via a PATCH now (applyIncomingPatch, deep-merged, never a
+    // wholesale replace — see the U1/U2 fix), so a full-snapshot push for
+    // an owned, already-known entity always means "the sender's copy may be
+    // stale," never "here's an intentional edit to accept." Push the local
+    // copy back up instead of accepting the overwrite, correcting the
+    // sender rather than silently losing local state.
+    const state = get();
+    const localCopy = state.characters.find(c => c.id === entity.id);
+    if (localCopy && entity.id === syncManager.ownedCharacterId) {
+      syncManager.pushEntity(localCopy);
+      return;
+    }
+
     // A remote device can push spell/item ids this device has never locally
     // browsed — warm Tier 2 before the entity lands in state so the engine
     // pipeline never hits a synchronous cache miss for it.
@@ -470,16 +824,25 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       spellRepo.ensureLoaded(spellIdsOnEntity(entity)),
       itemRepo.ensureLoaded(itemIdsOnEntity(entity)),
     ]);
+    let stampedEntity: Entity = entity;
     set(state => {
-      const exists  = state.characters.some(c => c.id === entity.id);
-      const updated = exists
-        ? state.characters.map(c => c.id === entity.id ? entity : c)
-        : [...state.characters, entity];
+      const existing = state.characters.find(c => c.id === entity.id);
+      // Re-audit A01/A29 (item 14): stamp a fresh local revision on the
+      // accepted entity, ignoring whatever revision (if any) came over the
+      // wire — this is a local, monotonic conflict-detection counter, not
+      // a synced value. Advancing it here is what lets undo() notice "an
+      // inbound sync update landed since this undo entry was captured"
+      // instead of silently restoring an obsolete snapshot over it.
+      stampedEntity = { ...entity, revision: (existing?.revision ?? 0) + 1 };
+      const updated = existing
+        ? state.characters.map(c => c.id === entity.id ? stampedEntity : c)
+        : [...state.characters, stampedEntity];
       return { characters: updated };
     });
     // Persist locally so the entity survives an app restart
-    saveEntity(entity).catch(e =>
-      console.error('[characterStore] applyIncomingEntity → saveEntity failed:', e)
+    saveEntity(stampedEntity).then(
+      () => reportPersistOutcome('applyIncomingEntity', null),
+      e  => reportPersistOutcome('applyIncomingEntity', e)
     );
   },
 
@@ -499,23 +862,86 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       }));
     }
     let merged: Entity | null = null;
+    let rejected = false;
     set(state => {
       const next = state.characters.map(c => {
         if (c.id !== entityId) return c;
-        merged = deepMerge(c, patch);
+        // Re-audit A01/A29 (item 14): stamp a fresh local revision after
+        // merging, same reasoning as applyIncomingEntity above — the patch
+        // itself may carry an unrelated `revision` value from the sender,
+        // which must not leak into this device's own monotonic counter.
+        const rawMerged = { ...deepMerge(c, patch), revision: (c.revision ?? 0) + 1 };
+        // Item-identity closure (pass 3, finding B): a patch is a PARTIAL
+        // fragment — hydrating it in isolation could invent an id from the
+        // wrong array position (the patch's own inventory arrays don't
+        // necessarily line up with the full entity's). Hydrate the FULL
+        // merged entity instead, with the SAME shared hydrator every other
+        // ingress uses, so an incoming patch that introduces an
+        // identity-less legacy item is normalized before it's ever exposed
+        // to Zustand/persisted — no app restart required.
+        //
+        // Extra Attack sequence closure (Part B4/B7): also strips
+        // attackSequence from the MERGED result — deepMerge(c, patch) would
+        // otherwise let an incoming patch SET (or merge fields into) this
+        // device's own in-progress sequence, since the patch is a caller-
+        // supplied Record<string, unknown> deep-merged onto the current
+        // entity with no per-field allowlist.
+        const hydrated = stripTransientRuntimeState(hydrateLegacyItemInstanceIds(rawMerged));
+        // Hydration only ever fills what's MISSING — it never rewrites
+        // malformed or duplicate SUPPLIED ids, so validating afterward
+        // still catches genuinely bad incoming data (a malformed id, a
+        // duplicate nonempty id across two rows) without hydration masking
+        // it. Reject the whole patch rather than exposing/persisting
+        // invalid state — the safest behavior when a sync peer sends
+        // something structurally wrong.
+        if (!validateEntityDeep(hydrated).valid) {
+          rejected = true;
+          return c;
+        }
+        merged = hydrated;
         return merged;
       });
-      return { characters: next };
+      return rejected ? state : { characters: next };
     });
+    if (rejected) {
+      reportPersistOutcome('applyIncomingPatch', new Error('Incoming patch produced an invalid entity — rejected.'));
+      return;
+    }
     if (merged) {
-      saveEntity(merged).catch(e =>
-        console.error('[characterStore] applyIncomingPatch → saveEntity failed:', e)
+      saveEntity(merged).then(
+        () => reportPersistOutcome('applyIncomingPatch', null),
+        e  => reportPersistOutcome('applyIncomingPatch', e)
       );
     }
     // If we don't have a local copy at all, there's nothing to merge onto —
     // this shouldn't normally happen since a full snapshot always precedes
     // patches (see server.ts's onEntitySyncRequested on every 'hello'), but
     // silently doing nothing is the safe behavior rather than guessing.
+  },
+
+  importCharacter: async (rawEntity) => {
+    try {
+      if (await persistedCharacterExists(rawEntity.id)) return false;
+      // Item-identity closure (pass 2, finding A/A3): defense-in-depth —
+      // characterPortable.ts's own parsePortableCharacter already hydrates
+      // missing ItemInstance ids before returning, but this is the generic
+      // entry point any future import path could call directly; hydrating
+      // again here is a safe no-op once ids already exist, and guarantees
+      // the invariant holds regardless of caller.
+      //
+      // Extra Attack sequence closure (Part B4): same defense-in-depth for
+      // attackSequence — parsePortableCharacter already strips it, but this
+      // generic entry point re-strips unconditionally so the invariant
+      // holds even for a future caller that bypasses that parse step.
+      const entity = stripTransientRuntimeState(hydrateLegacyItemInstanceIds(rawEntity));
+      await saveEntity(entity);
+      set(state => ({ characters: [entity, ...state.characters.filter(c => c.id !== entity.id)] }));
+      reportPersistOutcome('importCharacter', null);
+      return true;
+    } catch (error) {
+      reportPersistOutcome('importCharacter', error);
+      return false;
+    }
   },
 
   deleteCharacter: (id) => {
@@ -528,10 +954,12 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     const timer = saveTimers.get(id);
     if (timer) clearTimeout(timer);
     saveTimers.delete(id);
-    pendingSaves.delete(id);
+    pendingSaveIds.delete(id);
 
-    deleteEntity(id).catch(e =>
-      console.error('[characterStore] deleteCharacter → deleteEntity failed:', e)
+    void useLastCharacterStore.getState().clearIfDeleted(id).catch(() => {});
+    deleteEntity(id).then(
+      () => reportPersistOutcome('deleteCharacter', null),
+      e  => reportPersistOutcome('deleteCharacter', e)
     );
   },
 

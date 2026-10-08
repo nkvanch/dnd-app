@@ -4,8 +4,8 @@
     {
       "name": "dnd-app-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "web", "--", "--port", "8092"],
-      "port": 8092,
+      "runtimeArgs": ["run", "web", "--", "--port", "8097"],
+      "port": 8097,
       "autoPort": true
     }
   ]

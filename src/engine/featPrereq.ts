@@ -83,6 +83,27 @@ export function evaluatePrerequisite(entity: Entity, prereq: string | null): Pre
   const text = prereq.trim();
   const lower = text.toLowerCase();
 
+  // -- 2024 style: "Level 4+" alone or combined, "Level 4+, Strength or Dexterity 13+" --
+  // Every comma-separated part must hold; the first unmet one is reported.
+  const parts = text.split(/,\s*(?=level\s+\d|strength|dexterity|constitution|intelligence|wisdom|charisma|fighting style|spellcasting)/i);
+  if (parts.length > 1 || /^level\s+\d+\+?$/i.test(text) || /fighting style feature/i.test(text)) {
+    for (const part of parts) {
+      const lv = /^level\s+(\d+)\+?$/i.exec(part.trim());
+      if (lv) {
+        const need = parseInt(lv[1], 10);
+        if (entity.identity.level < need) return { met: false, reason: `Requires level ${need} or higher (you are level ${entity.identity.level}).`, needsManualCheck: false };
+        continue;
+      }
+      if (/^fighting style feature$/i.test(part.trim())) {
+        if (!entity.features.some(f => /fighting style/i.test(f.name))) return { met: false, reason: 'Requires the Fighting Style class feature.', needsManualCheck: false };
+        continue;
+      }
+      const r = evaluatePrerequisite(entity, part.trim());
+      if (!r.met) return r;
+    }
+    return { met: true, reason: '', needsManualCheck: false };
+  }
+
   // -- Ability minimums, possibly with "X or Y NN+" --
   // Matches "Strength 13+", "Dexterity 13", "Intelligence or Wisdom 13+".
   const abilityMatch = lower.match(/((?:strength|dexterity|constitution|intelligence|wisdom|charisma)(?:\s+or\s+(?:strength|dexterity|constitution|intelligence|wisdom|charisma))*)\s+(\d+)\+?/);
@@ -180,9 +201,17 @@ export function evaluatePrerequisite(entity: Entity, prereq: string | null): Pre
     .filter(s => !['a', 'an', 'the', 'small', 'race'].includes(s));
 
   if (tokens.length > 0) {
-    const met = tokens.some(tok =>
-      races.some(r => r.includes(tok) || tok.includes(r)),
-    );
+    // Bug fix (architecture review E4): this used to be a bidirectional
+    // substring match (`r.includes(tok) || tok.includes(r)`), which matches
+    // any race whose name is a substring of another — e.g. a plain Elf
+    // satisfied a "Half-Elf, Half-Orc, or Human" prerequisite, since
+    // "half-elf".includes("elf"). Normalize hyphens to spaces (matching
+    // raceWords' own underscore-to-space normalization) and require an
+    // exact match instead.
+    const met = tokens.some(tok => {
+      const normTok = tok.replace(/-/g, ' ').trim();
+      return races.some(r => r === normTok);
+    });
     if (met) return { met: true, reason: '', needsManualCheck: false };
     // "Dwarf or a Small race" has a size clause we can't verify from race id.
     const hasSizeClause = /small race/.test(lower);

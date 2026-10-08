@@ -7,12 +7,11 @@
 // anything tagged with a magic-item rarity in its properties, the same
 // convention item-builder.tsx already writes rarity into.
 import { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Image } from 'react-native';
+import { View, Text, ScrollView, FlatList, Pressable, StyleSheet, TextInput, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Item } from '../../src/engine/types';
-import { itemRepo } from '../../src/content/itemRepo';
-import { toItemIndexEntry } from '../../src/content/itemRepo.types';
 import type { ItemIndexEntry } from '../../src/content/itemRepo.types';
+import { mergeItemIndex } from '../../src/content/contentResolution';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
@@ -27,13 +26,13 @@ function rarityRank(r: string | null): number {
   return r ? RARITIES.indexOf(r) : -1;
 }
 
-function RareItemRow({ entry, homebrewItem, onEdit }: {
+function RareItemRow({ entry, rarity, homebrewItem, onEdit }: {
   entry: ItemIndexEntry;
+  rarity: string | null;
   homebrewItem: Item | null;
   onEdit: (() => void) | null;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const rarity = rarityOf(entry.properties);
   const desc = homebrewItem?.features?.[0]?.description
     ?? (homebrewItem?.homebrewDraft?.description as string | undefined);
 
@@ -81,20 +80,27 @@ export default function RareItemsScreen() {
 
   const homebrewById = useMemo(() => new Map(homebrewItems.map(i => [i.id, i])), [homebrewItems]);
 
-  const allEntries = useMemo(() => {
-    const official = itemRepo.getIndex();
-    const homebrew = homebrewItems.map(toItemIndexEntry);
-    return [...official, ...homebrew];
-  }, [homebrewItems]);
+  // Bug fix (architecture review C10): this used to concat official +
+  // homebrew with no dedup — a homebrew item overriding an official one
+  // by id showed up as two separate rows. mergeItemIndex already dedups
+  // by id (homebrew wins), matching the precedence used everywhere else.
+  const allEntries = useMemo(() => mergeItemIndex(homebrewItems), [homebrewItems]);
 
+  // Rarity is computed once per entry here (was previously recomputed by
+  // both the sort comparator and RareItemRow itself — redundant work
+  // multiplied across every entry, meaningful once the official catalog's
+  // ~600 rarity-tagged items are in play) and carried alongside each entry
+  // rather than re-derived downstream.
   const rareEntries = useMemo(() => {
-    let list = allEntries.filter(e => rarityOf(e.properties) !== null);
-    if (rarityFilter) list = list.filter(e => rarityOf(e.properties) === rarityFilter);
+    const withRarity = allEntries
+      .map(entry => ({ entry, rarity: rarityOf(entry.properties) }))
+      .filter((x): x is { entry: ItemIndexEntry; rarity: string } => x.rarity !== null);
+    let list = rarityFilter ? withRarity.filter(x => x.rarity === rarityFilter) : withRarity;
     const q = search.trim().toLowerCase();
-    if (q) list = list.filter(e => e.name.toLowerCase().includes(q));
+    if (q) list = list.filter(x => x.entry.name.toLowerCase().includes(q));
     return [...list].sort((a, b) => {
-      const rDiff = rarityRank(rarityOf(b.properties)) - rarityRank(rarityOf(a.properties));
-      return rDiff !== 0 ? rDiff : a.name.localeCompare(b.name);
+      const rDiff = rarityRank(b.rarity) - rarityRank(a.rarity);
+      return rDiff !== 0 ? rDiff : a.entry.name.localeCompare(b.entry.name);
     });
   }, [allEntries, rarityFilter, search]);
 
@@ -139,18 +145,21 @@ export default function RareItemsScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
-          {rareEntries.map(entry => (
+        <FlatList
+          data={rareEntries}
+          keyExtractor={x => x.entry.id}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
             <RareItemRow
-              key={entry.id}
-              entry={entry}
-              homebrewItem={homebrewById.get(entry.id) ?? null}
-              onEdit={homebrewById.has(entry.id)
-                ? () => router.push({ pathname: '/homebrew/item-builder', params: { editId: entry.id } } as any)
+              entry={item.entry}
+              rarity={item.rarity}
+              homebrewItem={homebrewById.get(item.entry.id) ?? null}
+              onEdit={homebrewById.has(item.entry.id)
+                ? () => router.push({ pathname: '/homebrew/item-builder', params: { editId: item.entry.id } } as any)
                 : null}
             />
-          ))}
-        </ScrollView>
+          )}
+        />
       )}
     </View>
   );

@@ -19,8 +19,8 @@ import TcpSocket from 'react-native-tcp-socket';
 import { NativeModules } from 'react-native';
 import type Socket from 'react-native-tcp-socket/lib/types/Socket';
 
-import { Entity, SyncEvent } from '../engine/types';
-import { SyncMessage, encodeMessage, parseBuffer } from './protocol';
+import { Entity, SyncEvent, Campaign } from '../engine/types';
+import { SyncMessage, encodeMessage, parseBuffer, CombatTurnState } from './protocol';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +31,14 @@ export type ClientCallbacks = {
   onEntitySnapshot: (entity: Entity) => void;
   /** Fired when the DM relays a partial entity PATCH instead of a full snapshot. */
   onEntityPatch?:   (entityId: string, patch: Record<string, unknown>) => void;
+  /** Fired when the DM pushes the current Campaign (name/rules/notes/quests/
+   *  session log) — on join/reconnect, or after the DM edits it (audit
+   *  finding CAMPAIGN-SYNC-1). */
+  onCampaignSnapshot?: (campaign: Campaign) => void;
+  onCampaignPatch?:    (campaignId: string, patch: Record<string, unknown>) => void;
+  /** Fired whenever the DM's combat state changes (start/advance/end turn) —
+   *  drives the player-facing "whose turn is it" banner. */
+  onCombatTurn?:    (turn: CombatTurnState) => void;
   /** Fired whenever a connection attempt fails, with a human-readable reason. */
   onError?:         (reason: string) => void;
 };
@@ -60,6 +68,11 @@ export class SyncClient {
   // expose for diagnostics
   get target(): string { return `${this.host}:${this.port}`; }
   get lastErrorMessage(): string | null { return this.lastError; }
+  /** Which character this device currently claims/controls, if any — see
+   *  claimCharacter(). Used by characterStore's applyIncomingEntity to
+   *  decide whether an incoming full snapshot for this specific entity
+   *  should override local state or not (architecture review P1). */
+  get ownedCharacterId(): string | null { return this.characterId; }
 
   constructor(deviceId: string, nickname: string, characterId: string | null, callbacks: ClientCallbacks) {
     this.deviceId    = deviceId;
@@ -199,6 +212,32 @@ export class SyncClient {
 
       case 'entity_patch':
         this.cb.onEntityPatch?.(msg.entityId, msg.patch);
+        break;
+
+      case 'campaign_snapshot':
+        this.cb.onCampaignSnapshot?.(msg.campaign);
+        break;
+
+      case 'campaign_patch':
+        this.cb.onCampaignPatch?.(msg.campaignId, msg.patch);
+        break;
+
+      case 'combat_turn_state':
+        this.cb.onCombatTurn?.({ active: msg.active, round: msg.round, currentEntityId: msg.currentEntityId, currentName: msg.currentName });
+        break;
+
+      // CAMPAIGN-CLOSED-1: previously fell through to `default: break` and
+      // was silently dropped — the server never actually sent this type
+      // before now, so it was dead on both ends. The DM's device now sends
+      // one right before intentionally stopping hosting (see server.ts's
+      // announceClosing / campaignStore.ts's leaveCampaign), so a player
+      // sees a specific reason ("The DM has closed this campaign.") instead
+      // of the same generic "Connection lost" a transient network drop
+      // shows — same onError path, just with a message that actually
+      // distinguishes the two cases.
+      case 'error':
+        this.lastError = msg.message;
+        this.cb.onError?.(msg.message);
         break;
 
       default: break;

@@ -2,12 +2,25 @@
 // FILE: src/store/campaignStore.ts
 // Campaign + DM identity state management.
 // ============================================================================
+import { requiredPacksForRuleset } from '../content/requiredPacks';
+import { installedOfficialPacks } from '../content/officialPackService';
 import { create } from 'zustand';
-import { Campaign, CampaignRules } from '../engine/types';
+import { Campaign, CampaignRules, DeviceSession, RulesetId } from '../engine/types';
 import { saveCampaign, loadAllCampaigns, deleteCampaign, loadCampaign } from '../db/campaignRepo';
+import { getMeta, setMeta } from '../db/appMetaRepo';
 import { useSessionStore } from './sessionStore';
 import { syncManager } from '../sync/syncManager';
+import { deepMerge } from '../sync/diff';
 import { DEFAULT_RULES } from './characterStore';
+
+// Persisted (via the generic app_meta key/value store — no schema change
+// needed) so a reconnect after any app restart or foreground transition can
+// re-announce which character this device claims, instead of the P1/S0
+// stale-snapshot guard in characterStore.applyIncomingEntity being silently
+// defeated for the rest of the session (audit finding SYNC-4). Session-local
+// SyncClient state (syncManager.ownedCharacterId) was the only place this
+// ever lived before — it resets to null on every fresh connection.
+const CLAIMED_CHARACTER_META_KEY = 'claimed_character_id';
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 // DEFAULT_RULES is defined once in characterStore and imported here so a single
@@ -15,6 +28,24 @@ import { DEFAULT_RULES } from './characterStore';
 
 function genId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+/**
+ * Re-establishes the live connection a PLAYER had to `campaign` (after an app restart or a switch). A DM is never connected here:
+ * a campaign is persistent offline state, and a live room (room code, TCP server) exists only while the DM has started a live
+ * session on purpose (startLiveSession). So restoring or switching to a campaign the device owns opens no socket.
+ * A stale/unreachable player join code surfaces later as a disconnected sync status, not a thrown error here.
+ */
+async function reconnectIfPlayer(
+  campaign: Campaign,
+  session:  DeviceSession,
+  isDm:     boolean,
+): Promise<void> {
+  if (isDm) return;
+  const claimedCharacterId = (await getMeta(CLAIMED_CHARACTER_META_KEY)) || null;
+  await syncManager.startAsClient(
+    campaign.joinCode, session.deviceId, session.nickname, claimedCharacterId,
+  );
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -26,21 +57,37 @@ type CampaignStore = {
 
   /** True when the logged-in device owns the active campaign. */
   isDm: boolean;
+  /** True only while this device is hosting a live session (a room code and a server exist). Never true after a restart. */
+  liveSession: boolean;
 
   /** Load all campaigns from SQLite. Called after initDb(). */
   loadCampaigns: () => Promise<void>;
 
   /**
-   * Create a new campaign. The caller must be the DM device.
-   * Sets activeCampaign and persists to SQLite.
+   * Create a new campaign: persistent, offline DM state. The caller is the DM device. It persists to SQLite, sets activeCampaign and
+   * the local DM context, and does NOT touch the network: no room code, no server socket (see startLiveSession). `rules`, when given, becomes the campaign's own
+   * persistent effective configuration (e.g. copied from a chosen CustomRuleProfile by the
+   * caller) — editing the original profile later never silently rewrites it.
    */
-  createCampaign: (name: string) => Promise<Campaign>;
+  createCampaign: (opts: {
+    name: string; description?: string; rulesetId?: RulesetId;
+    rules?: CampaignRules; bannedPackIds?: string[];
+  }) => Promise<Campaign>;
 
   /**
    * Join an existing campaign via 7-character code.
    * In the full sync implementation this resolves to the DM's IP.
    * For now it stores a stub campaign locally.
    */
+  /**
+   * Starts a live session for the active campaign (DM only): opens the LAN server, allocates a room code, and stores it on the
+   * campaign so players can join. Returns the room code, or null when no usable local network exists (the session still counts
+   * as started and gets a code when a network appears). Ending it leaves the campaign untouched.
+   */
+  startLiveSession: () => Promise<string | null>;
+  /** Ends the live session: tells connected players, stops the server, clears the room code. The campaign stays active and saved. */
+  endLiveSession: (reason?: string) => Promise<void>;
+
   joinCampaign: (code: string) => Promise<void>;
 
   /** Assign a character to a campaign. */
@@ -52,8 +99,51 @@ type CampaignStore = {
   /** Update campaign fields (name, rules, notes, etc.). */
   updateCampaign: (id: string, updater: (c: Campaign) => Campaign) => Promise<void>;
 
-  /** Leave / remove the active campaign. */
-  leaveCampaign: () => Promise<void>;
+  /**
+   * Player-only: apply a full Campaign snapshot pushed by the DM — on join/
+   * reconnect ('hello'), or a full push when there's no prior local copy to
+   * diff against. Unlike applyIncomingEntity, there is no stale-snapshot
+   * guard here: a player never legitimately authors a Campaign edit of
+   * their own to protect, so the DM's copy is always authoritative
+   * (audit finding CAMPAIGN-SYNC-1).
+   */
+  applyIncomingCampaign: (campaign: Campaign) => Promise<void>;
+
+  /** Player-only: merge a partial Campaign patch pushed by the DM onto the
+   *  local copy — same deepMerge shape as characterStore.applyIncomingPatch.
+   *  No-op if this device doesn't know the campaign yet (a snapshot always
+   *  precedes patches, same assumption applyIncomingPatch makes). */
+  applyIncomingCampaignPatch: (campaignId: string, patch: Record<string, unknown>) => Promise<void>;
+
+  /**
+   * Stop hosting/connecting to the active campaign and clear it as active —
+   * does NOT delete it. The campaign stays in `campaigns` (and SQLite) and
+   * can be resumed later via switchToCampaign. A DM leaving disconnects any
+   * connected players (the TCP server stops), same as a network outage —
+   * their own devices keep their last-synced state and can reconnect once
+   * the DM re-hosts.
+   */
+  leaveCampaign: (reason?: string) => Promise<void>;
+
+  /**
+   * Permanently delete a campaign — SQLite row and local list entry both
+   * gone, unrecoverable. Deliberately separate from leaveCampaign so the
+   * routine "I'm done for tonight" action never destroys data by accident
+   * (this used to be exactly what leaveCampaign did for a DM). Leaves the
+   * campaign first if it's currently active.
+   */
+  deleteCampaignPermanently: (id: string) => Promise<void>;
+
+  /**
+   * A DM can own/keep several campaigns but only hosts one at a time
+   * (CampaignHost, singular, per device — see syncManager). Switches which
+   * LOCALLY KNOWN campaign is active: stops hosting/connecting to whatever
+   * was active before, then hosts (DM) or reconnects (player) the target.
+   * Graceful-degradation rules match resumeSync — a DM never fails to
+   * become the active host locally just because a live network/reconnect
+   * attempt failed; only an unknown campaign id throws.
+   */
+  switchToCampaign: (campaignId: string) => Promise<void>;
 
   /**
    * Re-establish the sync transport for an already-active campaign after an app
@@ -71,11 +161,14 @@ type CampaignStore = {
   reconnectWithCode: (code: string) => Promise<void>;
 };
 
+const requiredFor = (ruleset: RulesetId | undefined) => requiredPacksForRuleset(ruleset, installedOfficialPacks());
+
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
   campaigns:      [],
   activeCampaign: null,
   isLoading:      false,
   isDm:           false,
+  liveSession:    false,
 
   loadCampaigns: async () => {
     set({ isLoading: true });
@@ -84,38 +177,37 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       const session   = useSessionStore.getState().session;
       const active    = campaigns.find(c => c.id === session?.campaignId) ?? null;
       const isDm      = !!active && !!session && active.dmDeviceId === session.deviceId;
-      set({ campaigns, activeCampaign: active, isDm, isLoading: false });
+      // A restart has no live session, so a room code a DM campaign still carries from before is stale: drop it.
+      if (active && isDm && active.joinCode) { active.joinCode = ''; void saveCampaign(active).catch(() => undefined); }
+      set({ campaigns, activeCampaign: active, isDm, liveSession: false, isLoading: false });
     } catch (e) {
       console.error('[campaignStore] loadCampaigns failed:', e);
       set({ isLoading: false });
     }
   },
 
-  createCampaign: async (name) => {
+  createCampaign: async (opts) => {
     const session = useSessionStore.getState().session;
     if (!session) throw new Error('No device session. Call initSession() first.');
 
     const campaign: Campaign = {
       id:           genId(),
-      name,
+      name:         opts.name,
       dmDeviceId:   session.deviceId,
-      joinCode:     '',  // assigned from the real LAN room code below, before persisting
-      rules:        { ...DEFAULT_RULES },
+      joinCode:     '',  // a room code exists only during a live session (startLiveSession)
+      rules:        opts.rules ? { ...opts.rules } : { ...DEFAULT_RULES },
       playerIds:    [],
       characterIds: [],
       notes:        '',
       createdAt:    Date.now(),
+      ...(opts.description?.trim() ? { description: opts.description.trim() } : {}),
+      ...(opts.rulesetId ? { rulesetId: opts.rulesetId } : {}),
+      ...(opts.bannedPackIds && opts.bannedPackIds.length > 0 ? { bannedPackIds: opts.bannedPackIds } : {}),
+      // The content packs this campaign's ruleset needs, so a player who joins can be told what they lack (content/requiredPacks.ts).
+      ...(requiredFor(opts.rulesetId).length > 0 ? { requiredPacks: requiredFor(opts.rulesetId) } : {}),
     };
 
-    // Start the LAN sync server (DM role). This binds the TCP socket and returns
-    // the real room code encoding this device's WiFi IP. On web or off-WiFi this
-    // throws; we surface that to the caller so the UI can explain why hosting
-    // failed, and we don't persist a campaign that can't actually be hosted.
-    const roomCode = await syncManager.startAsServer(
-      campaign.id, session.deviceId, session.deviceId, session.nickname,
-    );
-    campaign.joinCode = roomCode;
-
+    // Offline by design: no server, no room code. A live session is started on purpose later (startLiveSession).
     await saveCampaign(campaign);
     await useSessionStore.getState().setCampaignId(campaign.id);
 
@@ -123,9 +215,32 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       campaigns:      [...state.campaigns, campaign],
       activeCampaign: campaign,
       isDm:           true,
+      liveSession:    false,
     }));
 
     return campaign;
+  },
+
+  startLiveSession: async () => {
+    const { activeCampaign, isDm, updateCampaign, liveSession } = get();
+    const session = useSessionStore.getState().session;
+    if (!session) throw new Error('No device session.');
+    if (!activeCampaign || !isDm) throw new Error('Open one of your campaigns first.');
+    if (liveSession) return activeCampaign.joinCode || null;
+    // Fresh id per hosting run, distinct from the device's permanent identity (audit finding ARCH-4).
+    const roomCode = await syncManager.startAsServer(activeCampaign.id, genId(), session.deviceId, session.nickname);
+    set({ liveSession: true });
+    await updateCampaign(activeCampaign.id, c => ({ ...c, joinCode: roomCode ?? '' }));
+    return roomCode ?? null;
+  },
+
+  endLiveSession: async (reason) => {
+    const { activeCampaign, isDm, updateCampaign } = get();
+    if (!activeCampaign || !isDm) return;
+    await syncManager.announceClosing(reason ?? 'The DM has ended the live session.');
+    syncManager.stopAll();
+    set({ liveSession: false });
+    await updateCampaign(activeCampaign.id, c => ({ ...c, joinCode: '' }));
   },
 
   joinCampaign: async (code) => {
@@ -146,10 +261,12 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     );
 
     // Persist a local campaign record keyed by the join code so the UI has a
-    // campaign to show immediately and the session points at it. The DM's
-    // authoritative name/rules arrive with the connection; we reconcile the
-    // local record's name once a snapshot identifies the campaign. Until then a
-    // readable placeholder name is used.
+    // campaign to show immediately and the session points at it. A readable
+    // placeholder is used until the DM's real campaign_snapshot arrives
+    // (pushed automatically on 'hello' — see server.ts's onCampaignSyncRequested),
+    // at which point applyIncomingCampaign reconciles this placeholder
+    // (matched by joinCode, since its locally-invented id never matches the
+    // DM's real one) into the DM's authoritative name/rules/notes/quests.
     const local: Campaign = {
       id:           `joined_${cleanCode}`,
       name:         `Joined campaign (${cleanCode})`,
@@ -198,6 +315,10 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     // when offline or when this device is the DM (the DM already owns the data).
     if (!get().isDm) {
       syncManager.claimCharacter(characterId);
+      // Persisted too (see CLAIMED_CHARACTER_META_KEY's doc comment above) —
+      // ownedCharacterId alone resets on every fresh connection, which used
+      // to silently defeat the reconnect stale-snapshot guard.
+      await setMeta(CLAIMED_CHARACTER_META_KEY, characterId);
       // Lazy import to avoid a static cycle (characterStore -> syncManager).
       const entity = require('./characterStore').useCharacterStore.getState()
         .characters.find((c: { id: string }) => c.id === characterId);
@@ -224,32 +345,127 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       activeCampaign:
         state.activeCampaign?.id === id ? updated : state.activeCampaign,
     }));
+
+    // Broadcast to connected players (audit finding CAMPAIGN-SYNC-1) — a
+    // no-op inside syncCampaignPatch itself when this device isn't the DM
+    // (see that method's own doc comment), so every caller of updateCampaign
+    // — including the player-only local self-corrections like persisting a
+    // freshly-reconnected joinCode — can call this unconditionally without
+    // each needing to know whether IT should be the one broadcasting.
+    syncManager.syncCampaignPatch(id, existing, updated);
   },
 
-  leaveCampaign: async () => {
-    const { activeCampaign } = get();
+  applyIncomingCampaign: async (campaign) => {
+    const state = get();
+    // Reconcile the join-time placeholder (id `joined_${code}`, dmDeviceId
+    // 'remote' — see joinCampaign's own doc comment, which promised this
+    // reconciliation but never implemented it until now) into the DM's
+    // real campaign record. Matched by joinCode, not id: the placeholder's
+    // locally-invented id never matches the DM's real generated one, so a
+    // plain id-based upsert would leave both records around forever
+    // instead of resolving to a single one (audit finding CAMPAIGN-SYNC-1).
+    const placeholder = state.campaigns.find(
+      c => c.id !== campaign.id && c.joinCode === campaign.joinCode && c.dmDeviceId === 'remote'
+    );
+    if (placeholder) {
+      await deleteCampaign(placeholder.id);
+      if (state.activeCampaign?.id === placeholder.id) {
+        await useSessionStore.getState().setCampaignId(campaign.id);
+      }
+    }
+    await saveCampaign(campaign);
+    set(s => {
+      const withoutPlaceholder = placeholder ? s.campaigns.filter(c => c.id !== placeholder.id) : s.campaigns;
+      const exists = withoutPlaceholder.some(c => c.id === campaign.id);
+      const campaigns = exists
+        ? withoutPlaceholder.map(c => c.id === campaign.id ? campaign : c)
+        : [...withoutPlaceholder, campaign];
+      const wasActive = s.activeCampaign?.id === campaign.id || s.activeCampaign?.id === placeholder?.id;
+      return {
+        campaigns,
+        activeCampaign: wasActive ? campaign : s.activeCampaign,
+      };
+    });
+  },
+
+  applyIncomingCampaignPatch: async (campaignId, patch) => {
+    const { campaigns } = get();
+    const existing = campaigns.find(c => c.id === campaignId);
+    if (!existing) return; // a snapshot always precedes patches
+    const merged = deepMerge(existing, patch);
+    await saveCampaign(merged);
+    set(state => ({
+      campaigns: state.campaigns.map(c => c.id === campaignId ? merged : c),
+      activeCampaign: state.activeCampaign?.id === campaignId ? merged : state.activeCampaign,
+    }));
+  },
+
+  leaveCampaign: async (reason) => {
+    const { activeCampaign, isDm } = get();
     if (!activeCampaign) return;
 
-    const session = useSessionStore.getState().session;
-    const ownsCampaign = session?.deviceId === activeCampaign.dmDeviceId;
+    // Bug fix: this used to permanently delete the campaign when a DM left
+    // — the only way a DM could "leave" was to destroy the data, so owning
+    // more than one campaign at a time was impossible (creating a second
+    // one meant deleting the first). Leaving now just stops hosting/
+    // connecting and clears the active reference, for both roles alike —
+    // the campaign's own record is untouched and can be resumed later via
+    // switchToCampaign. See deleteCampaignPermanently for actual deletion.
+    //
+    // CAMPAIGN-CLOSED-1: tell connected players WHY, before tearing the
+    // connection down — without this, a DM-initiated stop/leave/delete
+    // looked identical to a transient network drop from a player's device
+    // (both just showed "Connection lost"). Awaited so the message has
+    // actually flushed before stopAll() destroys the sockets.
+    if (isDm) {
+      await syncManager.announceClosing(reason ?? 'The DM has stopped hosting this campaign.');
+    }
+    syncManager.stopAll();
+    set({ activeCampaign: null, isDm: false, liveSession: false });
+    await useSessionStore.getState().setCampaignId(null);
+    // Don't carry a claimed character over into whatever campaign this
+    // device joins/hosts next — see CLAIMED_CHARACTER_META_KEY's doc comment.
+    await setMeta(CLAIMED_CHARACTER_META_KEY, '');
+  },
 
-    // Tear down the TCP server/client regardless of role before clearing state.
+  deleteCampaignPermanently: async (id) => {
+    const { activeCampaign, leaveCampaign } = get();
+    if (activeCampaign?.id === id) {
+      // Can't delete what this device is currently hosting/connected to —
+      // leave it first (stops the transport, clears the session pointer).
+      await leaveCampaign('The DM has deleted this campaign.');
+    }
+    await deleteCampaign(id);
+    set(state => ({ campaigns: state.campaigns.filter(c => c.id !== id) }));
+  },
+
+  switchToCampaign: async (campaignId) => {
+    const { campaigns, activeCampaign } = get();
+    const session = useSessionStore.getState().session;
+    if (!session) throw new Error('No device session. Call initSession() first.');
+    if (activeCampaign?.id === campaignId) return; // already active
+
+    const target = campaigns.find(c => c.id === campaignId);
+    if (!target) throw new Error(`Campaign ${campaignId} not found locally.`);
+
+    // A device hosts/connects to one campaign at a time — stop whatever was
+    // active before switching (CampaignHost is singular per device; owning
+    // several campaigns and switching which one is live is the point of
+    // this action, not hosting them all at once).
     syncManager.stopAll();
 
-    if (ownsCampaign) {
-      // DM deletes the campaign entirely
-      await deleteCampaign(activeCampaign.id);
-      set(state => ({
-        campaigns:      state.campaigns.filter(c => c.id !== activeCampaign.id),
-        activeCampaign: null,
-        isDm:           false,
-      }));
-    } else {
-      // Player just clears their local active campaign reference
-      set({ activeCampaign: null, isDm: false });
-    }
+    const isDm = target.dmDeviceId === session.deviceId;
+    set({ activeCampaign: target, isDm, liveSession: false });
+    await useSessionStore.getState().setCampaignId(target.id);
 
-    await useSessionStore.getState().setCampaignId(null);
+    try {
+      await reconnectIfPlayer(target, session, isDm);
+    } catch (e) {
+      // Same graceful-degradation contract as resumeSync — the switch has
+      // already happened locally either way (activeCampaign/isDm are set
+      // above); only the live transport attempt failed.
+      console.warn('[campaignStore] switchToCampaign failed:', e);
+    }
   },
 
   resumeSync: async () => {
@@ -258,25 +474,15 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     if (!activeCampaign || !session) return;
 
     try {
-      if (isDm) {
-        // Re-host. The room code is regenerated from the current LAN IP and may
-        // differ from last session; persist the new code so the DM screen and
-        // any QR share reflect reality.
-        const roomCode = await syncManager.startAsServer(
-          activeCampaign.id, session.deviceId, session.deviceId, session.nickname,
-        );
-        if (roomCode !== activeCampaign.joinCode) {
-          await get().updateCampaign(activeCampaign.id, c => ({ ...c, joinCode: roomCode }));
-        }
-      } else {
-        // Reconnect as a player using the stored join code.
-        await syncManager.startAsClient(
-          activeCampaign.joinCode, session.deviceId, session.nickname, null,
-        );
-      }
+      // A player reconnects; a DM restores the campaign only (no live session until startLiveSession).
+      await reconnectIfPlayer(activeCampaign, session, isDm);
     } catch (e) {
-      // Off-WiFi or unreachable host — the campaign stays active locally and the
-      // sync status simply shows disconnected. Don't throw on boot.
+      // A DM re-host no longer throws for "no network" (see
+      // syncManager.startAsServer) — this now only catches a genuine
+      // platform/build incapability (web, native TCP module not linked) or,
+      // for a player, a malformed stored join code. The campaign stays
+      // active locally either way and the sync status simply shows
+      // disconnected. Don't throw on boot.
       console.warn('[campaignStore] resumeSync failed:', e);
     }
   },
@@ -291,8 +497,9 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
     // Tear down any half-open client before reconnecting with the new code.
     syncManager.stopAll();
+    const claimedCharacterId = (await getMeta(CLAIMED_CHARACTER_META_KEY)) || null;
     await syncManager.startAsClient(
-      cleanCode, session.deviceId, session.nickname, null,
+      cleanCode, session.deviceId, session.nickname, claimedCharacterId,
     );
 
     // Persist the fresh code so a later resume uses it.

@@ -1,21 +1,31 @@
 // app/creation/class-detail.tsx
 // Class detail with back button, collapsible sections, and safe re-selection.
-import { View, Text, ScrollView, Pressable, StyleSheet, Modal } from 'react-native';
+import { identityLabelsFor } from '../../src/store/identityLabelsFor';
+import { View, Text, ScrollView, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
-import { globalContentDB } from '../../src/content/classes/library';
-import { levelUp, stripResolvedAsiStats, applyGrant } from '../../src/engine/leveling';
+import { acquireClass, levelUpClass, resetCreationClass } from '../../src/engine/leveling';
 import { recomputeDerived } from '../../src/engine/pipeline';
 import { getProgressionForClass } from '../../src/content/classes/progressions';
 import {
   classMeta, featuresByLevel, progressionTable, abilityFullName,
 } from '../../src/content/classes/classBrowse';
-import { subclassEntriesForClassMerged } from '../../src/content/subclasses/subclassBrowse';
+import {
+  subclassEntriesForClassMerged, subclassAdditions, SUBCLASS_ADDITION_LABELS,
+  subclassSourceLabel, subclassSortOptions, SubclassAddition,
+} from '../../src/content/subclasses/subclassBrowse';
+import { sortByOption } from '../../src/content/contentQuery';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
-import { Entity } from '../../src/engine/types';
+import { NonSrdBadge, isNonSrd } from '../../src/components/NonSrdBadge';
+import { EditionBadge } from '../../src/components/EditionBadge';
+import {
+  FilterChipRow, MultiSelectChipRow, FilterSection, OfficialHomebrewChipRow, ActiveFilterChips,
+} from '../../src/components/FilterChipRow';
+import { SortControl } from '../../src/components/SortControl';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 type ClassDetail = {
   description: string;
@@ -27,6 +37,8 @@ type ClassDetail = {
   toolProf: string;
   spellcasting: boolean;
 };
+
+const ABILITY_NAMES: Record<string, string> = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' };
 
 const CLASS_DETAIL: Record<string, ClassDetail> = {
   fighter: {
@@ -149,36 +161,8 @@ const CLASS_DETAIL: Record<string, ClassDetail> = {
     toolProf: 'None',
     spellcasting: true,
   },
-  artificer: {
-    description: 'An inventor who infuses mundane objects with magic, casting spells from level 1 and unlocking Infuse Item at level 2.',
-    savingThrows: ['Constitution', 'Intelligence'],
-    savingThrowAbilities: ['con', 'int'],
-    primaryFeatures: ['Magical Tinkering', 'Spellcasting', 'Infuse Item', 'Artificer Specialist'],
-    armorProf: 'Light, medium, shields',
-    weaponProf: 'Simple weapons',
-    toolProf: "Thieves' tools, tinker's tools, one type of artisan's tools",
-    spellcasting: true,
-  },
-  abyss_knight: {
-    description: 'A warrior bound by pact to a demon lord of the Abyss, channeling dark power through their hit dice to fuel both their attacks and their nascent spellcasting.',
-    savingThrows: ['Strength', 'Constitution'],
-    savingThrowAbilities: ['str', 'con'],
-    primaryFeatures: ['Abyssal Energy', 'Oozing Knight', "Demon's Sight", 'Frightening Gaze', 'Dark Magic'],
-    armorProf: 'Light, medium, heavy, shields',
-    weaponProf: 'Simple weapons, martial weapons',
-    toolProf: 'None',
-    spellcasting: true,
-  },
-  blood_hunter: {
-    description: 'A grim warrior who sacrifices their own vitality to hunt monsters, channeling hemocraft blood magic into weapon strikes and curses.',
-    savingThrows: ['Dexterity', 'Intelligence'],
-    savingThrowAbilities: ['dex', 'int'],
-    primaryFeatures: ["Hunter's Bane", 'Blood Maledict', 'Crimson Rite', 'Blood Hunter Order', 'Extra Attack'],
-    armorProf: 'Light, medium, shields',
-    weaponProf: 'Simple weapons, martial weapons',
-    toolProf: "Alchemist's supplies",
-    spellcasting: false,
-  },
+  // No entries for non-SRD classes (Artificer and the private ones): the public app carries no description of them. A class from an installed
+  // private pack reads its facts from the class record itself, like the 2024 classes.
 };
 
 /**
@@ -186,101 +170,6 @@ const CLASS_DETAIL: Record<string, ClassDetail> = {
  * class starts clean. Without this, going back and choosing a different class
  * piles up old features/choices/resources and double-counts HP.
  */
-function clearClassData(entity: Entity, hitDie: number): Entity {
-  // Revert resolved-ASI stat bumps BEFORE dropping the choices that record them.
-  const stripped = stripResolvedAsiStats(entity);
-
-  // Reset ALL skills to untrained — class skill choices set trained=true on the
-  // skill block directly (not via effects), so they survive a features/choices
-  // wipe and stack when a new class's skill choices are resolved.
-  // Background-granted skills (set at grantedAt===0 via selectBackground) also
-  // live here; we'll re-apply them below from the background features.
-  const clearedSkills: typeof stripped.skills = {
-    skills: Object.fromEntries(
-      Object.entries(stripped.skills.skills).map(([k, v]) => [
-        k,
-        { ...v, trained: false, expertise: false },
-      ])
-    ) as typeof stripped.skills.skills,
-  };
-
-  // Re-apply background skill grants so they survive the class change.
-  // Background features carry grant_proficiency effects or the background
-  // screen directly sets trained=true; we re-derive from the remaining features.
-  let retrainedSkills = clearedSkills;
-  const backgroundFeatures = stripped.features.filter(
-    f => f.source.kind === 'background'
-  );
-  for (const feature of backgroundFeatures) {
-    for (const effect of feature.effects) {
-      if (
-        effect.type === 'grant_proficiency' &&
-        effect.target.startsWith('skill:') &&
-        effect.operation === 'add'
-      ) {
-        const skillName = effect.target.slice(6) as keyof typeof retrainedSkills.skills;
-        if (retrainedSkills.skills[skillName]) {
-          retrainedSkills = {
-            skills: {
-              ...retrainedSkills.skills,
-              [skillName]: { ...retrainedSkills.skills[skillName], trained: true },
-            },
-          };
-        }
-      }
-    }
-  }
-  // Background.tsx also sets trained=true directly (not via effect) — re-apply
-  // by checking background feature proficiency lists from the content DB.
-  // This is safe because the backgroundId is stable on the entity.
-  const bgId = stripped.identity.backgroundId;
-  if (bgId) {
-    const BG_SKILL_MAP: Record<string, string[]> = {
-      acolyte:      ['insight', 'religion'],
-      charlatan:    ['deception', 'sleight_of_hand'],
-      criminal:     ['deception', 'stealth'],
-      entertainer:  ['acrobatics', 'performance'],
-      folk_hero:    ['animal_handling', 'survival'],
-      guild_artisan:['insight', 'persuasion'],
-      hermit:       ['medicine', 'religion'],
-      noble:        ['history', 'persuasion'],
-      outlander:    ['athletics', 'survival'],
-      sage:         ['arcana', 'history'],
-      sailor:       ['athletics', 'perception'],
-      soldier:      ['athletics', 'intimidation'],
-      urchin:       ['sleight_of_hand', 'stealth'],
-    };
-    const bgSkills = BG_SKILL_MAP[bgId] ?? [];
-    for (const sk of bgSkills) {
-      const skillName = sk as keyof typeof retrainedSkills.skills;
-      if (retrainedSkills.skills[skillName]) {
-        retrainedSkills = {
-          skills: {
-            ...retrainedSkills.skills,
-            [skillName]: { ...retrainedSkills.skills[skillName], trained: true },
-          },
-        };
-      }
-    }
-  }
-
-  return {
-    ...stripped,
-    skills:   retrainedSkills,
-    identity: { ...stripped.identity, level: 0, subclassId: null },
-    features: stripped.features.filter(
-      f => f.source.kind !== 'class' && f.source.kind !== 'subclass' && f.source.kind !== 'feat'
-    ),
-    choices:   stripped.choices.filter(c => c.grantedAt === 0),
-    resources: {
-      ...stripped.resources,
-      custom:  [],
-      hp:      { current: 0, maximum: 0, temp: 0 },
-      hitDice: { die: hitDie, total: 0, remaining: 0 },
-    },
-    spellcasting: null,
-  };
-}
 
 export default function ClassDetailScreen() {
   const router = useRouter();
@@ -296,6 +185,21 @@ export default function ClassDetailScreen() {
   // Subclass list — collapsed by default, its own dropdown control (inside
   // this class's own detail screen, not the outer class-selection list).
   const [subclassesOpen, setSubclassesOpen] = useState(false);
+  // CREATION-FILTERS-1: dev/personal builds show every subclass (not just
+  // the SRD-tagged one) — some classes have 10+ once every sourcebook's
+  // options are included, with no way to narrow the list before this.
+  const [subclassSearch, setSubclassSearch] = useState('');
+  // SHARED-QUERY-1: Parent Class/Game/Ruleset/Unlock Level are deliberately
+  // NOT filter controls here — this screen is already scoped to one
+  // specific class (context determines Parent Class), and the campaign/
+  // character context already determines Ruleset. Unlock level stays a
+  // per-row badge (real info) but not a filter axis — matches the revised
+  // Subclass filter spec (Source/Pack, Official/Homebrew, "What it adds"
+  // only).
+  const [subclassOfficialFilter, setSubclassOfficialFilter] = useState<'all' | 'official' | 'homebrew'>('all');
+  const [subclassAddsFilter, setSubclassAddsFilter] = useState<Set<SubclassAddition>>(new Set());
+  const [subclassFiltersOpen, setSubclassFiltersOpen] = useState(false);
+  const [subclassSort, setSubclassSort] = useState('name_asc');
 
   // Jump from a progression row to the Features tab, expanding that feature.
   function goToFeature(featureId: string) {
@@ -306,12 +210,19 @@ export default function ClassDetailScreen() {
   const [changePrompt, setChangePrompt] = useState<{
     lines: string[]; className: string; onConfirm: () => void;
   } | null>(null);
-  const homebrewClasses = useHomebrewStore(s => s.classes);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
   const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
-  const cls    = [...globalContentDB.classes, ...homebrewClasses].find(c => c.id === id);
+  // getMergedContentDB() (not a plain official+homebrew concat) so a
+  // homebrew class sharing an official id correctly wins, matching the
+  // precedence rule every other content-resolution site in the app already
+  // follows (audit finding CONTENT-1/2/3/4 — this call site previously
+  // spread official first, so .find() always returned the official entry).
+  const cls    = getMergedContentDB().classes.find(c => c.id === id);
   const detail = id ? CLASS_DETAIL[id] : null;
+  // The 2024 (5.5e) classes are official content with no CLASS_DETAIL entry: they read their facts from the class itself.
+  const isHomebrewClass = !!cls && useHomebrewStore.getState().classes.some(c => c.id === cls.id);
+  const isOfficial2024 = !!cls && !isHomebrewClass && (cls.rulesetId === 'dnd5e-2024' || !detail);
 
   useEffect(() => {
     if (!cls || !draft) safeGoBack();
@@ -326,29 +237,12 @@ export default function ClassDetailScreen() {
 
   function selectClass() {
     const progression = getProgressionForClass(cls!);
-    const detail      = cls ? CLASS_DETAIL[cls.id] : null;
+
     const isReselect  = !!draft!.identity.classId && draft!.identity.classId !== cls!.id;
 
     function doSelect() {
       // Strip old class data before applying new class (also resets HP & spellcasting)
-      let updated = clearClassData(draft!, cls!.hitDie);
-
-      // clearClassData's resources.custom wipe has no way to tell a racial
-      // resource pool (Dragonborn's Breath Weapon, Half-Orc's Relentless
-      // Endurance, etc.) apart from a class one — CustomResource carries no
-      // source tag — so it drops both. Re-grant whatever the character's
-      // already-chosen race/subrace declares, exactly as race-detail.tsx did
-      // when the race was first selected, so picking a class afterward
-      // doesn't silently erase a racial limited-use ability.
-      const mergedRaces = getMergedContentDB().races;
-      const race = mergedRaces.find(r => r.id === updated.identity.raceId);
-      for (const resource of race?.resources ?? []) {
-        updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);
-      }
-      const subrace = race?.subraces?.find(s => s.id === updated.identity.subRaceId);
-      for (const resource of subrace?.resources ?? []) {
-        updated = applyGrant(updated, { kind: 'resource', value: resource }, 0);
-      }
+      let updated = resetCreationClass(draft!, cls!.hitDie);
 
       // Clear visited flags so the equipment/spells screens re-show for the new class
       const notes = (() => {
@@ -356,22 +250,17 @@ export default function ClassDetailScreen() {
         catch { return {}; }
       })();
 
-      updated = {
-        ...updated,
-        identity:  { ...updated.identity, classId: cls!.id },
-        proficiencies: {
-          ...updated.proficiencies,
-          // For official classes: use CLASS_DETAIL saving throws.
-          // For homebrew Phase 2 classes: fall back to cls.savingThrows.
-          // For Phase 1 stub classes with no data: empty array.
-          savingThrows: detail?.savingThrowAbilities ?? cls!.savingThrows ?? [],
-        },
-        notes: JSON.stringify({ ...notes, equipmentVisited: false, spellsVisited: false }),
-      };
+      updated = { ...updated, notes: JSON.stringify({ ...notes, equipmentVisited: false, spellsVisited: false }) };
+      const definitions = getMergedContentDB().classes;
+      updated = acquireClass(updated, cls!, rules, definitions);
+      for (let level = 2; level <= targetLevel; level++) {
+        updated = levelUpClass(updated, cls!.id, progression, rules, cls!, definitions);
+      }
 
-      updated = levelUp(updated, targetLevel, progression, rules);
-
-      updated = recomputeDerived(updated, rules);
+      const contentDB = getMergedContentDB(updated.rulesetId);
+      updated = recomputeDerived(updated, rules, {
+        classDefs: contentDB.classes, homebrewSpells: contentDB.spells, races: contentDB.races, items: contentDB.items,
+      });
       setDraft(updated);
       router.push('/creation/hub');
     }
@@ -389,10 +278,10 @@ export default function ClassDetailScreen() {
         .filter(c => c.resolved && c.definition.kind === 'asi')
         .length;
       const hadSpells = !!draft!.spellcasting;
-      const newHadSpells = detail?.spellcasting ?? false;
+      const newHadSpells = detail?.spellcasting ?? !!cls!.spellcastingAbility;
 
       const lines: string[] = [
-        `Switching from ${draft!.identity.classId} to ${cls!.id}.`,
+        `Switching from ${identityLabelsFor(draft!).class || draft!.identity.classId} to ${cls!.name}.`,
         '',
         'This will remove:',
         `• ${classFeatures.length} class feature${classFeatures.length !== 1 ? 's' : ''} (${classFeatures.slice(0, 3).join(', ')}${classFeatures.length > 3 ? '…' : ''})`,
@@ -419,15 +308,20 @@ export default function ClassDetailScreen() {
 
   return (
     <>
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+    >
 
       <View style={styles.headingRow}>
         <Text style={styles.heading}>{cls.name}</Text>
-        {!detail && (
+        {!detail && !isOfficial2024 && (
           <View style={styles.homebrewTag}>
             <Text style={styles.homebrewTagTxt}>Homebrew</Text>
           </View>
         )}
+        {!isHomebrewClass && <EditionBadge item={cls} official />}
+        {(!!detail || isOfficial2024) && isNonSrd(cls.srd, cls.rulesetId) && <NonSrdBadge />}
       </View>
       <View style={styles.divider} />
 
@@ -596,7 +490,7 @@ export default function ClassDetailScreen() {
         // Saving throws: official from CLASS_DETAIL, homebrew from cls.savingThrows.
         const saves = detail
           ? detail.savingThrows
-          : (cls.savingThrows ?? []).map(a => a.charAt(0).toUpperCase() + a.slice(1));
+          : (cls.savingThrows ?? []).map(a => isOfficial2024 ? ABILITY_NAMES[a] ?? a : a.charAt(0).toUpperCase() + a.slice(1));
         // Proficiencies: official has prose strings; homebrew has profs arrays.
         const armor   = detail ? detail.armorProf  : (cls.armorProfs ?? []).join(', ');
         const weapons = detail ? detail.weaponProf : (cls.weaponProfs ?? []).join(', ');
@@ -626,7 +520,7 @@ export default function ClassDetailScreen() {
             </CollapsibleSection>
 
             {/* Homebrew with incomplete spellcasting config gets a gentle hint */}
-            {!detail && cls.spellcastingAbility === undefined && !cls.spellcastingAbilityOptions?.length && (
+            {!detail && !isOfficial2024 && cls.spellcastingAbility === undefined && !cls.spellcastingAbilityOptions?.length && (
               <View style={styles.infoCard}>
                 <Text style={styles.infoCardTxt}>
                   If this is a spellcasting class, configure spellcasting in the
@@ -640,17 +534,67 @@ export default function ClassDetailScreen() {
 
       {/* ── Subclasses — a real dropdown, collapsed by default ── */}
       {(() => {
-        const subs = subclassEntriesForClassMerged(cls.id, homebrewSubclasses);
-        if (subs.length === 0) return null;
+        const allSubs = subclassEntriesForClassMerged(cls.id, homebrewSubclasses);
+        if (allSubs.length === 0) return null;
+        const isHomebrewSub = (sub: typeof allSubs[number]) => homebrewSubclasses.some(hs => hs.id === sub.id);
+        const availableAdditions = Array.from(new Set(allSubs.flatMap(s => Array.from(subclassAdditions(s.progression)))))
+          .map(a => ({ id: a, label: SUBCLASS_ADDITION_LABELS[a] }));
+        const sortOptions = subclassSortOptions(isHomebrewSub);
+        const subs = sortByOption(
+          allSubs
+            .filter(s => !subclassSearch.trim() || s.name.toLowerCase().includes(subclassSearch.trim().toLowerCase()))
+            .filter(s => subclassOfficialFilter === 'all' || (subclassOfficialFilter === 'homebrew') === isHomebrewSub(s))
+            .filter(s => subclassAddsFilter.size === 0 || Array.from(subclassAddsFilter).some(a => subclassAdditions(s.progression).has(a))),
+          sortOptions,
+          subclassSort,
+        );
+        const activeChips = [
+          ...(subclassOfficialFilter !== 'all' ? [{ key: 'official', label: subclassOfficialFilter === 'official' ? 'Official' : 'Homebrew', onClear: () => setSubclassOfficialFilter('all') }] : []),
+          ...Array.from(subclassAddsFilter).map(a => ({ key: `adds_${a}`, label: SUBCLASS_ADDITION_LABELS[a], onClear: () => setSubclassAddsFilter(prev => { const n = new Set(prev); n.delete(a); return n; }) })),
+        ];
         return (
           <>
             <View style={styles.divider} />
             <Pressable style={styles.subclassDropdownHeader} onPress={() => setSubclassesOpen(o => !o)}>
-              <Text style={styles.subclassHeading}>SUBCLASSES ({subs.length})</Text>
+              <Text style={styles.subclassHeading}>SUBCLASSES ({allSubs.length})</Text>
               <Text style={styles.subclassDropdownCaret}>{subclassesOpen ? '▲' : '▼'}</Text>
             </Pressable>
             {subclassesOpen && (
               <View style={{ gap: Spacing.sm }}>
+                {allSubs.length > 6 && (
+                  <View style={styles.subclassSearchRow}>
+                    <TextInput
+                      style={[styles.subclassSearch, styles.subclassSearchFlex]}
+                      placeholder={`Search ${allSubs.length} subclasses…`}
+                      placeholderTextColor={Colors.textDim}
+                      value={subclassSearch}
+                      onChangeText={setSubclassSearch}
+                    />
+                  </View>
+                )}
+                <View style={styles.controlsRow}>
+                  <Pressable
+                    style={[styles.subclassFiltersToggle, subclassFiltersOpen && styles.subclassFiltersToggleActive]}
+                    onPress={() => setSubclassFiltersOpen(o => !o)}
+                  >
+                    <Text style={[styles.subclassFiltersToggleTxt, subclassFiltersOpen && styles.subclassFiltersToggleTxtActive]}>Filters</Text>
+                  </Pressable>
+                  <SortControl options={sortOptions} value={subclassSort} onChange={setSubclassSort} />
+                </View>
+                {subclassFiltersOpen && (
+                  <View>
+                    <FilterSection label="Official / Homebrew">
+                      <OfficialHomebrewChipRow value={subclassOfficialFilter} onChange={setSubclassOfficialFilter} />
+                    </FilterSection>
+                    <FilterSection label="What It Adds">
+                      <MultiSelectChipRow options={availableAdditions} values={subclassAddsFilter} onChange={setSubclassAddsFilter} scrollable />
+                    </FilterSection>
+                  </View>
+                )}
+                <ActiveFilterChips chips={activeChips} onClearAll={() => { setSubclassOfficialFilter('all'); setSubclassAddsFilter(new Set()); }} />
+                {subs.length === 0 && (
+                  <Text style={styles.noResultsTxt}>No subclasses match your search.</Text>
+                )}
                 {subs.map(sub => (
                   <Pressable
                     key={sub.id}
@@ -660,6 +604,8 @@ export default function ClassDetailScreen() {
                     <View style={{ flex: 1 }}>
                       <View style={styles.subclassNameRow}>
                         <Text style={styles.subclassName}>{sub.name}</Text>
+                        {!homebrewSubclasses.some(hs => hs.id === sub.id) && <EditionBadge item={sub.progression} official />}
+                        {!homebrewSubclasses.some(hs => hs.id === sub.id) && isNonSrd(sub.progression.srd, sub.progression.rulesetId) && <NonSrdBadge />}
                         <View style={styles.subclassLvlBadge}>
                           <Text style={styles.subclassLvlTxt}>Lv {sub.unlockLevel}+</Text>
                         </View>
@@ -675,11 +621,14 @@ export default function ClassDetailScreen() {
         );
       })()}
 
-      <View style={styles.divider} />
-      <Pressable style={styles.selectBtn} onPress={selectClass}>
-        <Text style={styles.selectBtnText}>Select Class</Text>
-      </Pressable>
     </ScrollView>
+    <SafeBottomView>
+      <View style={styles.footer}>
+        <Pressable style={styles.selectBtn} onPress={selectClass}>
+          <Text style={styles.selectBtnText}>Select Class</Text>
+        </Pressable>
+      </View>
+    </SafeBottomView>
 
     {/* Class-change confirmation — custom dark/gold modal (replaces native Alert) */}
     <Modal visible={!!changePrompt} transparent animationType="fade" onRequestClose={() => setChangePrompt(null)}>
@@ -789,7 +738,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   heading: { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
   headingRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm },
   homebrewTag: {
@@ -894,6 +844,22 @@ const styles = StyleSheet.create({
   },
   subclassDropdownCaret: { fontSize: FontSize.sm, color: Colors.textDim },
   subclassHeading: { fontSize: FontSize.xs, color: Colors.gold, letterSpacing: 2, fontWeight: FontWeight.bold },
+  subclassSearch: {
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    fontSize: FontSize.sm, color: Colors.textPrimary,
+  },
+  subclassSearchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: Spacing.xs },
+  subclassSearchFlex: { flex: 1 },
+  subclassFiltersToggle: {
+    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.surface, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
+  },
+  subclassFiltersToggleActive: { borderColor: Colors.gold, backgroundColor: Colors.gold + '22' },
+  subclassFiltersToggleTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  subclassFiltersToggleTxtActive: { color: Colors.gold },
+  noResultsTxt: { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic' },
   subclassCard: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     backgroundColor: Colors.surface, borderRadius: Radius.md,

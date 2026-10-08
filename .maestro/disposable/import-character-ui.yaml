@@ -1,0 +1,20 @@
+appId: com.nkvanch.grimoire
+name: Character import entry and dedicated screen
+tags:
+  - smoke
+  - import
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: tab-characters
+- assertVisible:
+    id: import-character
+- tapOn:
+    id: import-character
+- assertVisible:
+    id: import-character-screen
+- assertVisible: "Choose a Grimoire Character JSON file exported from another Grimoire installation."
+- assertVisible:
+    id: choose-character-file
+- takeScreenshot: "D:/Documents/dnd-app/builds/maestro-artifacts/import-character"

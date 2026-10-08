@@ -12,11 +12,27 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Background, Feature, Effect, SkillName } from '../../src/engine/types';
+import { Background, Feature, SkillName, Entity, RulesetId, BACKGROUND_CHOICE_PREFIX } from '../../src/engine/types';
+import {
+  ChoiceDefinitionListEditor, DraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { Alert } from '../../src/utils/alert';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { disambiguateId } from '../../src/content/traitCompiler';
+import { globalContentDB } from '../../src/content/classes/library';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLosslessChoices, serializeBackgroundFeatures, serializeLosslessChoices } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 // Same 18-skill list used in race-builder.tsx and the PDF export.
@@ -101,9 +117,11 @@ function FeatureListEditor({ features, onChange }: {
       </View>
 
       <Modal visible={!!open} transparent animationType="slide" onRequestClose={() => setOpenId(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpenId(null)}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenId(null)} accessible={false} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
-          <Pressable style={styles.modalSheet} onPress={e => e.stopPropagation()}>
+          <View style={styles.modalSheet}>
             {open && (
               <ScrollView keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>{open.name}</Text>
@@ -128,9 +146,9 @@ function FeatureListEditor({ features, onChange }: {
                 </SafeBottomView>
               </ScrollView>
             )}
-          </Pressable>
+          </View>
           </KeyboardAvoidingView>
-        </Pressable>
+        </View>
       </Modal>
     </View>
   );
@@ -144,6 +162,8 @@ export default function BackgroundBuilderScreen() {
   const homebrewBackgrounds = useHomebrewStore(s => s.backgrounds);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing = editId ? homebrewBackgrounds.find(b => b.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name, setName] = useState('');
   const [skills, setSkills] = useState<SkillName[]>([]);
@@ -152,6 +172,9 @@ export default function BackgroundBuilderScreen() {
   const [languages, setLanguages] = useState('');
   const [equipmentNote, setEquipmentNote] = useState('');
   const [features, setFeatures] = useState<DraftFeature[]>([]);
+  const [pendingChoices, setPendingChoices] = useState<DraftChoice[]>([]);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: restore from homebrewDraft (same rationale as race/item —
   // skills/features compile into Effect/Feature data that's lossy to
@@ -159,6 +182,7 @@ export default function BackgroundBuilderScreen() {
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     const draft = editing.homebrewDraft as Record<string, unknown> | undefined;
     if (draft) {
       setSkills((draft.skills as SkillName[]) ?? []);
@@ -166,6 +190,14 @@ export default function BackgroundBuilderScreen() {
       setLanguages(String(draft.languages ?? ''));
       setEquipmentNote(String(draft.equipmentNote ?? ''));
       setFeatures((draft.features as DraftFeature[]) ?? []);
+      if (draft.pendingChoices) setPendingChoices(hydrateLosslessChoices(editing.pendingChoices, BACKGROUND_CHOICE_PREFIX));
+    }
+    // CHOICE-AUTHORING-1: see race-builder.tsx's identical fallback comment.
+    if (!draft?.pendingChoices && editing.pendingChoices) {
+      const reconstructed = editing.pendingChoices
+        .map(def => definitionToDraftChoice(def, BACKGROUND_CHOICE_PREFIX))
+        .filter((d): d is DraftChoice => d !== null);
+      if (reconstructed.length > 0) setPendingChoices(reconstructed);
     }
   }, [editing?.id]);
 
@@ -186,7 +218,12 @@ export default function BackgroundBuilderScreen() {
   }
 
   function buildBackground(): Background {
-    const id = editing?.id ?? (toId(name) || 'homebrew_background');
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
+    const takenBgIds = new Set([
+      ...globalContentDB.backgrounds.map(b => b.id),
+      ...homebrewBackgrounds.filter(b => b.id !== editing?.id).map(b => b.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_background', takenBgIds);
     const bgFeatures: Feature[] = [];
 
     // Skills — same grant_proficiency (skill:X) pattern as race traits,
@@ -235,22 +272,67 @@ export default function BackgroundBuilderScreen() {
         level: null, actions: [], choices: [], passive: true, effects: [],
       });
     }
-    for (const f of features) {
-      bgFeatures.push({
-        id: `${id}_${toId(f.name)}`, name: f.name,
-        description: f.description.trim() || f.name,
-        source: { kind: 'background', refId: id },
-        level: null, actions: [], choices: [], passive: true, effects: [],
-      });
-    }
+    // Bug fix: this used to build each custom feature's id as
+    // `${id}_${toId(f.name)}` with no collision check — two custom features
+    // with the same (or same-once-slugified) name silently produced the
+    // identical Feature.id, with the second silently shadowing lookups for
+    // the first. Seed usedIds with the 4 reserved ids above (only the ones
+    // actually pushed) plus every already-pushed custom feature id, same
+    // "_2/_3 disambiguation" pattern already used by the trait-based
+    // builders (race/monster/subclass/condition-builder) via
+    // traitCompiler's disambiguateId.
+    const generatedIds = bgFeatures.map(f => f.id);
+    const originalDraft = editing?.homebrewDraft as Record<string, unknown> | undefined;
+    const serializedFeatures = serializeBackgroundFeatures(editing, (originalDraft?.features as DraftFeature[] | undefined) ?? [], features, id, bgFeatures, generatedIds);
 
-    return {
-      id, name: name.trim(), features: bgFeatures,
-      homebrewDraft: { skills, toolProfs, languages, equipmentNote, features },
-    };
+    return mergeHomebrewDefinition(editing, {
+      // Imported definitions without an authoring draft cannot be safely
+      // reverse-compiled by this UI; preserve structured mechanics.
+      ...(editing && !editing.homebrewDraft ? {
+        features: editing.features, pendingChoices: editing.pendingChoices,
+      } : {}),
+      id, name: name.trim(), features: serializedFeatures.features, rulesetId,
+      pendingChoices: serializeLosslessChoices(editing?.pendingChoices, pendingChoices, BACKGROUND_CHOICE_PREFIX),
+      homebrewDraft: { skills, toolProfs, languages, equipmentNote, features, pendingChoices, traitOwners: serializedFeatures.owners },
+    });
   }
 
-  async function handleSave() {
+  // Read-only test: apply the draft background's features to a disposable
+  // level-1 scratch entity, same mechanism app/creation/background.tsx's
+  // real selectBackground() uses (loop applyGrant over bg.features at
+  // level 0) — no real character touched. Reuses FeatPreviewModal's
+  // buildFeatSummaryRows (diffs effective ability scores/derived stats/
+  // skill+save proficiencies/HP) plus an inline "new feature" pass for
+  // anything that grants no numeric effect (this screen's tool/language/
+  // equipment/special-feature entries are description-only — see
+  // buildBackground() above — so they'd otherwise be invisible in the
+  // test). This screen has no flexibleAsi picker (unlike the real
+  // in-play background-selection screen, which does support one per the
+  // 5.5e background-ASI work — see Background.flexibleAsi) so there's no
+  // player-directed-choice gap to disclose: buildBackground() never sets
+  // that field, nothing is left out of what this builder can actually
+  // produce.
+  function runTest() {
+    const bg = buildBackground();
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => {
+      let updated = e;
+      for (const feature of bg.features) {
+        updated = applyGrant(updated, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
+      }
+      return updated;
+    }, DEFAULT_RULES);
+    const rows = buildFeatSummaryRows(before, after);
+    const beforeFeatureIds = new Set(before.features.map(f => f.id));
+    for (const f of after.features) {
+      if (!beforeFeatureIds.has(f.id)) rows.push({ label: `New feature: ${f.name}` });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
+  }
+
+  function handleSave() {
     if (!name.trim()) { Alert.alert('Name required'); return; }
     if (skills.length !== 2) {
       Alert.alert(
@@ -258,12 +340,12 @@ export default function BackgroundBuilderScreen() {
         `Standard backgrounds grant exactly 2 skill proficiencies (you have ${skills.length}). Save anyway?`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Save', onPress: doSave },
+          { text: 'Save', onPress: () => { void doSave(); } },
         ],
       );
       return;
     }
-    doSave();
+    void doSave();
   }
 
   const [saving, setSaving] = useState(false);
@@ -274,6 +356,7 @@ export default function BackgroundBuilderScreen() {
     const bg = buildBackground();
     try {
       await saveItem('background', bg);
+      usePendingSelectionStore.getState().setPending('background_picker', bg.id);
       goBack();
     } catch (e) {
       console.error('[background-builder] save failed:', e);
@@ -297,6 +380,9 @@ export default function BackgroundBuilderScreen() {
         <Text style={styles.fieldLabel}>Background Name *</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName}
           placeholder="e.g. Wandering Scholar" placeholderTextColor={Colors.textDim} />
+
+        <Text style={styles.fieldLabel}>Game / Ruleset</Text>
+        <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
 
         <Text style={styles.fieldLabel}>Skill Proficiencies (standard: 2)</Text>
         <View style={styles.chipWrap}>
@@ -339,11 +425,24 @@ export default function BackgroundBuilderScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.fieldLabel}>Languages (optional)</Text>
+        <Text style={styles.fieldLabel}>Languages (optional, descriptive)</Text>
         <TextInput style={styles.input} value={languages} onChangeText={setLanguages}
-          placeholder="e.g. one language of your choice" placeholderTextColor={Colors.textDim} />
+          placeholder="e.g. Common and Sylvan" placeholderTextColor={Colors.textDim} />
+        <Text style={styles.hint}>
+          For a FIXED language (always known), just list it here. For a real player
+          choice ("choose one language of your choice"), use Player Choices below
+          instead -- typing that phrase here has no mechanical effect.
+        </Text>
 
-        <Text style={styles.fieldLabel}>Starting Equipment (optional, descriptive)</Text>
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Player Choices (optional)</Text>
+        <Text style={styles.hint}>
+          A real choice the player resolves when they select this background -- e.g.
+          "choose one artisan's tool" or "learn two languages of your choice." Unlike
+          the fixed fields above, this queues a pick the player actually makes.
+        </Text>
+        <ChoiceDefinitionListEditor choices={pendingChoices} onChange={setPendingChoices} />
+
+        <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Starting Equipment (optional, descriptive)</Text>
         <TextInput style={[styles.input, styles.textArea]} value={equipmentNote} onChangeText={setEquipmentNote}
           placeholder="e.g. a set of common clothes, a belt pouch containing 10 gp..."
           placeholderTextColor={Colors.textDim} multiline textAlignVertical="top" />
@@ -363,11 +462,21 @@ export default function BackgroundBuilderScreen() {
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, (!name.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Background'}</Text>
           </Pressable>
         </View>
       </SafeBottomView>
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Background'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -415,8 +524,10 @@ const styles = StyleSheet.create({
   doneBtn: { flex: 2, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center' },
   doneBtnTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
-  footer:   { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:  { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:   { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:  { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:  { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

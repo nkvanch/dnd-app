@@ -331,6 +331,10 @@ export function usesLargeCreatureWeaponDice(rules: CampaignRules): boolean {
 export function playerFreeEditLocked(rules: CampaignRules): boolean {
   return getHouseRule(rules, 'lockPlayerFreeEdit');
 }
+/** Positive UI semantic avoids repeating/inverting the lock flag at call sites. */
+export function canPlayerFreeEdit(rules: CampaignRules): boolean {
+  return !playerFreeEditLocked(rules);
+}
 export function longRestRestoresAllHitDice(rules: CampaignRules): boolean {
   return getHouseRule(rules, 'fullHitDiceOnLongRest');
 }

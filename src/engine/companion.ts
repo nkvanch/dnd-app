@@ -36,12 +36,10 @@ export type CompanionTemplate = {
    */
   syncAbilitiesFromOwner?: Ability[];
   /**
-   * HP formula. 'per_owner_level' matches Steel Defender's "5 x your
-   * Artificer level" rule; 'fixed' is for companions with a flat pool
-   * (e.g. Eldritch Cannon's fixed-by-level table, expressed as a lookup
-   * function instead since it isn't linear — see hpForOwnerLevel).
+   * Hit Points: `base` plus `perOwnerLevel` times the owner's level (Steel Defender's "2 + your Intelligence modifier + 5 x your
+   * Artificer level" is base 5, 5 per level here). Data, not a function, so a template can travel in a content pack.
    */
-  hpForOwnerLevel: (ownerLevel: number) => number;
+  hp: { base: number; perOwnerLevel: number };
   /**
    * Feature instances this companion always has — its attack(s), AC formula
    * (as a base_ac_formula effect, same machinery Unarmored Defense uses, so
@@ -70,7 +68,7 @@ export function syncCompanionFromOwner(
   for (const ab of template.syncAbilitiesFromOwner ?? []) {
     stats[ab] = owner.stats[ab];
   }
-  const hpMax = Math.max(1, template.hpForOwnerLevel(owner.identity.level));
+  const hpMax = Math.max(1, template.hp.base + template.hp.perOwnerLevel * owner.identity.level);
   const prevMax = companion.resources.hp.maximum;
   // Preserve current damage taken, but rescale if max just grew (e.g. owner
   // leveled up) — never let current exceed the new max, never heal for free.

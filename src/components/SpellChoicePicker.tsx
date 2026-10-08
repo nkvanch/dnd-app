@@ -11,10 +11,15 @@
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { applySpellChoiceToEntity } from '../engine/leveling';
-import { spellRepo } from '../content/spellRepo';
 import type { SpellIndexEntry } from '../content/spellRepo.types';
+import { mergeSpellIndex } from '../content/contentResolution';
+import { spellListsForClass, filterSpellsForClass, spellSourceLabel } from '../content/spellLists';
+import { candidateSpellsForChoice, hasOwnSpellPool } from '../content/spellChoiceFilter';
 import { useHomebrewStore } from '../store/homebrewStore';
 import { Entity, ChoiceState, CampaignRules } from '../engine/types';
+import { SortOption, nameSortOptions, sortByOption } from '../content/contentQuery';
+import { SortControl } from './SortControl';
+import { FilterChipRow, FilterSection, ActiveFilterChips, ZeroResultsState } from './FilterChipRow';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 export function SpellChoicePicker({
@@ -23,61 +28,121 @@ export function SpellChoicePicker({
   rules,
   onResolved,
   onClose,
+  progressNote,
 }: {
   entity:     Entity;
   choice:     ChoiceState;
   rules:      CampaignRules;
   onResolved: (updated: Entity) => void;
   onClose?:   () => void;
+  /** SPELL-ACCUMULATION-2: "N more cantrip/spell choices after this one" —
+   *  same prop shape as AsiFeatPicker's, shown when a caller (TabFeatures.tsx)
+   *  chains this picker through several same-group pending choices in a row. */
+  progressNote?: string;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [search,   setSearch]   = useState('');
+  const [schoolFilter, setSchoolFilter] = useState<string | null>(null);
+  const [castFilter, setCastFilter] = useState<'all' | 'ritual' | 'concentration'>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState('name_asc');
+  const [activeSpellListId, setActiveSpellListId] = useState<string | null>(null);
   const homebrewSpells = useHomebrewStore(s => s.spells);
+  const spellLists = useHomebrewStore(s => s.spellLists);
 
   const isCantripChoice = choice.definition.id.includes('cantrip');
-  const classId = entity.identity.classId;
+  const classId = choice.definition.forClassId ?? entity.identity.classId;
   const spellcasting = entity.spellcasting;
+  // A choice with its own pool rules (Magical Secrets, Blessed Warrior, Pact of the Tome, Mystic Arcanum) ignores
+  // the class-list pickers below and offers exactly what its filter names.
+  const ownPool = hasOwnSpellPool(choice.definition);
 
   // Highest spell slot tier this entity currently has any slots in — caps
   // which leveled spells are choosable (a caster can't learn a spell above
   // what they can currently cast). Cantrips have no such cap.
+  // BUGFIX-WARLOCK-SPELLS-1: see app/creation/spells.tsx's identical fix —
+  // a pure Warlock's castable level lives in pactSlots, never
+  // spellcasting.slots (pact slots are deliberately excluded from the
+  // regular multiclass slot table). Reading only .slots left this at 0 for
+  // a leveling-up Warlock, making every "choose N more spells known"
+  // picker show zero eligible spells past level 1.
   const maxCastableLevel = useMemo(() => {
     if (!spellcasting) return 0;
     const tiers = ['9','8','7','6','5','4','3','2','1'] as const;
     for (const t of tiers) {
-      if ((spellcasting.slots[t]?.total ?? 0) > 0) return Number(t);
+      if ((spellcasting.slots[t]?.total ?? 0) > 0 || (spellcasting.pactSlots?.[t]?.total ?? 0) > 0) return Number(t);
     }
     return 0;
   }, [spellcasting]);
 
-  const allSpells: SpellIndexEntry[] = useMemo(() => {
-    const homebrewIds = new Set(homebrewSpells.map(s => s.id));
-    const official = spellRepo.getIndex().filter(s => !homebrewIds.has(s.id));
-    return [...official, ...homebrewSpells];
-  }, [homebrewSpells]);
+  const allSpells: SpellIndexEntry[] = useMemo(() => mergeSpellIndex(homebrewSpells), [homebrewSpells]);
 
   const known = new Set([...(spellcasting?.cantrips ?? []), ...(spellcasting?.known ?? [])]);
   const q = search.trim().toLowerCase();
 
-  const options = useMemo(() => {
-    return allSpells.filter(s => {
+  // Sort options: name always; Spell Level only meaningful for the
+  // non-cantrip pool (a cantrip choice's pool is entirely level 0, so a
+  // Level sort would be a no-op — omitted per item 26's "unless the option
+  // set is too small to justify" allowance rather than shown decoratively.
+  const sortOptions: SortOption<SpellIndexEntry>[] = useMemo(() => [
+    ...nameSortOptions<SpellIndexEntry>(),
+    ...(isCantripChoice ? [] : [{
+      id: 'level', label: 'Spell Level',
+      compare: (a: SpellIndexEntry, b: SpellIndexEntry) => a.level - b.level || a.name.localeCompare(b.name),
+    }]),
+    {
+      id: 'school', label: 'School',
+      compare: (a, b) => a.school.localeCompare(b.school) || a.name.localeCompare(b.name),
+    },
+  ], [isCantripChoice]);
+
+  const classSpellLists = useMemo(() => spellListsForClass(spellLists, classId), [spellLists, classId]);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
+  const classSpellSource = useMemo(() => getMergedContentDB().classes.find(c => c.id === classId)?.spellListSource, [getMergedContentDB, classId]);
+  const classFiltered = useMemo(
+    () => filterSpellsForClass(allSpells, classId, activeSpellListId, spellLists, classSpellSource),
+    [allSpells, classId, activeSpellListId, spellLists, classSpellSource],
+  );
+
+  const preFilterOptions = useMemo(() => {
+    if (ownPool) {
+      return candidateSpellsForChoice(allSpells, choice.definition, { ownClassId: classId, maxCastableLevel })
+        .filter(s => !known.has(s.id));
+    }
+    return classFiltered.filter(s => {
       if (known.has(s.id)) return false;
-      if (!s.classes || s.classes.length === 0 || s.classes.includes(classId)) {
-        // class-restricted (or legacy-untagged, included per the same
-        // fallback creation's spell picker uses) — keep checking
-      } else {
-        return false;
-      }
       if (isCantripChoice) {
         if (s.level !== 0) return false;
       } else {
         if (s.level === 0 || s.level > maxCastableLevel) return false;
       }
-      if (q && !s.name.toLowerCase().includes(q) && !s.school.toLowerCase().includes(q)) return false;
       return true;
-    }).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allSpells, classId, isCantripChoice, maxCastableLevel, q]);
+  }, [classFiltered, isCantripChoice, maxCastableLevel, ownPool, allSpells]);
+
+  // School chips reflect only what's actually present in THIS constrained
+  // pool (not every school ever) — same "don't show a filter with nothing
+  // to filter" rule FilterChipRow's own <=1-option auto-hide enforces.
+  const availableSchools = useMemo(
+    () => Array.from(new Set(preFilterOptions.map(s => s.school))).sort().map(sc => ({ id: sc, label: sc })),
+    [preFilterOptions],
+  );
+
+  const options = useMemo(() => sortByOption(preFilterOptions.filter(s => {
+    if (q && !s.name.toLowerCase().includes(q) && !s.school.toLowerCase().includes(q)) return false;
+    if (schoolFilter && s.school !== schoolFilter) return false;
+    if (castFilter === 'ritual' && !s.ritual) return false;
+    if (castFilter === 'concentration' && !s.concentration) return false;
+    return true;
+  }), sortOptions, sort), [preFilterOptions, q, schoolFilter, castFilter, sortOptions, sort]);
+
+  const activeFilterChips = [
+    ...(schoolFilter ? [{ key: 'school', label: schoolFilter, onClear: () => setSchoolFilter(null) }] : []),
+    ...(castFilter !== 'all' ? [{ key: 'cast', label: castFilter === 'ritual' ? 'Ritual' : 'Concentration', onClear: () => setCastFilter('all') }] : []),
+    ...(activeSpellListId ? [{ key: 'spellList', label: spellLists.find(l => l.id === activeSpellListId)?.name ?? 'Spell List', onClear: () => setActiveSpellListId(null) }] : []),
+  ];
+  function clearAllFilters() { setSchoolFilter(null); setCastFilter('all'); setActiveSpellListId(null); }
 
   function toggle(id: string) {
     setSelected(prev => {
@@ -96,7 +161,7 @@ export function SpellChoicePicker({
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.headerRow}>
-        <Text style={styles.heading}>{isCantripChoice ? 'Choose Cantrips' : 'Choose Spells'}</Text>
+        <Text style={styles.heading}>{choice.definition.spellFilter?.label ?? (isCantripChoice ? 'Choose Cantrips' : 'Choose Spells')}</Text>
         {onClose && (
           <Pressable onPress={onClose} hitSlop={8}>
             <Text style={styles.close}>✕</Text>
@@ -104,6 +169,7 @@ export function SpellChoicePicker({
         )}
       </View>
       <Text style={styles.sub}>{choice.definition.prompt}</Text>
+      {progressNote && <Text style={styles.progressNote}>{progressNote}</Text>}
       <Text style={styles.count}>Selected {selected.length}/{choice.definition.count}</Text>
 
       <TextInput
@@ -113,6 +179,43 @@ export function SpellChoicePicker({
         value={search}
         onChangeText={setSearch}
       />
+
+      <View style={styles.controlsRow}>
+        <Pressable
+          style={[styles.filtersToggle, filtersOpen && styles.filtersToggleActive]}
+          onPress={() => setFiltersOpen(v => !v)}
+        >
+          <Text style={[styles.filtersToggleTxt, filtersOpen && styles.filtersToggleTxtActive]}>Filters</Text>
+        </Pressable>
+        <SortControl options={sortOptions} value={sort} onChange={setSort} />
+      </View>
+
+      {filtersOpen && (
+        <View style={styles.filterPanel}>
+          <FilterSection label="School">
+            <FilterChipRow options={availableSchools} value={schoolFilter} onChange={setSchoolFilter} scrollable />
+          </FilterSection>
+          <FilterSection label="Ritual / Concentration">
+            <FilterChipRow
+              options={[{ id: 'ritual' as const, label: 'Ritual' }, { id: 'concentration' as const, label: 'Concentration' }]}
+              value={castFilter === 'all' ? null : castFilter}
+              onChange={v => setCastFilter(v ?? 'all')}
+            />
+          </FilterSection>
+          {!ownPool && (classSpellLists.length > 0 || !!classSpellSource) && (
+            <FilterSection label="Spell Source">
+              {/* "Official" is always an explicit option — FilterChipRow hides itself at <=1
+                  option, so a class with exactly one Spell List would otherwise show nothing. */}
+              <FilterChipRow
+                options={[{ id: 'official', label: classSpellSource ? `Class default · ${spellSourceLabel(classSpellSource, spellLists, getMergedContentDB().classes) ?? ''}` : 'Official' }, ...classSpellLists.map(l => ({ id: l.id, label: l.name }))]}
+                value={activeSpellListId ?? 'official'}
+                onChange={id => setActiveSpellListId(!id || id === 'official' ? null : id)}
+              />
+            </FilterSection>
+          )}
+        </View>
+      )}
+      <ActiveFilterChips chips={activeFilterChips} onClearAll={clearAllFilters} />
 
       <View style={styles.list}>
         {options.map(s => {
@@ -133,7 +236,10 @@ export function SpellChoicePicker({
             </Pressable>
           );
         })}
-        {options.length === 0 && (
+        {options.length === 0 && (activeFilterChips.length > 0 || q) && (
+          <ZeroResultsState hasActiveFilters onClearFilters={() => { clearAllFilters(); setSearch(''); }} />
+        )}
+        {options.length === 0 && activeFilterChips.length === 0 && !q && (
           <Text style={styles.empty}>
             No {isCantripChoice ? 'new cantrips' : 'new spells'} available to choose right now.
           </Text>
@@ -158,12 +264,22 @@ const styles = StyleSheet.create({
   heading:   { flex: 1, flexShrink: 1, fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.gold, marginBottom: Spacing.xs },
   close:     { fontSize: FontSize.xl, color: Colors.textSecondary, paddingLeft: Spacing.md },
   sub:       { fontSize: FontSize.md, color: Colors.textSecondary },
+  progressNote: { fontSize: FontSize.xs, color: Colors.gold, fontWeight: FontWeight.bold, marginTop: 4 },
   count:     { fontSize: FontSize.sm, color: Colors.gold, fontWeight: FontWeight.bold, marginBottom: Spacing.md },
   search: {
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
     borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    fontSize: FontSize.md, color: Colors.textPrimary, marginBottom: Spacing.md,
+    fontSize: FontSize.md, color: Colors.textPrimary, marginBottom: Spacing.sm,
   },
+  controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  filtersToggle: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+  },
+  filtersToggleActive: { backgroundColor: Colors.gold + '22', borderColor: Colors.gold },
+  filtersToggleTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
+  filtersToggleTxtActive: { color: Colors.gold },
+  filterPanel: { marginTop: Spacing.sm },
   empty:     { fontSize: FontSize.sm, color: Colors.textDim, fontStyle: 'italic', textAlign: 'center', padding: Spacing.lg },
 
   list: { gap: Spacing.sm, marginBottom: Spacing.lg },

@@ -1,0 +1,22 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - existing character read only
+tags: [preserve-state, optional-character]
+---
+- launchApp
+- tapOn: { id: tab-home }
+- runFlow:
+    when:
+      visible: { id: home-last-character }
+    commands:
+      - tapOn: { id: home-last-character }
+      - assertVisible: { id: character-more }
+      - tapOn: { id: character-more }
+      - assertVisible: { id: character-menu-history }
+      - assertVisible: { id: character-menu-rules }
+      - assertVisible: "Free Edit.*"
+      - assertVisible: { id: character-menu-export-character }
+      - back
+      - back
+- assertVisible: { id: home-screen }
+
+

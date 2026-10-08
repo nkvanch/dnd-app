@@ -39,7 +39,7 @@ export default function AboutScreen() {
           Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC and available
           at{' '}
           <Text style={styles.link} onPress={() => Linking.openURL(SRD_URL)}>
-            dnd.wizards.com/resources/systems-reference-document
+            https://dnd.wizards.com/resources/systems-reference-document
           </Text>
           . The SRD 5.1 is licensed under the Creative Commons Attribution
           4.0 International License, available at{' '}
@@ -47,7 +47,25 @@ export default function AboutScreen() {
             style={styles.link}
             onPress={() => Linking.openURL('https://creativecommons.org/licenses/by/4.0/legalcode')}
           >
-            creativecommons.org/licenses/by/4.0
+            https://creativecommons.org/licenses/by/4.0/legalcode
+          </Text>
+          .
+        </Text>
+        <Text style={[styles.body, styles.bodySpaced]}>
+          This work also includes material taken from the System Reference
+          Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC (the 2024
+          rules' classes, species, backgrounds, Origin feats and Weapon
+          Mastery) and available at{' '}
+          <Text style={styles.link} onPress={() => Linking.openURL('https://www.dndbeyond.com/srd')}>
+            https://www.dndbeyond.com/srd
+          </Text>
+          . The SRD 5.2.1 is licensed under the Creative Commons Attribution
+          4.0 International License, available at{' '}
+          <Text
+            style={styles.link}
+            onPress={() => Linking.openURL('https://creativecommons.org/licenses/by/4.0/legalcode')}
+          >
+            https://creativecommons.org/licenses/by/4.0/legalcode
           </Text>
           .
         </Text>

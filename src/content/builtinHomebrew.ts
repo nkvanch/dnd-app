@@ -14,10 +14,21 @@
 // effect-bearing features), so it carries its full progression in
 // `rawProgression`. getProgressionForClass honours that verbatim.
 // ============================================================================
-import { CharClass, Race } from '../engine/types';
+import { CharClass, Race, Feat, Item, Condition, Spell, Feature } from '../engine/types';
+import type { MonsterTemplate } from './monsters/types';
+import type { HomebrewSubclass } from '../engine/types';
 import { abyssKnightProgression } from './classes/abyssKnight';
 import { bloodHunterProgression } from './classes/bloodHunter';
 import { raceSkeleton } from './races/index';
+import { raceBallast, raceBallastLesser } from './homebrewPack/ballast';
+import {
+  emperorWarlockClass, emperorWarlockDemoClass, emperorWarlockSpirits, emperorWarlockConditions, emperorWarlockSummons,
+} from './classes/emperorWarlock';
+import { monsterGlassback, glassbackFracturedCondition, glassbackCompressedCondition } from './homebrewPack/glassback';
+import {
+  anchorOfCommand, takeABrace, bracedCondition, heldFastCondition, commandTheField,
+  standardOfTheUnyieldingLine, weightOfAuthorityTiers,
+} from './homebrewPack/stressPack';
 
 /**
  * Abyss Knight as a homebrew CharClass. The simplified fields (savingThrows,
@@ -67,9 +78,22 @@ const bloodHunterClass: CharClass = {
 
 /** All built-in homebrew, grouped by content type for seeding. */
 export const BUILTIN_HOMEBREW = {
-  classes: [abyssKnightClass, bloodHunterClass] as CharClass[],
-  races:   [raceSkeleton]     as Race[],
+  classes:    [abyssKnightClass, bloodHunterClass, emperorWarlockClass, emperorWarlockDemoClass] as CharClass[],
+  races:      [raceSkeleton, raceBallast, raceBallastLesser] as Race[],
+  subclasses: emperorWarlockSpirits as HomebrewSubclass[],
+  feats:      [anchorOfCommand, takeABrace] as Feat[],
+  items:      [standardOfTheUnyieldingLine] as Item[],
+  monsters:   [monsterGlassback, ...emperorWarlockSummons] as MonsterTemplate[],
+  conditions: [bracedCondition, heldFastCondition, glassbackFracturedCondition, glassbackCompressedCondition, ...emperorWarlockConditions] as Condition[],
+  spells:     [commandTheField] as Spell[],
+  features:   weightOfAuthorityTiers as Feature[],
 };
+
+/** Every built-in id across all content types — the store uses this to tell a built-in (whose
+ *  deletion is remembered in app_meta) from a user-created entry (whose deletion hits SQLite). */
+export const BUILTIN_HOMEBREW_IDS: ReadonlySet<string> = new Set(
+  Object.values(BUILTIN_HOMEBREW).flatMap(list => (list as { id: string }[]).map(x => x.id)),
+);
 
 /** Stable list of [type, item] pairs for the seeding loop. */
 export const BUILTIN_HOMEBREW_SEED: Array<

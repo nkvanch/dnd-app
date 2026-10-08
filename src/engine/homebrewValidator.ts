@@ -2,8 +2,9 @@
 // FILE: src/engine/homebrewValidator.ts
 // Validates homebrew content before it enters the content database.
 // ============================================================================
-import { Race, CharClass, Spell, Feature, Background, Feat } from './types';
+import { Race, CharClass, Spell, Feature, Background, Feat, HomebrewSubclass, Item, SpellList } from './types';
 import { MonsterTemplate } from '../content/monsters/types';
+import { validateEntityDeep } from './entityValidation';
 
 export type ValidationResult = {
   valid:    boolean;
@@ -13,7 +14,7 @@ export type ValidationResult = {
 
 // ── Feature validator ─────────────────────────────────────────────────────────
 
-function validateFeature(f: unknown, path: string): ValidationResult {
+export function validateFeature(f: unknown, path: string): ValidationResult {
   const errors:   string[] = [];
   const warnings: string[] = [];
 
@@ -26,7 +27,7 @@ function validateFeature(f: unknown, path: string): ValidationResult {
   if (!feat.name  || typeof feat.name  !== 'string') errors.push(`${path}.name: required string`);
   if (!feat.source || typeof feat.source !== 'object') errors.push(`${path}.source: required`);
 
-  const VALID_SOURCE_KINDS = new Set(['race','class','subclass','background','feat','item','spell','condition','campaign']);
+  const VALID_SOURCE_KINDS = new Set(['race','class','subclass','background','feat','item','spell','condition','campaign','manual']);
   if (feat.source && !VALID_SOURCE_KINDS.has((feat.source as any).kind)) {
     warnings.push(`${path}.source.kind: "${(feat.source as any).kind}" is not a known kind`);
   }
@@ -41,6 +42,7 @@ function validateFeature(f: unknown, path: string): ValidationResult {
       'stat_modifier','grant_proficiency','grant_resistance','grant_immunity',
       'apply_condition','grant_resource','override_rule','base_ac_formula',
       'suppress_condition_effects','condition_immunity',
+      'grant_spell','grant_sense','grant_movement',
     ]);
     for (const [i, e] of feat.effects.entries()) {
       if (!VALID_EFFECT_TYPES.has((e as any).type)) {
@@ -174,6 +176,66 @@ export function validateFeat(data: unknown): ValidationResult {
   return { valid: errors.length === 0, errors, warnings };
 }
 
+// ── Subclass validator ────────────────────────────────────────────────────────
+// HomebrewSubclass = ClassProgression & {id, name} — a genuinely different
+// shape from CharClass (classId + entries[], not id/hitDie/features[]), so
+// this can't reuse validateClass the way background/condition reuse
+// validateRace.
+
+export function validateSubclass(data: unknown): ValidationResult {
+  const errors:   string[] = [];
+  const warnings: string[] = [];
+
+  if (!data || typeof data !== 'object') {
+    return { valid: false, errors: ['Root: not an object'], warnings: [] };
+  }
+  const sub = data as Partial<HomebrewSubclass>;
+
+  if (!sub.id      || typeof sub.id      !== 'string') errors.push('id: required string');
+  if (!sub.name    || typeof sub.name    !== 'string') errors.push('name: required string');
+  if (!sub.classId || typeof sub.classId !== 'string') errors.push('classId: required string');
+  if (!Array.isArray(sub.entries)) {
+    errors.push('entries: must be an array');
+  } else {
+    for (const [i, entry] of sub.entries.entries()) {
+      if (typeof entry.level !== 'number') errors.push(`entries[${i}].level: required number`);
+      if (!Array.isArray(entry.grants))  warnings.push(`entries[${i}].grants: missing (using [])`);
+      if (!Array.isArray(entry.choices)) warnings.push(`entries[${i}].choices: missing (using [])`);
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+// ── Item validator ────────────────────────────────────────────────────────────
+
+export function validateItem(data: unknown): ValidationResult {
+  const errors:   string[] = [];
+  const warnings: string[] = [];
+
+  if (!data || typeof data !== 'object') {
+    return { valid: false, errors: ['Root: not an object'], warnings: [] };
+  }
+  const item = data as Partial<Item>;
+
+  if (!item.id   || typeof item.id   !== 'string') errors.push('id: required string');
+  if (!item.name || typeof item.name !== 'string') errors.push('name: required string');
+  if (!Array.isArray(item.features)) {
+    errors.push('features: must be an array');
+  } else {
+    for (const [i, f] of item.features.entries()) {
+      const r = validateFeature(f, `features[${i}]`);
+      errors.push(...r.errors);
+      warnings.push(...r.warnings);
+    }
+  }
+  if (typeof item.weight !== 'number') warnings.push('weight: missing (using 0)');
+  if (typeof item.cost   !== 'string') warnings.push('cost: missing (using "")');
+  if (!Array.isArray(item.properties)) warnings.push('properties: missing (using [])');
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
 // ── Monster validator ─────────────────────────────────────────────────────────
 
 export function validateMonster(data: unknown): ValidationResult {
@@ -217,18 +279,58 @@ export function validateMonster(data: unknown): ValidationResult {
 
 // ── Generic content validator ─────────────────────────────────────────────────
 
+/** A SpellList's own cross-reference (which spells it names) can't be checked here — this
+ *  function has no content database in scope — so it only validates its own shape (name +
+ *  a non-empty spellIds array). Unresolvable spell ids are instead caught the same way every
+ *  other dangling content reference is: validateEntity's missing_spell Issue, at the point a
+ *  character actually tries to use one. */
+export function validateSpellList(data: unknown): ValidationResult {
+  const errors:   string[] = [];
+  const warnings: string[] = [];
+
+  if (!data || typeof data !== 'object') {
+    return { valid: false, errors: ['Root: not an object'], warnings: [] };
+  }
+  const list = data as Partial<SpellList>;
+
+  if (!list.id   || typeof list.id   !== 'string') errors.push('id: required string');
+  if (!list.name || typeof list.name !== 'string') errors.push('name: required string');
+  if (!Array.isArray(list.spellIds)) {
+    errors.push('spellIds: must be an array');
+  } else if (list.spellIds.length === 0) {
+    warnings.push('spellIds: empty — this list grants no spells yet');
+  } else if (!list.spellIds.every(id => typeof id === 'string')) {
+    errors.push('spellIds: every entry must be a string id');
+  }
+  if (list.classId !== undefined && typeof list.classId !== 'string') errors.push('classId: must be a string if present');
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
 export function validateContent(
-  type: 'race' | 'class' | 'spell' | 'background' | 'feature' | 'feat' | 'monster',
+  type: 'race' | 'subrace' | 'class' | 'subclass' | 'spell' | 'background'
+      | 'feature' | 'feat' | 'item' | 'monster' | 'condition' | 'spellList',
   data: unknown
 ): ValidationResult {
   switch (type) {
     case 'race':       return validateRace(data);
+    case 'subrace':    return validateRace(data); // same shape: id + name + features[]
     case 'class':      return validateClass(data);
+    case 'subclass':   return validateSubclass(data);
     case 'spell':      return validateSpell(data);
     case 'background': return validateRace(data); // same shape: id + name + features[]
+    case 'condition':  return validateRace(data); // same shape: id + name + features[]
     case 'feature':    return validateFeature(data, 'feature');
     case 'feat':       return validateFeat(data);
+    case 'item':       return validateItem(data);
     case 'monster':    return validateMonster(data);
+    case 'spellList':  return validateSpellList(data);
     default:           return { valid: false, errors: [`Unknown type: ${type}`], warnings: [] };
   }
+}
+
+// Canonical structural validation lives in entityValidation.ts so every
+// persistence/import boundary shares one deep definition of a safe Entity.
+export function validateEntityShape(raw: unknown): ValidationResult {
+  return validateEntityDeep(raw);
 }

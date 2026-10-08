@@ -1,0 +1,14 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - import character UI
+tags: [preserve-state, import]
+---
+- launchApp
+- tapOn: { id: tab-characters }
+- tapOn: { id: import-character }
+- assertVisible: { id: import-character-screen }
+- assertVisible: "Choose a Grimoire Character JSON file exported from another Grimoire installation."
+- assertVisible: { id: choose-character-file }
+- back
+- assertVisible: { id: characters-screen }
+- tapOn: { id: tab-home }
+- assertVisible: { id: home-screen }

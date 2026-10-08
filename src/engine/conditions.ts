@@ -2,7 +2,7 @@
 // FILE: src/engine/conditions.ts
 // PROJECT: Condition Application, Suppression & Immunity Engine
 // ============================================================================
-import { Entity, ActiveCondition, CampaignRules, Feature, FeatureInstance } from './types';
+import { Entity, ActiveCondition, CampaignRules, Feature, FeatureInstance, DurationTracker } from './types';
 import { recomputeDerived } from './pipeline';
 import { DEFAULT_RULES } from '../store/characterStore';
 
@@ -92,7 +92,15 @@ export function applyCondition(
   conditionId:        string,
   sourceId:           string,
   rules:              CampaignRules = DEFAULT_RULES,
-  conditionFeatures?: Feature[]
+  conditionFeatures?: Feature[],
+  /** Optional — defaults to null (permanent, today's existing behavior).
+   * Only 'rounds' (tickDurations, called from a player's own "End Turn" or
+   * a DM's endTurn()) and 'until_rest' (already removed wholesale by
+   * longRest() in rest.ts) durations are ever actually acted on anywhere in
+   * the app — 'minutes'/'hours' are set but never ticked (see
+   * wildShapeState.expiresAt's own doc comment for why), so callers should
+   * not offer those as real options. */
+  duration?:          DurationTracker | null,
 ): Entity {
   if (isImmuneToCondition(entity, conditionId)) return entity;
 
@@ -114,7 +122,7 @@ export function applyCondition(
   const newCondition: ActiveCondition = {
     id:           conditionId,
     sourceId,
-    duration:     null,
+    duration:     duration ?? null,
     suppressedBy: collectSuppressors(entity, conditionId),
   };
 
@@ -228,6 +236,23 @@ export function tickDurations(
     .map(tickCondition)
     .filter((c): c is ActiveCondition => c !== null);
 
+  // Bug fix: a condition expiring here previously only removed its
+  // ActiveCondition entry — the Feature(s) applyCondition() had pushed onto
+  // entity.features (source.kind:'condition', refId: the expired id) stayed
+  // forever, so an expired condition's mechanical effects (an AC penalty,
+  // a stat bonus, anything besides the visible chip) kept applying with no
+  // way to clear them short of a manual removeCondition() call, which
+  // nothing calls automatically on natural expiry. Same feature-stripping
+  // filter removeCondition() already uses for a manual removal.
+  const expiredIds = new Set(
+    entity.conditionMonitor.active
+      .filter(c => !newActive.some(a => a.id === c.id))
+      .map(c => c.id)
+  );
+  const newFeatures = expiredIds.size === 0
+    ? entity.features
+    : entity.features.filter(f => !(f.source.kind === 'condition' && expiredIds.has(f.source.refId)));
+
   const updated = {
     ...entity,
     conditions: newConditions,
@@ -235,6 +260,7 @@ export function tickDurations(
       ...entity.conditionMonitor,
       active: newActive,
     },
+    features: newFeatures,
   };
 
   return recomputeDerived(updated, rules);

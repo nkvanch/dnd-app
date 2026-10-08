@@ -5,10 +5,13 @@
 // Entities are stored as full JSON blobs. The only separate columns are id,
 // kind, and updatedAt for efficient list/filter queries.
 // ============================================================================
+import { withRequiredPacks } from '../content/requiredPacks';
+import { installedOfficialPacks } from '../content/officialPackService';
 import { Platform } from 'react-native';
-import { Entity } from '../engine/types';
+import { Entity, stripTransientRuntimeState } from '../engine/types';
 import { getDb } from './db';
 import { migrateEntity } from '../engine/multiclass';
+import { validateEntityShape } from '../engine/homebrewValidator';
 
 type EntityRow = {
   id:        string;
@@ -28,11 +31,27 @@ export async function saveEntity(entity: Entity): Promise<void> {
        kind      = excluded.kind,
        data      = excluded.data,
        updatedAt = excluded.updatedAt`,
-    [entity.id, entity.kind, JSON.stringify(entity), Date.now()]
+    // The packs this character's content comes from are recorded with it (content/requiredPacks.ts), so a removed pack or another device can say what it needs.
+    [entity.id, entity.kind, JSON.stringify(entity.kind === 'character' ? withRequiredPacks(entity, installedOfficialPacks()) : entity), Date.now()]
   );
 }
 
-/** Load a single Entity by id. Returns null if not found. */
+/** Answers only whether a persisted character row owns this exact id.
+ * This deliberately avoids parsing entity JSON and ignores drafts, metadata,
+ * profiles, content ids, and any in-memory character list. */
+export async function persistedCharacterExists(id: string): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  const db = getDb();
+  const row = await db.getFirstAsync<{ present: number }>(
+    "SELECT 1 AS present FROM entities WHERE id = ? AND kind = 'character' LIMIT 1",
+    [id]
+  );
+  return row?.present === 1;
+}
+
+/** Load a single Entity by id. Returns null if not found OR structurally
+ *  invalid (re-audit A07 — same validated path parseEntityRow uses, so a
+ *  direct single-entity load can't crash on a malformed row either). */
 export async function loadEntity(id: string): Promise<Entity | null> {
   if (Platform.OS === 'web') return null;
   const db  = getDb();
@@ -41,7 +60,45 @@ export async function loadEntity(id: string): Promise<Entity | null> {
     [id]
   );
   if (!row) return null;
-  return migrateEntity(JSON.parse(row.data) as Entity);
+  return parseEntityRow(row);
+}
+
+/**
+ * Parses one entity row, returning null (and logging) instead of throwing
+ * on a malformed blob — used by loadAllEntities/loadEntitiesByKind so one
+ * corrupted row doesn't take down the entire list (audit finding
+ * PERSIST-4). Mirrors the per-row try/catch loadAllEntityMeta already uses
+ * below for the same reason.
+ *
+ * Re-audit A07: a syntactically-valid-JSON-but-structurally-broken row
+ * (e.g. {id, identity:{name}, features:[]}, missing stats/resources/
+ * inventory) used to parse "successfully" here — JSON.parse doesn't care
+ * that the shape is wrong — and only fail much later, outside this
+ * function's own try/catch, wherever the first consumer actually touched
+ * the missing field (recomputeDerived, a UI read, ...). validateEntityShape
+ * now catches that HERE, at the same per-row quarantine point as a JSON
+ * parse failure, so one malformed character is skipped and logged while
+ * every other row still loads normally.
+ */
+function parseEntityRow(r: EntityRow): Entity | null {
+  try {
+    const parsed = JSON.parse(r.data) as unknown;
+    // Supported historical shapes migrate before the canonical deep check.
+    const migrated = migrateEntity(parsed as Entity);
+    const shape = validateEntityShape(migrated);
+    if (!shape.valid) {
+      console.error(`[entityRepo] quarantining structurally invalid row id=${r.id}:`, shape.errors);
+      return null;
+    }
+    // Extra Attack sequence closure (Part B4): this is the single choke
+    // point behind every DB read (loadEntity, loadAllEntities,
+    // loadEntitiesByKind) — a row saved mid-Attack-sequence must never come
+    // back with a resumable attackSequence still attached.
+    return stripTransientRuntimeState(migrated);
+  } catch (e) {
+    console.error(`[entityRepo] skipping malformed row id=${r.id}:`, e);
+    return null;
+  }
 }
 
 /** Load all stored entities, sorted by updatedAt descending (most recent first). */
@@ -51,7 +108,7 @@ export async function loadAllEntities(): Promise<Entity[]> {
   const rows = await db.getAllAsync<EntityRow>(
     'SELECT * FROM entities ORDER BY updatedAt DESC'
   );
-  return rows.map(r => migrateEntity(JSON.parse(r.data) as Entity));
+  return rows.map(parseEntityRow).filter((e): e is Entity => e !== null);
 }
 
 /** Load all entities of a specific kind. */
@@ -62,7 +119,7 @@ export async function loadEntitiesByKind(kind: Entity['kind']): Promise<Entity[]
     'SELECT * FROM entities WHERE kind = ? ORDER BY updatedAt DESC',
     [kind]
   );
-  return rows.map(r => migrateEntity(JSON.parse(r.data) as Entity));
+  return rows.map(parseEntityRow).filter((e): e is Entity => e !== null);
 }
 
 export type EntityMeta = {

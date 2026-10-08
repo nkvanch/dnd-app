@@ -63,9 +63,13 @@ export default function OnboardingScreen() {
       const demo = buildDemoCharacter(rules);
       await spellRepo.ensureLoaded(spellIdsOnEntity(demo));
       setDraft(demo);
-      await saveDraft();
+      const saved = await saveDraft();
       await finish();
-      router.replace(`/sheet/${demo.id}` as any);
+      // saveDraft() (re-audit A09, item 11) now only clears the draft and
+      // commits it to the character list once the SQLite write actually
+      // succeeds — navigating to the sheet on a failed save would open a
+      // character that was never actually persisted.
+      router.replace(saved ? (`/sheet/${demo.id}` as any) : '/(tabs)');
     } catch (e) {
       console.error('[onboarding] buildDemoCharacter failed:', e);
       setBuildingDemo(false);

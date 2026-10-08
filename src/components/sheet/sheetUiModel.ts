@@ -1,0 +1,5 @@
+import { CampaignRules, CustomRuleProfile, Entity } from '../../engine/types';
+import { sheetRuleAccess } from './ruleProfileUi';
+export const FREE_EDIT_CORE_SECTIONS=['Character Values','Manual Overrides','Movement & Defense','Saving Throws'] as const;
+export function freeEditUiModel(base:CampaignRules,entity:Entity,profiles:readonly CustomRuleProfile[]){const access=sheetRuleAccess(base,entity,profiles);const sections=access.canFreeEdit?[...FREE_EDIT_CORE_SECTIONS,...(entity.spellcasting?['Spell Slots'] as const:[])]:[];return{locked:!access.canFreeEdit,sections,hasControls:sections.length>0};}
+export function characterHeaderUiModel(input:{canFreeEdit:boolean;canUndo:boolean;canRedo:boolean;hasDiagnostics:boolean}){return{direct:[{id:'undo',enabled:input.canUndo},{id:'redo',enabled:input.canRedo},{id:'more',enabled:true}],overflow:[{id:'history',enabled:true},{id:'rules',enabled:true},{id:'edit',enabled:input.canFreeEdit},{id:'export',enabled:true},...(input.hasDiagnostics?[{id:'diagnostics',enabled:true}]:[])]};}

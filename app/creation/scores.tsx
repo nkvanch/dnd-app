@@ -4,12 +4,16 @@ import { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore } from '../../src/store/characterStore';
+import { useHomebrewStore } from '../../src/store/homebrewStore';
 import { recomputeDerived } from '../../src/engine/pipeline';
-import { recalculateAllHP, reapplyResolvedAsi } from '../../src/engine/leveling';
+import { recalculateAllHP, reapplyResolvedAsi, stripResolvedAsiStats } from '../../src/engine/leveling';
 import { rollAbilityScoreSet } from '../../src/engine/dice';
-import { pointBuyConfig } from '../../src/engine/houseRules';
+import { useCustomRuleProfileStore } from '../../src/store/customRuleProfileStore';
+import { resolveEffectiveCampaignRules } from '../../src/engine/customRuleProfiles';
+import { adjustPointBuy, minimumPointBuyScores, normalizePointBuyConfig, pointBuyCost, validatePointBuy } from '../../src/engine/pointBuy';
 import { Ability, AbilityScores } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const ABILITY_LABELS: Record<Ability, string> = {
@@ -18,13 +22,6 @@ const ABILITY_LABELS: Record<Ability, string> = {
 };
 
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
-const BASE_POINT_COST: Record<number, number> = { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:7, 15:9 };
-// Cost for any score, extrapolating above 15 at +2/point (matches the 14→15 step)
-// so a custom point-buy max above 15 still has a sensible cost.
-function pointCost(score: number): number {
-  if (score <= 15) return BASE_POINT_COST[score] ?? 0;
-  return 9 + (score - 15) * 2;
-}
 type Method = 'standard' | 'pointbuy' | 'manual' | 'roll';
 
 function getRaceBonuses(
@@ -54,31 +51,48 @@ export default function ScoresScreen() {
   const router   = useRouter();
   const draft    = useCharacterStore(s => s.draft);
   const setDraft = useCharacterStore(s => s.setDraft);
-  const rules    = useCharacterStore(s => s.rules);
+  const campaignRules = useCharacterStore(s => s.rules);
+  const profiles = useCustomRuleProfileStore(s=>s.profiles);
+  const rules = draft ? resolveEffectiveCampaignRules(campaignRules,draft,profiles) : campaignRules;
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
 
   // All hooks must be called before any conditional return
   const raceBonuses = getRaceBonuses(draft);
 
   // Pre-populate from existing stats if returning to this screen.
-  // draft.stats IS the base score — race bonuses live in features, not in stats,
-  // so no subtraction is needed here.
+  // Re-audit A26: draft.stats is NOT the base score once an ASI has been
+  // resolved — a resolved Ability Score Improvement writes its +2/+1+1
+  // directly into stats (reapplyResolvedAsi's own doc comment: "the +2/+1+1
+  // lives in base stats"). Populating this screen straight from draft.stats
+  // meant reopening Scores after resolving an ASI, then confirming with
+  // every field UNCHANGED, fed the ALREADY-BUMPED value back in as the new
+  // "base" — and handleConfirm's own reapplyResolvedAsi call below then
+  // added the SAME ASI on top a second time. stripResolvedAsiStats (already
+  // built for the class-reselection case — same "unwind ASI stat bumps back
+  // to true base" primitive) reconstructs the true pre-ASI base here, so
+  // reapplyResolvedAsi's later re-application is the ONLY place the bonus
+  // gets added, no matter how many times this screen is reopened/confirmed.
+  // Race bonuses still need no subtraction — they live in features, not stats.
   const existingBase: AbilityScores = (() => {
     if (!draft) return DEFAULT_SCORES;
+    const trueBase = stripResolvedAsiStats(draft).stats;
     const base = {} as AbilityScores;
     for (const ab of ABILITIES) {
-      base[ab] = draft.stats[ab];
+      base[ab] = trueBase[ab];
     }
     return base;
   })();
 
-  const [method,       setMethod]       = useState<Method>('standard');
-  const pb = pointBuyConfig(rules);   // { points, max, min } from house rules
+  const configuredMethod=(draft?.customRuleProfileId ? rules.abilityGenerationMode : draft?.creationAbilityMode ?? rules.abilityGenerationMode ?? 'standard') as Method;
+  const [method, setMethod] = useState<Method>(configuredMethod);
+  const pb = normalizePointBuyConfig(rules.pointBuy);
   const [rolledScores, setRolledScores] = useState<number[]>([]);
   const [rollAssignments, setRollAssignments] = useState<Partial<Record<Ability, number>>>({});
   const [rollSelected, setRollSelected] = useState<number | null>(null);
   const [assignments,  setAssignments]  = useState<Partial<Record<Ability, number>>>({});
   const [selected,     setSelected]     = useState<number | null>(null);
-  const [pbScores,     setPbScores]     = useState<AbilityScores>(existingBase);
+  const [pbScores, setPbScores] = useState<AbilityScores>(()=>validatePointBuy(existingBase,pb).valid?existingBase:minimumPointBuyScores(pb));
+  function persistPointBuy(next:AbilityScores){ setPbScores(next); if(draft)setDraft({...draft,stats:next,creationAbilityMode:'pointbuy'}); }
   // Manual: string-based so user can type freely; stored as strings in the input
   const [manualText,   setManualText]   = useState<Record<Ability, string>>(
     Object.fromEntries(ABILITIES.map(ab => [ab, String(existingBase[ab])])) as Record<Ability, string>
@@ -88,6 +102,10 @@ export default function ScoresScreen() {
   useEffect(() => {
     if (!draft) router.replace('/creation/name');
   }, [draft]);
+  useEffect(() => {
+    setMethod(configuredMethod);
+    if (configuredMethod === 'pointbuy' && !validatePointBuy(pbScores,pb).valid) persistPointBuy(minimumPointBuyScores(pb));
+  }, [configuredMethod, pb.budget, pb.minimum, pb.maximum]);
 
   if (!draft) return null;
 
@@ -103,16 +121,10 @@ export default function ScoresScreen() {
     setSelected(null);
   }
 
-  const pointsSpent = ABILITIES.reduce((s, ab) => s + pointCost(pbScores[ab]), 0);
-  const pointsLeft  = pb.points - pointsSpent;
-
-  function adjustPB(ab: Ability, delta: number) {
-    const next = pbScores[ab] + delta;
-    if (next < pb.min || next > pb.max) return;
-    const cost = pointCost(next) - pointCost(pbScores[ab]);
-    if (cost > pointsLeft) return;
-    setPbScores(prev => ({ ...prev, [ab]: next }));
-  }
+  const pointState=validatePointBuy(pbScores,pb);
+  const pointsLeft=pointState.remaining;
+  function adjustedPB(ab:Ability,delta:-1|1){return adjustPointBuy(pbScores,ab,delta,pb);}
+  function adjustPB(ab:Ability,delta:-1|1){persistPointBuy(adjustedPB(ab,delta));}
 
   // Manual: parse the typed text, defaulting to 10 only when it's actually
   // empty. `parseInt(text) || 10` (the previous version) silently turned a
@@ -160,7 +172,7 @@ export default function ScoresScreen() {
       // to this tab without touching a stepper must not let an out-of-budget
       // or out-of-range state slip through Confirm just because every
       // ability happens to already have a value.
-      return pointsLeft >= 0 && ABILITIES.every(ab => pbScores[ab] >= pb.min && pbScores[ab] <= pb.max);
+      return pointState.valid;
     }
     return true;
   }
@@ -188,19 +200,22 @@ export default function ScoresScreen() {
       ...draft,
       stats: base,
       notes: JSON.stringify({ ...existingNotes, scoresConfirmed: true }),
+      creationAbilityMode: method,
     };
     // Setting base stats wholesale would erase any ASI already resolved during
     // creation (the +2/+1+1 lives in base stats). Re-apply resolved ASIs on top
     // so re-confirming scores never silently loses an Ability Score Improvement.
+    const contentDB = getMergedContentDB(withFlag.rulesetId);
+    const cardContent = { classDefs: contentDB.classes, homebrewSpells: contentDB.spells, races: contentDB.races, items: contentDB.items };
     let updated = reapplyResolvedAsi(withFlag, rules);
-    updated = recomputeDerived(updated, rules);
+    updated = recomputeDerived(updated, rules, cardContent);
     // Recompute HP now that final CON is known, so the sheet/hub don't show a
     // stale value computed at class-selection time (e.g. HP 13 instead of 16
     // when CON was raised to 18 after choosing the class). Only meaningful once
     // a class (hit die) has been chosen.
     if (updated.identity.classId && updated.resources.hitDice.die > 0) {
       updated = recalculateAllHP(updated, rules);
-      updated = recomputeDerived(updated, rules);
+      updated = recomputeDerived(updated, rules, cardContent);
     }
     setDraft(updated);
     router.push('/creation/hub');
@@ -211,7 +226,11 @@ export default function ScoresScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
 
         <Text style={styles.heading}>Ability Scores</Text>
         <View style={styles.divider} />
@@ -219,7 +238,7 @@ export default function ScoresScreen() {
         {/* Method tabs */}
         <View style={styles.tabs}>
           {(['standard','pointbuy','manual','roll'] as Method[]).map(m => (
-            <Pressable key={m} style={[styles.tab, method===m && styles.tabActive]} onPress={() => setMethod(m)}>
+            <Pressable key={m} testID={`ability-method-${m}`} style={[styles.tab, method===m && styles.tabActive]} onPress={() => { setMethod(m); if(m==='pointbuy'){const next=validatePointBuy(pbScores,pb).valid?pbScores:minimumPointBuyScores(pb);persistPointBuy(next);}else if(draft)setDraft({...draft,creationAbilityMode:m}); }}>
               <Text style={[styles.tabText, method===m && styles.tabTextActive]}>
                 {m === 'standard' ? 'Standard' : m === 'pointbuy' ? 'Point Buy' : m === 'manual' ? 'Manual' : '4d6'}
               </Text>
@@ -281,7 +300,8 @@ export default function ScoresScreen() {
             </View>
           </>
         )}
-        {method === 'pointbuy' && <Text style={styles.hint}>Points remaining: {pointsLeft} / {pb.points}  (scores {pb.min}–{pb.max})</Text>}
+        {method === 'pointbuy' && <Text testID="pointbuy-remaining" style={styles.hint}>Points remaining: {pointsLeft} / {pb.budget}  (scores {pb.minimum}–{pb.maximum})</Text>}
+        {method === 'pointbuy' && <Pressable style={styles.resetBtn} onPress={()=>persistPointBuy(minimumPointBuyScores(pb))}><Text style={styles.resetTxt}>Reset to minimum</Text></Pressable>}
         {method === 'manual'   && <Text style={styles.hint}>Enter any value. Use +/− or type directly.</Text>}
 
         {/* Ability rows */}
@@ -295,11 +315,11 @@ export default function ScoresScreen() {
               {/* Point Buy */}
               {method === 'pointbuy' && (
                 <View style={styles.stepper}>
-                  <Pressable style={styles.stepBtn} onPress={() => adjustPB(ab, -1)}>
+                  <Pressable testID={`pointbuy-${ab}-minus`} accessibilityLabel={`${ABILITY_LABELS[ab]} minus`} style={[styles.stepBtn,adjustedPB(ab,-1)===pbScores&&styles.stepDisabled]} disabled={adjustedPB(ab,-1)===pbScores} onPress={() => adjustPB(ab, -1)}>
                     <Text style={styles.stepBtnText}>−</Text>
                   </Pressable>
-                  <ScoreDisplay base={base} bonus={bonus} />
-                  <Pressable style={styles.stepBtn} onPress={() => adjustPB(ab, 1)}>
+                  <View><ScoreDisplay base={base} bonus={bonus} /><Text style={styles.costTxt}>Cost {base===null?'—':pointBuyCost(base,pb)}</Text></View>
+                  <Pressable testID={`pointbuy-${ab}-plus`} accessibilityLabel={`${ABILITY_LABELS[ab]} plus`} style={[styles.stepBtn,adjustedPB(ab,1)===pbScores&&styles.stepDisabled]} disabled={adjustedPB(ab,1)===pbScores} accessibilityHint={adjustedPB(ab,1)===pbScores?'Maximum reached or not enough points':undefined} onPress={() => adjustPB(ab, 1)}>
                     <Text style={styles.stepBtnText}>+</Text>
                   </Pressable>
                 </View>
@@ -365,15 +385,18 @@ export default function ScoresScreen() {
           );
         })}
 
-        <View style={styles.divider} />
-        <Pressable
-          style={[styles.nextBtn, !canConfirm() && styles.nextBtnDisabled]}
-          onPress={handleConfirm}
-          disabled={!canConfirm()}
-        >
-          <Text style={styles.nextBtnText}>Confirm Scores</Text>
-        </Pressable>
       </ScrollView>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable
+            style={[styles.nextBtn, !canConfirm() && styles.nextBtnDisabled]}
+            onPress={handleConfirm}
+            disabled={!canConfirm()}
+          >
+            <Text style={styles.nextBtnText}>Confirm Scores</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
     </KeyboardAvoidingView>
   );
 }
@@ -405,11 +428,14 @@ const sd = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  content:   { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  content:   { padding: Spacing.lg },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   backBtn:   { marginBottom: Spacing.md },
   backBtnText: { fontSize: FontSize.md, color: Colors.gold, fontWeight: FontWeight.bold },
   heading:   { fontSize: FontSize.xxl, fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.md },
   divider:   { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
+  costTxt: {fontSize:FontSize.xs,color:Colors.textDim,textAlign:'center'},
+  resetBtn:{alignSelf:'center',padding:Spacing.sm}, resetTxt:{color:Colors.gold,fontSize:FontSize.sm,fontWeight:FontWeight.bold},
   hint:      { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md, textAlign: 'center' },
 
   tabs: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
@@ -432,6 +458,7 @@ const styles = StyleSheet.create({
 
   stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   stepBtn: { width: 32, height: 32, borderRadius: Radius.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
+  stepDisabled:{opacity:0.35},
   stepBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
 
   // Manual text input

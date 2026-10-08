@@ -11,14 +11,17 @@
 //    starred-only. Spells show all known, with level + tap-for-description.
 //  • Fly/swim/climb come from derived.movement (grant_movement effects). Empty
 //    until a race/item/spell grants them.
-import { useState } from 'react';
+import { findBeastForm } from '../../content/runtimeRules';
+import { useState, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import {
-  Entity, Ability, SkillName, CampaignRules, SenseType, Sense, ItemInstance, Spell,
+  Entity, Ability, SkillName, CampaignRules, SenseType, Sense, ItemInstance, Spell, DurationTracker,
 } from '../../engine/types';
 import { modifier, collectAllEffects, applyStatModifiers, recomputeDerived } from '../../engine/pipeline';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { HpModal } from './HpModal';
+import { ConcentrationModal } from './ConcentrationModal';
+import { useCharacterStore } from '../../store/characterStore';
 import { useDiceLogStore } from '../../store/diceLogStore';
 import { spellRepo } from '../../content/spellRepo';
 import { itemRepo } from '../../content/itemRepo';
@@ -62,44 +65,55 @@ const COMMON_CONDITIONS = [
   'paralyzed','poisoned','prone','restrained','stunned','unconscious',
 ];
 
-// Structured notes are serialized into entity.notes as a JSON block fenced by a
-// marker so legacy plain-text notes still load. Anything before the marker is
-// kept as the free-text "scratch" area.
+// Structured notes are serialized as pure JSON into entity.explorationNotes
+// — its own field, not shared with the Notes tab's entity.notes (see that
+// field's own doc comment for why: NOTES-CORRUPT-1). NOTES_MARKER is kept
+// only for the one-time backward-compatible read path below, extracting
+// exploration data out of entity.notes for a character saved before this
+// field existed — never written back there again.
 const NOTES_MARKER = '\n<<<GRIMOIRE_NOTES>>>\n';
 type NoteCategory = 'objectives' | 'npcs' | 'clues' | 'locations';
 type StructuredNotes = { scratch: string; objectives: string[]; npcs: string[]; clues: string[]; locations: string[] };
 
-function parseNotes(raw: string): StructuredNotes {
-  const empty: StructuredNotes = { scratch: raw ?? '', objectives: [], npcs: [], clues: [], locations: [] };
-  if (!raw || !raw.includes(NOTES_MARKER)) return empty;
-  const [scratch, json] = raw.split(NOTES_MARKER);
+function structuredFromJson(json: string, scratchFallback: string): StructuredNotes {
   try {
     const parsed = JSON.parse(json);
     return {
-      scratch: scratch ?? '',
+      scratch: parsed.scratch ?? scratchFallback,
       objectives: parsed.objectives ?? [],
       npcs: parsed.npcs ?? [],
       clues: parsed.clues ?? [],
       locations: parsed.locations ?? [],
     };
   } catch {
-    return { ...empty, scratch: raw };
+    return { scratch: scratchFallback, objectives: [], npcs: [], clues: [], locations: [] };
   }
 }
-function serializeNotes(n: StructuredNotes): string {
-  const { scratch, ...lists } = n;
-  return `${scratch}${NOTES_MARKER}${JSON.stringify(lists)}`;
+
+export function parseNotes(explorationNotes: string | undefined, legacyEntityNotes: string): StructuredNotes {
+  if (explorationNotes) return structuredFromJson(explorationNotes, explorationNotes);
+  // Backward compatibility only: a character saved before explorationNotes
+  // existed may still have exploration data embedded inside entity.notes
+  // behind the legacy marker.
+  if (legacyEntityNotes?.includes(NOTES_MARKER)) {
+    const [scratch, json] = legacyEntityNotes.split(NOTES_MARKER);
+    return structuredFromJson(json, scratch ?? '');
+  }
+  return { scratch: '', objectives: [], npcs: [], clues: [], locations: [] };
+}
+export function serializeNotes(n: StructuredNotes): string {
+  return JSON.stringify(n);
 }
 
 interface Props {
   entity: Entity;
   rules: CampaignRules;
   onEntityUpdate: (updated: Entity) => void;
-  onDamage: (amount: number, damageType?: string) => void;
+  onDamage: (amount: number, damageType?: string, isNonmagicalAttack?: boolean) => void;
   onHeal: (amount: number) => void;
-  onAddCondition: (condId: string) => void;
+  onAddCondition: (condId: string, duration: DurationTracker | null) => void;
   onRemoveCondition: (condId: string) => void;
-  onSaveNotes: (notes: string) => void;
+  onSaveExplorationNotes: (notes: string) => void;
 }
 
 // ── Manual senses helpers ────────────────────────────────────────────────────
@@ -169,13 +183,36 @@ function makeAdHocFeatChoice(): import('../../engine/types').ChoiceState {
   };
 }
 
-export function TabExploration({
-  entity, rules, onEntityUpdate, onDamage, onHeal, onAddCondition, onRemoveCondition, onSaveNotes,
+function TabExplorationInner({
+  entity, rules, onEntityUpdate, onDamage, onHeal, onAddCondition, onRemoveCondition, onSaveExplorationNotes,
 }: Props) {
   const [sensesOpen, setSensesOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
   const [addFeatOpen, setAddFeatOpen] = useState(false);
   const [hpOpen, setHpOpen] = useState(false);
+  // Concentration-check trigger on damage — TabCharacter.tsx has always had
+  // this via its own local handleDamage wrapper; TabExploration's HpModal
+  // called the raw onDamage prop directly with no such wrapper, so damage
+  // taken while this tab was open never prompted a concentration save
+  // (audit finding CONCENTRATION-EXPLORE-1). Same "read fresh state after
+  // onDamage, since Zustand updates synchronously" pattern as TabCharacter.
+  const [concOpen, setConcOpen] = useState(false);
+  const [concDamage, setConcDamage] = useState(0);
+  function handleDamage(amount: number, damageType?: string, isNonmagicalAttack?: boolean) {
+    onDamage(amount, damageType, isNonmagicalAttack);
+    const fresh = useCharacterStore.getState().characters.find(c => c.id === entity.id);
+    if (fresh?.spellcasting?.concentrating) {
+      setConcDamage(amount);
+      setConcOpen(true);
+    }
+  }
+  // Rules-engine blocker RE-AUDIT closure (3A): same visibility rule as
+  // TabCharacter.tsx's HpModal — shown only while transformed into a form
+  // that actually declares nonmagicalPhysicalResistance.
+  const activeBeastForm = entity.wildShapeState?.active
+    ? findBeastForm(entity.wildShapeState!.formId)
+    : undefined;
+  const showNonmagicalOption = !!activeBeastForm?.nonmagicalPhysicalResistance;
   const [condOpen, setCondOpen] = useState(false);
   const [customCond, setCustomCond] = useState('');
   const [spellDetail, setSpellDetail] = useState<Spell | null>(null);
@@ -207,8 +244,8 @@ export function TabExploration({
   const tools = proficiencies.tools ?? [];
 
   // Notes
-  const notes = parseNotes(entity.notes);
-  function updateNotes(next: StructuredNotes) { onSaveNotes(serializeNotes(next)); }
+  const notes = parseNotes(entity.explorationNotes, entity.notes);
+  function updateNotes(next: StructuredNotes) { onSaveExplorationNotes(serializeNotes(next)); }
 
   // Features list — favorites (starred) shown separately from the full list
   const allFeatures = features.filter(f => f.id !== MANUAL_SENSES_FEATURE_ID && f.id !== MANUAL_MOVEMENT_FEATURE_ID);
@@ -370,6 +407,7 @@ export function TabExploration({
           <SpellList
             ids={[...entity.spellcasting.cantrips, ...entity.spellcasting.known]}
             onTap={setSpellDetail}
+            rulesetId={entity.rulesetId}
           />
         </Section>
       )}
@@ -393,9 +431,19 @@ export function TabExploration({
         visible={hpOpen}
         currentHp={resources.hp.current}
         maxHp={resources.hp.maximum}
-        onDamage={(n, dt) => { onDamage(n, dt); }}
+        onDamage={handleDamage}
         onHeal={(n) => { onHeal(n); }}
         onClose={() => setHpOpen(false)}
+        showNonmagicalOption={showNonmagicalOption}
+      />
+
+      <ConcentrationModal
+        visible={concOpen}
+        damageTaken={concDamage}
+        entity={useCharacterStore.getState().characters.find(c => c.id === entity.id) ?? entity}
+        rules={rules}
+        onResolve={updated => { onEntityUpdate(updated); setConcOpen(false); }}
+        onClose={() => setConcOpen(false)}
       />
 
       <SensesModal visible={sensesOpen} entity={entity} rules={rules}
@@ -411,7 +459,7 @@ export function TabExploration({
             <Text style={styles.sheetTitle}>Add Condition</Text>
             <View style={styles.chipWrap}>
               {COMMON_CONDITIONS.map(c => (
-                <Pressable key={c} style={styles.typeChip} onPress={() => { onAddCondition(c); setCondOpen(false); }}>
+                <Pressable key={c} style={styles.typeChip} onPress={() => { onAddCondition(c, null); setCondOpen(false); }}>
                   <Text style={styles.typeChipTxt}>{c}</Text>
                 </Pressable>
               ))}
@@ -429,7 +477,7 @@ export function TabExploration({
                 onPress={() => {
                   const name = customCond.trim();
                   if (!name) return;
-                  onAddCondition(name);
+                  onAddCondition(name, null);
                   setCustomCond('');
                   setCondOpen(false);
                 }}
@@ -446,8 +494,10 @@ export function TabExploration({
 
       {/* Spell detail */}
       <Modal visible={!!spellDetail} transparent animationType="slide" onRequestClose={() => setSpellDetail(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setSpellDetail(null)}>
-          <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSpellDetail(null)} accessible={false} />
+          <View style={styles.sheet}>
             {spellDetail && (
               <ScrollView>
                 <Text style={styles.spellDetailName}>{spellDetail.name}</Text>
@@ -467,8 +517,8 @@ export function TabExploration({
             <Pressable style={styles.secondaryBtn} onPress={() => setSpellDetail(null)}>
               <Text style={styles.secondaryBtnTxt}>Close</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Add feat */}
@@ -476,13 +526,17 @@ export function TabExploration({
         <View style={styles.modalRoot}>
           <AsiFeatPicker entity={entity} choice={makeAdHocFeatChoice()} rules={rules} featOnly
             onClose={() => setAddFeatOpen(false)}
-            onResolved={(updated) => { onEntityUpdate(updated); setAddFeatOpen(false); }} />
+            onResolved={(updated) => { onEntityUpdate(updated); setAddFeatOpen(false); }}
+            browseStateKey="feat:live" />
         </View>
       </Modal>
 
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: see TabCharacter.tsx's identical comment.
+export const TabExploration = memo(TabExplorationInner);
 
 // ── Feature row (favorite star + name/description) ──────────────────────────
 function FeatureRow({ feature, onToggleStar }: {
@@ -503,12 +557,12 @@ function FeatureRow({ feature, onToggleStar }: {
 }
 
 // ── Spell list grouped by level ──────────────────────────────────────────────
-function SpellList({ ids, onTap }: { ids: string[]; onTap: (s: Spell) => void }) {
+function SpellList({ ids, onTap, rulesetId }: { ids: string[]; onTap: (s: Spell) => void; rulesetId?: Entity["rulesetId"] }) {
   const resolved = ids
-    .map(id => spellRepo.getSpellSync(id))
+    .map(id => spellRepo.getSpellSync(id, rulesetId))
     .filter((s): s is Spell => !!s)
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
-  const unknown = ids.filter(id => !spellRepo.getSpellSync(id));
+  const unknown = ids.filter(id => !spellRepo.getSpellSync(id, rulesetId));
 
   if (resolved.length === 0 && unknown.length === 0) {
     return <Text style={styles.emptyNote}>None known</Text>;

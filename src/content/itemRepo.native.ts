@@ -8,16 +8,21 @@
 // spellRepo.native.ts's two-tier cache design exactly — see that file's
 // header for the full rationale.
 // ============================================================================
-import { Item } from '../engine/types';
+import { Item, asRulesetId } from '../engine/types';
 import { getContentDb } from '../db/contentDb';
 import type { ItemIndexEntry, ItemRepo } from './itemRepo.types';
+import { withOfficialItems } from './packRepos';
+import { baseWeaponIdFromName } from './items/itemBrowse';
+import { hasVerifiedPublicItemProvenance } from './items/srdProvenance';
+import { GENERATED_SRD_ITEMS } from './items/generatedSrdItems';
+import { toItemIndexEntry } from './itemRepo.types';
 
 const SRD_ONLY = process.env.EXPO_PUBLIC_SRD_ONLY === 'true';
 
 type ItemIndexRow = {
   id: string; name: string; weight: number; cost: string;
-  properties: string; hasDamageEffect: number; weaponRange: string | null;
-  srd: number | null;
+  properties: string; hasDamageEffect: number; hasFeatures?: number; weaponRange: string | null;
+  srd: number | null; rulesetId: string | null;
 };
 
 let index: ItemIndexEntry[] = [];
@@ -25,22 +30,51 @@ const fullCache = new Map<string, Item>();
 
 async function init(): Promise<void> {
   if (index.length > 0) return;
-  const db = getContentDb();
-  const rows = await db.getAllAsync<ItemIndexRow>(
-    'SELECT id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd FROM items'
-  );
-  index = rows
-    .filter(r => !SRD_ONLY || r.srd === 1)
-    .map(r => ({
-      id:              r.id,
-      name:            r.name,
-      weight:          r.weight,
-      cost:            r.cost,
-      properties:      JSON.parse(r.properties) as string[],
-      hasDamageEffect: r.hasDamageEffect === 1,
-      weaponRange:     r.weaponRange,
-      srd:             r.srd === null ? undefined : r.srd === 1,
-    }));
+  // The app's SQLite content DB is the full/private catalog. Public mode must
+  // never hydrate those rows: use the separate canonical-generated artifact.
+  if (SRD_ONLY) {
+    index = GENERATED_SRD_ITEMS
+      .filter(item => hasVerifiedPublicItemProvenance(item.id))
+      .map(toItemIndexEntry);
+    for (const item of GENERATED_SRD_ITEMS) {
+      if (hasVerifiedPublicItemProvenance(item.id)) fullCache.set(item.id, item);
+    }
+    return;
+  }
+  try {
+    const db = getContentDb();
+    const rows = await db.getAllAsync<ItemIndexRow>(
+      'SELECT id, name, weight, cost, properties, hasDamageEffect, hasFeatures, weaponRange, srd, rulesetId FROM items'
+    );
+    const built: ItemIndexEntry[] = [];
+    for (const r of rows) {
+      if (SRD_ONLY && (r.srd !== 1 || !hasVerifiedPublicItemProvenance(r.id))) continue;
+      try {
+        built.push({
+          id:              r.id,
+          name:            r.name,
+          weight:          r.weight,
+          cost:            r.cost,
+          properties:      JSON.parse(r.properties) as string[],
+          hasDamageEffect: r.hasDamageEffect === 1,
+          hasFeatures:     r.hasFeatures === 1,
+          weaponRange:     r.weaponRange,
+          srd:             r.srd === null ? undefined : r.srd === 1,
+          rulesetId:       r.rulesetId ? asRulesetId(r.rulesetId) : undefined,
+        });
+      } catch (e) {
+        // One malformed row (e.g. bad `properties` JSON) shouldn't cost
+        // every other item in the index.
+        console.error(`[itemRepo] Skipping malformed item index row "${r.id}":`, e);
+      }
+    }
+    index = built;
+  } catch (e) {
+    // Degrade gracefully — an empty item index means item pickers show
+    // nothing rather than the whole boot sequence aborting downstream
+    // (see app/_layout.tsx boot()).
+    console.error('[itemRepo] init failed — item index unavailable this session:', e);
+  }
 }
 
 function getIndex(): ItemIndexEntry[] {
@@ -48,16 +82,37 @@ function getIndex(): ItemIndexEntry[] {
 }
 
 async function ensureLoaded(ids: string[]): Promise<void> {
-  const missing = Array.from(new Set(ids)).filter(id => !fullCache.has(id));
+  if (SRD_ONLY) return;
+  const requested = new Set(ids);
+  for (const id of ids) {
+    const entry = index.find(item => item.id === id);
+    const baseId = entry ? baseWeaponIdFromName(entry.name) : null;
+    if (baseId && baseId !== id) requested.add(baseId);
+  }
+  const missing = Array.from(requested).filter(id => !fullCache.has(id));
   if (missing.length === 0) return;
-  const db = getContentDb();
-  const placeholders = missing.map(() => '?').join(',');
-  const rows = await db.getAllAsync<{ id: string; data: string }>(
-    `SELECT id, data FROM items WHERE id IN (${placeholders})`,
-    missing
-  );
-  for (const row of rows) {
-    fullCache.set(row.id, JSON.parse(row.data) as Item);
+  try {
+    const db = getContentDb();
+    const placeholders = missing.map(() => '?').join(',');
+    const rows = await db.getAllAsync<{ id: string; data: string }>(
+      `SELECT id, data FROM items WHERE id IN (${placeholders})`,
+      missing
+    );
+    for (const row of rows) {
+      try {
+        fullCache.set(row.id, JSON.parse(row.data) as Item);
+      } catch (e) {
+        // A malformed record just stays missing from the cache — callers
+        // already handle an unresolved item id as "not found," and the id
+        // stays eligible for a retry on the next ensureLoaded() call.
+        console.error(`[itemRepo] Skipping malformed item record "${row.id}":`, e);
+      }
+    }
+  } catch (e) {
+    // Query-level failure (e.g. a SQLite hiccup) — leave `missing` uncached
+    // rather than throwing, so one bad ensureLoaded() call doesn't take
+    // down the caller (e.g. character hydration in characterStore.ts).
+    console.error('[itemRepo] ensureLoaded failed:', e);
   }
 }
 
@@ -65,4 +120,4 @@ function getItemSync(id: string): Item | undefined {
   return fullCache.get(id);
 }
 
-export const itemRepo: ItemRepo = { init, getIndex, ensureLoaded, getItemSync };
+export const itemRepo: ItemRepo = withOfficialItems({ init, getIndex, ensureLoaded, getItemSync });

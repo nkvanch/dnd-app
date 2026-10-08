@@ -13,24 +13,31 @@
 // same role as convert-spells.mjs / parse_items.py.)
 //
 // Re-run this whenever spell content changes, then re-bundle the app so the
-// new assets/content.db is picked up. The `contentVersion` meta row changes
-// on every run, which is what triggers contentDb.ts to re-copy the asset
+// new assets/content.db is picked up. The `contentVersion` meta row is a deterministic hash of authoritative content
+// and changes whenever generated content changes, which is what triggers contentDb.ts to re-copy the asset
 // over a stale previously-installed database on a user's device.
 // ============================================================================
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 
-import { FULL_SPELL_LIBRARY } from '../src/content/spells/index.ts';
-import { FULL_ITEM_LIBRARY } from '../src/content/items/index.ts';
+import { ALL_SPELLS as CATALOG_SPELLS } from '../src/content/spells/index.ts';
+import { ALL_ITEMS as CATALOG_ITEMS } from '../src/content/items/index.ts';
+
+// The app ships NO built-in catalog: spells and items come from installed content packs, so the bundled database is schema-only.
+// GRIMOIRE_CONTENT_DB_FULL=1 writes the whole catalog instead (a development database for tools; never ship it).
+const FULL = process.env.GRIMOIRE_CONTENT_DB_FULL === '1';
+const ALL_SPELLS = FULL ? CATALOG_SPELLS : [];
+const ALL_ITEMS = FULL ? CATALOG_ITEMS : [];
 import { toItemIndexEntry } from '../src/content/itemRepo.types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR   = path.join(__dirname, '..', 'assets');
-const OUT_PATH  = path.join(OUT_DIR, 'content.db');
+const OUT_PATH  = process.env.CONTENT_DB_OUT_PATH ?? path.join(OUT_DIR, 'content.db');
 
-fs.mkdirSync(OUT_DIR, { recursive: true });
+fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
 // Start clean each run — this is a generated artifact, not hand-edited.
 if (fs.existsSync(OUT_PATH)) fs.rmSync(OUT_PATH);
 
@@ -52,6 +59,8 @@ db.exec(`
     concentration INTEGER NOT NULL,
     classes       TEXT,
     srd           INTEGER,
+    rulesetId     TEXT,
+    components    TEXT,
     data          TEXT NOT NULL
   );
   CREATE INDEX idx_spells_name  ON spells(name);
@@ -65,8 +74,10 @@ db.exec(`
     cost            TEXT NOT NULL,
     properties      TEXT NOT NULL,
     hasDamageEffect INTEGER NOT NULL,
+    hasFeatures     INTEGER NOT NULL,
     weaponRange     TEXT,
     srd             INTEGER,
+    rulesetId       TEXT,
     data            TEXT NOT NULL
   );
   CREATE INDEX idx_items_name ON items(name);
@@ -78,17 +89,17 @@ db.exec(`
 `);
 
 const insertSpell = db.prepare(`
-  INSERT INTO spells (id, name, level, school, castingTime, ritual, concentration, classes, srd, data)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO spells (id, name, level, school, castingTime, ritual, concentration, classes, srd, rulesetId, components, data)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const insertItem = db.prepare(`
-  INSERT INTO items (id, name, weight, cost, properties, hasDamageEffect, weaponRange, srd, data)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO items (id, name, weight, cost, properties, hasDamageEffect, hasFeatures, weaponRange, srd, rulesetId, data)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const seenIds = new Set();
 let dupCount = 0;
-for (const spell of FULL_SPELL_LIBRARY) {
+for (const spell of ALL_SPELLS) {
   if (seenIds.has(spell.id)) {
     dupCount++;
     console.warn(`  ! duplicate spell id "${spell.id}" — keeping first occurrence`);
@@ -105,13 +116,15 @@ for (const spell of FULL_SPELL_LIBRARY) {
     spell.concentration ? 1 : 0,
     spell.classes && spell.classes.length > 0 ? JSON.stringify(spell.classes) : null,
     spell.srd === undefined ? null : (spell.srd ? 1 : 0),
+    spell.rulesetId ?? null,
+    spell.components && spell.components.length > 0 ? JSON.stringify(spell.components) : null,
     JSON.stringify(spell)
   );
 }
 
 const seenItemIds = new Set();
 let itemDupCount = 0;
-for (const item of FULL_ITEM_LIBRARY) {
+for (const item of ALL_ITEMS) {
   if (seenItemIds.has(item.id)) {
     itemDupCount++;
     console.warn(`  ! duplicate item id "${item.id}" — keeping first occurrence`);
@@ -126,16 +139,25 @@ for (const item of FULL_ITEM_LIBRARY) {
     item.cost,
     JSON.stringify(item.properties),
     entry.hasDamageEffect ? 1 : 0,
+    entry.hasFeatures ? 1 : 0,
     entry.weaponRange,
     item.srd === undefined ? null : (item.srd ? 1 : 0),
+    item.rulesetId ?? null,
     JSON.stringify(item)
   );
 }
 
-const contentVersion = String(Date.now());
+// The bundled DB version gates native re-imports.  Include the schema shape
+// as well as content: adding the Tier-1 `hasFeatures` column must replace an
+// older installed DB even when the authored spell/item records themselves
+// did not change.
+const CONTENT_SCHEMA_VERSION = 3;
+const contentVersion = createHash('sha256')
+  .update(JSON.stringify({ schemaVersion: CONTENT_SCHEMA_VERSION, spells: ALL_SPELLS, items: ALL_ITEMS }))
+  .digest('hex');
 const setMeta = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');
 setMeta.run('contentVersion', contentVersion);
-setMeta.run('schemaVersion', '1');
+setMeta.run('schemaVersion', String(CONTENT_SCHEMA_VERSION));
 
 db.close();
 
@@ -143,7 +165,8 @@ db.close();
 // expect on disk — src/db/contentDb.ts compares this constant against the
 // app_meta-stored version of whatever's already installed on the device and
 // re-imports the bundled asset (overwriting the stale copy) if they differ.
-const versionFilePath = path.join(__dirname, '..', 'src', 'content', 'contentDbVersion.ts');
+const versionFilePath = process.env.CONTENT_DB_VERSION_OUT_PATH
+  ?? path.join(__dirname, '..', 'src', 'content', 'contentDbVersion.ts');
 fs.writeFileSync(
   versionFilePath,
   `// AUTO-GENERATED by scripts/generate-content-db.mjs — do not hand-edit.\n` +

@@ -1,0 +1,11 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - startup
+tags: [preserve-state, smoke]
+---
+- launchApp
+- assertVisible: { id: home-screen }
+- assertVisible: { id: tab-characters }
+- assertVisible: { id: tab-compendium }
+- tapOn: { id: tab-characters }
+- tapOn: { id: tab-home }
+- assertVisible: { id: home-screen }

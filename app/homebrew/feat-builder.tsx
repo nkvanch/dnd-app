@@ -14,14 +14,30 @@ import {
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ability, DraftTrait, Feat } from '../../src/engine/types';
+import { Ability, DraftTrait, Entity, Feat, RulesetId, FEAT_CHOICE_PREFIX } from '../../src/engine/types';
+import {
+  ChoiceDefinitionListEditor, DraftChoice,
+} from '../../src/components/homebrew/ChoiceDefinitionEditor';
+import { draftChoiceToDefinition, definitionToDraftChoice } from '../../src/content/choiceDefinitionCompiler';
 import { validateFeat } from '../../src/engine/homebrewValidator';
 import { Alert } from '../../src/utils/alert';
 import { useHomebrewStore } from '../../src/store/homebrewStore';
+import { usePendingSelectionStore } from '../../src/store/pendingSelectionStore';
+import { GameRulesetPicker } from '../../src/components/homebrew/GameRulesetPicker';
+import { gameIdForRuleset } from '../../src/content/rulesets';
 import { useSafeGoBack } from '../../src/hooks/useSafeGoBack';
 import { SafeBottomView } from '../../src/components/SafeBottomView';
 import { newDraftTrait, buildTraitFeature, TraitEditorModal } from '../../src/components/homebrew/TraitEditor';
-import { toId } from '../../src/content/traitCompiler';
+import { toId, disambiguateId, EFFECT_KIND_LABELS as TRAIT_KIND_LABELS } from '../../src/content/traitCompiler';
+import { mechanicsLabel } from '../../src/content/featureMechanics';
+import { FULL_FEAT_LIBRARY } from '../../src/content/feats/index';
+import { simulate } from '../../src/engine/simulate';
+import { applyGrant } from '../../src/engine/leveling';
+import { buildFeatSummaryRows } from '../../src/components/FeatPreviewModal';
+import { HomebrewTestModal, Row } from '../../src/components/homebrew/HomebrewTestModal';
+import { useCharacterStore, makeEmptyEntity, DEFAULT_RULES } from '../../src/store/characterStore';
+import { mergeHomebrewDefinition } from '../../src/engine/homebrewRoundTrip';
+import { hydrateLosslessChoices, serializeLosslessChoices, LosslessDraftChoice } from '../../src/engine/homebrewNestedSerializers';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -53,6 +69,8 @@ export default function FeatBuilderScreen() {
   const feats    = useHomebrewStore(s => s.feats);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const editing  = editId ? feats.find(f => f.id === editId) ?? null : null;
+  const draftRulesetId = useCharacterStore(s => s.draft?.rulesetId);
+  const [rulesetId, setRulesetId] = useState<RulesetId | undefined>(() => editing ? editing.rulesetId : draftRulesetId);
 
   const [name,         setName]         = useState('');
   const [prerequisite, setPrerequisite] = useState('');
@@ -60,6 +78,14 @@ export default function FeatBuilderScreen() {
   const [description,  setDescription]  = useState('');
   const [trait,        setTrait]        = useState<DraftTrait>(() => newDraftTrait('Effect'));
   const [traitOpen,    setTraitOpen]    = useState(false);
+  // Re-audit A05: the compiled Feature can't be losslessly reversed into a
+  // DraftTrait (see the hydration effect's own comment), so edit mode starts
+  // the Trait Editor at a blank placeholder — buildFeat() must NOT compile
+  // that placeholder into the saved feature unless the user actually opened
+  // and used the Trait Editor. Tracks whether they did; when they didn't
+  // (e.g. a rename-only edit), the ORIGINAL feature's effects/actions/
+  // resource grants pass through unchanged instead of being silently wiped.
+  const [traitTouched, setTraitTouched] = useState(false);
 
   const [abilityChoiceOn, setAbilityChoiceOn] = useState(false);
   const [abilityOptions,  setAbilityOptions]  = useState<Ability[]>(['str']);
@@ -70,12 +96,16 @@ export default function FeatBuilderScreen() {
     { id: string; label: string; mode: 'proficiency' | 'expertise'; from: 'any' | 'proficient' }[]
   >([]);
 
+  const [pendingChoices, setPendingChoices] = useState<LosslessDraftChoice[]>([]);
   const [saving, setSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testRows, setTestRows] = useState<Row[]>([]);
 
   // Edit mode: hydrate once when the existing feat first resolves.
   useEffect(() => {
     if (!editing) return;
     setName(editing.name);
+    setRulesetId(editing.rulesetId);
     setPrerequisite(editing.prerequisite ?? '');
     setSource(editing.source);
     setDescription(editing.description);
@@ -83,7 +113,9 @@ export default function FeatBuilderScreen() {
     // (effects are already-compiled Effect objects, not the authoring shape) —
     // edit mode starts the effect as "Flavor only" with the saved description,
     // same accepted limitation subclass-builder.tsx's edit-mode recovery has.
-    setTrait({ ...newDraftTrait('Effect'), description: editing.feature.description });
+    const summary = mechanicsLabel([editing.feature]);
+    setTrait({ ...newDraftTrait('Effect'), description: editing.feature.description, ...(summary !== 'Flavor only' ? { mechanicsSummary: summary } : {}) });
+    setTraitTouched(false);
     if (editing.abilityChoice) {
       setAbilityChoiceOn(true);
       setAbilityOptions(editing.abilityChoice.options);
@@ -92,6 +124,14 @@ export default function FeatBuilderScreen() {
     }
     if (editing.skillChoice) {
       setSkillPicks(editing.skillChoice.picks);
+    }
+    // CHOICE-AUTHORING-1: pendingChoices is already the canonical
+    // ChoiceDefinition[] shape (unlike DraftTrait's lossy Feature compile),
+    // so reconstructing via definitionToDraftChoice directly is lossless —
+    // no separate homebrewDraft blob needed for this field.
+    if (editing.pendingChoices) {
+      const reconstructed = hydrateLosslessChoices(editing.pendingChoices, FEAT_CHOICE_PREFIX);
+      if (reconstructed.length > 0) setPendingChoices(reconstructed);
     }
   }, [editing?.id]);
 
@@ -111,9 +151,25 @@ export default function FeatBuilderScreen() {
   }
 
   function buildFeat(): Feat {
-    const id = editing?.id ?? (toId(name) || 'homebrew_feat');
-    const { feature } = buildTraitFeature(trait, { idPrefix: id, sourceKind: 'feat', sourceRefId: id, level: null });
-    return {
+    // HOMEBREW-ID-COLLISION-1: see race-builder.tsx's identical fix.
+    const takenFeatIds = new Set([
+      ...FULL_FEAT_LIBRARY.map(f => f.id),
+      ...feats.filter(f => f.id !== editing?.id).map(f => f.id),
+    ]);
+    const id = editing?.id ?? disambiguateId(toId(name) || 'homebrew_feat', takenFeatIds);
+    // Re-audit A05: if the Trait Editor was never opened/touched this
+    // session, the current `trait` state is still the blank placeholder
+    // hydration seeded it with (see the hydration effect's own comment on
+    // why a lossless reverse-compile isn't possible) — compiling THAT would
+    // silently wipe the original feat's real effects/actions/resource
+    // grants on a rename-only save. Pass the original feature through
+    // verbatim in that case; only recompile from `trait` once the user has
+    // actually used the editor.
+    // Opening the editor without choosing a new effect kind (still "none") keeps the feat's compiled mechanics too.
+    const feature = (editing && (!traitTouched || (trait.effectKind === 'none' && !!trait.mechanicsSummary)))
+      ? editing.feature
+      : buildTraitFeature(trait, { idPrefix: id, sourceKind: 'feat', sourceRefId: id, level: null }).feature;
+    return mergeHomebrewDefinition(editing, {
       id,
       name: name.trim(),
       prerequisite: prerequisite.trim() || null,
@@ -124,10 +180,34 @@ export default function FeatBuilderScreen() {
         ? { options: abilityOptions, amount: parseInt(abilityAmount, 10) || 1, grantsSaveProficiency: grantsSaveProf }
         : undefined,
       skillChoice: skillPicks.length > 0 ? { picks: skillPicks } : undefined,
-    };
+      pendingChoices: serializeLosslessChoices(editing?.pendingChoices, pendingChoices, FEAT_CHOICE_PREFIX),
+      rulesetId,
+    });
   }
 
-  async function handleSave() {
+  // Read-only test on a disposable level-1 scratch entity — no save, no
+  // real character touched anywhere. Uses applyGrant() directly (not
+  // applyFeatToEntity(), whose choice-resolution half has no meaning for a
+  // scratch entity with no pending choices) — a bare feature grant is the
+  // correct, simpler primitive for "what does this do".
+  function runTest() {
+    const feat = buildFeat();
+    const empty = makeEmptyEntity('homebrew-test');
+    const scratch: Entity = { ...empty, identity: { ...empty.identity, level: 1 } };
+    const { before, after } = simulate(scratch, e => applyGrant(e, { kind: 'feature', value: feat.feature }, 0), DEFAULT_RULES);
+    const rows = buildFeatSummaryRows(before, after);
+    // abilityChoice/skillChoice effects are synthesized by AsiFeatPicker's
+    // own local featureToApply() only once a player picks a specific
+    // ability/skill — there's no single answer to preview generically for
+    // an unresolved choice, so disclose the gap rather than guess.
+    if (feat.abilityChoice || feat.skillChoice) {
+      rows.push({ label: "This feat also lets the player choose an ability/skill — the test above doesn't include that choice's effects." });
+    }
+    setTestRows(rows);
+    setTestOpen(true);
+  }
+
+  function handleSave() {
     const feat = buildFeat();
     const { valid, errors, warnings } = validateFeat(feat);
     if (!valid) {
@@ -137,11 +217,11 @@ export default function FeatBuilderScreen() {
     if (warnings.length > 0) {
       Alert.alert('Warnings', warnings.join('\n') + '\n\nSave anyway?', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Save', onPress: () => doSave(feat) },
+        { text: 'Save', onPress: () => { void doSave(feat); } },
       ]);
       return;
     }
-    doSave(feat);
+    void doSave(feat);
   }
 
   async function doSave(feat: Feat) {
@@ -149,6 +229,7 @@ export default function FeatBuilderScreen() {
     setSaving(true);
     try {
       await saveItem('feat', feat);
+      usePendingSelectionStore.getState().setPending('feat_picker', feat.id);
       goBack();
     } catch (e) {
       console.error('[feat-builder] save failed:', e);
@@ -172,6 +253,10 @@ export default function FeatBuilderScreen() {
         <Field label="Name *">
           <TextInput style={styles.input} value={name} onChangeText={setName}
             placeholder="Feat name" placeholderTextColor={Colors.textDim} />
+        </Field>
+
+        <Field label="Game / Ruleset">
+          <GameRulesetPicker value={rulesetId} onChange={setRulesetId} defaultGameId={gameIdForRuleset(draftRulesetId)} />
         </Field>
 
         <Field label="Prerequisite (optional)">
@@ -198,7 +283,7 @@ export default function FeatBuilderScreen() {
         <Field label="Mechanical Effect">
           <Pressable style={styles.effectCard} onPress={() => setTraitOpen(true)}>
             <Text style={styles.effectCardName}>Edit Effect</Text>
-            <Text style={styles.effectCardDesc}>{EFFECT_KIND_LABELS[trait.effectKind]}</Text>
+            <Text style={styles.effectCardDesc}>{trait.effectKind === 'none' && trait.mechanicsSummary ? trait.mechanicsSummary : (EFFECT_KIND_LABELS[trait.effectKind] ?? TRAIT_KIND_LABELS[trait.effectKind])}</Text>
           </Pressable>
         </Field>
 
@@ -274,10 +359,22 @@ export default function FeatBuilderScreen() {
           </Pressable>
         </Field>
 
+        <Field label="Tool / Language / Expertise Choices (optional)">
+          <Text style={styles.emptyNote}>
+            For feats like Prodigy ("one tool proficiency and one language") or Artificer
+            Initiate ("one artisan's tools of your choice") — a real, resolvable choice,
+            distinct from the Ability/Skill Choice blocks above.
+          </Text>
+          <ChoiceDefinitionListEditor choices={pendingChoices} onChange={setPendingChoices} />
+        </Field>
+
       </ScrollView>
 
       <SafeBottomView>
         <View style={styles.footer}>
+          <Pressable style={[styles.testBtn, !name.trim() && styles.btnDisabled]} onPress={runTest} disabled={!name.trim()}>
+            <Text style={styles.testBtnTxt}>🧪 Test</Text>
+          </Pressable>
           <Pressable style={[styles.saveBtn, (!name.trim() || !description.trim() || saving) && styles.btnDisabled]} onPress={handleSave} disabled={!name.trim() || !description.trim() || saving}>
             <Text style={styles.saveBtnTxt}>{saving ? 'Saving...' : 'Save Feat'}</Text>
           </Pressable>
@@ -287,10 +384,17 @@ export default function FeatBuilderScreen() {
       <TraitEditorModal
         trait={traitOpen ? trait : null}
         visible={traitOpen}
-        onChange={setTrait}
+        onChange={t => { setTrait(t); setTraitTouched(true); }}
         onDone={() => setTraitOpen(false)}
-        onDelete={() => { setTrait(newDraftTrait('Effect')); setTraitOpen(false); }}
+        onDelete={() => { setTrait(newDraftTrait('Effect')); setTraitTouched(true); setTraitOpen(false); }}
         excludeKinds={['resource_ability', 'spell_grant']}
+      />
+
+      <HomebrewTestModal
+        visible={testOpen}
+        title={`Testing: ${name.trim() || 'New Feat'}`}
+        rows={testRows}
+        onClose={() => setTestOpen(false)}
       />
     </KeyboardAvoidingView>
   );
@@ -336,8 +440,10 @@ const styles = StyleSheet.create({
   removeBtnTxt: { color: Colors.red, fontSize: FontSize.sm },
   inlineAddBtn: { alignSelf: 'flex-start', paddingVertical: Spacing.xs },
   inlineAddTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
-  footer:    { padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveBtn:   { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  footer:    { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surfaceHigh, borderTopWidth: 1, borderTopColor: Colors.border },
+  testBtn:   { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, alignItems: 'center' },
+  testBtnTxt:  { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  saveBtn:   { flex: 1, backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.4 },
   saveBtnTxt:  { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 });

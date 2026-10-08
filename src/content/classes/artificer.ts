@@ -17,7 +17,19 @@
 // mechanic. See src/content/infusions/index.ts's header comment for the
 // same reasoning applied to individual infusions.
 // ============================================================================
-import { ClassProgression, ChoiceDefinition } from '../../engine/types';
+import { ClassProgression, ChoiceDefinition, ChoiceOption } from '../../engine/types';
+import { ALL_TOOLS } from '../tools';
+
+/** CHOICE-EXPANSION-2: pool of every canonical tool in one category — reused
+ * wherever official content restricts a tool choice to "one artisan's
+ * tools"/"one musical instrument"/"one gaming set" rather than any tool. */
+function toolCategoryPool(...categories: string[]): ChoiceOption[] {
+  return ALL_TOOLS.filter(t => categories.includes(t.category)).map(t => ({ id: t.id, label: t.name, value: t.id }));
+}
+
+function toolChoice(id: string, count: number, prompt: string, pool: ChoiceDefinition['pool'] = 'all'): ChoiceDefinition {
+  return { id, prompt, kind: 'tool', count, pool, grants: [], required: true, resolved: false };
+}
 
 function asiChoice(id: string): ChoiceDefinition {
   return {
@@ -86,7 +98,13 @@ export const artificerProgression: ClassProgression = {
   entries: [
     {
       level: 1, hpDie: 8,
-      choices: [artificerSkillChoice, ...artificerEquipChoices],
+      choices: [
+        artificerSkillChoice, ...artificerEquipChoices,
+        // CHOICE-EXPANSION-2: "one type of artisan's tools of your choice"
+        // was previously not modeled at all (not even flavor text) — Thieves'
+        // Tools/Tinker's Tools below remain the fixed part of this grant.
+        toolChoice('artificer_tool_lvl_1', 1, 'Choose one type of artisan\'s tools.', toolCategoryPool('artisan')),
+      ],
       grants: [
         { kind: 'proficiency', value: { armor: ['light', 'medium'], weapons: ['simple'], tools: ['thieves_tools', 'tinkers_tools'] } },
         { kind: 'feature', value: { id: 'magical_tinkering', name: 'Magical Tinkering', description: "You learn to invest a spark of magic into mundane objects. As an action, touch a Tiny nonmagical object and imbue it with a harmless sensory effect (light, sound, odor, or similar). Flavor-only — no engine hook for freeform touch effects.", source: { kind: 'class', refId: 'artificer' }, level: 1, effects: [], actions: [], choices: [], passive: false } },
@@ -130,7 +148,7 @@ export const artificerProgression: ClassProgression = {
       level: 10, hpDie: 8,
       choices: [infusionChoice('artificer_infusions_10', 2)],
       grants: [
-        { kind: 'feature', value: { id: 'magic_item_adept', name: 'Magic Item Adept', description: 'You can attune to up to 4 magic items at once, and crafting a magic item costs you half the usual gold and time. Flavor-only — the app has no attunement-count enforcement or crafting/downtime system.', source: { kind: 'class', refId: 'artificer' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'magic_item_adept', name: 'Magic Item Adept', description: 'You can attune to up to 4 magic items at once (enforced by the app), and crafting a magic item costs you half the usual gold and time. Flavor-only — no crafting/downtime system exists to reflect the cost/time reduction.', source: { kind: 'class', refId: 'artificer' }, level: 10, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     {
@@ -145,7 +163,7 @@ export const artificerProgression: ClassProgression = {
       level: 14, hpDie: 8,
       choices: [infusionChoice('artificer_infusions_14', 2)],
       grants: [
-        { kind: 'feature', value: { id: 'magic_item_savant', name: 'Magic Item Savant', description: 'You can attune to up to 5 magic items at once, and you ignore all class, race, spell, and level requirements on attuning to or using a magic item. Flavor-only — no attunement/requirement enforcement exists in the engine.', source: { kind: 'class', refId: 'artificer' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'magic_item_savant', name: 'Magic Item Savant', description: 'You can attune to up to 5 magic items at once (enforced by the app), and you ignore all class, race, spell, and level requirements on attuning to or using a magic item. Flavor-only — no requirement-checking exists in the engine to ignore.', source: { kind: 'class', refId: 'artificer' }, level: 14, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     { level: 15, hpDie: 8, choices: [], grants: [] },
@@ -155,7 +173,7 @@ export const artificerProgression: ClassProgression = {
       level: 18, hpDie: 8,
       choices: [infusionChoice('artificer_infusions_18', 2)],
       grants: [
-        { kind: 'feature', value: { id: 'magic_item_master', name: 'Magic Item Master', description: 'You can attune to up to 6 magic items at once. Flavor-only — no attunement-count enforcement exists in the engine.', source: { kind: 'class', refId: 'artificer' }, level: 18, effects: [], actions: [], choices: [], passive: true } },
+        { kind: 'feature', value: { id: 'magic_item_master', name: 'Magic Item Master', description: 'You can attune to up to 6 magic items at once (enforced by the app).', source: { kind: 'class', refId: 'artificer' }, level: 18, effects: [], actions: [], choices: [], passive: true } },
       ],
     },
     { level: 19, hpDie: 8, choices: [asiChoice('artificer_asi_19')], grants: [] },

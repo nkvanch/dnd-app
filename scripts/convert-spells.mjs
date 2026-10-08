@@ -75,6 +75,10 @@ const PI_NAME_RE = /\b(Tasha|Melf|Bigby|Otiluke|Leomund|Otto|Rary|Evard|Nystul|D
 // Xanathar's Guide, Sword Coast Adventurer's Guide, Tasha's Cauldron, and
 // other post-PHB expansion content). Matched by exact spell name.
 const SRD_DENY_NAMES = new Set([
+  // Verified ABSENT from the official SRD 5.1 PDF (Wizards of the Coast, CC-BY-4.0);
+  // previously mis-allowed. Public-metadata fix only: the definitions stay in
+  // the full/private library.
+  'Blade Ward', 'Friends', 'Armor of Agathys', 'Catapult', 'Chromatic Orb', 'Dissonant Whispers', 'Ensnaring Strike', 'Hex', 'Ray of Sickness', 'Witch Bolt', 'Beast Sense', 'Cloud of Daggers', 'Crown of Madness', 'Phantasmal Force', 'Pyrotechnics', 'Elemental Weapon', 'Feign Death', 'Flame Arrows', 'Circle of Power', 'Destructive Wave', 'Swift Quiver', 'Transmute Rock', 'Arcane Gate', 'Telepathy',
   // Cantrips — SCAG/XGE/Tasha's additions
   'Booming Blade', 'Green-Flame Blade', 'Sword Burst', 'Lightning Lure',
   'Control Flames', 'Create Bonfire', 'Frostbite', 'Gust', 'Mold Earth',
@@ -90,7 +94,7 @@ const SRD_DENY_NAMES = new Set([
   // SRD-text verification pass.
   'Arms of Hadar', 'Hunger of Hadar',
   // Confirmed while reading levels 1–2 directly in this session
-  'Earth Tremor', 'Hail of Thorns', 'Illusory Script', 'Cordon of Arrows',
+  'Earth Tremor', 'Hail of Thorns', 'Cordon of Arrows',
   // Confirmed on second pass through level 2 and start of level 3
   'Dust Devil', 'Earthbind', 'Shadow Blade', 'Skywrite', 'Summon Beast',
   'Warding Wind', 'Aura of Vitality', 'Blinding Smite',
@@ -114,38 +118,38 @@ const SRD_DENY_NAMES = new Set([
 // and adding confirmed entries; anything not yet read stays safely unset.
 const SRD_ALLOW_NAMES = new Set([
   // Cantrips
-  'Acid Splash', 'Blade Ward', 'Chill Touch', 'Dancing Lights', 'Druidcraft',
-  'Eldritch Blast', 'Fire Bolt', 'Friends', 'Guidance', 'Light', 'Mage Hand',
+  'Acid Splash', 'Illusory Script', 'Chill Touch', 'Dancing Lights', 'Druidcraft',
+  'Eldritch Blast', 'Fire Bolt', 'Guidance', 'Light', 'Mage Hand',
   'Mending', 'Message', 'Minor Illusion', 'Poison Spray', 'Prestidigitation',
   'Produce Flame', 'Ray of Frost', 'Resistance', 'Sacred Flame', 'Shillelagh',
   'Shocking Grasp', 'Spare the Dying', 'Thaumaturgy', 'True Strike',
   'Vicious Mockery',
   // Level 1 (partial)
-  'Alarm', 'Animal Friendship', 'Armor of Agathys', 'Bane', 'Bless',
-  'Burning Hands', 'Catapult', 'Charm Person', 'Chromatic Orb', 'Color Spray',
+  'Alarm', 'Animal Friendship', 'Bane', 'Bless',
+  'Burning Hands', 'Charm Person', 'Color Spray',
   'Command', 'Comprehend Languages', 'Create or Destroy Water', 'Cure Wounds',
   'Detect Evil and Good', 'Detect Magic', 'Detect Poison and Disease',
-  'Disguise Self', 'Dissonant Whispers', 'Divine Favor', 'Ensnaring Strike',
+  'Disguise Self', 'Divine Favor',
   'Entangle', 'Expeditious Retreat', 'Faerie Fire', 'False Life',
   'Feather Fall', 'Find Familiar', 'Fog Cloud', 'Goodberry', 'Grease',
-  'Guiding Bolt', 'Healing Word', 'Hellish Rebuke', 'Heroism', 'Hex',
+  'Guiding Bolt', 'Healing Word', 'Hellish Rebuke', 'Heroism',
   "Hunter's Mark", 'Identify', 'Inflict Wounds', 'Jump', 'Longstrider',
   'Mage Armor', 'Magic Missile', 'Protection from Evil and Good',
-  'Purify Food and Drink', 'Ray of Sickness', 'Sanctuary', 'Shield',
+  'Purify Food and Drink', 'Sanctuary', 'Shield',
   'Shield of Faith', 'Silent Image', 'Sleep', 'Speak with Animals',
-  'Thunderwave', 'Unseen Servant', 'Witch Bolt',
+  'Thunderwave', 'Unseen Servant',
   // Level 2 (partial)
   'Aid', 'Alter Self', 'Animal Messenger', 'Arcane Lock', 'Augury',
-  'Barkskin', 'Beast Sense', 'Blindness/Deafness', 'Blur', 'Branding Smite',
-  'Calm Emotions', 'Cloud of Daggers', 'Continual Flame', 'Crown of Madness',
+  'Barkskin', 'Blindness/Deafness', 'Blur', 'Branding Smite',
+  'Calm Emotions', 'Continual Flame',
   'Darkness', 'Darkvision', 'Detect Thoughts', 'Enhance Ability',
   'Enlarge/Reduce', 'Enthrall', 'Find Steed', 'Find Traps', 'Flame Blade',
   'Flaming Sphere', 'Gentle Repose', 'Gust of Wind', 'Heat Metal',
   'Hold Person', 'Invisibility', 'Knock', 'Lesser Restoration', 'Levitate',
   'Locate Animals or Plants', 'Locate Object', 'Magic Mouth', 'Magic Weapon',
   'Mirror Image', 'Misty Step', 'Moonbeam', 'Pass without Trace',
-  'Phantasmal Force', 'Prayer of Healing', 'Protection from Poison',
-  'Pyrotechnics', 'Ray of Enfeeblement', 'Rope Trick', 'Scorching Ray',
+  'Prayer of Healing', 'Protection from Poison',
+  'Ray of Enfeeblement', 'Rope Trick', 'Scorching Ray',
   'See Invisibility', 'Shatter', 'Silence', 'Spider Climb', 'Spike Growth',
   'Spiritual Weapon', 'Suggestion', 'Warding Bond', 'Web', 'Zone of Truth',
   // Level 3 (start)
@@ -153,7 +157,7 @@ const SRD_ALLOW_NAMES = new Set([
   // Level 3 (rest, fourth pass)
   'Blink', 'Call Lightning', 'Clairvoyance', 'Conjure Animals',
   'Counterspell', 'Create Food and Water', 'Daylight', 'Dispel Magic',
-  'Elemental Weapon', 'Fear', 'Feign Death', 'Fireball', 'Flame Arrows',
+  'Fear', 'Fireball',
   'Fly', 'Gaseous Form', 'Glyph of Warding', 'Haste', 'Hypnotic Pattern',
   'Lightning Bolt', 'Magic Circle', 'Major Image', 'Mass Healing Word',
   'Meld into Stone', 'Nondetection', 'Phantom Steed', 'Plant Growth',
@@ -172,18 +176,18 @@ const SRD_ALLOW_NAMES = new Set([
   'Ice Storm', 'Locate Creature', 'Phantasmal Killer', 'Polymorph',
   'Stone Shape', 'Stoneskin', 'Wall of Fire',
   // Level 5 (all, fifth pass)
-  'Animate Objects', 'Antilife Shell', 'Awaken', 'Circle of Power',
+  'Animate Objects', 'Antilife Shell', 'Awaken',
   'Cloudkill', 'Commune', 'Commune with Nature', 'Cone of Cold',
   'Conjure Elemental', 'Contact Other Plane', 'Contagion', 'Creation',
-  'Destructive Wave', 'Dispel Evil and Good', 'Dominate Person', 'Dream',
+  'Dispel Evil and Good', 'Dominate Person', 'Dream',
   'Flame Strike', 'Geas', 'Greater Restoration', 'Hallow', 'Hold Monster',
   'Insect Plague', 'Legend Lore', 'Mass Cure Wounds', 'Mislead',
   'Modify Memory', 'Passwall', 'Planar Binding', 'Raise Dead',
-  'Reincarnate', 'Scrying', 'Seeming', 'Swift Quiver', 'Telekinesis',
-  'Teleportation Circle', 'Transmute Rock', 'Tree Stride', 'Wall of Force',
+  'Reincarnate', 'Scrying', 'Seeming', 'Telekinesis',
+  'Teleportation Circle', 'Tree Stride', 'Wall of Force',
   'Wall of Stone',
   // Level 6 (start)
-  'Arcane Gate', 'Blade Barrier',
+  'Blade Barrier',
   // Level 6 (rest, sixth/final pass)
   'Chain Lightning', 'Circle of Death', 'Conjure Fey', 'Contingency',
   'Create Undead', 'Disintegrate', 'Eyebite', 'Find the Path',
@@ -202,7 +206,7 @@ const SRD_ALLOW_NAMES = new Set([
   'Animal Shapes', 'Antimagic Field', 'Antipathy/Sympathy', 'Clone',
   'Control Weather', 'Demiplane', 'Dominate Monster', 'Earthquake',
   'Feeblemind', 'Glibness', 'Holy Aura', 'Incendiary Cloud', 'Maze',
-  'Mind Blank', 'Power Word Stun', 'Sunburst', 'Telepathy',
+  'Mind Blank', 'Power Word Stun', 'Sunburst',
   // Level 9 (all)
   'Astral Projection', 'Foresight', 'Gate', 'Imprisonment', 'Mass Heal',
   'Meteor Swarm', 'Power Word Kill', 'Prismatic Wall', 'Shapechange',
@@ -234,15 +238,33 @@ const SRD_RENAME_MAP = {
   melfs_acid_arrow:               'Acid Arrow',
   leomunds_tiny_hut:              'Tiny Hut',
   nystuls_magic_aura:             "Arcanist's Magic Aura",
-  evards_black_tentacles:         'Black Tentacles',
+  // evards_black_tentacles is deliberately NOT here: the hand-authored
+  // `black_tentacles` (level4.ts) is the canonical public SRD entry, so the
+  // vault's Evard-id duplicate stays hidden (id kept for save compatibility).
   mordenkainens_private_sanctum:  'Private Sanctum',
   otilukes_resilient_sphere:      'Resilient Sphere',
   otilukes_freezing_sphere:       'Freezing Sphere',
   ottos_irresistible_dance:       'Irresistible Dance',
-  // mordenkainens_magnificent_mansion: has a vault markdown parsing bug
-  // (range/components/duration came out empty) — excluded until that's
-  // fixed at the source; renaming wouldn't help since the underlying data
-  // is broken regardless of SRD status. Flagged separately in ROADMAP_1.0.md.
+  // Verified against the official SRD 5.1 PDF: SRD spells published under the
+  // generic (non-Product-Identity) title. Ids stay stable for saved characters.
+  bigbys_hand:                    'Arcane Hand',
+  mordenkainens_sword:            'Arcane Sword',
+  mordenkainens_faithful_hound:   'Faithful Hound',
+  tensers_floating_disk:          'Floating Disk',
+  drawmijs_instant_summons:       'Instant Summons',
+  mordenkainens_magnificent_mansion: 'Magnificent Mansion',
+  leomunds_secret_chest:          'Secret Chest',
+  rarys_telepathic_bond:          'Telepathic Bond',
+  // mordenkainens_magnificent_mansion / mordenkainens_sword: the vault
+  // markdown has a parsing bug (range/components/duration came out empty);
+  // SRD_FIELD_OVERRIDES below patches them from the official SRD 5.1 headers.
+};
+
+// Structured-field corrections for vault entries whose markdown parsed badly.
+// Values are the official SRD 5.1 spell headers.
+const SRD_FIELD_OVERRIDES = {
+  mordenkainens_magnificent_mansion: { castingTime: '1 minute', range: '300 feet', components: ['V', 'S', 'M'], duration: '24 hours', concentration: false },
+  mordenkainens_sword: { castingTime: '1 action', range: '60 feet', components: ['V', 'S', 'M'], duration: 'Concentration, up to 1 minute', concentration: true },
 };
 
 // ── Id aliases ────────────────────────────────────────────────────────────────
@@ -303,15 +325,36 @@ function parseBlock(block) {
 
   const levelMatch = block.match(LEVEL_RE);
   if (!levelMatch) return null; // not a spell block
-  const level  = parseInt(levelMatch[1], 10);
-  const school = cap(levelMatch[2].trim().toLowerCase());
+  const level = parseInt(levelMatch[1], 10);
+
+  // BUG FIX (found during a later filter/sort audit): the level line
+  // captured EVERYTHING after "Level N - " as `school` with no
+  // truncation. Some vault entries put "(ritual)" or "**Classes**: ..."
+  // on that SAME line instead of their own dedicated line, so that text
+  // used to get baked directly into `school` (producing values like
+  // "Conjuration (ritual)" or "Abjuration **Classes**: bard, cleric,
+  // wizard") — and, worse, the classes text landed nowhere useful, since
+  // the separate FIELD.classes regex only matches a **Classes**: line on
+  // its own. Strip both trailing forms here and recover any classes list
+  // found this way as a fallback source.
+  let schoolRaw = levelMatch[2].trim();
+  let classesFromSchoolLine = null;
+  const classesSuffixMatch = schoolRaw.match(/^(.*?)\s*\*\*classes\*\*:\s*(.+)$/i);
+  if (classesSuffixMatch) {
+    schoolRaw = classesSuffixMatch[1].trim();
+    classesFromSchoolLine = classesSuffixMatch[2];
+  } else {
+    const ritualSuffixMatch = schoolRaw.match(/^(.*?)\s*\(ritual\)\s*$/i);
+    if (ritualSuffixMatch) schoolRaw = ritualSuffixMatch[1].trim();
+  }
+  const school = cap(schoolRaw.toLowerCase());
 
   const grab = (re) => { const m = block.match(re); return m ? m[1].trim() : ''; };
   const castingTime = grab(FIELD.castingTime);
   const range       = grab(FIELD.range);
   const components  = parseComponents(grab(FIELD.components));
   const duration    = grab(FIELD.duration);
-  const classesRaw  = grab(FIELD.classes);
+  const classesRaw  = grab(FIELD.classes) || classesFromSchoolLine || '';
   const classes = classesRaw
     ? classesRaw.split(',').map(c => slug(c.trim())).filter(Boolean)
     : [];
@@ -401,6 +444,7 @@ for (const file of FILES) {
     const parsed = parseBlock(block.trim());
     if (!parsed) continue;
     const { spell, srd } = parsed;
+    Object.assign(spell, SRD_FIELD_OVERRIDES[spell.id] || {});
     if (seen.has(spell.id)) {
       console.warn(`! Duplicate id "${spell.id}" (${spell.name}) — keeping first.`);
       continue;

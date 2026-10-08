@@ -18,14 +18,15 @@ import { DraftTrait, TraitEffectKind, Ability } from '../../engine/types';
 import {
   ABILITIES, SENSE_TYPES, MOVE_TYPES, SKILLS, ACTION_TYPES, RECHARGE_TYPES,
   COMMON_TOOLS, COMMON_DAMAGE_TYPES, SPEED_ZEROING_CONDITIONS,
-  toId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace,
+  toId, disambiguateId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace,
+  STAT_BONUS_TARGETS, STAT_OP_LABELS, ARMOR_PROFICIENCIES, WEAPON_PROFICIENCIES, IMMUNITY_CONDITIONS, EFFECT_KIND_LABELS,
 } from '../../content/traitCompiler';
 import type { MoveType, DraftSubrace } from '../../content/traitCompiler';
 // The one trait-editor field needing live content-DB/store access — every
 // other panel here is pure form state. Only ever reads id/name/level/
 // castingTime, so the lightweight Tier-1 index is sufficient — no need to
 // fetch full spell records just to search/reference a spell by name.
-import { spellRepo } from '../../content/spellRepo';
+import { mergeSpellIndex } from '../../content/contentResolution';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { SafeBottomView } from '../SafeBottomView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -33,7 +34,7 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 export {
   ABILITIES, SENSE_TYPES, MOVE_TYPES, SKILLS, ACTION_TYPES, RECHARGE_TYPES,
   COMMON_TOOLS, COMMON_DAMAGE_TYPES, SPEED_ZEROING_CONDITIONS,
-  toId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace,
+  toId, disambiguateId, newDraftTrait, buildTraitFeature, newDraftSubrace, buildSubrace, EFFECT_KIND_LABELS,
 };
 export type { MoveType, DraftSubrace };
 
@@ -65,6 +66,69 @@ export function AbilityScoreGrid({ values, onChange }: {
 
 // ── Trait editor modal — the "droppable window" ───────────────────────────────
 
+/**
+ * "Forces a saving throw" for a limited-use ability. The DC scales with the character by default (8 + proficiency +
+ * an ability modifier, the way class features do); it can instead follow their spell save DC, or be a fixed number.
+ */
+function SaveDcEditor({ trait, set }: { trait: DraftTrait; set: (patch: Partial<DraftTrait>) => void }) {
+  const on = !!trait.saveEnabled;
+  const mode = trait.saveDcMode ?? 'ability';
+  return (
+    <View style={{ gap: Spacing.xs }}>
+      <Pressable style={styles.toggleRow} onPress={() => set({ saveEnabled: !on })}>
+        <View style={[styles.checkbox, on && styles.checkboxChecked]} />
+        <Text style={styles.toggleTxt}>Targets make a saving throw against this</Text>
+      </Pressable>
+      {on && (
+        <>
+          <Text style={styles.inlineLabel}>They save with</Text>
+          <View style={styles.chipWrap}>
+            {ABILITIES.map(a => (
+              <Pressable key={a} style={[styles.chip, (trait.saveAbility ?? 'wis') === a && styles.chipActive]} onPress={() => set({ saveAbility: a })}>
+                <Text style={[styles.chipTxt, (trait.saveAbility ?? 'wis') === a && styles.chipTxtActive]}>{a.toUpperCase()}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.inlineLabel}>Save DC</Text>
+          <View style={styles.chipWrap}>
+            {([['ability', '8 + proficiency + ability'], ['spell', 'Spell save DC'], ['fixed', 'Fixed number']] as const).map(([k, label]) => (
+              <Pressable key={k} style={[styles.chip, mode === k && styles.chipActive]} onPress={() => set({ saveDcMode: k })}>
+                <Text style={[styles.chipTxt, mode === k && styles.chipTxtActive]}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {mode === 'ability' && (
+            <View style={styles.chipWrap}>
+              {ABILITIES.map(a => (
+                <Pressable key={a} style={[styles.chip, (trait.saveDcAbility ?? 'cha') === a && styles.chipActive]} onPress={() => set({ saveDcAbility: a })}>
+                  <Text style={[styles.chipTxt, (trait.saveDcAbility ?? 'cha') === a && styles.chipTxtActive]}>{a.toUpperCase()}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {mode === 'fixed' && (
+            <View style={styles.rowInline}>
+              <Text style={styles.inlineLabel}>DC:</Text>
+              <TextInput style={[styles.input, styles.smallInput]} value={trait.saveDcFixed ?? ''} onChangeText={v => set({ saveDcFixed: v })} keyboardType="number-pad" />
+            </View>
+          )}
+          <Text style={styles.effectNote}>
+            {mode === 'ability' ? 'Grows with the character: their proficiency bonus and that ability modifier are added automatically.'
+              : mode === 'spell' ? "Uses the character's own spell save DC." : 'Never changes with level.'}
+          </Text>
+        </>
+      )}
+    </View>
+  );
+}
+
+/** One line under the recharge chips saying what the app will and won't do for the chosen trigger. */
+function RechargeHint({ recharge }: { recharge: 'short_rest' | 'long_rest' | 'dawn' | 'other' }) {
+  if (recharge === 'dawn') return <Text style={styles.chipTxt}>Restored by the sheet's ☀ Dawn button, not by a rest.</Text>;
+  if (recharge === 'other') return <Text style={styles.chipTxt}>Not restored automatically: tap + on the sheet when it recharges.</Text>;
+  return null;
+}
+
 export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, excludeKinds }: {
   trait: DraftTrait | null;
   visible: boolean;
@@ -86,11 +150,7 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
   const homebrewSpells = useHomebrewStore(s => s.spells);
   const [cantripSearch, setCantripSearch] = useState('');
   const [leveledSearch, setLeveledSearch] = useState('');
-  const allSpells = useMemo(() => {
-    const homebrewIds = new Set(homebrewSpells.map(s => s.id));
-    const official     = spellRepo.getIndex().filter(s => !homebrewIds.has(s.id));
-    return [...official, ...homebrewSpells];
-  }, [homebrewSpells]);
+  const allSpells = useMemo(() => mergeSpellIndex(homebrewSpells), [homebrewSpells]);
 
   if (!trait) return null;
   const set = (patch: Partial<DraftTrait>) => onChange({ ...trait, ...patch });
@@ -104,10 +164,12 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
       { key: 'ability_score', label: 'Ability score bonus' },
       { key: 'unarmored_defense', label: 'Unarmored Defense (AC formula)' },
       { key: 'ac_bonus', label: 'AC bonus (+N, stacks)' },
+      { key: 'stat_bonus', label: 'Speed, initiative, saves & more' },
     ] },
     { group: 'Proficiencies', kinds: [
       { key: 'skill_proficiency', label: 'Skill proficiency' },
       { key: 'tool_proficiency', label: 'Tool/kit proficiency' },
+      { key: 'gear_proficiency', label: 'Weapon/armor proficiency' },
     ] },
     { group: 'Senses & Movement', kinds: [
       { key: 'sense', label: 'Grants a sense' },
@@ -118,6 +180,7 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
       { key: 'damage_resistance', label: 'Resistance' },
       { key: 'damage_immunity', label: 'Immunity' },
       { key: 'damage_vulnerability', label: 'Vulnerability' },
+      { key: 'condition_immunity', label: 'Condition immunity' },
     ] },
     { group: 'Advantage/Reminders', kinds: [
       { key: 'advantage_disadvantage', label: 'Advantage/Disadvantage' },
@@ -138,9 +201,11 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDone}>
-      <Pressable style={styles.backdrop} onPress={onDone}>
+      <View style={styles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onDone} accessible={false} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
-        <Pressable style={styles.traitModalSheet} onPress={e => e.stopPropagation()}>
+        <View style={styles.traitModalSheet}>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.traitModalTitle}>{trait.name}</Text>
 
@@ -242,6 +307,96 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
                   penalty. For a trait that REPLACES the whole AC formula instead (like Monk's
                   Unarmored Defense itself), use "Unarmored Defense (AC formula)" above.
                 </Text>
+              </View>
+            )}
+
+            {trait.effectKind === 'stat_bonus' && (() => {
+              const spec = STAT_BONUS_TARGETS.find(s => s.key === (trait.statTarget ?? 'speed')) ?? STAT_BONUS_TARGETS[0];
+              const op = spec.ops.includes(trait.statOperation ?? 'add') ? (trait.statOperation ?? 'add') : 'add';
+              return (
+                <View style={styles.effectPanel}>
+                  <Text style={styles.inlineLabel}>Which stat</Text>
+                  <View style={styles.chipWrap}>
+                    {STAT_BONUS_TARGETS.map(s => (
+                      <Pressable key={s.key} style={[styles.chip, spec.key === s.key && styles.chipActive]}
+                        onPress={() => set({ statTarget: s.key, statOperation: s.ops.includes(trait.statOperation ?? 'add') ? trait.statOperation : 'add' })}>
+                        <Text style={[styles.chipTxt, spec.key === s.key && styles.chipTxtActive]}>{s.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {spec.key === 'saving_throw' && (
+                    <View style={styles.chipWrap}>
+                      {(['all', ...ABILITIES] as const).map(a => (
+                        <Pressable key={a} style={[styles.chip, (trait.statSaveAbility ?? 'all') === a && styles.chipActive]}
+                          onPress={() => set({ statSaveAbility: a })}>
+                          <Text style={[styles.chipTxt, (trait.statSaveAbility ?? 'all') === a && styles.chipTxtActive]}>{a === 'all' ? 'All saves' : a.toUpperCase()}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                  {spec.ops.length > 1 && (
+                    <View style={styles.chipWrap}>
+                      {spec.ops.map(o => (
+                        <Pressable key={o} style={[styles.chip, op === o && styles.chipActive]} onPress={() => set({ statOperation: o })}>
+                          <Text style={[styles.chipTxt, op === o && styles.chipTxtActive]}>{STAT_OP_LABELS[o]}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                  <View style={styles.rowInline}>
+                    <Text style={styles.inlineLabel}>{op === 'scale' ? 'Multiplier:' : op === 'set' ? 'Set to:' : 'Bonus:'}</Text>
+                    <TextInput style={[styles.input, styles.smallInput]} value={trait.statAmount ?? ''}
+                      onChangeText={v => set({ statAmount: v })} keyboardType="numbers-and-punctuation" />
+                  </View>
+                  <Text style={styles.effectNote}>
+                    {op === 'scale'
+                      ? 'Multiplies the finished value, after every bonus (2 doubles it, 0.5 halves it, rounded down).'
+                      : op === 'set'
+                        ? 'Replaces the normal value (the highest "set" wins; bonuses still add on top).'
+                        : 'Adds to the stat. Use a negative number for a penalty.'}
+                  </Text>
+                </View>
+              );
+            })()}
+
+            {trait.effectKind === 'gear_proficiency' && (
+              <View style={styles.effectPanel}>
+                <View style={styles.chipWrap}>
+                  {(['armor', 'weapon'] as const).map(k => (
+                    <Pressable key={k} style={[styles.chip, (trait.gearKind ?? 'armor') === k && styles.chipActive]}
+                      onPress={() => set({ gearKind: k, gearName: k === 'armor' ? 'heavy' : 'martial' })}>
+                      <Text style={[styles.chipTxt, (trait.gearKind ?? 'armor') === k && styles.chipTxtActive]}>{k === 'armor' ? 'Armor' : 'Weapon'}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.chipWrap}>
+                  {((trait.gearKind ?? 'armor') === 'armor' ? ARMOR_PROFICIENCIES : WEAPON_PROFICIENCIES).map(o => (
+                    <Pressable key={o.key} style={[styles.chip, (trait.gearName ?? '') === o.key && styles.chipActive]} onPress={() => set({ gearName: o.key })}>
+                      <Text style={[styles.chipTxt, (trait.gearName ?? '') === o.key && styles.chipTxtActive]}>{o.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {(trait.gearKind ?? 'armor') === 'weapon' && (
+                  <>
+                    <Text style={styles.inlineLabel}>Or a specific weapon</Text>
+                    <TextInput style={styles.input} value={trait.gearName ?? ''} onChangeText={v => set({ gearName: v })}
+                      placeholder="e.g. rapier, longbow" placeholderTextColor={Colors.textDim} />
+                  </>
+                )}
+              </View>
+            )}
+
+            {trait.effectKind === 'condition_immunity' && (
+              <View style={styles.effectPanel}>
+                <View style={styles.chipWrap}>
+                  {IMMUNITY_CONDITIONS.map(c => (
+                    <Pressable key={c.key} style={[styles.chip, (trait.conditionImmunityTarget ?? '') === c.key && styles.chipActive]}
+                      onPress={() => set({ conditionImmunityTarget: c.key })}>
+                      <Text style={[styles.chipTxt, (trait.conditionImmunityTarget ?? '') === c.key && styles.chipTxtActive]}>{c.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.effectNote}>The character can't be given this condition (the app refuses to apply it).</Text>
               </View>
             )}
 
@@ -497,8 +652,9 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
                         {g.recharge === 'other' && (
                           <TextInput style={styles.input} value={g.rechargeOther}
                             onChangeText={v => updateGrant(g.localId, { rechargeOther: v })}
-                            placeholder="e.g. Dawn" placeholderTextColor={Colors.textDim} />
+                            placeholder="e.g. once per encounter" placeholderTextColor={Colors.textDim} />
                         )}
+                        <RechargeHint recharge={g.recharge} />
                         <View style={styles.rowInline}>
                           <Text style={styles.inlineLabel}>Uses:</Text>
                           <TextInput style={[styles.input, styles.smallInput]} value={g.uses}
@@ -581,8 +737,10 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
                 {trait.recharge === 'other' && (
                   <TextInput style={styles.input} value={trait.rechargeOther}
                     onChangeText={v => set({ rechargeOther: v })}
-                    placeholder="e.g. Dawn, 1/day" placeholderTextColor={Colors.textDim} />
+                    placeholder="e.g. once per encounter" placeholderTextColor={Colors.textDim} />
                 )}
+                <RechargeHint recharge={trait.recharge} />
+                <SaveDcEditor trait={trait} set={set} />
                 <View style={styles.rowInline}>
                   <Text style={styles.inlineLabel}>Uses per recharge:</Text>
                   <TextInput style={[styles.input, styles.smallInput]} value={trait.uses}
@@ -636,8 +794,10 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
                     {trait.recharge === 'other' && (
                       <TextInput style={styles.input} value={trait.rechargeOther}
                         onChangeText={v => set({ rechargeOther: v })}
-                        placeholder="e.g. Dawn, 1/day" placeholderTextColor={Colors.textDim} />
+                        placeholder="e.g. once per encounter" placeholderTextColor={Colors.textDim} />
                     )}
+                    <RechargeHint recharge={trait.recharge} />
+                    <SaveDcEditor trait={trait} set={set} />
                     <View style={styles.rowInline}>
                       <Text style={styles.inlineLabel}>Uses per recharge:</Text>
                       <TextInput style={[styles.input, styles.smallInput]} value={trait.uses}
@@ -664,18 +824,20 @@ export function TraitEditorModal({ trait, visible, onChange, onDone, onDelete, e
               </View>
             </SafeBottomView>
           </ScrollView>
-        </Pressable>
+        </View>
         </KeyboardAvoidingView>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
 
 // ── Trait list + add-by-name flow ─────────────────────────────────────────────
 
-export function TraitListEditor({ traits, onChange }: {
+export function TraitListEditor({ traits, onChange, excludeKinds }: {
   traits: DraftTrait[];
   onChange: (traits: DraftTrait[]) => void;
+  /** Forwarded to the per-trait TraitEditorModal — see its own doc comment. */
+  excludeKinds?: TraitEffectKind[];
 }) {
   const [newName, setNewName] = useState('');
   const [openTraitId, setOpenTraitId] = useState<string | null>(null);
@@ -706,7 +868,7 @@ export function TraitListEditor({ traits, onChange }: {
           <View style={{ flex: 1 }}>
             <Text style={styles.traitCardName}>{t.name}</Text>
             <Text style={styles.traitCardMeta}>
-              {(t.effectKind === 'none' ? 'Flavor only' :
+              {(t.effectKind === 'none' ? (t.mechanicsSummary ?? 'Flavor only') :
                t.effectKind === 'ability_score' ? `+${t.abilityAmount || 0} ${t.abilityTarget.toUpperCase()}` :
                t.effectKind === 'unarmored_defense' ? `AC = ${t.unarmoredBase} + ${t.unarmoredAbilities.map(a => a.toUpperCase()).join('+') || '—'}` :
                t.effectKind === 'ac_bonus' ? `AC ${parseInt(t.acBonusAmount, 10) >= 0 ? '+' : ''}${t.acBonusAmount || 0}` :
@@ -720,6 +882,9 @@ export function TraitListEditor({ traits, onChange }: {
                t.effectKind === 'damage_immunity' ? `Immune to ${t.damageType || '(unspecified)'}` :
                t.effectKind === 'damage_vulnerability' ? `Vulnerable to ${t.damageType || '(unspecified)'}` :
                t.effectKind === 'spell_grant' ? `${t.spellGrantCantripId ? '1 cantrip' : '0 cantrips'} + ${t.spellGrants.length} leveled spell${t.spellGrants.length !== 1 ? 's' : ''}` :
+               t.effectKind === 'stat_bonus' ? `${STAT_BONUS_TARGETS.find(s => s.key === (t.statTarget ?? 'speed'))?.label ?? 'Stat'}: ${t.statOperation === 'scale' ? '×' : t.statOperation === 'set' ? '= ' : (parseFloat(t.statAmount ?? '') >= 0 ? '+' : '')}${t.statAmount ?? ''}` :
+               t.effectKind === 'gear_proficiency' ? `Proficiency: ${(t.gearName ?? '') || '(unset)'} ${t.gearKind === 'weapon' ? 'weapons' : 'armor'}` :
+               t.effectKind === 'condition_immunity' ? `Immune to ${t.conditionImmunityTarget || '(unset)'}` :
                `${t.uses}/${t.recharge === 'other' ? (t.rechargeOther || 'other') : t.recharge === 'short_rest' ? 'short rest' : 'long rest'}`)
                + (t.limitedUse && t.effectKind !== 'resource_ability' && t.effectKind !== 'spell_grant'
                    ? ` · ${t.uses}/${t.recharge === 'other' ? (t.rechargeOther || 'other') : t.recharge === 'short_rest' ? 'short rest' : 'long rest'}`
@@ -749,6 +914,7 @@ export function TraitListEditor({ traits, onChange }: {
         onChange={updateTrait}
         onDone={() => setOpenTraitId(null)}
         onDelete={() => openTrait && deleteTrait(openTrait.localId)}
+        excludeKinds={excludeKinds}
       />
     </View>
   );

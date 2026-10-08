@@ -8,7 +8,21 @@
 // Cancelling sets active=false; recomputeDerived restores original values.
 // ============================================================================
 import { Entity, DmOverride, CampaignRules, DERIVED_NUMERIC_KEYS } from './types';
-import { recomputeDerived } from './pipeline';
+import { effectiveAbilityScores, modifier, recomputeDerived } from './pipeline';
+
+function reconcileConOverrideHp(previous: Entity, next: Entity): Entity {
+  const level = next.identity.level;
+  if (level <= 0) return next;
+  const delta = (modifier(effectiveAbilityScores(next).con) - modifier(effectiveAbilityScores(previous).con)) * level;
+  if (delta === 0) return next;
+  const maximum = Math.max(1, next.resources.hp.maximum + delta);
+  return { ...next, resources: { ...next.resources, hp: {
+    ...next.resources.hp,
+    maximum,
+    // Preserve damage taken. A maximum reduction clamps current into range.
+    current: Math.min(maximum, Math.max(0, next.resources.hp.current + delta)),
+  } } };
+}
 
 function uuid(): string {
   const s4 = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
@@ -27,7 +41,8 @@ export function applyDmOverride(
 ): Entity {
   // Guard: only allow scalar numeric DerivedStats targets
   const isSavingThrow = override.stat.startsWith('savingThrows.');
-  if (!DERIVED_NUMERIC_KEYS.has(override.stat) && !isSavingThrow) {
+  const isAbility = ['str','dex','con','int','wis','cha'].includes(override.stat);
+  if (!DERIVED_NUMERIC_KEYS.has(override.stat) && !isSavingThrow && !isAbility) {
     console.warn(`[dmOverride] Attempted override of non-scalar stat: "${override.stat}". Ignored.`);
     return entity;
   }
@@ -45,7 +60,8 @@ export function applyDmOverride(
     dmOverrides: [...(entity.dmOverrides ?? []), newOverride],
   };
 
-  return recomputeDerived(updated, rules);
+  const recomputed = recomputeDerived(updated, rules);
+  return override.stat === 'con' ? reconcileConOverrideHp(entity, recomputed) : recomputed;
 }
 
 /**
@@ -67,7 +83,9 @@ export function cancelDmOverride(
         : o
     ),
   };
-  return recomputeDerived(updated, rules);
+  const recomputed = recomputeDerived(updated, rules);
+  const cancelled = (entity.dmOverrides ?? []).find(o => o.id === overrideId && o.active);
+  return cancelled?.stat === 'con' ? reconcileConOverrideHp(entity, recomputed) : recomputed;
 }
 
 /**
@@ -88,7 +106,8 @@ export function cancelAllOverridesForStat(
         : o
     ),
   };
-  return recomputeDerived(updated, rules);
+  const recomputed = recomputeDerived(updated, rules);
+  return stat === 'con' ? reconcileConOverrideHp(entity, recomputed) : recomputed;
 }
 
 /**

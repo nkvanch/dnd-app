@@ -1,12 +1,14 @@
+import { setManualEntitlement } from '../../engine/entitlements';
 // app/sheet/TabAbilities.tsx
 // Tab 3 — Ability scores, saving throws, skills.
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Modal, TextInput } from 'react-native';
 import { Entity, Ability, SkillName, CampaignRules } from '../../engine/types';
-import { modifier, collectAllEffects, applyStatModifiers, recomputeDerived } from '../../engine/pipeline';
+import { modifier, effectiveAbilityScores, recomputeDerived } from '../../engine/pipeline';
 import { applyDmOverride, getActiveOverrides, cancelDmOverride } from '../../engine/dmOverride';
 import { AuditModal } from './AuditModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ABILITIES: { key: Ability; label: string }[] = [
   { key: 'str', label: 'STR' },
@@ -48,10 +50,9 @@ function cycleSkillProficiency(entity: Entity, skill: SkillName, rules: Campaign
     : !entry.expertise
       ? { ...entry, trained: true,  expertise: true }
       : { ...entry, trained: false, expertise: false };
-  return recomputeDerived({
-    ...entity,
-    skills: { ...entity.skills, skills: { ...entity.skills.skills, [skill]: next } },
-  }, rules);
+  return recomputeDerived(setManualEntitlement(
+    setManualEntitlement(entity, 'skill_proficiency', skill, next.trained),
+    'skill_expertise', skill, next.expertise), rules);
 }
 
 function toggleSaveProficiency(entity: Entity, ability: Ability, rules: CampaignRules): Entity {
@@ -68,17 +69,13 @@ function toggleSaveProficiency(entity: Entity, ability: Ability, rules: Campaign
 function addProficiencyItem(entity: Entity, category: ProficiencyCategory, value: string, rules: CampaignRules): Entity {
   const trimmed = value.trim();
   if (!trimmed || entity.proficiencies[category].includes(trimmed)) return entity;
-  return recomputeDerived({
-    ...entity,
-    proficiencies: { ...entity.proficiencies, [category]: [...entity.proficiencies[category], trimmed] },
-  }, rules);
+  const kinds = { armor: 'armor_proficiency', weapons: 'weapon_proficiency', tools: 'tool_proficiency', languages: 'language' } as const;
+  return recomputeDerived(setManualEntitlement(entity, kinds[category], trimmed, true), rules);
 }
 
 function removeProficiencyItem(entity: Entity, category: ProficiencyCategory, value: string, rules: CampaignRules): Entity {
-  return recomputeDerived({
-    ...entity,
-    proficiencies: { ...entity.proficiencies, [category]: entity.proficiencies[category].filter(v => v !== value) },
-  }, rules);
+  const kinds = { armor: 'armor_proficiency', weapons: 'weapon_proficiency', tools: 'tool_proficiency', languages: 'language' } as const;
+  return recomputeDerived(setManualEntitlement(entity, kinds[category], value, false), rules);
 }
 
 const MANUAL_EDIT_LABEL = 'Manual edit';
@@ -162,6 +159,7 @@ function ProficienciesModal({ visible, entity, rules, onUpdate, onClose }: {
   const [category, setCategory] = useState<ProficiencyCategory>('tools');
   const [text, setText] = useState('');
   const [bonusesOpen, setBonusesOpen] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const CATEGORY_TABS: { key: ProficiencyCategory; label: string }[] = [
     { key: 'tools',     label: 'Tools' },
@@ -178,8 +176,10 @@ function ProficienciesModal({ visible, entity, rules, onUpdate, onClose }: {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={pStyles.backdrop} onPress={onClose}>
-        <Pressable style={pStyles.sheet} onPress={e => e.stopPropagation()}>
+      <View style={pStyles.backdrop}>
+        {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+        <View style={[pStyles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={pStyles.title}>Proficiencies</Text>
 
@@ -300,8 +300,8 @@ function ProficienciesModal({ visible, entity, rules, onUpdate, onClose }: {
               <Text style={pStyles.doneBtnTxt}>Done</Text>
             </Pressable>
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -372,7 +372,7 @@ interface AbilitiesProps {
   onEntityUpdate: (updated: Entity) => void;
 }
 
-export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEntityUpdate }: AbilitiesProps) {
+function TabAbilitiesInner({ entity, rules, isDm, campaignId, deviceId, onEntityUpdate }: AbilitiesProps) {
   const [auditStat,  setAuditStat]  = useState<string | null>(null);
   const [auditLabel, setAuditLabel] = useState('');
   const [profOpen, setProfOpen] = useState(false);
@@ -382,24 +382,22 @@ export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEnti
     setAuditLabel(label);
   }
 
-  const { stats, derived, proficiencies, skills } = entity;
+  const { derived, proficiencies, skills } = entity;
 
   // Effective stats include race/feature bonuses — matches the engine's derived values.
-  const effectiveStats = applyStatModifiers(stats, collectAllEffects(entity));
+  const effectiveStats = effectiveAbilityScores(entity);
 
-  // Passive score = 10 + ability mod + proficiency (×2 for expertise) + bonus.
-  const passiveScore = (skill: SkillName): number => {
-    const entry = skills.skills[skill];
-    if (!entry) return 10;
-    const baseMod  = modifier(effectiveStats[entry.ability]);
-    const profMult = entry.expertise ? 2 : entry.trained ? 1 : 0;
-    return 10 + baseMod + derived.proficiencyBonus * profMult + (entry.bonus ?? 0);
-  };
-
-  const PASSIVES: { skill: SkillName; label: string }[] = [
-    { skill: 'perception',    label: 'Passive Perception' },
-    { skill: 'investigation', label: 'Passive Investigation' },
-    { skill: 'insight',       label: 'Passive Insight' },
+  // Bug fix (architecture review U6): this used to hand-recompute the
+  // passive-score formula independently of entity.derived, so it had no way
+  // to see a DM override on the passive score (entity.derived.
+  // passivePerception correctly folds those in via recomputeDerived) — a
+  // player could set a Manual Bonus override on Passive Perception and see
+  // it apply everywhere on the sheet except here. Now reads the already-
+  // computed, override-aware, Observant-feat-aware derived values directly.
+  const PASSIVES: { skill: SkillName; stat: keyof Pick<typeof derived, 'passivePerception' | 'passiveInvestigation' | 'passiveInsight'>; label: string }[] = [
+    { skill: 'perception',    stat: 'passivePerception',    label: 'Passive Perception' },
+    { skill: 'investigation', stat: 'passiveInvestigation', label: 'Passive Investigation' },
+    { skill: 'insight',       stat: 'passiveInsight',       label: 'Passive Insight' },
   ];
 
   return (
@@ -474,10 +472,10 @@ export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEnti
       {/* Passive Scores */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>PASSIVE SCORES</Text>
-        {PASSIVES.map(({ skill, label }) => (
-          <Pressable key={skill} style={styles.saveRow} onPress={() => openAudit(skill, label)}>
+        {PASSIVES.map(({ skill, stat, label }) => (
+          <Pressable key={skill} style={styles.saveRow} onPress={() => openAudit(stat, label)}>
             <Text style={styles.saveLabel}>{label}</Text>
-            <Text style={styles.saveVal}>{passiveScore(skill)}</Text>
+            <Text style={styles.saveVal}>{derived[stat]}</Text>
           </Pressable>
         ))}
       </View>
@@ -532,6 +530,9 @@ export function TabAbilities({ entity, rules, isDm, campaignId, deviceId, onEnti
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: see TabCharacter.tsx's identical comment.
+export const TabAbilities = memo(TabAbilitiesInner);
 
 const styles = StyleSheet.create({
   scroll:   { flex: 1 },

@@ -1,63 +1,79 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { findBeastForm } from '../../content/runtimeRules';
+import { MissingPacksBanner } from './MissingPacksBanner';
+import { exhaustionEffectText } from '../../engine/exhaustion';
+import { useSpellPayment } from './SpellPaymentChooser';
 // app/sheet/TabCharacter.tsx
 // Tab 1 — Combat dashboard. Players live here.
 // Includes: HP, stat row, conditions/exhaustion, resources, spell slots,
 //           death saves (when HP=0), concentration check, level-up button.
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo, memo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Modal, TextInput,
 } from 'react-native';
-import { Entity, CampaignRules, CharClass, ActionCard } from '../../engine/types';
+import { Entity, CampaignRules, CharClass, ActionCard, asClassId, DurationTracker, ActivationOption, matchesRuleset, Ability } from '../../engine/types';
 import { useCharacterStore } from '../../store/characterStore';
 import { hasActiveOverride } from '../../engine/dmOverride';
-import { dropConcentration } from '../../engine/combat';
-import { recomputeDerived, modifier } from '../../engine/pipeline';
-import { levelUp, levelUpClass } from '../../engine/leveling';
+import { toggleActionEconomy, parseRechargeThreshold, rollRecharge, concentrationLinkedEffectNames } from '../../engine/combat';
+import { confirmEndConcentration } from './spellTabUi';
+import { recomputeDerived, modifier, effectiveAbilityScores } from '../../engine/pipeline';
+import { rollDie } from '../../engine/leveling';
+import { levelUp, levelUpClass, calculateLevelUpHpGain, isValidHpRoll } from '../../engine/leveling';
+import { simulate } from '../../engine/simulate';
 import { getClassLevels } from '../../engine/multiclass';
-import { spendHitDie, discardHitDie } from '../../engine/rest';
-import { rollD20, rollExpression } from '../../engine/dice';
+import { spendHitDie, spendHitDieManual, currentHitDieSize, entityHitDieTier, spendableHitDicePools, hasSpentDawnResources, takeDawn } from '../../engine/rest';
+import { bumpedHitDie } from '../../engine/hitDieTier';
+import { rollExpression, doubleDiceCount } from '../../engine/dice';
+import { useDiceLogStore } from '../../store/diceLogStore';
 import { ALL_PROGRESSIONS } from '../../content/classes/index';
 import { getProgressionForClass, mergeSubclassIntoProgression } from '../../content/classes/progressions';
 import { getSubclassEntryMerged } from '../../content/subclasses/subclassBrowse';
-import { globalContentDB } from '../../content/classes/library';
 import { spellRepo } from '../../content/spellRepo';
 import { spellIdsOnEntity } from '../../content/spellRepo.types';
 import { useHomebrewStore } from '../../store/homebrewStore';
 import { AsiFeatPicker } from '../AsiFeatPicker';
 import { AuditModal } from './AuditModal';
 import { HpModal } from './HpModal';
+import { HeroicInspirationPanel } from './HeroicInspirationPanel';
+import { ConcentrationModal } from './ConcentrationModal';
 import { CompanionSection } from './CompanionSection';
-import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag } from './TabActions';
+import { ActionCardRow, UseModal, applyActionCardUse, toggleFavoriteTag, isFavoriteCard, actionCardIdentity, ActivationOptionModal, useCardContent } from './TabActions';
+import { LevelUpPreviewModal } from './LevelUpPreviewModal';
+import { ProgressionPlannerModal } from './ProgressionPlannerModal';
+import { MulticlassProgressionPlannerModal } from './MulticlassProgressionPlannerModal';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 // Class progressions are looked up from the content library — no hardcoded names.
 // ALL_PROGRESSIONS is a Record<classId, ClassProgression> covering all 12 classes.
 
-// ── Exhaustion level descriptions ─────────────────────────────────────────────
-
-const EXHAUSTION_EFFECTS: Record<number, string> = {
-  1: 'Disadvantage on ability checks',
-  2: 'Speed halved',
-  3: 'Disadvantage on attacks and saving throws',
-  4: 'Hit point maximum halved',
-  5: 'Speed reduced to 0',
-  6: 'Death',
-};
-
-// Display-only mechanical reminders. The engine already applies the real effects
-// via the Effect system; these just surface what each condition does.
-const CONDITION_WARNINGS: Record<string, string> = {
-  poisoned:   'Disadvantage on attacks and ability checks',
-  blinded:    'Attacks against you have advantage; you have disadvantage on attacks',
-  prone:      'Disadvantage on attacks; melee attacks against you have advantage',
-  paralyzed:  'Speed 0; auto-fail STR/DEX saves; attacks against you have advantage',
-  frightened: 'Disadvantage on checks and attacks while source is visible',
-  stunned:    'Speed 0; auto-fail STR/DEX saves; attacks against you have advantage',
-  restrained: 'Speed 0; disadvantage on attacks; attacks against you have advantage',
-  grappled:   'Speed 0',
-  incapacitated: 'Cannot take actions or reactions',
-  petrified:  'Incapacitated; resistance to all damage; attacks against you have advantage',
-  unconscious:'Incapacitated, prone; auto-fail STR/DEX saves; attacks have advantage',
+/**
+ * 2014 condition-mechanics closure, Part S: split per condition into what
+ * Grimoire actually ENFORCES right now (`automated` — speed/action-economy
+ * consequences; a condition's own roll-modifier consequence, if any, is
+ * NOT repeated here since it already shows up in the Advantage/Disadvantage
+ * list right below this block, driven by the same live derived.advantageStates
+ * — listing it twice would be redundant, not clearer) versus what stays a
+ * table/context-dependent judgment call (`reminder` — target-side facts,
+ * auto-fail saves/checks, anything needing distance/visibility/source
+ * identity this engine doesn't track). See content/conditions/index.ts's
+ * own header comment for the full per-condition reasoning behind this split.
+ */
+const CONDITION_MECHANICS: Record<string, { automated: string[]; reminder: string[] }> = {
+  blinded:       { automated: [], reminder: ['Attacks against you have advantage', 'You automatically fail sight-based checks'] },
+  charmed:       { automated: [], reminder: ["Can't attack the charmer or target them with harmful effects", 'The charmer has advantage on social checks against you'] },
+  deafened:      { automated: [], reminder: ['You automatically fail hearing-based checks'] },
+  frightened:    { automated: [], reminder: ['Disadvantage on checks and attacks while the source of fear is visible', "Can't willingly move closer to the source of fear"] },
+  grappled:      { automated: ['Speed 0'], reminder: [] },
+  incapacitated: { automated: ['Cannot take Actions or Reactions'], reminder: [] },
+  invisible:     { automated: [], reminder: ['Attacks against you have disadvantage'] },
+  paralyzed:     { automated: ['Speed 0', 'Cannot take Actions or Reactions'], reminder: ['You automatically fail STR and DEX saves', 'Attacks against you have advantage, and are critical hits within 5 feet'] },
+  petrified:     { automated: ['Speed 0', 'Cannot take Actions or Reactions', 'Resistance to all damage'], reminder: ['You automatically fail STR and DEX saves', 'Attacks against you have advantage', 'Immune to poison and disease (not mechanically enforced)'] },
+  poisoned:      { automated: [], reminder: [] },
+  prone:         { automated: [], reminder: ['Attacks against you have advantage within 5 feet, disadvantage otherwise', 'Standing up costs half your movement (not tracked)'] },
+  restrained:    { automated: ['Speed 0'], reminder: ['Attacks against you have advantage'] },
+  stunned:       { automated: ['Speed 0', 'Cannot take Actions or Reactions'], reminder: ['You automatically fail STR and DEX saves', 'Attacks against you have advantage'] },
+  unconscious:   { automated: ['Speed 0', 'Cannot take Actions or Reactions'], reminder: ["Falls prone and drops what it's holding", 'You automatically fail STR and DEX saves', 'Attacks against you have advantage, and are critical hits within 5 feet'] },
 };
 
 // Death saves live in entity.resources.deathSaves — persisted and synced,
@@ -73,21 +89,23 @@ interface Props {
   isDm:         boolean;
   campaignId:   string;
   deviceId:     string;
-  onDamage:     (amount: number, damageType?: string) => void;
+  onDamage:     (amount: number, damageType?: string, isNonmagicalAttack?: boolean) => void;
   onHeal:       (amount: number) => void;
-  onAddCondition:    (id: string) => void;
+  onAddCondition:    (id: string, duration: DurationTracker | null) => void;
   onRemoveCondition: (id: string) => void;
   onResourceChange:  (resourceId: string, delta: number) => void;
-  onSpendSlot:       (tier: string) => void;
-  onRestoreSlot:     (tier: string) => void;
+  onSpendSlot:       (tier: string, kind?: 'normal' | 'pact') => void;
+  onRestoreSlot:     (tier: string, kind?: 'normal' | 'pact') => void;
+  /** Manually ends the current concentration (and its linked effects) — the
+   *  one shared handler app/sheet/[id].tsx also gives the Spells tab. */
+  onEndConcentration: (spellName: string) => void;
   onEntityUpdate:    (updated: Entity) => void;
+  /** Closure item 16 — the one authoritative End Turn entry point, shared
+   *  verbatim with the Actions and Spells tabs (see app/sheet/[id].tsx's
+   *  handleEndTurn). */
+  onEndTurn:         () => void;
 }
 
-const KNOWN_CONDITIONS = [
-  'blinded','charmed','deafened','exhaustion','frightened',
-  'grappled','incapacitated','invisible','paralyzed','petrified',
-  'poisoned','prone','restrained','stunned','unconscious',
-];
 
 // Display labels for the four structured sense types.
 const SENSE_LABELS: Record<string, string> = {
@@ -101,67 +119,6 @@ type MoveType = 'fly' | 'swim' | 'climb' | 'burrow';
 const MOVE_TYPE_LABELS: Record<MoveType, string> = { fly: 'Fly', swim: 'Swim', climb: 'Climb', burrow: 'Burrow' };
 const MOVE_TYPE_OPTIONS: MoveType[] = ['climb', 'swim', 'fly', 'burrow'];
 const MANUAL_MOVEMENT_FEATURE_ID = 'manual_movement';
-
-// ── Concentration Check Modal ─────────────────────────────────────────────────
-
-function ConcentrationModal({
-  visible, dc, conMod, entity, rules,
-  onResolve, onClose,
-}: {
-  visible: boolean;
-  dc: number;
-  conMod: number;
-  entity: Entity;
-  rules: CampaignRules;
-  onResolve: (updated: Entity) => void;
-  onClose: () => void;
-}) {
-  const [roll, setRoll] = useState<number | null>(null);
-  const spellName = entity.spellcasting?.concentrating ?? 'spell';
-
-  function handleRoll() {
-    const result = rollD20(conMod).total;
-    setRoll(result);
-    if (result < dc) {
-      // Fail — drop concentration
-      const updated = recomputeDerived(dropConcentration(entity), rules);
-      onResolve(updated);
-    } else {
-      onResolve(entity);
-    }
-  }
-
-  const passed = roll !== null ? roll >= dc : null;
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.concSheet} onPress={e => e.stopPropagation()}>
-          <Text style={styles.concTitle}>🧠 Concentration Check</Text>
-          <Text style={styles.concSpell}>Concentrating on: {spellName}</Text>
-          <Text style={styles.concDc}>DC {dc} Constitution save</Text>
-
-          {roll === null ? (
-            <Pressable style={styles.rollBtn} onPress={handleRoll}>
-              <Text style={styles.rollBtnTxt}>🎲 Roll CON Save (+{conMod})</Text>
-            </Pressable>
-          ) : (
-            <View style={[styles.concResult, passed ? styles.concPass : styles.concFail]}>
-              <Text style={styles.concResultNum}>{roll}</Text>
-              <Text style={styles.concResultLabel}>
-                {passed ? '✅ Pass — Concentration kept' : '❌ Fail — Concentration dropped'}
-              </Text>
-            </View>
-          )}
-
-          <Pressable style={styles.closeBtnSm} onPress={onClose}>
-            <Text style={styles.closeBtnSmTxt}>Done</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
 
 // ── Death Saves Section ───────────────────────────────────────────────────────
 
@@ -293,6 +250,90 @@ function DeathSavesSection({
   );
 }
 
+// ── Table-first rolled-HP gate ────────────────────────────────────────────────
+// Shared by both the single-class and multiclass branches of LevelUpSection
+// below. Primary: enter the physically-rolled die result. Secondary: "Roll
+// in App" rolls the same die via rollDie and resolves through the exact
+// same onResolve callback — never a separate consequence path. Renders
+// nothing (returns null) when `pending` is null, so mounting it
+// unconditionally in both branches is cheap and safe.
+function HpRollGate({
+  pending, draft, onDraftChange, entity, rules, onCancel, onResolve,
+}: {
+  pending: { hpDie: number; hpAbility: Ability } | null;
+  draft: string;
+  onDraftChange: (s: string) => void;
+  entity: Entity;
+  rules: CampaignRules;
+  onCancel: () => void;
+  onResolve: (roll: number) => void;
+}) {
+  if (!pending) return null;
+  const abilityMod = modifier(effectiveAbilityScores(entity)[pending.hpAbility]);
+  // Closure 4C: strict, complete-integer validation (rejects "5abc", "5.5",
+  // "0", and anything above the die size) — replaces a bare parseInt(draft)
+  // check, which silently accepted a partial parse.
+  const validRoll = isValidHpRoll(draft, pending.hpDie);
+  const parsed = validRoll ? parseInt(draft.trim(), 10) : NaN;
+  // Closure 4A/4B: the SAME pure calculation applyHP itself uses — this
+  // preview can never disagree with what Confirm actually applies, and
+  // correctly reflects the hpMinHalfDie house-rule floor (previously
+  // missing from this preview entirely). HpRollGate only ever opens for
+  // rules.hpMode === 'rolled' at a level that isn't the character's very
+  // first (see pressLevelUp/pressLevelUpClass's own gating), so those are
+  // fixed here rather than threaded through `pending`.
+  const previewGain = validRoll
+    ? calculateLevelUpHpGain(entity, pending.hpDie, 'rolled', rules, pending.hpAbility, false, parsed)
+    : null;
+
+  function submit() {
+    if (validRoll) onResolve(parsed);
+  }
+  function rollInApp() {
+    onResolve(rollDie(pending!.hpDie));
+  }
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
+      <Pressable style={styles.hpRollBackdrop} onPress={onCancel}>
+        <Pressable style={styles.hpRollSheet} onPress={e => e.stopPropagation()}>
+          <Text style={styles.hpRollTitle}>Hit Points for This Level</Text>
+          <Text style={styles.hpRollLine}>Hit Die: d{pending.hpDie}</Text>
+          <Text style={styles.hpRollLine}>{pending.hpAbility.toUpperCase()} modifier: {abilityMod >= 0 ? '+' : ''}{abilityMod}</Text>
+
+          <View style={styles.hpRollInputRow}>
+            <Text style={styles.hpRollInputLabel}>Rolled result</Text>
+            <TextInput
+              style={styles.hpRollInput}
+              value={draft}
+              onChangeText={onDraftChange}
+              keyboardType="number-pad"
+              placeholder={`1–${pending.hpDie}`}
+              placeholderTextColor={Colors.textDim}
+              autoFocus
+              onSubmitEditing={submit}
+            />
+          </View>
+          {previewGain !== null && (
+            <Text style={styles.hpRollPreview}>HP increase: {previewGain}</Text>
+          )}
+
+          <Pressable style={[styles.hpRollSubmit, !validRoll && styles.btnDisabled]} disabled={!validRoll} onPress={submit}>
+            <Text style={styles.hpRollSubmitTxt}>Confirm</Text>
+          </Pressable>
+          {/* Secondary convenience — same onResolve path as the manual entry above. */}
+          <Pressable style={styles.hpRollAppBtn} onPress={rollInApp}>
+            <Text style={styles.hpRollAppBtnTxt}>🎲 Roll in App</Text>
+          </Pressable>
+          <Pressable style={styles.closeBtnSm} onPress={onCancel}>
+            <Text style={styles.closeBtnSmTxt}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── Level Up Button ───────────────────────────────────────────────────────────
 
 function LevelUpSection({
@@ -300,11 +341,46 @@ function LevelUpSection({
 }: {
   entity: Entity; rules: CampaignRules; onEntityUpdate: (u: Entity) => void; onLeveled: (u: Entity) => void;
 }) {
-  const homebrewClasses    = useHomebrewStore(s => s.classes);
   const homebrewSubclasses = useHomebrewStore(s => s.subclasses);
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
   const [addClassOpen, setAddClassOpen] = useState(false);
+  // Set once levelUp()/levelUpClass() has been simulated but not yet
+  // resolved — drives LevelUpPreviewModal. confirmPendingLevelUp() below
+  // applies `after` verbatim; it must NEVER re-invoke levelUp()/
+  // levelUpClass(), since CampaignRules.hpMode can be 'rolled'
+  // (Math.random() inside applyHP) — a second call would apply a
+  // DIFFERENT roll than the one just previewed.
+  const [pendingLevelUp, setPendingLevelUp] = useState<{
+    title: string; before: Entity; after: Entity;
+  } | null>(null);
+  const [plannerOpen, setPlannerOpen] = useState(false);
 
-  const allClasses = [...globalContentDB.classes, ...homebrewClasses] as CharClass[];
+  // Table-first rolled HP: when rules.hpMode === 'rolled', pressing Level Up
+  // (or Add/Level a class) opens this inline gate instead of immediately
+  // rolling — the DM/player enters the physically-rolled die result (or
+  // uses the secondary "Roll in App" convenience), and ONLY THEN does the
+  // real level-up call run, with that exact result threaded through
+  // levelUp/levelUpClass's manualHpRoll parameter. average/fixed/max modes
+  // are entirely unaffected — this gate never opens for them.
+  const [hpRollFor, setHpRollFor] = useState<
+    | { kind: 'single'; hpDie: number; hpAbility: Ability }
+    | { kind: 'class'; targetClassId: string; targetClass?: CharClass; hpDie: number; hpAbility: Ability }
+    | null
+  >(null);
+  const [hpRollDraft, setHpRollDraft] = useState('');
+
+  function confirmPendingLevelUp() {
+    if (!pendingLevelUp) return;
+    onEntityUpdate(pendingLevelUp.after);
+    onLeveled(pendingLevelUp.after);
+    setPendingLevelUp(null);
+  }
+
+  // getMergedContentDB() so a homebrew class sharing an official id
+  // correctly wins — feeds resolveProgression below, which governs actual
+  // level-up mechanics (audit finding CONTENT-1/2/3/4 — this previously
+  // spread official first, so .find() always returned the official entry).
+  const allClasses = getMergedContentDB().classes as CharClass[];
   const maxLevel    = rules.maxLevel ?? 20;
 
   function classLabel(id: string) {
@@ -331,20 +407,65 @@ function LevelUpSection({
     const progression = resolveProgression(classId, entity.identity.subclassId);
     if (!progression) return null;
     const nextLevel = entity.identity.level + 1;
+    const nextEntry = progression.entries.find(e => e.level === nextLevel);
 
-    async function doLevelUp() {
-      const updated = levelUp(entity, nextLevel, progression!, rules);
+    async function doLevelUp(manualHpRoll?: number) {
+      const { before, after } = simulate(entity, e => levelUp(e, nextLevel, progression!, rules, allClasses, manualHpRoll), rules);
       // levelUp() can grant fixed cantrips/spells for this level — warm Tier 2
       // for anything new before the entity reaches the engine pipeline.
-      await spellRepo.ensureLoaded(spellIdsOnEntity(updated));
-      onEntityUpdate(updated);
-      onLeveled(updated);
+      await spellRepo.ensureLoaded(spellIdsOnEntity(after));
+      setPendingLevelUp({ title: `Level Up (→ ${nextLevel})`, before, after });
+    }
+
+    function pressLevelUp() {
+      // Table-first: only rolled mode past the very first level needs a
+      // result at all — max/fixed/average are already deterministic
+      // (applyHP's own isVeryFirstLevel/mode branches), and gating those
+      // would just be an extra tap for no reason.
+      if (rules.hpMode === 'rolled' && entity.identity.level > 0 && nextEntry) {
+        setHpRollDraft('');
+        setHpRollFor({ kind: 'single', hpDie: nextEntry.hpDie, hpAbility: progression!.hpAbility ?? 'con' });
+      } else {
+        void doLevelUp();
+      }
     }
 
     return (
-      <Pressable style={styles.levelUpBtn} onPress={doLevelUp}>
-        <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
-      </Pressable>
+      <>
+        <Pressable style={styles.levelUpBtn} onPress={pressLevelUp}>
+          <Text style={styles.levelUpBtnTxt}>⬆ Level Up (→ {nextLevel})</Text>
+        </Pressable>
+        <HpRollGate
+          pending={hpRollFor?.kind === 'single' ? hpRollFor : null}
+          draft={hpRollDraft}
+          onDraftChange={setHpRollDraft}
+          entity={entity}
+          rules={rules}
+          onCancel={() => setHpRollFor(null)}
+          onResolve={roll => { setHpRollFor(null); void doLevelUp(roll); }}
+        />
+        {entity.identity.level < maxLevel && (
+          <Pressable style={styles.plannerBtn} onPress={() => setPlannerOpen(true)}>
+            <Text style={styles.plannerBtnTxt}>🔭 Progression Planner</Text>
+          </Pressable>
+        )}
+        <LevelUpPreviewModal
+          visible={pendingLevelUp !== null}
+          title={pendingLevelUp?.title ?? ''}
+          before={pendingLevelUp?.before ?? null}
+          after={pendingLevelUp?.after ?? null}
+          onConfirm={confirmPendingLevelUp}
+          onCancel={() => setPendingLevelUp(null)}
+        />
+        <ProgressionPlannerModal
+          classDefinitions={allClasses}
+          visible={plannerOpen}
+          entity={entity}
+          rules={rules}
+          progression={progression}
+          onClose={() => setPlannerOpen(false)}
+        />
+      </>
     );
   }
 
@@ -352,17 +473,51 @@ function LevelUpSection({
   //    "+ Add a Class" to take a brand-new one. ──
   const classes = getClassLevels(entity);
   const takenIds = new Set(classes.map(c => c.classId));
-  const availableToAdd = allClasses.filter(c => !takenIds.has(c.id));
+  // LIVE-RULESET-2 (item 7): the "+ Add a Class" contextual picker is
+  // filtered by the character's own entity.rulesetId — a genuinely NEW
+  // pick, unlike allClasses itself (kept unfiltered above, since it's also
+  // used to resolve/label classes the character ALREADY has, which must
+  // keep working regardless of the character's current ruleset).
+  const availableToAdd = allClasses.filter(c => !takenIds.has(asClassId(c.id)) && matchesRuleset(c.rulesetId, entity.rulesetId));
 
-  async function doLevelUpClass(targetClassId: string, targetClass?: CharClass) {
+  async function doLevelUpClass(targetClassId: string, targetClass?: CharClass, manualHpRoll?: number) {
     const existing = classes.find(c => c.classId === targetClassId);
     const progression = resolveProgression(targetClassId, existing?.subclassId ?? null);
     if (!progression) return;
-    const updated = levelUpClass(entity, targetClassId, progression, rules, targetClass);
-    await spellRepo.ensureLoaded(spellIdsOnEntity(updated));
-    onEntityUpdate(updated);
-    onLeveled(updated);
-    setAddClassOpen(false);
+    const { before, after } = simulate(entity, e => levelUpClass(e, targetClassId, progression!, rules, targetClass, allClasses, manualHpRoll), rules);
+    await spellRepo.ensureLoaded(spellIdsOnEntity(after));
+    const title = existing
+      ? `Level Up ${classLabel(targetClassId)} (→ ${existing.level + 1})`
+      : `Add ${targetClass?.name ?? classLabel(targetClassId)} (level 1)`;
+    setPendingLevelUp({ title, before, after });
+    setAddClassOpen(false); // close the "Add a Class" list modal now — preview takes over
+  }
+
+  // Table-first gate, multiclass version of pressLevelUp above — same
+  // reasoning (only rolled mode needs a result; deterministic modes skip
+  // straight to doLevelUpClass).
+  function pressLevelUpClass(targetClassId: string, targetClass?: CharClass) {
+    const existing = classes.find(c => c.classId === targetClassId);
+    const progression = resolveProgression(targetClassId, existing?.subclassId ?? null);
+    const newClassLevel = (existing?.level ?? 0) + 1;
+    const entry = progression?.entries.find(e => e.level === newClassLevel);
+    // Closure 4B: the character's TRUE very first level ever (a from-
+    // scratch, level-0 character taking their first class) always gets max
+    // die regardless of hpMode (see levelUpClass's own isVeryFirstLevel) —
+    // HpRollGate's preview assumes isVeryFirstLevel:false (see its own doc
+    // comment), so this must skip the gate entirely in that case, same as
+    // the single-class path's pre-existing `entity.identity.level > 0`
+    // guard above. Previously this gate DID open here, let the player enter
+    // a value, and then silently discarded it (applyHP ignores manualRoll
+    // when isVeryFirstLevel is true) — a real, if narrow, instance of the
+    // "preview disagrees with what actually happens" bug this closure fixes.
+    const isVeryFirstLevel = entity.identity.level === 0 && newClassLevel === 1;
+    if (rules.hpMode === 'rolled' && entry && !isVeryFirstLevel) {
+      setHpRollDraft('');
+      setHpRollFor({ kind: 'class', targetClassId, targetClass, hpDie: entry.hpDie, hpAbility: progression!.hpAbility ?? 'con' });
+    } else {
+      void doLevelUpClass(targetClassId, targetClass);
+    }
   }
 
   return (
@@ -371,7 +526,7 @@ function LevelUpSection({
         <Pressable
           key={c.classId}
           style={styles.levelUpBtn}
-          onPress={() => doLevelUpClass(c.classId)}
+          onPress={() => pressLevelUpClass(c.classId)}
         >
           <Text style={styles.levelUpBtnTxt}>⬆ Level Up {classLabel(c.classId)} (→ {c.level + 1})</Text>
         </Pressable>
@@ -380,6 +535,26 @@ function LevelUpSection({
       <Pressable style={styles.addClassBtn} onPress={() => setAddClassOpen(true)}>
         <Text style={styles.addClassBtnTxt}>+ Add a Class</Text>
       </Pressable>
+
+      <HpRollGate
+        pending={hpRollFor?.kind === 'class' ? hpRollFor : null}
+        draft={hpRollDraft}
+        onDraftChange={setHpRollDraft}
+        entity={entity}
+        rules={rules}
+        onCancel={() => setHpRollFor(null)}
+        onResolve={roll => {
+          const pending = hpRollFor;
+          setHpRollFor(null);
+          if (pending?.kind === 'class') void doLevelUpClass(pending.targetClassId, pending.targetClass, roll);
+        }}
+      />
+
+      {entity.identity.level < maxLevel && (
+        <Pressable style={styles.plannerBtn} onPress={() => setPlannerOpen(true)}>
+          <Text style={styles.plannerBtnTxt}>🔭 Progression Planner</Text>
+        </Pressable>
+      )}
 
       <Modal visible={addClassOpen} animationType="slide" onRequestClose={() => setAddClassOpen(false)}>
         <View style={styles.addClassModalRoot}>
@@ -403,7 +578,7 @@ function LevelUpSection({
               <Pressable
                 key={c.id}
                 style={styles.addClassRow}
-                onPress={() => doLevelUpClass(c.id, c)}
+                onPress={() => pressLevelUpClass(c.id, c)}
               >
                 <Text style={styles.addClassRowTxt}>{c.name}</Text>
               </Pressable>
@@ -411,6 +586,25 @@ function LevelUpSection({
           </ScrollView>
         </View>
       </Modal>
+
+      <LevelUpPreviewModal
+        visible={pendingLevelUp !== null}
+        title={pendingLevelUp?.title ?? ''}
+        before={pendingLevelUp?.before ?? null}
+        after={pendingLevelUp?.after ?? null}
+        onConfirm={confirmPendingLevelUp}
+        onCancel={() => setPendingLevelUp(null)}
+      />
+      <MulticlassProgressionPlannerModal
+        classDefinitions={allClasses}
+        visible={plannerOpen}
+        entity={entity}
+        rules={rules}
+        availableToAdd={availableToAdd}
+        resolveProgression={resolveProgression}
+        classLabel={classLabel}
+        onClose={() => setPlannerOpen(false)}
+      />
     </View>
   );
 }
@@ -428,6 +622,7 @@ function NumberPromptModal({
   onClose: () => void;
 }) {
   const [text, setText] = useState('');
+  const insets = useSafeAreaInsets();
   const n = parseInt(text, 10);
   const valid = !isNaN(n) && n >= 0;
 
@@ -441,7 +636,7 @@ function NumberPromptModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.concSheet} onPress={e => e.stopPropagation()}>
+        <Pressable style={[styles.concSheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]} onPress={e => e.stopPropagation()}>
           <Text style={styles.concTitle}>{title}</Text>
           <Text style={styles.concSpell}>{label}</Text>
           <TextInput
@@ -756,22 +951,52 @@ function MovementModal({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function TabCharacter({
+function TabCharacterInner({
   entity, rules, isDm, campaignId, deviceId,
   onDamage, onHeal, onAddCondition, onRemoveCondition,
-  onResourceChange, onSpendSlot, onRestoreSlot, onEntityUpdate,
+  onResourceChange, onSpendSlot, onRestoreSlot, onEndConcentration, onEntityUpdate, onEndTurn,
 }: Props) {
+  // Sourced from the merged content DB (not a hardcoded, official-only id
+  // list) so homebrew conditions are actually pickable here — audit
+  // finding KNOWN_CONDITIONS-1.
+  const getMergedContentDB = useHomebrewStore(s => s.getMergedContentDB);
   const [hpOpen,     setHpOpen]     = useState(false);
   const [auditStat,  setAuditStat]  = useState<string | null>(null);
   const [auditLabel, setAuditLabel] = useState('');
   const [condModal,  setCondModal]  = useState(false);
   const [condSearch, setCondSearch] = useState('');
+  // Set once a condition name is tapped, before its duration is chosen —
+  // drives the "how long?" sub-step shown in the same modal (or the
+  // separate NumberPromptModal for the "N Rounds" case).
+  const [pendingConditionId, setPendingConditionId] = useState<string | null>(null);
+  const [roundsPromptOpen,   setRoundsPromptOpen]   = useState(false);
+
+  function closeConditionFlow() {
+    setCondModal(false);
+    setCondSearch('');
+    setPendingConditionId(null);
+    setRoundsPromptOpen(false);
+  }
   const [concOpen,   setConcOpen]   = useState(false);
-  const [concDc,     setConcDc]     = useState(10);
+  const [concDamage, setConcDamage] = useState(0);
   const [manualHpOpen, setManualHpOpen] = useState(false);
   const [maxHpOpen,    setMaxHpOpen]    = useState(false);
   const [tempHpOpen,   setTempHpOpen]   = useState(false);
   const [activeFavCard, setActiveFavCard] = useState<ActionCard | null>(null);
+  // Rules-engine blocker RE-AUDIT closure (2F): carries the bypass/context
+  // decision ALONGSIDE the card, not just the card alone — see
+  // TabActions.tsx's PendingActionUse for the same fix and its own doc
+  // comment on why this was a real bug (a chosen source/Cast-Anyway
+  // decision used to be silently discarded by the activation-option picker).
+  const [pendingFavUse, setPendingFavUse] = useState<{
+    card: ActionCard;
+    bypassSpellPreparation?: boolean;
+    selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext;
+    bypassIncapacitated?: boolean;
+    /** Rules-completeness batch (ritual casting) — see TabActions.tsx's
+     *  PendingActionUse.castMode for the identical fix. */
+    castMode?: 'ritual';
+  } | null>(null);
   const [levelUpAsiOpen, setLevelUpAsiOpen] = useState(false);
   const [sensesOpen, setSensesOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
@@ -779,6 +1004,23 @@ export function TabCharacter({
   // Inline hit-die result — shown for 3s then cleared, no Alert needed
   const [hitDieResult, setHitDieResult] = useState<string | null>(null);
   const hitDieTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Table-first: "Use Hit Die" opens this inline entry instead of an Alert —
+  // same compact pattern as the death-save/initiative inline controls.
+  const [hitDieEntry, setHitDieEntry] = useState(false);
+  const [hitDieDraft, setHitDieDraft] = useState('');
+  // Rules-completeness batch (mixed hit-die pools), C2/C4: which die SIZE
+  // the player has explicitly chosen to spend next — only meaningful (and
+  // only rendered as a picker) when 2+ distinct sizes are currently
+  // spendable; a single-pool character never sees this at all and every
+  // spend call below omits dieSize exactly as before this batch. Reset
+  // whenever the spendable set changes shape (a spend/rest/level-up) so a
+  // stale selection (e.g. a pool that just hit 0) can't linger.
+  const [selectedHitDieSize, setSelectedHitDieSize] = useState<number | null>(null);
+  const spendableHitDice = spendableHitDicePools(entity.resources.hitDice);
+  const hitDieChoiceNeeded = spendableHitDice.length > 1;
+  const effectiveHitDieSize = hitDieChoiceNeeded
+    ? (spendableHitDice.some(p => p.die === selectedHitDieSize) ? selectedHitDieSize : null)
+    : (spendableHitDice[0]?.die ?? null);
 
   function showHitDieResult(msg: string) {
     setHitDieResult(msg);
@@ -789,21 +1031,73 @@ export function TabCharacter({
   const { identity, resources, derived, conditions, spellcasting } = entity;
 
   // Favorited Actions-tab cards, surfaced here too — starred via the same
-  // ☆/★ toggle on the Actions tab (favoriteTag on the underlying Feature).
-  const favoriteCards = (entity.actionCards ?? []).filter(c => {
-    const f = entity.features.find(x => x.id === c.featureId)
-      ?? entity.inventory.equipped.flatMap(inst => inst.features).find(x => x.id === c.featureId);
-    return f?.favoriteTag === true;
-  });
-  function handleUseFavorite(card: ActionCard) {
-    if (card.resourceCost) onEntityUpdate(applyActionCardUse(entity, card, rules));
-    setActiveFavCard(card);
+  // ☆/★ toggle on the Actions tab (Entity.favoriteActionIds — see
+  // isFavoriteCard's doc comment in TabActions.tsx for why this isn't just
+  // a Feature.favoriteTag lookup: spell-based and synthetic cards like
+  // Unarmed Strike have no backing Feature to store a flag on).
+  const { requestPayment, paymentChooser } = useSpellPayment(entity);
+  const favoriteCardContent = useCardContent(entity);
+  const favoriteCards = (entity.actionCards ?? []).filter(c => isFavoriteCard(entity, c));
+  function handleUseFavorite(card: ActionCard, bypassSpellPreparation?: boolean, selectedSpellCastingContext?: import('../../engine/types').SpellCastingContext, bypassIncapacitated?: boolean, castMode?: 'ritual') {
+    // A-57 (item 10): a favorited card with discrete use-time options
+    // (e.g. Divine Smite's spell-slot tier) must resolve the picker BEFORE
+    // spending anything, same as TabActions' own handleUse — this call
+    // site used to always pass chosenOption undefined, silently falling
+    // back to the card's default cost/tier instead of asking.
+    if (card.activation.options && card.activation.options.length > 0) {
+      // Rules-engine blocker RE-AUDIT closure 2F (extended, HIGH batch C7/
+      // C8): preserve the bypass/context/status-override decision
+      // ActionCardRow already made, not just the card.
+      setPendingFavUse({ card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated, castMode });
+      return;
+    }
+    // Rules-completeness batch (ritual casting), A4: never request a slot
+    // payment for a ritual cast.
+    if (castMode === 'ritual') {
+      const updated = applyActionCardUse(entity, card, rules, undefined, undefined, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent, bypassIncapacitated, castMode);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveFavCard(card);
+      return;
+    }
+    // Same fix as TabActions' handleUse — always run applyActionCardUse
+    // (it no-ops correctly with nothing to spend) so a cost-less
+    // concentration cantrip favorited here also tracks concentration.
+    // bypassSpellPreparation threads the Quick Override "Cast Anyway"
+    // choice from ActionCardRow (rules-engine blocker closure 1F) through
+    // to the same shared applyActionCardUse every other cast surface uses.
+    requestPayment(card, undefined, payment => {
+      const updated = applyActionCardUse(entity, card, rules, undefined, payment, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent, bypassIncapacitated);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveFavCard(card);
+    });
   }
-  function rollForFavorite(): import('../../engine/types').DiceRoll | null {
+  function handleChooseFavoriteOption(option: ActivationOption) {
+    const pending = pendingFavUse;
+    setPendingFavUse(null);
+    if (!pending) return;
+    const { card, bypassSpellPreparation, selectedSpellCastingContext, bypassIncapacitated, castMode } = pending;
+    if (castMode === 'ritual') {
+      const updated = applyActionCardUse(entity, card, rules, option, undefined, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent, bypassIncapacitated, castMode);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveFavCard(card);
+      return;
+    }
+    requestPayment(card, option, payment => {
+      const updated = applyActionCardUse(entity, card, rules, option, payment, bypassSpellPreparation, selectedSpellCastingContext, favoriteCardContent, bypassIncapacitated);
+      if (updated === entity) return;
+      onEntityUpdate(updated);
+      setActiveFavCard(card);
+    });
+  }
+  function rollForFavorite(crit: boolean): import('../../engine/types').DiceRoll | null {
     if (!activeFavCard) return null;
     const expr = activeFavCard.layer2.match(/(\d+d\d+(?:[+-]\d+)?)/)?.[1];
     if (!expr) return null;
-    try { return rollExpression(expr, activeFavCard.name); }
+    const finalExpr = crit ? doubleDiceCount(expr) : expr;
+    try { return useDiceLogStore.getState().rollAndLog(finalExpr, activeFavCard.name); }
     catch { return null; }
   }
 
@@ -868,18 +1162,46 @@ export function TabCharacter({
       rules,
     ));
   }
+  // Rules-completeness batch (mixed hit-die pools), C2: both hit-die spend
+  // paths below require an explicit, currently-valid pool choice before
+  // doing anything — `effectiveHitDieSize` is only non-null when either
+  // there's nothing to choose between (one spendable pool) or the player
+  // has already tapped one of the picker chips. Neither path falls back to
+  // spendHitDie/spendHitDieManual's own single-pool convenience omission
+  // once 2+ pools exist — that would silently reintroduce the exact
+  // largest-first auto-pick this batch removes.
   function handleRollHitDie() {
-    if (resources.hitDice.remaining <= 0) return;
+    if (resources.hitDice.remaining <= 0 || effectiveHitDieSize === null) return;
     const before  = resources.hp.current;
-    const updated = spendHitDie(entity, rules);
+    const updated = spendHitDie(entity, rules, effectiveHitDieSize);
+    if (updated === entity) return;
     onEntityUpdate(updated);
+    setSelectedHitDieSize(null);
     const healed = updated.resources.hp.current - before;
     showHitDieResult(`+${healed} HP restored`);
   }
-  function handleDiscardHitDie() {
-    if (resources.hitDice.remaining <= 0) return;
-    onEntityUpdate(discardHitDie(entity, rules));
-    showHitDieResult('Hit die spent — roll your die and heal');
+  // Table-first primary path: the die was already rolled physically —
+  // enter that result, spend the die and heal in one action via the exact
+  // same final mutation (healFromSpentHitDie, inside spendHitDieManual)
+  // handleRollHitDie's in-app convenience uses.
+  function openHitDieEntry() {
+    if (resources.hitDice.remaining <= 0 || effectiveHitDieSize === null) return;
+    setHitDieDraft('');
+    setHitDieEntry(true);
+  }
+  function submitHitDieEntry() {
+    if (effectiveHitDieSize === null) return;
+    const dieSize = currentHitDieSize(entity, effectiveHitDieSize, rules);
+    const roll = parseInt(hitDieDraft, 10);
+    if (isNaN(roll) || roll < 1 || roll > dieSize) return;
+    const before  = resources.hp.current;
+    const updated = spendHitDieManual(entity, roll, rules, effectiveHitDieSize);
+    if (updated === entity) return;
+    onEntityUpdate(updated);
+    setSelectedHitDieSize(null);
+    const healed = updated.resources.hp.current - before;
+    showHitDieResult(`+${healed} HP restored`);
+    setHitDieEntry(false);
   }
 
   function openAudit(stat: string, label: string) {
@@ -890,16 +1212,24 @@ export function TabCharacter({
   // Damage handler — triggers concentration check modal if needed.
   // Reads fresh entity state AFTER onDamage (Zustand is synchronous)
   // so the modal gets the correct entity, not the stale prop.
-  const handleDamage = useCallback((amount: number, damageType?: string) => {
-    onDamage(amount, damageType);
+  const handleDamage = useCallback((amount: number, damageType?: string, isNonmagicalAttack?: boolean) => {
+    onDamage(amount, damageType, isNonmagicalAttack);
     const { characters } = useCharacterStore.getState();
     const fresh = characters.find(c => c.id === entity.id);
     if (fresh?.spellcasting?.concentrating) {
-      const dc = Math.max(10, Math.floor(amount / 2));
-      setConcDc(dc);
+      setConcDamage(amount);
       setConcOpen(true);
     }
   }, [onDamage, entity.id]);
+
+  // Rules-engine blocker RE-AUDIT closure (3A): visible only while
+  // transformed into a form that actually declares
+  // nonmagicalPhysicalResistance — HpModal itself further gates on the
+  // selected damage type being bludgeoning/piercing/slashing.
+  const activeBeastForm = entity.wildShapeState?.active
+    ? findBeastForm(entity.wildShapeState!.formId)
+    : undefined;
+  const showNonmagicalOption = !!activeBeastForm?.nonmagicalPhysicalResistance;
 
   const hpPct = resources.hp.maximum > 0
     ? Math.max(0, Math.min(1, resources.hp.current / resources.hp.maximum))
@@ -908,17 +1238,28 @@ export function TabCharacter({
   const isDying = resources.hp.current === 0 && resources.hp.maximum > 0;
 
   const exhaustion = entity.conditionMonitor.exhaustion;
-  const conMod     = modifier(entity.stats.con);
 
-  const filteredConds = KNOWN_CONDITIONS.filter(c =>
-    c.includes(condSearch.toLowerCase()) &&
-    !conditions.some(ac => ac.id === c)
-  );
+  // TABCHAR-PERF-1: was recomputed (map+filter over the merged condition
+  // list) on every render, including every keystroke in condSearch and
+  // every render triggered by something unrelated to conditions at all
+  // (this is the default/most-rendered character-sheet tab). getMergedContentDB()
+  // itself is called once per render (cheap — cached at the store level as
+  // of CONTENT-REGISTRY-PERF-1, returns the same reference when nothing in
+  // the content store changed), and used as a stable useMemo dependency.
+  const mergedContentDB = getMergedContentDB(entity.rulesetId);
+  const filteredConds = useMemo(() => mergedContentDB.conditions
+    .map(c => c.id)
+    .filter(c =>
+      c.includes(condSearch.toLowerCase()) &&
+      !conditions.some(ac => ac.id === c)
+    ), [mergedContentDB, condSearch, conditions]);
 
   const SLOT_TIERS = ['1','2','3','4','5','6','7','8','9'] as const;
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      <MissingPacksBanner entity={entity} />
 
       {/* HP Block */}
       <Pressable style={styles.hpBlock} onPress={() => setHpOpen(true)}>
@@ -976,6 +1317,8 @@ export function TabCharacter({
         />
       )}
 
+      <HeroicInspirationPanel entity={entity} onEntityUpdate={onEntityUpdate} />
+
       {/* Stat Row */}
       <View style={styles.statRow}>
         {[
@@ -1004,11 +1347,12 @@ export function TabCharacter({
           <Text style={styles.sectionTitle}>FAVORITES</Text>
           {favoriteCards.map(c => (
             <ActionCardRow
-              key={c.featureId}
+              key={actionCardIdentity(c)}
               card={c}
+              entity={entity}
               onUse={handleUseFavorite}
               isFavorite
-              onToggleFavorite={c => onEntityUpdate(toggleFavoriteTag(entity, c.featureId))}
+              onToggleFavorite={c => onEntityUpdate(toggleFavoriteTag(entity, c))}
             />
           ))}
         </View>
@@ -1123,26 +1467,82 @@ export function TabCharacter({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>HIT DICE</Text>
           <Text style={styles.hitDiceCount}>
-            {resources.hitDice.remaining}/{resources.hitDice.total}  ·  d{resources.hitDice.die}
+            {resources.hitDice.remaining}/{resources.hitDice.total}  ·  {
+              // A mixed multiclass pool (see HitDiceBlock's doc comment)
+              // can't be summarized by the single `die` field alone —
+              // show each size's own remaining/total instead.
+              resources.hitDice.pools
+                ? resources.hitDice.pools.map(p => `${p.remaining}d${p.die}`).join(' + ')
+                : `d${resources.hitDice.die}`
+            }
           </Text>
         </View>
-        <View style={styles.hitDieRow}>
-          <Pressable
-            style={[styles.hitDieBtn, styles.hitDieRoll, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
-            onPress={handleRollHitDie}
-            disabled={resources.hitDice.remaining <= 0}
-          >
-            <Text style={styles.useHitDieTxt}>🎲 Roll Hit Die</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.hitDieBtn, styles.hitDieUse, resources.hitDice.remaining <= 0 && styles.useHitDieBtnDisabled]}
-            onPress={handleDiscardHitDie}
-            disabled={resources.hitDice.remaining <= 0}
-          >
-            <Text style={styles.hitDieUseTxt}>Use Hit Die</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.hitDieHint}>Roll: app rolls the die + heals you.  Use: spend one and roll your own.</Text>
+        {/* Rules-completeness batch (mixed hit-die pools), C2/C8: an
+            explicit die-size picker, shown ONLY when 2+ distinct sizes are
+            currently spendable — a single-pool character never sees this
+            row at all, matching this app's "never ask when there's nothing
+            to choose" convention elsewhere. Each spend clears the selection
+            (see handleRollHitDie/submitHitDieEntry), so spending a d10 then
+            a d6 then another d10 in the same rest each requires its own
+            explicit tap — never assumes the previous choice still applies. */}
+        {hitDieChoiceNeeded && !hitDieEntry && (
+          <View style={styles.hitDieRow}>
+            {spendableHitDice.map(p => (
+              <Pressable
+                key={p.die}
+                style={[styles.hitDieBtn, selectedHitDieSize === p.die ? styles.hitDieUse : styles.hitDieRoll]}
+                onPress={() => setSelectedHitDieSize(p.die)}
+              >
+                <Text style={selectedHitDieSize === p.die ? styles.hitDieUseTxt : styles.useHitDieTxt}>
+                  d{bumpedHitDie(p.die, entityHitDieTier(entity, rules))} ({p.remaining} left)
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        {hitDieEntry ? (
+          <View style={styles.hitDieEntryRow}>
+            <Text style={styles.hitDieEntryLabel}>Rolled (1–d{currentHitDieSize(entity, effectiveHitDieSize ?? undefined, rules)}):</Text>
+            <TextInput
+              style={styles.hitDieEntryInput}
+              value={hitDieDraft}
+              onChangeText={setHitDieDraft}
+              keyboardType="number-pad"
+              placeholder="e.g. 6"
+              placeholderTextColor={Colors.textDim}
+              autoFocus
+              onSubmitEditing={submitHitDieEntry}
+            />
+            <Pressable style={styles.hitDieEntrySubmit} onPress={submitHitDieEntry}>
+              <Text style={styles.hitDieEntrySubmitTxt}>Heal</Text>
+            </Pressable>
+            <Pressable style={styles.hitDieEntryCancel} onPress={() => setHitDieEntry(false)}>
+              <Text style={styles.hitDieEntryCancelTxt}>✕</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.hitDieRow}>
+            {/* Primary — table-first: the die was already rolled physically. */}
+            <Pressable
+              style={[styles.hitDieBtn, styles.hitDieUse, (resources.hitDice.remaining <= 0 || effectiveHitDieSize === null) && styles.useHitDieBtnDisabled]}
+              onPress={openHitDieEntry}
+              disabled={resources.hitDice.remaining <= 0 || effectiveHitDieSize === null}
+            >
+              <Text style={styles.hitDieUseTxt}>Use Hit Die</Text>
+            </Pressable>
+            {/* Secondary convenience — rolls, then the exact same mutation. */}
+            <Pressable
+              style={[styles.hitDieBtn, styles.hitDieRoll, (resources.hitDice.remaining <= 0 || effectiveHitDieSize === null) && styles.useHitDieBtnDisabled]}
+              onPress={handleRollHitDie}
+              disabled={resources.hitDice.remaining <= 0 || effectiveHitDieSize === null}
+            >
+              <Text style={styles.useHitDieTxt}>🎲 Roll in App</Text>
+            </Pressable>
+          </View>
+        )}
+        <Text style={styles.hitDieHint}>
+          {hitDieChoiceNeeded ? 'Choose a die size above, then: ' : ''}Use: enter your table roll and heal.  Roll: app rolls and heals for you.
+        </Text>
         {hitDieResult && (
           <Text style={styles.dieResultTxt}>{hitDieResult}</Text>
         )}
@@ -1163,7 +1563,7 @@ export function TabCharacter({
             <View style={styles.condChip}>
               <Text style={styles.condChipTxt}>Exhaustion {exhaustion}</Text>
             </View>
-            <Text style={styles.exhaustionDesc}>{EXHAUSTION_EFFECTS[exhaustion]}</Text>
+            <Text style={styles.exhaustionDesc}>{exhaustionEffectText(exhaustion, entity)}</Text>
           </View>
         )}
 
@@ -1180,7 +1580,11 @@ export function TabCharacter({
           <View style={styles.condRow}>
             {conditions.map(c => (
               <View key={c.id} style={styles.condChip}>
-                <Text style={styles.condChipTxt}>{c.id}</Text>
+                <Text style={styles.condChipTxt}>
+                  {c.id}
+                  {c.duration?.unit === 'rounds' && ` · ${c.duration.remaining}r`}
+                  {c.duration?.unit === 'until_rest' && ' · until rest'}
+                </Text>
                 <Pressable onPress={() => onRemoveCondition(c.id)} hitSlop={8}>
                   <Text style={styles.condX}>✕</Text>
                 </Pressable>
@@ -1189,12 +1593,63 @@ export function TabCharacter({
           </View>
         )}
 
-        {/* Mechanical effect reminders for active conditions */}
-        {conditions.filter(c => CONDITION_WARNINGS[c.id]).map(c => (
-          <Text key={`warn-${c.id}`} style={styles.condWarning}>
-            ⚠ <Text style={styles.condWarningName}>{c.id}:</Text> {CONDITION_WARNINGS[c.id]}
-          </Text>
-        ))}
+        {/* A-25: action/bonus-action/reaction pips — tap to correct manually
+            (real play has actions the app never models as a card: Dash/
+            Dodge/Help/Search, a reaction spent narratively). Auto-set when
+            an actual action-type card gets used, via applyActionCardUse. */}
+        <View style={styles.turnEconomyRow}>
+          {(['action', 'bonus_action', 'reaction'] as const).map(slot => {
+            const used = slot === 'action' ? entity.turnState?.actionUsed
+              : slot === 'bonus_action' ? entity.turnState?.bonusActionUsed
+              : entity.turnState?.reactionUsed;
+            const label = slot === 'action' ? 'Action' : slot === 'bonus_action' ? 'Bonus' : 'Reaction';
+            return (
+              <Pressable
+                key={slot}
+                style={[styles.turnPip, used && styles.turnPipUsed]}
+                onPress={() => onEntityUpdate(toggleActionEconomy(entity, slot))}
+              >
+                <Text style={[styles.turnPipTxt, used && styles.turnPipTxtUsed]}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Closure item 16: calls the ONE shared onEndTurn handler
+            (app/sheet/[id].tsx's handleEndTurn) rather than computing
+            playerEndTurn() locally and routing it through THIS tab's own
+            onEntityUpdate (which used a different label/category than the
+            other two tabs) — guarantees identical timeline/sync/undo
+            behavior regardless of which tab End Turn is pressed from.
+            Always visible (action-economy reset is relevant every turn
+            regardless). No preview gate: advancing a turn is expected/
+            mundane, not a surprising commit. */}
+        <Pressable
+          style={styles.endTurnBtn}
+          onPress={onEndTurn}
+        >
+          <Text style={styles.endTurnBtnTxt}>⏭ End Turn</Text>
+        </Pressable>
+
+        {/* Mechanical effect breakdown for active conditions — Automated
+            (Grimoire enforces this right now) vs. Table reminder (context-
+            dependent, the table/DM applies it) — see CONDITION_MECHANICS'
+            own doc comment above. */}
+        {conditions.filter(c => CONDITION_MECHANICS[c.id]).map(c => {
+          const { automated, reminder } = CONDITION_MECHANICS[c.id];
+          if (automated.length === 0 && reminder.length === 0) return null;
+          return (
+            <View key={`warn-${c.id}`} style={styles.condMechanicsBlock}>
+              <Text style={styles.condWarningName}>{c.id}</Text>
+              {automated.map((line, i) => (
+                <Text key={`a-${i}`} style={[styles.condWarning, styles.condAutomated]}>✓ {line}</Text>
+              ))}
+              {reminder.map((line, i) => (
+                <Text key={`r-${i}`} style={styles.condWarning}>⚠ {line}</Text>
+              ))}
+            </View>
+          );
+        })}
 
         {/* Advantage/Disadvantage grants from race/class traits, items, etc.
             Reminder only, same as condition warnings above — the app has no
@@ -1213,10 +1668,22 @@ export function TabCharacter({
 
       {/* Concentration indicator */}
       {spellcasting?.concentrating && (
-        <View style={styles.concIndicator}>
-          <Text style={styles.concIndicatorTxt}>
-            🧠 Concentrating on: {spellcasting.concentrating}
+        <View style={[styles.concIndicator, styles.concIndicatorRow]}>
+          <Text style={[styles.concIndicatorTxt, styles.concIndicatorLabel]}>
+            🧠 Concentrating on: {spellRepo.getSpellSync(spellcasting.concentrating)?.name ?? spellcasting.concentrating}
+            {spellcasting.concentratingDuration?.unit === 'rounds' && ` · ${spellcasting.concentratingDuration.remaining}r`}
           </Text>
+          <Pressable
+            style={styles.concEndBtn}
+            hitSlop={6}
+            accessibilityLabel="End concentration"
+            onPress={() => {
+              const name = spellRepo.getSpellSync(spellcasting.concentrating!)?.name ?? spellcasting.concentrating!;
+              confirmEndConcentration(name, concentrationLinkedEffectNames(entity), () => onEndConcentration(name));
+            }}
+          >
+            <Text style={styles.concEndBtnTxt}>End</Text>
+          </Pressable>
         </View>
       )}
 
@@ -1224,7 +1691,25 @@ export function TabCharacter({
       {resources.custom.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>RESOURCES</Text>
-          {resources.custom.map(r => (
+          {/* Dawn is an explicit event, not a rest: only offered when a dawn resource is spent. */}
+          {hasSpentDawnResources(entity) && (
+            <Pressable style={styles.dawnBtn} onPress={() => onEntityUpdate(takeDawn(entity, rules))} accessibilityLabel="Dawn: restore resources that recharge at dawn">
+              <Text style={styles.dawnBtnTxt}>☀ Dawn — restore dawn resources</Text>
+            </Pressable>
+          )}
+          {resources.custom.map(r => {
+            // Table-first recharge: the +/- controls below are already the
+            // PRIMARY "mark recharged" path (a DM/player just taps + after
+            // rolling physically). This adds only the secondary "Roll
+            // Recharge" convenience for a resource whose recharge string
+            // parses as "Recharge X-6" — rolls 1d6 in app and, on success,
+            // restores via the exact same onResourceChange the + button
+            // uses (to full, matching the real rule: a recharge success
+            // restores the whole ability, not one charge). Resources that
+            // don't parse this way (rest-based, start_of_turn, freeform
+            // homebrew text) show no roll button — nothing invented for them.
+            const rechargeThreshold = parseRechargeThreshold(r.recharge);
+            return (
             <View key={r.id} style={styles.resourceRow}>
               <View style={styles.resourceInfo}>
                 <Text style={styles.resourceName}>{r.name}</Text>
@@ -1240,9 +1725,22 @@ export function TabCharacter({
                 <Pressable style={styles.resBtn} onPress={() => onResourceChange(r.id, 1)} disabled={r.current >= r.maximum}>
                   <Text style={[styles.resBtnTxt, r.current >= r.maximum && styles.disabled]}>+</Text>
                 </Pressable>
+                {rechargeThreshold !== null && r.current < r.maximum && (
+                  <Pressable
+                    style={styles.rechargeBtn}
+                    onPress={() => {
+                      const { roll, success } = rollRecharge(rechargeThreshold);
+                      if (success) onResourceChange(r.id, r.maximum - r.current);
+                      showHitDieResult(`${r.name}: rolled ${roll} — ${success ? 'recharged!' : 'no charge'}`);
+                    }}
+                  >
+                    <Text style={styles.rechargeBtnTxt}>🎲</Text>
+                  </Pressable>
+                )}
               </View>
             </View>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -1251,23 +1749,43 @@ export function TabCharacter({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SPELL SLOTS</Text>
           <View style={styles.slotGrid}>
-            {SLOT_TIERS.map(tier => {
-              const slot = spellcasting.slots[tier];
+            {(['normal', 'pact'] as const).flatMap(kind => SLOT_TIERS.map(tier => ({ kind, tier }))).map(({ kind, tier }) => {
+              const slot = (kind === 'pact' ? spellcasting.pactSlots : spellcasting.slots)?.[tier];
               if (!slot || slot.total === 0) return null;
               return (
-                <View key={tier} style={styles.slotBlock}>
-                  <Text style={styles.slotTier}>Lv {tier}</Text>
+                <View key={kind + tier} style={styles.slotBlock}>
+                  <Text style={styles.slotTier}>{kind === 'pact' ? 'Pact · ' : ''}Lv {tier}</Text>
+                  {/* Re-audit closure item 1: pips are spend-ONLY now — tapping
+                      any pip always spends one slot (a no-op once fully
+                      exhausted, since spendSpellSlot's own invariant refuses
+                      to spend past total). Restoration is a deliberate,
+                      separate action via the explicit "+" button below (same
+                      pattern the RESOURCES section above already uses for
+                      its own −/+ controls) — never triggered by an ordinary
+                      pip tap, so casually tapping an exhausted slot row can
+                      no longer silently heal a slot back. */}
                   <View style={styles.slotPips}>
                     {Array.from({ length: slot.total }).map((_, i) => (
                       <Pressable
                         key={i}
                         hitSlop={10}
                         style={[styles.pip2, i < slot.used && styles.pip2Used]}
-                        onPress={() => i < slot.used ? onRestoreSlot(tier) : onSpendSlot(tier)}
+                        onPress={() => onSpendSlot(tier, kind)}
                       />
                     ))}
                   </View>
-                  <Text style={styles.slotCount}>{slot.total - slot.used}/{slot.total}</Text>
+                  <View style={styles.slotCountRow}>
+                    <Pressable
+                      hitSlop={8}
+                      style={styles.slotRestoreBtn}
+                      disabled={slot.used === 0}
+                      onPress={() => onRestoreSlot(tier, kind)}
+                      accessibilityLabel={`Restore a level ${tier} slot`}
+                    >
+                      <Text style={[styles.slotRestoreBtnTxt, slot.used === 0 && styles.disabled]}>+</Text>
+                    </Pressable>
+                    <Text style={styles.slotCount}>{slot.total - slot.used}/{slot.total}</Text>
+                  </View>
                 </View>
               );
             })}
@@ -1295,6 +1813,7 @@ export function TabCharacter({
         onDamage={handleDamage}
         onHeal={onHeal}
         onClose={() => setHpOpen(false)}
+        showNonmagicalOption={showNonmagicalOption}
       />
 
       <NumberPromptModal
@@ -1326,8 +1845,7 @@ export function TabCharacter({
 
       <ConcentrationModal
         visible={concOpen}
-        dc={concDc}
-        conMod={conMod}
+        damageTaken={concDamage}
         entity={useCharacterStore.getState().characters.find(c => c.id === entity.id) ?? entity}
         rules={rules}
         onResolve={updated => { onEntityUpdate(updated); setConcOpen(false); }}
@@ -1335,37 +1853,73 @@ export function TabCharacter({
       />
 
       {/* Condition Picker Modal */}
-      <Modal visible={condModal} transparent animationType="slide" onRequestClose={() => setCondModal(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setCondModal(false)}>
-          <Pressable style={styles.condPickerSheet} onPress={e => e.stopPropagation()}>
-            <Text style={styles.condPickerTitle}>Add Condition</Text>
-            <TextInput
-              style={styles.condSearch}
-              value={condSearch}
-              onChangeText={setCondSearch}
-              placeholder="Search conditions…"
-              placeholderTextColor={Colors.textDim}
-            />
-            <ScrollView>
-              {filteredConds.map(c => (
-                <Pressable key={c} style={styles.condPickerItem} onPress={() => {
-                  onAddCondition(c);
-                  setCondModal(false);
-                  setCondSearch('');
-                }}>
-                  <Text style={styles.condPickerItemTxt}>{c}</Text>
+      <Modal visible={condModal} transparent animationType="slide" onRequestClose={closeConditionFlow}>
+        <View style={styles.backdrop}>
+          {/* SCROLL-TOUCH-1: backdrop is a sibling, not an ancestor, of the sheet (see TabInventory AddItemModal) */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeConditionFlow} accessible={false} />
+          <View style={styles.condPickerSheet}>
+            {pendingConditionId === null ? (
+              <>
+                <Text style={styles.condPickerTitle}>Add Condition</Text>
+                <TextInput
+                  style={styles.condSearch}
+                  value={condSearch}
+                  onChangeText={setCondSearch}
+                  placeholder="Search conditions…"
+                  placeholderTextColor={Colors.textDim}
+                />
+                <ScrollView>
+                  {filteredConds.map(c => (
+                    <Pressable key={c} style={styles.condPickerItem} onPress={() => setPendingConditionId(c)}>
+                      <Text style={styles.condPickerItemTxt}>{c}</Text>
+                    </Pressable>
+                  ))}
+                  {filteredConds.length === 0 && (
+                    <Text style={styles.emptyNote}>No conditions found</Text>
+                  )}
+                </ScrollView>
+                <Pressable style={styles.cancelBtn} onPress={closeConditionFlow}>
+                  <Text style={styles.cancelTxt}>Cancel</Text>
                 </Pressable>
-              ))}
-              {filteredConds.length === 0 && (
-                <Text style={styles.emptyNote}>No conditions found</Text>
-              )}
-            </ScrollView>
-            <Pressable style={styles.cancelBtn} onPress={() => setCondModal(false)}>
-              <Text style={styles.cancelTxt}>Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={styles.condPickerTitle}>How long — {pendingConditionId}?</Text>
+                <Pressable
+                  style={styles.condPickerItem}
+                  onPress={() => { onAddCondition(pendingConditionId, null); closeConditionFlow(); }}
+                >
+                  <Text style={styles.condPickerItemTxt}>Permanent</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.condPickerItem}
+                  onPress={() => { onAddCondition(pendingConditionId, { unit: 'until_rest', remaining: 0 }); closeConditionFlow(); }}
+                >
+                  <Text style={styles.condPickerItemTxt}>Until Next Rest</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.condPickerItem}
+                  onPress={() => { setCondModal(false); setRoundsPromptOpen(true); }}
+                >
+                  <Text style={styles.condPickerItemTxt}>N Rounds…</Text>
+                </Pressable>
+                <Pressable style={styles.cancelBtn} onPress={() => setPendingConditionId(null)}>
+                  <Text style={styles.cancelTxt}>Back</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
       </Modal>
+
+      <NumberPromptModal
+        visible={roundsPromptOpen}
+        title={`${pendingConditionId} — Rounds`}
+        label="How many rounds until it expires?"
+        confirmLabel="Add Condition"
+        onConfirm={n => { onAddCondition(pendingConditionId!, { unit: 'rounds', remaining: Math.max(1, n) }); closeConditionFlow(); }}
+        onClose={closeConditionFlow}
+      />
 
       {/* Level-up ASI / Feat picker */}
       <Modal visible={levelUpAsiOpen} animationType="slide" onRequestClose={() => setLevelUpAsiOpen(false)}>
@@ -1393,6 +1947,7 @@ export function TabCharacter({
                   const more = updated.choices.some(c => c.definition.kind === 'asi' && !c.resolved);
                   if (!more) setLevelUpAsiOpen(false);
                 }}
+                browseStateKey="feat:levelup"
               />
             );
           })()}
@@ -1417,10 +1972,19 @@ export function TabCharacter({
         onUpdate={(u) => { onEntityUpdate(u); }}
       />
 
+      {paymentChooser}
       <UseModal
         card={activeFavCard}
         onRoll={rollForFavorite}
         onClose={() => setActiveFavCard(null)}
+      />
+
+      <ActivationOptionModal
+        entity={entity}
+        card={pendingFavUse?.card ?? null}
+        onChoose={handleChooseFavoriteOption}
+        onClose={() => setPendingFavUse(null)}
+        bypassIncapacitated={pendingFavUse?.bypassIncapacitated}
       />
 
       {/* Add a feat ad-hoc from the sheet */}
@@ -1436,6 +2000,7 @@ export function TabCharacter({
               onEntityUpdate(updated);
               setAddFeatOpen(false);
             }}
+            browseStateKey="feat:live"
           />
         </View>
       </Modal>
@@ -1443,6 +2008,12 @@ export function TabCharacter({
     </ScrollView>
   );
 }
+
+// EDIT-PERF-1: memoized so opening an unrelated sheet-level modal (Free
+// Edit, Ruleset Change, History, ...) doesn't force this tab to re-render —
+// only actually matters combined with the caller passing stable prop
+// references (see app/sheet/[id].tsx's onCombatEntityUpdate etc.).
+export const TabCharacter = memo(TabCharacterInner);
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -1486,7 +2057,7 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, alignItems: 'center',
   },
   useHitDieBtnDisabled: { opacity: 0.4 },
-  useHitDieTxt: { color: Colors.green, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  useHitDieTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
 
   // Weapon attacks
   weaponRow: {
@@ -1506,8 +2077,10 @@ const styles = StyleSheet.create({
   weaponBadgeTxt:    { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold },
 
   // Condition warnings
-  condWarning:     { fontSize: FontSize.xs, color: Colors.gold, marginTop: 4, lineHeight: 16 },
-  condWarningName: { fontWeight: FontWeight.bold, textTransform: 'capitalize' },
+  condMechanicsBlock: { marginTop: 4, gap: 1 },
+  condWarning:     { fontSize: FontSize.xs, color: Colors.gold, lineHeight: 16 },
+  condWarningName: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, textTransform: 'capitalize', color: Colors.textSecondary },
+  condAutomated:   { color: Colors.green },
   advList: { marginTop: 4, gap: 2 },
   advTxt:    { color: Colors.green },
   disadvTxt: { color: Colors.red },
@@ -1630,6 +2203,12 @@ const styles = StyleSheet.create({
     padding: Spacing.sm, alignItems: 'center',
   },
   levelUpBtnTxt: { color: Colors.gold, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  plannerBtn: {
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.xs,
+  },
+  plannerBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
   levelUpMcWrap: { gap: Spacing.xs },
   addClassBtn: {
     backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md,
@@ -1684,12 +2263,38 @@ const styles = StyleSheet.create({
   condX:       { color: Colors.textDim, fontSize: FontSize.sm },
   emptyNote:   { color: Colors.textDim, fontSize: FontSize.sm, fontStyle: 'italic' },
 
+  endTurnBtn: {
+    alignSelf: 'flex-start', marginTop: Spacing.xs,
+    backgroundColor: Colors.surface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+  },
+  endTurnBtnTxt: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+
+  turnEconomyRow: { flexDirection: 'row', gap: Spacing.xs, marginTop: Spacing.xs },
+  turnPip: {
+    backgroundColor: Colors.green + '22', borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.green + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+  },
+  turnPipUsed: { backgroundColor: Colors.surfaceHigh, borderColor: Colors.border },
+  turnPipTxt: { fontSize: FontSize.xs, color: Colors.green, fontWeight: FontWeight.bold },
+  turnPipTxtUsed: { color: Colors.textDim },
+
   concIndicator: {
     backgroundColor: Colors.blue + '22', borderRadius: Radius.md,
     borderWidth: 1, borderColor: Colors.blue + '44',
     padding: Spacing.sm,
   },
   concIndicatorTxt: { color: Colors.blue, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+  concIndicatorRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  concIndicatorLabel: { flex: 1 },
+  concEndBtn: {
+    backgroundColor: Colors.red + '22', borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.red + '66',
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+  },
+  concEndBtnTxt: { fontSize: FontSize.sm, color: Colors.red, fontWeight: FontWeight.bold },
 
   resourceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   resourceInfo:     { flex: 1 },
@@ -1705,6 +2310,13 @@ const styles = StyleSheet.create({
   resourceCount: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, minWidth: 40, textAlign: 'center' },
   resourceMax:   { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.normal },
   disabled:      { opacity: 0.3 },
+  dawnBtn: { alignSelf: 'flex-start', backgroundColor: Colors.surfaceHigh, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.gold, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, marginBottom: Spacing.xs },
+  dawnBtnTxt: { color: Colors.gold, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+  rechargeBtn: {
+    width: 28, height: 28, borderRadius: Radius.full,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  rechargeBtnTxt: { fontSize: FontSize.md },
 
   slotGrid:  { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   slotBlock: { alignItems: 'center', gap: 4, minWidth: 50 },
@@ -1716,6 +2328,13 @@ const styles = StyleSheet.create({
   },
   pip2Used: { backgroundColor: Colors.border },
   slotCount: { fontSize: FontSize.xs, color: Colors.textDim },
+  slotCountRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  slotRestoreBtn: {
+    width: 16, height: 16, borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceHigh, borderWidth: 1, borderColor: Colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  slotRestoreBtnTxt: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.bold, lineHeight: FontSize.xs },
 
   // Concentration modal
   backdrop:   { flex: 1, backgroundColor: '#000000bb', justifyContent: 'center', padding: Spacing.lg },
@@ -1726,16 +2345,32 @@ const styles = StyleSheet.create({
   },
   concTitle:        { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.blue, textAlign: 'center' },
   concSpell:        { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
-  concDc:           { fontSize: FontSize.md, color: Colors.textPrimary, textAlign: 'center', fontWeight: FontWeight.bold },
   rollBtn:          { backgroundColor: Colors.blue, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
   rollBtnTxt:       { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.md },
-  concResult:       { borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center', gap: Spacing.xs },
-  concPass:         { backgroundColor: Colors.green + '22', borderWidth: 1, borderColor: Colors.green + '66' },
-  concFail:         { backgroundColor: Colors.red   + '22', borderWidth: 1, borderColor: Colors.red   + '66' },
-  concResultNum:    { fontSize: 40, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  concResultLabel:  { fontSize: FontSize.md, color: Colors.textPrimary, textAlign: 'center' },
   closeBtnSm:       { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center' },
   closeBtnSmTxt:    { color: Colors.textSecondary, fontSize: FontSize.md },
+  btnDisabled:      { opacity: 0.4 },
+  // Table-first rolled-HP gate (HpRollGate)
+  hpRollBackdrop: { flex: 1, backgroundColor: '#000000bb', justifyContent: 'center', padding: Spacing.lg },
+  hpRollSheet: {
+    backgroundColor: Colors.surfaceHigh, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.gold + '44',
+    padding: Spacing.lg, gap: Spacing.sm,
+  },
+  hpRollTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold, textAlign: 'center' },
+  hpRollLine:  { fontSize: FontSize.md, color: Colors.textPrimary, textAlign: 'center' },
+  hpRollInputRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, justifyContent: 'center' },
+  hpRollInputLabel: { color: Colors.textSecondary, fontSize: FontSize.sm },
+  hpRollInput: {
+    width: 80, backgroundColor: Colors.surface, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.gold, color: Colors.textPrimary,
+    textAlign: 'center', paddingVertical: 6, fontSize: FontSize.md,
+  },
+  hpRollPreview: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.green, textAlign: 'center' },
+  hpRollSubmit:    { backgroundColor: Colors.gold, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center' },
+  hpRollSubmitTxt: { color: Colors.bg, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  hpRollAppBtn:    { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.sm, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
+  hpRollAppBtnTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 
   // Condition picker
   condPickerSheet: {
@@ -1759,9 +2394,22 @@ const styles = StyleSheet.create({
   // Hit dice buttons
   hitDieRow:    { flexDirection: 'row', gap: Spacing.sm },
   hitDieBtn:    { flex: 1, borderRadius: Radius.md, borderWidth: 1, padding: Spacing.sm, alignItems: 'center' },
-  hitDieRoll:   { backgroundColor: Colors.green + '22', borderColor: Colors.green + '66' },
-  hitDieUse:    { backgroundColor: Colors.surfaceHigh, borderColor: Colors.border },
-  hitDieUseTxt: { color: Colors.textSecondary, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  // Table-first: Use Hit Die (manual entry) is the visually primary action;
+  // Roll in App (useHitDieTxt below) is the secondary convenience.
+  hitDieRoll:   { backgroundColor: Colors.surfaceHigh, borderColor: Colors.border },
+  hitDieUse:    { backgroundColor: Colors.green + '22', borderColor: Colors.green + '66' },
+  hitDieUseTxt: { color: Colors.green, fontWeight: FontWeight.bold, fontSize: FontSize.md },
+  hitDieEntryRow:       { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
+  hitDieEntryLabel:     { color: Colors.textSecondary, fontSize: FontSize.sm },
+  hitDieEntryInput: {
+    flex: 1, backgroundColor: Colors.surfaceHigh, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: Colors.green, color: Colors.textPrimary,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4, fontSize: FontSize.md,
+  },
+  hitDieEntrySubmit:    { backgroundColor: Colors.green, borderRadius: Radius.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  hitDieEntrySubmitTxt: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  hitDieEntryCancel:    { padding: Spacing.sm },
+  hitDieEntryCancelTxt: { color: Colors.textDim, fontSize: FontSize.md },
   hitDieHint:   { fontSize: FontSize.xs, color: Colors.textDim, fontStyle: 'italic', marginTop: 4 },
   // Inline result text (hit die + death saves)
   dieResultTxt: {

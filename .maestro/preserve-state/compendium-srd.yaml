@@ -1,0 +1,25 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - Compendium SRD exposure
+tags: [preserve-state, srd]
+---
+- launchApp
+- tapOn: { id: tab-compendium }
+- assertVisible: { id: compendium-screen }
+- tapOn: { id: compendium-search }
+- inputText: "Fireball"
+- assertVisible: "Fireball"
+- eraseText
+- inputText: "Artificer"
+- assertVisible: "No results match your search."
+- eraseText
+- inputText: "Tasha's Hideous Laughter"
+- assertVisible: "No results match your search."
+- eraseText
+- back
+- tapOn: { id: compendium-filters }
+- assertNotVisible: "Official / Homebrew"
+- tapOn: { id: compendium-filters }
+- tapOn: { id: tab-home }
+- assertVisible: { id: home-screen }
+
+

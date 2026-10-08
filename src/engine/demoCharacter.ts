@@ -6,7 +6,7 @@
 // patterns this mirrors). No hand-written JSON entity — this stays valid
 // automatically as the engine evolves, per docs/ROADMAP_1.0.md Phase 3.3.
 //
-// Human + Fighter + Soldier background were chosen deliberately: all three
+// Human + Fighter + Acolyte background were chosen deliberately: all three
 // are confirmed SRD-safe (see the Phase 1 legal audit), so the demo character
 // is legally clean in a public build with zero extra filtering needed.
 //
@@ -19,9 +19,7 @@ import { Entity, CampaignRules } from './types';
 import { makeEmptyEntity } from '../store/characterStore';
 import { applyGrant, levelUp, resolveChoice } from './leveling';
 import { recomputeDerived } from './pipeline';
-import { fighterProgression } from '../content/classes/fighter';
-import { raceHuman } from '../content/races/index';
-import { bgSoldier } from '../content/backgrounds/index';
+import { getOfficialContentProvider } from '../content/officialSource';
 
 const DEMO_CHARACTER_ID_PREFIX = 'demo-';
 
@@ -30,7 +28,7 @@ export function isDemoCharacter(entity: Entity): boolean {
 }
 
 /**
- * Builds a level-3 Human Fighter (Soldier background) via the real engine
+ * Builds a level-3 Human Fighter (Acolyte background) via the real engine
  * pipeline. Auto-resolves only 'skill' and 'equipment' choices (picking the
  * first available option from each pool, a sensible default) so the demo
  * character has real starting gear and trained skills rather than showing
@@ -38,6 +36,12 @@ export function isDemoCharacter(entity: Entity): boolean {
  * choices pending, same as any real level-3 fighter who hasn't picked yet.
  */
 export function buildDemoCharacter(rules: CampaignRules): Entity {
+  // The sample character is built from the installed SRD 5.1 pack (a Human Acolyte Fighter (the SRD 5.1 pack's one background)), not from built-in content.
+  const provider = getOfficialContentProvider();
+  const raceHuman = provider?.getRace('human');
+  const bgSoldier = provider?.getBackground('acolyte');
+  const fighterProgression = provider?.getClass('fighter')?.rawProgression;
+  if (!raceHuman || !bgSoldier || !fighterProgression) throw new Error('The sample character needs the SRD 5.1 content pack to be installed.');
   const id = `${DEMO_CHARACTER_ID_PREFIX}${Date.now().toString(36)}`;
   let entity = makeEmptyEntity(id, 'character');
 
@@ -67,7 +71,7 @@ export function buildDemoCharacter(rules: CampaignRules): Entity {
   for (const feature of bgSoldier.features) {
     entity = applyGrant(entity, { kind: 'feature', value: { ...feature, isActive: true } }, 0);
   }
-  const soldierSkills = ['athletics', 'intimidation'] as const;
+  const soldierSkills = ['insight', 'religion'] as const;   // the Acolyte's skills
   entity = {
     ...entity,
     skills: {

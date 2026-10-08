@@ -6,27 +6,73 @@ import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCharacterStore, makeEmptyEntity } from '../../src/store/characterStore';
+import { RulesetId } from '../../src/engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../src/theme';
+import { SafeBottomView } from '../../src/components/SafeBottomView';
+import { RulesSourcePicker, RulesChoice, rulesChoiceFromDraft } from '../../src/components/RulesSourcePicker';
+import { MissingRulesetContentBanner } from '../../src/components/MissingRulesetContentBanner';
 
 const LEVEL_OPTIONS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
+
+/** Parses the {targetLevel, campaign} JSON this screen stashes in
+ *  entity.notes (see handleContinue below) back out, for pre-filling the
+ *  form when re-entering an already-started draft. Same shape name.tsx has
+ *  always written; not a general notes parser. */
+function parseBasics(notes: string): { targetLevel: number; campaign: string } | null {
+  try {
+    const parsed = JSON.parse(notes) as { targetLevel?: unknown; campaign?: unknown };
+    if (typeof parsed.targetLevel === 'number') {
+      return { targetLevel: parsed.targetLevel, campaign: typeof parsed.campaign === 'string' ? parsed.campaign : '' };
+    }
+  } catch { /* not this screen's JSON shape (e.g. real session notes already written later) */ }
+  return null;
+}
 
 export default function NameScreen() {
   const router   = useRouter();
   const setDraft = useCharacterStore(s => s.setDraft);
+  // Re-audit A09 (item 11): read the CURRENT draft once at mount, not
+  // reactively — re-entering this screen (e.g. via Back from Hub) should
+  // pre-fill from and continue editing whatever draft already exists
+  // rather than silently starting a brand new entity with a new id, which
+  // used to orphan every step already completed on the old draft.
+  const [existingDraft] = useState(() => useCharacterStore.getState().draft);
+  const existingBasics = existingDraft ? parseBasics(existingDraft.notes) : null;
 
-  const [name,     setName]     = useState('');
-  const [level,    setLevel]    = useState(1);
-  const [campaign, setCampaign] = useState('');
+  const [name,     setName]     = useState(existingDraft?.identity.name ?? '');
+  const [level,    setLevel]    = useState(existingBasics?.targetLevel ?? 1);
+  const [campaign, setCampaign] = useState(existingBasics?.campaign ?? '');
+  const [rulesChoice, setRulesChoice] = useState<RulesChoice>(() => rulesChoiceFromDraft(existingDraft));
 
   function handleContinue() {
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    let entity = makeEmptyEntity(Date.now().toString());
+    // Mutate the existing draft in place (same id) when one is already in
+    // progress, instead of always minting a fresh entity — see the
+    // existingDraft comment above.
+    let entity = existingDraft ?? makeEmptyEntity(Date.now().toString());
     entity = {
       ...entity,
       identity: { ...entity.identity, name: trimmed },
       notes: JSON.stringify({ targetLevel: level, campaign: campaign.trim() }),
+      // LIVE-RULESET-4 (item 8): every NEW character gets a canonical
+      // rulesetId from the moment it's created, rather than starting
+      // untagged and only ever getting one via a later, optional Change
+      // Ruleset action. 'dnd5e-2014' is this app's own long-standing
+      // implicit baseline — every piece of content authored before the
+      // 5.5e proof-of-concept was written against it, and it's already the
+      // fallback RulesetChangeModal's own picker assumes for an untagged
+      // character (gameIdForRuleset(RULESETS['dnd5e-2014'].id)). Making
+      // that assumption explicit and stored, rather than re-derived every
+      // time, is the "canonical, not silently defaulted" outcome the spec
+      // asks for. Existing (already-saved) untagged characters are
+      // deliberately NOT touched by this — see loadCharacters()'s own
+      // comment for why a blanket migration isn't done.
+      // The player's Rules choice (campaign / custom / official preset) decides the ruleset and the
+      // rule-profile overlay; the default is the same 2014 baseline as before.
+      rulesetId: rulesChoice.rulesetId as RulesetId,
+      customRuleProfileId: rulesChoice.profileId,
     };
 
     setDraft(entity);
@@ -38,7 +84,11 @@ export default function NameScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.inner}
+        keyboardShouldPersistTaps="handled"
+      >
 
         {/* Header — title + original app settings button */}
         <View style={styles.headerRow}>
@@ -91,6 +141,10 @@ export default function NameScreen() {
           />
         </View>
 
+        {/* Rules source: campaign setting / custom / official 5e & 5.5e. Drives the ruleset and what content is suggested first. */}
+        <RulesSourcePicker value={rulesChoice} onChange={setRulesChoice} />
+        <MissingRulesetContentBanner ruleset={rulesChoice.rulesetId as RulesetId | undefined} />
+
         {/* Campaign Settings — lives here in Character Basics, not in the creation flow */}
         <Pressable style={styles.campaignSettingsCard} onPress={() => router.push('/creation/rules')}>
           <Text style={styles.campaignSettingsIcon}>📖</Text>
@@ -105,22 +159,27 @@ export default function NameScreen() {
 
         <View style={styles.divider} />
 
-        <Pressable
-          style={[styles.continueBtn, !name.trim() && styles.continueBtnDisabled]}
-          onPress={handleContinue}
-          disabled={!name.trim()}
-        >
-          <Text style={styles.continueBtnText}>Continue</Text>
-        </Pressable>
-
       </ScrollView>
+      <SafeBottomView>
+        <View style={styles.footer}>
+          <Pressable
+            style={[styles.continueBtn, !name.trim() && styles.continueBtnDisabled]}
+            onPress={handleContinue}
+            disabled={!name.trim()}
+          >
+            <Text style={styles.continueBtnText}>Continue</Text>
+          </Pressable>
+        </View>
+      </SafeBottomView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  inner: { padding: Spacing.lg, paddingTop: Spacing.xxl, paddingBottom: Spacing.xxl },
+  scroll:    { flex: 1 },
+  footer:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
+  inner: { padding: Spacing.lg, paddingTop: Spacing.xxl },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md },
   headerSpacer: { width: 32 },

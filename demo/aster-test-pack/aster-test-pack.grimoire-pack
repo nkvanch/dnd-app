@@ -1,0 +1,461 @@
+{
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "packType": "content-pack",
+  "createdAt": 1789986946676,
+  "modifiedAt": 1789986946676,
+  "appVersion": "1.0.0",
+  "deviceId": null,
+  "characters": [],
+  "homebrew": {
+    "races": [
+      {
+        "id": "aster_touched_demo",
+        "name": "Aster-Touched (Demo)",
+        "features": [
+          {
+            "id": "aster_touched_demo_aster_resilience",
+            "name": "Aster Resilience",
+            "description": "+1 Constitution.",
+            "source": {
+              "kind": "race",
+              "refId": "aster_touched_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "stat_modifier",
+                "target": "con",
+                "operation": "add",
+                "value": 1,
+                "condition": null
+              }
+            ]
+          },
+          {
+            "id": "aster_touched_demo_starsight",
+            "name": "Starsight",
+            "description": "Darkvision 60 ft.",
+            "source": {
+              "kind": "race",
+              "refId": "aster_touched_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "grant_sense",
+                "target": "senses",
+                "operation": "add",
+                "value": null,
+                "condition": null,
+                "senseType": "darkvision",
+                "senseRange": 60
+              }
+            ]
+          },
+          {
+            "id": "aster_touched_demo_starlit_pulse",
+            "name": "Starlit Pulse",
+            "description": "Bonus action: heal 1d6. 2 uses per short rest.",
+            "source": {
+              "kind": "race",
+              "refId": "aster_touched_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": false,
+            "effects": [],
+            "activation": {
+              "actionType": "bonus_action",
+              "resourceCost": {
+                "resourceId": "aster_touched_demo_starlit_pulse_pool",
+                "quantity": 1
+              },
+              "range": "self",
+              "target": "self",
+              "requiresSave": null
+            },
+            "abilityEffects": [
+              {
+                "type": "heal",
+                "dice": "1d6"
+              }
+            ]
+          },
+          {
+            "id": "aster_touched_demo_aster_lance_gift",
+            "name": "Aster Lance Gift",
+            "description": "Cast Aster Lance (Demo) once per long rest.",
+            "source": {
+              "kind": "race",
+              "refId": "aster_touched_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": []
+          },
+          {
+            "id": "aster_touched_demo_aster_lance_gift_grant_aster_lance_demo",
+            "name": "Aster Lance (Demo)",
+            "description": "Granted by Aster Lance Gift.",
+            "source": {
+              "kind": "race",
+              "refId": "aster_touched_demo"
+            },
+            "level": 1,
+            "actions": [],
+            "choices": [],
+            "passive": false,
+            "effects": [],
+            "activation": {
+              "actionType": "action",
+              "resourceCost": {
+                "resourceId": "aster_touched_demo_aster_lance_gift_grant_aster_lance_demo_pool",
+                "quantity": 1
+              },
+              "range": "self",
+              "target": "single",
+              "requiresSave": null
+            },
+            "abilityEffects": [
+              {
+                "type": "cast_spell",
+                "spellId": "aster_lance_demo"
+              }
+            ]
+          }
+        ],
+        "resources": [
+          {
+            "resourceId": "aster_touched_demo_starlit_pulse_pool",
+            "name": "Starlit Pulse",
+            "maximum": 2,
+            "recharge": "short_rest"
+          },
+          {
+            "resourceId": "aster_touched_demo_aster_lance_gift_grant_aster_lance_demo_pool",
+            "name": "Aster Lance Gift: Aster Lance (Demo)",
+            "maximum": 1,
+            "recharge": "long_rest"
+          }
+        ],
+        "size": "Medium",
+        "speed": 30,
+        "languages": [
+          "Common"
+        ]
+      }
+    ],
+    "feats": [
+      {
+        "id": "aster_focus_demo",
+        "name": "Aster Focus (Demo)",
+        "prerequisite": null,
+        "source": "Aster Test Pack (demo)",
+        "description": "TEST/DEMO CONTENT, part of the Aster Test Pack. Not for play. Increase Intelligence, Wisdom or Charisma by 1 (your choice) and gain Arcana proficiency.",
+        "abilityChoice": {
+          "options": [
+            "int",
+            "wis",
+            "cha"
+          ],
+          "amount": 1
+        },
+        "feature": {
+          "id": "aster_focus_demo_aster_study",
+          "name": "Aster Study",
+          "description": "Proficiency in Arcana.",
+          "source": {
+            "kind": "feat",
+            "refId": "aster_focus_demo"
+          },
+          "level": null,
+          "actions": [],
+          "choices": [],
+          "passive": true,
+          "effects": [
+            {
+              "type": "grant_proficiency",
+              "target": "skill:arcana",
+              "operation": "add",
+              "value": null,
+              "condition": null
+            }
+          ]
+        }
+      }
+    ],
+    "items": [
+      {
+        "id": "aster_lantern_demo",
+        "name": "Aster Lantern (Demo)",
+        "weight": 2,
+        "cost": "-",
+        "properties": [
+          "wondrous item",
+          "requires attunement",
+          "TEST/DEMO CONTENT, part of the Aster Test Pack. Not for play."
+        ],
+        "features": [
+          {
+            "id": "aster_lantern_ward",
+            "name": "Lantern Ward",
+            "description": "+1 AC while the lantern is attuned.",
+            "source": {
+              "kind": "item",
+              "refId": "aster_lantern_demo"
+            },
+            "level": null,
+            "passive": true,
+            "actions": [],
+            "choices": [],
+            "effects": [
+              {
+                "type": "stat_modifier",
+                "target": "ac",
+                "operation": "add",
+                "value": 1,
+                "condition": null
+              }
+            ]
+          },
+          {
+            "id": "aster_lantern_flash",
+            "name": "Starflash",
+            "description": "Action: mark a creature with starlight for 3 rounds (applies Star-Marked).",
+            "source": {
+              "kind": "item",
+              "refId": "aster_lantern_demo"
+            },
+            "level": null,
+            "passive": false,
+            "actions": [],
+            "choices": [],
+            "effects": [],
+            "activation": {
+              "actionType": "action",
+              "resourceCost": null,
+              "range": "30 feet",
+              "target": "single",
+              "requiresSave": null
+            },
+            "abilityEffects": [
+              {
+                "type": "apply_condition",
+                "conditionId": "star_marked_demo",
+                "duration": {
+                  "unit": "rounds",
+                  "remaining": 3
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "monsters": [
+      {
+        "id": "aster_wisp_demo",
+        "name": "Aster Wisp (Demo)",
+        "cr": 0.25,
+        "size": "tiny",
+        "type": "elemental",
+        "alignment": "unaligned",
+        "stats": {
+          "str": 3,
+          "dex": 16,
+          "con": 10,
+          "int": 8,
+          "wis": 12,
+          "cha": 10
+        },
+        "hp": {
+          "dice": "3d4",
+          "average": 8
+        },
+        "ac": {
+          "value": 13,
+          "source": "natural"
+        },
+        "speed": 0,
+        "features": [
+          {
+            "id": "aster_wisp_demo_flickering_light",
+            "name": "Flickering Light",
+            "description": "Darkvision 120 ft.",
+            "source": {
+              "kind": "campaign",
+              "refId": "aster_wisp_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "grant_sense",
+                "target": "senses",
+                "operation": "add",
+                "value": null,
+                "condition": null,
+                "senseType": "darkvision",
+                "senseRange": 120
+              }
+            ]
+          },
+          {
+            "id": "aster_wisp_mark",
+            "name": "Star Mark",
+            "description": "Action: mark a creature (Star-Marked) for 2 rounds.",
+            "source": {
+              "kind": "campaign",
+              "refId": "aster_wisp_demo"
+            },
+            "level": null,
+            "passive": false,
+            "actions": [],
+            "choices": [],
+            "effects": [],
+            "activation": {
+              "actionType": "action",
+              "resourceCost": null,
+              "range": "30 feet",
+              "target": "single",
+              "requiresSave": {
+                "ability": "wis",
+                "dc": 12
+              }
+            },
+            "abilityEffects": [
+              {
+                "type": "apply_condition",
+                "conditionId": "star_marked_demo",
+                "duration": {
+                  "unit": "rounds",
+                  "remaining": 2
+                }
+              }
+            ]
+          }
+        ],
+        "savingThrows": [],
+        "skills": {},
+        "senses": [
+          "darkvision 120 ft"
+        ],
+        "languages": []
+      }
+    ],
+    "spells": [
+      {
+        "id": "aster_lance_demo",
+        "name": "Aster Lance (Demo)",
+        "level": 1,
+        "school": "Evocation",
+        "castingTime": "1 action",
+        "range": "60 feet",
+        "components": [
+          "V",
+          "S"
+        ],
+        "duration": "Instantaneous",
+        "description": "TEST/DEMO CONTENT, part of the Aster Test Pack. Not for play. A beam of starlight strikes a creature you can see: it makes a Dexterity save or takes 2d6 radiant damage (half on a success).",
+        "upcast": "Damage increases by 1d6 for each slot level above 1st.",
+        "ritual": false,
+        "concentration": false,
+        "classes": [
+          "wizard",
+          "sorcerer"
+        ],
+        "spellType": [
+          "damage"
+        ]
+      }
+    ],
+    "conditions": [
+      {
+        "id": "star_marked_demo",
+        "name": "Star-Marked (Demo)",
+        "description": "TEST/DEMO CONTENT, part of the Aster Test Pack. Not for play. You are outlined in starlight: -1 AC.",
+        "features": [
+          {
+            "id": "star_marked_demo_starlit_outline",
+            "name": "Starlit Outline",
+            "description": "A faint star-shaped outline makes you easier to hit: -1 AC while marked.",
+            "source": {
+              "kind": "condition",
+              "refId": "star_marked_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "stat_modifier",
+                "target": "ac",
+                "operation": "add",
+                "value": -1,
+                "condition": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "packageId": "pkg_1789986946676_kxjb0y7f",
+  "name": "Aster Test Pack",
+  "author": "Grimoire (original demo content)",
+  "description": "TEST/DEMO ONLY. Original mini-dataset that exercises species traits, a structured feat choice, a limited resource, an item with an attunement bonus and an active ability, a condition, a spell and a monster, with cross-content dependencies.",
+  "packageVersion": "1.0",
+  "compatibleRulesets": [],
+  "contents": [
+    {
+      "type": "race",
+      "id": "aster_touched_demo",
+      "name": "Aster-Touched (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "feat",
+      "id": "aster_focus_demo",
+      "name": "Aster Focus (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "item",
+      "id": "aster_lantern_demo",
+      "name": "Aster Lantern (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "monster",
+      "id": "aster_wisp_demo",
+      "name": "Aster Wisp (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "spell",
+      "id": "aster_lance_demo",
+      "name": "Aster Lance (Demo)",
+      "included": "dependency"
+    },
+    {
+      "type": "condition",
+      "id": "star_marked_demo",
+      "name": "Star-Marked (Demo)",
+      "included": "dependency"
+    }
+  ],
+  "media": []
+}

@@ -19,7 +19,7 @@ const STEEL_DEFENDER: CompanionTemplate = {
   name: 'Steel Defender',
   baseStats: { str: 14, dex: 12, con: 14, int: 4, wis: 10, cha: 6 },
   speed: 40,
-  hpForOwnerLevel: (level) => 5 + 5 * level,
+  hp: { base: 5, perOwnerLevel: 5 },
   features: [
     {
       id: 'steel_defender_ac', name: 'Defender Plating',
@@ -48,7 +48,7 @@ const ELDRITCH_CANNON: CompanionTemplate = {
   name: 'Eldritch Cannon',
   baseStats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
   speed: 0,
-  hpForOwnerLevel: (level) => 5 + 2 * level,
+  hp: { base: 5, perOwnerLevel: 2 },
   features: [
     {
       id: 'eldritch_cannon_ac', name: 'Cannon Housing',
@@ -76,7 +76,7 @@ const RANGERS_WOLF: CompanionTemplate = {
   name: "Ranger's Companion (Wolf)",
   baseStats: { str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6 },
   speed: 40,
-  hpForOwnerLevel: (level) => 4 * level,
+  hp: { base: 0, perOwnerLevel: 4 },
   features: [
     {
       id: 'rangers_wolf_bite', name: 'Bite',
@@ -90,7 +90,20 @@ const RANGERS_WOLF: CompanionTemplate = {
       id: 'rangers_wolf_pack_tactics', name: 'Pack Tactics',
       description: 'The wolf has advantage on an attack roll against a creature if at least one of the wolf\'s allies is within 5 feet of the creature and the ally isn\'t incapacitated.',
       source: { kind: 'class', refId: 'rangers_wolf' }, level: null, actions: [], choices: [], passive: true,
-      effects: [{ type: 'stat_modifier', target: 'attack rolls when an ally is within 5 feet of the target', operation: 'advantage', value: null, condition: null }],
+      // Bug fix (item 9, context-dependent/three-state mechanics): this
+      // used to be an unconditional advantage effect — the app can't
+      // observe battlefield positioning, so it was always silently
+      // granting advantage regardless of whether an ally was actually
+      // within 5 feet. Now gated behind an explicit situational question
+      // (defaults to not-applying until answered Yes) via the new
+      // Effect.situational mechanism, and targets the properly-declared
+      // 'adv.attack_rolls' key (resolver.ts's TARGET_STRATEGY) instead of
+      // a freeform descriptive string. Note: adv.attack_rolls itself has
+      // no numeric consumer anywhere yet — this app has no attack-roll
+      // auto-resolution (the player rolls their own dice) — so this fix
+      // is about correct/honest tagging, not a new visible number; the
+      // question now shows up in TabFeatures' Situational section either way.
+      effects: [{ type: 'stat_modifier', target: 'adv.attack_rolls', operation: 'advantage', value: null, condition: null, situational: { id: 'ally_within_5ft_of_target', question: "Is an ally within 5 feet of the target (and not incapacitated)?" } }],
     },
   ],
 };

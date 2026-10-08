@@ -1,0 +1,223 @@
+{
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "packType": "content-pack",
+  "createdAt": 1789986948525,
+  "modifiedAt": 1789986948525,
+  "appVersion": "1.0.0",
+  "deviceId": null,
+  "characters": [],
+  "homebrew": {
+    "subclasses": [
+      {
+        "id": "understudy_demo",
+        "name": "The Understudy (Demo)",
+        "classId": "bard",
+        "entries": [
+          {
+            "level": 3,
+            "grants": [
+              {
+                "kind": "feature",
+                "value": {
+                  "id": "understudy_demo_l3_borrowed_roles",
+                  "name": "Borrowed Roles",
+                  "description": "Bonus action: step into a borrowed role. You have 3 uses per long rest.",
+                  "source": {
+                    "kind": "subclass",
+                    "refId": "understudy_demo"
+                  },
+                  "level": 3,
+                  "actions": [],
+                  "choices": [],
+                  "passive": false,
+                  "effects": [],
+                  "activation": {
+                    "actionType": "bonus_action",
+                    "resourceCost": {
+                      "resourceId": "understudy_demo_l3_borrowed_roles_pool",
+                      "quantity": 1
+                    },
+                    "range": "self",
+                    "target": "self",
+                    "requiresSave": null
+                  },
+                  "abilityEffects": [
+                    {
+                      "type": "heal",
+                      "dice": "1d8"
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "resource",
+                "value": {
+                  "resourceId": "understudy_demo_l3_borrowed_roles_pool",
+                  "name": "Borrowed Roles",
+                  "maximum": 3,
+                  "recharge": "long_rest"
+                }
+              },
+              {
+                "kind": "feature",
+                "value": {
+                  "id": "understudy_demo_l3_costume_guard",
+                  "name": "Costume Guard",
+                  "description": "+1 AC. The costume is sturdier than it looks.",
+                  "source": {
+                    "kind": "subclass",
+                    "refId": "understudy_demo"
+                  },
+                  "level": 3,
+                  "actions": [],
+                  "choices": [],
+                  "passive": true,
+                  "effects": [
+                    {
+                      "type": "stat_modifier",
+                      "target": "ac",
+                      "operation": "add",
+                      "value": 1,
+                      "condition": null
+                    }
+                  ]
+                }
+              }
+            ],
+            "choices": [],
+            "hpDie": 8
+          },
+          {
+            "level": 6,
+            "grants": [
+              {
+                "kind": "feature",
+                "value": {
+                  "id": "understudy_demo_l6_cue_the_spotlight",
+                  "name": "Cue the Spotlight",
+                  "description": "Action: throw the spotlight on a creature within 30 feet for 3 rounds (applies Spotlit).",
+                  "source": {
+                    "kind": "subclass",
+                    "refId": "understudy_demo"
+                  },
+                  "level": 6,
+                  "passive": false,
+                  "actions": [],
+                  "choices": [],
+                  "effects": [],
+                  "activation": {
+                    "actionType": "action",
+                    "resourceCost": null,
+                    "range": "30 feet",
+                    "target": "single",
+                    "requiresSave": {
+                      "ability": "wis",
+                      "dc": 13
+                    }
+                  },
+                  "abilityEffects": [
+                    {
+                      "type": "apply_condition",
+                      "conditionId": "spotlit_demo",
+                      "duration": {
+                        "unit": "rounds",
+                        "remaining": 3
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "choices": [],
+            "hpDie": 8
+          },
+          {
+            "level": 10,
+            "grants": [
+              {
+                "kind": "feature",
+                "value": {
+                  "id": "understudy_demo_l10_steady_nerves",
+                  "name": "Steady Nerves",
+                  "description": "Resistance to psychic damage.",
+                  "source": {
+                    "kind": "subclass",
+                    "refId": "understudy_demo"
+                  },
+                  "level": 10,
+                  "actions": [],
+                  "choices": [],
+                  "passive": true,
+                  "effects": [
+                    {
+                      "type": "grant_resistance",
+                      "target": "psychic",
+                      "operation": "resistance",
+                      "value": null,
+                      "condition": null
+                    }
+                  ]
+                }
+              }
+            ],
+            "choices": [],
+            "hpDie": 8
+          }
+        ]
+      }
+    ],
+    "conditions": [
+      {
+        "id": "spotlit_demo",
+        "name": "Spotlit (Demo)",
+        "description": "TEST/DEMO CONTENT, part of the Understudy Test Pack. Not for play. You can't hide while the spotlight is on you: disadvantage on Stealth.",
+        "features": [
+          {
+            "id": "spotlit_demo_in_the_spotlight",
+            "name": "In the Spotlight",
+            "description": "Disadvantage on Stealth checks while lit by the spotlight.",
+            "source": {
+              "kind": "condition",
+              "refId": "spotlit_demo"
+            },
+            "level": null,
+            "actions": [],
+            "choices": [],
+            "passive": true,
+            "effects": [
+              {
+                "type": "stat_modifier",
+                "target": "stealth",
+                "operation": "disadvantage",
+                "value": null,
+                "condition": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "packageId": "pkg_1789986948525_2xdhdug8",
+  "name": "Understudy Test Pack",
+  "author": "Grimoire (original demo content)",
+  "description": "TEST/DEMO ONLY. One deliberately awkward original character concept: a limited \"Borrowed Roles\" resource, a three-stage custom progression, a passive AC modifier, an active ability that applies a condition, and that condition, packaged so you can see what a pack feels like.",
+  "packageVersion": "1.0",
+  "compatibleRulesets": [],
+  "contents": [
+    {
+      "type": "subclass",
+      "id": "understudy_demo",
+      "name": "The Understudy (Demo)",
+      "included": "selected"
+    },
+    {
+      "type": "condition",
+      "id": "spotlit_demo",
+      "name": "Spotlit (Demo)",
+      "included": "dependency"
+    }
+  ],
+  "media": []
+}

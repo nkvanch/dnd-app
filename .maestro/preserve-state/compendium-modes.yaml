@@ -1,0 +1,60 @@
+appId: com.nkvanch.grimoire
+name: Preserve state - Compendium Official / Homebrew / Packages (read only)
+tags: [preserve-state, compendium-modes, optional-content]
+---
+# Read-only: switches modes and looks. Never creates, edits, removes or imports anything.
+- launchApp
+- tapOn: { id: tab-compendium }
+- assertVisible: { id: compendium-mode-official }
+- assertVisible: { id: compendium-mode-homebrew }
+- assertVisible: { id: compendium-mode-packages }
+# Official is selected by default (its ordinary browser is on screen)
+- assertVisible: { id: compendium-screen }
+- assertVisible: { id: compendium-search }
+# Official is official-only: the filter panel has no Official / Homebrew source selector
+- tapOn: { id: compendium-filters }
+- assertNotVisible: "Official / Homebrew"
+- tapOn: { id: compendium-filters }
+
+# Homebrew library
+- tapOn: { id: compendium-mode-homebrew }
+- assertVisible: { id: compendium-homebrew-screen }
+- assertVisible: { id: compendium-homebrew-search }
+- assertNotVisible: { id: compendium-search }
+# Optional: if an entry exists, expand it, collapse it, and open its Export Homebrew options (nothing is exported)
+- runFlow:
+    when:
+      visible: { id: "homebrew-row-toggle-.*" }
+    commands:
+      - tapOn: { id: "homebrew-row-toggle-.*" }
+      - tapOn: { id: "homebrew-row-toggle-.*" }
+      # The single-entry export is labelled Export Homebrew and never offers a Character file. Only the
+      # option sheet is opened; nothing is exported and no file dialog is launched.
+      - tapOn: { id: "homebrew-export-.*" }
+      - assertVisible: { id: export-format-pack }
+      - assertNotVisible: { id: export-format-character-json }
+      - assertNotVisible: ".*Grimoire Character.*"
+      - tapOn: "Cancel"
+- assertVisible: { id: compendium-homebrew-screen }
+
+# Installed packages
+- tapOn: { id: compendium-mode-packages }
+- assertVisible: { id: compendium-packages-screen }
+- assertVisible: { id: packages-import }
+- assertVisible: { id: packages-create }
+# Optional: if a package exists, open its detail and come back to the list
+- runFlow:
+    when:
+      visible: { id: "package-row-.*" }
+    commands:
+      - tapOn: { id: "package-row-.*" }
+      - assertVisible: { id: compendium-package-detail }
+      - tapOn: { id: package-detail-back }
+      - assertVisible: { id: compendium-packages-screen }
+
+# Back to Official
+- tapOn: { id: compendium-mode-official }
+- assertVisible: { id: compendium-screen }
+- assertVisible: { id: compendium-search }
+- tapOn: { id: tab-home }
+- assertVisible: { id: home-screen }

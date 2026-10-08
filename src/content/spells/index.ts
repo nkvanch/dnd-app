@@ -45,6 +45,9 @@ import { NEW_LEVEL8 }    from './level8';
 import { NEW_LEVEL9 }    from './level9';
 import { ALL_VAULT_SPELLS } from './generated';
 import srdClassification from './srdClassification.json';
+import { EMPEROR_CLASS_SPELLS } from '../classes/emperorWarlock/spellData';
+import { SPELL_LIST_2024 } from '../classes2024/spellLists2024';
+import { NEW_SPELLS_2024 } from '../classes2024/spells2024';
 
 // Vault spells carry no srd field in generated.ts itself (see that file's
 // header) — classification is merged in here, at load time, from the small
@@ -208,7 +211,7 @@ export const spellHex: Spell = {
   duration: 'Concentration, up to 1 hour',
   description: 'You place a curse on a creature that you can see within range. The target takes an extra 1d6 necrotic damage whenever you hit it with an attack. Also, choose one ability when you cast the spell. The target has disadvantage on ability checks made with the chosen ability. If the target drops to 0 hit points before this spell ends, you can use a bonus action on a subsequent turn of yours to curse a new creature.',
   upcast: 'When you cast this spell using a slot of 3rd or 4th level, you can maintain your concentration on the spell for up to 8 hours. When you use a slot of 5th level or higher, you can maintain concentration for up to 24 hours.',
-  ritual: false, concentration: true, srd: true, classes: ['warlock'],
+  ritual: false, concentration: true, srd: false, classes: ['warlock'],
 };
 
 export const spellHuntersMark: Spell = {
@@ -492,6 +495,8 @@ const _rawSpellLibrary: Spell[] = [
   ...NEW_LEVEL9,
   // ── Vault-sourced library (auto-generated content, SRD status merged in) ──
   ...CLASSIFIED_VAULT_SPELLS,
+  // ── Spells that exist only in the 2024 rules ─────────────────────────────
+  ...NEW_SPELLS_2024,
 ];
 
 // The vault import (generated.ts) re-sourced a number of core SRD spells that
@@ -503,10 +508,46 @@ const _rawSpellLibrary: Spell[] = [
 // carry homebrew edits like Green-Flame Blade's Abyss Knight text) takes
 // precedence over the later vault-sourced duplicate.
 const _seenSpellIds = new Set<string>();
+// The Emperor Warlock (built-in homebrew, both versions) draws on an existing spell list it does not own,
+// so the spells on that list gain its class ids here — the spec's own list PLUS the whole Warlock list. A spell with no `classes` tag is already offered to
+// every class and is left alone — tagging it would have narrowed it.
+const _emperorSpellIds = new Set(EMPEROR_CLASS_SPELLS);
+// The 2024 classes (bard_2024, ...) use the 2024 class spell lists (SRD 5.2.1): a spell on a 2024 list
+// gains that class's 2024 id. As above, an untagged spell is already offered to everyone and is left alone.
+const _classes2024BySpell = new Map<string, string[]>();
+for (const [cls, byLevel] of Object.entries(SPELL_LIST_2024)) {
+  for (const id of Object.values(byLevel).flat()) _classes2024BySpell.set(id, [...(_classes2024BySpell.get(id) ?? []), `${cls}_2024`]);
+}
+const _isEmperorSpell = (s: Spell) => _emperorSpellIds.has(s.id) || !!s.classes?.includes('warlock');
+/**
+ * The generated spell data has ten records whose header ran together into `castingTime`
+ * ("1 action **Range**: Touch **Components**: V, S **Duration**: ..."), leaving range and duration empty. This
+ * splits that header back into its fields, and gives Delayed Blast Fireball the duration its record lacks
+ * (SRD 5.1: Concentration, up to 1 minute). A record that is already well formed is returned untouched.
+ */
+const MERGED_HEADER = /^(.*?)\s*\*\*Range\*\*:\s*(.*?)\s*\*\*Components\*\*:\s*(.*?)\s*\*\*Duration\*\*:\s*(.*)$/;
+export function repairSpellHeader(s: Spell): Spell {
+  const m = MERGED_HEADER.exec(s.castingTime ?? '');
+  let out = s;
+  if (m) {
+    const letters = (m[3].match(/\b[VSM]\b/g) ?? []) as string[];
+    out = { ...s, castingTime: m[1].trim(), range: s.range || m[2].trim(), duration: s.duration || m[4].trim(),
+      components: s.components.length > 0 ? s.components : letters };
+  }
+  if (!out.duration && out.id === 'delayed_blast_fireball') out = { ...out, duration: 'Concentration, up to 1 minute' };
+  return out;
+}
+
 export const FULL_SPELL_LIBRARY: Spell[] = _rawSpellLibrary.filter(s => {
   if (_seenSpellIds.has(s.id)) return false;
   _seenSpellIds.add(s.id);
   return true;
+}).map(s => {
+  let out = repairSpellHeader(s);
+  if (_isEmperorSpell(s) && s.classes && s.classes.length > 0) out = { ...out, classes: [...(out.classes ?? []), 'emperor_warlock', 'emperor_warlock_demo'] };
+  const c24 = _classes2024BySpell.get(s.id);
+  if (c24 && out.classes && out.classes.length > 0) out = { ...out, classes: [...new Set([...(out.classes ?? []), ...c24])] };
+  return out;
 });
 
 /**

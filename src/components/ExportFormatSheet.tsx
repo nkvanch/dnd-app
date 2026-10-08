@@ -5,32 +5,35 @@
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Platform } from 'react-native';
 import { ExportFormat, ExportAction } from '../io/exportShare';
+import { ExportKind, exportFormatsFor } from '../io/exportFormats';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
 // expo-print has no web implementation — offering PDF there would just throw
 // at share-time with no useful error, so it's disabled rather than shown.
 const PDF_AVAILABLE_HERE = Platform.OS !== 'web';
 
-const FORMATS: { id: ExportFormat; label: string; hint: string }[] = [
-  { id: 'pdf', label: '📄  PDF',      hint: 'Printable, shareable document' },
-  { id: 'md',  label: '📝  Markdown', hint: 'For Discord, notes apps, wikis' },
-  { id: 'txt', label: '📃  Plain Text', hint: 'Universal, no formatting' },
-];
-
-const PACK_FORMAT: { id: ExportFormat; label: string; hint: string } =
-  { id: 'pack', label: '📦  Grimoire Pack', hint: 'Share with another device — fully re-importable' };
-
 interface Props {
   visible: boolean;
+  kind:    ExportKind;
   title:   string;
   onSelect: (format: ExportFormat, action: ExportAction) => void;
   onClose:  () => void;
-  /** Show the "Grimoire Pack" option — homebrew exports only, not characters. */
-  showPackOption?: boolean;
 }
 
-export function ExportFormatSheet({ visible, title, onSelect, onClose, showPackOption }: Props) {
-  const formats = showPackOption ? [...FORMATS, PACK_FORMAT] : FORMATS;
+/**
+ * This sheet offers ONE portable option per kind (Export Character or
+ * Export Homebrew, never both) plus the readable copies (PDF/Markdown/Plain Text —
+ * for a person to read). Re-audit item 16: a "Grimoire Pack" row used to
+ * live in this same sheet behind an unused `showPackOption` prop (never
+ * actually passed `true` anywhere) — a second, metadata-less path to the
+ * same .grimoire-pack format PackageExportModal already produces properly
+ * (dependency closure, name/author/description). Removed rather than left
+ * dormant: a live but unreachable shortcut here would be an easy trap for
+ * a future call site to wire up instead of the real "Portable Homebrew"
+ * flow (PackageExportModal — see its own header comment for the intended
+ * Readable/Portable split).
+ */
+export function ExportFormatSheet({ visible, kind, title, onSelect, onClose }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -40,11 +43,12 @@ export function ExportFormatSheet({ visible, title, onSelect, onClose, showPackO
             <Text style={styles.subtitle}>Tap a format to save it — or use ⤴ to share instead</Text>
           </View>
 
-          {formats.map(f => {
+          {exportFormatsFor(kind).map(f => {
             const disabled = f.id === 'pdf' && !PDF_AVAILABLE_HERE;
             return (
               <Pressable
                 key={f.id}
+                testID={`export-format-${f.id}`}
                 style={[styles.row, disabled && styles.rowDisabled]}
                 disabled={disabled}
                 onPress={() => onSelect(f.id, 'save')}

@@ -6,7 +6,7 @@
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { applyInfusionChoiceToEntity } from '../engine/leveling';
-import { ALL_INFUSIONS } from '../content/infusions';
+import { infusions } from '../content/runtimeRules';
 import { Entity, ChoiceState, CampaignRules } from '../engine/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../theme';
 
@@ -28,7 +28,7 @@ export function InfusionPicker({
   const level = entity.identity.level;
 
   const options = useMemo(
-    () => ALL_INFUSIONS.filter(i => i.minLevel <= level && !known.includes(i.id)),
+    () => infusions().filter(i => i.minLevel <= level && !known.includes(i.id)),
     [level, known],
   );
 
